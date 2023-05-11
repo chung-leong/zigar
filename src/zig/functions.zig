@@ -4,12 +4,12 @@ pub const pi = 3.14;
 
 pub const Types = enum { Dog, Cat, Bear };
 
-pub fn hello() void {
-    print("Hello world\n", .{});
+pub fn hello(number: i32) void {
+    print("Hello world ({d})\n", .{number});
 }
 
-pub fn world() void {
-    print("World\n", .{});
+pub fn world(number1: i16, number2: u32, number3: ?i32) void {
+    print("World ({d}, {d}, {?})\n", .{ number1, number2, number3 });
 }
 
 pub const a = 5;
