@@ -3,26 +3,6 @@
 
 using namespace v8;
 
-class AddonData {
- public:
-  explicit AddonData(Isolate* isolate) {
-    node::AddEnvironmentCleanupHook(isolate, DeleteInstance, this);
-  }
-
-  static void DeleteInstance(void* data) {
-    delete static_cast<AddonData*>(data);
-  }
-};
-
-struct Pool {
-  const void *opaque;
-  void * (*const get)(const void *opaque, size_t size);
-};
-
-static void *AllocMemory(Pool *pool, size_t size) {
-  return pool->get(pool->opaque, size);
-}
-
 enum class Result {
   success = 0,
   failure = 1,
@@ -38,6 +18,10 @@ static Local<Value> GetArgument(const FunctionCallbackInfo<Value>& info, size_t 
 
 static bool IsNull(const FunctionCallbackInfo<Value>& info, Local<Value> value) {
   return value->IsNullOrUndefined();
+}
+
+static bool IsArrayBuffer(const FunctionCallbackInfo<Value>& info, Local<Value> value) {
+  return value->IsArrayBuffer() || value->IsArrayBufferView();
 }
 
 static Result ConvertToBoolean(const FunctionCallbackInfo<Value>& info, Local<Value> value, bool *dest) {
@@ -104,7 +88,7 @@ static Result ConvertToF64(const FunctionCallbackInfo<Value>& info, Local<Value>
   return Result::success;
 }
 
-static Result ConvertToUTF8(const FunctionCallbackInfo<Value>& info, Local<Value> value, uint8_t **dest, size_t *dest_len, Pool *pool) {
+static Result ConvertToUTF8(const FunctionCallbackInfo<Value>& info, Local<Value> value, uint8_t **dest, size_t *dest_len) {
   Local<String> string;
   Isolate* isolate = info.GetIsolate();
   if (value->IsString()) {
@@ -117,7 +101,8 @@ static Result ConvertToUTF8(const FunctionCallbackInfo<Value>& info, Local<Value
     string = result.ToLocalChecked();
   }
   size_t len = string->Length();
-  uint8_t *buffer = static_cast<uint8_t *>(AllocMemory(pool, len + 1));
+  // TODO: manage memory properly
+  uint8_t *buffer = static_cast<uint8_t *>(malloc((len + 1) * sizeof(uint8_t)));
   if (!buffer) {
     return Result::failure;
   }
@@ -127,7 +112,7 @@ static Result ConvertToUTF8(const FunctionCallbackInfo<Value>& info, Local<Value
   return Result::success;
 }
 
-static Result ConvertToUTF16(const FunctionCallbackInfo<Value>& info, Local<Value> value, uint16_t **dest, size_t *dest_len, Pool *pool) {
+static Result ConvertToUTF16(const FunctionCallbackInfo<Value>& info, Local<Value> value, uint16_t **dest, size_t *dest_len) {
   Local<String> string;
   Isolate* isolate = info.GetIsolate();
   if (value->IsString()) {
@@ -140,7 +125,7 @@ static Result ConvertToUTF16(const FunctionCallbackInfo<Value>& info, Local<Valu
     string = result.ToLocalChecked();
   }
   size_t len = string->Length();
-  uint16_t *buffer = static_cast<uint16_t *>(AllocMemory(pool, len + 1));
+  uint16_t *buffer = static_cast<uint16_t *>(malloc((len + 1) * sizeof(uint16_t)));
   if (!buffer) {
     return Result::failure;
   }
@@ -176,6 +161,7 @@ struct Callbacks {
   Local<Value> (*const get_argument)(const FunctionCallbackInfo<Value>&, size_t);
   
   bool (*const is_null)(const FunctionCallbackInfo<Value>&, Local<Value>);
+  bool (*const is_array_buffer)(const FunctionCallbackInfo<Value>&, Local<Value>);
 
   Result (*const convert_to_boolean)(const FunctionCallbackInfo<Value>&, Local<Value>, bool *);
   Result (*const convert_to_i32)(const FunctionCallbackInfo<Value>&, Local<Value>, int32_t *);
@@ -183,8 +169,8 @@ struct Callbacks {
   Result (*const convert_to_i64)(const FunctionCallbackInfo<Value>&, Local<Value>, int64_t *);
   Result (*const convert_to_u64)(const FunctionCallbackInfo<Value>&, Local<Value>, uint64_t *);
   Result (*const convert_to_f64)(const FunctionCallbackInfo<Value>&, Local<Value>, double *);
-  Result (*const convert_to_utf8)(const FunctionCallbackInfo<Value>&, Local<Value>, uint8_t **, size_t *, Pool *);
-  Result (*const convert_to_utf16)(const FunctionCallbackInfo<Value>&, Local<Value>, uint16_t **, size_t *, Pool *);
+  Result (*const convert_to_utf8)(const FunctionCallbackInfo<Value>&, Local<Value>, uint8_t **, size_t *);
+  Result (*const convert_to_utf16)(const FunctionCallbackInfo<Value>&, Local<Value>, uint16_t **, size_t *);
   Result (*const convert_to_buffer)(const FunctionCallbackInfo<Value>&, Local<Value>, uint8_t **, size_t *);
 
   void (*throw_exception)(const FunctionCallbackInfo<Value>&, const char *);
@@ -193,6 +179,7 @@ struct Callbacks {
     get_argument_count(GetArgumentCount),
     get_argument(GetArgument),
     is_null(IsNull),
+    is_array_buffer(IsArrayBuffer),
     convert_to_boolean(ConvertToBoolean),
     convert_to_i32(ConvertToI32),
     convert_to_u32(ConvertToU32),
@@ -286,6 +273,17 @@ static MaybeLocal<Value> ProcessEntry(Isolate *isolate, const Entry *entry) {
   }
   return MaybeLocal<Value>();                                   
 }
+
+class AddonData {
+ public:
+  explicit AddonData(Isolate* isolate) {
+    node::AddEnvironmentCleanupHook(isolate, DeleteInstance, this);
+  }
+
+  static void DeleteInstance(void* data) {
+    delete static_cast<AddonData*>(data);
+  }
+};
 
 static void Load(const FunctionCallbackInfo<Value>& info) {
   AddonData* data = reinterpret_cast<AddonData*>(info.Data().As<External>()->Value());

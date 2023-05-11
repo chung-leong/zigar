@@ -4,7 +4,7 @@ pub const pi = 3.14;
 
 pub const Types = enum { Dog, Cat, Bear };
 
-pub fn hello(number: i32) void {
+pub fn hello(number: f16) void {
     print("Hello world ({d})\n", .{number});
 }
 
