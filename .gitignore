@@ -129,6 +129,9 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-# Zig
-src/zig/zig-cache/*
+src/zig/zig-cache
 src/zig/build/*
+*.so
+*.o
+.vscode
+build

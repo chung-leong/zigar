@@ -1,8 +1,6 @@
 #include <node.h>
 #include <dlfcn.h>
 
-#define __cdecl __attribute__((__cdecl__))
-
 using namespace v8;
 
 class AddonData {
@@ -18,7 +16,7 @@ class AddonData {
 
 struct Pool {
   const void *opaque;
-  void * __cdecl (*const get)(const void *opaque, size_t size);
+  void * (*const get)(const void *opaque, size_t size);
 };
 
 static void *AllocMemory(Pool *pool, size_t size) {
@@ -30,19 +28,19 @@ enum class Result {
   failure = 1,
 };
 
-static size_t __cdecl GetArgumentCount(const FunctionCallbackInfo<Value>& info) {
+static size_t GetArgumentCount(const FunctionCallbackInfo<Value>& info) {
   return info.Length();
 }
 
-static Local<Value> __cdecl GetArgument(const FunctionCallbackInfo<Value>& info, size_t index) {
+static Local<Value> GetArgument(const FunctionCallbackInfo<Value>& info, size_t index) {
   return info[index];
 }
 
-static bool __cdecl IsNull(const FunctionCallbackInfo<Value>& info, Local<Value> value) {
+static bool IsNull(const FunctionCallbackInfo<Value>& info, Local<Value> value) {
   return value->IsNullOrUndefined();
 }
 
-static Result __cdecl ConvertToBoolean(const FunctionCallbackInfo<Value>& info, Local<Value> value, bool *dest) {
+static Result ConvertToBoolean(const FunctionCallbackInfo<Value>& info, Local<Value> value, bool *dest) {
   Local<Boolean> boolean;
   if (value->IsBoolean()) {
     boolean = value.As<Boolean>();
@@ -58,7 +56,7 @@ static Result __cdecl ConvertToBoolean(const FunctionCallbackInfo<Value>& info, 
   return Result::success;
 }
 
-static Result __cdecl ConvertToI32(const FunctionCallbackInfo<Value>& info, Local<Value> value, int32_t *dest) {
+static Result ConvertToI32(const FunctionCallbackInfo<Value>& info, Local<Value> value, int32_t *dest) {
   Local<Int32> number;
   if (value->IsInt32()) {
     number = value.As<Int32>();
@@ -74,7 +72,7 @@ static Result __cdecl ConvertToI32(const FunctionCallbackInfo<Value>& info, Loca
   return Result::success;
 }
 
-static Result __cdecl ConvertToU32(const FunctionCallbackInfo<Value>& info, Local<Value> value, uint32_t *dest) {
+static Result ConvertToU32(const FunctionCallbackInfo<Value>& info, Local<Value> value, uint32_t *dest) {
   Local<Uint32> number;
   if (value->IsUint32()) {
     number = value.As<Uint32>();
@@ -90,7 +88,7 @@ static Result __cdecl ConvertToU32(const FunctionCallbackInfo<Value>& info, Loca
   return Result::success;
 }
 
-static Result __cdecl ConvertToF64(const FunctionCallbackInfo<Value>& info, Local<Value> value, double *dest) {
+static Result ConvertToF64(const FunctionCallbackInfo<Value>& info, Local<Value> value, double *dest) {
   Local<Number> number;
   if (value->IsNumber()) {
     number = value.As<Number>();
@@ -106,7 +104,7 @@ static Result __cdecl ConvertToF64(const FunctionCallbackInfo<Value>& info, Loca
   return Result::success;
 }
 
-static Result __cdecl ConvertToUTF8(const FunctionCallbackInfo<Value>& info, Local<Value> value, uint8_t **dest, size_t *dest_len, Pool *pool) {
+static Result ConvertToUTF8(const FunctionCallbackInfo<Value>& info, Local<Value> value, uint8_t **dest, size_t *dest_len, Pool *pool) {
   Local<String> string;
   Isolate* isolate = info.GetIsolate();
   if (value->IsString()) {
@@ -129,7 +127,7 @@ static Result __cdecl ConvertToUTF8(const FunctionCallbackInfo<Value>& info, Loc
   return Result::success;
 }
 
-static Result __cdecl ConvertToUTF16(const FunctionCallbackInfo<Value>& info, Local<Value> value, uint16_t **dest, size_t *dest_len, Pool *pool) {
+static Result ConvertToUTF16(const FunctionCallbackInfo<Value>& info, Local<Value> value, uint16_t **dest, size_t *dest_len, Pool *pool) {
   Local<String> string;
   Isolate* isolate = info.GetIsolate();
   if (value->IsString()) {
@@ -152,7 +150,7 @@ static Result __cdecl ConvertToUTF16(const FunctionCallbackInfo<Value>& info, Lo
   return Result::success;
 }
 
-static Result __cdecl ConvertToBuffer(const FunctionCallbackInfo<Value>& info, Local<Value> value, uint8_t **dest, size_t *dest_len) {
+static Result ConvertToBuffer(const FunctionCallbackInfo<Value>& info, Local<Value> value, uint8_t **dest, size_t *dest_len) {
   Local<ArrayBuffer> buffer; 
   if (value->IsArrayBuffer()) {
     buffer = value.As<ArrayBuffer>();
@@ -167,29 +165,29 @@ static Result __cdecl ConvertToBuffer(const FunctionCallbackInfo<Value>& info, L
   return Result::success;
 }
 
-static void __cdecl ThrowException(const FunctionCallbackInfo<Value>& info, const char *message) {
+static void ThrowException(const FunctionCallbackInfo<Value>& info, const char *message) {
     Isolate *isolate = info.GetIsolate();
     Local<String> value = String::NewFromUtf8(isolate, message).ToLocalChecked();
     isolate->ThrowException(Exception::Error(value));
 }
 
 struct Callbacks {  
-  size_t __cdecl (*const get_argument_count)(const FunctionCallbackInfo<Value>&);
-  Local<Value> __cdecl (*const get_argument)(const FunctionCallbackInfo<Value>&, size_t);
+  size_t (*const get_argument_count)(const FunctionCallbackInfo<Value>&);
+  Local<Value> (*const get_argument)(const FunctionCallbackInfo<Value>&, size_t);
   
-  bool __cdecl (*const is_null)(const FunctionCallbackInfo<Value>&, Local<Value>);
+  bool (*const is_null)(const FunctionCallbackInfo<Value>&, Local<Value>);
 
-  Result __cdecl (*const convert_to_boolean)(const FunctionCallbackInfo<Value>&, Local<Value>, bool *);
-  Result __cdecl (*const convert_to_i32)(const FunctionCallbackInfo<Value>&, Local<Value>, int32_t *);
-  Result __cdecl (*const convert_to_u32)(const FunctionCallbackInfo<Value>&, Local<Value>, uint32_t *);
-  Result __cdecl (*const convert_to_i64)(const FunctionCallbackInfo<Value>&, Local<Value>, int64_t *);
-  Result __cdecl (*const convert_to_u64)(const FunctionCallbackInfo<Value>&, Local<Value>, uint64_t *);
-  Result __cdecl (*const convert_to_f64)(const FunctionCallbackInfo<Value>&, Local<Value>, double *);
-  Result __cdecl (*const convert_to_utf8)(const FunctionCallbackInfo<Value>&, Local<Value>, uint8_t **, size_t *, Pool *);
-  Result __cdecl (*const convert_to_utf16)(const FunctionCallbackInfo<Value>&, Local<Value>, uint16_t **, size_t *, Pool *);
-  Result __cdecl (*const convert_to_buffer)(const FunctionCallbackInfo<Value>&, Local<Value>, uint8_t **, size_t *);
+  Result (*const convert_to_boolean)(const FunctionCallbackInfo<Value>&, Local<Value>, bool *);
+  Result (*const convert_to_i32)(const FunctionCallbackInfo<Value>&, Local<Value>, int32_t *);
+  Result (*const convert_to_u32)(const FunctionCallbackInfo<Value>&, Local<Value>, uint32_t *);
+  Result (*const convert_to_i64)(const FunctionCallbackInfo<Value>&, Local<Value>, int64_t *);
+  Result (*const convert_to_u64)(const FunctionCallbackInfo<Value>&, Local<Value>, uint64_t *);
+  Result (*const convert_to_f64)(const FunctionCallbackInfo<Value>&, Local<Value>, double *);
+  Result (*const convert_to_utf8)(const FunctionCallbackInfo<Value>&, Local<Value>, uint8_t **, size_t *, Pool *);
+  Result (*const convert_to_utf16)(const FunctionCallbackInfo<Value>&, Local<Value>, uint16_t **, size_t *, Pool *);
+  Result (*const convert_to_buffer)(const FunctionCallbackInfo<Value>&, Local<Value>, uint8_t **, size_t *);
 
-  void __cdecl (*throw_exception)(const FunctionCallbackInfo<Value>&, const char *);
+  void (*throw_exception)(const FunctionCallbackInfo<Value>&, const char *);
 
   Callbacks() :
     get_argument_count(GetArgumentCount),
@@ -210,8 +208,8 @@ struct Callbacks {
 const Callbacks callbacks;
 
 struct FunctionRecord {
-  int arg_count;
-  void __cdecl (*thunk)(const FunctionCallbackInfo<Value>&, const Callbacks &);
+  size_t arg_count;
+  void (*thunk)(const FunctionCallbackInfo<Value>&, const Callbacks &);
 };
 
 struct EnumRecord {
@@ -246,19 +244,19 @@ struct Entry {
 };
 
 struct ZigModule {
-  Entry *entries;
+  const Entry *entries;
   size_t entry_count;
 };
 
 static void Run(const FunctionCallbackInfo<Value>& info) {
-  FunctionRecord *record = reinterpret_cast<FunctionRecord *>(info.Data().As<External>()->Value());
+  const FunctionRecord *record = reinterpret_cast<FunctionRecord *>(info.Data().As<External>()->Value());
   record->thunk(info, callbacks);
 }
 
-static MaybeLocal<Value> ProcessEntry(Isolate *isolate, Entry *entry) {
+static MaybeLocal<Value> ProcessEntry(Isolate *isolate, const Entry *entry) {
   switch (EntryType(entry->type)) {
     case EntryType::function: {
-      Local<External> external = External::New(isolate, &entry->function);
+      Local<External> external = External::New(isolate, const_cast<FunctionRecord *>(&entry->function));
       Local<Context> context = isolate->GetCurrentContext();
       return FunctionTemplate::New(isolate, Run, external, 
         Local<Signature>(), entry->function.arg_count)
@@ -319,7 +317,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   Local<Value> hash = Object::New(isolate);
   Local<Context> context = isolate->GetCurrentContext();
   for (size_t i = 0; i < module->entry_count; i++) {
-    Entry *entry = &module->entries[i];
+    const Entry *entry = &module->entries[i];
     MaybeLocal<Value> result = ProcessEntry(isolate, entry);
     if (!result.IsEmpty()) {
       hash.As<Object>()->Set(context, 
