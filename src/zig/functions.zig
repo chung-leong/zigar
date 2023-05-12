@@ -8,8 +8,8 @@ pub fn hello(number: f16) void {
     print("Hello world ({d})\n", .{number});
 }
 
-pub fn world(number1: i16, number2: u32, number3: ?i32) void {
-    print("World ({d}, {d}, {?})\n", .{ number1, number2, number3 });
+pub fn world(s: []const u16) void {
+    print("World ({d}, {d})\n", .{ s[0], s[1] });
 }
 
 pub const a = 5;

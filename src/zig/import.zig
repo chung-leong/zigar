@@ -1,39 +1,91 @@
 const std = @import("std");
-
-const V8Value = *opaque {};
-const V8CallbackInfo = *opaque {};
-const V8CallbackTable = extern struct {
-    get_argument_count: *const fn (info: V8CallbackInfo) callconv(.C) usize,
-    get_argument: *const fn (info: V8CallbackInfo, index: usize) callconv(.C) V8Value,
-
-    is_null: *const fn (info: V8CallbackInfo, value: V8Value) callconv(.C) bool,
-    is_array_buffer: *const fn (info: V8CallbackInfo, value: V8Value) callconv(.C) bool,
-
-    convert_to_boolean: *const fn (info: V8CallbackInfo, value: V8Value, dest: *bool) callconv(.C) c_int,
-    convert_to_i32: *const fn (info: V8CallbackInfo, value: V8Value, dest: *i32) callconv(.C) c_int,
-    convert_to_u32: *const fn (info: V8CallbackInfo, value: V8Value, dest: *u32) callconv(.C) c_int,
-    convert_to_i64: *const fn (info: V8CallbackInfo, value: V8Value, dest: *i64) callconv(.C) c_int,
-    convert_to_u64: *const fn (info: V8CallbackInfo, value: V8Value, dest: *u64) callconv(.C) c_int,
-    convert_to_f64: *const fn (info: V8CallbackInfo, value: V8Value, dest: *f64) callconv(.C) c_int,
-    convert_to_utf8: *const fn (info: V8CallbackInfo, value: V8Value, dest: *[*:0]const u8, dest_len: *usize) callconv(.C) c_int,
-    convert_to_utf16: *const fn (info: V8CallbackInfo, value: V8Value, dest: *[*:0]const u16, dest_len: *usize) callconv(.C) c_int,
-    convert_to_buffer: *const fn (info: V8CallbackInfo, value: V8Value, dest: *[*]const u8, dest_len: *usize) callconv(.C) c_int,
-
-    throw_exception: *const fn (info: V8CallbackInfo, message: [*:0]const u8) void,
-};
-const V8Callbacks = *const V8CallbackTable;
+const api_version = 1;
 
 const Result = enum {
     Success,
     Failure,
 };
-
 const Error = error{
     UnsupportedConversion,
     IntegerOverflow,
     FloatUnderflow,
     FloatOverflow,
 };
+
+const Value = *opaque {};
+const Pool = *opaque {};
+const Isolate = *opaque {};
+const CallInfo = *opaque {};
+const Memory = extern struct {
+    len: usize,
+    bytes: [*]u8,
+};
+const Callbacks = extern struct {
+    get_isolate: *const fn (info: CallInfo) callconv(.C) Isolate,
+    get_argument_count: *const fn (info: CallInfo) callconv(.C) usize,
+    get_argument: *const fn (info: CallInfo, index: usize) callconv(.C) Value,
+
+    is_null: *const fn (isolate: Isolate, value: Value) callconv(.C) bool,
+    is_array_buffer: *const fn (isolate: Isolate, value: Value) callconv(.C) bool,
+
+    convert_to_boolean: *const fn (isolate: Isolate, value: Value, dest: *bool) callconv(.C) c_int,
+    convert_to_i32: *const fn (isolate: Isolate, value: Value, dest: *i32) callconv(.C) c_int,
+    convert_to_u32: *const fn (isolate: Isolate, value: Value, dest: *u32) callconv(.C) c_int,
+    convert_to_i64: *const fn (isolate: Isolate, value: Value, dest: *i64) callconv(.C) c_int,
+    convert_to_u64: *const fn (isolate: Isolate, value: Value, dest: *u64) callconv(.C) c_int,
+    convert_to_f64: *const fn (isolate: Isolate, value: Value, dest: *f64) callconv(.C) c_int,
+    convert_to_utf8: *const fn (isolate: Isolate, value: Value, pool: Pool, dest: *Memory) callconv(.C) c_int,
+    convert_to_utf16: *const fn (isolate: Isolate, value: Value, pool: Pool, dest: *Memory) callconv(.C) c_int,
+    convert_to_buffer: *const fn (isolate: Isolate, value: Value, dest: *Memory) callconv(.C) c_int,
+
+    throw_exception: *const fn (isolate: Isolate, message: [*:0]const u8) void,
+};
+
+fn CArray(comptime T: type) type {
+    return extern struct {
+        items: [*]const T,
+        count: usize,
+    };
+}
+
+const EntryType = enum(c_int) {
+    unavailable = 0,
+    function,
+    enum_set,
+    enum_value,
+    object,
+    int_value,
+    float_value,
+};
+const FunctionRecord = extern struct {
+    arg_count: usize,
+    thunk: Thunk,
+};
+const EnumRecord = extern struct {
+    name: [*:0]const u8,
+    value: c_int,
+};
+const EntryParams = extern union {
+    fn_record: FunctionRecord,
+    enum_set: CArray(EnumRecord),
+    int_value: i64,
+    float_value: f64,
+};
+const EntryContent = extern struct {
+    type: EntryType,
+    params: EntryParams,
+};
+const Entry = extern struct {
+    name: [*:0]const u8,
+    content: EntryContent,
+};
+const Module = extern struct {
+    version: c_int,
+    callbacks: *Callbacks,
+    entries: CArray(Entry),
+};
+
+var callbacks: Callbacks = undefined;
 
 fn isScalar(comptime T: type) bool {
     return switch (@typeInfo(T)) {
@@ -51,7 +103,7 @@ fn isArray(comptime T: type) bool {
 
 fn isSlice(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        .Pointer => true,
+        .Pointer => |pt| pt.size == std.builtin.Type.Pointer.Size.Slice,
         else => false,
     };
 }
@@ -96,20 +148,11 @@ fn BaseType(comptime T: type) type {
     };
 }
 
-fn ChildType(comptime array: anytype) type {
-    const T = @TypeOf(array);
+fn ChildType(comptime T: type) type {
     return switch (@typeInfo(T)) {
         .Array => |ar| ar.child,
-        .Pointer => |pt| ChildType(pt),
-        else => @compileError("Expected array, found '" ++ @typeName(T) ++ "'"),
-    };
-}
-
-fn ArrayType(comptime slice: anytype) type {
-    const T = @TypeOf(slice);
-    return switch (@typeInfo(T)) {
         .Pointer => |pt| pt.child,
-        else => @compileError("Expected slice, found '" ++ @typeName(T) ++ "'"),
+        else => @compileError("Expected array or pointer type, found '" ++ @typeName(T) ++ "'"),
     };
 }
 
@@ -131,9 +174,9 @@ fn checkOverflow(value: anytype, comptime T: type) !void {
     }
 }
 
-fn coerce(info: V8CallbackInfo, callbacks: V8Callbacks, value: V8Value, comptime T: type) !T {
+fn coerce(isolate: Isolate, value: Value, pool: Pool, comptime T: type) !T {
     if (comptime isOptional(T)) {
-        if (callbacks.is_null(info, value)) {
+        if (callbacks.is_null(isolate, value)) {
             return null;
         }
     }
@@ -148,7 +191,7 @@ fn coerce(info: V8CallbackInfo, callbacks: V8Callbacks, value: V8Value, comptime
         };
         const callback = @field(callbacks, "convert_to_" ++ @typeName(IT));
         var result: IT = undefined;
-        var retval = callback(info, value, &result);
+        var retval = callback(isolate, value, &result);
         if (@intToEnum(Result, retval) != Result.Success) {
             return Error.UnsupportedConversion;
         }
@@ -164,104 +207,109 @@ fn coerce(info: V8CallbackInfo, callbacks: V8Callbacks, value: V8Value, comptime
         return result;
     } else if (comptime isArrayLike(T)) {
         const CT = ChildType(T);
-        if (isSlice(CT) and (CT == u8 or CT == u16)) {
+        if (CT == u8 or CT == u16) {
             // convert to string unless incoming value is an ArrayBuffer
-            if (!callbacks.is_array_buffer(info, value)) {
+            if (!callbacks.is_array_buffer(isolate, value)) {
                 const width = if (CT == u8) "8" else "16";
                 const callback = @field(callbacks, "convert_to_utf" ++ width);
-                var result: [*:0]CT = undefined;
-                var len: usize = undefined;
-                var retval = callback(info, value, &result, &len);
+                var result: Memory = undefined;
+                var retval = callback(isolate, value, pool, &result);
                 if (@intToEnum(Result, retval) != Result.Success) {
                     return Error.UnsupportedConversion;
                 }
-                return @ptrCast(T, result);
+                var len = if (CT == u8) result.len else result.len >> 1;
+                const ptr = @ptrCast([*]CT, @alignCast(@alignOf(CT), result.bytes));
+                return ptr[0..len];
             }
         }
     }
     return Error.UnsupportedConversion;
 }
 
-fn throwException(info: V8CallbackInfo, callbacks: V8Callbacks, comptime fmt: []const u8, vars: anytype) void {
+fn throwException(isolate: Isolate, comptime fmt: []const u8, vars: anytype) void {
     var buffer: [1024]u8 = undefined;
     const message = std.fmt.bufPrint(&buffer, fmt, vars) catch fmt;
-    callbacks.throw_exception(info, @ptrCast([*:0]const u8, message.ptr));
+    callbacks.throw_exception(isolate, @ptrCast([*:0]const u8, message.ptr));
 }
 
-const Thunk = *const fn (info: V8CallbackInfo, callbacks: V8Callbacks) callconv(.C) void;
+const Thunk = *const fn (info: CallInfo, pool: Pool) callconv(.C) void;
 
 fn createThunk(comptime name: []const u8, comptime zig_fn: anytype) Thunk {
     const Args = std.meta.ArgsTuple(@TypeOf(zig_fn));
     const ThunkType = struct {
-        fn ga(info: V8CallbackInfo, callbacks: V8Callbacks, index: usize, count: i32, comptime T: type) ?T {
-            const arg = callbacks.get_argument(info, index);
-            if (coerce(info, callbacks, arg, T)) |value| {
-                return value;
-            } else |err| {
-                const arg_count = callbacks.get_argument_count(info);
-                if (err == Error.UnsupportedConversion and arg_count < count) {
-                    const fmt = "{s}() expects {d} argument(s), {d} given";
-                    throwException(info, callbacks, fmt, .{ name, count, arg_count });
-                } else {
-                    const fmt = "Error encounter while converting JavaScript value to {s} for argument {d} of {s}(): {s}";
-                    throwException(info, callbacks, fmt, .{ @typeName(T), index + 1, name, @errorName(err) });
-                }
+        fn ga(isolate: Isolate, info: CallInfo, pool: Pool, index_ptr: *usize, count: i32, comptime T: type) ?T {
+            if (T == std.mem.Allocator) {
+                // TODO: provide allocator
                 return null;
+            } else {
+                const index: usize = index_ptr.*;
+                index_ptr.* = index + 1;
+                const arg = callbacks.get_argument(info, index);
+                if (coerce(isolate, arg, pool, T)) |value| {
+                    return value;
+                } else |err| {
+                    const arg_count = callbacks.get_argument_count(info);
+                    if (err == Error.UnsupportedConversion and arg_count < count) {
+                        const fmt = "{s}() expects {d} argument(s), {d} given";
+                        throwException(isolate, fmt, .{ name, count, arg_count });
+                    } else {
+                        const fmt = "Error encounter while converting JavaScript value to {s} for argument {d} of {s}(): {s}";
+                        throwException(isolate, fmt, .{ @typeName(T), index + 1, name, @errorName(err) });
+                    }
+                    return null;
+                }
             }
         }
 
-        fn cfn(info: V8CallbackInfo, cb: V8Callbacks) callconv(.C) void {
+        fn cfn(info: CallInfo, pool: Pool) callconv(.C) void {
+            const iso = callbacks.get_isolate(info);
             var args: Args = undefined;
             const f = std.meta.fields(Args);
-            const l = f.len;
+            const c = f.len;
             // can't loop through fields at comptime :-(
-            if (l > 32) {
-                throwException(info, cb, "{s}() has more than 32 arguments", .{name});
+            if (c > 32) {
+                throwException(iso, "{s}() has more than 32 arguments", .{name});
                 return;
             }
-            if (l > 0) args[0] = ga(info, cb, 0, l, f[0].type) orelse return;
-            if (l > 1) args[1] = ga(info, cb, 1, l, f[1].type) orelse return;
-            if (l > 2) args[2] = ga(info, cb, 2, l, f[2].type) orelse return;
-            if (l > 3) args[3] = ga(info, cb, 3, l, f[3].type) orelse return;
-            if (l > 4) args[4] = ga(info, cb, 4, l, f[4].type) orelse return;
-            if (l > 5) args[5] = ga(info, cb, 5, l, f[5].type) orelse return;
-            if (l > 6) args[6] = ga(info, cb, 6, l, f[6].type) orelse return;
-            if (l > 7) args[7] = ga(info, cb, 7, l, f[7].type) orelse return;
-            if (l > 8) args[8] = ga(info, cb, 8, l, f[8].type) orelse return;
-            if (l > 9) args[9] = ga(info, cb, 9, l, f[9].type) orelse return;
-            if (l > 10) args[10] = ga(info, cb, 10, l, f[10].type) orelse return;
-            if (l > 11) args[11] = ga(info, cb, 11, l, f[11].type) orelse return;
-            if (l > 12) args[12] = ga(info, cb, 12, l, f[12].type) orelse return;
-            if (l > 13) args[13] = ga(info, cb, 13, l, f[13].type) orelse return;
-            if (l > 14) args[14] = ga(info, cb, 14, l, f[14].type) orelse return;
-            if (l > 15) args[15] = ga(info, cb, 15, l, f[15].type) orelse return;
-            if (l > 16) args[16] = ga(info, cb, 16, l, f[16].type) orelse return;
-            if (l > 17) args[17] = ga(info, cb, 17, l, f[17].type) orelse return;
-            if (l > 18) args[18] = ga(info, cb, 18, l, f[18].type) orelse return;
-            if (l > 19) args[19] = ga(info, cb, 19, l, f[19].type) orelse return;
-            if (l > 20) args[20] = ga(info, cb, 20, l, f[20].type) orelse return;
-            if (l > 21) args[21] = ga(info, cb, 21, l, f[21].type) orelse return;
-            if (l > 22) args[22] = ga(info, cb, 22, l, f[22].type) orelse return;
-            if (l > 23) args[23] = ga(info, cb, 23, l, f[23].type) orelse return;
-            if (l > 24) args[24] = ga(info, cb, 24, l, f[24].type) orelse return;
-            if (l > 25) args[25] = ga(info, cb, 25, l, f[25].type) orelse return;
-            if (l > 26) args[26] = ga(info, cb, 26, l, f[26].type) orelse return;
-            if (l > 27) args[27] = ga(info, cb, 27, l, f[27].type) orelse return;
-            if (l > 28) args[28] = ga(info, cb, 28, l, f[28].type) orelse return;
-            if (l > 29) args[29] = ga(info, cb, 29, l, f[29].type) orelse return;
-            if (l > 30) args[30] = ga(info, cb, 30, l, f[30].type) orelse return;
-            if (l > 31) args[31] = ga(info, cb, 31, l, f[31].type) orelse return;
+            var i: usize = 0;
+            if (c > 0) args[0] = ga(iso, info, pool, &i, c, f[0].type) orelse return;
+            if (c > 1) args[1] = ga(iso, info, pool, &i, c, f[1].type) orelse return;
+            if (c > 2) args[2] = ga(iso, info, pool, &i, c, f[2].type) orelse return;
+            if (c > 3) args[3] = ga(iso, info, pool, &i, c, f[3].type) orelse return;
+            if (c > 4) args[4] = ga(iso, info, pool, &i, c, f[4].type) orelse return;
+            if (c > 5) args[5] = ga(iso, info, pool, &i, c, f[5].type) orelse return;
+            if (c > 6) args[6] = ga(iso, info, pool, &i, c, f[6].type) orelse return;
+            if (c > 7) args[7] = ga(iso, info, pool, &i, c, f[7].type) orelse return;
+            if (c > 8) args[8] = ga(iso, info, pool, &i, c, f[8].type) orelse return;
+            if (c > 9) args[9] = ga(iso, info, pool, &i, c, f[9].type) orelse return;
+            if (c > 10) args[10] = ga(iso, info, pool, &i, c, f[10].type) orelse return;
+            if (c > 11) args[11] = ga(iso, info, pool, &i, c, f[11].type) orelse return;
+            if (c > 12) args[12] = ga(iso, info, pool, &i, c, f[12].type) orelse return;
+            if (c > 13) args[13] = ga(iso, info, pool, &i, c, f[13].type) orelse return;
+            if (c > 14) args[14] = ga(iso, info, pool, &i, c, f[14].type) orelse return;
+            if (c > 15) args[15] = ga(iso, info, pool, &i, c, f[15].type) orelse return;
+            if (c > 16) args[16] = ga(iso, info, pool, &i, c, f[16].type) orelse return;
+            if (c > 17) args[17] = ga(iso, info, pool, &i, c, f[17].type) orelse return;
+            if (c > 18) args[18] = ga(iso, info, pool, &i, c, f[18].type) orelse return;
+            if (c > 19) args[19] = ga(iso, info, pool, &i, c, f[19].type) orelse return;
+            if (c > 20) args[20] = ga(iso, info, pool, &i, c, f[20].type) orelse return;
+            if (c > 21) args[21] = ga(iso, info, pool, &i, c, f[21].type) orelse return;
+            if (c > 22) args[22] = ga(iso, info, pool, &i, c, f[22].type) orelse return;
+            if (c > 23) args[23] = ga(iso, info, pool, &i, c, f[23].type) orelse return;
+            if (c > 24) args[24] = ga(iso, info, pool, &i, c, f[24].type) orelse return;
+            if (c > 25) args[25] = ga(iso, info, pool, &i, c, f[25].type) orelse return;
+            if (c > 26) args[26] = ga(iso, info, pool, &i, c, f[26].type) orelse return;
+            if (c > 27) args[27] = ga(iso, info, pool, &i, c, f[27].type) orelse return;
+            if (c > 28) args[28] = ga(iso, info, pool, &i, c, f[28].type) orelse return;
+            if (c > 29) args[29] = ga(iso, info, pool, &i, c, f[29].type) orelse return;
+            if (c > 30) args[30] = ga(iso, info, pool, &i, c, f[30].type) orelse return;
+            if (c > 31) args[31] = ga(iso, info, pool, &i, c, f[31].type) orelse return;
 
             _ = @call(std.builtin.CallModifier.auto, zig_fn, args);
         }
     };
     return ThunkType.cfn;
 }
-
-const FunctionRecord = extern struct {
-    arg_count: usize,
-    thunk: Thunk,
-};
 
 fn createFunction(comptime name: []const u8, comptime zig_fn: anytype) FunctionRecord {
     const arg_count = @typeInfo(@TypeOf(zig_fn)).Fn.params.len;
@@ -271,33 +319,21 @@ fn createFunction(comptime name: []const u8, comptime zig_fn: anytype) FunctionR
     };
 }
 
-fn CArray(comptime T: type) type {
-    return extern struct {
-        items: [*]const T,
-        count: usize,
-    };
-}
-
-fn reifySlice(comptime slice: anytype) ArrayType(slice) {
-    var array: ArrayType(slice) = undefined;
+fn reifySlice(comptime slice: anytype) ChildType(@TypeOf(slice)) {
+    var array: ChildType(@TypeOf(slice)) = undefined;
     for (slice, 0..) |item, index| {
         array[index] = item;
     }
     return array;
 }
 
-fn createArray(comptime array: anytype) CArray(ChildType(array)) {
+fn createArray(comptime array: anytype) CArray(ChildType(@TypeOf(array))) {
     return .{ .items = &array, .count = array.len };
 }
 
 fn createString(comptime s: []const u8) [*:0]const u8 {
     return @ptrCast([*:0]const u8, s);
 }
-
-const EnumRecord = extern struct {
-    name: [*:0]const u8,
-    value: c_int,
-};
 
 fn createEnumSet(comptime T: anytype) CArray(EnumRecord) {
     const fields = std.meta.fields(T);
@@ -310,33 +346,6 @@ fn createEnumSet(comptime T: anytype) CArray(EnumRecord) {
     }
     return createArray(entries);
 }
-
-const EntryType = enum(c_int) {
-    unavailable = 0,
-    function,
-    enum_set,
-    enum_value,
-    object,
-    int_value,
-    float_value,
-};
-
-const EntryParams = extern union {
-    fn_record: FunctionRecord,
-    enum_set: CArray(EnumRecord),
-    int_value: i64,
-    float_value: f64,
-};
-
-const EntryContent = extern struct {
-    type: EntryType,
-    params: EntryParams,
-};
-
-const Entry = extern struct {
-    name: [*:0]const u8,
-    content: EntryContent,
-};
 
 fn createEntryContent(comptime name: []const u8, comptime field: anytype) EntryContent {
     const T = @TypeOf(field);
@@ -374,15 +383,13 @@ fn createEntryContent(comptime name: []const u8, comptime field: anytype) EntryC
     };
 }
 
-const EntryTable = CArray(Entry);
-
-fn createEntryTable(comptime section: anytype) EntryTable {
-    const decls = @typeInfo(section).Struct.decls;
+fn createEntryTable(comptime package: anytype) CArray(Entry) {
+    const decls = @typeInfo(package).Struct.decls;
     var entries: [decls.len]Entry = undefined;
     var index = 0;
     for (decls) |decl| {
         if (decl.is_pub) {
-            const field = @field(section, decl.name);
+            const field = @field(package, decl.name);
             const content = createEntryContent(decl.name, field);
             if (content.type != EntryType.unavailable) {
                 entries[index] = .{
@@ -396,7 +403,15 @@ fn createEntryTable(comptime section: anytype) EntryTable {
     return createArray(reifySlice(entries[0..index]));
 }
 
-export const zig_module = createEntryTable(@import("./functions.zig"));
+fn createModule(comptime package: anytype) Module {
+    return .{
+        .version = api_version,
+        .callbacks = &callbacks,
+        .entries = createEntryTable(package),
+    };
+}
+
+export const zig_module = createModule(@import("./functions.zig"));
 
 test "module content" {
     std.debug.print("\n", .{});
