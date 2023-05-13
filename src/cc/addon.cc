@@ -10,7 +10,7 @@ enum class Result {
 
 struct Memory {
   size_t len;
-  int8_t *bytes;
+  uint8_t* bytes;
 };
 
 struct Callbacks {  
@@ -21,24 +21,24 @@ struct Callbacks {
   bool (*is_null)(Local<Value>);
   bool (*is_array_buffer)(Local<Value>);
 
-  Result (*convert_to_bool)(Isolate *, Local<Value>, bool *);
-  Result (*convert_to_i32)(Isolate *, Local<Value>, int32_t *);
-  Result (*convert_to_u32)(Isolate *, Local<Value>, uint32_t *);
-  Result (*convert_to_i64)(Isolate *, Local<Value>, int64_t *);
-  Result (*convert_to_u64)(Isolate *, Local<Value>, uint64_t *);
-  Result (*convert_to_f64)(Isolate *, Local<Value>, double *);
-  Result (*convert_to_utf8)(Isolate *, Local<Value>, Local<Array> &, Memory *);
-  Result (*convert_to_utf16)(Isolate *, Local<Value>, Local<Array> &, Memory *);
-  Result (*convert_to_buffer)(Isolate *, Local<Value>, Memory *);
+  Result (*convert_to_bool)(Isolate*, Local<Value>, bool*);
+  Result (*convert_to_i32)(Isolate*, Local<Value>, int32_t*);
+  Result (*convert_to_u32)(Isolate*, Local<Value>, uint32_t*);
+  Result (*convert_to_i64)(Isolate*, Local<Value>, int64_t*);
+  Result (*convert_to_u64)(Isolate*, Local<Value>, uint64_t*);
+  Result (*convert_to_f64)(Isolate*, Local<Value>, double*);
+  Result (*convert_to_utf8)(Isolate*, Local<Value>, Local<Array>&, Memory*);
+  Result (*convert_to_utf16)(Isolate*, Local<Value>, Local<Array>&, Memory*);
+  Result (*convert_to_buffer)(Isolate*, Local<Value>, Memory*);
 
-  Result (*convert_from_bool)(Isolate *, bool, Local<Value> *);
-  Result (*convert_from_i32)(Isolate *, int32_t, Local<Value> *);
-  Result (*convert_from_u32)(Isolate *, uint32_t, Local<Value> *);
-  Result (*convert_from_i64)(Isolate *, int64_t, Local<Value> *);
-  Result (*convert_from_u64)(Isolate *, uint64_t, Local<Value> *);
-  Result (*convert_from_f64)(Isolate *, double, Local<Value> *);
+  Result (*convert_from_bool)(Isolate*, bool, Local<Value>*);
+  Result (*convert_from_i32)(Isolate*, int32_t, Local<Value>*);
+  Result (*convert_from_u32)(Isolate*, uint32_t, Local<Value>*);
+  Result (*convert_from_i64)(Isolate*, int64_t, Local<Value>*);
+  Result (*convert_from_u64)(Isolate*, uint64_t, Local<Value>*);
+  Result (*convert_from_f64)(Isolate*, double, Local<Value>*);
 
-  void (*throw_exception)(Isolate *, const char *);
+  void (*throw_exception)(Isolate*, const char*);
 };
 
 enum class EntryType {
@@ -56,15 +56,15 @@ struct Variable {
   void (*setter_thunk)(Isolate*, const FunctionCallbackInfo<Value>&, Local<Array>&);
 };
 struct EnumerationItem {
-  const char *name;
+  const char* name;
   int value;
 };
 struct Enumeration {
-  const EnumerationItem *items;
+  const EnumerationItem* items;
   size_t count;
 };
 struct Entry {
-  const char *name;
+  const char* name;
   int type;
   union {
     ::Function function;
@@ -73,16 +73,16 @@ struct Entry {
   };
 };
 struct EntryTable {
-  const Entry *entries;
+  const Entry* entries;
   size_t count;
 };
 struct Module {
   int version;
-  Callbacks *callbacks;
+  Callbacks* callbacks;
   EntryTable table;
 };
 
-static Local<String> NewString(Isolate* isolate, const char *s) {
+static Local<String> NewString(Isolate* isolate, const char* s) {
   return String::NewFromUtf8(isolate, s).ToLocalChecked();
 }
 
@@ -91,7 +91,7 @@ static Local<Number> NewInteger(Isolate* isolate, int64_t n) {
   return Number::New(isolate, (double) n);
 }
 
-static Local<v8::Function> NewFunction(Isolate* isolate, FunctionCallback f, int len, void *data) {
+static Local<v8::Function> NewFunction(Isolate* isolate, FunctionCallback f, int len, void* data) {
   Local<External> external = External::New(isolate, data);
   Local<Signature> signature;
   Local<FunctionTemplate> ftmpl = FunctionTemplate::New(isolate, f, external, signature, len);
@@ -101,7 +101,7 @@ static Local<v8::Function> NewFunction(Isolate* isolate, FunctionCallback f, int
 static Memory GetMemory(Local<ArrayBuffer> buffer) {
   std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
   Memory memory;
-  memory.bytes = reinterpret_cast<int8_t *>(store->Data());
+  memory.bytes = reinterpret_cast<uint8_t*>(store->Data());
   memory.len = store->ByteLength();
   return memory;
 }
@@ -235,7 +235,7 @@ static Result ConvertToUTF8(Isolate* isolate, Local<Value> value, Local<Array>& 
   if (AllocateMemory(isolate, pool, (len + 1) * sizeof(uint8_t), &memory) != Result::success) {
     return Result::failure;
   }
-  char *buffer = reinterpret_cast<char *>(memory.bytes);
+  char* buffer = reinterpret_cast<char*>(memory.bytes);
   string->WriteUtf8(isolate, buffer);
   *dest = memory;
   return Result::success;
@@ -257,7 +257,7 @@ static Result ConvertToUTF16(Isolate* isolate, Local<Value> value, Local<Array>&
   if (AllocateMemory(isolate, pool, (len + 1) * sizeof(uint16_t), &memory) != Result::success) {
     return Result::failure;
   }
-  uint16_t *buffer = reinterpret_cast<uint16_t *>(memory.bytes);
+  uint16_t *buffer = reinterpret_cast<uint16_t*>(memory.bytes);
   string->Write(isolate, buffer);
   *dest = memory;
   return Result::success;
@@ -309,18 +309,18 @@ static Local<Value> ProcessEntryTable(Isolate* isolate, const EntryTable* table)
   Local<Value> object = Object::New(isolate);
   Local<Context> context = isolate->GetCurrentContext();
   for (size_t i = 0; i < table->count; i++) {
-    const Entry *entry = &table->entries[i];
+    const Entry* entry = &table->entries[i];
     MaybeLocal<Value> result;
 
     switch (EntryType(entry->type)) {
       case EntryType::function: {
-        void *data = const_cast<::Function*>(&entry->function);
+        void* data = const_cast<::Function*>(&entry->function);
         result = NewFunction(isolate, Run, entry->function.arg_count, data);       
       } break;
       case EntryType::enumeration: {
         Local<Value> enumeration = Object::New(isolate);
         for (size_t i = 0; i < entry->enumeration.count; i++) {
-          const EnumerationItem *item = &entry->enumeration.items[i];
+          const EnumerationItem* item = &entry->enumeration.items[i];
           Local<String> name = NewString(isolate, item->name);
           Local<Number> number = NewInteger(isolate, item->value);
           enumeration.As<Object>()->Set(context, name, number).Check();
@@ -328,7 +328,7 @@ static Local<Value> ProcessEntryTable(Isolate* isolate, const EntryTable* table)
         result = enumeration;
       } break;
       case EntryType::variable: {
-        void *data = const_cast<Variable*>(&entry->variable);
+        void* data = const_cast<Variable*>(&entry->variable);
         PropertyAttribute attribute = static_cast<PropertyAttribute>(DontDelete | ReadOnly);
         Local<v8::Function> getter, setter;
         if (entry->variable.getter_thunk) {
@@ -376,22 +376,22 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
 
   // load the shared library
 	String::Utf8Value path(isolate, info[0]);
-  void *handle = dlopen(*path, RTLD_LAZY);
+  void* handle = dlopen(*path, RTLD_LAZY);
   if (!handle) {
     ThrowException(isolate, "Unable to load shared library");
     return;
   }
 
   // find the zig module
-  void *symbol = dlsym(handle, "zig_module");
+  void* symbol = dlsym(handle, "zig_module");
   if (!symbol) {
     ThrowException(isolate, "Unable to find the symbol \"zig_module\"");
     return;
   }
 
   // attach callbacks to module
-  ::Module *module = reinterpret_cast<::Module *>(symbol);
-  Callbacks *callbacks = module->callbacks;
+  ::Module* module = reinterpret_cast<::Module*>(symbol);
+  Callbacks* callbacks = module->callbacks;
   callbacks->get_argument_count = GetArgumentCount;
   callbacks->get_argument = GetArgument;
   callbacks->set_return_value = SetReturnValue;
