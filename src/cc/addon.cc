@@ -14,24 +14,32 @@ struct Memory {
 };
 
 struct Callbacks {  
-  Isolate *(*get_isolate)(const FunctionCallbackInfo<Value>&);
+  Isolate* (*get_isolate)(const FunctionCallbackInfo<Value>&);
   size_t (*get_argument_count)(const FunctionCallbackInfo<Value>&);
   Local<Value> (*get_argument)(const FunctionCallbackInfo<Value>&, size_t);
+  void (*set_return_value)(const FunctionCallbackInfo<Value>& info, Local<Value> value);
   
-  bool (*is_null)(Isolate *isolate, Local<Value>);
-  bool (*is_array_buffer)(Isolate *isolate, Local<Value>);
+  bool (*is_null)(Isolate* isolate, Local<Value>);
+  bool (*is_array_buffer)(Isolate* isolate, Local<Value>);
 
-  Result (*convert_to_boolean)(Isolate *isolate, Local<Value>, bool *);
-  Result (*convert_to_i32)(Isolate *isolate, Local<Value>, int32_t *);
-  Result (*convert_to_u32)(Isolate *isolate, Local<Value>, uint32_t *);
-  Result (*convert_to_i64)(Isolate *isolate, Local<Value>, int64_t *);
-  Result (*convert_to_u64)(Isolate *isolate, Local<Value>, uint64_t *);
-  Result (*convert_to_f64)(Isolate *isolate, Local<Value>, double *);
-  Result (*convert_to_utf8)(Isolate *isolate, Local<Value>, Local<Array>&, Memory *);
-  Result (*convert_to_utf16)(Isolate *isolate, Local<Value>, Local<Array>&, Memory *);
-  Result (*convert_to_buffer)(Isolate *isolate, Local<Value>, Memory *);
+  Result (*convert_to_bool)(Isolate *, Local<Value>, bool *);
+  Result (*convert_to_i32)(Isolate *, Local<Value>, int32_t *);
+  Result (*convert_to_u32)(Isolate *, Local<Value>, uint32_t *);
+  Result (*convert_to_i64)(Isolate *, Local<Value>, int64_t *);
+  Result (*convert_to_u64)(Isolate *, Local<Value>, uint64_t *);
+  Result (*convert_to_f64)(Isolate *, Local<Value>, double *);
+  Result (*convert_to_utf8)(Isolate *, Local<Value>, Local<Array> &, Memory *);
+  Result (*convert_to_utf16)(Isolate *, Local<Value>, Local<Array> &, Memory *);
+  Result (*convert_to_buffer)(Isolate *, Local<Value>, Memory *);
 
-  void (*throw_exception)(Isolate *isolate, const char *);
+  Result (*convert_from_bool)(Isolate *, bool, Local<Value> *);
+  Result (*convert_from_i32)(Isolate *, int32_t, Local<Value> *);
+  Result (*convert_from_u32)(Isolate *, uint32_t, Local<Value> *);
+  Result (*convert_from_i64)(Isolate *, int64_t, Local<Value> *);
+  Result (*convert_from_u64)(Isolate *, uint64_t, Local<Value> *);
+  Result (*convert_from_f64)(Isolate *, double, Local<Value> *);
+
+  void (*throw_exception)(Isolate *, const char *);
 };
 
 enum class EntryType {
@@ -84,6 +92,12 @@ static Local<Value> GetArgument(const FunctionCallbackInfo<Value>& info, size_t 
   return info[index];
 }
 
+static void SetReturnValue(const FunctionCallbackInfo<Value>& info, Local<Value> value) {
+  if (!value.IsEmpty()) {
+    info.GetReturnValue().Set(value);
+  }
+}
+
 static Memory GetMemory(Local<ArrayBuffer> buffer) {
   std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
   Memory memory;
@@ -92,7 +106,7 @@ static Memory GetMemory(Local<ArrayBuffer> buffer) {
   return memory;
 }
 
-static Result AllocateMemory(Isolate *isolate, Local<Array> &pool, size_t size, Memory *dest) {
+static Result AllocateMemory(Isolate* isolate, Local<Array>& pool, size_t size, Memory* dest) {
   if (pool.IsEmpty()) {
     pool = Array::New(isolate);
   }
@@ -103,15 +117,15 @@ static Result AllocateMemory(Isolate *isolate, Local<Array> &pool, size_t size, 
   return Result::success;
 }
 
-static bool IsNull(Isolate *isolate, Local<Value> value) {
+static bool IsNull(Isolate* isolate, Local<Value> value) {
   return value->IsNullOrUndefined();
 }
 
-static bool IsArrayBuffer(Isolate *isolate, Local<Value> value) {
+static bool IsArrayBuffer(Isolate* isolate, Local<Value> value) {
   return value->IsArrayBuffer() || value->IsArrayBufferView();
 }
 
-static Result ConvertToBoolean(Isolate *isolate, Local<Value> value, bool *dest) {
+static Result ConvertToBool(Isolate* isolate, Local<Value> value, bool* dest) {
   Local<Boolean> boolean;
   if (value->IsBoolean()) {
     boolean = value.As<Boolean>();
@@ -126,7 +140,12 @@ static Result ConvertToBoolean(Isolate *isolate, Local<Value> value, bool *dest)
   return Result::success;
 }
 
-static Result ConvertToI32(Isolate *isolate, Local<Value> value, int32_t *dest) {
+static Result ConvertFromBool(Isolate* isolate, bool value, Local<Value>* dest) {
+  *dest = Boolean::New(isolate, value);
+  return Result::success;
+}
+
+static Result ConvertToI32(Isolate* isolate, Local<Value> value, int32_t* dest) {
   Local<Int32> number;
   if (value->IsInt32()) {
     number = value.As<Int32>();
@@ -141,7 +160,12 @@ static Result ConvertToI32(Isolate *isolate, Local<Value> value, int32_t *dest) 
   return Result::success;
 }
 
-static Result ConvertToU32(Isolate *isolate, Local<Value> value, uint32_t *dest) {
+static Result ConvertFromI32(Isolate* isolate, int32_t value, Local<Value>* dest) {
+  *dest = Int32::New(isolate, value);
+  return Result::success;
+}
+
+static Result ConvertToU32(Isolate* isolate, Local<Value> value, uint32_t* dest) {
   Local<Uint32> number;
   if (value->IsUint32()) {
     number = value.As<Uint32>();
@@ -156,7 +180,12 @@ static Result ConvertToU32(Isolate *isolate, Local<Value> value, uint32_t *dest)
   return Result::success;
 }
 
-static Result ConvertToF64(Isolate *isolate, Local<Value> value, double *dest) {
+static Result ConvertFromU32(Isolate* isolate, uint32_t value, Local<Value>* dest) {
+  *dest = Uint32::NewFromUnsigned(isolate, value);
+  return Result::success;
+}
+
+static Result ConvertToF64(Isolate* isolate, Local<Value> value, double* dest) {
   Local<Number> number;
   if (value->IsNumber()) {
     number = value.As<Number>();
@@ -171,7 +200,12 @@ static Result ConvertToF64(Isolate *isolate, Local<Value> value, double *dest) {
   return Result::success;
 }
 
-static Result ConvertToUTF8(Isolate *isolate, Local<Value> value, Local<Array> &pool, Memory *dest) {
+static Result ConvertFromF64(Isolate* isolate, double value, Local<Value>* dest) {
+  *dest = Number::New(isolate, value);
+  return Result::success;
+}
+
+static Result ConvertToUTF8(Isolate* isolate, Local<Value> value, Local<Array>& pool, Memory* dest) {
   Local<String> string;
   if (value->IsString()) {
     string = value.As<String>();
@@ -193,7 +227,7 @@ static Result ConvertToUTF8(Isolate *isolate, Local<Value> value, Local<Array> &
   return Result::success;
 }
 
-static Result ConvertToUTF16(Isolate *isolate, Local<Value> value, Local<Array> &pool, Memory *dest) {
+static Result ConvertToUTF16(Isolate* isolate, Local<Value> value, Local<Array>& pool, Memory* dest) {
   Local<String> string;
   if (value->IsString()) {
     string = value.As<String>();
@@ -215,7 +249,7 @@ static Result ConvertToUTF16(Isolate *isolate, Local<Value> value, Local<Array> 
   return Result::success;
 }
 
-static Result ConvertToBuffer(Isolate *isolate, Local<Value> value, Memory *dest) {
+static Result ConvertToBuffer(Isolate* isolate, Local<Value> value, Memory* dest) {
   Local<ArrayBuffer> buffer; 
   if (value->IsArrayBuffer()) {
     buffer = value.As<ArrayBuffer>();
@@ -228,7 +262,7 @@ static Result ConvertToBuffer(Isolate *isolate, Local<Value> value, Memory *dest
   return Result::success;
 }
 
-static void ThrowException(Isolate *isolate, const char *message) {
+static void ThrowException(Isolate* isolate, const char* message) {
     Local<String> value = String::NewFromUtf8(isolate, message).ToLocalChecked();
     isolate->ThrowException(Exception::Error(value));
 }
@@ -240,7 +274,7 @@ static void Run(const FunctionCallbackInfo<Value>& info) {
   record->thunk(info, pool);
 }
 
-static MaybeLocal<Value> ProcessEntry(Isolate *isolate, const Entry *entry) {
+static MaybeLocal<Value> ProcessEntry(Isolate* isolate, const Entry* entry) {
   switch (EntryType(entry->type)) {
     case EntryType::function: {
       void *data = const_cast<FunctionRecord *>(&entry->function);
@@ -317,9 +351,10 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->get_isolate = GetIsolate;
   callbacks->get_argument_count = GetArgumentCount;
   callbacks->get_argument = GetArgument;
+  callbacks->set_return_value = SetReturnValue;
   callbacks->is_null = IsNull;
   callbacks->is_array_buffer = IsArrayBuffer;
-  callbacks->convert_to_boolean = ConvertToBoolean;
+  callbacks->convert_to_bool = ConvertToBool;
   callbacks->convert_to_i32 = ConvertToI32;
   callbacks->convert_to_u32 = ConvertToU32;
   callbacks->convert_to_i64 = nullptr;
@@ -328,6 +363,12 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->convert_to_utf8 = ConvertToUTF8;
   callbacks->convert_to_utf16 = ConvertToUTF16;
   callbacks->convert_to_buffer = ConvertToBuffer;
+  callbacks->convert_from_bool = ConvertFromBool;
+  callbacks->convert_from_i32 = ConvertFromI32;
+  callbacks->convert_from_u32 = ConvertFromU32;
+  callbacks->convert_from_i64 = nullptr;
+  callbacks->convert_from_u64 = nullptr;
+  callbacks->convert_from_f64 = ConvertFromF64;
   callbacks->throw_exception = ThrowException;
 
   // process all entries inside modules

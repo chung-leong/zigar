@@ -1,5 +1,5 @@
 const std = @import("std");
-const api_version = 1;
+pub const api_version = 1;
 
 const Result = enum {
     Success,
@@ -24,11 +24,12 @@ const Callbacks = extern struct {
     get_isolate: *const fn (info: CallInfo) callconv(.C) Isolate,
     get_argument_count: *const fn (info: CallInfo) callconv(.C) usize,
     get_argument: *const fn (info: CallInfo, index: usize) callconv(.C) Value,
+    set_return_value: *const fn (info: CallInfo, retval: ?Value) callconv(.C) void,
 
     is_null: *const fn (isolate: Isolate, value: Value) callconv(.C) bool,
     is_array_buffer: *const fn (isolate: Isolate, value: Value) callconv(.C) bool,
 
-    convert_to_boolean: *const fn (isolate: Isolate, value: Value, dest: *bool) callconv(.C) c_int,
+    convert_to_bool: *const fn (isolate: Isolate, value: Value, dest: *bool) callconv(.C) c_int,
     convert_to_i32: *const fn (isolate: Isolate, value: Value, dest: *i32) callconv(.C) c_int,
     convert_to_u32: *const fn (isolate: Isolate, value: Value, dest: *u32) callconv(.C) c_int,
     convert_to_i64: *const fn (isolate: Isolate, value: Value, dest: *i64) callconv(.C) c_int,
@@ -37,6 +38,13 @@ const Callbacks = extern struct {
     convert_to_utf8: *const fn (isolate: Isolate, value: Value, pool: Pool, dest: *Memory) callconv(.C) c_int,
     convert_to_utf16: *const fn (isolate: Isolate, value: Value, pool: Pool, dest: *Memory) callconv(.C) c_int,
     convert_to_buffer: *const fn (isolate: Isolate, value: Value, dest: *Memory) callconv(.C) c_int,
+
+    convert_from_bool: *const fn (isolate: Isolate, value: bool, dest: *Value) callconv(.C) c_int,
+    convert_from_i32: *const fn (isolate: Isolate, value: i32, dest: *Value) callconv(.C) c_int,
+    convert_from_u32: *const fn (isolate: Isolate, value: u32, dest: *Value) callconv(.C) c_int,
+    convert_from_i64: *const fn (isolate: Isolate, value: i64, dest: *Value) callconv(.C) c_int,
+    convert_from_u64: *const fn (isolate: Isolate, value: u64, dest: *Value) callconv(.C) c_int,
+    convert_from_f64: *const fn (isolate: Isolate, value: f64, dest: *Value) callconv(.C) c_int,
 
     throw_exception: *const fn (isolate: Isolate, message: [*:0]const u8) void,
 };
@@ -156,6 +164,15 @@ fn ChildType(comptime T: type) type {
     };
 }
 
+fn IntermediateType(comptime T: type) type {
+    return switch (T) {
+        i8, i16 => i32,
+        u8, u16 => u32,
+        f16, f32, f80, f128 => f64,
+        else => T,
+    };
+}
+
 fn checkOverflow(value: anytype, comptime T: type) !void {
     switch (@typeInfo(T)) {
         .Int => {
@@ -174,7 +191,7 @@ fn checkOverflow(value: anytype, comptime T: type) !void {
     }
 }
 
-fn coerce(isolate: Isolate, value: Value, pool: Pool, comptime T: type) !T {
+fn convertTo(isolate: Isolate, pool: Pool, value: Value, comptime T: type) !T {
     if (comptime isOptional(T)) {
         if (callbacks.is_null(isolate, value)) {
             return null;
@@ -183,12 +200,7 @@ fn coerce(isolate: Isolate, value: Value, pool: Pool, comptime T: type) !T {
     const BT = BaseType(T);
 
     if (comptime isScalar(BT)) {
-        const IT = switch (BT) {
-            i8, i16 => i32,
-            u8, u16 => u32,
-            f16, f32, f80, f128 => f64,
-            else => BT,
-        };
+        const IT = IntermediateType(BT);
         const callback = @field(callbacks, "convert_to_" ++ @typeName(IT));
         var result: IT = undefined;
         var retval = callback(isolate, value, &result);
@@ -198,11 +210,7 @@ fn coerce(isolate: Isolate, value: Value, pool: Pool, comptime T: type) !T {
         if (comptime BT != IT) {
             // need to check for overflow and cast to final type
             try checkOverflow(result, BT);
-            if (comptime isInt(T)) {
-                return @intCast(BT, result);
-            } else if (comptime isFloat(T)) {
-                return @floatCast(BT, result);
-            }
+            return if (comptime isInt(T)) @intCast(BT, result) else @floatCast(BT, result);
         }
         return result;
     } else if (comptime isArrayLike(T)) {
@@ -226,6 +234,28 @@ fn coerce(isolate: Isolate, value: Value, pool: Pool, comptime T: type) !T {
     return Error.UnsupportedConversion;
 }
 
+fn convertFrom(isolate: Isolate, pool: Pool, value: anytype) !?Value {
+    const T = @TypeOf(value);
+    if (T == void) {
+        return null;
+    }
+    if (comptime isOptional(T)) {
+        return if (value) |v| convertFrom(isolate, pool, v) else null;
+    }
+    if (comptime isScalar(T)) {
+        const IT = IntermediateType(T);
+        const i_value: IT = if (comptime isFloat(T)) @floatCast(IT, value) else value;
+        const callback = @field(callbacks, "convert_from_" ++ @typeName(IT));
+        var result: Value = undefined;
+        var retval = callback(isolate, i_value, &result);
+        if (@intToEnum(Result, retval) != Result.Success) {
+            return Error.UnsupportedConversion;
+        }
+        return result;
+    }
+    return Error.UnsupportedConversion;
+}
+
 fn throwException(isolate: Isolate, comptime fmt: []const u8, vars: anytype) void {
     var buffer: [1024]u8 = undefined;
     const message = std.fmt.bufPrint(&buffer, fmt, vars) catch fmt;
@@ -245,7 +275,7 @@ fn createThunk(comptime name: []const u8, comptime zig_fn: anytype) Thunk {
                 const index: usize = index_ptr.*;
                 index_ptr.* = index + 1;
                 const arg = callbacks.get_argument(info, index);
-                if (coerce(isolate, arg, pool, T)) |value| {
+                if (convertTo(isolate, pool, arg, T)) |value| {
                     return value;
                 } else |err| {
                     const arg_count = callbacks.get_argument_count(info);
@@ -253,7 +283,7 @@ fn createThunk(comptime name: []const u8, comptime zig_fn: anytype) Thunk {
                         const fmt = "{s}() expects {d} argument(s), {d} given";
                         throwException(isolate, fmt, .{ name, count, arg_count });
                     } else {
-                        const fmt = "Error encounter while converting JavaScript value to {s} for argument {d} of {s}(): {s}";
+                        const fmt = "Error encountered while converting JavaScript value to {s} for argument {d} of {s}(): {s}";
                         throwException(isolate, fmt, .{ @typeName(T), index + 1, name, @errorName(err) });
                     }
                     return null;
@@ -305,7 +335,63 @@ fn createThunk(comptime name: []const u8, comptime zig_fn: anytype) Thunk {
             if (c > 30) args[30] = ga(iso, info, pool, &i, c, f[30].type) orelse return;
             if (c > 31) args[31] = ga(iso, info, pool, &i, c, f[31].type) orelse return;
 
-            _ = @call(std.builtin.CallModifier.auto, zig_fn, args);
+            var result = @call(std.builtin.CallModifier.auto, zig_fn, args);
+            var retval: anyerror!?Value = null;
+            if (comptime isErrorUnion(@TypeOf(result))) {
+                if (result) |value| {
+                    retval = convertFrom(iso, pool, value);
+                } else |err| {
+                    throwException(iso, "Error encountered in {s}(): {s}", .{ name, @errorName(err) });
+                    return;
+                }
+            } else {
+                retval = convertFrom(iso, pool, result);
+            }
+            if (retval) |value| {
+                callbacks.set_return_value(info, value);
+            } else |err| {
+                const T = BaseType(@TypeOf(result));
+                const fmt = "Error encountered while converting {s} to JavaScript value: {s}";
+                throwException(iso, fmt, .{ @typeName(T), @errorName(err) });
+                return;
+            }
+        }
+    };
+    return ThunkType.cfn;
+}
+
+fn createGetterThunk(comptime package: anytype, comptime name: []const u8) Thunk {
+    const ThunkType = struct {
+        fn cfn(info: CallInfo, pool: Pool) callconv(.C) void {
+            const iso = callbacks.get_isolate(info);
+            const field = @field(package, name);
+            const T = @TypeOf(field);
+            if (convertFrom(iso, pool, field)) |v| {
+                callbacks.set_return_value(info, v);
+            } else |err| {
+                const fmt = "Error encountered while converting {s} to JavaScript value: {s}";
+                throwException(iso, fmt, .{ @typeName(T), @errorName(err) });
+                return;
+            }
+        }
+    };
+    return ThunkType.cfn;
+}
+
+fn createSetterThunk(comptime package: anytype, comptime name: []const u8) Thunk {
+    const ThunkType = struct {
+        fn cfn(info: CallInfo, pool: Pool) callconv(.C) void {
+            const iso = callbacks.get_isolate(info);
+            const arg = callbacks.get_argument(info, 0);
+            const T = @TypeOf(@field(package, name));
+            if (convertTo(iso, pool, arg, T)) |value| {
+                var ptr = &@field(package, name);
+                ptr.* = value;
+            } else |err| {
+                const fmt = "Error encountered while converting JavaScript value to {s}: {s}";
+                throwException(iso, fmt, .{ @typeName(T), @errorName(err) });
+                return;
+            }
         }
     };
     return ThunkType.cfn;
@@ -347,42 +433,6 @@ fn createEnumSet(comptime T: anytype) CArray(EnumRecord) {
     return createArray(entries);
 }
 
-fn createEntryContent(comptime name: []const u8, comptime field: anytype) EntryContent {
-    const T = @TypeOf(field);
-    return switch (@typeInfo(T)) {
-        .Type => switch (@typeInfo(field)) {
-            .Enum => .{
-                .type = EntryType.enum_set,
-                .params = .{ .enum_set = createEnumSet(field) },
-            },
-            else => .{
-                .type = EntryType.unavailable,
-                .params = .{ .int_value = 0 },
-            },
-        },
-        .Fn => .{
-            .type = EntryType.function,
-            .params = .{ .fn_record = createFunction(name, field) },
-        },
-        .Enum => .{
-            .type = EntryType.enum_value,
-            .params = .{ .int_value = @enumToInt(field) },
-        },
-        .Int, .ComptimeInt => .{
-            .type = EntryType.int_value,
-            .params = .{ .int_value = field },
-        },
-        .Float, .ComptimeFloat => .{
-            .type = EntryType.float_value,
-            .params = .{ .float_value = field },
-        },
-        else => .{
-            .type = EntryType.unavailable,
-            .params = .{ .int_value = 0 },
-        },
-    };
-}
-
 fn createEntryTable(comptime package: anytype) CArray(Entry) {
     const decls = @typeInfo(package).Struct.decls;
     var entries: [decls.len]Entry = undefined;
@@ -390,11 +440,36 @@ fn createEntryTable(comptime package: anytype) CArray(Entry) {
     for (decls) |decl| {
         if (decl.is_pub) {
             const field = @field(package, decl.name);
-            const content = createEntryContent(decl.name, field);
-            if (content.type != EntryType.unavailable) {
+            const content: ?EntryContent = switch (@typeInfo(@TypeOf(field))) {
+                .Type => switch (@typeInfo(field)) {
+                    .Enum => .{
+                        .type = EntryType.enum_set,
+                        .params = .{ .enum_set = createEnumSet(field) },
+                    },
+                    else => null,
+                },
+                .Fn => .{
+                    .type = EntryType.function,
+                    .params = .{ .fn_record = createFunction(decl.name, field) },
+                },
+                .Enum => .{
+                    .type = EntryType.enum_value,
+                    .params = .{ .int_value = @enumToInt(field) },
+                },
+                .Int, .ComptimeInt => .{
+                    .type = EntryType.int_value,
+                    .params = .{ .int_value = field },
+                },
+                .Float, .ComptimeFloat => .{
+                    .type = EntryType.float_value,
+                    .params = .{ .float_value = field },
+                },
+                else => null,
+            };
+            if (content) |c| {
                 entries[index] = .{
                     .name = createString(decl.name),
-                    .content = content,
+                    .content = c,
                 };
                 index += 1;
             }
@@ -403,36 +478,10 @@ fn createEntryTable(comptime package: anytype) CArray(Entry) {
     return createArray(reifySlice(entries[0..index]));
 }
 
-fn createModule(comptime package: anytype) Module {
+pub fn createModule(comptime package: anytype) Module {
     return .{
         .version = api_version,
         .callbacks = &callbacks,
         .entries = createEntryTable(package),
     };
-}
-
-export const zig_module = createModule(@import("./functions.zig"));
-
-test "module content" {
-    std.debug.print("\n", .{});
-    for (zig_module.items, 0..zig_module.count) |entry, _| {
-        std.debug.print("{s}\t", .{entry.name});
-        switch (entry.content.type) {
-            EntryType.function => std.debug.print("[function]\n", .{}),
-            EntryType.enum_set => {
-                std.debug.print("enum {{\n", .{});
-                const items = entry.content.params.enum_set.items;
-                const count = entry.content.params.enum_set.count;
-                for (items, 0..count) |item, _| {
-                    std.debug.print("  {s} = {d}\n", .{ item.name, item.value });
-                }
-                std.debug.print("}}\n", .{});
-            },
-            EntryType.int_value, EntryType.enum_value => std.debug.print("{d}\n", .{entry.content.params.int_value}),
-            EntryType.float_value => std.debug.print("{d}\n", .{entry.content.params.float_value}),
-            else => {
-                std.debug.print("[unknown]\n", .{});
-            },
-        }
-    }
 }

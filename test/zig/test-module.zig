@@ -1,6 +1,11 @@
 const print = @import("std").debug.print;
 
-pub const pi = 3.14;
+const private = 1234;
+
+pub const uint8: u8 = 150;
+pub const int16: i16 = 1234;
+pub const uint32: u32 = 69000;
+pub const float = 3.14;
 
 pub const Types = enum { Dog, Cat, Bear };
 
