@@ -21,13 +21,12 @@ const Memory = extern struct {
     bytes: [*]u8,
 };
 const Callbacks = extern struct {
-    get_isolate: *const fn (info: CallInfo) callconv(.C) Isolate,
     get_argument_count: *const fn (info: CallInfo) callconv(.C) usize,
     get_argument: *const fn (info: CallInfo, index: usize) callconv(.C) Value,
     set_return_value: *const fn (info: CallInfo, retval: ?Value) callconv(.C) void,
 
-    is_null: *const fn (isolate: Isolate, value: Value) callconv(.C) bool,
-    is_array_buffer: *const fn (isolate: Isolate, value: Value) callconv(.C) bool,
+    is_null: *const fn (value: Value) callconv(.C) bool,
+    is_array_buffer: *const fn (value: Value) callconv(.C) bool,
 
     convert_to_bool: *const fn (isolate: Isolate, value: Value, dest: *bool) callconv(.C) c_int,
     convert_to_i32: *const fn (isolate: Isolate, value: Value, dest: *i32) callconv(.C) c_int,
@@ -48,6 +47,7 @@ const Callbacks = extern struct {
 
     throw_exception: *const fn (isolate: Isolate, message: [*:0]const u8) void,
 };
+const Thunk = *const fn (isolate: Isolate, info: CallInfo, pool: Pool) callconv(.C) void;
 
 fn CArray(comptime T: type) type {
     return extern struct {
@@ -59,25 +59,26 @@ fn CArray(comptime T: type) type {
 const EntryType = enum(c_int) {
     unavailable = 0,
     function,
-    enum_set,
-    enum_value,
-    object,
-    int_value,
-    float_value,
+    variable,
+    enumeration,
 };
-const FunctionRecord = extern struct {
-    arg_count: usize,
+const Function = extern struct {
     thunk: Thunk,
+    arg_count: usize,
 };
-const EnumRecord = extern struct {
+const Variable = extern struct {
+    getter_thunk: Thunk,
+    setter_thunk: ?Thunk,
+};
+const EnumerationItem = extern struct {
     name: [*:0]const u8,
     value: c_int,
 };
+const Enumeration = CArray(EnumerationItem);
 const EntryParams = extern union {
-    fn_record: FunctionRecord,
-    enum_set: CArray(EnumRecord),
-    int_value: i64,
-    float_value: f64,
+    function: Function,
+    variable: Variable,
+    enumeration: Enumeration,
 };
 const EntryContent = extern struct {
     type: EntryType,
@@ -87,10 +88,11 @@ const Entry = extern struct {
     name: [*:0]const u8,
     content: EntryContent,
 };
+const EntryTable = CArray(Entry);
 const Module = extern struct {
     version: c_int,
     callbacks: *Callbacks,
-    entries: CArray(Entry),
+    entries: EntryTable,
 };
 
 var callbacks: Callbacks = undefined;
@@ -262,8 +264,6 @@ fn throwException(isolate: Isolate, comptime fmt: []const u8, vars: anytype) voi
     callbacks.throw_exception(isolate, @ptrCast([*:0]const u8, message.ptr));
 }
 
-const Thunk = *const fn (info: CallInfo, pool: Pool) callconv(.C) void;
-
 fn createThunk(comptime name: []const u8, comptime zig_fn: anytype) Thunk {
     const Args = std.meta.ArgsTuple(@TypeOf(zig_fn));
     const ThunkType = struct {
@@ -291,8 +291,7 @@ fn createThunk(comptime name: []const u8, comptime zig_fn: anytype) Thunk {
             }
         }
 
-        fn cfn(info: CallInfo, pool: Pool) callconv(.C) void {
-            const iso = callbacks.get_isolate(info);
+        fn cfn(iso: Isolate, info: CallInfo, pool: Pool) callconv(.C) void {
             var args: Args = undefined;
             const f = std.meta.fields(Args);
             const c = f.len;
@@ -360,17 +359,16 @@ fn createThunk(comptime name: []const u8, comptime zig_fn: anytype) Thunk {
     return ThunkType.cfn;
 }
 
-fn createGetterThunk(comptime package: anytype, comptime name: []const u8) Thunk {
+fn createGetterThunk(comptime name: []const u8, comptime package: anytype) Thunk {
     const ThunkType = struct {
-        fn cfn(info: CallInfo, pool: Pool) callconv(.C) void {
-            const iso = callbacks.get_isolate(info);
+        fn cfn(iso: Isolate, info: CallInfo, pool: Pool) callconv(.C) void {
             const field = @field(package, name);
             const T = @TypeOf(field);
             if (convertFrom(iso, pool, field)) |v| {
                 callbacks.set_return_value(info, v);
             } else |err| {
-                const fmt = "Error encountered while converting {s} to JavaScript value: {s}";
-                throwException(iso, fmt, .{ @typeName(T), @errorName(err) });
+                const fmt = "Error encountered while converting {s} to JavaScript value for property \"{s}\": {s}";
+                throwException(iso, fmt, .{ @typeName(T), name, @errorName(err) });
                 return;
             }
         }
@@ -378,18 +376,17 @@ fn createGetterThunk(comptime package: anytype, comptime name: []const u8) Thunk
     return ThunkType.cfn;
 }
 
-fn createSetterThunk(comptime package: anytype, comptime name: []const u8) Thunk {
+fn createSetterThunk(comptime name: []const u8, comptime package: anytype) Thunk {
     const ThunkType = struct {
-        fn cfn(info: CallInfo, pool: Pool) callconv(.C) void {
-            const iso = callbacks.get_isolate(info);
+        fn cfn(iso: Isolate, info: CallInfo, pool: Pool) callconv(.C) void {
             const arg = callbacks.get_argument(info, 0);
             const T = @TypeOf(@field(package, name));
             if (convertTo(iso, pool, arg, T)) |value| {
                 var ptr = &@field(package, name);
                 ptr.* = value;
             } else |err| {
-                const fmt = "Error encountered while converting JavaScript value to {s}: {s}";
-                throwException(iso, fmt, .{ @typeName(T), @errorName(err) });
+                const fmt = "Error encountered while converting JavaScript value to {s} for property \"{s}\": {s}";
+                throwException(iso, fmt, .{ @typeName(T), name, @errorName(err) });
                 return;
             }
         }
@@ -397,11 +394,19 @@ fn createSetterThunk(comptime package: anytype, comptime name: []const u8) Thunk
     return ThunkType.cfn;
 }
 
-fn createFunction(comptime name: []const u8, comptime zig_fn: anytype) FunctionRecord {
+fn createFunction(comptime name: []const u8, comptime zig_fn: anytype) Function {
     const arg_count = @typeInfo(@TypeOf(zig_fn)).Fn.params.len;
     return .{
         .arg_count = arg_count,
         .thunk = createThunk(name, zig_fn),
+    };
+}
+
+fn createVariable(comptime name: []const u8, comptime package: anytype) Variable {
+    const writable = false;
+    return .{
+        .getter_thunk = createGetterThunk(name, package),
+        .setter_thunk = if (writable) createSetterThunk(name, package) else null,
     };
 }
 
@@ -421,9 +426,9 @@ fn createString(comptime s: []const u8) [*:0]const u8 {
     return @ptrCast([*:0]const u8, s);
 }
 
-fn createEnumSet(comptime T: anytype) CArray(EnumRecord) {
+fn createEnumeration(comptime T: anytype) Enumeration {
     const fields = std.meta.fields(T);
-    var entries: [fields.len]EnumRecord = undefined;
+    var entries: [fields.len]EnumerationItem = undefined;
     for (fields, 0..) |field, index| {
         entries[index] = .{
             .name = createString(field.name),
@@ -433,7 +438,7 @@ fn createEnumSet(comptime T: anytype) CArray(EnumRecord) {
     return createArray(entries);
 }
 
-fn createEntryTable(comptime package: anytype) CArray(Entry) {
+fn createEntryTable(comptime package: anytype) EntryTable {
     const decls = @typeInfo(package).Struct.decls;
     var entries: [decls.len]Entry = undefined;
     var index = 0;
@@ -441,30 +446,22 @@ fn createEntryTable(comptime package: anytype) CArray(Entry) {
         if (decl.is_pub) {
             const field = @field(package, decl.name);
             const content: ?EntryContent = switch (@typeInfo(@TypeOf(field))) {
+                .NoReturn, .Pointer, .Opaque, .Frame, .AnyFrame => null,
                 .Type => switch (@typeInfo(field)) {
                     .Enum => .{
                         .type = EntryType.enum_set,
-                        .params = .{ .enum_set = createEnumSet(field) },
+                        .params = .{ .enumeration = createEnumeration(field) },
                     },
                     else => null,
                 },
                 .Fn => .{
                     .type = EntryType.function,
-                    .params = .{ .fn_record = createFunction(decl.name, field) },
+                    .params = .{ .function = createFunction(decl.name, field) },
                 },
-                .Enum => .{
-                    .type = EntryType.enum_value,
-                    .params = .{ .int_value = @enumToInt(field) },
+                else => .{
+                    .type = EntryType.variable,
+                    .params = .{ .variable = createVariable(decl.name, package) },
                 },
-                .Int, .ComptimeInt => .{
-                    .type = EntryType.int_value,
-                    .params = .{ .int_value = field },
-                },
-                .Float, .ComptimeFloat => .{
-                    .type = EntryType.float_value,
-                    .params = .{ .float_value = field },
-                },
-                else => null,
             };
             if (content) |c| {
                 entries[index] = .{

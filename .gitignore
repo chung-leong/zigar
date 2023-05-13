@@ -135,3 +135,7 @@ src/zig/build/*
 *.o
 .vscode
 build
+
+node_modules
+webpack.debug.js
+coverage

@@ -1,0 +1,32 @@
+{
+  "name": "node-zig",
+  "version": "0.0.1",
+  "description": "Enable to use of Zig in NodeJS",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "install": "node-gyp rebuild"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chung-leong/node-zig.git"
+  },
+  "keywords": [
+    "zig"
+  ],
+  "author": "Chung Leong",
+  "license": "MIT",
+  "gypfile": true,
+  "bugs": {
+    "url": "https://github.com/chung-leong/node-zig/issues"
+  },
+  "homepage": "https://github.com/chung-leong/node-zig#readme",
+  "devDependencies": {
+    "chai": "^4.3.7",
+    "mocha": "^10.2.0",
+    "mocha-skip-if": "^1.0.4"
+  }
+}

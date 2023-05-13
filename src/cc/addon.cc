@@ -14,13 +14,12 @@ struct Memory {
 };
 
 struct Callbacks {  
-  Isolate* (*get_isolate)(const FunctionCallbackInfo<Value>&);
   size_t (*get_argument_count)(const FunctionCallbackInfo<Value>&);
   Local<Value> (*get_argument)(const FunctionCallbackInfo<Value>&, size_t);
   void (*set_return_value)(const FunctionCallbackInfo<Value>& info, Local<Value> value);
   
-  bool (*is_null)(Isolate* isolate, Local<Value>);
-  bool (*is_array_buffer)(Isolate* isolate, Local<Value>);
+  bool (*is_null)(Local<Value>);
+  bool (*is_array_buffer)(Local<Value>);
 
   Result (*convert_to_bool)(Isolate *, Local<Value>, bool *);
   Result (*convert_to_i32)(Isolate *, Local<Value>, int32_t *);
@@ -45,43 +44,66 @@ struct Callbacks {
 enum class EntryType {
   unavailable = 0,
   function,
-  enumSet,
-  enumValue,
-  object,
-  intValue,
-  floatValue,
+  variable,
+  enumeration,
 };
-struct FunctionRecord {
+struct Function {
+  void (*thunk)(Isolate*, const FunctionCallbackInfo<Value>&, Local<Array>&);
   size_t arg_count;
-  void (*thunk)(const FunctionCallbackInfo<Value>&, Local<Array>&);
 };
-struct EnumRecord {
+struct Variable {
+  void (*getter_thunk)(Isolate*, const FunctionCallbackInfo<Value>&, Local<Array>&);
+  void (*setter_thunk)(Isolate*, const FunctionCallbackInfo<Value>&, Local<Array>&);
+};
+struct EnumerationItem {
   const char *name;
   int value;
 };
-struct EnumSet {
-  const EnumRecord *records;
-  size_t record_count;
+struct Enumeration {
+  const EnumerationItem *items;
+  size_t count;
 };
 struct Entry {
   const char *name;
   int type;
   union {
-    FunctionRecord function;    
-    EnumSet enum_set;
-    int64_t int_value;
-    double float_value;
+    ::Function function;
+    Variable variable;
+    Enumeration enumeration;
   };
 };
-struct ZigModule {
+struct EntryTable {
+  const Entry *entries;
+  size_t count;
+};
+struct Module {
   int version;
   Callbacks *callbacks;
-  const Entry *entries;
-  size_t entry_count;
+  EntryTable table;
 };
 
-static Isolate *GetIsolate(const FunctionCallbackInfo<Value>& info) {
-  return info.GetIsolate();
+static Local<String> NewString(Isolate* isolate, const char *s) {
+  return String::NewFromUtf8(isolate, s).ToLocalChecked();
+}
+
+static Local<Number> NewInteger(Isolate* isolate, int64_t n) {
+  // TODO: avoid double when possible
+  return Number::New(isolate, (double) n);
+}
+
+static Local<v8::Function> NewFunction(Isolate* isolate, FunctionCallback f, int len, void *data) {
+  Local<External> external = External::New(isolate, data);
+  Local<Signature> signature;
+  Local<FunctionTemplate> ftmpl = FunctionTemplate::New(isolate, f, external, signature, len);
+  return ftmpl->GetFunction(isolate->GetCurrentContext()).ToLocalChecked();
+}
+
+static Memory GetMemory(Local<ArrayBuffer> buffer) {
+  std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
+  Memory memory;
+  memory.bytes = reinterpret_cast<int8_t *>(store->Data());
+  memory.len = store->ByteLength();
+  return memory;
 }
 
 static size_t GetArgumentCount(const FunctionCallbackInfo<Value>& info) {
@@ -98,14 +120,6 @@ static void SetReturnValue(const FunctionCallbackInfo<Value>& info, Local<Value>
   }
 }
 
-static Memory GetMemory(Local<ArrayBuffer> buffer) {
-  std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
-  Memory memory;
-  memory.bytes = reinterpret_cast<int8_t *>(store->Data());
-  memory.len = store->ByteLength();
-  return memory;
-}
-
 static Result AllocateMemory(Isolate* isolate, Local<Array>& pool, size_t size, Memory* dest) {
   if (pool.IsEmpty()) {
     pool = Array::New(isolate);
@@ -117,11 +131,11 @@ static Result AllocateMemory(Isolate* isolate, Local<Array>& pool, size_t size, 
   return Result::success;
 }
 
-static bool IsNull(Isolate* isolate, Local<Value> value) {
+static bool IsNull(Local<Value> value) {
   return value->IsNullOrUndefined();
 }
 
-static bool IsArrayBuffer(Isolate* isolate, Local<Value> value) {
+static bool IsArrayBuffer(Local<Value> value) {
   return value->IsArrayBuffer() || value->IsArrayBufferView();
 }
 
@@ -268,45 +282,75 @@ static void ThrowException(Isolate* isolate, const char* message) {
 }
 
 static void Run(const FunctionCallbackInfo<Value>& info) {
-  void *data = info.Data().As<External>()->Value();
-  const FunctionRecord *record = reinterpret_cast<FunctionRecord *>(data);
+  void* data = info.Data().As<External>()->Value();
+  const ::Function* function = reinterpret_cast<::Function*>(data);
+  Isolate* isolate = info.GetIsolate();
   Local<Array> pool;
-  record->thunk(info, pool);
+  function->thunk(isolate, info, pool);
 }
 
-static MaybeLocal<Value> ProcessEntry(Isolate* isolate, const Entry* entry) {
-  switch (EntryType(entry->type)) {
-    case EntryType::function: {
-      void *data = const_cast<FunctionRecord *>(&entry->function);
-      Local<External> external = External::New(isolate, data);
-      Local<Context> context = isolate->GetCurrentContext();
-      return FunctionTemplate::New(isolate, Run, external, 
-        Local<Signature>(), entry->function.arg_count)
-          ->GetFunction(context).ToLocalChecked();
+static void GetProperty(const FunctionCallbackInfo<Value>& info) {
+  void* data = info.Data().As<External>()->Value();
+  const Variable* variable = reinterpret_cast<Variable*>(data);
+  Isolate* isolate = info.GetIsolate();
+  Local<Array> pool;
+  variable->getter_thunk(isolate, info, pool);
+}
+
+static void SetProperty(const FunctionCallbackInfo<Value>& info) {
+  void* data = info.Data().As<External>()->Value();
+  const Variable* variable = reinterpret_cast<Variable*>(data);
+  Isolate* isolate = info.GetIsolate();
+  Local<Array> pool;
+  variable->setter_thunk(isolate, info, pool);
+}
+
+static Local<Value> ProcessEntryTable(Isolate* isolate, const EntryTable* table) {
+  Local<Value> object = Object::New(isolate);
+  Local<Context> context = isolate->GetCurrentContext();
+  for (size_t i = 0; i < table->count; i++) {
+    const Entry *entry = &table->entries[i];
+    MaybeLocal<Value> result;
+
+    switch (EntryType(entry->type)) {
+      case EntryType::function: {
+        void *data = const_cast<::Function*>(&entry->function);
+        result = NewFunction(isolate, Run, entry->function.arg_count, data);       
+      } break;
+      case EntryType::enumeration: {
+        Local<Value> enumeration = Object::New(isolate);
+        for (size_t i = 0; i < entry->enumeration.count; i++) {
+          const EnumerationItem *item = &entry->enumeration.items[i];
+          Local<String> name = NewString(isolate, item->name);
+          Local<Number> number = NewInteger(isolate, item->value);
+          enumeration.As<Object>()->Set(context, name, number).Check();
+        }
+        result = enumeration;
+      } break;
+      case EntryType::variable: {
+        void *data = const_cast<Variable*>(&entry->variable);
+        PropertyAttribute attribute = static_cast<PropertyAttribute>(DontDelete | ReadOnly);
+        Local<v8::Function> getter, setter;
+        if (entry->variable.getter_thunk) {
+          getter = NewFunction(isolate, GetProperty, 0, data);
+        }
+        if (entry->variable.setter_thunk) {
+          setter = NewFunction(isolate, SetProperty, 1, data);
+          attribute = static_cast<PropertyAttribute>(attribute & ~ReadOnly);
+        }
+        Local<String> name = NewString(isolate, entry->name);
+        object.As<Object>()->SetAccessorProperty(name, getter, setter, attribute);        
+      } break;
+      case EntryType::unavailable:
+        break;
     }
-    case EntryType::intValue: 
-    case EntryType::enumValue: {
-      return Number::New(isolate, (double) entry->int_value);
+    if (!result.IsEmpty()) {
+      Local<Value> value = result.ToLocalChecked();
+      Local<String> name = NewString(isolate, entry->name);
+      object.As<Object>()->Set(context, name, value).Check();
     }
-    case EntryType::floatValue: {
-      return Number::New(isolate, entry->float_value);
-    }
-    case EntryType::enumSet: {
-      Local<Value> hash = Object::New(isolate);
-      Local<Context> context = isolate->GetCurrentContext();
-      for (size_t i = 0; i < entry->enum_set.record_count; i++) {
-        const EnumRecord *record = &entry->enum_set.records[i];
-        hash.As<Object>()->Set(context, 
-          String::NewFromUtf8(isolate, record->name).ToLocalChecked(),
-          Number::New(isolate, (double) record->value)).Check();
-      }
-      return hash;
-    }
-    case EntryType::object:
-    case EntryType::unavailable:
-      break;
   }
-  return MaybeLocal<Value>();                                   
+  return object;
 }
 
 class AddonData {
@@ -346,9 +390,8 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   }
 
   // attach callbacks to module
-  ZigModule *module = reinterpret_cast<ZigModule *>(symbol);
+  ::Module *module = reinterpret_cast<::Module *>(symbol);
   Callbacks *callbacks = module->callbacks;
-  callbacks->get_isolate = GetIsolate;
   callbacks->get_argument_count = GetArgumentCount;
   callbacks->get_argument = GetArgument;
   callbacks->set_return_value = SetReturnValue;
@@ -372,30 +415,17 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->throw_exception = ThrowException;
 
   // process all entries inside modules
-  Local<Value> hash = Object::New(isolate);
-  Local<Context> context = isolate->GetCurrentContext();
-  for (size_t i = 0; i < module->entry_count; i++) {
-    const Entry *entry = &module->entries[i];
-    MaybeLocal<Value> result = ProcessEntry(isolate, entry);
-    if (!result.IsEmpty()) {
-      hash.As<Object>()->Set(context, 
-        String::NewFromUtf8(isolate, entry->name).ToLocalChecked(),
-        result.ToLocalChecked()).Check();
-    }
-  }
+  info.GetReturnValue().Set(ProcessEntryTable(isolate, &module->table));
 
   // TODO: save the handle so we can release it on shutdown
 
-  info.GetReturnValue().Set(hash);
 }
 
 NODE_MODULE_INIT(/* exports, module, context */) {
   Isolate* isolate = context->GetIsolate();
   AddonData* data = new AddonData(isolate);
-  Local<External> external = External::New(isolate, data);
 
-  exports->Set(context,
-    String::NewFromUtf8(isolate, "load").ToLocalChecked(),
-    FunctionTemplate::New(isolate, Load, external)
-      ->GetFunction(context).ToLocalChecked()).Check();
+  Local<String> name = NewString(isolate, "load");
+  Local<v8::Function> function = NewFunction(isolate, Load, 1, static_cast<void*>(data));
+  exports->Set(context, name, function).Check();
 } 
