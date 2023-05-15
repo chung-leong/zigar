@@ -25,6 +25,10 @@ const Callbacks = extern struct {
     get_argument: *const fn (info: CallInfo, index: usize) callconv(.C) Value,
     set_return_value: *const fn (info: CallInfo, retval: ?Value) callconv(.C) void,
 
+    allocate_memory: *const fn (isolate: Isolate, pool: Pool, size: usize, dest: *Memory) callconv(.C) c_int,
+    reallocate_memory: *const fn (isolate: Isolate, pool: Pool, size: usize, dest: *Memory) callconv(.C) c_int,
+    free_memory: *const fn (isolate: Isolate, pool: Pool, dest: *Memory) callconv(.C) c_int,
+
     is_null: *const fn (value: Value) callconv(.C) bool,
     is_array_buffer: *const fn (value: Value) callconv(.C) bool,
 
@@ -34,8 +38,8 @@ const Callbacks = extern struct {
     convert_to_i64: *const fn (isolate: Isolate, value: Value, dest: *i64) callconv(.C) c_int,
     convert_to_u64: *const fn (isolate: Isolate, value: Value, dest: *u64) callconv(.C) c_int,
     convert_to_f64: *const fn (isolate: Isolate, value: Value, dest: *f64) callconv(.C) c_int,
-    convert_to_utf8: *const fn (isolate: Isolate, value: Value, pool: Pool, dest: *Memory) callconv(.C) c_int,
-    convert_to_utf16: *const fn (isolate: Isolate, value: Value, pool: Pool, dest: *Memory) callconv(.C) c_int,
+    convert_to_utf8: *const fn (isolate: Isolate, pool: Pool, value: Value, dest: *Memory) callconv(.C) c_int,
+    convert_to_utf16: *const fn (isolate: Isolate, pool: Pool, value: Value, dest: *Memory) callconv(.C) c_int,
     convert_to_buffer: *const fn (isolate: Isolate, value: Value, dest: *Memory) callconv(.C) c_int,
 
     convert_from_bool: *const fn (isolate: Isolate, value: bool, dest: *Value) callconv(.C) c_int,
@@ -44,6 +48,9 @@ const Callbacks = extern struct {
     convert_from_i64: *const fn (isolate: Isolate, value: i64, dest: *Value) callconv(.C) c_int,
     convert_from_u64: *const fn (isolate: Isolate, value: u64, dest: *Value) callconv(.C) c_int,
     convert_from_f64: *const fn (isolate: Isolate, value: f64, dest: *Value) callconv(.C) c_int,
+    convert_from_utf8: *const fn (isolate: Isolate, pool: Pool, value: *Memory, dest: *Value) callconv(.C) c_int,
+    convert_from_utf16: *const fn (isolate: Isolate, pool: Pool, value: *Memory, dest: *Value) callconv(.C) c_int,
+    convert_from_buffer: *const fn (isolate: Isolate, value: *Memory, dest: *Value) callconv(.C) c_int,
 
     throw_exception: *const fn (isolate: Isolate, message: [*:0]const u8) void,
 };
