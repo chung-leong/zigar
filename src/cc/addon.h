@@ -8,7 +8,7 @@ enum class Result : int {
   failure = 1,
   failureSizeMismatch = 2,
 };
-enum class TypedArrayType : int {
+enum class ElementType : int {
   unknown,
   i8,
   u8,
@@ -21,46 +21,42 @@ enum class TypedArrayType : int {
   f32,
   f64,
 };
-enum class ValueType : int {
-  undefined = 0,
-  number,
-  bigInt,
-  string,
-  array,
-  object,
-  typedArray,
-  arrayBuffer,
-};
-enum class ValueTypePresent : int64_t {
+enum class ValueTypes : int64_t {
   empty = 0,
-  number = (1 << static_cast<int>(ValueType::number)),
-  bigInt = (1 << static_cast<int>(ValueType::bigInt)),
-  string = (1 << static_cast<int>(ValueType::string)),
-  array = (1 << static_cast<int>(ValueType::array)),
-  object = (1 << static_cast<int>(ValueType::object)),
-  typedArray = (1 << static_cast<int>(ValueType::typedArray)),
-  arrayBuffer = (1 << static_cast<int>(ValueType::arrayBuffer)),
+  number = 1 << 0,
+  bigInt = 1 << 1,
+  string = 1 << 2,
+  array = 1 << 3,
+  object = 1 << 4,
+  typedArray = 1 << 5,
+  arrayBuffer = 1 << 6,
 };
-enum class FunctionFlags {
-  isThrowing = (1 << 0),
+enum class FunctionAttributes : int64_t {
+  throwing = 1 << 0,
+  allocating = 1 << 1,
+  suspending = 1 << 2,
+  referencing = 1 << 3,
 };
 struct TypedArray {
   uint8_t* bytes;
   size_t len;
-  TypedArrayType type;
-};
-struct ValueWithType {
-  Local<Value> value;
-  ValueTypePresent type;
+  ElementType type;
 };
 struct Callbacks {  
   size_t (*get_argument_count)(const FunctionCallbackInfo<Value>&);
-  ValueWithType (*get_argument)(const FunctionCallbackInfo<Value>&, size_t);
-  ValueTypePresent (*get_return_value_type)(const FunctionCallbackInfo<Value>&);
+  Local<Value> (*get_argument)(const FunctionCallbackInfo<Value>&, size_t);
+  ValueTypes (*get_argument_type)(const FunctionCallbackInfo<Value>&, size_t);
+  ValueTypes (*get_return_type)(const FunctionCallbackInfo<Value>&);
   void (*set_return_value)(const FunctionCallbackInfo<Value>& info, Local<Value> value);
   
+  Result (*allocate_memory)(Isolate*, Local<Array>&, size_t size, Local<Value>*);
+  Result (*reallocate_memory)(Isolate*, Local<Array>&, size_t size, Local<Value>*);
+  Result (*free_memory)(Isolate*, Local<Array>&, Local<Value>*);
+
   bool (*is_null)(Local<Value>);
   bool (*is_string)(Local<Value>);
+  bool (*is_object)(Local<Value>);
+  bool (*is_array)(Local<Value>);
   bool (*is_array_buffer)(Local<Value>);
 
   Result (*get_property)(Isolate*, const char*, Local<Value>, Local<Value>*);
@@ -100,24 +96,24 @@ enum class EntryType : int {
 struct Argument {
   const char* name;
   const char* class_name;
-  ValueTypePresent default_type;
-  ValueTypePresent possible_type;
+  ValueTypes default_type;
+  ValueTypes possible_type;
 };
 struct Function {
   Thunk thunk;
-  FunctionFlags flags;
+  FunctionAttributes attributes;
   const Argument* arguments;
   size_t argument_count;
   const char* return_class_name;
-  ValueTypePresent return_default_type;
-  ValueTypePresent return_possible_type;
+  ValueTypes return_default_type;
+  ValueTypes return_possible_type;
 };
 struct Variable {
   Thunk getter_thunk;
   Thunk setter_thunk;
   const char* class_name;
-  ValueTypePresent default_type;
-  ValueTypePresent possible_type;
+  ValueTypes default_type;
+  ValueTypes possible_type;
 };
 struct EnumerationItem {
   const char* name;
@@ -126,9 +122,9 @@ struct EnumerationItem {
 struct Enumeration {
   const EnumerationItem* items;
   size_t count;
-  int64_t is_signed;
-  ValueTypePresent default_type;
-  ValueTypePresent possible_type;
+  int is_signed;
+  ValueTypes default_type;
+  ValueTypes possible_type;
 };
 struct Entry {
   const char* name;
@@ -151,13 +147,12 @@ struct Module {
 
 struct EntryData  {  
   Entry entry;
-  std::vector<ValueTypePresent> argument_types;
-  ValueTypePresent return_type;
+  std::vector<ValueTypes> argument_types;
+  ValueTypes return_type;
 };
 struct ModuleData {
   std::vector<EntryData> entry_data;
   void* so_handle;
-  Persistent<Value, CopyablePersistentTraits<Value>> object;
 
   ~ModuleData() {
     dlclose(so_handle);

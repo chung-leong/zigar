@@ -25,7 +25,7 @@ static Local<v8::Function> NewFunction(Isolate* isolate, FunctionCallback f, int
 static ::TypedArray GetMemory(Local<ArrayBuffer> arBuf) {
   std::shared_ptr<BackingStore> store = arBuf->GetBackingStore();
   ::TypedArray array;
-  array.type = TypedArrayType::u8;
+  array.type = ElementType::u8;
   array.bytes = reinterpret_cast<uint8_t*>(store->Data());
   array.len = store->ByteLength();
   return array;
@@ -35,15 +35,16 @@ static size_t GetArgumentCount(const FunctionCallbackInfo<Value>& info) {
   return info.Length();
 }
 
-static ValueWithType GetArgument(const FunctionCallbackInfo<Value>& info, size_t index) {
-  EntryData* f = GetExternalData<EntryData*>(info);
-  ValueWithType arg;
-  arg.value = info[index];
-  arg.type = (index < f->argument_types.size()) ? f->argument_types[index] : ValueTypePresent::empty;
-  return arg;
+static Local<Value> GetArgument(const FunctionCallbackInfo<Value>& info, size_t index) {
+  return info[index];
 }
 
-static ValueTypePresent GetReturnValueType(const FunctionCallbackInfo<Value>& info) {
+static ValueTypes GetArgumentType(const FunctionCallbackInfo<Value>& info, size_t index) {
+  EntryData* f = GetExternalData<EntryData*>(info);
+  return (index < f->argument_types.size()) ? f->argument_types[index] : ValueTypes::empty;
+}
+
+static ValueTypes GetReturnType(const FunctionCallbackInfo<Value>& info) {
   EntryData* f = GetExternalData<EntryData*>(info);
   return f->return_type;
 }
@@ -88,6 +89,14 @@ static bool IsNull(Local<Value> value) {
 
 static bool IsString(Local<Value> value) {
   return value->IsString();
+}
+
+static bool IsArray(Local<Value> value) {
+  return value->IsArray();
+}
+
+static bool IsObject(Local<Value> value) {
+  return value->IsObject();
 }
 
 static bool IsArrayBuffer(Local<Value> value) {
@@ -212,57 +221,57 @@ static Result ConvertToUTF16(Isolate* isolate, Local<Array>& pool, Local<Value> 
   return Result::success;
 }
 
-static bool isTypedArrayType(Local<Value> value, TypedArrayType type) {
+static bool isTypedArrayType(Local<Value> value, ElementType type) {
   switch (type) {
-    case TypedArrayType::unknown: 
+    case ElementType::unknown: 
       return value->IsInt8Array() || value->IsUint8Array();
-    case TypedArrayType::i8: 
+    case ElementType::i8: 
       return value->IsInt8Array();
-    case TypedArrayType::u8: 
+    case ElementType::u8: 
       return value->IsUint8Array() || value->IsUint8ClampedArray();
-    case TypedArrayType::i16: 
+    case ElementType::i16: 
       return value->IsInt16Array();
-    case TypedArrayType::u16: 
+    case ElementType::u16: 
       return value->IsUint16Array();
-    case TypedArrayType::i32: 
+    case ElementType::i32: 
       return value->IsInt32Array();
-    case TypedArrayType::u32: 
+    case ElementType::u32: 
       return value->IsUint32Array();
-    case TypedArrayType::f32: 
+    case ElementType::f32: 
       return value->IsFloat32Array();
-    case TypedArrayType::i64: 
+    case ElementType::i64: 
       return value->IsBigInt64Array();
-    case TypedArrayType::u64: 
+    case ElementType::u64: 
       return value->IsBigUint64Array();
-    case TypedArrayType::f64: 
+    case ElementType::f64: 
       return value->IsFloat64Array();
   }
   return false;
 }
 
-static size_t GetElementSize(TypedArrayType type) {
+static size_t GetElementSize(ElementType type) {
   switch (type) {
-    case TypedArrayType::unknown: 
-    case TypedArrayType::i8: 
-    case TypedArrayType::u8: 
+    case ElementType::unknown: 
+    case ElementType::i8: 
+    case ElementType::u8: 
       return 1;
-    case TypedArrayType::i16: 
-    case TypedArrayType::u16: 
+    case ElementType::i16: 
+    case ElementType::u16: 
       return 2;
-    case TypedArrayType::i32: 
-    case TypedArrayType::u32: 
-    case TypedArrayType::f32: 
+    case ElementType::i32: 
+    case ElementType::u32: 
+    case ElementType::f32: 
       return 4;
-    case TypedArrayType::i64: 
-    case TypedArrayType::u64: 
-    case TypedArrayType::f64: 
+    case ElementType::i64: 
+    case ElementType::u64: 
+    case ElementType::f64: 
       return 8;
   }
   return 0;
 }
 static Result ConvertToTypedArray(Isolate* isolate, Local<Value> value, ::TypedArray* dest) {
   Local<ArrayBuffer> buffer;
-  TypedArrayType type = dest->type;
+  ElementType type = dest->type;
   size_t offset = 0;
   if (value->IsArrayBuffer()) {
     buffer = value.As<ArrayBuffer>();
@@ -316,7 +325,7 @@ static Local<Value> ProcessEntryTable(Isolate* isolate, EntryTable *table, Modul
   Local<Value> object = Object::New(isolate);
   for (size_t i = 0; i < table->count; i++) {
     const Entry *entry = &table->entries[i];
-    md->entry_data.push_back({});
+    md->entry_data.emplace_back();
     EntryData *ed = &md->entry_data.back();
     switch (entry->type) {
       case EntryType::function: {
@@ -391,10 +400,13 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   Callbacks* callbacks = module->callbacks;
   callbacks->get_argument_count = GetArgumentCount;
   callbacks->get_argument = GetArgument;
-  callbacks->get_return_value_type = GetReturnValueType;
+  callbacks->get_argument_type = GetArgumentType;
+  callbacks->get_return_type = GetReturnType;
   callbacks->set_return_value = SetReturnValue;
   callbacks->is_null = IsNull;
   callbacks->is_string = IsString;
+  callbacks->is_object = IsObject;
+  callbacks->is_array = IsArray;
   callbacks->is_array_buffer = IsArrayBuffer;
   callbacks->get_property = GetProperty;
   callbacks->set_property = SetProperty;
@@ -412,7 +424,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->convert_from_u32 = ConvertFromU32;
   callbacks->convert_from_i64 = nullptr;
   callbacks->convert_from_u64 = nullptr;
-  callbacks->convert_from_f64 = nullptr; // ConvertFromF64;
+  callbacks->convert_from_f64 = ConvertFromF64;
   callbacks->convert_from_utf8 = nullptr; // ConvertFromUTF8;
   callbacks->convert_from_utf16 = nullptr; // ConvertFromUTF16;
   callbacks->convert_from_typed_array = nullptr; // ConvertFromTypedArray;
@@ -424,6 +436,9 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   ModuleData *md = &ad->module_data.back();
   Local<Value> value = ProcessEntryTable(isolate, &module->table, md);
   info.GetReturnValue().Set(value);
+
+  // save handle so shared library can be unloaded on shutdown
+  md->so_handle = handle;
 }
 
 NODE_MODULE_INIT(/* exports, module, context */) {
