@@ -28,6 +28,7 @@ const ElementType = enum(c_int) {
     F64,
 };
 const ValueTypes = packed struct(i64) {
+    boolean: bool = false,
     number: bool = false,
     bigInt: bool = false,
     string: bool = false,
@@ -35,7 +36,7 @@ const ValueTypes = packed struct(i64) {
     object: bool = false,
     typedArray: bool = false,
     arrayBuffer: bool = false,
-    _: u57 = 0,
+    _: u56 = 0,
 };
 const FunctionAttributes = packed struct(i64) {
     throwing: bool = false,
@@ -82,7 +83,7 @@ const Function = extern struct {
     return_possible_types: ValueTypes,
 };
 const Variable = extern struct {
-    getter_thunk: Thunk,
+    getter_thunk: ?Thunk,
     setter_thunk: ?Thunk,
     class_name: ?[*]const u8,
     default_type: ValueTypes,
@@ -95,7 +96,7 @@ const EnumerationItem = extern struct {
 const Enumeration = extern struct {
     items: [*]const EnumerationItem,
     count: usize,
-    is_signed: c_int,
+    is_signed: bool,
     default_type: ValueTypes,
     possible_types: ValueTypes,
 };
@@ -119,7 +120,7 @@ const EntryTable = extern struct {
 const Module = extern struct {
     version: c_int,
     callbacks: *Callbacks,
-    entries: EntryTable,
+    table: EntryTable,
 };
 
 // function-pointer table that's filled on the C++ side
@@ -206,11 +207,12 @@ fn isSlice(comptime T: type) bool {
 
 fn isBinaryKnown(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        .Bool, .Int, .Float => isScalar(true),
+        .Bool, .Int, .Float => isScalar(T),
         .Array => |ar| isBinaryKnown(ar.child),
         .Struct => |st| switch (st.layout) {
             .Extern => true,
             .Packed => if (st.backing_integer) true else false,
+            else => false,
         },
         else => false,
     };
@@ -286,12 +288,33 @@ fn typeNameCapitalized(comptime T: type) []const u8 {
     return result;
 }
 
+fn checkWritability(comptime package: anytype, comptime name: []const u8) bool {
+    return switch (@typeInfo(@TypeOf(@field(package, name)))) {
+        .Bool, .Int, .Enum, .Float, .Array, .Pointer, .Struct, .Fn => check: {
+            // see if we get a const pointer
+            const PT = @TypeOf(&@field(package, name));
+            break :check switch (comptime @typeInfo(PT)) {
+                .Pointer => |pt| !pt.is_const,
+                else => false,
+            };
+        },
+        else => false,
+    };
+}
+
 fn getPossibleTypes(comptime T: type, comptime out: bool) ValueTypes {
     var can_be: ValueTypes = .{};
-    switch (comptime @typeInfo(T)) {
-        .Int, .Float => {
+    switch (@typeInfo(T)) {
+        .Bool => {
+            can_be.boolean = true;
+        },
+        .Int, .Enum => {
             can_be.number = true;
             can_be.bigInt = true;
+            can_be.string = !out;
+        },
+        .Float => {
+            can_be.number = true;
             can_be.string = !out;
         },
         .Array => |ar| {
@@ -319,7 +342,10 @@ fn getPossibleTypes(comptime T: type, comptime out: bool) ValueTypes {
 
 fn getReturnType(comptime T: type) ValueTypes {
     var prefer: ValueTypes = .{};
-    switch (comptime @typeInfo(T)) {
+    switch (@typeInfo(T)) {
+        .Bool => {
+            prefer.boolean = true;
+        },
         .Int, .Float => {
             prefer.number = true;
         },
@@ -355,7 +381,7 @@ fn getReturnType(comptime T: type) ValueTypes {
 
 // run-time helper functions
 fn checkOverflow(value: anytype, comptime T: type) !void {
-    switch (comptime @typeInfo(T)) {
+    switch (@typeInfo(T)) {
         .Int => {
             if (value > std.math.maxInt(T)) {
                 return Error.IntegerOverflow;
@@ -443,96 +469,72 @@ fn createThunk(comptime package: anytype, comptime name: []const u8) Thunk {
     const function = @field(package, name);
     const Args = std.meta.ArgsTuple(@TypeOf(function));
     const ThunkType = struct {
-        fn ga(isolate: Isolate, info: CallInfo, pool: Pool, index_ptr: *usize, count: i32, comptime T: type) ?T {
+        // we're passing the function name and argument count into getArgument() in order to allow the function
+        // to be reused across different functions
+        fn getArgument(isolate: Isolate, info: CallInfo, pool: Pool, fname: []const u8, i_ptr: *usize, count: i32, comptime T: type) ?T {
             if (comptime T == std.mem.Allocator) {
                 // TODO: provide allocator
                 return null;
             } else {
-                const index: usize = index_ptr.*;
-                index_ptr.* = index + 1;
+                const index: usize = i_ptr.*;
                 const arg = callbacks.get_argument(info, index);
+                i_ptr.* = index + 1;
                 if (convertTo(isolate, pool, arg, T)) |value| {
                     return value;
                 } else |err| {
                     const arg_count = callbacks.get_argument_count(info);
                     if (err == Error.UnsupportedConversion and arg_count < count) {
                         const fmt = "{s}() expects {d} argument(s), {d} given";
-                        throwException(isolate, fmt, .{ name, count, arg_count });
+                        throwException(isolate, fmt, .{ fname, count, arg_count });
                     } else {
                         const fmt = "Error encountered while converting JavaScript value to {s} for argument {d} of {s}(): {s}";
-                        throwException(isolate, fmt, .{ @typeName(T), index + 1, name, @errorName(err) });
+                        throwException(isolate, fmt, .{ @typeName(T), index + 1, fname, @errorName(err) });
                     }
                     return null;
                 }
             }
         }
 
-        fn cfn(iso: Isolate, info: CallInfo, pool: Pool) callconv(.C) void {
-            var args: Args = undefined;
-            const f = std.meta.fields(Args);
-            const c = f.len;
-            // can't loop through fields at comptime :-(
-            if (comptime c > 32) {
-                throwException(iso, "{s}() has more than 32 arguments", .{name});
-                return;
-            }
-            var i: usize = 0;
-            if (comptime c > 0) args[0] = ga(iso, info, pool, &i, c, f[0].type) orelse return;
-            if (comptime c > 1) args[1] = ga(iso, info, pool, &i, c, f[1].type) orelse return;
-            if (comptime c > 2) args[2] = ga(iso, info, pool, &i, c, f[2].type) orelse return;
-            if (comptime c > 3) args[3] = ga(iso, info, pool, &i, c, f[3].type) orelse return;
-            if (comptime c > 4) args[4] = ga(iso, info, pool, &i, c, f[4].type) orelse return;
-            if (comptime c > 5) args[5] = ga(iso, info, pool, &i, c, f[5].type) orelse return;
-            if (comptime c > 6) args[6] = ga(iso, info, pool, &i, c, f[6].type) orelse return;
-            if (comptime c > 7) args[7] = ga(iso, info, pool, &i, c, f[7].type) orelse return;
-            if (comptime c > 8) args[8] = ga(iso, info, pool, &i, c, f[8].type) orelse return;
-            if (comptime c > 9) args[9] = ga(iso, info, pool, &i, c, f[9].type) orelse return;
-            if (comptime c > 10) args[10] = ga(iso, info, pool, &i, c, f[10].type) orelse return;
-            if (comptime c > 11) args[11] = ga(iso, info, pool, &i, c, f[11].type) orelse return;
-            if (comptime c > 12) args[12] = ga(iso, info, pool, &i, c, f[12].type) orelse return;
-            if (comptime c > 13) args[13] = ga(iso, info, pool, &i, c, f[13].type) orelse return;
-            if (comptime c > 14) args[14] = ga(iso, info, pool, &i, c, f[14].type) orelse return;
-            if (comptime c > 15) args[15] = ga(iso, info, pool, &i, c, f[15].type) orelse return;
-            if (comptime c > 16) args[16] = ga(iso, info, pool, &i, c, f[16].type) orelse return;
-            if (comptime c > 17) args[17] = ga(iso, info, pool, &i, c, f[17].type) orelse return;
-            if (comptime c > 18) args[18] = ga(iso, info, pool, &i, c, f[18].type) orelse return;
-            if (comptime c > 19) args[19] = ga(iso, info, pool, &i, c, f[19].type) orelse return;
-            if (comptime c > 20) args[20] = ga(iso, info, pool, &i, c, f[20].type) orelse return;
-            if (comptime c > 21) args[21] = ga(iso, info, pool, &i, c, f[21].type) orelse return;
-            if (comptime c > 22) args[22] = ga(iso, info, pool, &i, c, f[22].type) orelse return;
-            if (comptime c > 23) args[23] = ga(iso, info, pool, &i, c, f[23].type) orelse return;
-            if (comptime c > 24) args[24] = ga(iso, info, pool, &i, c, f[24].type) orelse return;
-            if (comptime c > 25) args[25] = ga(iso, info, pool, &i, c, f[25].type) orelse return;
-            if (comptime c > 26) args[26] = ga(iso, info, pool, &i, c, f[26].type) orelse return;
-            if (comptime c > 27) args[27] = ga(iso, info, pool, &i, c, f[27].type) orelse return;
-            if (comptime c > 28) args[28] = ga(iso, info, pool, &i, c, f[28].type) orelse return;
-            if (comptime c > 29) args[29] = ga(iso, info, pool, &i, c, f[29].type) orelse return;
-            if (comptime c > 30) args[30] = ga(iso, info, pool, &i, c, f[30].type) orelse return;
-            if (comptime c > 31) args[31] = ga(iso, info, pool, &i, c, f[31].type) orelse return;
-
-            var result = @call(std.builtin.CallModifier.auto, function, args);
-            var retval: anyerror!?Value = null;
+        fn handleResult(isolate: Isolate, info: CallInfo, pool: Pool, fname: []const u8, result: anytype) void {
             if (comptime isErrorUnion(@TypeOf(result))) {
                 if (result) |value| {
-                    retval = convertFrom(iso, pool, value);
+                    handleResult(isolate, info, pool, fname, value);
                 } else |err| {
-                    throwException(iso, "Error encountered in {s}(): {s}", .{ name, @errorName(err) });
-                    return;
+                    throwException(isolate, "Error encountered in {s}(): {s}", .{ fname, @errorName(err) });
+                }
+            } else if (comptime isOptional(@TypeOf(result))) {
+                if (result) |value| {
+                    handleResult(isolate, info, pool, fname, value);
                 }
             } else {
-                retval = convertFrom(iso, pool, result);
-            }
-            if (retval) |value| {
-                callbacks.set_return_value(info, value);
-            } else |err| {
-                const T = BaseType(@TypeOf(result));
-                const fmt = "Error encountered while converting {s} to JavaScript value for return value of {s}(): {s}";
-                throwException(iso, fmt, .{ @typeName(T), name, @errorName(err) });
-                return;
+                if (convertFrom(isolate, pool, result)) |value| {
+                    callbacks.set_return_value(info, value);
+                } else |err| {
+                    const T = BaseType(@TypeOf(result));
+                    const fmt = "Error encountered while converting {s} to JavaScript value for return value of {s}(): {s}";
+                    throwException(isolate, fmt, .{ @typeName(T), fname, @errorName(err) });
+                }
             }
         }
+
+        fn invokeFunction(isolate: Isolate, info: CallInfo, pool: Pool) callconv(.C) void {
+            var args: Args = undefined;
+            const fields = std.meta.fields(Args);
+            const count = fields.len;
+            var i: usize = 0;
+            inline for (fields, 0..) |field, j| {
+                if (getArgument(isolate, info, pool, name, &i, count, field.type)) |arg| {
+                    args[j] = arg;
+                } else {
+                    // exception thrown in getArgument()
+                    return;
+                }
+            }
+            var result = @call(std.builtin.CallModifier.auto, function, args);
+            handleResult(isolate, info, pool, name, result);
+        }
     };
-    return ThunkType.cfn;
+    return ThunkType.invokeFunction;
 }
 
 fn createGetterThunk(comptime package: anytype, comptime name: []const u8) Thunk {
@@ -609,7 +611,7 @@ fn createFunction(comptime package: anytype, comptime name: []const u8) Function
 }
 
 fn createVariable(comptime package: anytype, comptime name: []const u8) Variable {
-    const writable = false;
+    const writable = checkWritability(package, name);
     const T = @TypeOf(@field(package, name));
     return .{
         .getter_thunk = createGetterThunk(package, name),
@@ -667,17 +669,17 @@ fn createEntryTable(comptime package: anytype) EntryTable {
                 => null,
                 .Type => switch (@typeInfo(field)) {
                     .Enum => .{
-                        .type = EntryType.enum_set,
+                        .type = .enum_set,
                         .params = .{ .enumeration = &createEnumeration(package, name) },
                     },
                     else => null,
                 },
                 .Fn => .{
-                    .type = EntryType.function,
+                    .type = .function,
                     .params = .{ .function = &createFunction(package, name) },
                 },
                 else => .{
-                    .type = EntryType.variable,
+                    .type = .variable,
                     .params = .{ .variable = &createVariable(package, name) },
                 },
             };
@@ -701,6 +703,6 @@ pub fn createModule(comptime package: anytype) Module {
     return .{
         .version = api_version,
         .callbacks = &callbacks,
-        .entries = createEntryTable(package),
+        .table = createEntryTable(package),
     };
 }

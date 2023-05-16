@@ -129,12 +129,11 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-src/zig/zig-cache
-src/zig/build/*
+**/zig-cache
+**/build/*
 *.so
 *.o
 .vscode
-build
 
 node_modules
 webpack.debug.js

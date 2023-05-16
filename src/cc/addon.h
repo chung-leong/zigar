@@ -21,15 +21,26 @@ enum class ElementType : int {
   f32,
   f64,
 };
+enum class ValueTypeBitPos {
+  boolean = 0,
+  number,
+  bigInt,
+  string,
+  array,
+  object,
+  typedArray,
+  arrayBuffer,
+};
 enum class ValueTypes : int64_t {
   empty = 0,
-  number = 1 << 0,
-  bigInt = 1 << 1,
-  string = 1 << 2,
-  array = 1 << 3,
-  object = 1 << 4,
-  typedArray = 1 << 5,
-  arrayBuffer = 1 << 6,
+  boolean = 1 << static_cast<int>(ValueTypeBitPos::boolean),
+  number = 1 << static_cast<int>(ValueTypeBitPos::number),
+  bigInt = 1 << static_cast<int>(ValueTypeBitPos::bigInt),
+  string = 1 << static_cast<int>(ValueTypeBitPos::string),
+  array = 1 << static_cast<int>(ValueTypeBitPos::array),
+  object = 1 << static_cast<int>(ValueTypeBitPos::object),
+  typedArray = 1 << static_cast<int>(ValueTypeBitPos::typedArray),
+  arrayBuffer = 1 << static_cast<int>(ValueTypeBitPos::arrayBuffer),
 };
 enum class FunctionAttributes : int64_t {
   throwing = 1 << 0,
