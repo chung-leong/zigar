@@ -105,26 +105,25 @@ enum class EntryType : int {
   enumeration,
 };
 struct Argument {
-  const char* name;
-  const char* class_name;
   ValueTypes default_type;
   ValueTypes possible_type;
+  const char* class_name;
 };
 struct Function {
   Thunk thunk;
   FunctionAttributes attributes;
   const Argument* arguments;
   size_t argument_count;
-  const char* return_class_name;
   ValueTypes return_default_type;
   ValueTypes return_possible_type;
+  const char* return_class_name;
 };
 struct Variable {
   Thunk getter_thunk;
   Thunk setter_thunk;
-  const char* class_name;
   ValueTypes default_type;
   ValueTypes possible_type;
+  const char* class_name;
 };
 struct EnumerationItem {
   const char* name;

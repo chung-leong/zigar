@@ -69,25 +69,24 @@ const EntryType = enum(c_int) {
     enumeration,
 };
 const Argument = extern struct {
-    name: [*]const u8,
-    class_name: ?[*]const u8,
     possible_types: ValueTypes,
+    class_name: ?[*]const u8,
 };
 const Function = extern struct {
     thunk: Thunk,
     attributes: FunctionAttributes,
     arguments: [*]const Argument,
     argument_count: usize,
-    return_class_name: ?[*]const u8,
     return_default_type: ValueTypes,
     return_possible_types: ValueTypes,
+    return_class_name: ?[*]const u8,
 };
 const Variable = extern struct {
     getter_thunk: ?Thunk,
     setter_thunk: ?Thunk,
-    class_name: ?[*]const u8,
     default_type: ValueTypes,
     possible_types: ValueTypes,
+    class_name: ?[*]const u8,
 };
 const EnumerationItem = extern struct {
     name: [*:0]const u8,
@@ -575,18 +574,17 @@ fn createSetterThunk(comptime package: anytype, comptime name: []const u8) Thunk
 // functions that create the module struct at compile time
 fn createFunction(comptime package: anytype, comptime name: []const u8) Function {
     const function = @field(package, name);
-    const Args = std.meta.ArgsTuple(@TypeOf(function));
-    const fields = std.meta.fields(Args);
-    var arguments: [fields.len]Argument = undefined;
+    const params = @typeInfo(@TypeOf(function)).Fn.params;
+    var arguments: [params.len]Argument = undefined;
     var index = 0;
-    for (fields) |field| {
-        if (field.type == std.mem.Allocator) {
+    for (params) |param| {
+        const T = param.type orelse noreturn;
+        if (T == std.mem.Allocator) {
             continue;
         }
         arguments[index] = .{
-            .name = createString(field.name),
-            .class_name = "",
-            .possible_types = getPossibleTypes(field.type, false),
+            .class_name = null,
+            .possible_types = getPossibleTypes(T, false),
         };
         index += 1;
     }
@@ -643,7 +641,7 @@ fn createEnumeration(comptime package: anytype, comptime name: []const u8) Enume
         }
     }
     return .{
-        .items = entries,
+        .items = &entries,
         .count = entries.len,
         .is_signed = is_signed,
         .default_type = default_type,
@@ -669,7 +667,7 @@ fn createEntryTable(comptime package: anytype) EntryTable {
                 => null,
                 .Type => switch (@typeInfo(field)) {
                     .Enum => .{
-                        .type = .enum_set,
+                        .type = .enumeration,
                         .params = .{ .enumeration = &createEnumeration(package, name) },
                     },
                     else => null,
