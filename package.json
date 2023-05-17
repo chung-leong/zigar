@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "description": "Enable to use of Zig in NodeJS",
   "main": "index.js",
+  "type": "module",
   "directories": {
     "test": "test"
   },
