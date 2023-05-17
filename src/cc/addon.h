@@ -1,6 +1,8 @@
 #include <node.h>
 #include <dlfcn.h>
 
+#define INT(a) static_cast<int>(a)
+
 using namespace v8;
 
 enum class Result : int {
@@ -28,21 +30,31 @@ enum class ValueTypeBitPos {
   string,
   array,
   object,
-  typedArray,
+  function,
   arrayBuffer,
 };
-enum class ValueTypes : int64_t {
+enum class ValueTypes : int {
   empty = 0,
-  boolean = 1 << static_cast<int>(ValueTypeBitPos::boolean),
-  number = 1 << static_cast<int>(ValueTypeBitPos::number),
-  bigInt = 1 << static_cast<int>(ValueTypeBitPos::bigInt),
-  string = 1 << static_cast<int>(ValueTypeBitPos::string),
-  array = 1 << static_cast<int>(ValueTypeBitPos::array),
-  object = 1 << static_cast<int>(ValueTypeBitPos::object),
-  typedArray = 1 << static_cast<int>(ValueTypeBitPos::typedArray),
-  arrayBuffer = 1 << static_cast<int>(ValueTypeBitPos::arrayBuffer),
+  boolean = 1 << INT(ValueTypeBitPos::boolean),
+  number = 1 << INT(ValueTypeBitPos::number),
+  bigInt = 1 << INT(ValueTypeBitPos::bigInt),
+  string = 1 << INT(ValueTypeBitPos::string),
+  array = 1 << INT(ValueTypeBitPos::array),
+  object = 1 << INT(ValueTypeBitPos::object),
+  function = 1 << INT(ValueTypeBitPos::function),
+  arrayBuffer = 1 << INT(ValueTypeBitPos::arrayBuffer),
+  i8Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::i8)),
+  u8Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::u8)),
+  i16Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::i16)),
+  u16Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::u16)),
+  i32Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::i32)),
+  u32Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::u32)),
+  i64Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::i64)),
+  u64Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::u64)),
+  f32Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::f32)),
+  f64Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::f64)),
 };
-enum class FunctionAttributes : int64_t {
+enum class FunctionAttributes : int {
   throwing = 1 << 0,
   allocating = 1 << 1,
   suspending = 1 << 2,
@@ -69,6 +81,7 @@ struct Callbacks {
   bool (*is_object)(Local<Value>);
   bool (*is_array)(Local<Value>);
   bool (*is_array_buffer)(Local<Value>);
+  bool (*match_value_types)(Local<Value>, ValueTypes types);
 
   Result (*get_property)(Isolate*, const char*, Local<Value>, Local<Value>*);
   Result (*set_property)(Isolate*, const char*, Local<Value>, Local<Value>);
@@ -155,23 +168,8 @@ struct Module {
   EntryTable table;
 };
 
-struct EntryData  {  
+struct FunctionData  {  
   Entry entry;
-  std::vector<ValueTypes> argument_types;
   ValueTypes return_type;
-};
-struct ModuleData {
-  std::vector<EntryData> entry_data;
-  void* so_handle;
-
-  ~ModuleData() {
-    dlclose(so_handle);
-  }
-};
-struct AddonData {
-  std::vector<ModuleData> module_data;
-
-  static void DeleteInstance(void* data) {
-    delete static_cast<AddonData*>(data);
-  }
+  ValueTypes argument_types[0];
 };

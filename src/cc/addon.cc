@@ -15,8 +15,35 @@ static Local<Number> NewInteger(Isolate* isolate, int64_t value, bool is_signed)
   return Number::New(isolate, (double) value);
 }
 
+static Local<Value> AllocateExternal(Isolate* isolate, size_t count) {
+  struct SetWeakCallbackData {
+    Global<Value> global;
+    int64_t payload[1]; 
+  };
+  // allocate enough memory to hold the global and the payload
+  size_t total_size = sizeof(SetWeakCallbackData) - sizeof(int64_t) + count;
+  uint8_t* bytes = new uint8_t[total_size];
+  memset(bytes, 0, total_size);
+  SetWeakCallbackData *callback_data = reinterpret_cast<SetWeakCallbackData *>(bytes);
+  // create a v8::External and attach it to global ref
+  Local<Value> external = External::New(isolate, callback_data->payload);
+  callback_data->global.Reset(isolate, external);
+  // use SetWeak to invoke a callback when the External gets gc'ed
+  auto callback = [](const v8::WeakCallbackInfo<SetWeakCallbackData>& data) {
+    SetWeakCallbackData* callback_data = data.GetParameter();
+    callback_data->global.Reset();
+    delete callback_data;
+  };
+  callback_data->global.template 
+    SetWeak<SetWeakCallbackData>(callback_data, callback, WeakCallbackType::kParameter);
+  return external;
+}
+
 static Local<v8::Function> NewFunction(Isolate* isolate, FunctionCallback f, int len, void* data) {
-  Local<External> external = External::New(isolate, data);
+  Local<External> external;
+  if (data) {
+    external = External::New(isolate, data);
+  }
   Local<Signature> signature;
   Local<FunctionTemplate> ftmpl = FunctionTemplate::New(isolate, f, external, signature, len);
   return ftmpl->GetFunction(isolate->GetCurrentContext()).ToLocalChecked();
@@ -40,13 +67,13 @@ static Local<Value> GetArgument(const FunctionCallbackInfo<Value>& info, size_t 
 }
 
 static ValueTypes GetArgumentType(const FunctionCallbackInfo<Value>& info, size_t index) {
-  EntryData* f = GetExternalData<EntryData*>(info);
-  return (index < f->argument_types.size()) ? f->argument_types[index] : ValueTypes::empty;
+  FunctionData* fd = GetExternalData<FunctionData*>(info);
+  return fd->argument_types[index];
 }
 
 static ValueTypes GetReturnType(const FunctionCallbackInfo<Value>& info) {
-  EntryData* f = GetExternalData<EntryData*>(info);
-  return f->return_type;
+  FunctionData* fd = GetExternalData<FunctionData*>(info);
+  return fd->return_type;
 }
 
 static void SetReturnValue(const FunctionCallbackInfo<Value>& info, Local<Value> value) {
@@ -101,6 +128,28 @@ static bool IsObject(Local<Value> value) {
 
 static bool IsArrayBuffer(Local<Value> value) {
   return value->IsArrayBuffer() || value->IsTypedArray();
+}
+
+static bool MatchValueTypes(Local<Value> value, ValueTypes types) {
+  auto match = [&](ValueTypes type) { return (INT(types) & INT(type)) != 0; };
+  return (match(ValueTypes::boolean) && value->IsBoolean())
+      || (match(ValueTypes::number) && value->IsNumber())
+      || (match(ValueTypes::bigInt) && value->IsBigInt())
+      || (match(ValueTypes::string) && value->IsString())
+      || (match(ValueTypes::array) && value->IsArray())
+      || (match(ValueTypes::object) && value->IsObject())
+      || (match(ValueTypes::function) && value->IsFunction())
+      || (match(ValueTypes::arrayBuffer) && value->IsArrayBuffer())
+      || (match(ValueTypes::i8Array) && value->IsInt8Array())
+      || (match(ValueTypes::u8Array) && (value->IsUint8Array() || value->IsUint8ClampedArray()))
+      || (match(ValueTypes::i16Array) && value->IsInt16Array())
+      || (match(ValueTypes::u16Array) && value->IsUint16Array())
+      || (match(ValueTypes::i32Array) && value->IsInt32Array())
+      || (match(ValueTypes::u32Array) && value->IsUint32Array())
+      || (match(ValueTypes::i64Array) && value->IsBigInt64Array())
+      || (match(ValueTypes::u64Array) && value->IsBigUint64Array())
+      || (match(ValueTypes::f32Array) && value->IsFloat32Array())
+      || (match(ValueTypes::f64Array) && value->IsFloat64Array());
 }
 
 static Result ConvertToBool(Isolate* isolate, Local<Value> value, bool* dest) {
@@ -221,34 +270,6 @@ static Result ConvertToUTF16(Isolate* isolate, Local<Array>& pool, Local<Value> 
   return Result::success;
 }
 
-static bool isTypedArrayType(Local<Value> value, ElementType type) {
-  switch (type) {
-    case ElementType::unknown: 
-      return value->IsInt8Array() || value->IsUint8Array();
-    case ElementType::i8: 
-      return value->IsInt8Array();
-    case ElementType::u8: 
-      return value->IsUint8Array() || value->IsUint8ClampedArray();
-    case ElementType::i16: 
-      return value->IsInt16Array();
-    case ElementType::u16: 
-      return value->IsUint16Array();
-    case ElementType::i32: 
-      return value->IsInt32Array();
-    case ElementType::u32: 
-      return value->IsUint32Array();
-    case ElementType::f32: 
-      return value->IsFloat32Array();
-    case ElementType::i64: 
-      return value->IsBigInt64Array();
-    case ElementType::u64: 
-      return value->IsBigUint64Array();
-    case ElementType::f64: 
-      return value->IsFloat64Array();
-  }
-  return false;
-}
-
 static size_t GetElementSize(ElementType type) {
   switch (type) {
     case ElementType::unknown: 
@@ -275,7 +296,7 @@ static Result ConvertToTypedArray(Isolate* isolate, Local<Value> value, ::TypedA
   size_t offset = 0;
   if (value->IsArrayBuffer()) {
     buffer = value.As<ArrayBuffer>();
-  } else if (value->IsTypedArray() && isTypedArrayType(value, type)) {
+  } else if (value->IsTypedArray()) {
     buffer = value.As<v8::TypedArray>()->Buffer();
     offset = value.As<v8::TypedArray>()->ByteOffset();
   } else {
@@ -298,50 +319,78 @@ static void ThrowException(Isolate* isolate, const char* message) {
 }
 
 static void Run(const FunctionCallbackInfo<Value>& info) {
-  EntryData* f = GetExternalData<EntryData*>(info);
+  FunctionData* fd = GetExternalData<FunctionData*>(info);
   Isolate* isolate = info.GetIsolate();
   Local<Array> pool;
-  Thunk thunk = f->entry.function->thunk;
+  Thunk thunk = fd->entry.function->thunk;
   thunk(isolate, info, pool);
 }
 
 static void Get(const FunctionCallbackInfo<Value>& info) {
-  EntryData* v = GetExternalData<EntryData*>(info);
+  FunctionData* fd = GetExternalData<FunctionData*>(info);
   Isolate* isolate = info.GetIsolate();
   Local<Array> pool;
-  Thunk thunk = v->entry.variable->getter_thunk;
+  Thunk thunk = fd->entry.variable->getter_thunk;
   thunk(isolate, info, pool);
 }
 
 static void Set(const FunctionCallbackInfo<Value>& info) {
-  EntryData* v = GetExternalData<EntryData*>(info);
+  FunctionData* fd = GetExternalData<FunctionData*>(info);
   Isolate* isolate = info.GetIsolate();
   Local<Array> pool;
-  Thunk thunk = v->entry.variable->setter_thunk;
+  Thunk thunk = fd->entry.variable->setter_thunk;
   thunk(isolate, info, pool);
 }
 
-static Local<Value> ProcessEntryTable(Isolate* isolate, EntryTable *table, ModuleData *md) {
+static Local<Value> ProcessEntryTable(Isolate* isolate, EntryTable *table) {
   Local<Value> object = Object::New(isolate);
   for (size_t i = 0; i < table->count; i++) {
     const Entry *entry = &table->entries[i];
-    md->entry_data.emplace_back();
-    EntryData *ed = &md->entry_data.back();
+    // allocate memory for FunctionData struct, enough for holding the current 
+    // type set for each argument
+    size_t arg_count;
+    switch (entry->type) {
+      case EntryType::function:
+        arg_count = entry->function->argument_count;
+        break;
+      case EntryType::variable:
+        arg_count = 1;
+        break;
+      default:
+        arg_count = 0;
+    }
+    size_t size = sizeof(FunctionData) + sizeof(ValueTypes) * arg_count;
+    Local<Value> external = AllocateExternal(isolate, size);
+    FunctionData *fd = reinterpret_cast<FunctionData*>(external.As<External>()->Value());
+    fd->entry = *entry;
     switch (entry->type) {
       case EntryType::function: {
         // save argument and return types
         const Argument *args = entry->function->arguments;
-        unsigned arg_count = entry->function->argument_count;
-        ed->argument_types.reserve(arg_count);
         for (size_t i = 0; i < arg_count; i++) {
-          ed->argument_types.push_back(args[i].default_type);
+          fd->argument_types[i] = args[i].default_type;
         }
-        ed->return_type = entry->function->return_default_type;
-        Local<v8::Function> function = NewFunction(isolate, Run, arg_count, ed);
+        fd->return_type = entry->function->return_default_type;
+        Local<v8::Function> function = NewFunction(isolate, Run, arg_count, fd);
         SetProperty(isolate, entry->name, object, function);
       } break;
+      case EntryType::variable: {
+        fd->argument_types[0] = entry->variable->default_type;
+        fd->return_type = entry->variable->default_type;
+        PropertyAttribute attribute = static_cast<PropertyAttribute>(DontDelete | ReadOnly);
+        Local<v8::Function> getter, setter;
+        if (entry->variable->getter_thunk) {
+          getter = NewFunction(isolate, Get, 0, fd);
+        }
+        if (entry->variable->setter_thunk) {
+          setter = NewFunction(isolate, ::Set, 1, fd);
+          attribute = static_cast<PropertyAttribute>(attribute & ~ReadOnly);
+        }
+        Local<String> name = NewString(isolate, entry->name);
+        object.As<Object>()->SetAccessorProperty(name, getter, setter, attribute);
+      } break;
       case EntryType::enumeration: {
-        ed->return_type = entry->enumeration->default_type;
+        fd->return_type = entry->enumeration->default_type;
         Local<Value> enumeration = Object::New(isolate);
         for (size_t i = 0; i < entry->enumeration->count; i++) {
           const EnumerationItem* item = &entry->enumeration->items[i];
@@ -350,19 +399,6 @@ static Local<Value> ProcessEntryTable(Isolate* isolate, EntryTable *table, Modul
         }
         SetProperty(isolate, entry->name, object, enumeration);
       } break;
-      case EntryType::variable: {
-        ed->argument_types.push_back(entry->variable->default_type);
-        ed->return_type = entry->variable->default_type;
-        PropertyAttribute attribute = static_cast<PropertyAttribute>(DontDelete | ReadOnly);
-        Local<v8::Function> getter, setter;
-        if (entry->variable->getter_thunk) {
-          getter = NewFunction(isolate, Get, 0, ed);
-        }
-        if (entry->variable->setter_thunk) {
-          setter = NewFunction(isolate, ::Set, 1, ed);
-          attribute = static_cast<PropertyAttribute>(attribute & ~ReadOnly);
-        }
-      } break;
       case EntryType::unavailable:
         break;
     }
@@ -370,8 +406,11 @@ static Local<Value> ProcessEntryTable(Isolate* isolate, EntryTable *table, Modul
   return object;
 }
 
+static void UnloadLibrary(void *handle) {
+    dlclose(handle);
+}
+
 static void Load(const FunctionCallbackInfo<Value>& info) {
-  AddonData* ad = reinterpret_cast<AddonData*>(info.Data().As<External>()->Value());
   Isolate* isolate = info.GetIsolate();
 
   // check arguments
@@ -408,6 +447,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->is_object = IsObject;
   callbacks->is_array = IsArray;
   callbacks->is_array_buffer = IsArrayBuffer;
+  callbacks->match_value_types = MatchValueTypes;
   callbacks->get_property = GetProperty;
   callbacks->set_property = SetProperty;
   callbacks->convert_to_bool = ConvertToBool;
@@ -432,20 +472,15 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->throw_exception = ThrowException;
 
   // process all entries inside modules
-  ad->module_data.emplace_back();
-  ModuleData *md = &ad->module_data.back();
-  Local<Value> value = ProcessEntryTable(isolate, &module->table, md);
+  Local<Value> value = ProcessEntryTable(isolate, &module->table);
   info.GetReturnValue().Set(value);
 
-  // save handle so shared library can be unloaded on shutdown
-  md->so_handle = handle;
+  // unload shared library on shutdown
+  node::AddEnvironmentCleanupHook(isolate, UnloadLibrary, handle);
 }
 
 NODE_MODULE_INIT(/* exports, module, context */) {
   Isolate* isolate = context->GetIsolate();
-  AddonData* data = new AddonData();
-  node::AddEnvironmentCleanupHook(isolate, AddonData::DeleteInstance, data);
-
-  Local<v8::Function> function = NewFunction(isolate, Load, 1, static_cast<void*>(data));
+  Local<v8::Function> function = NewFunction(isolate, Load, 1, NULL);
   SetProperty(isolate, "load", exports, function);
 } 

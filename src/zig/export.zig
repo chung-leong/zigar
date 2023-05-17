@@ -1,6 +1,16 @@
 const std = @import("std");
 pub const api_version = 1;
 
+// for padding bitfields
+fn Padding(comptime used: comptime_int) type {
+    return @Type(.{
+        .Int = .{
+            .signedness = .unsigned,
+            .bits = @bitSizeOf(c_int) - used,
+        },
+    });
+}
+
 // error that can occur during type conversion
 const Error = error{
     UnsupportedConversion,
@@ -27,23 +37,33 @@ const ElementType = enum(c_int) {
     F32,
     F64,
 };
-const ValueTypes = packed struct(i64) {
+const ValueTypes = packed struct(c_int) {
     boolean: bool = false,
     number: bool = false,
     bigInt: bool = false,
     string: bool = false,
     array: bool = false,
     object: bool = false,
-    typedArray: bool = false,
+    function: bool = false,
     arrayBuffer: bool = false,
-    _: u56 = 0,
+    i8Array: bool = false,
+    u8Array: bool = false,
+    i16Array: bool = false,
+    u16Array: bool = false,
+    i32Array: bool = false,
+    u32Array: bool = false,
+    i64Array: bool = false,
+    u64Array: bool = false,
+    f32Array: bool = false,
+    f64Array: bool = false,
+    _: Padding(18) = 0,
 };
-const FunctionAttributes = packed struct(i64) {
+const FunctionAttributes = packed struct(c_int) {
     throwing: bool = false,
     allocating: bool = false,
     suspending: bool = false,
     referencing: bool = false,
-    _: u60 = 0,
+    _: Padding(4) = 0,
 };
 const Value = *opaque {};
 const Pool = *opaque {};
@@ -139,6 +159,10 @@ const Callbacks = extern struct {
     is_object: *const fn (value: Value) callconv(.C) bool,
     is_array: *const fn (value: Value) callconv(.C) bool,
     is_array_buffer: *const fn (value: Value) callconv(.C) bool,
+    match_value_types: *const fn (value: Value, types: ValueTypes) callconv(.C) bool,
+
+    get_property: *const fn (isolate: Isolate, name: [*]const u8, value: Value, dest: *Value) callconv(.C) Result,
+    set_property: *const fn (isolate: Isolate, name: [*]const u8, value: Value, dest: Value) callconv(.C) Result,
 
     convert_to_bool: *const fn (isolate: Isolate, value: Value, dest: *bool) callconv(.C) Result,
     convert_to_i32: *const fn (isolate: Isolate, value: Value, dest: *i32) callconv(.C) Result,
@@ -538,37 +562,37 @@ fn createThunk(comptime package: anytype, comptime name: []const u8) Thunk {
 
 fn createGetterThunk(comptime package: anytype, comptime name: []const u8) Thunk {
     const ThunkType = struct {
-        fn cfn(iso: Isolate, info: CallInfo, pool: Pool) callconv(.C) void {
+        fn invokeFunction(isolate: Isolate, info: CallInfo, pool: Pool) callconv(.C) void {
             const field = @field(package, name);
             const T = @TypeOf(field);
-            if (convertFrom(iso, pool, field)) |v| {
+            if (convertFrom(isolate, pool, field)) |v| {
                 callbacks.set_return_value(info, v);
             } else |err| {
                 const fmt = "Error encountered while converting {s} to JavaScript value for property \"{s}\": {s}";
-                throwException(iso, fmt, .{ @typeName(T), name, @errorName(err) });
+                throwException(isolate, fmt, .{ @typeName(T), name, @errorName(err) });
                 return;
             }
         }
     };
-    return ThunkType.cfn;
+    return ThunkType.invokeFunction;
 }
 
 fn createSetterThunk(comptime package: anytype, comptime name: []const u8) Thunk {
     const ThunkType = struct {
-        fn cfn(iso: Isolate, info: CallInfo, pool: Pool) callconv(.C) void {
+        fn invokeFunction(isolate: Isolate, info: CallInfo, pool: Pool) callconv(.C) void {
             const arg = callbacks.get_argument(info, 0);
             const T = @TypeOf(@field(package, name));
-            if (convertTo(iso, pool, arg, T)) |value| {
+            if (convertTo(isolate, pool, arg, T)) |value| {
                 var ptr = &@field(package, name);
                 ptr.* = value;
             } else |err| {
                 const fmt = "Error encountered while converting JavaScript value to {s} for property \"{s}\": {s}";
-                throwException(iso, fmt, .{ @typeName(T), name, @errorName(err) });
+                throwException(isolate, fmt, .{ @typeName(T), name, @errorName(err) });
                 return;
             }
         }
     };
-    return ThunkType.cfn;
+    return ThunkType.invokeFunction;
 }
 
 // functions that create the module struct at compile time
@@ -614,7 +638,7 @@ fn createVariable(comptime package: anytype, comptime name: []const u8) Variable
     return .{
         .getter_thunk = createGetterThunk(package, name),
         .setter_thunk = if (writable) createSetterThunk(package, name) else null,
-        .class_name = null,
+        .class_name = "hello",
         .default_type = getReturnType(T),
         .possible_types = getPossibleTypes(T, true),
     };
