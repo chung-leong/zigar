@@ -1,22 +1,38 @@
 import { parse, join, resolve } from 'path';
 import { tmpdir } from 'os';
-import { stat, lstat, readdir, mkdir, rmdir, unlink, readFile, writeFile } from 'fs/promises';
+import { stat, lstat, readdir, mkdir, rmdir, unlink, rename, chmod, utimes, readFile, writeFile, open } from 'fs/promises';
 
 const { env } = process;
+const defaults = {
+  buildDir: env.NODE_ZIG_BUILD_DIR ?? tmpdir(),
+  cacheDir: env.NODE_ZIG_CACHE_DIR ?? join(process.cwd(), 'zig-cache'),
+  zigCmd: env.NODE_ZIG_BUILD_CMD ?? (env.NODE_ENV === 'production') ? 'zig build -Doptimize=ReleaseFast' : 'zig build',
+  cleanUp: env.NODE_ZIG_CLEAN_UP ?? (env.NODE_ENV === 'production') ? '1' : '',
+};
 
-var buildDir = env.NODE_ZIG_BUILD_DIR ?? tmpdir();
-var cacheDir = env.NODE_ZIG_CACHE_DIR ?? join(process.cwd(), 'zig-cache');
-var zigCmd = env.NODE_ZIG_BUILD_CMD ?? (env.NODE_ENV === 'production') ? 'zig build' : 'zig build -O ReleaseFast';
+export async function settings(options) {
+  Object.assign(defaults, options);
+}
 
-export async function compile(path) {
+export async function compile(path, options = {}) {
+  const {
+    buildDir,
+    cacheDir,
+    zigCmd,
+    cleanUp,
+  } = { ...defaults, ...options };
   const fullPath = resolve(path);
   const rootFile = parse(fullPath);
-  const soName = rootFile.base + '.so';
+  const soName = `lib${rootFile.name}.so`;
   const soPath = join(cacheDir, soName);
   const soMTime = (await find(soPath))?.mtime;
-  const noBuilding = !buildDir || !cacheDir;
-  if (soMTime && noBuilding) {
-    return soPath;
+  if (!buildDir || !cacheDir) {
+    // can't build when no command or build directory is set to empty
+    if (soMTime) {
+      return soPath;
+    } else {
+      throw new Error(`Cannot find shared library and compilation is disabled: ${soPath}`);
+    }
   }
   if (!find(fullPath)) {
     throw new Error(`Source file not found: ${fullPath}`);
@@ -36,48 +52,82 @@ export async function compile(path) {
       dependent = true;
     }
   });
+  // build in a unique temp dir
+  const soBuildDir = join(buildDir, await md5(fullPath));
+  const logPath = join(soBuildDir, 'log');
+  const cmdPath = join(soBuildDir, 'cmd');
+  const pidPath = join(soBuildDir, 'pid');
+  // if there's an existing build folder, use it only if the command used to create it is the same
+  const prevCmd = await load(cmdPath, '');
+  if (prevCmd && prevCmd !== zigCmd) {
+    if (await writePID(pidPath)) {
+      await rimraf(soBuildDir);
+      changed = true;
+    }
+  }
   if (!changed) {
     return soPath;
   }
-  // build in a unique temp dir
-  const hash = await md5(fullPath);
-  await mkdirp(buildDir);
-  const soBuildDir = join(buildDir, hash);
-  const logPath = join(buildDir, hash + '.log');
-  var errorLog;
-  while (!errorLog) {
-    try {
-      await mkdir(soBuildDir);
-      const vars = {
+  var done = false, errorLog;
+  while (!done) {
+    await mkdirp(soBuildDir);
+    if (await writePID(pidPath)) {
+      await createProject({
+        'stub.zig': `../zig/stub.zig`,
+        'build.zig': `../zig/build${dependent ? '-clib' : ''}.zig`,
+      }, {
         EXPORTER_PATH: absolute('../zig/export.zig'),
         PACKAGE_PATH: fullPath,
         PACKAGE_NAME: rootFile.name,
-        LIBRARY_PATH: soPath,
+      }, soBuildDir);
+      const { exec } = await import('child_process');
+      const options = {
+        cwd: soBuildDir,
+        windowsHide: true,
       };
-      await create('../zig/stub.zig', soBuildDir, vars);
-      await create('../zig/build.zig', soBuildDir, vars);
-      break;
-    } catch (err) {
-      if (err.code != 'EEXIST') {
-        throw err;
-      }
-      // perhaps another process is compiling the same file
-      // wait for it to finish
-      if (await monitor(soBuildDir)) {
-        // the folder has vanished, see if the shared library has been updated
-        const soNewMTime = (await find(soPath))?.mtime;
-        if (!(soNewMTime && soNewMTime !== soMTime)) {
-          return soPath;
-        } else {
-          errorLog = await load(logPath);
+      const success = await new Promise((resolve) => {
+        exec(zigCmd, options, (err, stdout, stderr) => {
+          if (err) {
+            errorLog = stderr || '[NO OUTPUT]';
+            resolve(false);
+            writeFile(logPath, errorLog).catch(() => {});
+          } else {
+            resolve(true);
+          }
+        });
+      });
+      try {
+        if (success) {
+          const libPath = join(soBuildDir, 'zig-out', 'lib', soName);
+          await mkdirp(cacheDir);
+          await move(libPath, soPath);
         }
+      } finally {
+        if (cleanUp) {
+          await rimraf(soBuildDir);
+        } else {
+          await unlink(pidPath);
+          await writeFile(cmdPath, zigCmd);
+        }
+      }
+      done = true;
+    } else {
+      // perhaps another process is compiling the same file--wait for it to finish
+      if (await monitor(soBuildDir)) {
+        // pidfile has vanished--see if the shared library has been updated
+        const newMTime = (await find(soPath))?.mtime;
+        if (!(newMTime && newMTime !== soMTime)) {
+          errorLog = await load(logPath, '[ERROR LOG NOT FOUND]');
+        }
+        done = true;
       } else {
+        // remove the stale folder
         await rimraf(soBuildDir);
       }
     }  
   }
   if (errorLog) {
-    throw new Error(`Compilation of Zig code failed\n\n${errorLog}`);
+    throw new Error(`Zig compilation failed\n\n${errorLog}`);
   }
   return soPath;
 }
@@ -99,6 +149,9 @@ async function walk(dir, re, cb) {
     try {
       const list = await readdir(dir);
       for (const name of list) {
+        if (name.startsWith('.') || name === 'node_modules' || name === 'zig-cache') {
+          continue;
+        }
         const path = join(dir, name);
         const info = await find(path);
         if (info?.isDirectory() && !scanned.includes(info.ino)) {
@@ -113,32 +166,60 @@ async function walk(dir, re, cb) {
   await scan(dir);
 }
 
-async function monitor(dir) {
+async function monitor(path) {
   while (true) {
-    const mtime = (await find(dir)).mtime;
+    const mtime = (await find(path)).mtime;
     if (!mtime) {
-      // folder has been removed
+      // pidfile has been removed
       return true;
-    } else if (new Date() - mtime > 5000) {
-      // folder's been abandoned
+    } else if (new Date() - mtime > 2500) {
+      // pidfile's been abandoned
       return false;
     }
-    await delay(1000);
+    await delay(500);
   }
 }
 
-async function create(relpath, dir, vars) {
-  const path = absolute(relpath);
-  const { base } = parse(path);
-  const destPath = join(dir, base);
-  var s = await readFile(path, 'utf8');
-  s = s.replace(/"\${(\w+)}"/g, (m0, m1) => JSON.stringify(vars[m1] ?? m1));
-  s = s.replace(/\${(\w+)}/g, (m0, m1) => vars[m1] ?? m1);
-  await writeFile(destPath, s);
+async function writePID(path) {
+  try {
+    const handle = await open(path, 'wx');
+    handle.write(`${process.pid}`);
+    handle.close();
+    return true;
+  } catch (err) {
+    if (err.code == 'EEXIST') {
+      return false;
+    } else {
+      throw err;
+    }
+  }
 }
 
-function absolute(relpath) {
-  return (new URL(relpath, import.meta.url)).pathname;
+async function createProject(fileMap, vars, dir) {
+  for (const [ name, src ] of Object.entries(fileMap)) {
+    const path = absolute(src);
+    const destPath = join(dir, name);
+    var s = await readFile(path, 'utf8');
+    s = s.replace(/"\${(\w+)}"/g, (m0, m1) => JSON.stringify(vars[m1] ?? m1));
+    s = s.replace(/\${(\w+)}/g, (m0, m1) => vars[m1] ?? m1);
+    await writeFile(destPath, s);
+  }
+}
+
+async function move(srcPath, dstPath) {
+  try {
+    await rename(srcPath, dstPath);
+  } catch (err) {
+    if (err.code == 'EXDEV') {
+      const info = await stat(srcPath);
+      const data = await readFile(srcPath);
+      await writeFile(dstPath, data);
+      await chmod(dstPath, info.mode);
+      await unlink(srcPath);
+    } else {
+      throw err;
+    }
+  }  
 }
 
 async function load(path, def) {
@@ -149,6 +230,14 @@ async function load(path, def) {
   }
 }
 
+async function touch(path) {
+  try {
+    const now = new Date();
+    await utimes(path, now, now);
+  } catch (err) {    
+  }
+}
+
 async function md5(text) {
   const { createHash } = await import('crypto');
   const hash = createHash('md5');
@@ -156,12 +245,9 @@ async function md5(text) {
   return hash.digest('hex');
 }
 
-async function delay(ms) {
-  await new Promise(r => setTimeout(r, ms));
-}
-
 async function mkdirp(path) {
-  if (!find(path)) {
+  const exists = await find(path);
+  if (!exists) {
     const { root, dir } = parse(path);
     await mkdirp(dir);
     await mkdir(path);
@@ -174,7 +260,6 @@ async function rimraf(dir) {
     for (const name of list) {
       const path = join(dir, name);
       const info = await find(path, false);
-      console.log({ path, info });
       if (info?.isDirectory()) {
         await remove(path);
       } else if (info) {
@@ -184,4 +269,12 @@ async function rimraf(dir) {
     await rmdir(dir);
   };  
   await remove(dir); 
+}
+
+async function delay(ms) {
+  await new Promise(r => setTimeout(r, ms));
+}
+
+function absolute(relpath) {
+  return (new URL(relpath, import.meta.url)).pathname;
 }

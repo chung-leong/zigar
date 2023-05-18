@@ -1,3 +1,1 @@
-const exporter = @import("exporter");
-
-export const zig_module = exporter.createModule(@import("${PACKAGE_PATH}"));
+export const zig_module = @import("exporter").createModule(@import("package"));
