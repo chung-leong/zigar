@@ -1,10 +1,7 @@
-const addon = require('./build/Release/addon');
+import target, { hello, world } from './test-target.zig';
 
-const zig = addon.load('./libtest.so');
+console.log(target);
+console.log(hello(123));
+console.log(world());
 
-console.log(zig);
-console.log(zig.integer);
-
-const retval = zig.hello(12345);
-console.log(retval);
 

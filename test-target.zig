@@ -6,3 +6,7 @@ pub fn hello(number: f16) i16 {
     print("Hello world ({d})\n", .{number});
     return 789;
 }
+
+pub fn world() void {
+    print("Another function\n", .{});
+}
