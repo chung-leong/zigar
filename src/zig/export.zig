@@ -7,6 +7,7 @@ pub const api_version = 1;
 const Error = error{
     UnsupportedConversion,
     IntegerOverflow,
+    IntegerUnderflow,
     FloatUnderflow,
     FloatOverflow,
 };
@@ -417,7 +418,9 @@ fn convertTo(call: Call, value: Value, comptime T: type) !T {
         }
         if (comptime std.math.maxInt(BT) < std.math.maxInt(i64)) {
             // need to check for overflow and cast to final type
-            if (result > std.math.maxInt(BT)) {
+            if (result < std.math.minInt(BT)) {
+                return Error.IntegerUnderflow;
+            } else if (result > std.math.maxInt(BT)) {
                 return Error.IntegerOverflow;
             }
         }
@@ -471,13 +474,13 @@ fn convertFrom(call: Call, value: anytype) !?Value {
         return result;
     } else if (comptime isInt(T)) {
         var result: Value = undefined;
-        if (callbacks.convert_from_integer(call, value, &result) != .OK) {
+        if (callbacks.convert_from_integer(call, @intCast(i64, value), &result) != .OK) {
             return Error.UnsupportedConversion;
         }
         return result;
     } else if (comptime isFloat(T)) {
         var result: Value = undefined;
-        if (callbacks.convert_from_float(call, value, &result) != .OK) {
+        if (callbacks.convert_from_float(call, @floatCast(f64, value), &result) != .OK) {
             return Error.UnsupportedConversion;
         }
         return result;

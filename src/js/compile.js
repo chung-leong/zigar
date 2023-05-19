@@ -52,6 +52,14 @@ export async function compile(path, options = {}) {
       dependent = true;
     }
   });
+  if (!changed) {
+    const { pathname } = new URL('../zig', import.meta.url);
+    await walk(pathname, /\.zig$/i, (dir, name, { mtime }) => {
+      if (!(soMTime > mtime)) {
+        changed = true;
+      } 
+    });
+  }
   // build in a unique temp dir
   const soBuildDir = join(buildDir, await md5(fullPath));
   const logPath = join(soBuildDir, 'log');
