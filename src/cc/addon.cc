@@ -1,21 +1,48 @@
+#include <limits>
+#include <cmath>
 #include "addon.h"
 
-template<typename T>
-inline T GetExternalData(const FunctionCallbackInfo<Value>& info) {
-  void* data = info.Data().As<External>()->Value();
-  return reinterpret_cast<T>(data);
-}
-
-static Local<String> NewString(Isolate* isolate, const char* s) {
+//-----------------------------------------------------------------------------
+//  Utility functions
+//-----------------------------------------------------------------------------
+static Local<String> 
+NewString(Isolate* isolate, const char* s) {
   return String::NewFromUtf8(isolate, s).ToLocalChecked();
 }
 
-static Local<Number> NewInteger(Isolate* isolate, int64_t value, bool is_signed) {
-  // TODO: avoid double when possible
-  return Number::New(isolate, (double) value);
+static Local<Number> 
+NewInteger(Isolate* isolate, int64_t value) {
+  if (value >= INT32_MIN && value <= INT32_MAX) {
+    return Int32::New(isolate, static_cast<int64_t>(value));
+  } else if (value >= MIN_SAFE_INTEGER && value <= MAX_SAFE_INTEGER) {
+    return Number::New(isolate, (double) value);
+  } else {
+    return Number::New(isolate, std::numeric_limits<double>::quiet_NaN());
+  }
 }
 
-static Local<Value> AllocateExternal(Isolate* isolate, size_t count) {
+static Local<v8::Function> 
+NewFunction(Isolate* isolate, FunctionCallback f, int len, Local<Value> data = Local<Value>()) {
+  Local<Signature> signature;
+  Local<FunctionTemplate> ftmpl = FunctionTemplate::New(isolate, f, data, signature, len);
+  return ftmpl->GetFunction(isolate->GetCurrentContext()).ToLocalChecked();
+}
+
+static void 
+SetProperty(Isolate* isolate, const char *name, Local<Value> object, Local<Value> value) {
+  Local<String> key = NewString(isolate, name);
+  object.As<Object>()->Set(isolate->GetCurrentContext(), key, value).Check();
+}
+
+static void 
+ThrowException(Isolate* isolate, const char* message) {
+  Local<String> string = NewString(isolate, message);
+  Local<Value> error = Exception::Error(string);
+  isolate->ThrowException(error);
+}
+
+static Local<Value> 
+AllocateExternal(Isolate* isolate, size_t count) {
   struct SetWeakCallbackData {
     Global<Value> global;
     int64_t payload[1]; 
@@ -39,17 +66,8 @@ static Local<Value> AllocateExternal(Isolate* isolate, size_t count) {
   return external;
 }
 
-static Local<v8::Function> NewFunction(Isolate* isolate, FunctionCallback f, int len, void* data) {
-  Local<External> external;
-  if (data) {
-    external = External::New(isolate, data);
-  }
-  Local<Signature> signature;
-  Local<FunctionTemplate> ftmpl = FunctionTemplate::New(isolate, f, external, signature, len);
-  return ftmpl->GetFunction(isolate->GetCurrentContext()).ToLocalChecked();
-}
-
-static ::TypedArray GetMemory(Local<ArrayBuffer> arBuf) {
+static ::TypedArray 
+GetMemory(Local<ArrayBuffer> arBuf) {
   std::shared_ptr<BackingStore> store = arBuf->GetBackingStore();
   ::TypedArray array;
   array.type = ElementType::u8;
@@ -58,241 +76,221 @@ static ::TypedArray GetMemory(Local<ArrayBuffer> arBuf) {
   return array;
 }
 
-static size_t GetArgumentCount(const FunctionCallbackInfo<Value>& info) {
-  return info.Length();
+//-----------------------------------------------------------------------------
+//  Callback functions that zig modules will invoke
+//-----------------------------------------------------------------------------
+static size_t 
+GetArgumentCount(CallContext* call) {
+  return call->node_args->Length();
 }
 
-static Local<Value> GetArgument(const FunctionCallbackInfo<Value>& info, size_t index) {
-  return info[index];
+static Local<Value> 
+GetArgument(CallContext* call, size_t index) {
+  Local<Value> value = (*call->node_args)[index];
+  // unwrap scalar objects
+  if (value->IsBooleanObject()) {
+    value = Boolean::New(call->isolate, value.As<BooleanObject>()->ValueOf());
+  } else if (value->IsStringObject()) {
+    value = value.As<StringObject>()->ValueOf();
+  } else if (value->IsNumberObject()) {
+    value = Number::New(call->isolate, value.As<NumberObject>()->ValueOf());
+  } else if (value->IsBigIntObject()) {
+    value = value.As<BigIntObject>()->ValueOf();
+  }
+  return value;
 }
 
-static ValueTypes GetArgumentType(const FunctionCallbackInfo<Value>& info, size_t index) {
-  FunctionData* fd = GetExternalData<FunctionData*>(info);
-  return fd->argument_types[index];
+static ValueMask 
+GetArgumentType(CallContext* call, size_t index) {
+  return call->zig_func->argument_types[index];
 }
 
-static ValueTypes GetReturnType(const FunctionCallbackInfo<Value>& info) {
-  FunctionData* fd = GetExternalData<FunctionData*>(info);
-  return fd->return_type;
+static ValueMask 
+GetReturnType(CallContext* call) {
+  return call->zig_func->return_type;
 }
 
-static void SetReturnValue(const FunctionCallbackInfo<Value>& info, Local<Value> value) {
+static void 
+SetReturnValue(CallContext* call, Local<Value> value) {
   if (!value.IsEmpty()) {
-    info.GetReturnValue().Set(value);
+    call->node_args->GetReturnValue().Set(value);
   }
 }
 
-static Result GetProperty(Isolate* isolate, const char *name, Local<Value> object, Local<Value>* dest) {
-  Local<Context> context = isolate->GetCurrentContext();
-  MaybeLocal<Value> result = object.As<Object>()->Get(context, NewString(isolate, name));
+static Result 
+GetProperty(CallContext* call, const char *name, Local<Value> object, Local<Value>* dest) {
+  Local<Value> key = NewString(call->isolate, name);
+  MaybeLocal<Value> result = object.As<Object>()->Get(call->exec_context, key);
   if (result.IsEmpty()) {
-    return Result::failure;
+    return Result::eGeneric;
   }
   *dest = result.ToLocalChecked();
-  return Result::success;
+  return Result::ok;
 }
 
-static Result SetProperty(Isolate* isolate, const char *name, Local<Value> object, Local<Value> value) {
-  Local<Context> context = isolate->GetCurrentContext();
-  object.As<Object>()->Set(context, NewString(isolate, name), value).Check();
-  return Result::success;
+static Result
+SetProperty(CallContext* call, const char *name, Local<Value> object, Local<Value> value) {
+  Local<Value> key = NewString(call->isolate, name);
+  object.As<Object>()->Set(call->exec_context, key, value).Check();
+  return Result::ok;
 }
 
-static Result AllocateMemory(Isolate* isolate, Local<Array>& pool, size_t size, ::TypedArray* dest) {
-  if (pool.IsEmpty()) {
-    pool = Array::New(isolate);
+static Result
+AllocateMemory(CallContext* call, size_t size, ::TypedArray* dest) {
+  if (call->mem_pool.IsEmpty()) {
+    call->mem_pool = Array::New(call->isolate);
   }
-  Local<ArrayBuffer> buffer = ArrayBuffer::New(isolate, size);
-  uint32_t index = pool->Length();
-  Local<Context> context = isolate->GetCurrentContext();
-  pool->Set(context, index, buffer).Check();
+  Local<ArrayBuffer> buffer = ArrayBuffer::New(call->isolate, size);
+  uint32_t index = call->mem_pool->Length();
+  Local<Context> context = call->isolate->GetCurrentContext();
+  call->mem_pool->Set(context, index, buffer).Check();
   *dest = GetMemory(buffer);
-  return Result::success;
+  return Result::ok;
 }
 
-static bool IsNull(Local<Value> value) {
+static bool 
+IsNull(Local<Value> value) {
   return value->IsNullOrUndefined();
 }
 
-static bool IsString(Local<Value> value) {
-  return value->IsString();
+static bool 
+IsValueType(Local<Value> value, ValueMask mask) {
+  bool match = (mask.boolean && value->IsBoolean())
+            || (mask.number && value->IsNumber())
+            || (mask.bigInt && value->IsBigInt())
+            || (mask.string && value->IsString())
+            || (mask.array && value->IsArray())
+            || (mask.object && value->IsObject())
+            || (mask.function && value->IsFunction())
+            || (mask.arrayBuffer && value->IsArrayBuffer())
+            || (mask.i8Array && value->IsInt8Array())
+            || (mask.u8Array && (value->IsUint8Array() || value->IsUint8ClampedArray()))
+            || (mask.i16Array && value->IsInt16Array())
+            || (mask.u16Array && value->IsUint16Array())
+            || (mask.i32Array && value->IsInt32Array())
+            || (mask.u32Array && value->IsUint32Array())
+            || (mask.i64Array && value->IsBigInt64Array())
+            || (mask.u64Array && value->IsBigUint64Array())
+            || (mask.f32Array && value->IsFloat32Array())
+            || (mask.f64Array && value->IsFloat64Array());
+  return match;
 }
 
-static bool IsArray(Local<Value> value) {
-  return value->IsArray();
-}
-
-static bool IsObject(Local<Value> value) {
-  return value->IsObject();
-}
-
-static bool IsArrayBuffer(Local<Value> value) {
-  return value->IsArrayBuffer() || value->IsTypedArray();
-}
-
-static bool MatchValueTypes(Local<Value> value, ValueTypes types) {
-  auto match = [&](ValueTypes type) { return (INT(types) & INT(type)) != 0; };
-  return (match(ValueTypes::boolean) && value->IsBoolean())
-      || (match(ValueTypes::number) && value->IsNumber())
-      || (match(ValueTypes::bigInt) && value->IsBigInt())
-      || (match(ValueTypes::string) && value->IsString())
-      || (match(ValueTypes::array) && value->IsArray())
-      || (match(ValueTypes::object) && value->IsObject())
-      || (match(ValueTypes::function) && value->IsFunction())
-      || (match(ValueTypes::arrayBuffer) && value->IsArrayBuffer())
-      || (match(ValueTypes::i8Array) && value->IsInt8Array())
-      || (match(ValueTypes::u8Array) && (value->IsUint8Array() || value->IsUint8ClampedArray()))
-      || (match(ValueTypes::i16Array) && value->IsInt16Array())
-      || (match(ValueTypes::u16Array) && value->IsUint16Array())
-      || (match(ValueTypes::i32Array) && value->IsInt32Array())
-      || (match(ValueTypes::u32Array) && value->IsUint32Array())
-      || (match(ValueTypes::i64Array) && value->IsBigInt64Array())
-      || (match(ValueTypes::u64Array) && value->IsBigUint64Array())
-      || (match(ValueTypes::f32Array) && value->IsFloat32Array())
-      || (match(ValueTypes::f64Array) && value->IsFloat64Array());
-}
-
-static Result ConvertToBool(Isolate* isolate, Local<Value> value, bool* dest) {
-  Local<Boolean> boolean;
+static Result 
+ConvertToBool(CallContext* call, Local<Value> value, bool* dest) {
   if (value->IsBoolean()) {
-    boolean = value.As<Boolean>();
-  } else {
-    MaybeLocal<Boolean> result = value->ToBoolean(isolate);
-    if (result.IsEmpty()) {
-      return Result::failure;
-    }
-    boolean = result.ToLocalChecked();
+    *dest = value.As<Boolean>()->Value();
+    return Result::ok;
   }
-  *dest = boolean->Value();
-  return Result::success;
+  return Result::eGeneric;
 }
 
-static Result ConvertFromBool(Isolate* isolate, bool value, Local<Value>* dest) {
-  *dest = Boolean::New(isolate, value);
-  return Result::success;
+static Result 
+ConvertFromBool(CallContext* call, bool value, Local<Value>* dest) {
+  *dest = Boolean::New(call->isolate, value);
+  return Result::ok;
 }
 
-static Result ConvertToI32(Isolate* isolate, Local<Value> value, int32_t* dest) {
-  Local<Int32> number;
+static Result 
+ConvertToInteger(CallContext* call, Local<Value> value, int64_t* dest) {
   if (value->IsInt32()) {
-    number = value.As<Int32>();
-  } else {
-    MaybeLocal<Int32> result = value->ToInt32(isolate->GetCurrentContext());
-    if (result.IsEmpty()) {
-      return Result::failure;
+    *dest = value.As<Int32>()->Value();
+  } else if (value->IsNumber()) {
+    double fvalue = value.As<Number>()->Value();
+    *dest = static_cast<int64_t>(fvalue);
+  } else if (value->IsBigInt()) {
+    bool lossless;
+    int64_t ivalue = value.As<BigInt>()->Int64Value(&lossless);
+    if (!lossless) {
+      return Result::eOverflow;
     }
-    number = result.ToLocalChecked();
-  }
-  *dest = number->Value();
-  return Result::success;
-}
-
-static Result ConvertFromI32(Isolate* isolate, int32_t value, Local<Value>* dest) {
-  *dest = Int32::New(isolate, value);
-  return Result::success;
-}
-
-static Result ConvertToU32(Isolate* isolate, Local<Value> value, uint32_t* dest) {
-  Local<Uint32> number;
-  if (value->IsUint32()) {
-    number = value.As<Uint32>();
+    *dest = ivalue;
   } else {
-    MaybeLocal<Uint32> result = value->ToUint32(isolate->GetCurrentContext());
-    if (result.IsEmpty()) {
-      return Result::failure;
-    }
-    number = result.ToLocalChecked();
+    return Result::eGeneric;
   }
-  *dest = number->Value();
-  return Result::success;
+  return Result::ok;
 }
 
-static Result ConvertFromU32(Isolate* isolate, uint32_t value, Local<Value>* dest) {
-  *dest = Uint32::NewFromUnsigned(isolate, value);
-  return Result::success;
+static Result 
+ConvertFromInteger(CallContext* call, int64_t value, Local<Value>* dest) {
+  if (INT32_MIN <= value && value <= INT32_MAX) {
+    *dest = Int32::New(call->isolate, value);
+  } else if (MIN_SAFE_INTEGER <= value && value <= MAX_SAFE_INTEGER) {
+    *dest = Number::New(call->isolate, value);
+  } else {
+    *dest = BigInt::New(call->isolate, value);
+  }
+  return Result::ok;
 }
 
-static Result ConvertToF64(Isolate* isolate, Local<Value> value, double* dest) {
-  Local<Number> number;
+static Result 
+ConvertToFloat(CallContext* call, Local<Value> value, double* dest) {
   if (value->IsNumber()) {
-    number = value.As<Number>();
-  } else {
-    MaybeLocal<Number> result = value->ToNumber(isolate->GetCurrentContext());
+    *dest = value.As<Number>()->Value();
+  } else if (value->IsBigInt()) {
+    MaybeLocal<Number> result = value.As<BigInt>()->ToNumber(call->exec_context);
     if (result.IsEmpty()) {
-      return Result::failure;
+      return Result::eGeneric;
     }
-    number = result.ToLocalChecked();
+    Local<Number> number = result.ToLocalChecked();
+    double fvalue = number->Value();
+    if (!std::isfinite(fvalue)) {
+      return Result::eOverflow;
+    }
+    *dest = fvalue;
   }
-  *dest = number->Value();
-  return Result::success;
+  return Result::ok;
 }
 
-static Result ConvertFromF64(Isolate* isolate, double value, Local<Value>* dest) {
-  *dest = Number::New(isolate, value);
-  return Result::success;
+static Result 
+ConvertFromFloat(CallContext* call, double value, Local<Value>* dest) {
+  *dest = Number::New(call->isolate, value);
+  return Result::ok;
 }
 
-static Result ConvertToUTF8(Isolate* isolate, Local<Array>& pool, Local<Value> value, ::TypedArray* dest) {
+static Result 
+ConvertToUTF8(CallContext* call, Local<Value> value, ::TypedArray* dest) {
   Local<String> string;
   if (value->IsString()) {
     string = value.As<String>();
   } else {
-    MaybeLocal<String> result = value->ToString(isolate->GetCurrentContext());
+    MaybeLocal<String> result = value->ToString(call->exec_context);
     if (result.IsEmpty()) {
-      return Result::failure;
+      return Result::eGeneric;
     }
     string = result.ToLocalChecked();
   }
   size_t len = string->Length();
-  if (AllocateMemory(isolate, pool, (len + 1) * sizeof(uint8_t), dest) != Result::success) {
-    return Result::failure;
+  if (AllocateMemory(call, (len + 1) * sizeof(uint8_t), dest) != Result::ok) {
+    return Result::eGeneric;
   }
-  string->WriteUtf8(isolate, reinterpret_cast<char*>(dest->bytes));
-  return Result::success;
+  string->WriteUtf8(call->isolate, reinterpret_cast<char*>(dest->bytes));
+  return Result::ok;
 }
 
-static Result ConvertToUTF16(Isolate* isolate, Local<Array>& pool, Local<Value> value, ::TypedArray* dest) {
+static Result
+ConvertToUTF16(CallContext* call, Local<Value> value, ::TypedArray* dest) {
   Local<String> string;
   if (value->IsString()) {
     string = value.As<String>();
   } else {
-    MaybeLocal<String> result = value->ToString(isolate->GetCurrentContext());
+    MaybeLocal<String> result = value->ToString(call->exec_context);
     if (result.IsEmpty()) {
-      return Result::failure;
+      return Result::eGeneric;
     }
     string = result.ToLocalChecked();
   }
   size_t len = string->Length();
-  if (AllocateMemory(isolate, pool, (len + 1) * sizeof(uint16_t), dest) != Result::success) {
-    return Result::failure;
+  if (AllocateMemory(call, (len + 1) * sizeof(uint16_t), dest) != Result::ok) {
+    return Result::eGeneric;
   }
-  string->Write(isolate, reinterpret_cast<uint16_t*>(dest->bytes));
-  return Result::success;
+  string->Write(call->isolate, reinterpret_cast<uint16_t*>(dest->bytes));
+  return Result::ok;
 }
 
-static size_t GetElementSize(ElementType type) {
-  switch (type) {
-    case ElementType::unknown: 
-    case ElementType::i8: 
-    case ElementType::u8: 
-      return 1;
-    case ElementType::i16: 
-    case ElementType::u16: 
-      return 2;
-    case ElementType::i32: 
-    case ElementType::u32: 
-    case ElementType::f32: 
-      return 4;
-    case ElementType::i64: 
-    case ElementType::u64: 
-    case ElementType::f64: 
-      return 8;
-  }
-  return 0;
-}
-static Result ConvertToTypedArray(Isolate* isolate, Local<Value> value, ::TypedArray* dest) {
+static Result
+ConvertToTypedArray(CallContext* call, Local<Value> value, ::TypedArray* dest) {
   Local<ArrayBuffer> buffer;
-  ElementType type = dest->type;
   size_t offset = 0;
   if (value->IsArrayBuffer()) {
     buffer = value.As<ArrayBuffer>();
@@ -300,105 +298,112 @@ static Result ConvertToTypedArray(Isolate* isolate, Local<Value> value, ::TypedA
     buffer = value.As<v8::TypedArray>()->Buffer();
     offset = value.As<v8::TypedArray>()->ByteOffset();
   } else {
-    return Result::failure;
+    return Result::eGeneric;
   }    
-  // leave type as uint8 as we need the actual byte-count while performing pointer conversion in Zig
   *dest = GetMemory(buffer);
   if (offset > 0) {
-    const size_t element_size = GetElementSize(type);
-    const size_t byte_count = offset >> (element_size - 1);
-    dest->bytes += byte_count;
-    dest->len -= byte_count;
+    dest->bytes += offset;
+    dest->len -= offset;
   }
-  return Result::success;
+  return Result::ok;
 }
 
-static void ThrowException(Isolate* isolate, const char* message) {
-  Local<Value> error = Exception::Error(NewString(isolate, message));
-  isolate->ThrowException(error);
+static void 
+ThrowException(CallContext* call, const char* message) {
+  Local<Value> error = Exception::Error(NewString(call->isolate, message));
+  call->isolate->ThrowException(error);
 }
 
-static void Run(const FunctionCallbackInfo<Value>& info) {
-  FunctionData* fd = GetExternalData<FunctionData*>(info);
-  Isolate* isolate = info.GetIsolate();
-  Local<Array> pool;
-  Thunk thunk = fd->entry.function->thunk;
-  thunk(isolate, info, pool);
+//-----------------------------------------------------------------------------
+//  Functions that create V8-to-Zig bridging functions
+//-----------------------------------------------------------------------------
+static FunctionData* 
+AllocateFunctionData(Isolate* isolate, size_t arg_count, const Entry *entry, Local<Value>& external) {
+  // allocate memory for the FunctionData struct, enough for holding the current 
+  // type set for each argument
+  size_t size = sizeof(FunctionData) + sizeof(ValueMask) * arg_count;
+  external = AllocateExternal(isolate, size);
+  auto fd = reinterpret_cast<FunctionData*>(external.As<External>()->Value());
+  fd->entry = *entry;
+  return fd;
 }
 
-static void Get(const FunctionCallbackInfo<Value>& info) {
-  FunctionData* fd = GetExternalData<FunctionData*>(info);
-  Isolate* isolate = info.GetIsolate();
-  Local<Array> pool;
-  Thunk thunk = fd->entry.variable->getter_thunk;
-  thunk(isolate, info, pool);
+static void
+ProcessFunctionEntry(Isolate* isolate, const Entry *entry, Local<Value> container) {
+  size_t arg_count = entry->function->argument_count;
+  const Argument *args = entry->function->arguments;
+  // save argument and return types
+  Local<Value> external;
+  FunctionData *fd = AllocateFunctionData(isolate, arg_count, entry, external);
+  for (size_t i = 0; i < arg_count; i++) {
+    fd->argument_types[i] = args[i].default_type;
+  }
+  fd->return_type = entry->function->return_default_type;
+  // calls the Zig-generate thunk when V8 function is called
+  Local<v8::Function> function = NewFunction(isolate, 
+    [](const FunctionCallbackInfo<Value>& info) {
+      CallContext ctx(info);
+      ctx.zig_func->entry.function->thunk(&ctx);
+    }, arg_count, external);
+  SetProperty(isolate, entry->name, container, function);
 }
 
-static void Set(const FunctionCallbackInfo<Value>& info) {
-  FunctionData* fd = GetExternalData<FunctionData*>(info);
-  Isolate* isolate = info.GetIsolate();
-  Local<Array> pool;
-  Thunk thunk = fd->entry.variable->setter_thunk;
-  thunk(isolate, info, pool);
+static void 
+ProcessVariableEntry(Isolate* isolate, const Entry* entry, Local<Value> container) {
+  Local<Value> external;
+  FunctionData *fd = AllocateFunctionData(isolate, 1, entry, external);
+  fd->argument_types[0] = entry->variable->default_type;
+  fd->return_type = entry->variable->default_type;
+  PropertyAttribute attribute = static_cast<PropertyAttribute>(DontDelete | ReadOnly);
+  Local<v8::Function> getter, setter;
+  if (entry->variable->getter_thunk) {
+    getter = NewFunction(isolate, 
+      [](const FunctionCallbackInfo<Value>& info) {
+        CallContext ctx(info);
+        ctx.zig_func->entry.variable->getter_thunk(&ctx);
+      }, 0, external);
+  }
+  if (entry->variable->setter_thunk) {
+    setter = NewFunction(isolate, 
+      [](const FunctionCallbackInfo<Value>& info) {
+        CallContext ctx(info);
+        ctx.zig_func->entry.variable->setter_thunk(&ctx);
+      }, 1, external);
+    attribute = static_cast<PropertyAttribute>(attribute & ~ReadOnly);
+  }
+  Local<String> name = NewString(isolate, entry->name);
+  container.As<Object>()->SetAccessorProperty(name, getter, setter, attribute);
 }
 
-static Local<Value> ProcessEntryTable(Isolate* isolate, EntryTable *table) {
+static void 
+ProcessEnumerationEntry(Isolate* isolate, const Entry* entry, Local<Value> container) {
+  Local<Value> external;
+  FunctionData *fd = AllocateFunctionData(isolate, 0, entry, external);
+  fd->return_type = entry->enumeration->default_type;
+  Local<Value> enumeration = Object::New(isolate);
+  for (size_t i = 0; i < entry->enumeration->count; i++) {
+    const EnumerationItem* item = &entry->enumeration->items[i];
+    Local<Number> number = NewInteger(isolate, item->value);
+    SetProperty(isolate, item->name, enumeration, number);
+  }
+  SetProperty(isolate, entry->name, container, enumeration);
+}
+
+static Local<Value> 
+ProcessEntryTable(Isolate* isolate, EntryTable *table) {
   Local<Value> object = Object::New(isolate);
   for (size_t i = 0; i < table->count; i++) {
-    const Entry *entry = &table->entries[i];
-    // allocate memory for FunctionData struct, enough for holding the current 
-    // type set for each argument
-    size_t arg_count;
+    const Entry* entry = &table->entries[i];
     switch (entry->type) {
-      case EntryType::function:
-        arg_count = entry->function->argument_count;
+      case EntryType::function: 
+        ProcessFunctionEntry(isolate, entry, object);
         break;
-      case EntryType::variable:
-        arg_count = 1;
+      case EntryType::variable: 
+        ProcessVariableEntry(isolate, entry, object);
         break;
-      default:
-        arg_count = 0;
-    }
-    size_t size = sizeof(FunctionData) + sizeof(ValueTypes) * arg_count;
-    Local<Value> external = AllocateExternal(isolate, size);
-    FunctionData *fd = reinterpret_cast<FunctionData*>(external.As<External>()->Value());
-    fd->entry = *entry;
-    switch (entry->type) {
-      case EntryType::function: {
-        // save argument and return types
-        const Argument *args = entry->function->arguments;
-        for (size_t i = 0; i < arg_count; i++) {
-          fd->argument_types[i] = args[i].default_type;
-        }
-        fd->return_type = entry->function->return_default_type;
-        Local<v8::Function> function = NewFunction(isolate, Run, arg_count, fd);
-        SetProperty(isolate, entry->name, object, function);
-      } break;
-      case EntryType::variable: {
-        fd->argument_types[0] = entry->variable->default_type;
-        fd->return_type = entry->variable->default_type;
-        PropertyAttribute attribute = static_cast<PropertyAttribute>(DontDelete | ReadOnly);
-        Local<v8::Function> getter, setter;
-        if (entry->variable->getter_thunk) {
-          getter = NewFunction(isolate, Get, 0, fd);
-        }
-        if (entry->variable->setter_thunk) {
-          setter = NewFunction(isolate, ::Set, 1, fd);
-          attribute = static_cast<PropertyAttribute>(attribute & ~ReadOnly);
-        }
-        Local<String> name = NewString(isolate, entry->name);
-        object.As<Object>()->SetAccessorProperty(name, getter, setter, attribute);
-      } break;
-      case EntryType::enumeration: {
-        fd->return_type = entry->enumeration->default_type;
-        Local<Value> enumeration = Object::New(isolate);
-        for (size_t i = 0; i < entry->enumeration->count; i++) {
-          const EnumerationItem* item = &entry->enumeration->items[i];
-          Local<Number> number = NewInteger(isolate, item->value, entry->enumeration->is_signed);
-          SetProperty(isolate, item->name, enumeration, number);
-        }
-        SetProperty(isolate, entry->name, object, enumeration);
-      } break;
+      case EntryType::enumeration:
+        ProcessEnumerationEntry(isolate, entry, object);
+        break;
       case EntryType::unavailable:
         break;
     }
@@ -406,11 +411,11 @@ static Local<Value> ProcessEntryTable(Isolate* isolate, EntryTable *table) {
   return object;
 }
 
-static void UnloadLibrary(void *handle) {
-    dlclose(handle);
-}
-
-static void Load(const FunctionCallbackInfo<Value>& info) {
+//-----------------------------------------------------------------------------
+//  Function for loading Zig modules
+//-----------------------------------------------------------------------------
+static void 
+Load(const FunctionCallbackInfo<Value>& info) {
   Isolate* isolate = info.GetIsolate();
 
   // check arguments
@@ -443,28 +448,21 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->get_return_type = GetReturnType;
   callbacks->set_return_value = SetReturnValue;
   callbacks->is_null = IsNull;
-  callbacks->is_string = IsString;
-  callbacks->is_object = IsObject;
-  callbacks->is_array = IsArray;
-  callbacks->is_array_buffer = IsArrayBuffer;
-  callbacks->match_value_types = MatchValueTypes;
+  callbacks->is_value_type = IsValueType;
   callbacks->get_property = GetProperty;
   callbacks->set_property = SetProperty;
+  callbacks->get_array_length = nullptr;
+  callbacks->get_array_item = nullptr;
+  callbacks->set_array_item = nullptr;
   callbacks->convert_to_bool = ConvertToBool;
-  callbacks->convert_to_i32 = ConvertToI32;
-  callbacks->convert_to_u32 = ConvertToU32;
-  callbacks->convert_to_i64 = nullptr;
-  callbacks->convert_to_u64 = nullptr;
-  callbacks->convert_to_f64 = ConvertToF64;
+  callbacks->convert_to_integer = ConvertToInteger;
+  callbacks->convert_to_float = ConvertToFloat;
   callbacks->convert_to_utf8 = ConvertToUTF8;
   callbacks->convert_to_utf16 = ConvertToUTF16;
   callbacks->convert_to_typed_array = ConvertToTypedArray;
   callbacks->convert_from_bool = ConvertFromBool;
-  callbacks->convert_from_i32 = ConvertFromI32;
-  callbacks->convert_from_u32 = ConvertFromU32;
-  callbacks->convert_from_i64 = nullptr;
-  callbacks->convert_from_u64 = nullptr;
-  callbacks->convert_from_f64 = ConvertFromF64;
+  callbacks->convert_from_integer = ConvertFromInteger;
+  callbacks->convert_from_float = ConvertFromFloat;
   callbacks->convert_from_utf8 = nullptr; // ConvertFromUTF8;
   callbacks->convert_from_utf16 = nullptr; // ConvertFromUTF16;
   callbacks->convert_from_typed_array = nullptr; // ConvertFromTypedArray;
@@ -476,11 +474,13 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   info.GetReturnValue().Set(value);
 
   // unload shared library on shutdown
-  node::AddEnvironmentCleanupHook(isolate, UnloadLibrary, handle);
+  node::AddEnvironmentCleanupHook(isolate, [](void *handle) { 
+    dlclose(handle); 
+  }, handle);
 }
 
 NODE_MODULE_INIT(/* exports, module, context */) {
   Isolate* isolate = context->GetIsolate();
-  Local<v8::Function> function = NewFunction(isolate, Load, 1, NULL);
+  Local<v8::Function> function = NewFunction(isolate, Load, 1);
   SetProperty(isolate, "load", exports, function);
 } 

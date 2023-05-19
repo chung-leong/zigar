@@ -1,14 +1,19 @@
 #include <node.h>
 #include <dlfcn.h>
 
-#define INT(a) static_cast<int>(a)
+#define MAX_SAFE_INTEGER  9007199254740991
+#define MIN_SAFE_INTEGER  -9007199254740991
 
 using namespace v8;
 
+//-----------------------------------------------------------------------------
+//  Enum and structs used by both Zig and C++ code
+//  (need to keep these in sync with their Zig definitions)
+//-----------------------------------------------------------------------------
 enum class Result : int {
-  success = 0,
-  failure = 1,
-  failureSizeMismatch = 2,
+  ok = 0,
+  eGeneric = 1,
+  eOverflow = 2,
 };
 enum class ElementType : int {
   unknown,
@@ -23,94 +28,50 @@ enum class ElementType : int {
   f32,
   f64,
 };
-enum class ValueTypeBitPos {
-  boolean = 0,
-  number,
-  bigInt,
-  string,
-  array,
-  object,
-  function,
-  arrayBuffer,
+union ValueMask {
+  struct {
+    bool boolean: 1;
+    bool number: 1;
+    bool bigInt: 1;
+    bool string: 1;
+    bool array: 1;
+    bool object: 1;
+    bool function: 1;
+    bool arrayBuffer: 1;
+    bool i8Array: 1;
+    bool u8Array: 1;
+    bool i16Array: 1;
+    bool u16Array: 1;
+    bool i32Array: 1;
+    bool u32Array: 1;
+    bool i64Array: 1;
+    bool u64Array: 1;
+    bool f32Array: 1;
+    bool f64Array: 1;
+  };
+  int bit_fields;
 };
-enum class ValueTypes : int {
-  empty = 0,
-  boolean = 1 << INT(ValueTypeBitPos::boolean),
-  number = 1 << INT(ValueTypeBitPos::number),
-  bigInt = 1 << INT(ValueTypeBitPos::bigInt),
-  string = 1 << INT(ValueTypeBitPos::string),
-  array = 1 << INT(ValueTypeBitPos::array),
-  object = 1 << INT(ValueTypeBitPos::object),
-  function = 1 << INT(ValueTypeBitPos::function),
-  arrayBuffer = 1 << INT(ValueTypeBitPos::arrayBuffer),
-  i8Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::i8)),
-  u8Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::u8)),
-  i16Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::i16)),
-  u16Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::u16)),
-  i32Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::i32)),
-  u32Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::u32)),
-  i64Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::i64)),
-  u64Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::u64)),
-  f32Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::f32)),
-  f64Array = 1 << (INT(ValueTypeBitPos::arrayBuffer) + INT(ElementType::f64)),
+static_assert(sizeof(ValueMask) == sizeof(int), "ValueMask does not have the correct size");
+union FunctionAttributes {
+  struct {
+    bool throwing: 1;
+    bool allocating: 1;
+    bool suspending: 1;
+    bool referencing: 1;
+  };
+  int bit_fields;
 };
-enum class FunctionAttributes : int {
-  throwing = 1 << 0,
-  allocating = 1 << 1,
-  suspending = 1 << 2,
-  referencing = 1 << 3,
-};
+static_assert(sizeof(ValueMask) == sizeof(int), "FunctionAttributes does not have the correct size");
 struct TypedArray {
   uint8_t* bytes;
   size_t len;
   ElementType type;
 };
-struct Callbacks {  
-  size_t (*get_argument_count)(const FunctionCallbackInfo<Value>&);
-  Local<Value> (*get_argument)(const FunctionCallbackInfo<Value>&, size_t);
-  ValueTypes (*get_argument_type)(const FunctionCallbackInfo<Value>&, size_t);
-  ValueTypes (*get_return_type)(const FunctionCallbackInfo<Value>&);
-  void (*set_return_value)(const FunctionCallbackInfo<Value>& info, Local<Value> value);
-  
-  Result (*allocate_memory)(Isolate*, Local<Array>&, size_t size, Local<Value>*);
-  Result (*reallocate_memory)(Isolate*, Local<Array>&, size_t size, Local<Value>*);
-  Result (*free_memory)(Isolate*, Local<Array>&, Local<Value>*);
 
-  bool (*is_null)(Local<Value>);
-  bool (*is_string)(Local<Value>);
-  bool (*is_object)(Local<Value>);
-  bool (*is_array)(Local<Value>);
-  bool (*is_array_buffer)(Local<Value>);
-  bool (*match_value_types)(Local<Value>, ValueTypes types);
-
-  Result (*get_property)(Isolate*, const char*, Local<Value>, Local<Value>*);
-  Result (*set_property)(Isolate*, const char*, Local<Value>, Local<Value>);
-
-  Result (*convert_to_bool)(Isolate*, Local<Value>, bool*);
-  Result (*convert_to_i32)(Isolate*, Local<Value>, int32_t*);
-  Result (*convert_to_u32)(Isolate*, Local<Value>, uint32_t*);
-  Result (*convert_to_i64)(Isolate*, Local<Value>, int64_t*);
-  Result (*convert_to_u64)(Isolate*, Local<Value>, uint64_t*);
-  Result (*convert_to_f64)(Isolate*, Local<Value>, double*);
-  Result (*convert_to_utf8)(Isolate*, Local<Array>&, Local<Value>, ::TypedArray*);
-  Result (*convert_to_utf16)(Isolate*, Local<Array>&, Local<Value>, ::TypedArray*);
-  Result (*convert_to_typed_array)(Isolate*, Local<Value>, ::TypedArray*);
-
-  Result (*convert_from_bool)(Isolate*, bool, Local<Value>*);
-  Result (*convert_from_i32)(Isolate*, int32_t, Local<Value>*);
-  Result (*convert_from_u32)(Isolate*, uint32_t, Local<Value>*);
-  Result (*convert_from_i64)(Isolate*, int64_t, Local<Value>*);
-  Result (*convert_from_u64)(Isolate*, uint64_t, Local<Value>*);
-  Result (*convert_from_f64)(Isolate*, double, Local<Value>*);
-  Result (*convert_from_utf8)(Isolate*, Local<Array>&, ::TypedArray&, Local<Value>*);
-  Result (*convert_from_utf16)(Isolate*, Local<Array>&, ::TypedArray&, Local<Value>*);
-  Result (*convert_from_typed_array)(Isolate*, Local<Array>&, ::TypedArray&, Local<Value>*);
-
-  void (*throw_exception)(Isolate*, const char*);
-};
-
-typedef void (*Thunk)(Isolate*, const FunctionCallbackInfo<Value>&, Local<Array>&);
-
+//-----------------------------------------------------------------------------
+//  Data types that appear in the exported module struct
+//-----------------------------------------------------------------------------
+typedef void (*Thunk)(CallContext*);
 enum class EntryType : int {
   unavailable = 0,
   function,
@@ -118,8 +79,8 @@ enum class EntryType : int {
   enumeration,
 };
 struct Argument {
-  ValueTypes default_type;
-  ValueTypes possible_type;
+  ValueMask default_type;
+  ValueMask possible_type;
   const char* class_name;
 };
 struct Function {
@@ -127,15 +88,15 @@ struct Function {
   FunctionAttributes attributes;
   const Argument* arguments;
   size_t argument_count;
-  ValueTypes return_default_type;
-  ValueTypes return_possible_type;
+  ValueMask return_default_type;
+  ValueMask return_possible_type;
   const char* return_class_name;
 };
 struct Variable {
   Thunk getter_thunk;
   Thunk setter_thunk;
-  ValueTypes default_type;
-  ValueTypes possible_type;
+  ValueMask default_type;
+  ValueMask possible_type;
   const char* class_name;
 };
 struct EnumerationItem {
@@ -146,8 +107,8 @@ struct Enumeration {
   const EnumerationItem* items;
   size_t count;
   int is_signed;
-  ValueTypes default_type;
-  ValueTypes possible_type;
+  ValueMask default_type;
+  ValueMask possible_type;
 };
 struct Entry {
   const char* name;
@@ -162,14 +123,79 @@ struct EntryTable {
   const Entry* entries;
   size_t count;
 };
+struct Callbacks;
 struct Module {
   int version;
   Callbacks* callbacks;
   EntryTable table;
 };
 
+//-----------------------------------------------------------------------------
+//  Function-pointer table used by Zig code
+//-----------------------------------------------------------------------------
+struct CallContext;
+struct Callbacks {  
+  size_t (*get_argument_count)(CallContext*);
+  Local<Value> (*get_argument)(CallContext*, size_t);
+  ValueMask (*get_argument_type)(CallContext*, size_t);
+  ValueMask (*get_return_type)(CallContext*);
+  void (*set_return_value)(CallContext*, Local<Value> value);
+  
+  Result (*allocate_memory)(CallContext*, size_t size, ::TypedArray*);
+  Result (*reallocate_memory)(CallContext*, size_t size, ::TypedArray*);
+  Result (*free_memory)(CallContext*, ::TypedArray*);
+
+  bool (*is_null)(Local<Value>);
+  bool (*is_value_type)(Local<Value>, ValueMask);
+
+  Result (*get_property)(CallContext*, const char*, Local<Value>, Local<Value>*);
+  Result (*set_property)(CallContext*, const char*, Local<Value>, Local<Value>);
+
+  Result (*get_array_length)(CallContext*, Local<Value>, size_t*);
+  Result (*get_array_item)(CallContext*, size_t, Local<Value>, Local<Value>*);
+  Result (*set_array_item)(CallContext*, size_t, Local<Value>, Local<Value>);
+  
+  Result (*convert_to_bool)(CallContext*, Local<Value>, bool*);
+  Result (*convert_to_integer)(CallContext*, Local<Value>, int64_t*);
+  Result (*convert_to_float)(CallContext*, Local<Value>, double*);
+  Result (*convert_to_utf8)(CallContext*, Local<Value>, ::TypedArray*);
+  Result (*convert_to_utf16)(CallContext*, Local<Value>, ::TypedArray*);
+  Result (*convert_to_typed_array)(CallContext*, Local<Value>, ::TypedArray*);
+
+  Result (*convert_from_bool)(CallContext*, bool, Local<Value>*);
+  Result (*convert_from_integer)(CallContext*, int64_t, Local<Value>*);
+  Result (*convert_from_float)(CallContext*, double, Local<Value>*);
+  Result (*convert_from_utf8)(CallContext*, Local<Array>&, ::TypedArray&, Local<Value>*);
+  Result (*convert_from_utf16)(CallContext*, Local<Array>&, ::TypedArray&, Local<Value>*);
+  Result (*convert_from_typed_array)(CallContext*, Local<Array>&, ::TypedArray&, Local<Value>*);
+
+  void (*throw_exception)(CallContext*, const char*);
+};
+
+//-----------------------------------------------------------------------------
+//  Structure used to keep track of type conversion settings (per isolate)
+//  Gets garbage-collected alongside the function the struct is attached to
+//-----------------------------------------------------------------------------
 struct FunctionData  {  
   Entry entry;
-  ValueTypes return_type;
-  ValueTypes argument_types[0];
+  ValueMask return_type;
+  ValueMask argument_types[0];
+};
+
+//-----------------------------------------------------------------------------
+//  Structure used passed stuff to Zig code and back (per call)
+//-----------------------------------------------------------------------------
+struct CallContext {
+  Isolate* isolate;  
+  const FunctionCallbackInfo<Value>* node_args;
+  Local<Context> exec_context;
+  Local<Array> mem_pool;
+  FunctionData* zig_func;
+
+  CallContext(const FunctionCallbackInfo<Value> &info) {
+    node_args = &info;
+    isolate = info.GetIsolate();
+    exec_context = isolate->GetCurrentContext();
+    zig_func = reinterpret_cast<FunctionData*>(info.Data().As<External>()->Value());
+  }
 };
