@@ -13,7 +13,8 @@ using namespace v8;
 enum class Result : int {
   ok = 0,
   eGeneric = 1,
-  eOverflow = 2,
+  eUnderflow = 2,
+  eOverflow = 3,
 };
 enum class ElementType : int {
   unknown,
@@ -71,6 +72,7 @@ struct TypedArray {
 //-----------------------------------------------------------------------------
 //  Data types that appear in the exported module struct
 //-----------------------------------------------------------------------------
+struct CallContext;
 typedef void (*Thunk)(CallContext*);
 enum class EntryType : int {
   unavailable = 0,
@@ -133,7 +135,6 @@ struct Module {
 //-----------------------------------------------------------------------------
 //  Function-pointer table used by Zig code
 //-----------------------------------------------------------------------------
-struct CallContext;
 struct Callbacks {  
   size_t (*get_argument_count)(CallContext*);
   Local<Value> (*get_argument)(CallContext*, size_t);
@@ -156,18 +157,18 @@ struct Callbacks {
   Result (*set_array_item)(CallContext*, size_t, Local<Value>, Local<Value>);
   
   Result (*convert_to_bool)(CallContext*, Local<Value>, bool*);
-  Result (*convert_to_integer)(CallContext*, Local<Value>, int64_t*);
+  Result (*convert_to_signed)(CallContext*, Local<Value>, int64_t*);
+  Result (*convert_to_unsigned)(CallContext*, Local<Value>, uint64_t*);
   Result (*convert_to_float)(CallContext*, Local<Value>, double*);
-  Result (*convert_to_utf8)(CallContext*, Local<Value>, ::TypedArray*);
-  Result (*convert_to_utf16)(CallContext*, Local<Value>, ::TypedArray*);
+  Result (*convert_to_string)(CallContext*, Local<Value>, ::TypedArray*);
   Result (*convert_to_typed_array)(CallContext*, Local<Value>, ::TypedArray*);
 
-  Result (*convert_from_bool)(CallContext*, bool, Local<Value>*);
-  Result (*convert_from_integer)(CallContext*, int64_t, Local<Value>*);
-  Result (*convert_from_float)(CallContext*, double, Local<Value>*);
-  Result (*convert_from_utf8)(CallContext*, Local<Array>&, ::TypedArray&, Local<Value>*);
-  Result (*convert_from_utf16)(CallContext*, Local<Array>&, ::TypedArray&, Local<Value>*);
-  Result (*convert_from_typed_array)(CallContext*, Local<Array>&, ::TypedArray&, Local<Value>*);
+  Result (*create_from_bool)(CallContext*, bool, Local<Value>*);
+  Result (*create_from_signed)(CallContext*, int64_t, Local<Value>*);
+  Result (*create_from_unsigned)(CallContext*, uint64_t, Local<Value>*);
+  Result (*create_from_float)(CallContext*, double, Local<Value>*);
+  Result (*create_from_string)(CallContext*, Local<Array>&, ::TypedArray&, Local<Value>*);
+  Result (*create_from_typed_array)(CallContext*, Local<Array>&, ::TypedArray&, Local<Value>*);
 
   void (*throw_exception)(CallContext*, const char*);
 };

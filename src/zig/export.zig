@@ -5,6 +5,7 @@ pub const api_version = 1;
 //  Errors that might occur during type conversion
 //-----------------------------------------------------------------------------
 const Error = error{
+    TODO,
     UnsupportedConversion,
     IntegerOverflow,
     IntegerUnderflow,
@@ -25,6 +26,7 @@ const Value = *opaque {};
 const Result = enum(c_int) {
     OK,
     EGeneric,
+    EUnderflow,
     EOverflow,
 };
 const ElementType = enum(c_int) {
@@ -168,18 +170,18 @@ const Callbacks = extern struct {
     set_array_item: *const fn (call: Call, index: usize, value: Value, dest: Value) callconv(.C) Result,
 
     convert_to_bool: *const fn (call: Call, value: Value, dest: *bool) callconv(.C) Result,
-    convert_to_integer: *const fn (call: Call, value: Value, dest: *i64) callconv(.C) Result,
+    convert_to_signed: *const fn (call: Call, value: Value, dest: *i64) callconv(.C) Result,
+    convert_to_unsigned: *const fn (call: Call, value: Value, dest: *u64) callconv(.C) Result,
     convert_to_float: *const fn (call: Call, value: Value, dest: *f64) callconv(.C) Result,
-    convert_to_utf8: *const fn (call: Call, value: Value, dest: *TypedArray) callconv(.C) Result,
-    convert_to_utf16: *const fn (call: Call, value: Value, dest: *TypedArray) callconv(.C) Result,
+    convert_to_string: *const fn (call: Call, value: Value, dest: *TypedArray) callconv(.C) Result,
     convert_to_typed_array: *const fn (call: Call, value: Value, dest: *TypedArray) callconv(.C) Result,
 
-    convert_from_bool: *const fn (call: Call, value: bool, dest: *Value) callconv(.C) Result,
-    convert_from_integer: *const fn (call: Call, value: i64, dest: *Value) callconv(.C) Result,
-    convert_from_float: *const fn (call: Call, value: f64, dest: *Value) callconv(.C) Result,
-    convert_from_utf8: *const fn (call: Call, value: *TypedArray, dest: *Value) callconv(.C) Result,
-    convert_from_utf16: *const fn (call: Call, value: *TypedArray, dest: *Value) callconv(.C) Result,
-    convert_from_typed_array: *const fn (call: Call, value: *TypedArray, dest: *Value) callconv(.C) Result,
+    create_from_bool: *const fn (call: Call, value: bool, dest: *Value) callconv(.C) Result,
+    create_from_signed: *const fn (call: Call, value: i64, dest: *Value) callconv(.C) Result,
+    create_from_unsigned: *const fn (call: Call, value: u64, dest: *Value) callconv(.C) Result,
+    create_from_float: *const fn (call: Call, value: f64, dest: *Value) callconv(.C) Result,
+    create_from_string: *const fn (call: Call, value: *TypedArray, dest: *Value) callconv(.C) Result,
+    create_from_typed_array: *const fn (call: Call, value: *TypedArray, dest: *Value) callconv(.C) Result,
 
     throw_exception: *const fn (call: Call, message: [*:0]const u8) void,
 };
@@ -242,14 +244,14 @@ fn isBool(comptime T: type) bool {
 
 fn isInt(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        .Int => true,
+        .Int, .ComptimeInt => true,
         else => false,
     };
 }
 
 fn isFloat(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        .Float => true,
+        .Float, .ComptimeFloat => true,
         else => false,
     };
 }
@@ -398,92 +400,167 @@ fn getReturnType(comptime T: type) ValueMask {
 //-----------------------------------------------------------------------------
 //  Run-time helper functions
 //-----------------------------------------------------------------------------
-fn convertTo(call: Call, value: Value, comptime T: type) !T {
-    if (comptime isOptional(T)) {
-        if (callbacks.is_null(call, value)) {
-            return null;
-        }
-    }
-    const BT = BaseType(T);
-    if (comptime isBool(BT)) {
-        var result: bool = undefined;
-        if (callbacks.convert_to_bool(call, value, &result) != .OK) {
-            return Error.UnsupportedConversion;
-        }
-        return result;
-    } else if (comptime isInt(BT)) {
-        var result: i64 = undefined;
-        if (callbacks.convert_to_integer(call, value, &result) != .OK) {
-            return Error.UnsupportedConversion;
-        }
-        if (comptime std.math.maxInt(BT) < std.math.maxInt(i64)) {
-            // need to check for overflow and cast to final type
-            if (result < std.math.minInt(BT)) {
+fn convertValue(call: Call, value: Value, comptime T: type) !T {
+    switch (@typeInfo(T)) {
+        .Optional => |opt| {
+            if (callbacks.is_null(call, value)) {
+                return null;
+            }
+            return convertValue(call, value, opt.target);
+        },
+        .ErrorUnion => |eu| {
+            return convertValue(call, value, eu.target);
+        },
+        .Bool => {
+            var result: bool = undefined;
+            if (callbacks.convert_to_bool(call, value, &result) == .OK) {
+                return result;
+            }
+        },
+        .Int => |int| {
+            if (int.bits > @bitSizeOf(i64)) {
+                @compileError("Cannot handle integer larger than 64-bit");
+            }
+            const IT = if (int.signedness == .signed) i64 else u64;
+            const type_name = if (IT == i64) "signed" else "unsigned";
+            const cb = @field(callbacks, "convert_to_" ++ type_name);
+            var result: IT = undefined;
+            const rv = cb(call, value, &result);
+            if (rv == .OK) {
+                if (IT == T) {
+                    return result;
+                } else {
+                    // need to check for overflow and cast to final type
+                    if (result < std.math.minInt(T)) {
+                        return Error.IntegerUnderflow;
+                    } else if (result > std.math.maxInt(T)) {
+                        return Error.IntegerOverflow;
+                    }
+                    return @intCast(T, result);
+                }
+            } else if (rv == .EUnderflow) {
                 return Error.IntegerUnderflow;
-            } else if (result > std.math.maxInt(BT)) {
+            } else if (rv == .EOverflow) {
                 return Error.IntegerOverflow;
             }
-        }
-        return @intCast(BT, result);
-    } else if (comptime isFloat(BT)) {
-        var result: f64 = undefined;
-        if (callbacks.convert_to_float(call, value, &result) != .OK) {
-            return Error.UnsupportedConversion;
-        }
-        if (comptime @field(std.math, @typeName(BT) ++ "_max") < std.math.f64_max) {
-            if (result < @field(std.math, @typeName(BT) ++ "_min")) {
+        },
+        .ComptimeInt => {
+            return convertValue(call, value, i64);
+        },
+        .Float => |float| {
+            const IT = f64;
+            var result: IT = undefined;
+            const rv = callbacks.convert_to_float(call, value, &result);
+            if (rv == .OK) {
+                if (IT == T) {
+                    return result;
+                } else {
+                    if (float.bits < @bitSizeOf(IT)) {
+                        const max = @field(std.math, @typeName(T) ++ "_max");
+                        const min = @field(std.math, @typeName(T) ++ "_min");
+                        if (result < min) {
+                            return Error.FloatUnderflow;
+                        } else if (result > max) {
+                            return Error.FloatOverflow;
+                        }
+                    }
+                    return @floatCast(T, result);
+                }
+            } else if (rv == .EUnderflow) {
                 return Error.FloatUnderflow;
-            } else if (result > @field(std.math, @typeName(BT) ++ "_max")) {
+            } else if (rv == .EOverflow) {
                 return Error.FloatOverflow;
             }
-        }
-        return @floatCast(BT, result);
-    } else if (comptime isArray(T)) {
-        //
-    } else if (comptime isSlice(T)) {
-        const CT = ChildType(T);
-
-        // convert to string unless incoming value is an ArrayBuffer
-        if (!callbacks.is_array_buffer(call, value)) {
-            const callback = @field(callbacks, std.fmt.comptimePrint("convert_to_utf_{d}", .{@bitSizeOf(CT)}));
-            var result: TypedArray = undefined;
-            if (callback(call, value, &result) != .OK) {
-                return Error.UnsupportedConversion;
-            }
-            var len = if (CT == u8) result.len else result.len >> 1;
-            const ptr = @ptrCast([*]CT, @alignCast(@alignOf(CT), result.bytes));
-            return ptr[0..len];
-        }
+        },
+        .ComptimeFloat => {
+            return convertValue(call, value, f64);
+        },
+        .Array => |ar| {
+            _ = ar;
+            return Error.TODO;
+        },
+        .Pointer => |pt| {
+            _ = pt;
+            return Error.TODO;
+        },
+        else => {},
     }
     return Error.UnsupportedConversion;
 }
 
-fn convertFrom(call: Call, value: anytype) !?Value {
+fn createValue(call: Call, value: anytype) !?Value {
     const T = @TypeOf(value);
-    if (T == void) {
-        return null;
-    }
-    if (comptime isOptional(T)) {
-        return if (value) |v| convertFrom(call, v) else null;
-    }
-    if (comptime isBool(T)) {
-        var result: Value = undefined;
-        if (callbacks.convert_from_bool(call, value, &result) != .OK) {
-            return Error.UnsupportedConversion;
-        }
-        return result;
-    } else if (comptime isInt(T)) {
-        var result: Value = undefined;
-        if (callbacks.convert_from_integer(call, @intCast(i64, value), &result) != .OK) {
-            return Error.UnsupportedConversion;
-        }
-        return result;
-    } else if (comptime isFloat(T)) {
-        var result: Value = undefined;
-        if (callbacks.convert_from_float(call, @floatCast(f64, value), &result) != .OK) {
-            return Error.UnsupportedConversion;
-        }
-        return result;
+    var result: Value = undefined;
+    switch (@typeInfo(T)) {
+        .Void => {
+            return null;
+        },
+        .Optional => {
+            if (value) |v| {
+                return createValue(call, v);
+            } else {
+                return null;
+            }
+        },
+        .ErrorUnion => {
+            @compileError("Error should be handled prior to calling createValue");
+        },
+        .Bool => {
+            if (callbacks.create_from_bool(call, value, &result) == .OK) {
+                return result;
+            }
+        },
+        .Int => |int| {
+            if (int.bits > @bitSizeOf(u64)) {
+                @compileError("Cannot handle integer larger than 64-bit");
+            }
+            const IT = if (int.signedness == .signed) i64 else u64;
+            const type_name = if (IT == i64) "signed" else "unsigned";
+            const cb = @field(callbacks, "create_from_" ++ type_name);
+            const rv = cb(call, @intCast(IT, value), &result);
+            if (rv == .OK) {
+                return result;
+            } else if (rv == .EUnderflow) {
+                return Error.IntegerUnderflow;
+            } else if (rv == .EOverflow) {
+                return Error.IntegerOverflow;
+            }
+        },
+        .ComptimeInt => {
+            const IT = if (value < 0) i64 else u64;
+            return createValue(call, @intCast(IT, value));
+        },
+        .Float => |float| {
+            const IT = f64;
+            if (float.bits > @bitSizeOf(IT)) {
+                if (value < std.math.f64_min) {
+                    return Error.FloatUnderflow;
+                } else if (value > std.math.f64_max) {
+                    return Error.FloatOverflow;
+                }
+            }
+            const rv = callbacks.create_from_float(call, @floatCast(f64, value), &result);
+            if (rv == .OK) {
+                return result;
+            } else if (rv == .EUnderflow) {
+                return Error.IntegerUnderflow;
+            } else if (rv == .EOverflow) {
+                return Error.IntegerOverflow;
+            }
+        },
+        .ComptimeFloat => {
+            const IT = f64;
+            return createValue(call, @floatCast(IT, value));
+        },
+        .Array => |ar| {
+            _ = ar;
+            return Error.TODO;
+        },
+        .Pointer => |pt| {
+            _ = pt;
+            return Error.TODO;
+        },
+        else => {},
     }
     return Error.UnsupportedConversion;
 }
@@ -512,7 +589,7 @@ fn createThunk(comptime package: anytype, comptime name: []const u8) Thunk {
                 const index: usize = i_ptr.*;
                 const arg = callbacks.get_argument(call, index);
                 i_ptr.* = index + 1;
-                if (convertTo(call, arg, T)) |value| {
+                if (convertValue(call, arg, T)) |value| {
                     return value;
                 } else |err| {
                     const arg_count = callbacks.get_argument_count(call);
@@ -540,7 +617,7 @@ fn createThunk(comptime package: anytype, comptime name: []const u8) Thunk {
                     handleResult(call, fname, value);
                 }
             } else {
-                if (convertFrom(call, result)) |value| {
+                if (createValue(call, result)) |value| {
                     callbacks.set_return_value(call, value);
                 } else |err| {
                     const T = BaseType(@TypeOf(result));
@@ -575,7 +652,7 @@ fn createGetterThunk(comptime package: anytype, comptime name: []const u8) Thunk
         fn invokeFunction(call: Call) callconv(.C) void {
             const field = @field(package, name);
             const T = @TypeOf(field);
-            if (convertFrom(call, field)) |v| {
+            if (createValue(call, field)) |v| {
                 callbacks.set_return_value(call, v);
             } else |err| {
                 const fmt = "Error encountered while converting {s} to JavaScript value for property \"{s}\": {s}";
@@ -592,7 +669,7 @@ fn createSetterThunk(comptime package: anytype, comptime name: []const u8) Thunk
         fn invokeFunction(call: Call) callconv(.C) void {
             const arg = callbacks.get_argument(call, 0);
             const T = @TypeOf(@field(package, name));
-            if (convertTo(call, arg, T)) |value| {
+            if (convertValue(call, arg, T)) |value| {
                 var ptr = &@field(package, name);
                 ptr.* = value;
             } else |err| {

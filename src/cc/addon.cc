@@ -186,13 +186,13 @@ ConvertToBool(CallContext* call, Local<Value> value, bool* dest) {
 }
 
 static Result 
-ConvertFromBool(CallContext* call, bool value, Local<Value>* dest) {
+CreateFromBool(CallContext* call, bool value, Local<Value>* dest) {
   *dest = Boolean::New(call->isolate, value);
   return Result::ok;
 }
 
 static Result 
-ConvertToInteger(CallContext* call, Local<Value> value, int64_t* dest) {
+ConvertToSigned(CallContext* call, Local<Value> value, int64_t* dest) {
   if (value->IsInt32()) {
     *dest = value.As<Int32>()->Value();
   } else if (value->IsNumber()) {
@@ -212,7 +212,7 @@ ConvertToInteger(CallContext* call, Local<Value> value, int64_t* dest) {
 }
 
 static Result 
-ConvertFromInteger(CallContext* call, int64_t value, Local<Value>* dest) {
+CreateFromSigned(CallContext* call, int64_t value, Local<Value>* dest) {
   if (INT32_MIN <= value && value <= INT32_MAX) {
     *dest = Int32::New(call->isolate, value);
   } else if (MIN_SAFE_INTEGER <= value && value <= MAX_SAFE_INTEGER) {
@@ -220,6 +220,45 @@ ConvertFromInteger(CallContext* call, int64_t value, Local<Value>* dest) {
   } else {
     *dest = BigInt::New(call->isolate, value);
   }
+  return Result::ok;
+}
+
+static Result 
+ConvertToUnsigned(CallContext* call, Local<Value> value, uint64_t* dest) {
+  if (value->IsInt32()) {
+    int32_t ivalue = value.As<Int32>()->Value();
+    if (ivalue < 0) {
+      return Result::eUnderflow;
+    } 
+    *dest = static_cast<uint64_t>(ivalue);
+  } else if (value->IsNumber()) {
+    double fvalue = value.As<Number>()->Value();
+    if (fvalue < 0) {
+      return Result::eUnderflow;
+    }
+    *dest = static_cast<uint64_t>(fvalue);
+  } else if (value->IsBigInt()) {
+    bool lossless;    
+    uint64_t uvalue = value.As<BigInt>()->Uint64Value(&lossless);
+    if (!lossless) {
+      int64_t ivalue = value.As<BigInt>()->Int64Value(&lossless);
+      if (lossless && ivalue < 0) {
+        return Result::eUnderflow;
+      }
+      return Result::eOverflow;
+    }
+    *dest = uvalue;
+  }
+  return Result::ok;
+}
+
+static Result
+CreateFromUnsigned(CallContext* call, uint64_t value, Local<Value>* dest) {
+  // use function for signed when it's in range
+  if (value < INT64_MAX) {
+    return CreateFromSigned(call, static_cast<int64_t>(value), dest);
+  }
+  *dest = BigInt::NewFromUnsigned(call->isolate, value);
   return Result::ok;
 }
 
@@ -243,14 +282,15 @@ ConvertToFloat(CallContext* call, Local<Value> value, double* dest) {
 }
 
 static Result 
-ConvertFromFloat(CallContext* call, double value, Local<Value>* dest) {
+CreateFromFloat(CallContext* call, double value, Local<Value>* dest) {
   *dest = Number::New(call->isolate, value);
   return Result::ok;
 }
 
 static Result 
-ConvertToUTF8(CallContext* call, Local<Value> value, ::TypedArray* dest) {
+ConvertToString(CallContext* call, Local<Value> value, ::TypedArray* dest) {
   Local<String> string;
+  ElementType dest_type = dest->type;
   if (value->IsString()) {
     string = value.As<String>();
   } else {
@@ -261,30 +301,15 @@ ConvertToUTF8(CallContext* call, Local<Value> value, ::TypedArray* dest) {
     string = result.ToLocalChecked();
   }
   size_t len = string->Length();
-  if (AllocateMemory(call, (len + 1) * sizeof(uint8_t), dest) != Result::ok) {
+  size_t char_size = (dest_type == ElementType::u8) ? sizeof(uint8_t) : sizeof(uint16_t);
+  if (AllocateMemory(call, (len + 1) * char_size, dest) != Result::ok) {
     return Result::eGeneric;
   }
-  string->WriteUtf8(call->isolate, reinterpret_cast<char*>(dest->bytes));
-  return Result::ok;
-}
-
-static Result
-ConvertToUTF16(CallContext* call, Local<Value> value, ::TypedArray* dest) {
-  Local<String> string;
-  if (value->IsString()) {
-    string = value.As<String>();
+  if (dest_type == ElementType::u8) {
+    string->WriteUtf8(call->isolate, reinterpret_cast<char*>(dest->bytes));
   } else {
-    MaybeLocal<String> result = value->ToString(call->exec_context);
-    if (result.IsEmpty()) {
-      return Result::eGeneric;
-    }
-    string = result.ToLocalChecked();
+    string->Write(call->isolate, reinterpret_cast<uint16_t*>(dest->bytes));
   }
-  size_t len = string->Length();
-  if (AllocateMemory(call, (len + 1) * sizeof(uint16_t), dest) != Result::ok) {
-    return Result::eGeneric;
-  }
-  string->Write(call->isolate, reinterpret_cast<uint16_t*>(dest->bytes));
   return Result::ok;
 }
 
@@ -455,17 +480,17 @@ Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->get_array_item = nullptr;
   callbacks->set_array_item = nullptr;
   callbacks->convert_to_bool = ConvertToBool;
-  callbacks->convert_to_integer = ConvertToInteger;
+  callbacks->convert_to_signed = ConvertToSigned;
+  callbacks->convert_to_unsigned = ConvertToUnsigned;
   callbacks->convert_to_float = ConvertToFloat;
-  callbacks->convert_to_utf8 = ConvertToUTF8;
-  callbacks->convert_to_utf16 = ConvertToUTF16;
+  callbacks->convert_to_string = ConvertToString;
   callbacks->convert_to_typed_array = ConvertToTypedArray;
-  callbacks->convert_from_bool = ConvertFromBool;
-  callbacks->convert_from_integer = ConvertFromInteger;
-  callbacks->convert_from_float = ConvertFromFloat;
-  callbacks->convert_from_utf8 = nullptr; // ConvertFromUTF8;
-  callbacks->convert_from_utf16 = nullptr; // ConvertFromUTF16;
-  callbacks->convert_from_typed_array = nullptr; // ConvertFromTypedArray;
+  callbacks->create_from_bool = CreateFromBool;
+  callbacks->create_from_signed = CreateFromSigned;
+  callbacks->create_from_unsigned = CreateFromUnsigned;
+  callbacks->create_from_float = CreateFromFloat;
+  callbacks->create_from_string = nullptr; // CreateFromString;
+  callbacks->create_from_typed_array = nullptr; // CreateFromTypedArray;
 
   callbacks->throw_exception = ThrowException;
 
