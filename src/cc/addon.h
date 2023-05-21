@@ -12,11 +12,9 @@ using namespace v8;
 //-----------------------------------------------------------------------------
 enum class Result : int {
   ok = 0,
-  eGeneric = 1,
-  eUnderflow = 2,
-  eOverflow = 3,
+  failure = 1,
 };
-enum class ElementType : int {
+enum class NumberType : int {
   unknown,
   i8,
   u8,
@@ -66,7 +64,19 @@ static_assert(sizeof(ValueMask) == sizeof(int), "FunctionAttributes does not hav
 struct TypedArray {
   uint8_t* bytes;
   size_t len;
-  ElementType type;
+  NumberType type;
+};
+union BigIntFlags {
+  struct {
+    bool negative: 1;
+    bool overflow: 1;
+  };
+  int bit_fields;
+};
+struct BigInt {
+  BigIntFlags flags;
+  int word_count;
+  uint64_t words[1];
 };
 
 //-----------------------------------------------------------------------------
@@ -156,19 +166,21 @@ struct Callbacks {
   Result (*get_array_item)(CallContext*, size_t, Local<Value>, Local<Value>*);
   Result (*set_array_item)(CallContext*, size_t, Local<Value>, Local<Value>);
   
-  Result (*convert_to_bool)(CallContext*, Local<Value>, bool*);
-  Result (*convert_to_signed)(CallContext*, Local<Value>, int64_t*);
-  Result (*convert_to_unsigned)(CallContext*, Local<Value>, uint64_t*);
-  Result (*convert_to_float)(CallContext*, Local<Value>, double*);
-  Result (*convert_to_string)(CallContext*, Local<Value>, ::TypedArray*);
-  Result (*convert_to_typed_array)(CallContext*, Local<Value>, ::TypedArray*);
+  Result (*unwrap_bool)(CallContext*, Local<Value>, bool*);
+  Result (*unwrap_int32)(CallContext*, Local<Value>, int32_t*);
+  Result (*unwrap_int64)(CallContext*, Local<Value>, int64_t*);
+  Result (*unwrap_bigint)(CallContext*, Local<Value>, ::BigInt*);
+  Result (*unwrap_double)(CallContext*, Local<Value>, double*);
+  Result (*unwrap_string)(CallContext*, Local<Value>, ::TypedArray*);
+  Result (*unwrap_typed_array)(CallContext*, Local<Value>, ::TypedArray*);
 
-  Result (*create_from_bool)(CallContext*, bool, Local<Value>*);
-  Result (*create_from_signed)(CallContext*, int64_t, Local<Value>*);
-  Result (*create_from_unsigned)(CallContext*, uint64_t, Local<Value>*);
-  Result (*create_from_float)(CallContext*, double, Local<Value>*);
-  Result (*create_from_string)(CallContext*, Local<Array>&, ::TypedArray&, Local<Value>*);
-  Result (*create_from_typed_array)(CallContext*, Local<Array>&, ::TypedArray&, Local<Value>*);
+  Result (*wrap_bool)(CallContext*, bool, Local<Value>*);
+  Result (*wrap_int32)(CallContext*, int32_t, Local<Value>*);
+  Result (*wrap_int64)(CallContext*, uint64_t, Local<Value>*);
+  Result (*wrap_bigint)(CallContext*, const ::BigInt&, Local<Value>*);
+  Result (*wrap_double)(CallContext*, double, Local<Value>*);
+  Result (*wrap_string)(CallContext*, const ::TypedArray&, Local<Value>*);
+  Result (*wrap_typed_array)(CallContext*, const ::TypedArray&, Local<Value>*);
 
   void (*throw_exception)(CallContext*, const char*);
 };

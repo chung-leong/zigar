@@ -46,5 +46,16 @@ describe('Module properities getter/setter', async function() {
     expect(() => mod.int4 = 10).to.throw();
     expect(mod.int4).to.equal(7);
   })
-
+  it('should return a u64 as bigInt correctly', function() {
+    // TODO something like should be required to return bigInt:
+    // mod.$properties.uint64 = BigInt;
+    expect(mod.uint64).to.equal(0xFFFFFFFFFFFFFFFFn);
+  })
+  it('should return a i128 as bigInt', function() {
+    expect(mod.int128).to.equal(1234n);
+  })
+  it('should correctly set an i128', function() {
+    mod.int128 = 0xFFFFFFFFFFFFFFFFFFFFFFFFn;
+    expect(mod.int128).to.equal(0xFFFFFFFFFFFFFFFFFFFFFFFFn);
+  })
 })

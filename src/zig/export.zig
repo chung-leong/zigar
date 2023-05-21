@@ -11,6 +11,7 @@ const Error = error{
     IntegerUnderflow,
     FloatUnderflow,
     FloatOverflow,
+    IntegerUnsafe,
 };
 
 //-----------------------------------------------------------------------------
@@ -25,11 +26,9 @@ const Value = *opaque {};
 //-----------------------------------------------------------------------------
 const Result = enum(c_int) {
     OK,
-    EGeneric,
-    EUnderflow,
-    EOverflow,
+    Failure,
 };
-const ElementType = enum(c_int) {
+const NumberType = enum(c_int) {
     Unknown,
     I8,
     U8,
@@ -78,8 +77,23 @@ const FunctionAttributes = packed struct(c_int) {
 const TypedArray = extern struct {
     bytes: [*]u8,
     len: usize,
-    element_type: ElementType,
+    element_type: NumberType,
 };
+const BigIntFlags = packed struct(c_int) {
+    negative: bool = false,
+    overflow: bool = false,
+    _: Padding(2) = 0,
+};
+fn BigInt(comptime T: type) type {
+    // use U64 if it's smaller than that
+    const BT = if (@bitSizeOf(T) > 64) T else u64;
+    const S = packed struct {
+        flags: BigIntFlags,
+        word_count: c_int,
+        int: BT,
+    };
+    return S;
+}
 
 //-----------------------------------------------------------------------------
 //  Data types that appear in the exported module struct
@@ -151,7 +165,7 @@ const Module = extern struct {
 const Callbacks = extern struct {
     get_argument_count: *const fn (call: Call) callconv(.C) usize,
     get_argument: *const fn (call: Call, index: usize) callconv(.C) Value,
-    get_argument_type: *const fn (call: Call) callconv(.C) ValueMask,
+    get_argument_type: *const fn (call: Call, index: usize) callconv(.C) ValueMask,
     get_return_type: *const fn (call: Call) callconv(.C) ValueMask,
     set_return_value: *const fn (call: Call, retval: ?Value) callconv(.C) void,
 
@@ -169,19 +183,21 @@ const Callbacks = extern struct {
     get_array_item: *const fn (call: Call, index: usize, value: Value, dest: *Value) callconv(.C) Result,
     set_array_item: *const fn (call: Call, index: usize, value: Value, dest: Value) callconv(.C) Result,
 
-    convert_to_bool: *const fn (call: Call, value: Value, dest: *bool) callconv(.C) Result,
-    convert_to_signed: *const fn (call: Call, value: Value, dest: *i64) callconv(.C) Result,
-    convert_to_unsigned: *const fn (call: Call, value: Value, dest: *u64) callconv(.C) Result,
-    convert_to_float: *const fn (call: Call, value: Value, dest: *f64) callconv(.C) Result,
-    convert_to_string: *const fn (call: Call, value: Value, dest: *TypedArray) callconv(.C) Result,
-    convert_to_typed_array: *const fn (call: Call, value: Value, dest: *TypedArray) callconv(.C) Result,
+    unwrap_bool: ?*const fn (call: Call, value: Value, dest: *bool) callconv(.C) Result,
+    unwrap_int32: ?*const fn (call: Call, value: Value, dest: *i32) callconv(.C) Result,
+    unwrap_int64: ?*const fn (call: Call, value: Value, dest: *i64) callconv(.C) Result,
+    unwrap_bigint: ?*const fn (call: Call, value: Value, dest: *BigInt(u64)) callconv(.C) Result,
+    unwrap_double: ?*const fn (call: Call, value: Value, dest: *f64) callconv(.C) Result,
+    unwrap_string: ?*const fn (call: Call, value: Value, dest: *TypedArray) callconv(.C) Result,
+    unwrap_typed_array: ?*const fn (call: Call, value: Value, dest: *TypedArray) callconv(.C) Result,
 
-    create_from_bool: *const fn (call: Call, value: bool, dest: *Value) callconv(.C) Result,
-    create_from_signed: *const fn (call: Call, value: i64, dest: *Value) callconv(.C) Result,
-    create_from_unsigned: *const fn (call: Call, value: u64, dest: *Value) callconv(.C) Result,
-    create_from_float: *const fn (call: Call, value: f64, dest: *Value) callconv(.C) Result,
-    create_from_string: *const fn (call: Call, value: *TypedArray, dest: *Value) callconv(.C) Result,
-    create_from_typed_array: *const fn (call: Call, value: *TypedArray, dest: *Value) callconv(.C) Result,
+    wrap_bool: ?*const fn (call: Call, value: bool, dest: *Value) callconv(.C) Result,
+    wrap_int32: ?*const fn (call: Call, value: i32, dest: *Value) callconv(.C) Result,
+    wrap_int64: ?*const fn (call: Call, value: i64, dest: *Value) callconv(.C) Result,
+    wrap_bigint: ?*const fn (call: Call, value: *const BigInt(u64), dest: *Value) callconv(.C) Result,
+    wrap_double: ?*const fn (call: Call, value: f64, dest: *Value) callconv(.C) Result,
+    wrap_string: ?*const fn (call: Call, value: *const TypedArray, dest: *Value) callconv(.C) Result,
+    wrap_typed_array: ?*const fn (call: Call, value: *const TypedArray, dest: *Value) callconv(.C) Result,
 
     throw_exception: *const fn (call: Call, message: [*:0]const u8) void,
 };
@@ -326,11 +342,9 @@ fn getPossibleTypes(comptime T: type, comptime out: bool) ValueMask {
         .Int, .Enum => {
             can_be.number = true;
             can_be.bigInt = true;
-            can_be.string = !out;
         },
         .Float => {
             can_be.number = true;
-            can_be.string = !out;
         },
         .Array => |ar| {
             can_be.array = true;
@@ -364,7 +378,14 @@ fn getReturnType(comptime T: type) ValueMask {
         .Bool => {
             prefer.boolean = true;
         },
-        .Int, .Float => {
+        .Int => |int| {
+            if (int.bits > 64) {
+                prefer.bigInt = true;
+            } else {
+                prefer.number = true;
+            }
+        },
+        .Float => {
             prefer.number = true;
         },
         .Array => |ar| {
@@ -400,80 +421,133 @@ fn getReturnType(comptime T: type) ValueMask {
 //-----------------------------------------------------------------------------
 //  Run-time helper functions
 //-----------------------------------------------------------------------------
-fn convertValue(call: Call, value: Value, comptime T: type) !T {
+fn castInt(comptime T: type, value: anytype) !T {
+    if (@TypeOf(value) != T) {
+        if (value < std.math.minInt(T)) {
+            return Error.IntegerUnderflow;
+        } else if (value > std.math.maxInt(T)) {
+            return Error.IntegerOverflow;
+        }
+        return @intCast(T, value);
+    } else {
+        return value;
+    }
+}
+
+fn castFloat(comptime T: type, value: anytype) !T {
+    if (@TypeOf(value) != T) {
+        const max = @field(std.math, @typeName(T) ++ "_max");
+        const min = @field(std.math, @typeName(T) ++ "_min");
+        if (value < min) {
+            return Error.FloatUnderflow;
+        } else if (value > max) {
+            return Error.FloatOverflow;
+        }
+        return @floatCast(T, value);
+    } else {
+        return value;
+    }
+}
+
+const maxSafeInteger = 9007199254740991.0;
+const minSafeInteger = -9007199254740991.0;
+
+fn unwrapValue(call: Call, value: Value, mask: ValueMask, comptime T: type) !T {
     switch (@typeInfo(T)) {
         .Optional => |opt| {
             if (callbacks.is_null(call, value)) {
                 return null;
             }
-            return convertValue(call, value, opt.target);
+            return unwrapValue(call, value, opt.target);
         },
         .ErrorUnion => |eu| {
-            return convertValue(call, value, eu.target);
+            return unwrapValue(call, value, eu.target);
         },
         .Bool => {
-            var result: bool = undefined;
-            if (callbacks.convert_to_bool(call, value, &result) == .OK) {
-                return result;
+            if (mask.boolean) {
+                if (callbacks.unwrap_bool) |cb| {
+                    var result: bool = undefined;
+                    if (cb(call, value, &result) == .OK) {
+                        return result;
+                    }
+                }
             }
         },
         .Int => |int| {
-            if (int.bits > @bitSizeOf(i64)) {
-                @compileError("Cannot handle integer larger than 64-bit");
-            }
-            const IT = if (int.signedness == .signed) i64 else u64;
-            const type_name = if (IT == i64) "signed" else "unsigned";
-            const cb = @field(callbacks, "convert_to_" ++ type_name);
-            var result: IT = undefined;
-            const rv = cb(call, value, &result);
-            if (rv == .OK) {
-                if (IT == T) {
-                    return result;
-                } else {
-                    // need to check for overflow and cast to final type
-                    if (result < std.math.minInt(T)) {
-                        return Error.IntegerUnderflow;
-                    } else if (result > std.math.maxInt(T)) {
-                        return Error.IntegerOverflow;
+            if (mask.number) {
+                inline for (.{ i32, i64 }) |IT| {
+                    if (@field(callbacks, "unwrap_int" ++ @typeName(IT)[1..])) |cb| {
+                        var result: IT = undefined;
+                        if (cb(call, value, &result) == .OK) {
+                            return castInt(T, result);
+                        }
                     }
-                    return @intCast(T, result);
                 }
-            } else if (rv == .EUnderflow) {
-                return Error.IntegerUnderflow;
-            } else if (rv == .EOverflow) {
-                return Error.IntegerOverflow;
+                if (callbacks.unwrap_double) |cb| {
+                    var result: f64 = undefined;
+                    if (cb(call, value, &result) == .OK) {
+                        if (result > maxSafeInteger or result < minSafeInteger) {
+                            return Error.IntegerUnsafe;
+                        }
+                        const integer = @floatToInt(i64, result);
+                        return castInt(T, integer);
+                    }
+                }
+            }
+            if (mask.bigInt) {
+                if (callbacks.unwrap_bigint) |cb| {
+                    var result: BigInt(T) = undefined;
+                    result.word_count = @sizeOf(@TypeOf(result.int)) / 8;
+                    const ptr = @ptrCast(*BigInt(u64), &result);
+                    if (cb(call, value, ptr) == .OK) {
+                        if (result.flags.overflow) {
+                            if (result.flags.negative) {
+                                return Error.IntegerUnderflow;
+                            } else {
+                                return Error.IntegerOverflow;
+                            }
+                        }
+                        if (int.signedness == .signed) {
+                            if (result.flags.negative) {
+                                // negating the value might require an extra bit that we don't have
+                                if (std.math.negateCast(result.int)) |nv| {
+                                    return castInt(T, nv);
+                                } else |_| {
+                                    return Error.IntegerUnderflow;
+                                }
+                            }
+                            return castInt(T, result.int);
+                        } else {
+                            if (result.flags.negative) {
+                                return Error.IntegerUnderflow;
+                            }
+                            return castInt(T, result.int);
+                        }
+                    }
+                }
             }
         },
         .ComptimeInt => {
-            return convertValue(call, value, i64);
+            return unwrapValue(call, value, mask, i64);
         },
-        .Float => |float| {
-            const IT = f64;
-            var result: IT = undefined;
-            const rv = callbacks.convert_to_float(call, value, &result);
-            if (rv == .OK) {
-                if (IT == T) {
-                    return result;
-                } else {
-                    if (float.bits < @bitSizeOf(IT)) {
-                        const max = @field(std.math, @typeName(T) ++ "_max");
-                        const min = @field(std.math, @typeName(T) ++ "_min");
-                        if (result < min) {
-                            return Error.FloatUnderflow;
-                        } else if (result > max) {
-                            return Error.FloatOverflow;
-                        }
+        .Float => {
+            if (mask.number) {
+                if (callbacks.unwrap_double) |cb| {
+                    var result: f64 = undefined;
+                    if (cb(call, value, &result) == .OK) {
+                        return castFloat(T, result);
                     }
-                    return @floatCast(T, result);
                 }
-            } else if (rv == .EUnderflow) {
-                return Error.FloatUnderflow;
-            } else if (rv == .EOverflow) {
-                return Error.FloatOverflow;
+                if (unwrapValue(call, value, mask, i64)) |integer| {
+                    const double = @intToFloat(f64, integer);
+                    return castFloat(T, double);
+                } else |err| {
+                    return err;
+                }
             }
         },
         .ComptimeFloat => {
-            return convertValue(call, value, f64);
+            return unwrapValue(call, value, mask, f64);
         },
         .Array => |ar| {
             _ = ar;
@@ -488,16 +562,17 @@ fn convertValue(call: Call, value: Value, comptime T: type) !T {
     return Error.UnsupportedConversion;
 }
 
-fn createValue(call: Call, value: anytype) !?Value {
+fn wrapValue(call: Call, value: anytype, mask: ValueMask) !?Value {
     const T = @TypeOf(value);
     var result: Value = undefined;
+    var err: ?Error = null;
     switch (@typeInfo(T)) {
         .Void => {
             return null;
         },
         .Optional => {
             if (value) |v| {
-                return createValue(call, v);
+                return wrapValue(call, v, mask);
             } else {
                 return null;
             }
@@ -506,59 +581,83 @@ fn createValue(call: Call, value: anytype) !?Value {
             @compileError("Error should be handled prior to calling createValue");
         },
         .Bool => {
-            if (callbacks.create_from_bool(call, value, &result) == .OK) {
-                return result;
+            if (mask.boolean) {
+                if (callbacks.wrap_bool) |cb| {
+                    if (cb(call, value, &result) == .OK) {
+                        return result;
+                    }
+                }
             }
         },
-        .Int => |int| {
-            if (int.bits > @bitSizeOf(u64)) {
-                @compileError("Cannot handle integer larger than 64-bit");
+        .Int => {
+            if (mask.number) {
+                inline for (.{ i32, i64 }) |IT| {
+                    if (@field(callbacks, "wrap_int" ++ @typeName(IT)[1..])) |cb| {
+                        if (value < std.math.minInt(IT)) {
+                            err = Error.IntegerUnderflow;
+                        } else if (value > std.math.maxInt(IT)) {
+                            err = Error.IntegerUnderflow;
+                        } else {
+                            const integer = @intCast(IT, value);
+                            if (cb(call, integer, &result) == .OK) {
+                                return result;
+                            }
+                        }
+                    }
+                }
+                if (callbacks.wrap_double) |cb| {
+                    if (minSafeInteger <= value and value <= maxSafeInteger) {
+                        const double = @intToFloat(f64, value);
+                        if (cb(call, double, &result) == .OK) {
+                            return result;
+                        }
+                    }
+                }
             }
-            const IT = if (int.signedness == .signed) i64 else u64;
-            const type_name = if (IT == i64) "signed" else "unsigned";
-            const cb = @field(callbacks, "create_from_" ++ type_name);
-            const rv = cb(call, @intCast(IT, value), &result);
-            if (rv == .OK) {
-                return result;
-            } else if (rv == .EUnderflow) {
-                return Error.IntegerUnderflow;
-            } else if (rv == .EOverflow) {
-                return Error.IntegerOverflow;
+            if (mask.bigInt) {
+                if (callbacks.wrap_bigint) |cb| {
+                    var bigInt: BigInt(T) = undefined;
+                    bigInt.flags.negative = (std.math.sign(value) == -1);
+                    bigInt.int = @intCast(@TypeOf(bigInt.int), if (value < 0) -value else value);
+                    bigInt.word_count = @sizeOf(@TypeOf(bigInt.int)) / 8;
+                    const ptr = @ptrCast(*const BigInt(u64), &bigInt);
+                    if (cb(call, ptr, &result) == .OK) {
+                        return result;
+                    }
+                }
             }
         },
         .ComptimeInt => {
             const IT = if (value < 0) i64 else u64;
-            return createValue(call, @intCast(IT, value));
+            return wrapValue(call, @intCast(IT, value), mask);
         },
-        .Float => |float| {
-            const IT = f64;
-            if (float.bits > @bitSizeOf(IT)) {
-                if (value < std.math.f64_min) {
-                    return Error.FloatUnderflow;
-                } else if (value > std.math.f64_max) {
-                    return Error.FloatOverflow;
+        .Float => {
+            if (mask.number) {
+                if (callbacks.wrap_double) |cb| {
+                    if (value < std.math.f64_min) {
+                        err = Error.FloatUnderflow;
+                    } else if (value > std.math.f64_max) {
+                        err = Error.FloatOverflow;
+                    } else {
+                        const double = @floatCast(f64, value);
+                        if (cb(call, double, &value) == .OK) {
+                            return value;
+                        }
+                    }
                 }
-            }
-            const rv = callbacks.create_from_float(call, @floatCast(f64, value), &result);
-            if (rv == .OK) {
-                return result;
-            } else if (rv == .EUnderflow) {
-                return Error.IntegerUnderflow;
-            } else if (rv == .EOverflow) {
-                return Error.IntegerOverflow;
             }
         },
         .ComptimeFloat => {
             const IT = f64;
-            return createValue(call, @floatCast(IT, value));
+            return wrapValue(call, @floatCast(IT, value), mask);
         },
         .Array => |ar| {
             _ = ar;
-            return Error.TODO;
+            return .TODO;
         },
         .Pointer => |pt| {
             _ = pt;
-            return Error.TODO;
+            return .TODO;
         },
         else => {},
     }
@@ -588,8 +687,9 @@ fn createThunk(comptime package: anytype, comptime name: []const u8) Thunk {
             } else {
                 const index: usize = i_ptr.*;
                 const arg = callbacks.get_argument(call, index);
+                const mask = callbacks.get_argument_type(call, index);
                 i_ptr.* = index + 1;
-                if (convertValue(call, arg, T)) |value| {
+                if (unwrapValue(call, arg, mask, T)) |value| {
                     return value;
                 } else |err| {
                     const arg_count = callbacks.get_argument_count(call);
@@ -617,7 +717,8 @@ fn createThunk(comptime package: anytype, comptime name: []const u8) Thunk {
                     handleResult(call, fname, value);
                 }
             } else {
-                if (createValue(call, result)) |value| {
+                const mask = callbacks.get_return_type(call);
+                if (wrapValue(call, result, mask)) |value| {
                     callbacks.set_return_value(call, value);
                 } else |err| {
                     const T = BaseType(@TypeOf(result));
@@ -652,7 +753,8 @@ fn createGetterThunk(comptime package: anytype, comptime name: []const u8) Thunk
         fn invokeFunction(call: Call) callconv(.C) void {
             const field = @field(package, name);
             const T = @TypeOf(field);
-            if (createValue(call, field)) |v| {
+            const mask = callbacks.get_return_type(call);
+            if (wrapValue(call, field, mask)) |v| {
                 callbacks.set_return_value(call, v);
             } else |err| {
                 const fmt = "Error encountered while converting {s} to JavaScript value for property \"{s}\": {s}";
@@ -669,7 +771,8 @@ fn createSetterThunk(comptime package: anytype, comptime name: []const u8) Thunk
         fn invokeFunction(call: Call) callconv(.C) void {
             const arg = callbacks.get_argument(call, 0);
             const T = @TypeOf(@field(package, name));
-            if (convertValue(call, arg, T)) |value| {
+            const mask = callbacks.get_argument_type(call, 0);
+            if (unwrapValue(call, arg, mask, T)) |value| {
                 var ptr = &@field(package, name);
                 ptr.* = value;
             } else |err| {

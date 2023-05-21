@@ -7,6 +7,8 @@ pub var uint32: i32 = 34567;
 pub var int64: i64 = 0x1FFF_FFFF_FFFF_FFFF;
 pub var uint64: u64 = 0xFFFF_FFFF_FFFF_FFFF;
 
+pub var int128: i128 = 1234;
+
 pub var int4: i4 = 7;
 
 pub const constant = 43;
