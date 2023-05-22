@@ -67,13 +67,25 @@ AllocateExternal(Isolate* isolate, size_t count) {
 }
 
 static ::TypedArray 
-GetMemory(Local<ArrayBuffer> arBuf) {
-  std::shared_ptr<BackingStore> store = arBuf->GetBackingStore();
+GetMemory(Local<ArrayBuffer> buffer) {
+  std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
   ::TypedArray array;
   array.type = NumberType::u8;
   array.bytes = reinterpret_cast<uint8_t*>(store->Data());
   array.byte_size = store->ByteLength();
   return array;
+}
+
+static size_t
+FindAddress(Local<ArrayBuffer> buffer, size_t address, size_t len, size_t *offset_dest) {
+  std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
+  size_t buf_start = reinterpret_cast<size_t>(store->Data());
+  size_t buf_end = buf_start + store->ByteLength();
+  if (buf_start <= address && address + len <= buf_end) {
+    *offset_dest = address - buf_start;
+    return true;
+  }        
+  return false;
 }
 
 //-----------------------------------------------------------------------------
@@ -293,57 +305,99 @@ UnwrapTypedArray(Call* call, Local<Value> value, ::TypedArray* dest) {
   return Result::ok;
 }
 
-static Result
-WrapTypedArray(Call* call, const ::TypedArray& value, Local<Value> *dest) {
+static MaybeLocal<ArrayBuffer>
+ObtainBuffer(Call* call, const ::TypedArray& value, size_t *offset_dest) {
   // since the Call struct is allocated on the stack, its address is the 
   // starting point of stack space used by Zig code
-  size_t stack_top = reinterpret_cast<size_t>(call);
+  size_t stack_top = reinterpret_cast<size_t>(call) + sizeof(Call);
   size_t stack_bottom = reinterpret_cast<size_t>(&stack_top);
   size_t address = reinterpret_cast<size_t>(value.bytes);
-  Local<ArrayBuffer> buffer;
-  size_t offset = 0;
-  if (stack_bottom < address && address < stack_top) {
+  if (stack_bottom <= address && address + value.byte_size <= stack_top) {
     // need to copy data sitting on the stack
-    buffer = ArrayBuffer::New(call->isolate, value.byte_size);
+    Local<ArrayBuffer> buffer = ArrayBuffer::New(call->isolate, value.byte_size);
     ::TypedArray mem = GetMemory(buffer);
     memcpy(mem.bytes, value.bytes, value.byte_size);
+    *offset_dest = 0;
+    return buffer;
+  } 
+  // maybe it's pointing to a buffer passed as argument?
+  int arg_count = call->node_args->Length();
+  for (int i = 0; i < arg_count; i++) {
+    Local<Value> arg = (*call->node_args)[i];
+    Local<ArrayBuffer> buffer;
+    if (arg->IsArrayBuffer()) {
+      buffer = arg.As<ArrayBuffer>();
+    } else if (arg->IsArrayBufferView()) {
+      buffer = arg.As<ArrayBufferView>()->Buffer();
+    }
+    if (!buffer.IsEmpty()) {
+      if (FindAddress(buffer, address, value.byte_size, offset_dest)) {
+        return buffer;
+      }
+    }
   }
-  if (buffer.IsEmpty()) {
-    return Result::failure;
-  }
-  switch (value.type) {
+  // otherwise it's probably in the memory pool
+  int buf_count = call->mem_pool->Length();
+  for (int i = 0; i < buf_count; i++) {
+    MaybeLocal<Value> item = call->mem_pool->Get(call->exec_context, i);
+    if (!item.IsEmpty()) {
+      Local<ArrayBuffer> buffer = item.ToLocalChecked().As<ArrayBuffer>();
+      if (FindAddress(buffer, address, value.byte_size, offset_dest)) {
+        return buffer;
+      }
+    }
+  }  
+  return MaybeLocal<ArrayBuffer>();
+}
+
+template <typename T>
+Local<Value> CreateTypedArray(Local<T> buffer, size_t offset, size_t byte_size, NumberType type) {
+  switch (type) {
     case NumberType::i8:
-      *dest = Int8Array::New(buffer, offset, value.byte_size / sizeof(int8_t));
-      break;
+      return Int8Array::New(buffer, offset, byte_size / sizeof(int8_t));
     case NumberType::u8:
-      *dest = Uint8Array::New(buffer, offset, value.byte_size / sizeof(uint8_t));
-      break;
+      return Uint8Array::New(buffer, offset, byte_size / sizeof(uint8_t));
     case NumberType::i16:
-      *dest = Int16Array::New(buffer, offset, value.byte_size / sizeof(int16_t));
-      break;
+      return Int16Array::New(buffer, offset, byte_size / sizeof(int16_t));
     case NumberType::u16:
-      *dest = Uint16Array::New(buffer, offset, value.byte_size / sizeof(uint16_t));
-      break;
+      return Uint16Array::New(buffer, offset, byte_size / sizeof(uint16_t));
     case NumberType::i32:
-      *dest = Int32Array::New(buffer, offset, value.byte_size / sizeof(int32_t));
-      break;
+      return Int32Array::New(buffer, offset, byte_size / sizeof(int32_t));
     case NumberType::u32:
-      *dest = Uint32Array::New(buffer, offset, value.byte_size / sizeof(uint32_t));
-      break;
+      return Uint32Array::New(buffer, offset, byte_size / sizeof(uint32_t));
     case NumberType::i64:
-      *dest = BigInt64Array::New(buffer, offset, value.byte_size / sizeof(int64_t));
-      break;
+      return BigInt64Array::New(buffer, offset, byte_size / sizeof(int64_t));
     case NumberType::u64:
-      *dest = BigUint64Array::New(buffer, offset, value.byte_size / sizeof(uint64_t));
-      break;
+      return BigUint64Array::New(buffer, offset, byte_size / sizeof(uint64_t));
     case NumberType::f32:
-      *dest = Float32Array::New(buffer, offset, value.byte_size / sizeof(float));
-      break;
+      return Float32Array::New(buffer, offset, byte_size / sizeof(float));
     case NumberType::f64:
-      *dest = Float64Array::New(buffer, offset, value.byte_size / sizeof(double));
-      break;
+      return Float64Array::New(buffer, offset, byte_size / sizeof(double));
     default:
-      *dest = buffer;
+      return buffer;
+  }
+}
+
+static Result
+WrapTypedArray(Call* call, const ::TypedArray& value, Local<Value> *dest) {
+  size_t offset = 0;
+  MaybeLocal<ArrayBuffer> known = ObtainBuffer(call, value, &offset);
+  if (!known.IsEmpty()) {
+    Local<ArrayBuffer> buffer = known.ToLocalChecked();
+    *dest = CreateTypedArray(buffer, offset, value.byte_size, value.type);
+  } else {
+#ifndef V8_ENABLE_SANDBOX
+    // okay, we're dealing with mystery memory here
+    // assuming user knows what he's doing, we'll create a shared buffer 
+    // pointing to that memory
+    std::shared_ptr<BackingStore> store = SharedArrayBuffer::NewBackingStore(value.bytes, value.byte_size, [](void*, size_t, void*) {
+      // do nothing when buffer gets gc'ed
+    }, nullptr);
+    Local<SharedArrayBuffer> sh_buf = SharedArrayBuffer::New(call->isolate, store);
+    *dest = CreateTypedArray(sh_buf, offset, value.byte_size, value.type);
+#else
+    return Result::failure;
+#endif    
   }
   return Result::ok;
 }
