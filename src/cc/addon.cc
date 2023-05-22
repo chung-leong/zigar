@@ -72,7 +72,7 @@ GetMemory(Local<ArrayBuffer> arBuf) {
   ::TypedArray array;
   array.type = NumberType::u8;
   array.bytes = reinterpret_cast<uint8_t*>(store->Data());
-  array.len = store->ByteLength();
+  array.byte_size = store->ByteLength();
   return array;
 }
 
@@ -80,12 +80,12 @@ GetMemory(Local<ArrayBuffer> arBuf) {
 //  Callback functions that zig modules will invoke
 //-----------------------------------------------------------------------------
 static size_t 
-GetArgumentCount(CallContext* call) {
+GetArgumentCount(Call* call) {
   return call->node_args->Length();
 }
 
 static Local<Value> 
-GetArgument(CallContext* call, size_t index) {
+GetArgument(Call* call, size_t index) {
   Local<Value> value = (*call->node_args)[index];
   // unwrap scalar objects
   if (value->IsBooleanObject()) {
@@ -101,24 +101,24 @@ GetArgument(CallContext* call, size_t index) {
 }
 
 static ValueMask 
-GetArgumentType(CallContext* call, size_t index) {
+GetArgumentType(Call* call, size_t index) {
   return call->zig_func->argument_types[index];
 }
 
 static ValueMask 
-GetReturnType(CallContext* call) {
+GetReturnType(Call* call) {
   return call->zig_func->return_type;
 }
 
 static void 
-SetReturnValue(CallContext* call, Local<Value> value) {
+SetReturnValue(Call* call, Local<Value> value) {
   if (!value.IsEmpty()) {
     call->node_args->GetReturnValue().Set(value);
   }
 }
 
 static Result 
-GetProperty(CallContext* call, const char* name, Local<Value> object, Local<Value>* dest) {
+GetProperty(Call* call, const char* name, Local<Value> object, Local<Value>* dest) {
   Local<Value> key = NewString(call->isolate, name);
   MaybeLocal<Value> result = object.As<Object>()->Get(call->exec_context, key);
   if (result.IsEmpty()) {
@@ -129,21 +129,20 @@ GetProperty(CallContext* call, const char* name, Local<Value> object, Local<Valu
 }
 
 static Result
-SetProperty(CallContext* call, const char* name, Local<Value> object, Local<Value> value) {
+SetProperty(Call* call, const char* name, Local<Value> object, Local<Value> value) {
   Local<Value> key = NewString(call->isolate, name);
   object.As<Object>()->Set(call->exec_context, key, value).Check();
   return Result::ok;
 }
 
 static Result
-AllocateMemory(CallContext* call, size_t size, ::TypedArray* dest) {
+AllocateMemory(Call* call, size_t size, ::TypedArray* dest) {
   if (call->mem_pool.IsEmpty()) {
     call->mem_pool = Array::New(call->isolate);
   }
   Local<ArrayBuffer> buffer = ArrayBuffer::New(call->isolate, size);
   uint32_t index = call->mem_pool->Length();
-  Local<Context> context = call->isolate->GetCurrentContext();
-  call->mem_pool->Set(context, index, buffer).Check();
+  call->mem_pool->Set(call->exec_context, index, buffer).Check();
   *dest = GetMemory(buffer);
   return Result::ok;
 }
@@ -177,7 +176,7 @@ IsValueType(Local<Value> value, ValueMask mask) {
 }
 
 static Result 
-UnwrapBool(CallContext* call, Local<Value> value, bool* dest) {
+UnwrapBool(Call* call, Local<Value> value, bool* dest) {
   if (value->IsBoolean()) {
     *dest = value.As<Boolean>()->Value();
     return Result::ok;
@@ -186,13 +185,13 @@ UnwrapBool(CallContext* call, Local<Value> value, bool* dest) {
 }
 
 static Result 
-WrapBool(CallContext* call, bool value, Local<Value>* dest) {
+WrapBool(Call* call, bool value, Local<Value>* dest) {
   *dest = Boolean::New(call->isolate, value);
   return Result::ok;
 }
 
 static Result 
-UnwrapInt32(CallContext* call, Local<Value> value, int32_t* dest) {
+UnwrapInt32(Call* call, Local<Value> value, int32_t* dest) {
   if (value->IsInt32()) {
     *dest = value.As<Int32>()->Value();
     return Result::ok;
@@ -201,13 +200,13 @@ UnwrapInt32(CallContext* call, Local<Value> value, int32_t* dest) {
 }
 
 static Result 
-WrapInt32(CallContext* call, int32_t value, Local<Value>* dest) {
+WrapInt32(Call* call, int32_t value, Local<Value>* dest) {
   *dest = Int32::New(call->isolate, value);
   return Result::ok;
 }
 
 static Result 
-UnwrapDouble(CallContext* call, Local<Value> value, double* dest) {
+UnwrapDouble(Call* call, Local<Value> value, double* dest) {
   if (value->IsNumber()) {
     *dest = value.As<Number>()->Value();
     return Result::ok;
@@ -216,13 +215,13 @@ UnwrapDouble(CallContext* call, Local<Value> value, double* dest) {
 }
 
 static Result 
-WrapDouble(CallContext* call, double value, Local<Value>* dest) {
+WrapDouble(Call* call, double value, Local<Value>* dest) {
   *dest = Number::New(call->isolate, value);
   return Result::ok;
 }
 
 static Result 
-UnwrapBigInt(CallContext* call, Local<Value> value, ::BigInt* dest) {
+UnwrapBigInt(Call* call, Local<Value> value, ::BigInt* dest) {
   if (value->IsBigInt()) {
     int word_count = dest->word_count;
     int sign_bit = 0;
@@ -236,7 +235,7 @@ UnwrapBigInt(CallContext* call, Local<Value> value, ::BigInt* dest) {
 }
 
 static Result
-WrapBigInt(CallContext* call, const ::BigInt& value, Local<Value>* dest) {
+WrapBigInt(Call* call, const ::BigInt& value, Local<Value>* dest) {
   int word_count = value.word_count;
   int sign_bit = value.flags.negative ? 1 : 0;
   const uint64_t *words = value.words;
@@ -249,7 +248,7 @@ WrapBigInt(CallContext* call, const ::BigInt& value, Local<Value>* dest) {
 }
 
 static Result 
-UnwrapString(CallContext* call, Local<Value> value, ::TypedArray* dest) {
+UnwrapString(Call* call, Local<Value> value, ::TypedArray* dest) {
   Local<String> string;
   NumberType dest_type = dest->type;
   if (value->IsString()) {
@@ -275,7 +274,7 @@ UnwrapString(CallContext* call, Local<Value> value, ::TypedArray* dest) {
 }
 
 static Result
-UnwrapTypedArray(CallContext* call, Local<Value> value, ::TypedArray* dest) {
+UnwrapTypedArray(Call* call, Local<Value> value, ::TypedArray* dest) {
   Local<ArrayBuffer> buffer;
   size_t offset = 0;
   if (value->IsArrayBuffer()) {
@@ -289,13 +288,68 @@ UnwrapTypedArray(CallContext* call, Local<Value> value, ::TypedArray* dest) {
   *dest = GetMemory(buffer);
   if (offset > 0) {
     dest->bytes += offset;
-    dest->len -= offset;
+    dest->byte_size -= offset;
+  }
+  return Result::ok;
+}
+
+static Result
+WrapTypedArray(Call* call, const ::TypedArray& value, Local<Value> *dest) {
+  // since the Call struct is allocated on the stack, its address is the 
+  // starting point of stack space used by Zig code
+  size_t stack_top = reinterpret_cast<size_t>(call);
+  size_t stack_bottom = reinterpret_cast<size_t>(&stack_top);
+  size_t address = reinterpret_cast<size_t>(value.bytes);
+  Local<ArrayBuffer> buffer;
+  size_t offset = 0;
+  if (stack_bottom < address && address < stack_top) {
+    // need to copy data sitting on the stack
+    buffer = ArrayBuffer::New(call->isolate, value.byte_size);
+    ::TypedArray mem = GetMemory(buffer);
+    memcpy(mem.bytes, value.bytes, value.byte_size);
+  }
+  if (buffer.IsEmpty()) {
+    return Result::failure;
+  }
+  switch (value.type) {
+    case NumberType::i8:
+      *dest = Int8Array::New(buffer, offset, value.byte_size / sizeof(int8_t));
+      break;
+    case NumberType::u8:
+      *dest = Uint8Array::New(buffer, offset, value.byte_size / sizeof(uint8_t));
+      break;
+    case NumberType::i16:
+      *dest = Int16Array::New(buffer, offset, value.byte_size / sizeof(int16_t));
+      break;
+    case NumberType::u16:
+      *dest = Uint16Array::New(buffer, offset, value.byte_size / sizeof(uint16_t));
+      break;
+    case NumberType::i32:
+      *dest = Int32Array::New(buffer, offset, value.byte_size / sizeof(int32_t));
+      break;
+    case NumberType::u32:
+      *dest = Uint32Array::New(buffer, offset, value.byte_size / sizeof(uint32_t));
+      break;
+    case NumberType::i64:
+      *dest = BigInt64Array::New(buffer, offset, value.byte_size / sizeof(int64_t));
+      break;
+    case NumberType::u64:
+      *dest = BigUint64Array::New(buffer, offset, value.byte_size / sizeof(uint64_t));
+      break;
+    case NumberType::f32:
+      *dest = Float32Array::New(buffer, offset, value.byte_size / sizeof(float));
+      break;
+    case NumberType::f64:
+      *dest = Float64Array::New(buffer, offset, value.byte_size / sizeof(double));
+      break;
+    default:
+      *dest = buffer;
   }
   return Result::ok;
 }
 
 static void 
-ThrowException(CallContext* call, const char* message) {
+ThrowException(Call* call, const char* message) {
   Local<Value> error = Exception::Error(NewString(call->isolate, message));
   call->isolate->ThrowException(error);
 }
@@ -328,7 +382,7 @@ ProcessFunctionEntry(Isolate* isolate, const Entry* entry, Local<Value> containe
   // calls the Zig-generate thunk when V8 function is called
   Local<v8::Function> function = NewFunction(isolate, 
     [](const FunctionCallbackInfo<Value>& info) {
-      CallContext ctx(info);
+      Call ctx(info);
       ctx.zig_func->entry.function->thunk(&ctx);
     }, arg_count, external);
   SetProperty(isolate, entry->name, container, function);
@@ -345,14 +399,14 @@ ProcessVariableEntry(Isolate* isolate, const Entry* entry, Local<Value> containe
   if (entry->variable->getter_thunk) {
     getter = NewFunction(isolate, 
       [](const FunctionCallbackInfo<Value>& info) {
-        CallContext ctx(info);
+        Call ctx(info);
         ctx.zig_func->entry.variable->getter_thunk(&ctx);
       }, 0, external);
   }
   if (entry->variable->setter_thunk) {
     setter = NewFunction(isolate, 
       [](const FunctionCallbackInfo<Value>& info) {
-        CallContext ctx(info);
+        Call ctx(info);
         ctx.zig_func->entry.variable->setter_thunk(&ctx);
       }, 1, external);
     attribute = static_cast<PropertyAttribute>(attribute & ~ReadOnly);
@@ -453,7 +507,7 @@ Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->wrap_bigint = WrapBigInt;
   callbacks->wrap_double = WrapDouble;
   callbacks->wrap_string = nullptr; // WrapString;
-  callbacks->wrap_typed_array = nullptr; // WrapTypedArray;
+  callbacks->wrap_typed_array = WrapTypedArray;
 
   callbacks->throw_exception = ThrowException;
 

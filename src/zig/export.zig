@@ -76,7 +76,7 @@ const FunctionAttributes = packed struct(c_int) {
 };
 const TypedArray = extern struct {
     bytes: [*]u8,
-    len: usize,
+    byte_size: usize,
     element_type: NumberType,
 };
 const BigIntFlags = packed struct(c_int) {
@@ -310,15 +310,6 @@ fn reifySlice(comptime slice: anytype) ChildType(@TypeOf(slice)) {
     return array;
 }
 
-fn typeNameCapitalized(comptime T: type) []const u8 {
-    const name = comptime @typeName(T);
-    var result: [name.len]u8 = name;
-    if (result[0] >= 0x61 and result[0] <= 0x7a) {
-        result[0] -= 0x20;
-    }
-    return result;
-}
-
 fn checkWritability(comptime package: anytype, comptime name: []const u8) bool {
     return switch (@typeInfo(@TypeOf(@field(package, name)))) {
         .Bool, .Int, .Enum, .Float, .Array, .Pointer, .Struct, .Fn => check: {
@@ -333,6 +324,42 @@ fn checkWritability(comptime package: anytype, comptime name: []const u8) bool {
     };
 }
 
+fn getArrayType(comptime T: type) NumberType {
+    return switch (@typeInfo(T)) {
+        .Array => |ar| return getArrayType(ar.child),
+        .Int, .Float => switch (T) {
+            i8 => .I8,
+            u8 => .U8,
+            i16 => .I16,
+            u16 => .U16,
+            i32 => .I32,
+            u32 => .U32,
+            i64 => .I64,
+            u64 => .U64,
+            f32 => .F32,
+            f64 => .F64,
+            else => .Unknown,
+        },
+        else => .Unknown,
+    };
+}
+
+fn getTypeMask(comptime numType: NumberType) ValueMask {
+    return switch (numType) {
+        .I8 => .{ .i8Array = true },
+        .U8 => .{ .u8Array = true },
+        .I16 => .{ .i16Array = true },
+        .U16 => .{ .u16Array = true },
+        .I32 => .{ .i32Array = true },
+        .U32 => .{ .u32Array = true },
+        .I64 => .{ .i32Array = true },
+        .U64 => .{ .u32Array = true },
+        .F32 => .{ .f32Array = true },
+        .F64 => .{ .f64Array = true },
+        else => .{},
+    };
+}
+
 fn getPossibleTypes(comptime T: type, comptime out: bool) ValueMask {
     var can_be: ValueMask = .{};
     switch (@typeInfo(T)) {
@@ -343,10 +370,18 @@ fn getPossibleTypes(comptime T: type, comptime out: bool) ValueMask {
             can_be.number = true;
             can_be.bigInt = true;
         },
+        .ComptimeInt => {
+            can_be = getPossibleTypes(i53, out);
+        },
         .Float => {
             can_be.number = true;
         },
+        .ComptimeFloat => {
+            can_be = getPossibleTypes(f64, out);
+        },
         .Array => |ar| {
+            const array_type = getArrayType(T);
+            can_be = getTypeMask(array_type);
             can_be.array = true;
             can_be.arrayBuffer = isBinaryKnown(T);
             can_be.string = isUnicode(ar.child);
@@ -359,12 +394,8 @@ fn getPossibleTypes(comptime T: type, comptime out: bool) ValueMask {
             if (pt.size == .One) {
                 can_be = getPossibleTypes(pt.child, out);
             } else if (pt.size == .Slice) {
-                can_be.arrayBuffer = isBinaryKnown(pt.child, out);
-                can_be.string = isUnicode(pt.child);
-                const arrayName = @typeName(pt.child) ++ "Array";
-                if (@hasDecl(can_be, arrayName)) {
-                    @field(can_be, arrayName) = can_be.arrayBuffer;
-                }
+                const AT = @Type(.{ .Array = .{ .child = pt.child, .len = 0 } });
+                return getPossibleTypes(AT, out);
             }
         },
         else => {},
@@ -379,20 +410,27 @@ fn getReturnType(comptime T: type) ValueMask {
             prefer.boolean = true;
         },
         .Int => |int| {
-            if (int.bits > 64) {
-                prefer.bigInt = true;
-            } else {
+            if (int.bits <= 53) {
                 prefer.number = true;
+            } else {
+                prefer.bigInt = true;
             }
+        },
+        .ComptimeInt => {
+            prefer = getReturnType(i53);
         },
         .Float => {
             prefer.number = true;
         },
+        .ComptimeFloat => {
+            prefer = getReturnType(f64);
+        },
         .Array => |ar| {
+            const array_type = getArrayType(T);
             if (isUnicode(ar.child)) {
                 prefer.string = true;
-            } else if (isInt(ar.child) or isFloat(ar.child)) {
-                prefer.arrayBuffer = true;
+            } else if (array_type != .Unknown) {
+                prefer = getTypeMask(array_type);
             } else {
                 prefer.array = true;
             }
@@ -404,13 +442,8 @@ fn getReturnType(comptime T: type) ValueMask {
             if (pt.size == .One) {
                 prefer = getReturnType(pt.child);
             } else if (pt.size == .Slice) {
-                if (isUnicode(pt.child)) {
-                    prefer.string = true;
-                } else if (isInt(pt.child) or isFloat(pt.child)) {
-                    prefer.arrayBuffer = true;
-                } else {
-                    prefer.array = true;
-                }
+                const AT = @Type(.{ .Array = .{ .child = pt.child, .len = 0 } });
+                return getReturnType(AT);
             }
         },
         else => {},
@@ -448,6 +481,33 @@ fn castFloat(comptime T: type, value: anytype) !T {
         return value;
     }
 }
+
+fn matchType(mask: ValueMask, types: ValueMask) bool {
+    inline for (std.meta.fields(ValueMask)) |field| {
+        if (field.type == bool) {
+            const bit1 = @field(mask, field.name);
+            const bit2 = @field(types, field.name);
+            if (bit1 and bit2) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+const arrayBufferMask: ValueMask = .{
+    .arrayBuffer = true,
+    .i8Array = true,
+    .u8Array = true,
+    .i16Array = true,
+    .u16Array = true,
+    .i32Array = true,
+    .u32Array = true,
+    .i64Array = true,
+    .u64Array = true,
+    .f32Array = true,
+    .f64Array = true,
+};
 
 const maxSafeInteger = 9007199254740991.0;
 const minSafeInteger = -9007199254740991.0;
@@ -628,6 +688,7 @@ fn wrapValue(call: Call, value: anytype, mask: ValueMask) !?Value {
             }
         },
         .ComptimeInt => {
+            std.debug.print("ComptimeInt\n", .{});
             const IT = if (value < 0) i64 else u64;
             return wrapValue(call, @intCast(IT, value), mask);
         },
@@ -640,8 +701,8 @@ fn wrapValue(call: Call, value: anytype, mask: ValueMask) !?Value {
                         err = Error.FloatOverflow;
                     } else {
                         const double = @floatCast(f64, value);
-                        if (cb(call, double, &value) == .OK) {
-                            return value;
+                        if (cb(call, double, &result) == .OK) {
+                            return result;
                         }
                     }
                 }
@@ -652,12 +713,24 @@ fn wrapValue(call: Call, value: anytype, mask: ValueMask) !?Value {
             return wrapValue(call, @floatCast(IT, value), mask);
         },
         .Array => |ar| {
+            if (matchType(mask, arrayBufferMask)) {
+                if (callbacks.wrap_typed_array) |cb| {
+                    const array: TypedArray = .{
+                        .bytes = @constCast(@ptrCast([*]const u8, &value)),
+                        .byte_size = @sizeOf(T),
+                        .element_type = getArrayType(T),
+                    };
+                    if (cb(call, &array, &result) == .OK) {
+                        return result;
+                    }
+                }
+            }
             _ = ar;
-            return .TODO;
+            return Error.TODO;
         },
         .Pointer => |pt| {
             _ = pt;
-            return .TODO;
+            return Error.TODO;
         },
         else => {},
     }
@@ -830,7 +903,7 @@ fn createVariable(comptime package: anytype, comptime name: []const u8) Variable
     return .{
         .getter_thunk = createGetterThunk(package, name),
         .setter_thunk = if (writable) createSetterThunk(package, name) else null,
-        .class_name = "hello",
+        .class_name = null,
         .default_type = getReturnType(T),
         .possible_types = getPossibleTypes(T, true),
     };

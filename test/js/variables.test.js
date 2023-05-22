@@ -58,4 +58,16 @@ describe('Module properities getter/setter', async function() {
     mod.int128 = 0xFFFFFFFFFFFFFFFFFFFFFFFFn;
     expect(mod.int128).to.equal(0xFFFFFFFFFFFFFFFFFFFFFFFFn);
   })
+  it('should return an i32 array as an Int32Array', function() {
+    const a = mod.int32Array4;
+    expect(a).to.be.an.instanceOf(Int32Array);
+    expect(a).to.have.lengthOf(4);
+  })
+  it('should return a multi-dimensional f64 array as an Float64Array', function() {
+    const a = mod.float64Array4x4;
+    expect(a).to.be.an.instanceOf(Float64Array);
+    expect(a).to.have.lengthOf(16);
+    expect(a[2 * 4 + 2]).to.equal(3.3);
+    expect(a[3 * 4 + 1]).to.equal(4.2);
+  })
 })

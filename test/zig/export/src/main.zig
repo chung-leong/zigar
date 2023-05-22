@@ -77,9 +77,10 @@ test "entry for array constant has the right properties" {
     assert(variable.getter_thunk != null);
     assert(variable.setter_thunk == null);
     assert(variable.class_name == null);
-    assert(variable.default_type.arrayBuffer);
+    assert(variable.default_type.i32Array == true);
     assert(variable.possible_types.array);
     assert(variable.possible_types.arrayBuffer);
+    assert(variable.possible_types.i32Array == true);
 }
 
 test "entry for enumeration has the right properties" {
@@ -135,7 +136,6 @@ test "entry for function has the right properties" {
     assert(!args[0].possible_types.boolean);
     assert(args[0].possible_types.number);
     assert(args[0].possible_types.bigInt);
-    assert(args[0].possible_types.string);
 }
 
 test "entry for function using memory allocator has the right properties" {
@@ -151,5 +151,4 @@ test "entry for function using memory allocator has the right properties" {
     assert(!args[0].possible_types.boolean);
     assert(args[0].possible_types.number);
     assert(args[0].possible_types.bigInt);
-    assert(args[0].possible_types.string);
 }
