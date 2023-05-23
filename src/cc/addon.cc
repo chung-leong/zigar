@@ -5,69 +5,23 @@
 //-----------------------------------------------------------------------------
 //  Utility functions
 //-----------------------------------------------------------------------------
-static Local<String> 
-NewString(Isolate* isolate, const char* s) {
-  return String::NewFromUtf8(isolate, s).ToLocalChecked();
-}
-
-static Local<Number> 
-NewInteger(Isolate* isolate, int64_t value) {
-  if (value >= INT32_MIN && value <= INT32_MAX) {
-    return Int32::New(isolate, static_cast<int64_t>(value));
-  } else if (value >= MIN_SAFE_INTEGER && value <= MAX_SAFE_INTEGER) {
-    return Number::New(isolate, (double) value);
+static Local<String> NewString(Isolate* isolate, 
+                               const char* string) {
+  if (string) {
+    return String::NewFromUtf8(isolate, string).ToLocalChecked();
   } else {
-    return Number::New(isolate, std::numeric_limits<double>::quiet_NaN());
+    return Local<String>();
   }
 }
 
-static Local<v8::Function> 
-NewFunction(Isolate* isolate, FunctionCallback f, int len, Local<Value> data = Local<Value>()) {
-  Local<Signature> signature;
-  Local<FunctionTemplate> ftmpl = FunctionTemplate::New(isolate, f, data, signature, len);
-  return ftmpl->GetFunction(isolate->GetCurrentContext()).ToLocalChecked();
-}
-
-static void 
-SetProperty(Isolate* isolate, const char* name, Local<Value> object, Local<Value> value) {
-  Local<String> key = NewString(isolate, name);
-  object.As<Object>()->Set(isolate->GetCurrentContext(), key, value).Check();
-}
-
-static void 
-ThrowException(Isolate* isolate, const char* message) {
+static void ThrowException(Isolate* isolate, 
+                           const char* message) {
   Local<String> string = NewString(isolate, message);
   Local<Value> error = Exception::Error(string);
   isolate->ThrowException(error);
 }
 
-static Local<Value> 
-AllocateExternal(Isolate* isolate, size_t count) {
-  struct SetWeakCallbackData {
-    Global<Value> global;
-    int64_t payload[1]; 
-  };
-  // allocate enough memory to hold the global and the payload
-  size_t total_size = sizeof(SetWeakCallbackData) - sizeof(int64_t) + count;
-  uint8_t* bytes = new uint8_t[total_size];
-  memset(bytes, 0, total_size);
-  SetWeakCallbackData* callback_data = reinterpret_cast<SetWeakCallbackData*>(bytes);
-  // create a v8::External and attach it to global ref
-  Local<Value> external = External::New(isolate, callback_data->payload);
-  callback_data->global.Reset(isolate, external);
-  // use SetWeak to invoke a callback when the External gets gc'ed
-  auto callback = [](const v8::WeakCallbackInfo<SetWeakCallbackData>& data) {
-    SetWeakCallbackData* callback_data = data.GetParameter();
-    callback_data->global.Reset();
-    delete callback_data;
-  };
-  callback_data->global.template 
-    SetWeak<SetWeakCallbackData>(callback_data, callback, WeakCallbackType::kParameter);
-  return external;
-}
-
-static ::TypedArray 
-GetMemory(Local<ArrayBuffer> buffer) {
+static ::TypedArray GetMemory(Local<ArrayBuffer> buffer) {
   std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
   ::TypedArray array;
   array.type = NumberType::u8;
@@ -76,8 +30,10 @@ GetMemory(Local<ArrayBuffer> buffer) {
   return array;
 }
 
-static size_t
-FindAddress(Local<ArrayBuffer> buffer, size_t address, size_t len, size_t *offset_dest) {
+static size_t FindAddress(Local<ArrayBuffer> buffer, 
+                          size_t address, 
+                          size_t len, 
+                          size_t* offset_dest) {
   std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
   size_t buf_start = reinterpret_cast<size_t>(store->Data());
   size_t buf_end = buf_start + store->ByteLength();
@@ -91,13 +47,15 @@ FindAddress(Local<ArrayBuffer> buffer, size_t address, size_t len, size_t *offse
 //-----------------------------------------------------------------------------
 //  Callback functions that zig modules will invoke
 //-----------------------------------------------------------------------------
-static size_t 
-GetArgumentCount(Call* call) {
-  return call->node_args->Length();
+static Result GetArgumentCount(Call* call,
+                               size_t* dest) {
+  *dest = call->node_args->Length();
+  return Result::ok;
 }
 
-static Local<Value> 
-GetArgument(Call* call, size_t index) {
+static Result GetArgument(Call* call, 
+                          size_t index,
+                          Local<Value> *dest) {
   Local<Value> value = (*call->node_args)[index];
   // unwrap scalar objects
   if (value->IsBooleanObject()) {
@@ -109,30 +67,153 @@ GetArgument(Call* call, size_t index) {
   } else if (value->IsBigIntObject()) {
     value = value.As<BigIntObject>()->ValueOf();
   }
-  return value;
+  *dest = value;
+  return Result::ok;
 }
 
-static ValueMask 
-GetArgumentType(Call* call, size_t index) {
-  return call->zig_func->argument_types[index];
-}
-
-static ValueMask 
-GetReturnType(Call* call) {
-  return call->zig_func->return_type;
-}
-
-static void 
-SetReturnValue(Call* call, Local<Value> value) {
+static Result SetReturnValue(Call* call, 
+                             Local<Value> value) {
   if (!value.IsEmpty()) {
     call->node_args->GetReturnValue().Set(value);
   }
+  return Result::ok;
 }
 
-static Result 
-GetProperty(Call* call, const char* name, Local<Value> object, Local<Value>* dest) {
-  Local<Value> key = NewString(call->isolate, name);
-  MaybeLocal<Value> result = object.As<Object>()->Get(call->exec_context, key);
+static Result GetSlotObject(Call* call, 
+                            size_t slot_id, 
+                            Local<Value> *dest) {
+  Local<Array> array = Local<Array>::New(call->isolate, call->zig_func->slot_data);
+  MaybeLocal<Value> value = array->Get(call->exec_context, slot_id);
+  if (value.IsEmpty()) {
+    return Result::failure;
+  }
+  return Result::ok;
+}
+
+static Result GetSlotData(Call* call, 
+                          size_t slot_id, 
+                          void **dest) {
+  Local<Value> value;
+  if (GetSlotObject(call, slot_id, &value) != Result::ok) {
+    return Result::failure;
+  } 
+  *dest = value.As<External>()->Value();
+  return Result::ok;
+}
+
+static Result SetSlotObject(Call* call, 
+                            size_t slot_id, 
+                            Local<Value> object) {
+  Local<Array> array = Local<Array>::New(call->isolate, call->zig_func->slot_data);
+  array->Set(call->exec_context, slot_id, object).Check();
+  return Result::ok;  
+}
+
+static Result SetSlotData(Call* call, 
+                          size_t slot_id, 
+                          void *data,
+                          size_t byte_size) { 
+  // allocate enough memory to hold the global and the payload
+  size_t total_size = sizeof(SlotData) + byte_size;
+  uint8_t* bytes = new uint8_t[total_size];
+  SlotData* sd = reinterpret_cast<SlotData*>(bytes);
+  memset(&sd->external, 0, sizeof(Global<Value>));
+  memcpy(sd->payload, data, byte_size);
+  // create a v8::External and attach it to global ref
+  Local<External> external = External::New(call->isolate, sd->payload);
+  sd->external.Reset(call->isolate, external);
+  // use SetWeak to invoke a callback when the External gets gc'ed
+  sd->external.template SetWeak<SlotData>(sd, 
+    [](const v8::WeakCallbackInfo<SlotData>& data) {
+      SlotData* sd = data.GetParameter();
+      sd->external.Reset();
+      delete sd;
+    }, WeakCallbackType::kParameter);
+  return SetSlotObject(call, slot_id, external);
+
+}
+
+static Result CreateString(Call* call,
+                           const char* string,
+                           Local<String>* dest) {
+  *dest = NewString(call->isolate, string);
+  return Result::ok;
+}
+
+static Result CreateNamespace(Call* call, 
+                              Local<Object> *dest) {
+  Local<Value> prototype, values[0];
+  Local<Name> names[0];
+  *dest = Object::New(call->isolate, prototype, names, values, 0);
+  return Result::ok;
+}
+
+static Result CreateFunction(Call* call, 
+                             Local<String> name, 
+                             size_t arg_count, 
+                             Thunk thunk, 
+                             Local<v8::Function>* dest) {
+  // allocate a small bit of memory to hold reference to the thunk
+  // and keep the slot_data array alive
+  FunctionData *fd = new FunctionData;
+  fd->thunk = thunk;
+  fd->slot_data.Reset(call->isolate, call->zig_func->slot_data);
+  // stick it into an external object, using SetWeak to invoke a callback 
+  // when the external object gets gc'ed
+  Local<External> external = External::New(call->isolate, fd);
+  fd->external.Reset(call->isolate, external);
+  fd->external.template SetWeak<FunctionData>(fd, 
+    [](const v8::WeakCallbackInfo<FunctionData>& data) {
+      FunctionData* fd = data.GetParameter();
+      fd->external.Reset();
+      delete fd;
+    }, WeakCallbackType::kParameter);
+  // create function template
+  Local<Signature> signature;
+  Local<FunctionTemplate> tmpl = FunctionTemplate::New(call->isolate,
+    [](const FunctionCallbackInfo<Value>& info) {
+      Call ctx(info);
+      ctx.zig_func->thunk(&ctx);
+    }, external, signature, arg_count);
+  MaybeLocal<v8::Function> result = tmpl->GetFunction(call->exec_context);
+  if (result.IsEmpty()) {
+    return Result::failure;
+  }
+  Local<v8::Function> function = result.ToLocalChecked();
+  if (!name.IsEmpty()) {
+    function->SetName(name);
+  }
+  *dest = function;
+  return Result::ok;
+}
+
+static Result SetAccessors(Call* call, 
+                           Local<Object> container,
+                           Local<String> name, 
+                           Thunk getter_thunk,
+                           Thunk setter_thunk) {
+  Local<v8::Function> getter, setter;
+  PropertyAttribute attribute = static_cast<PropertyAttribute>(DontDelete | ReadOnly);
+  if (getter_thunk) {
+    if (CreateFunction(call, Local<String>(), 0, getter_thunk, &getter) != Result::ok) {
+      return Result::failure;
+    }
+  }
+  if (setter_thunk) {
+    if (CreateFunction(call, Local<String>(), 1, setter_thunk, &setter) != Result::ok) {
+      return Result::failure;
+    }
+    attribute = static_cast<PropertyAttribute>(attribute & ~ReadOnly);   
+  }
+  container->SetAccessorProperty(name, getter, setter, attribute);
+  return Result::ok;
+}
+
+static Result GetProperty(Call* call, 
+                          Local<Object> object, 
+                          Local<String> name, 
+                          Local<Value>* dest) {
+  MaybeLocal<Value> result = object->Get(call->exec_context, name);
   if (result.IsEmpty()) {
     return Result::failure;
   }
@@ -140,15 +221,17 @@ GetProperty(Call* call, const char* name, Local<Value> object, Local<Value>* des
   return Result::ok;
 }
 
-static Result
-SetProperty(Call* call, const char* name, Local<Value> object, Local<Value> value) {
-  Local<Value> key = NewString(call->isolate, name);
-  object.As<Object>()->Set(call->exec_context, key, value).Check();
+static Result SetProperty(Call* call, 
+                          Local<Object> object, 
+                          Local<String> name, 
+                          Local<Value> value) {
+  object->Set(call->exec_context, name, value).Check();
   return Result::ok;
 }
 
-static Result
-AllocateMemory(Call* call, size_t size, ::TypedArray* dest) {
+static Result AllocateMemory(Call* call, 
+                             size_t size, 
+                             ::TypedArray* dest) {
   if (call->mem_pool.IsEmpty()) {
     call->mem_pool = Array::New(call->isolate);
   }
@@ -159,36 +242,34 @@ AllocateMemory(Call* call, size_t size, ::TypedArray* dest) {
   return Result::ok;
 }
 
-static bool 
-IsNull(Local<Value> value) {
-  return value->IsNullOrUndefined();
+static Result IsValueType(Local<Value> value, 
+                          ValueMask mask,
+                          bool* dest) {
+  *dest = (mask.empty && value->IsNullOrUndefined())
+       || (mask.boolean && value->IsBoolean())
+       || (mask.number && value->IsNumber())
+       || (mask.bigInt && value->IsBigInt())
+       || (mask.string && value->IsString())
+       || (mask.array && value->IsArray())
+       || (mask.object && value->IsObject())
+       || (mask.function && value->IsFunction())
+       || (mask.arrayBuffer && value->IsArrayBuffer())
+       || (mask.i8Array && value->IsInt8Array())
+       || (mask.u8Array && (value->IsUint8Array() || value->IsUint8ClampedArray()))
+       || (mask.i16Array && value->IsInt16Array())
+       || (mask.u16Array && value->IsUint16Array())
+       || (mask.i32Array && value->IsInt32Array())
+       || (mask.u32Array && value->IsUint32Array())
+       || (mask.i64Array && value->IsBigInt64Array())
+       || (mask.u64Array && value->IsBigUint64Array())
+       || (mask.f32Array && value->IsFloat32Array())
+       || (mask.f64Array && value->IsFloat64Array());
+  return Result::ok;
 }
 
-static bool 
-IsValueType(Local<Value> value, ValueMask mask) {
-  bool match = (mask.boolean && value->IsBoolean())
-            || (mask.number && value->IsNumber())
-            || (mask.bigInt && value->IsBigInt())
-            || (mask.string && value->IsString())
-            || (mask.array && value->IsArray())
-            || (mask.object && value->IsObject())
-            || (mask.function && value->IsFunction())
-            || (mask.arrayBuffer && value->IsArrayBuffer())
-            || (mask.i8Array && value->IsInt8Array())
-            || (mask.u8Array && (value->IsUint8Array() || value->IsUint8ClampedArray()))
-            || (mask.i16Array && value->IsInt16Array())
-            || (mask.u16Array && value->IsUint16Array())
-            || (mask.i32Array && value->IsInt32Array())
-            || (mask.u32Array && value->IsUint32Array())
-            || (mask.i64Array && value->IsBigInt64Array())
-            || (mask.u64Array && value->IsBigUint64Array())
-            || (mask.f32Array && value->IsFloat32Array())
-            || (mask.f64Array && value->IsFloat64Array());
-  return match;
-}
-
-static Result 
-UnwrapBool(Call* call, Local<Value> value, bool* dest) {
+static Result UnwrapBool(Call* call, 
+                         Local<Value> value, 
+                         bool* dest) {
   if (value->IsBoolean()) {
     *dest = value.As<Boolean>()->Value();
     return Result::ok;
@@ -202,8 +283,9 @@ WrapBool(Call* call, bool value, Local<Value>* dest) {
   return Result::ok;
 }
 
-static Result 
-UnwrapInt32(Call* call, Local<Value> value, int32_t* dest) {
+static Result UnwrapInt32(Call* call, 
+                          Local<Value> value, 
+                          int32_t* dest) {
   if (value->IsInt32()) {
     *dest = value.As<Int32>()->Value();
     return Result::ok;
@@ -211,14 +293,16 @@ UnwrapInt32(Call* call, Local<Value> value, int32_t* dest) {
   return Result::failure;
 }
 
-static Result 
-WrapInt32(Call* call, int32_t value, Local<Value>* dest) {
+static Result WrapInt32(Call* call, 
+                        int32_t value, 
+                        Local<Value>* dest) {
   *dest = Int32::New(call->isolate, value);
   return Result::ok;
 }
 
-static Result 
-UnwrapDouble(Call* call, Local<Value> value, double* dest) {
+static Result UnwrapDouble(Call* call, 
+                           Local<Value> value, 
+                           double* dest) {
   if (value->IsNumber()) {
     *dest = value.As<Number>()->Value();
     return Result::ok;
@@ -226,14 +310,16 @@ UnwrapDouble(Call* call, Local<Value> value, double* dest) {
   return Result::failure;
 }
 
-static Result 
-WrapDouble(Call* call, double value, Local<Value>* dest) {
+static Result WrapDouble(Call* call, 
+                         double value, 
+                         Local<Value>* dest) {
   *dest = Number::New(call->isolate, value);
   return Result::ok;
 }
 
-static Result 
-UnwrapBigInt(Call* call, Local<Value> value, ::BigInt* dest) {
+static Result UnwrapBigInt(Call* call, 
+                           Local<Value> value, 
+                           ::BigInt* dest) {
   if (value->IsBigInt()) {
     int word_count = dest->word_count;
     int sign_bit = 0;
@@ -246,8 +332,9 @@ UnwrapBigInt(Call* call, Local<Value> value, ::BigInt* dest) {
   return Result::failure;
 }
 
-static Result
-WrapBigInt(Call* call, const ::BigInt& value, Local<Value>* dest) {
+static Result WrapBigInt(Call* call, 
+                         const ::BigInt& value, 
+                         Local<Value>* dest) {
   int word_count = value.word_count;
   int sign_bit = value.flags.negative ? 1 : 0;
   const uint64_t *words = value.words;
@@ -259,8 +346,9 @@ WrapBigInt(Call* call, const ::BigInt& value, Local<Value>* dest) {
   return Result::ok;
 }
 
-static Result 
-UnwrapString(Call* call, Local<Value> value, ::TypedArray* dest) {
+static Result UnwrapString(Call* call,
+                           Local<Value> value, 
+                           ::TypedArray* dest) {
   Local<String> string;
   NumberType dest_type = dest->type;
   if (value->IsString()) {
@@ -285,8 +373,9 @@ UnwrapString(Call* call, Local<Value> value, ::TypedArray* dest) {
   return Result::ok;
 }
 
-static Result
-UnwrapTypedArray(Call* call, Local<Value> value, ::TypedArray* dest) {
+static Result UnwrapTypedArray(Call* call, 
+                               Local<Value> value, 
+                               ::TypedArray* dest) {
   Local<ArrayBuffer> buffer;
   size_t offset = 0;
   if (value->IsArrayBuffer()) {
@@ -305,8 +394,9 @@ UnwrapTypedArray(Call* call, Local<Value> value, ::TypedArray* dest) {
   return Result::ok;
 }
 
-static MaybeLocal<ArrayBuffer>
-ObtainBuffer(Call* call, const ::TypedArray& value, size_t *offset_dest) {
+static MaybeLocal<ArrayBuffer> ObtainBuffer(Call* call, 
+                                            const ::TypedArray& value, 
+                                            size_t *offset_dest) {
   // since the Call struct is allocated on the stack, its address is the 
   // starting point of stack space used by Zig code
   size_t stack_top = reinterpret_cast<size_t>(call) + sizeof(Call);
@@ -350,8 +440,11 @@ ObtainBuffer(Call* call, const ::TypedArray& value, size_t *offset_dest) {
   return MaybeLocal<ArrayBuffer>();
 }
 
-template <typename T>
-Local<Value> CreateTypedArray(Local<T> buffer, size_t offset, size_t byte_size, NumberType type) {
+template <typename T> 
+Local<Value> CreateTypedArray(Local<T> buffer, 
+                              size_t offset, 
+                              size_t byte_size, 
+                              NumberType type) {
   switch (type) {
     case NumberType::i8:
       return Int8Array::New(buffer, offset, byte_size / sizeof(int8_t));
@@ -378,8 +471,9 @@ Local<Value> CreateTypedArray(Local<T> buffer, size_t offset, size_t byte_size, 
   }
 }
 
-static Result
-WrapTypedArray(Call* call, const ::TypedArray& value, Local<Value> *dest) {
+static Result WrapTypedArray(Call* call,
+                             const ::TypedArray& value, 
+                             Local<Value>* dest) {
   size_t offset = 0;
   MaybeLocal<ArrayBuffer> known = ObtainBuffer(call, value, &offset);
   if (!known.IsEmpty()) {
@@ -393,8 +487,8 @@ WrapTypedArray(Call* call, const ::TypedArray& value, Local<Value> *dest) {
     std::shared_ptr<BackingStore> store = SharedArrayBuffer::NewBackingStore(value.bytes, value.byte_size, [](void*, size_t, void*) {
       // do nothing when buffer gets gc'ed
     }, nullptr);
-    Local<SharedArrayBuffer> sh_buf = SharedArrayBuffer::New(call->isolate, store);
-    *dest = CreateTypedArray(sh_buf, offset, value.byte_size, value.type);
+    Local<SharedArrayBuffer> shared_buf = SharedArrayBuffer::New(call->isolate, store);
+    *dest = CreateTypedArray(shared_buf, offset, value.byte_size, value.type);
 #else
     return Result::failure;
 #endif    
@@ -402,114 +496,19 @@ WrapTypedArray(Call* call, const ::TypedArray& value, Local<Value> *dest) {
   return Result::ok;
 }
 
-static void 
-ThrowException(Call* call, const char* message) {
+static Result ThrowException(Call* call, 
+                             const char* message) {
   Local<Value> error = Exception::Error(NewString(call->isolate, message));
   call->isolate->ThrowException(error);
-}
-
-//-----------------------------------------------------------------------------
-//  Functions that create V8-to-Zig bridging functions
-//-----------------------------------------------------------------------------
-static FunctionData* 
-AllocateFunctionData(Isolate* isolate, size_t arg_count, const Entry* entry, Local<Value>& external) {
-  // allocate memory for the FunctionData struct, enough for holding the current 
-  // type set for each argument
-  size_t size = sizeof(FunctionData) + sizeof(ValueMask) * arg_count;
-  external = AllocateExternal(isolate, size);
-  auto fd = reinterpret_cast<FunctionData*>(external.As<External>()->Value());
-  fd->entry = *entry;
-  return fd;
-}
-
-static void
-ProcessFunctionEntry(Isolate* isolate, const Entry* entry, Local<Value> container) {
-  size_t arg_count = entry->function->argument_count;
-  const Argument* args = entry->function->arguments;
-  // save argument and return types
-  Local<Value> external;
-  FunctionData* fd = AllocateFunctionData(isolate, arg_count, entry, external);
-  for (size_t i = 0; i < arg_count; i++) {
-    fd->argument_types[i] = args[i].default_type;
-  }
-  fd->return_type = entry->function->return_default_type;
-  // calls the Zig-generate thunk when V8 function is called
-  Local<v8::Function> function = NewFunction(isolate, 
-    [](const FunctionCallbackInfo<Value>& info) {
-      Call ctx(info);
-      ctx.zig_func->entry.function->thunk(&ctx);
-    }, arg_count, external);
-  SetProperty(isolate, entry->name, container, function);
-}
-
-static void 
-ProcessVariableEntry(Isolate* isolate, const Entry* entry, Local<Value> container) {
-  Local<Value> external;
-  FunctionData* fd = AllocateFunctionData(isolate, 1, entry, external);
-  fd->argument_types[0] = entry->variable->default_type;
-  fd->return_type = entry->variable->default_type;
-  PropertyAttribute attribute = static_cast<PropertyAttribute>(DontDelete | ReadOnly);
-  Local<v8::Function> getter, setter;
-  if (entry->variable->getter_thunk) {
-    getter = NewFunction(isolate, 
-      [](const FunctionCallbackInfo<Value>& info) {
-        Call ctx(info);
-        ctx.zig_func->entry.variable->getter_thunk(&ctx);
-      }, 0, external);
-  }
-  if (entry->variable->setter_thunk) {
-    setter = NewFunction(isolate, 
-      [](const FunctionCallbackInfo<Value>& info) {
-        Call ctx(info);
-        ctx.zig_func->entry.variable->setter_thunk(&ctx);
-      }, 1, external);
-    attribute = static_cast<PropertyAttribute>(attribute & ~ReadOnly);
-  }
-  Local<String> name = NewString(isolate, entry->name);
-  container.As<Object>()->SetAccessorProperty(name, getter, setter, attribute);
-}
-
-static void 
-ProcessEnumerationEntry(Isolate* isolate, const Entry* entry, Local<Value> container) {
-  Local<Value> external;
-  FunctionData* fd = AllocateFunctionData(isolate, 0, entry, external);
-  fd->return_type = entry->enumeration->default_type;
-  Local<Value> enumeration = Object::New(isolate);
-  for (size_t i = 0; i < entry->enumeration->count; i++) {
-    const EnumerationItem* item = &entry->enumeration->items[i];
-    Local<Number> number = NewInteger(isolate, item->value);
-    SetProperty(isolate, item->name, enumeration, number);
-  }
-  SetProperty(isolate, entry->name, container, enumeration);
-}
-
-static Local<Value> 
-ProcessEntryTable(Isolate* isolate, EntryTable* table) {
-  Local<Value> object = Object::New(isolate);
-  for (size_t i = 0; i < table->count; i++) {
-    const Entry* entry = &table->entries[i];
-    switch (entry->type) {
-      case EntryType::function: 
-        ProcessFunctionEntry(isolate, entry, object);
-        break;
-      case EntryType::variable: 
-        ProcessVariableEntry(isolate, entry, object);
-        break;
-      case EntryType::enumeration:
-        ProcessEnumerationEntry(isolate, entry, object);
-        break;
-      case EntryType::unavailable:
-        break;
-    }
-  }
-  return object;
+  return Result::ok;
 }
 
 //-----------------------------------------------------------------------------
 //  Function for loading Zig modules
 //-----------------------------------------------------------------------------
-static void 
-Load(const FunctionCallbackInfo<Value>& info) {
+int so_count = 0;
+
+static void Load(const FunctionCallbackInfo<Value>& info) {
   Isolate* isolate = info.GetIsolate();
 
   // check arguments
@@ -538,16 +537,29 @@ Load(const FunctionCallbackInfo<Value>& info) {
   Callbacks* callbacks = module->callbacks;
   callbacks->get_argument_count = GetArgumentCount;
   callbacks->get_argument = GetArgument;
-  callbacks->get_argument_type = GetArgumentType;
-  callbacks->get_return_type = GetReturnType;
   callbacks->set_return_value = SetReturnValue;
-  callbacks->is_null = IsNull;
-  callbacks->is_value_type = IsValueType;
+
+  callbacks->get_slot_data = GetSlotData;
+  callbacks->get_slot_object = GetSlotObject;
+  callbacks->set_slot_data = SetSlotData;
+  callbacks->set_slot_object = SetSlotObject;
+
+  callbacks->create_string = CreateString;
+  callbacks->create_namespace = CreateNamespace;
+  callbacks->create_function = CreateFunction;
+  callbacks->create_constructor = nullptr;
+  callbacks->create_object = nullptr;
+
   callbacks->get_property = GetProperty;
   callbacks->set_property = SetProperty;
+  callbacks->set_accessors = SetAccessors;
+
   callbacks->get_array_length = nullptr;
   callbacks->get_array_item = nullptr;
   callbacks->set_array_item = nullptr;
+
+  callbacks->is_value_type = IsValueType;
+
   callbacks->unwrap_bool = UnwrapBool;
   callbacks->unwrap_int32 = UnwrapInt32;
   callbacks->unwrap_int64 = nullptr;
@@ -565,18 +577,49 @@ Load(const FunctionCallbackInfo<Value>& info) {
 
   callbacks->throw_exception = ThrowException;
 
-  // process all entries inside modules
-  Local<Value> value = ProcessEntryTable(isolate, &module->table);
-  info.GetReturnValue().Set(value);
+  // create array for storing slot data
+  Local<Array> slot_data = Array::New(isolate, 1);
 
-  // unload shared library on shutdown
-  node::AddEnvironmentCleanupHook(isolate, [](void* handle) { 
-    dlclose(handle); 
-  }, handle);
+  // save shared library in an external object
+  ModuleData *md = new ModuleData;
+  md->so_handle = handle;
+  Local<External> external = External::New(isolate, md);
+  md->external.Reset(isolate, external);
+  md->external.template SetWeak<ModuleData>(md, 
+    [](const v8::WeakCallbackInfo<ModuleData>& data) {
+      ModuleData* md = data.GetParameter();
+      md->external.Reset();
+      // unload shared library when external object is gc'ed
+      dlclose(md->so_handle);
+      so_count--;
+      delete md;
+    }, WeakCallbackType::kParameter);
+  // save external object into slot 0, which is never used
+  slot_data->Set(isolate->GetCurrentContext(), 0, external).Check();
+
+  // call the root function, which will set the return value
+  Call ctx(info);
+  FunctionData fds;
+  fds.slot_data.Reset(isolate, slot_data);
+  fds.thunk = module->root;
+  ctx.zig_func = &fds;
+  module->root(&ctx);
+}
+
+static void GetLibraryCount(const FunctionCallbackInfo<Value>& info) {
+  info.GetReturnValue().Set(so_count);
 }
 
 NODE_MODULE_INIT(/* exports, module, context */) {
   Isolate* isolate = context->GetIsolate();
-  Local<v8::Function> function = NewFunction(isolate, Load, 1);
-  SetProperty(isolate, "load", exports, function);
+  auto add = [&](const char *name, void (*f)(const FunctionCallbackInfo<Value>& info)) {
+    Local<Signature> signature;
+    Local<Value> data;
+    Local<FunctionTemplate> tmpl = FunctionTemplate::New(isolate, f, data, signature, 1);
+    Local<v8::Function> function = tmpl->GetFunction(isolate->GetCurrentContext()).ToLocalChecked();
+    Local<String> n = NewString(isolate, name);
+    exports->Set(context, n, function).Check();
+  };
+  add("load", Load);
+  add("getLibraryCount", GetLibraryCount);
 } 

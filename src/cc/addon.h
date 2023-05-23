@@ -1,9 +1,6 @@
 #include <node.h>
 #include <dlfcn.h>
 
-#define MAX_SAFE_INTEGER  9007199254740991
-#define MIN_SAFE_INTEGER  -9007199254740991
-
 using namespace v8;
 
 //-----------------------------------------------------------------------------
@@ -29,6 +26,7 @@ enum class NumberType : int {
 };
 union ValueMask {
   struct {
+    bool empty: 1;
     bool boolean: 1;
     bool number: 1;
     bool bigInt: 1;
@@ -84,87 +82,45 @@ struct BigInt {
 //-----------------------------------------------------------------------------
 struct Call;
 typedef void (*Thunk)(Call*);
-enum class EntryType : int {
-  unavailable = 0,
-  function,
-  variable,
-  enumeration,
-};
-struct Argument {
-  ValueMask default_type;
-  ValueMask possible_type;
-  const char* class_name;
-};
-struct Function {
-  Thunk thunk;
-  FunctionAttributes attributes;
-  const Argument* arguments;
-  size_t argument_count;
-  ValueMask return_default_type;
-  ValueMask return_possible_type;
-  const char* return_class_name;
-};
-struct Variable {
-  Thunk getter_thunk;
-  Thunk setter_thunk;
-  ValueMask default_type;
-  ValueMask possible_type;
-  const char* class_name;
-};
-struct EnumerationItem {
-  const char* name;
-  int64_t value;
-};
-struct Enumeration {
-  const EnumerationItem* items;
-  size_t count;
-  int is_signed;
-  ValueMask default_type;
-  ValueMask possible_type;
-};
-struct Entry {
-  const char* name;
-  EntryType type;
-  union {
-    ::Function* function;
-    Variable* variable;
-    Enumeration* enumeration;
-  };
-};
-struct EntryTable {
-  const Entry* entries;
-  size_t count;
-};
 struct Callbacks;
 struct Module {
   int version;
   Callbacks* callbacks;
-  EntryTable table;
+  Thunk get_root;
 };
 
 //-----------------------------------------------------------------------------
 //  Function-pointer table used by Zig code
 //-----------------------------------------------------------------------------
-struct Callbacks {  
-  size_t (*get_argument_count)(Call*);
-  Local<Value> (*get_argument)(Call*, size_t);
-  ValueMask (*get_argument_type)(Call*, size_t);
-  ValueMask (*get_return_type)(Call*);
-  void (*set_return_value)(Call*, Local<Value> value);
-  
-  Result (*allocate_memory)(Call*, size_t size, ::TypedArray*);
-  Result (*reallocate_memory)(Call*, size_t size, ::TypedArray*);
-  Result (*free_memory)(Call*, ::TypedArray*);
+struct Callbacks {
+  Result (*get_argument_count)(Call*, size_t*);
+  Result (*get_argument)(Call*, size_t, Local<Value>*);
+  Result (*set_return_value)(Call*, Local<Value> value);
 
-  bool (*is_null)(Local<Value>);
-  bool (*is_value_type)(Local<Value>, ValueMask);
+  Result (*get_slot_data)(Call*, size_t, void **);
+  Result (*get_slot_object)(Call*, size_t, Local<Value>*);
+  Result (*set_slot_data)(Call*, size_t, void *, size_t);
+  Result (*set_slot_object)(Call*, size_t, Local<Value>);
 
-  Result (*get_property)(Call*, const char*, Local<Value>, Local<Value>*);
-  Result (*set_property)(Call*, const char*, Local<Value>, Local<Value>);
+  Result (*create_string)(Call*, const char*, Local<String>*);
+  Result (*create_namespace)(Call*, Local<Object>*);
+  Result (*create_function)(Call*, Local<String>, size_t, Thunk, Local<v8::Function>*);
+  Result (*create_constructor)(Call*, Local<String>, size_t, Thunk, Local<v8::Function>*);
+  Result (*create_object)(Call*, Local<v8::Function>, Local<Object>*);
+
+  Result (*get_property)(Call*, Local<Object>, Local<String>, Local<Value>*);
+  Result (*set_property)(Call*, Local<Object>, Local<String>, Local<Value>);
+  Result (*set_accessors)(Call*, Local<Object>, Local<String>, Thunk, Thunk);
 
   Result (*get_array_length)(Call*, Local<Value>, size_t*);
   Result (*get_array_item)(Call*, size_t, Local<Value>, Local<Value>*);
   Result (*set_array_item)(Call*, size_t, Local<Value>, Local<Value>);
+ 
+  Result (*allocate_memory)(Call*, size_t size, ::TypedArray*);
+  Result (*reallocate_memory)(Call*, size_t size, ::TypedArray*);
+  Result (*free_memory)(Call*, ::TypedArray*);
+
+  Result (*is_value_type)(Local<Value>, ValueMask, bool*);
   
   Result (*unwrap_bool)(Call*, Local<Value>, bool*);
   Result (*unwrap_int32)(Call*, Local<Value>, int32_t*);
@@ -182,17 +138,26 @@ struct Callbacks {
   Result (*wrap_string)(Call*, const ::TypedArray&, Local<Value>*);
   Result (*wrap_typed_array)(Call*, const ::TypedArray&, Local<Value>*);
 
-  void (*throw_exception)(Call*, const char*);
+  Result (*throw_exception)(Call*, const char*);
 };
 
 //-----------------------------------------------------------------------------
-//  Structure used to keep track of type conversion settings (per isolate)
-//  Gets garbage-collected alongside the function the struct is attached to
+//  Per isolate data structures attached to JS object
 //-----------------------------------------------------------------------------
+struct ModuleData {
+  void *so_handle;  
+  Global<External> external;
+};
+
 struct FunctionData  {  
-  Entry entry;
-  ValueMask return_type;
-  ValueMask argument_types[0];
+  Thunk thunk;
+  Global<Array> slot_data;
+  Global<External> external;
+};
+
+struct SlotData {
+  Global<External> external;
+  uint64_t payload[0];
 };
 
 //-----------------------------------------------------------------------------
@@ -209,6 +174,10 @@ struct Call {
     node_args = &info;
     isolate = info.GetIsolate();
     exec_context = isolate->GetCurrentContext();
-    zig_func = reinterpret_cast<FunctionData*>(info.Data().As<External>()->Value());
+    if (info.Data()->IsExternal()) {
+      zig_func = reinterpret_cast<FunctionData*>(info.Data().As<External>()->Value());
+    } else {
+      zig_func = nullptr;
+    }
   }
 };
