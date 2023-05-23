@@ -647,7 +647,6 @@ fn wrapValue(call: Call, value: anytype, mask: ValueMask) !?Value {
             }
         },
         .ComptimeInt => {
-            std.debug.print("ComptimeInt\n", .{});
             const IT = if (value < 0) i64 else u64;
             return wrapValue(call, @intCast(IT, value), mask);
         },
@@ -903,7 +902,7 @@ fn exportStructure(call: Call, comptime S: type) !?Value {
     const decls = switch (@typeInfo(S)) {
         .Struct => |st| st.decls,
         .Union => |un| un.decls,
-        //.Enum => |em| em.decls,
+        .Enum => |em| em.decls,
         else => return null,
     };
     const fields = switch (@typeInfo(S)) {
@@ -912,19 +911,16 @@ fn exportStructure(call: Call, comptime S: type) !?Value {
         .Enum => |em| em.fields,
         else => return null,
     };
-    const container = try switch (@typeInfo(S)) {
+    const container = switch (@typeInfo(S)) {
         .Struct, .Union => value: {
             // TODO: create a class if the object has methods or fields
             var value: Value = undefined;
-            const rv = callbacks.create_namespace(call, &value);
-            break :value if (rv == .OK) value else Error.UnknownError;
+            if (callbacks.create_namespace(call, &value) != .OK) {
+                return Error.UnknownError;
+            }
+            break :value value;
         },
-        .Enum => value: {
-            // TODO: create enum class
-            var value: Value = undefined;
-            const rv = callbacks.create_namespace(call, &value);
-            break :value if (rv == .OK) value else Error.UnknownError;
-        },
+        .Enum => return null,
         else => return null,
     };
 

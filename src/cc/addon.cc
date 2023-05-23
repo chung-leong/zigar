@@ -142,9 +142,8 @@ static Result CreateString(Call* call,
 
 static Result CreateNamespace(Call* call, 
                               Local<Object> *dest) {
-  Local<Value> prototype, values[0];
-  Local<Name> names[0];
-  *dest = Object::New(call->isolate, prototype, names, values, 0);
+  Local<Value> prototype = v8::Null(call->isolate);
+  *dest = Object::New(call->isolate, prototype, nullptr, nullptr, 0);
   return Result::ok;
 }
 
@@ -601,9 +600,9 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   Call ctx(info);
   FunctionData fds;
   fds.slot_data.Reset(isolate, slot_data);
-  fds.thunk = module->root;
+  fds.thunk = module->get_root;
   ctx.zig_func = &fds;
-  module->root(&ctx);
+  module->get_root(&ctx);
 }
 
 static void GetLibraryCount(const FunctionCallbackInfo<Value>& info) {
