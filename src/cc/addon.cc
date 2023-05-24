@@ -47,16 +47,26 @@ static size_t FindAddress(Local<ArrayBuffer> buffer,
 //-----------------------------------------------------------------------------
 //  Callback functions that zig modules will invoke
 //-----------------------------------------------------------------------------
+static Result GetThis(Call* call,
+                      Local<Value>* dest) {
+  Local<Value> self = call->v8_args->This();
+  if (self.IsEmpty() || self->IsNullOrUndefined()) {
+    return Result::failure;
+  }
+  *dest = self;
+  return Result::ok;
+}
+
 static Result GetArgumentCount(Call* call,
                                size_t* dest) {
-  *dest = call->node_args->Length();
+  *dest = call->v8_args->Length();
   return Result::ok;
 }
 
 static Result GetArgument(Call* call, 
                           size_t index,
                           Local<Value> *dest) {
-  Local<Value> value = (*call->node_args)[index];
+  Local<Value> value = (*call->v8_args)[index];
   // unwrap scalar objects
   if (value->IsBooleanObject()) {
     value = Boolean::New(call->isolate, value.As<BooleanObject>()->ValueOf());
@@ -74,7 +84,7 @@ static Result GetArgument(Call* call,
 static Result SetReturnValue(Call* call, 
                              Local<Value> value) {
   if (!value.IsEmpty()) {
-    call->node_args->GetReturnValue().Set(value);
+    call->v8_args->GetReturnValue().Set(value);
   }
   return Result::ok;
 }
@@ -186,11 +196,20 @@ static Result CreateFunction(Call* call,
   return Result::ok;
 }
 
-static Result SetAccessors(Call* call, 
-                           Local<Object> container,
+static Result AddConstruct(Call* call, 
+                           Local<Object> object, 
                            Local<String> name, 
-                           Thunk getter_thunk,
-                           Thunk setter_thunk) {
+                           Local<Value> value) {
+  // TODO: perhaps make it read only?
+  object->Set(call->exec_context, name, value).Check();
+  return Result::ok;
+}
+
+static Result AddStaticAccessors(Call* call, 
+                                 Local<Object> container,
+                                 Local<String> name, 
+                                 Thunk getter_thunk,
+                                 Thunk setter_thunk) {
   Local<v8::Function> getter, setter;
   PropertyAttribute attribute = static_cast<PropertyAttribute>(DontDelete | ReadOnly);
   if (getter_thunk) {
@@ -206,6 +225,15 @@ static Result SetAccessors(Call* call,
   }
   container->SetAccessorProperty(name, getter, setter, attribute);
   return Result::ok;
+}
+
+static Result AddAccessors(Call* call,
+                           Local<Object> container,
+                           Local<String> name, 
+                           Thunk getter_thunk,
+                           Thunk setter_thunk) {
+  Local<Object> prototype = container->GetPrototype().As<Object>();
+  return AddStaticAccessors(call, prototype, name, getter_thunk, setter_thunk);
 }
 
 static Result GetProperty(Call* call, 
@@ -410,9 +438,9 @@ static MaybeLocal<ArrayBuffer> ObtainBuffer(Call* call,
     return buffer;
   } 
   // maybe it's pointing to a buffer passed as argument?
-  int arg_count = call->node_args->Length();
+  int arg_count = call->v8_args->Length();
   for (int i = 0; i < arg_count; i++) {
-    Local<Value> arg = (*call->node_args)[i];
+    Local<Value> arg = (*call->v8_args)[i];
     Local<ArrayBuffer> buffer;
     if (arg->IsArrayBuffer()) {
       buffer = arg.As<ArrayBuffer>();
@@ -534,6 +562,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   // attach callbacks to module
   ::Module* module = reinterpret_cast<::Module*>(symbol);
   Callbacks* callbacks = module->callbacks;
+  callbacks->get_this = GetThis;
   callbacks->get_argument_count = GetArgumentCount;
   callbacks->get_argument = GetArgument;
   callbacks->set_return_value = SetReturnValue;
@@ -543,15 +572,21 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->set_slot_data = SetSlotData;
   callbacks->set_slot_object = SetSlotObject;
 
-  callbacks->create_string = CreateString;
   callbacks->create_namespace = CreateNamespace;
+  callbacks->create_class = nullptr;
   callbacks->create_function = CreateFunction;
-  callbacks->create_constructor = nullptr;
+  callbacks->create_enumeration = nullptr;
+
+  callbacks->add_construct = AddConstruct;
+  callbacks->add_accessors = AddAccessors;
+  callbacks->add_static_accessors = AddStaticAccessors;
+  callbacks->add_enumeration_item = nullptr;
+
   callbacks->create_object = nullptr;
+  callbacks->create_string = CreateString;
 
   callbacks->get_property = GetProperty;
   callbacks->set_property = SetProperty;
-  callbacks->set_accessors = SetAccessors;
 
   callbacks->get_array_length = nullptr;
   callbacks->get_array_item = nullptr;
@@ -596,13 +631,18 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   // save external object into slot 0, which is never used
   slot_data->Set(isolate->GetCurrentContext(), 0, external).Check();
 
-  // call the root function, which will set the return value
+  // call the factory function
   Call ctx(info);
   FunctionData fds;
   fds.slot_data.Reset(isolate, slot_data);
-  fds.thunk = module->get_root;
+  fds.thunk = nullptr;
   ctx.zig_func = &fds;
-  module->get_root(&ctx);
+  Local<Value> ns;
+  if (module->factory(&ctx, &ns) == Result::ok) {
+    info.GetReturnValue().Set(ns);
+  } else {
+    ThrowException(isolate, "Unable to create namespace");
+  }
 }
 
 static void GetLibraryCount(const FunctionCallbackInfo<Value>& info) {

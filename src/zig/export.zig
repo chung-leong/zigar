@@ -2,21 +2,21 @@ const std = @import("std");
 pub const api_version = 1;
 
 //-----------------------------------------------------------------------------
-//  Function for generating unique id for structs
+//  For generating unique id for structs
 //-----------------------------------------------------------------------------
-fn getTypeInfoSlot(comptime s: anytype) usize {
-    return @ptrToInt(&@typeInfo(@TypeOf(s))) / @sizeOf(std.builtin.Type);
-}
-
-fn getSlotId(comptime s: anytype) usize {
-    switch (@typeInfo(@TypeOf(s))) {
-        .Struct => {
-            const baseId = getTypeInfoSlot(.{});
-            return getTypeInfoSlot(s) - baseId;
-        },
-        else => @compileError("Not a struct"),
-    }
-}
+const slotCounter = blk: {
+    comptime var count: comptime_int = 0;
+    const counter = struct {
+        // results of comptime functions are memoized
+        // the same struct will yield the same number
+        fn next(comptime S: anytype) comptime_int {
+            _ = S;
+            count += 1;
+            return count;
+        }
+    };
+    break :blk counter;
+};
 
 //-----------------------------------------------------------------------------
 //  Errors that might occur
@@ -30,6 +30,7 @@ const Error = error{
     FloatOverflow,
     IntegerUnsafe,
     UnknownError,
+    MissingThis,
 };
 
 //-----------------------------------------------------------------------------
@@ -37,6 +38,11 @@ const Error = error{
 //-----------------------------------------------------------------------------
 const Call = *opaque {};
 const Value = *opaque {};
+const Construct = *struct { content: Value };
+const Namespace = Construct;
+const Function = Construct;
+const Class = Construct;
+const Enumeration = Construct;
 
 //-----------------------------------------------------------------------------
 //  Enum and structs used by both Zig and C++ code
@@ -111,16 +117,18 @@ fn BigInt(comptime T: type) type {
 //  Data types that appear in the exported module struct
 //-----------------------------------------------------------------------------
 const Thunk = *const fn (call: Call) callconv(.C) void;
+const Factory = *const fn (call: Call, dest: *Namespace) callconv(.C) Result;
 const Module = extern struct {
     version: c_int,
     callbacks: *Callbacks,
-    get_root: Thunk,
+    factory: Factory,
 };
 
 //-----------------------------------------------------------------------------
-//  Function-pointer table that's filled on the C++ side
+//  Value-pointer table that's filled on the C++ side
 //-----------------------------------------------------------------------------
 const Callbacks = extern struct {
+    get_this: *const fn (call: Call, dest: *Value) callconv(.C) Result,
     get_argument_count: *const fn (call: Call, dest: *usize) callconv(.C) Result,
     get_argument: *const fn (call: Call, index: usize, dest: *Value) callconv(.C) Result,
     set_return_value: *const fn (call: Call, retval: ?Value) callconv(.C) Result,
@@ -130,15 +138,21 @@ const Callbacks = extern struct {
     set_slot_data: *const fn (call: Call, slot_id: usize, data: *anyopaque, byte_size: usize) callconv(.C) Result,
     set_slot_object: *const fn (call: Call, slot_id: usize, object: Value) callconv(.C) Result,
 
+    create_namespace: *const fn (call: Call, dest: *Namespace) callconv(.C) Result,
+    create_class: *const fn (call: Call, name: Value, thunk: Thunk, dest: *Class) callconv(.C) Result,
+    create_function: *const fn (call: Call, name: Value, len: usize, thunk: Thunk, dest: *Function) callconv(.C) Result,
+    create_enumeration: *const fn (call: Call, name: Value, mask: ValueMask, thunk: Thunk, dest: *Enumeration) callconv(.C) Result,
+
+    add_construct: *const fn (call: Call, container: Construct, name: Value, construct: Construct) callconv(.C) Result,
+    add_accessors: *const fn (call: Call, container: Construct, name: Value, getter: ?Thunk, setter: ?Thunk) callconv(.C) Result,
+    add_static_accessors: *const fn (call: Call, container: Construct, name: Value, getter: ?Thunk, setter: ?Thunk) callconv(.C) Result,
+    add_enumeration_item: *const fn (call: Call, container: Enumeration, name: Value, value: Value) callconv(.C) Result,
+
+    create_object: *const fn (call: Call, class: Class, dest: *Value) callconv(.C) Result,
     create_string: *const fn (call: Call, string: ?[*]const u8, dest: *Value) callconv(.C) Result,
-    create_namespace: *const fn (call: Call, dest: *Value) callconv(.C) Result,
-    create_function: *const fn (call: Call, name: Value, len: usize, thunk: Thunk, dest: *Value) callconv(.C) Result,
-    create_constructor: *const fn (call: Call, name: Value, len: usize, thunk: Thunk, dest: *Value) callconv(.C) Result,
-    create_object: *const fn (call: Call, class: Value, dest: *Value) callconv(.C) Result,
 
     get_property: *const fn (call: Call, container: Value, name: Value, dest: *Value) callconv(.C) Result,
-    set_property: *const fn (call: Call, container: Value, name: Value, container: Value) callconv(.C) Result,
-    set_accessors: *const fn (call: Call, container: Value, name: Value, getter: ?Thunk, setter: ?Thunk) callconv(.C) Result,
+    set_property: *const fn (call: Call, container: Value, name: Value, value: Value) callconv(.C) Result,
 
     get_array_length: *const fn (call: Call, value: Value, dest: *usize) callconv(.C) Result,
     get_array_item: *const fn (call: Call, index: usize, value: Value, dest: *Value) callconv(.C) Result,
@@ -410,6 +424,15 @@ fn getReturnType(comptime T: type) ValueMask {
     return prefer;
 }
 
+fn getEnumerationType(comptime T: type) ValueMask {
+    inline for (@typeInfo(T).Enum.fields) |field| {
+        if (field.value < minSafeInteger or field.value > maxSafeInteger) {
+            return .{ .bigInt = true };
+        }
+    }
+    return .{ .number = true };
+}
+
 //-----------------------------------------------------------------------------
 //  Run-time helper functions
 //-----------------------------------------------------------------------------
@@ -454,6 +477,120 @@ fn matchType(mask: ValueMask, types: ValueMask) bool {
     return false;
 }
 
+fn getFunctionMasks(comptime function: anytype) []ValueMask {
+    const info = @typeInfo(@TypeOf(function)).Fn;
+    var types: [info.params.len + 1]ValueMask = undefined;
+    // TODO: remove orelse clause when return_type is no longer optional
+    const RT = BaseType(info.return_type orelse noreturn);
+    var index: usize = 0;
+    inline for (info.params) |param| {
+        const T = param.type orelse noreturn;
+        if (T == std.mem.Allocator) {
+            continue;
+        }
+        types[index] = getPossibleTypes(T, false);
+        index += 1;
+    }
+    types[index] = getReturnType(RT);
+    index += 1;
+    return types[0..index];
+}
+
+//-----------------------------------------------------------------------------
+//  Run-time helper functions that invoke host-provided methods
+//-----------------------------------------------------------------------------
+fn getThis(call: Call) ?Value {
+    var this: Value = undefined;
+    if (callbacks.get_this(call, &this) != .OK) {
+        return null;
+    }
+    return this;
+}
+
+fn getArgument(call: Call, index: usize) Value {
+    var arg: Value = undefined;
+    _ = callbacks.get_argument(call, index, &arg);
+    return arg;
+}
+
+fn getArgumentCount(call: Call) usize {
+    var count: usize = undefined;
+    return if (callbacks.get_argument_count(call, &count) == .OK) count else 0;
+}
+
+fn setReturnValue(call: Call, value: ?Value) void {
+    _ = callbacks.set_return_value(call, value orelse return);
+}
+
+fn createString(call: Call, string: []const u8) Value {
+    const c_string = @ptrCast([*:0]const u8, string);
+    var value: Value = undefined;
+    _ = callbacks.create_string(call, c_string, &value);
+    return value;
+}
+
+fn createFunction(call: Call, name: Value, arg_count: usize, thunk: Thunk) !Function {
+    var function: Function = undefined;
+    if (callbacks.create_function(call, name, arg_count, thunk, &function) != .OK) {
+        return Error.UnknownError;
+    }
+    return function;
+}
+
+fn createNamespace(call: Call) !Namespace {
+    var container: Namespace = undefined;
+    if (callbacks.create_namespace(call, &container) != .OK) {
+        return Error.UnknownError;
+    }
+    return container;
+}
+
+fn createEnumeration(call: Call, name: Value, mask: ValueMask, thunk: Thunk) !Enumeration {
+    var container: Enumeration = undefined;
+    if (callbacks.create_enumeration(call, name, mask, thunk, &container) != .OK) {
+        return Error.UnknownError;
+    }
+    return container;
+}
+
+fn createClass(call: Call, name: Value, thunk: Thunk) !Class {
+    var container: Class = undefined;
+    if (callbacks.create_class(call, name, thunk, &container) != .OK) {
+        return Error.UnknownError;
+    }
+    return container;
+}
+
+fn addConstruct(call: Call, container: Construct, name: Value, construct: Construct) !void {
+    if (callbacks.add_construct(call, container, name, construct) != .OK) {
+        return Error.UnknownError;
+    }
+}
+
+fn addAccessors(call: Call, container: Class, name: Value, getter: ?Thunk, setter: ?Thunk) !void {
+    if (callbacks.add_accessors(call, container, name, getter, setter) != .OK) {
+        return Error.UnknownError;
+    }
+}
+
+fn addStaticAccessors(call: Call, container: Class, name: Value, getter: ?Thunk, setter: ?Thunk) !void {
+    if (callbacks.add_static_accessors(call, container, name, getter, setter) != .OK) {
+        return Error.UnknownError;
+    }
+}
+
+fn addEnumerationItem(call: Call, container: Enumeration, name: Value, value: Value) !void {
+    if (callbacks.add_enumeration_item(call, container, name, value) != .OK) {
+        return Error.UnknownError;
+    }
+}
+
+fn setProperty(call: Call, container: Value, name: Value, value: Value) !void {
+    if (callbacks.set_property(call, container, name, value) != .OK) {
+        return Error.UnknownError;
+    }
+}
+
 const arrayBufferMask: ValueMask = .{
     .arrayBuffer = true,
     .i8Array = true,
@@ -467,9 +604,8 @@ const arrayBufferMask: ValueMask = .{
     .f32Array = true,
     .f64Array = true,
 };
-
-const maxSafeInteger = 9007199254740991.0;
-const minSafeInteger = -9007199254740991.0;
+const maxSafeInteger = 9007199254740991;
+const minSafeInteger = -9007199254740991;
 
 fn unwrapValue(call: Call, value: Value, mask: ValueMask, comptime T: type) !T {
     switch (@typeInfo(T)) {
@@ -711,20 +847,18 @@ fn createThunk(comptime S: type, comptime name: []const u8) Thunk {
     const ThunkType = struct {
         // we're passing the function name and argument count into getArgument() in order to allow the function
         // to be reused across different functions
-        fn getArgument(call: Call, fname: []const u8, i_ptr: *usize, count: i32, comptime T: type, mask: ValueMask) ?T {
+        fn unwrapArgument(call: Call, fname: []const u8, i_ptr: *usize, count: i32, comptime T: type, mask: ValueMask) ?T {
             if (comptime T == std.mem.Allocator) {
                 // TODO: provide allocator
                 return null;
             } else {
                 const index: usize = i_ptr.*;
-                var arg: Value = undefined;
-                _ = callbacks.get_argument(call, index, &arg);
+                const arg = getArgument(call, index);
                 i_ptr.* = index + 1;
                 if (unwrapValue(call, arg, mask, T)) |value| {
                     return value;
                 } else |err| {
-                    var arg_count: usize = undefined;
-                    _ = callbacks.get_argument_count(call, &arg_count);
+                    const arg_count = getArgumentCount(call);
                     if (err == Error.UnsupportedConversion and arg_count < count) {
                         const fmt = "{s}() expects {d} argument(s), {d} given";
                         throwException(call, fmt, .{ fname, count, arg_count });
@@ -737,20 +871,20 @@ fn createThunk(comptime S: type, comptime name: []const u8) Thunk {
             }
         }
 
-        fn handleResult(call: Call, fname: []const u8, result: anytype, mask: ValueMask) void {
+        fn wrapResult(call: Call, fname: []const u8, result: anytype, mask: ValueMask) void {
             if (comptime isErrorUnion(@TypeOf(result))) {
                 if (result) |value| {
-                    handleResult(call, fname, value);
+                    wrapResult(call, fname, value);
                 } else |err| {
                     throwException(call, "Error encountered in {s}(): {s}", .{ fname, @errorName(err) });
                 }
             } else if (comptime isOptional(@TypeOf(result))) {
                 if (result) |value| {
-                    handleResult(call, fname, value);
+                    wrapResult(call, fname, value);
                 }
             } else {
                 if (wrapValue(call, result, mask)) |value| {
-                    _ = callbacks.set_return_value(call, value);
+                    setReturnValue(call, value);
                 } else |err| {
                     const T = BaseType(@TypeOf(result));
                     const fmt = "Error encountered while converting {s} to JavaScript value for return value of {s}(): {s}";
@@ -764,9 +898,9 @@ fn createThunk(comptime S: type, comptime name: []const u8) Thunk {
             const fields = std.meta.fields(Args);
             const count = fields.len;
             var i: usize = 0;
-            const masks = getFunctionTypeMasks(function);
+            const masks = getFunctionMasks(function);
             inline for (fields, 0..) |field, j| {
-                if (getArgument(call, name, &i, count, field.type, masks[i])) |arg| {
+                if (unwrapArgument(call, name, &i, count, field.type, masks[i])) |arg| {
                     args[j] = arg;
                 } else {
                     // exception thrown in getArgument()
@@ -774,20 +908,20 @@ fn createThunk(comptime S: type, comptime name: []const u8) Thunk {
                 }
             }
             var result = @call(std.builtin.CallModifier.auto, function, args);
-            handleResult(call, name, result, masks[masks.len - 1]);
+            wrapResult(call, name, result, masks[masks.len - 1]);
         }
     };
     return ThunkType.invokeFunction;
 }
 
-fn createGetterThunk(comptime S: type, comptime name: []const u8) Thunk {
+fn createStaticGetterThunk(comptime S: type, comptime name: []const u8) Thunk {
     const ThunkType = struct {
-        fn invokeFunction(call: Call) callconv(.C) void {
+        fn returnValue(call: Call) callconv(.C) void {
             const field = @field(S, name);
             const T = @TypeOf(field);
             const mask = comptime getReturnType(T);
-            if (wrapValue(call, field, mask)) |v| {
-                _ = callbacks.set_return_value(call, v);
+            if (wrapValue(call, field, mask)) |value| {
+                setReturnValue(call, value);
             } else |err| {
                 const fmt = "Error encountered while converting {s} to JavaScript value for property \"{s}\": {s}";
                 throwException(call, fmt, .{ @typeName(T), name, @errorName(err) });
@@ -795,12 +929,12 @@ fn createGetterThunk(comptime S: type, comptime name: []const u8) Thunk {
             }
         }
     };
-    return ThunkType.invokeFunction;
+    return ThunkType.returnValue;
 }
 
-fn createSetterThunk(comptime S: type, comptime name: []const u8) Thunk {
+fn createStaticSetterThunk(comptime S: type, comptime name: []const u8) Thunk {
     const ThunkType = struct {
-        fn invokeFunction(call: Call) callconv(.C) void {
+        fn assignValue(call: Call) callconv(.C) void {
             var arg: Value = undefined;
             _ = callbacks.get_argument(call, 0, &arg);
             const T = @TypeOf(@field(S, name));
@@ -815,139 +949,169 @@ fn createSetterThunk(comptime S: type, comptime name: []const u8) Thunk {
             }
         }
     };
-    return ThunkType.invokeFunction;
+    return ThunkType.assignValue;
 }
 
-pub fn createRootThunk(comptime S: type) Thunk {
+fn createConstructorThunk(comptime T: type) Thunk {
+    _ = T;
     const ThunkType = struct {
-        fn invokeFunction(call: Call) callconv(.C) void {
-            if (exportStructure(call, S)) |ns| {
-                _ = callbacks.set_return_value(call, ns);
-            } else |err| {
-                const fmt = "Error encountered while exporting module \"{s}\": {s}";
-                throwException(call, fmt, .{ @typeName(S), @errorName(err) });
-                return;
+        fn constructInstance(call: Call) callconv(.C) void {
+            if (getThis(call)) |this| {
+                _ = this;
             }
         }
     };
-    return ThunkType.invokeFunction;
+    return ThunkType.constructInstance;
 }
 
-//-----------------------------------------------------------------------------
-//  Functions that create the module struct (compile-time)
-//-----------------------------------------------------------------------------
-fn createString(call: Call, string: []const u8) Value {
-    var value: Value = undefined;
-    const c_string = @ptrCast([*:0]const u8, string);
-    _ = callbacks.create_string(call, c_string, &value);
-    return value;
-}
-
-fn getFunctionTypeMasks(comptime function: anytype) []ValueMask {
-    const info = @typeInfo(@TypeOf(function)).Fn;
-    var types: [info.params.len + 1]ValueMask = undefined;
-    // TODO: remove orelse clause when return_type is no longer optional
-    const RT = BaseType(info.return_type orelse noreturn);
-    var index: usize = 0;
-    inline for (info.params) |param| {
-        const T = param.type orelse noreturn;
-        if (T == std.mem.Allocator) {
-            continue;
+fn createEnumerationThunk(comptime T: type) Thunk {
+    _ = T;
+    const ThunkType = struct {
+        fn obtainItem(call: Call) callconv(.C) void {
+            if (getThis(call)) |this| {
+                _ = this;
+            }
         }
-        types[index] = getPossibleTypes(T, false);
-        index += 1;
-    }
-    types[index] = getReturnType(RT);
-    index += 1;
-    return types[0..index];
+    };
+    return ThunkType.obtainItem;
 }
 
-fn attachFunction(call: Call, comptime S: type, comptime name: []const u8, container: Value) !void {
+//-----------------------------------------------------------------------------
+//  Values that get called mainly when a module load
+//-----------------------------------------------------------------------------
+fn attachValue(call: Call, container: Construct, comptime S: type, comptime name: []const u8) !void {
     const zig_func = @field(S, name);
-    const masks = getFunctionTypeMasks(zig_func);
+    const masks = getFunctionMasks(zig_func);
     // the last item is for the return value
     const arg_count = masks.len - 1;
     const thunk = createThunk(S, name);
-    var function: Value = undefined;
     const key = createString(call, name);
-    if (callbacks.create_function(call, key, arg_count, thunk, &function) != .OK) {
-        return Error.UnknownError;
-    }
-    if (callbacks.set_property(call, container, key, function) != .OK) {
-        return Error.UnknownError;
-    }
+    const function: Function = try createFunction(call, key, arg_count, thunk);
+    return addConstruct(call, container, key, function);
 }
 
-fn attachStaticProperty(call: Call, comptime S: type, comptime name: []const u8, container: Value) !void {
+fn attachStaticProperty(call: Call, container: Construct, comptime S: type, comptime name: []const u8) !void {
     const writable = comptime checkWritability(S, name);
-    const getter = createGetterThunk(S, name);
-    const setter = if (writable) createSetterThunk(S, name) else null;
+    const getter = createStaticGetterThunk(S, name);
+    const setter = if (writable) createStaticSetterThunk(S, name) else null;
     const key = createString(call, name);
-    if (callbacks.set_accessors(call, container, key, getter, setter) != .OK) {
-        return Error.UnknownError;
-    }
+    try addStaticAccessors(call, container, key, getter, setter);
 }
 
-fn attachStructure(call: Call, comptime S: type, comptime name: []const u8, container: Value) !void {
+fn attachType(call: Call, container: Construct, comptime S: type, comptime name: []const u8) !void {
     const T = @field(S, name);
-    if (try exportStructure(call, T)) |value| {
+    const result: ?Construct = try switch (@typeInfo(T)) {
+        .Struct => exportStructure(call, T, name),
+        .Union => exportUnion(call, T, name),
+        .Enum => exportEnumeration(call, T, name),
+        else => return,
+    };
+    if (result) |value| {
         const key = createString(call, name);
-        if (callbacks.set_property(call, container, key, value) != .OK) {
-            return Error.UnknownError;
-        }
+        try addConstruct(call, container, key, value);
     }
 }
 
-fn exportStructure(call: Call, comptime S: type) !?Value {
-    const decls = switch (@typeInfo(S)) {
-        .Struct => |st| st.decls,
-        .Union => |un| un.decls,
-        .Enum => |em| em.decls,
-        else => return null,
-    };
-    const fields = switch (@typeInfo(S)) {
-        .Struct => |st| st.fields,
-        .Union => |un| un.fields,
-        .Enum => |em| em.fields,
-        else => return null,
-    };
-    const container = switch (@typeInfo(S)) {
-        .Struct, .Union => value: {
-            // TODO: create a class if the object has methods or fields
-            var value: Value = undefined;
-            if (callbacks.create_namespace(call, &value) != .OK) {
-                return Error.UnknownError;
-            }
-            break :value value;
-        },
-        .Enum => return null,
-        else => return null,
-    };
-
+fn attachDeclarations(call: Call, container: Construct, comptime T: type, comptime decls: anytype) !void {
     inline for (decls) |decl| {
         if (decl.is_pub) {
             const name = decl.name;
-            const field = @field(S, name);
+            const field = @field(T, name);
             const FT = @TypeOf(field);
             switch (@typeInfo(FT)) {
                 .NoReturn, .Pointer, .Opaque, .Frame, .AnyFrame => {},
-                .Fn => try attachFunction(call, S, name, container),
-                .Type => try attachStructure(call, S, name, container),
-                else => try attachStaticProperty(call, S, name, container),
+                .Fn => try attachValue(call, container, T, name),
+                .Type => try attachType(call, container, T, name),
+                else => try attachStaticProperty(call, container, T, name),
             }
         }
     }
-    for (fields) |field| {
-        // TODO
-        _ = field;
+}
+
+fn attachStructureFields(call: Call, container: Class, comptime T: type, comptime fields: anytype) !void {
+    _ = T;
+    _ = container;
+    _ = call;
+    inline for (fields) |field| {
+        switch (@TypeOf(field)) {}
     }
+}
+
+fn attachUnionFields(call: Call, container: Class, comptime T: type, comptime fields: anytype) !void {
+    _ = T;
+    _ = container;
+    _ = call;
+    inline for (fields) |field| {
+        switch (@TypeOf(field)) {}
+    }
+}
+
+fn attachEnumerationFields(call: Call, container: Enumeration, comptime T: type, comptime fields: anytype) !void {
+    const mask = getEnumerationType(T);
+    inline for (fields) |field| {
+        const name = createString(call, field.name);
+        const value = try wrapValue(call, field.value, mask);
+        try addEnumerationItem(call, container, name, value orelse return Error.UnknownError);
+    }
+}
+
+fn exportStructure(call: Call, comptime T: type, comptime name: []const u8) !Class {
+    const info = @typeInfo(T).Struct;
+    const container = try if (info.fields.len == 0) ns: {
+        break :ns createNamespace(call);
+    } else cls: {
+        const class_name = createString(call, name);
+        const thunk = createConstructorThunk(T);
+        break :cls createClass(call, class_name, thunk);
+    };
+    try attachDeclarations(call, container, T, info.decls);
+    try attachStructureFields(call, container, T, info.fields);
     return container;
+}
+
+fn exportUnion(call: Call, comptime T: type, comptime name: []const u8) !Class {
+    const info = @typeInfo(T).Union;
+    const container = if (info.fields.len == 0) ns: {
+        break :ns try createNamespace(call);
+    } else cls: {
+        const class_name = createString(call, name);
+        const thunk = createConstructorThunk(T);
+        break :cls try createClass(call, class_name, thunk);
+    };
+    try attachDeclarations(call, container, T, info.decls);
+    try attachUnionFields(call, container, T, info.fields);
+    return container;
+}
+
+fn exportEnumeration(call: Call, comptime T: type, comptime name: []const u8) !Enumeration {
+    const info = @typeInfo(T).Enum;
+    const enum_name = createString(call, name);
+    const thunk = createEnumerationThunk(T);
+    const mask = getEnumerationType(T);
+    const container = try createEnumeration(call, enum_name, mask, thunk);
+    try attachDeclarations(call, container, T, info.decls);
+    try attachEnumerationFields(call, container, T, info.fields);
+    return container;
+}
+
+pub fn createRootFactory(comptime S: type) Factory {
+    const RootFactory = struct {
+        fn exportModule(call: Call, dest: *Namespace) callconv(.C) Result {
+            if (exportStructure(call, S, "root")) |ns| {
+                dest.* = ns;
+                return .OK;
+            } else |_| {
+                return .Failure;
+            }
+        }
+    };
+    return RootFactory.exportModule;
 }
 
 pub fn createModule(comptime S: type) Module {
     return .{
         .version = api_version,
         .callbacks = &callbacks,
-        .get_root = createRootThunk(S),
+        .factory = createRootFactory(S),
     };
 }
