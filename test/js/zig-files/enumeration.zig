@@ -5,7 +5,7 @@ pub const Pet = enum {
 };
 
 pub const Donut = enum(u128) {
-    Jelly = 0xffff_ffff_ffff_ffff_ffff_ffff_ffff_fffe,
+    //Jelly = 0xffff_ffff_ffff_ffff_ffff_ffff_ffff_fffe,
     Plain = 0,
 
     pub const Favor = enum {

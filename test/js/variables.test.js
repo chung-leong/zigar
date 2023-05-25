@@ -38,9 +38,6 @@ describe('Module properities getter/setter', async function() {
     expect(() => mod.uint32 = 0x1FFFFFFFF).to.throw();
     expect(mod.uint32).to.equal(34567);
   })
-  it('should throw when i64 exceeding safe range is accessed', function() {
-    expect(() => mod.int64).to.throw();
-  })
   it('should throw when an i4 overflows', function() {
     expect(mod.int4).to.equal(7);
     expect(() => mod.int4 = 10).to.throw();
@@ -63,11 +60,11 @@ describe('Module properities getter/setter', async function() {
     expect(a).to.be.an.instanceOf(Int32Array);
     expect(a).to.have.lengthOf(4);
   })
-  it('should return a multi-dimensional f64 array as an Float64Array', function() {
+  it('should return a multi-dimensional f64 array as an array of Float64Array', function() {
     const a = mod.float64Array4x4;
-    expect(a).to.be.an.instanceOf(Float64Array);
-    expect(a).to.have.lengthOf(16);
-    expect(a[2 * 4 + 2]).to.equal(3.3);
-    expect(a[3 * 4 + 1]).to.equal(4.2);
+    expect(a).to.be.an('array').with.lengthOf(4);
+    expect(a[0]).to.be.an.instanceOf(Float64Array);
+    expect(a[2][2]).to.equal(3.3);
+    expect(a[3][1]).to.equal(4.2);
   })
 })

@@ -132,7 +132,7 @@ const Callbacks = extern struct {
     get_this: *const fn (call: Call, dest: *Value) callconv(.C) Result,
     get_argument_count: *const fn (call: Call, dest: *usize) callconv(.C) Result,
     get_argument: *const fn (call: Call, index: usize, dest: *Value) callconv(.C) Result,
-    set_return_value: *const fn (call: Call, retval: ?Value) callconv(.C) Result,
+    set_return_value: *const fn (call: Call, retval: ?AnyObject) callconv(.C) Result,
 
     get_slot_data: *const fn (call: Call, slot_id: usize, dest: **anyopaque) callconv(.C) Result,
     get_slot_object: *const fn (call: Call, slot_id: usize, dest: *AnyObject) callconv(.C) Result,
@@ -157,8 +157,8 @@ const Callbacks = extern struct {
     set_property: *const fn (call: Call, container: Value, name: Value, value: Value) callconv(.C) Result,
 
     get_array_length: *const fn (call: Call, value: Value, dest: *usize) callconv(.C) Result,
-    get_array_item: *const fn (call: Call, index: usize, value: Value, dest: *Value) callconv(.C) Result,
-    set_array_item: *const fn (call: Call, index: usize, value: Value) callconv(.C) Result,
+    get_array_item: *const fn (call: Call, array: Value, index: usize, dest: *Value) callconv(.C) Result,
+    set_array_item: *const fn (call: Call, array: Value, index: usize, value: Value) callconv(.C) Result,
 
     allocate_memory: *const fn (call: Call, size: usize, dest: *TypedArray) callconv(.C) Result,
     reallocate_memory: *const fn (call: Call, size: usize, dest: *TypedArray) callconv(.C) Result,
@@ -173,6 +173,7 @@ const Callbacks = extern struct {
     unwrap_double: ?*const fn (call: Call, value: Value, dest: *f64) callconv(.C) Result,
     unwrap_string: ?*const fn (call: Call, value: Value, dest: *TypedArray) callconv(.C) Result,
     unwrap_typed_array: ?*const fn (call: Call, value: Value, dest: *TypedArray) callconv(.C) Result,
+    unwrap_structure: ?*const fn (call: Call, class: Class, value: Value, dest: *TypedArray) callconv(.C) Result,
 
     wrap_bool: ?*const fn (call: Call, value: bool, dest: *Value) callconv(.C) Result,
     wrap_int32: ?*const fn (call: Call, value: i32, dest: *Value) callconv(.C) Result,
@@ -181,6 +182,7 @@ const Callbacks = extern struct {
     wrap_double: ?*const fn (call: Call, value: f64, dest: *Value) callconv(.C) Result,
     wrap_string: ?*const fn (call: Call, value: *const TypedArray, dest: *Value) callconv(.C) Result,
     wrap_typed_array: ?*const fn (call: Call, value: *const TypedArray, dest: *Value) callconv(.C) Result,
+    wrap_structure: ?*const fn (call: Call, class: Class, value: *const TypedArray, dest: *Value) callconv(.C) Result,
 
     throw_exception: *const fn (call: Call, message: [*:0]const u8) Result,
 };
@@ -341,7 +343,7 @@ fn checkWritability(comptime S: type, comptime name: []const u8) bool {
     };
 }
 
-fn getNumberType(comptime T: type) NumberType {
+fn getNumberType(comptime T: type) ?NumberType {
     return switch (T) {
         i8 => .I8,
         u8 => .U8,
@@ -353,7 +355,7 @@ fn getNumberType(comptime T: type) NumberType {
         u64 => .U64,
         f32 => .F32,
         f64 => .F64,
-        else => @compileError("Not a numeric type"),
+        else => null,
     };
 }
 
@@ -437,7 +439,7 @@ fn getArgumentCount(call: Call) usize {
     return if (callbacks.get_argument_count(call, &count) == .OK) count else 0;
 }
 
-fn setReturnValue(call: Call, value: ?Value) void {
+fn setReturnValue(call: Call, value: ?AnyObject) void {
     _ = callbacks.set_return_value(call, value orelse return);
 }
 
@@ -747,11 +749,11 @@ fn wrapValue(call: Call, value: anytype) !?Value {
         .Array => |ar| {
             // return TypedArray when elements are ints or floats
             if (callbacks.wrap_typed_array) |cb| {
-                if (isInt(ar.child) or isFloat(ar.child)) {
+                if (getNumberType(ar.child)) |known_type| {
                     const array: TypedArray = .{
                         .bytes = @constCast(@ptrCast([*]const u8, &value)),
                         .byte_size = @sizeOf(T),
-                        .element_type = getNumberType(ar.child),
+                        .element_type = known_type,
                     };
                     if (cb(call, &array, &result) == .OK) {
                         return result;
@@ -763,7 +765,7 @@ fn wrapValue(call: Call, value: anytype) !?Value {
             if (callbacks.create_array(call, value.len, &array) == .OK) {
                 for (value, 0..) |element, index| {
                     if (try wrapValue(call, element)) |element_value| {
-                        if (callbacks.set_array_item(call, index, element_value) != .OK) {
+                        if (callbacks.set_array_item(call, array, index, element_value) != .OK) {
                             return Error.UnknownError;
                         }
                     }
@@ -775,7 +777,6 @@ fn wrapValue(call: Call, value: anytype) !?Value {
             _ = pt;
             return Error.TODO;
         },
-
         else => {},
     }
     return Error.UnsupportedConversion;
@@ -982,8 +983,9 @@ fn createEnumerationThunk(comptime T: type) Thunk {
             const value = unwrapValue(call, arg, IT) catch return;
             inline for (@typeInfo(T).Enum.fields) |field| {
                 if (field.value == value) {
-                    const item = getSlotObject(call, .{ .Enum = T, .Value = field.value });
-                    setReturnValue(call, @ptrCast(Value, item));
+                    if (getSlotObject(call, .{ .Enum = T, .Value = field.value })) |item| {
+                        setReturnValue(call, item);
+                    }
                     return;
                 }
             }

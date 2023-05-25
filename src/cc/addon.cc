@@ -144,6 +144,19 @@ static Result SetSlotData(Call* call,
 
 }
 
+static Result CreateObject(Call* call, 
+                           Local<v8::Function> constructor,
+                           Local<Object>* dest) {
+  return Result::failure;
+}
+
+static Result CreateArray(Call* call, 
+                          size_t len,
+                          Local<Array>* dest) {
+  *dest = Array::New(call->isolate, len);
+  return Result::ok;
+}
+
 static Result CreateString(Call* call,
                            const char* string,
                            Local<String>* dest) {
@@ -297,6 +310,36 @@ static Result SetProperty(Call* call,
                           Local<String> name, 
                           Local<Value> value) {
   object->Set(call->exec_context, name, value).Check();
+  return Result::ok;
+}
+
+static Result GetArrayLength(Call* call,
+                             Local<Array> array, 
+                             size_t* dest) {
+  *dest = array.As<Array>()->Length();
+  return Result::ok;
+}
+
+static Result GetArrayItem(Call* call,
+                           Local<Array> array,
+                           size_t index,
+                           Local<Value>* dest) {
+  MaybeLocal<Value> result = array->Get(call->exec_context, index);
+  if (result.IsEmpty()) {
+    return Result::failure;
+  }
+  *dest = result.ToLocalChecked();
+  return Result::ok;
+}
+
+static Result SetArrayItem(Call* call,
+                           Local<Array> array,
+                           size_t index,
+                           Local<Value> value) {
+  Maybe<bool> result = array->Set(call->exec_context, index, value);
+  if (result.IsNothing() || !result.FromJust()) {
+    return Result::failure;
+  }
   return Result::ok;
 }
 
@@ -561,6 +604,7 @@ Local<Value> CreateTypedArray(Local<T> buffer,
     case NumberType::f64:
       return Float64Array::New(buffer, offset, byte_size / sizeof(double));      
   }
+  return Local<Value>();
 }
 
 static Result WrapTypedArray(Call* call,
@@ -667,15 +711,16 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->add_static_accessors = AddStaticAccessors;
   callbacks->add_enumeration_item = AddEnumerationItem;
 
-  callbacks->create_object = nullptr;
+  callbacks->create_object = CreateObject;
+  callbacks->create_array = CreateArray;
   callbacks->create_string = CreateString;
 
   callbacks->get_property = GetProperty;
   callbacks->set_property = SetProperty;
 
-  callbacks->get_array_length = nullptr;
-  callbacks->get_array_item = nullptr;
-  callbacks->set_array_item = nullptr;
+  callbacks->get_array_length = GetArrayLength;
+  callbacks->get_array_item = GetArrayItem;
+  callbacks->set_array_item = SetArrayItem;
 
   callbacks->is_value_type = IsValueType;
 

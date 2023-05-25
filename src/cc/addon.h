@@ -114,14 +114,15 @@ struct Callbacks {
   Result (*add_enumeration_item)(Call*, Local<v8::Function>, Local<String>, Local<Value>, Local<Value>*);
 
   Result (*create_object)(Call*, Local<v8::Function>, Local<Object>*);
+  Result (*create_array)(Call*, size_t, Local<Array>*);
   Result (*create_string)(Call*, const char*, Local<String>*);
 
   Result (*get_property)(Call*, Local<Object>, Local<String>, Local<Value>*);
   Result (*set_property)(Call*, Local<Object>, Local<String>, Local<Value>);
   
-  Result (*get_array_length)(Call*, Local<Value>, size_t*);
-  Result (*get_array_item)(Call*, size_t, Local<Value>, Local<Value>*);
-  Result (*set_array_item)(Call*, size_t, Local<Value>, Local<Value>);
+  Result (*get_array_length)(Call*, Local<Array>, size_t*);
+  Result (*get_array_item)(Call*, Local<Array>, size_t, Local<Value>*);
+  Result (*set_array_item)(Call*, Local<Array>, size_t, Local<Value>);
  
   Result (*allocate_memory)(Call*, size_t, ::TypedArray*);
   Result (*reallocate_memory)(Call*, size_t, ::TypedArray*);
