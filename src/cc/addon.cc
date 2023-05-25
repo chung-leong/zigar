@@ -93,10 +93,11 @@ static Result GetSlotObject(Call* call,
                             size_t slot_id, 
                             Local<Value> *dest) {
   Local<Array> array = Local<Array>::New(call->isolate, call->zig_func->slot_data);
-  MaybeLocal<Value> value = array->Get(call->exec_context, slot_id);
-  if (value.IsEmpty()) {
+  MaybeLocal<Value> result = array->Get(call->exec_context, slot_id);
+  if (result.IsEmpty()) {
     return Result::failure;
-  }
+  }  
+  *dest = result.ToLocalChecked();
   return Result::ok;
 }
 
@@ -193,6 +194,44 @@ static Result CreateFunction(Call* call,
     function->SetName(name);
   }
   *dest = function;
+  return Result::ok;
+}
+
+static Result CreateEnumeration(Call* call, 
+                                Local<String> name, 
+                                Thunk thunk, 
+                                Local<v8::Function>* dest) {
+  return CreateFunction(call, name, 1, thunk, dest);
+}
+
+static Result AddEnumerationItem(Call* call,
+                                 Local<v8::Function> constructor,
+                                 Local<String> name,
+                                 Local<Value> value,
+                                 Local<Value>* dest) {
+  Local<Value> item;
+  if (value->IsBigInt()) {
+    // can't handle actual bigger value due to missing API
+    int64_t number = value.As<v8::BigInt>()->Int64Value();
+    item = BigIntObject::New(call->isolate, number);
+  } else if (value->IsNumber()) {
+    double number = value.As<Number>()->NumberValue(call->exec_context).FromJust();
+    item = NumberObject::New(call->isolate, number);
+  } else {
+    return Result::failure;
+  }
+  // get the "prototype" prop (and not the constructor's own prototype)
+  Local<String> p_name = NewString(call->isolate, "prototype");
+  Local<Value> prototype = constructor->Get(call->exec_context, p_name).ToLocalChecked();
+  // put Number/BigInt in the enumeration's prototype chain
+  Local<Value> item_prototype = item.As<Object>()->GetPrototype();
+  if (prototype.As<Object>()->GetPrototype() != item_prototype) {
+    prototype.As<Object>()->SetPrototype(call->exec_context, item_prototype).Check();
+  }
+  // set the NumberObject/BigIntObject's prototype
+  item.As<Object>()->SetPrototype(call->exec_context, prototype).Check();
+  constructor->Set(call->exec_context, name, item).Check();
+  *dest = item;
   return Result::ok;
 }
 
@@ -575,12 +614,12 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->create_namespace = CreateNamespace;
   callbacks->create_class = nullptr;
   callbacks->create_function = CreateFunction;
-  callbacks->create_enumeration = nullptr;
+  callbacks->create_enumeration = CreateEnumeration;
 
   callbacks->add_construct = AddConstruct;
   callbacks->add_accessors = AddAccessors;
   callbacks->add_static_accessors = AddStaticAccessors;
-  callbacks->add_enumeration_item = nullptr;
+  callbacks->add_enumeration_item = AddEnumerationItem;
 
   callbacks->create_object = nullptr;
   callbacks->create_string = CreateString;

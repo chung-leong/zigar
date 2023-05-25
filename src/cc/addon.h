@@ -107,12 +107,12 @@ struct Callbacks {
   Result (*create_namespace)(Call*, Local<Object>*);
   Result (*create_class)(Call*, Local<String>, Thunk, Local<v8::Function>*);
   Result (*create_function)(Call*, Local<String>, size_t, Thunk, Local<v8::Function>*);
-  Result (*create_enumeration)(Call*, Local<Object>*, ValueMask, Thunk, Local<v8::Function>*);
+  Result (*create_enumeration)(Call*, Local<String>, Thunk, Local<v8::Function>*);
 
   Result (*add_construct)(Call*, Local<Object>, Local<String>, Local<Value>);
   Result (*add_accessors)(Call*, Local<Object>, Local<String>, Thunk, Thunk);
   Result (*add_static_accessors)(Call*, Local<Object>, Local<String>, Thunk, Thunk);
-  Result (*add_enumeration_item)(Call*, Local<Object>, Local<String>, Local<Value>);
+  Result (*add_enumeration_item)(Call*, Local<v8::Function>, Local<String>, Local<Value>, Local<Value>*);
 
   Result (*create_object)(Call*, Local<v8::Function>, Local<Object>*);
   Result (*create_string)(Call*, const char*, Local<String>*);

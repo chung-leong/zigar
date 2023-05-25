@@ -9,10 +9,11 @@ const slotCounter = blk: {
     const counter = struct {
         // results of comptime functions are memoized
         // the same struct will yield the same number
-        fn next(comptime S: anytype) comptime_int {
+        fn get(comptime S: anytype) comptime_int {
             _ = S;
+            const slot = count;
             count += 1;
-            return count;
+            return slot;
         }
     };
     break :blk counter;
@@ -141,12 +142,12 @@ const Callbacks = extern struct {
     create_namespace: *const fn (call: Call, dest: *Namespace) callconv(.C) Result,
     create_class: *const fn (call: Call, name: Value, thunk: Thunk, dest: *Class) callconv(.C) Result,
     create_function: *const fn (call: Call, name: Value, len: usize, thunk: Thunk, dest: *Function) callconv(.C) Result,
-    create_enumeration: *const fn (call: Call, name: Value, mask: ValueMask, thunk: Thunk, dest: *Enumeration) callconv(.C) Result,
+    create_enumeration: *const fn (call: Call, name: Value, thunk: Thunk, dest: *Enumeration) callconv(.C) Result,
 
     add_construct: *const fn (call: Call, container: Construct, name: Value, construct: Construct) callconv(.C) Result,
     add_accessors: *const fn (call: Call, container: Construct, name: Value, getter: ?Thunk, setter: ?Thunk) callconv(.C) Result,
     add_static_accessors: *const fn (call: Call, container: Construct, name: Value, getter: ?Thunk, setter: ?Thunk) callconv(.C) Result,
-    add_enumeration_item: *const fn (call: Call, container: Enumeration, name: Value, value: Value) callconv(.C) Result,
+    add_enumeration_item: *const fn (call: Call, container: Enumeration, name: Value, value: Value, dest: *Value) callconv(.C) Result,
 
     create_object: *const fn (call: Call, class: Class, dest: *Value) callconv(.C) Result,
     create_string: *const fn (call: Call, string: ?[*]const u8, dest: *Value) callconv(.C) Result,
@@ -162,6 +163,8 @@ const Callbacks = extern struct {
     reallocate_memory: *const fn (call: Call, size: usize, dest: *TypedArray) callconv(.C) Result,
     free_memory: *const fn (call: Call, dest: *TypedArray) callconv(.C) Result,
 
+    is_value_type: *const fn (value: Value, mask: ValueMask, dest: *bool) callconv(.C) Result,
+
     unwrap_bool: ?*const fn (call: Call, value: Value, dest: *bool) callconv(.C) Result,
     unwrap_int32: ?*const fn (call: Call, value: Value, dest: *i32) callconv(.C) Result,
     unwrap_int64: ?*const fn (call: Call, value: Value, dest: *i64) callconv(.C) Result,
@@ -169,8 +172,6 @@ const Callbacks = extern struct {
     unwrap_double: ?*const fn (call: Call, value: Value, dest: *f64) callconv(.C) Result,
     unwrap_string: ?*const fn (call: Call, value: Value, dest: *TypedArray) callconv(.C) Result,
     unwrap_typed_array: ?*const fn (call: Call, value: Value, dest: *TypedArray) callconv(.C) Result,
-
-    is_value_type: *const fn (value: Value, mask: ValueMask, dest: *bool) callconv(.C) Result,
 
     wrap_bool: ?*const fn (call: Call, value: bool, dest: *Value) callconv(.C) Result,
     wrap_int32: ?*const fn (call: Call, value: i32, dest: *Value) callconv(.C) Result,
@@ -281,6 +282,48 @@ fn ChildType(comptime T: type) type {
         .Pointer => |pt| pt.child,
         else => @compileError("Expected array or pointer type, found '" ++ @typeName(T) ++ "'"),
     };
+}
+
+fn FitInt(comptime value: comptime_int) type {
+    const signedness = if (value < 0) .signed else .unsigned;
+    var bits = 32;
+    while (true) : (bits += 32) {
+        const IT = @Type(.{
+            .Int = .{ .bits = bits, .signedness = signedness },
+        });
+        if (std.math.minInt(IT) <= value and value <= std.math.maxInt(IT)) {
+            return IT;
+        }
+    }
+}
+
+fn FitEnum(comptime T: type) type {
+    const fields = @typeInfo(T).Enum.fields;
+    const signedness = sign: {
+        for (fields) |field| {
+            if (field.value < 0) {
+                break :sign .signed;
+            }
+        }
+        break :sign .unsigned;
+    };
+    var bits = 32;
+    while (true) : (bits += 32) {
+        const IT = @Type(.{
+            .Int = .{ .bits = bits, .signedness = signedness },
+        });
+        var all_fit = true;
+        for (fields) |field| {
+            const value = field.value;
+            if (!(std.math.minInt(IT) <= value and value <= std.math.maxInt(IT))) {
+                all_fit = false;
+                break;
+            }
+        }
+        if (all_fit) {
+            return IT;
+        }
+    }
 }
 
 fn checkWritability(comptime S: type, comptime name: []const u8) bool {
@@ -545,9 +588,9 @@ fn createNamespace(call: Call) !Namespace {
     return container;
 }
 
-fn createEnumeration(call: Call, name: Value, mask: ValueMask, thunk: Thunk) !Enumeration {
+fn createEnumeration(call: Call, name: Value, thunk: Thunk) !Enumeration {
     var container: Enumeration = undefined;
-    if (callbacks.create_enumeration(call, name, mask, thunk, &container) != .OK) {
+    if (callbacks.create_enumeration(call, name, thunk, &container) != .OK) {
         return Error.UnknownError;
     }
     return container;
@@ -579,10 +622,12 @@ fn addStaticAccessors(call: Call, container: Class, name: Value, getter: ?Thunk,
     }
 }
 
-fn addEnumerationItem(call: Call, container: Enumeration, name: Value, value: Value) !void {
-    if (callbacks.add_enumeration_item(call, container, name, value) != .OK) {
+fn addEnumerationItem(call: Call, container: Enumeration, name: Value, value: Value) !Value {
+    var item: Value = undefined;
+    if (callbacks.add_enumeration_item(call, container, name, value, &item) != .OK) {
         return Error.UnknownError;
     }
+    return item;
 }
 
 fn setProperty(call: Call, container: Value, name: Value, value: Value) !void {
@@ -783,7 +828,7 @@ fn wrapValue(call: Call, value: anytype, mask: ValueMask) !?Value {
             }
         },
         .ComptimeInt => {
-            const IT = if (value < 0) i64 else u64;
+            const IT = FitInt(value);
             return wrapValue(call, @intCast(IT, value), mask);
         },
         .Float => {
@@ -836,6 +881,22 @@ fn throwException(call: Call, comptime fmt: []const u8, vars: anytype) void {
     const message = std.fmt.bufPrint(buffer[0..1023], fmt, vars) catch fmt;
     buffer[message.len] = 0;
     _ = callbacks.throw_exception(call, @ptrCast([*:0]const u8, message.ptr));
+}
+
+fn setSlotObject(call: Call, value: Value, comptime S: anytype) !void {
+    const slot = slotCounter.get(S);
+    if (callbacks.set_slot_object(call, slot, value) != .OK) {
+        return Error.UnknownError;
+    }
+}
+
+fn getSlotObject(call: Call, comptime S: anytype) ?Value {
+    const slot = slotCounter.get(S);
+    var value: Value = undefined;
+    if (callbacks.get_slot_object(call, slot, &value) != .OK) {
+        return null;
+    }
+    return value;
 }
 
 //-----------------------------------------------------------------------------
@@ -965,11 +1026,21 @@ fn createConstructorThunk(comptime T: type) Thunk {
 }
 
 fn createEnumerationThunk(comptime T: type) Thunk {
-    _ = T;
     const ThunkType = struct {
         fn obtainItem(call: Call) callconv(.C) void {
-            if (getThis(call)) |this| {
-                _ = this;
+            if (getArgumentCount(call) != 1) {
+                return;
+            }
+            const IT = FitEnum(T);
+            const mask = getEnumerationType(T);
+            const arg = getArgument(call, 0);
+            const value = unwrapValue(call, arg, mask, IT) catch return;
+            inline for (@typeInfo(T).Enum.fields) |field| {
+                if (field.value == value) {
+                    const item = getSlotObject(call, .{ .enumeration = T, .value = field.value });
+                    setReturnValue(call, item);
+                    return;
+                }
             }
         }
     };
@@ -1050,8 +1121,10 @@ fn attachEnumerationFields(call: Call, container: Enumeration, comptime T: type,
     const mask = getEnumerationType(T);
     inline for (fields) |field| {
         const name = createString(call, field.name);
-        const value = try wrapValue(call, field.value, mask);
-        try addEnumerationItem(call, container, name, value orelse return Error.UnknownError);
+        const value = try wrapValue(call, field.value, mask) orelse return Error.UnknownError;
+        const item = try addEnumerationItem(call, container, name, value);
+        // save item into slot
+        try setSlotObject(call, item, .{ .enumeration = T, .value = field.value });
     }
 }
 
@@ -1087,8 +1160,7 @@ fn exportEnumeration(call: Call, comptime T: type, comptime name: []const u8) !E
     const info = @typeInfo(T).Enum;
     const enum_name = createString(call, name);
     const thunk = createEnumerationThunk(T);
-    const mask = getEnumerationType(T);
-    const container = try createEnumeration(call, enum_name, mask, thunk);
+    const container = try createEnumeration(call, enum_name, thunk);
     try attachDeclarations(call, container, T, info.decls);
     try attachEnumerationFields(call, container, T, info.fields);
     return container;
