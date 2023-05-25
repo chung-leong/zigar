@@ -1,12 +1,20 @@
-pub const pets = enum {
+pub const Pet = enum {
     Dog,
     Cat,
     Monkey,
 };
 
-pub const donuts = enum(u128) {
-    jelly = 0xffff_ffff_ffff_ffff_ffff_ffff_ffff_fffe,
-    plain = 0,
+pub const Donut = enum(u128) {
+    Jelly = 0xffff_ffff_ffff_ffff_ffff_ffff_ffff_fffe,
+    Plain = 0,
+
+    pub const Favor = enum {
+        Strawberry,
+        Raspberry,
+        Cranberry,
+    };
+
+    const secret = 42;
 
     pub fn tasty() bool {
         return true;

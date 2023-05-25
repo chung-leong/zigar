@@ -21,12 +21,12 @@ static void ThrowException(Isolate* isolate,
   isolate->ThrowException(error);
 }
 
-static ::TypedArray GetMemory(Local<ArrayBuffer> buffer) {
+static ::TypedArray GetMemory(Local<ArrayBuffer> buffer, size_t offset = 0) {
   std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
   ::TypedArray array;
   array.type = NumberType::u8;
-  array.bytes = reinterpret_cast<uint8_t*>(store->Data());
-  array.byte_size = store->ByteLength();
+  array.bytes = reinterpret_cast<uint8_t*>(store->Data()) + offset;
+  array.byte_size = store->ByteLength() - offset;
   return array;
 }
 
@@ -197,6 +197,13 @@ static Result CreateFunction(Call* call,
   return Result::ok;
 }
 
+static Result CreateClass(Call* call, 
+                          Local<String> name, 
+                          Thunk thunk, 
+                          Local<v8::Function>* dest) {
+  return CreateFunction(call, name, 1, thunk, dest);
+}
+
 static Result CreateEnumeration(Call* call, 
                                 Local<String> name, 
                                 Thunk thunk, 
@@ -204,32 +211,30 @@ static Result CreateEnumeration(Call* call,
   return CreateFunction(call, name, 1, thunk, dest);
 }
 
+static void SetObjectClass(Call* call, 
+                           Local<v8::Function> subclass, 
+                           Local<Object> object) {
+  // get the subclass's prototype prop                            
+  Local<String> prop = NewString(call->isolate, "prototype");
+  Local<Object> prototype = subclass->Get(call->exec_context, prop).ToLocalChecked().As<Object>();
+  // put parent class in the subclass's prototype chain
+  Local<Object> item_prototype = object->GetPrototype().As<Object>();
+  if (prototype->GetPrototype() != item_prototype) {
+    prototype->SetPrototype(call->exec_context, item_prototype).Check();
+  }
+  // set the object's prototype
+  object->SetPrototype(call->exec_context, prototype).Check();
+}
+
 static Result AddEnumerationItem(Call* call,
                                  Local<v8::Function> constructor,
                                  Local<String> name,
                                  Local<Value> value,
                                  Local<Value>* dest) {
-  Local<Value> item;
-  if (value->IsBigInt()) {
-    // can't handle actual bigger value due to missing API
-    int64_t number = value.As<v8::BigInt>()->Int64Value();
-    item = BigIntObject::New(call->isolate, number);
-  } else if (value->IsNumber()) {
-    double number = value.As<Number>()->NumberValue(call->exec_context).FromJust();
-    item = NumberObject::New(call->isolate, number);
-  } else {
-    return Result::failure;
-  }
-  // get the "prototype" prop (and not the constructor's own prototype)
-  Local<String> p_name = NewString(call->isolate, "prototype");
-  Local<Value> prototype = constructor->Get(call->exec_context, p_name).ToLocalChecked();
-  // put Number/BigInt in the enumeration's prototype chain
-  Local<Value> item_prototype = item.As<Object>()->GetPrototype();
-  if (prototype.As<Object>()->GetPrototype() != item_prototype) {
-    prototype.As<Object>()->SetPrototype(call->exec_context, item_prototype).Check();
-  }
-  // set the NumberObject/BigIntObject's prototype
-  item.As<Object>()->SetPrototype(call->exec_context, prototype).Check();
+  // make number an object so they won't match other enum                                  
+  Local<Object> item = value->ToObject(call->exec_context).ToLocalChecked();
+  // insert enumeration class into prototype chain
+  SetObjectClass(call, constructor, item);
   constructor->Set(call->exec_context, name, item).Check();
   *dest = item;
   return Result::ok;
@@ -393,6 +398,7 @@ static Result UnwrapBigInt(Call* call,
     value.As<v8::BigInt>()->ToWordsArray(&sign_bit, &word_count, words);
     dest->flags.overflow = (word_count > dest->word_count);
     dest->flags.negative = !!sign_bit;
+    dest->word_count = word_count;
     return Result::ok;
   }
   return Result::failure;
@@ -451,12 +457,25 @@ static Result UnwrapTypedArray(Call* call,
     offset = value.As<v8::TypedArray>()->ByteOffset();
   } else {
     return Result::failure;
-  }    
-  *dest = GetMemory(buffer);
-  if (offset > 0) {
-    dest->bytes += offset;
-    dest->byte_size -= offset;
   }
+  *dest = GetMemory(buffer, offset);
+  return Result::ok;
+}
+
+static Result UnwrapStructure(Call* call,
+                              Local<v8::Function> constructor,
+                              Local<Value> value,
+                              ::TypedArray* dest) {
+  if (!value->IsDataView()) {
+    return Result::failure;
+  }
+  Maybe<bool> match = value.As<Object>()->InstanceOf(call->exec_context, constructor);
+  if (match.IsNothing() || !match.FromJust()) {
+    return Result::failure;
+  }
+  Local<ArrayBuffer> buffer = value.As<DataView>()->Buffer();
+  size_t offset = value.As<DataView>()->ByteLength();
+  *dest = GetMemory(buffer, offset);
   return Result::ok;
 }
 
@@ -506,6 +525,15 @@ static MaybeLocal<ArrayBuffer> ObtainBuffer(Call* call,
   return MaybeLocal<ArrayBuffer>();
 }
 
+static Local<SharedArrayBuffer> ObtainSharedBuffer(Call* call, 
+                                                   const ::TypedArray& value) {
+    std::shared_ptr<BackingStore> store = SharedArrayBuffer::NewBackingStore(value.bytes, value.byte_size, 
+      [](void*, size_t, void*) {
+        // do nothing when buffer gets gc'ed
+      }, nullptr);
+    return SharedArrayBuffer::New(call->isolate, store);
+}
+
 template <typename T> 
 Local<Value> CreateTypedArray(Local<T> buffer, 
                               size_t offset, 
@@ -531,9 +559,7 @@ Local<Value> CreateTypedArray(Local<T> buffer,
     case NumberType::f32:
       return Float32Array::New(buffer, offset, byte_size / sizeof(float));
     case NumberType::f64:
-      return Float64Array::New(buffer, offset, byte_size / sizeof(double));
-    default:
-      return buffer;
+      return Float64Array::New(buffer, offset, byte_size / sizeof(double));      
   }
 }
 
@@ -548,17 +574,37 @@ static Result WrapTypedArray(Call* call,
   } else {
 #ifndef V8_ENABLE_SANDBOX
     // okay, we're dealing with mystery memory here
-    // assuming user knows what he's doing, we'll create a shared buffer 
+    // assuming the user knows what he's doing, we'll create a shared buffer 
     // pointing to that memory
-    std::shared_ptr<BackingStore> store = SharedArrayBuffer::NewBackingStore(value.bytes, value.byte_size, [](void*, size_t, void*) {
-      // do nothing when buffer gets gc'ed
-    }, nullptr);
-    Local<SharedArrayBuffer> shared_buf = SharedArrayBuffer::New(call->isolate, store);
+    Local<SharedArrayBuffer> shared_buf = ObtainSharedBuffer(call, value);
     *dest = CreateTypedArray(shared_buf, offset, value.byte_size, value.type);
 #else
     return Result::failure;
 #endif    
   }
+  return Result::ok;
+}
+
+static Result WrapStructure(Call* call,
+                            Local<v8::Function> constructor,
+                            const ::TypedArray& value,
+                            Local<Value>* dest) {
+  Local<DataView> view;                              
+  size_t offset = 0;
+  MaybeLocal<ArrayBuffer> known = ObtainBuffer(call, value, &offset);
+  if (!known.IsEmpty()) {
+    Local<ArrayBuffer> buffer = known.ToLocalChecked();
+    view = DataView::New(buffer, offset, value.byte_size);
+  } else {
+#ifndef V8_ENABLE_SANDBOX
+    Local<SharedArrayBuffer> shared_buf = ObtainSharedBuffer(call, value);
+    view = DataView::New(shared_buf, offset, value.byte_size);
+#else
+    return Result::failure;
+#endif    
+  }
+  SetObjectClass(call, constructor, view);
+  *dest = view;
   return Result::ok;
 }
 
@@ -612,7 +658,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->set_slot_object = SetSlotObject;
 
   callbacks->create_namespace = CreateNamespace;
-  callbacks->create_class = nullptr;
+  callbacks->create_class = CreateClass;
   callbacks->create_function = CreateFunction;
   callbacks->create_enumeration = CreateEnumeration;
 
@@ -640,6 +686,8 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->unwrap_double = UnwrapDouble;
   callbacks->unwrap_string = UnwrapString;
   callbacks->unwrap_typed_array = UnwrapTypedArray;
+  callbacks->unwrap_structure = UnwrapStructure;
+
   callbacks->wrap_bool = WrapBool;
   callbacks->wrap_int32 = WrapInt32;
   callbacks->wrap_int64 = nullptr;
@@ -647,6 +695,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->wrap_double = WrapDouble;
   callbacks->wrap_string = nullptr; // WrapString;
   callbacks->wrap_typed_array = WrapTypedArray;
+  callbacks->wrap_structure = WrapStructure;
 
   callbacks->throw_exception = ThrowException;
 

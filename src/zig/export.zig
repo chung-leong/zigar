@@ -5,14 +5,14 @@ pub const api_version = 1;
 //  For generating unique id for structs
 //-----------------------------------------------------------------------------
 const slotCounter = blk: {
-    comptime var count: comptime_int = 0;
+    comptime var next = 1;
     const counter = struct {
         // results of comptime functions are memoized
         // the same struct will yield the same number
         fn get(comptime S: anytype) comptime_int {
             _ = S;
-            const slot = count;
-            count += 1;
+            const slot = next;
+            next += 1;
             return slot;
         }
     };
@@ -44,6 +44,7 @@ const Namespace = Construct;
 const Function = Construct;
 const Class = Construct;
 const Enumeration = Construct;
+const AnyObject = *anyopaque;
 
 //-----------------------------------------------------------------------------
 //  Enum and structs used by both Zig and C++ code
@@ -54,7 +55,6 @@ const Result = enum(c_int) {
     Failure,
 };
 const NumberType = enum(c_int) {
-    Unknown,
     I8,
     U8,
     I16,
@@ -135,9 +135,9 @@ const Callbacks = extern struct {
     set_return_value: *const fn (call: Call, retval: ?Value) callconv(.C) Result,
 
     get_slot_data: *const fn (call: Call, slot_id: usize, dest: **anyopaque) callconv(.C) Result,
-    get_slot_object: *const fn (call: Call, slot_id: usize, dest: *Value) callconv(.C) Result,
+    get_slot_object: *const fn (call: Call, slot_id: usize, dest: *AnyObject) callconv(.C) Result,
     set_slot_data: *const fn (call: Call, slot_id: usize, data: *anyopaque, byte_size: usize) callconv(.C) Result,
-    set_slot_object: *const fn (call: Call, slot_id: usize, object: Value) callconv(.C) Result,
+    set_slot_object: *const fn (call: Call, slot_id: usize, object: AnyObject) callconv(.C) Result,
 
     create_namespace: *const fn (call: Call, dest: *Namespace) callconv(.C) Result,
     create_class: *const fn (call: Call, name: Value, thunk: Thunk, dest: *Class) callconv(.C) Result,
@@ -150,6 +150,7 @@ const Callbacks = extern struct {
     add_enumeration_item: *const fn (call: Call, container: Enumeration, name: Value, value: Value, dest: *Value) callconv(.C) Result,
 
     create_object: *const fn (call: Call, class: Class, dest: *Value) callconv(.C) Result,
+    create_array: *const fn (call: Call, len: usize, dest: *Value) callconv(.C) Result,
     create_string: *const fn (call: Call, string: ?[*]const u8, dest: *Value) callconv(.C) Result,
 
     get_property: *const fn (call: Call, container: Value, name: Value, dest: *Value) callconv(.C) Result,
@@ -157,7 +158,7 @@ const Callbacks = extern struct {
 
     get_array_length: *const fn (call: Call, value: Value, dest: *usize) callconv(.C) Result,
     get_array_item: *const fn (call: Call, index: usize, value: Value, dest: *Value) callconv(.C) Result,
-    set_array_item: *const fn (call: Call, index: usize, value: Value, dest: Value) callconv(.C) Result,
+    set_array_item: *const fn (call: Call, index: usize, value: Value) callconv(.C) Result,
 
     allocate_memory: *const fn (call: Call, size: usize, dest: *TypedArray) callconv(.C) Result,
     reallocate_memory: *const fn (call: Call, size: usize, dest: *TypedArray) callconv(.C) Result,
@@ -340,23 +341,19 @@ fn checkWritability(comptime S: type, comptime name: []const u8) bool {
     };
 }
 
-fn getArrayType(comptime T: type) NumberType {
-    return switch (@typeInfo(T)) {
-        .Array => |ar| return getArrayType(ar.child),
-        .Int, .Float => switch (T) {
-            i8 => .I8,
-            u8 => .U8,
-            i16 => .I16,
-            u16 => .U16,
-            i32 => .I32,
-            u32 => .U32,
-            i64 => .I64,
-            u64 => .U64,
-            f32 => .F32,
-            f64 => .F64,
-            else => .Unknown,
-        },
-        else => .Unknown,
+fn getNumberType(comptime T: type) NumberType {
+    return switch (T) {
+        i8 => .I8,
+        u8 => .U8,
+        i16 => .I16,
+        u16 => .U16,
+        i32 => .I32,
+        u32 => .U32,
+        i64 => .I64,
+        u64 => .U64,
+        f32 => .F32,
+        f64 => .F64,
+        else => @compileError("Not a numeric type"),
     };
 }
 
@@ -374,106 +371,6 @@ fn getTypeMask(comptime numType: NumberType) ValueMask {
         .F64 => .{ .f64Array = true },
         else => .{},
     };
-}
-
-fn getPossibleTypes(comptime T: type, comptime out: bool) ValueMask {
-    var can_be: ValueMask = .{};
-    switch (@typeInfo(T)) {
-        .Bool => {
-            can_be.boolean = true;
-        },
-        .Int, .Enum => {
-            can_be.number = true;
-            can_be.bigInt = true;
-        },
-        .ComptimeInt => {
-            can_be = getPossibleTypes(i53, out);
-        },
-        .Float => {
-            can_be.number = true;
-        },
-        .ComptimeFloat => {
-            can_be = getPossibleTypes(f64, out);
-        },
-        .Array => |ar| {
-            const array_type = getArrayType(T);
-            can_be = getTypeMask(array_type);
-            can_be.array = true;
-            can_be.arrayBuffer = isBinaryKnown(T);
-            can_be.string = isUnicode(ar.child);
-        },
-        .Struct => {
-            can_be.object = true;
-            can_be.arrayBuffer = isBinaryKnown(T);
-        },
-        .Pointer => |pt| {
-            if (pt.size == .One) {
-                can_be = getPossibleTypes(pt.child, out);
-            } else if (pt.size == .Slice) {
-                const AT = @Type(.{ .Array = .{ .child = pt.child, .len = 0 } });
-                return getPossibleTypes(AT, out);
-            }
-        },
-        else => {},
-    }
-    return can_be;
-}
-
-fn getReturnType(comptime T: type) ValueMask {
-    var prefer: ValueMask = .{};
-    switch (@typeInfo(T)) {
-        .Bool => {
-            prefer.boolean = true;
-        },
-        .Int => |int| {
-            if (int.bits <= 53) {
-                prefer.number = true;
-            } else {
-                prefer.bigInt = true;
-            }
-        },
-        .ComptimeInt => {
-            prefer = getReturnType(i53);
-        },
-        .Float => {
-            prefer.number = true;
-        },
-        .ComptimeFloat => {
-            prefer = getReturnType(f64);
-        },
-        .Array => |ar| {
-            const array_type = getArrayType(T);
-            if (isUnicode(ar.child)) {
-                prefer.string = true;
-            } else if (array_type != .Unknown) {
-                prefer = getTypeMask(array_type);
-            } else {
-                prefer.array = true;
-            }
-        },
-        .Struct => {
-            prefer.object = true;
-        },
-        .Pointer => |pt| {
-            if (pt.size == .One) {
-                prefer = getReturnType(pt.child);
-            } else if (pt.size == .Slice) {
-                const AT = @Type(.{ .Array = .{ .child = pt.child, .len = 0 } });
-                return getReturnType(AT);
-            }
-        },
-        else => {},
-    }
-    return prefer;
-}
-
-fn getEnumerationType(comptime T: type) ValueMask {
-    inline for (@typeInfo(T).Enum.fields) |field| {
-        if (field.value < minSafeInteger or field.value > maxSafeInteger) {
-            return .{ .bigInt = true };
-        }
-    }
-    return .{ .number = true };
 }
 
 //-----------------------------------------------------------------------------
@@ -494,11 +391,9 @@ fn castInt(comptime T: type, value: anytype) !T {
 
 fn castFloat(comptime T: type, value: anytype) !T {
     if (@TypeOf(value) != T) {
-        const max = @field(std.math, @typeName(T) ++ "_max");
-        const min = @field(std.math, @typeName(T) ++ "_min");
-        if (value < min) {
+        if (value < std.math.floatMin(T)) {
             return Error.FloatUnderflow;
-        } else if (value > max) {
+        } else if (value > std.math.floatMax(T)) {
             return Error.FloatOverflow;
         }
         return @floatCast(T, value);
@@ -518,25 +413,6 @@ fn matchType(mask: ValueMask, types: ValueMask) bool {
         }
     }
     return false;
-}
-
-fn getFunctionMasks(comptime function: anytype) []ValueMask {
-    const info = @typeInfo(@TypeOf(function)).Fn;
-    var types: [info.params.len + 1]ValueMask = undefined;
-    // TODO: remove orelse clause when return_type is no longer optional
-    const RT = BaseType(info.return_type orelse noreturn);
-    var index: usize = 0;
-    inline for (info.params) |param| {
-        const T = param.type orelse noreturn;
-        if (T == std.mem.Allocator) {
-            continue;
-        }
-        types[index] = getPossibleTypes(T, false);
-        index += 1;
-    }
-    types[index] = getReturnType(RT);
-    index += 1;
-    return types[0..index];
 }
 
 //-----------------------------------------------------------------------------
@@ -652,7 +528,7 @@ const arrayBufferMask: ValueMask = .{
 const maxSafeInteger = 9007199254740991;
 const minSafeInteger = -9007199254740991;
 
-fn unwrapValue(call: Call, value: Value, mask: ValueMask, comptime T: type) !T {
+fn unwrapValue(call: Call, value: Value, comptime T: type) !T {
     switch (@typeInfo(T)) {
         .Optional => |opt| {
             if (callbacks.is_null(call, value)) {
@@ -664,90 +540,112 @@ fn unwrapValue(call: Call, value: Value, mask: ValueMask, comptime T: type) !T {
             return unwrapValue(call, value, eu.target);
         },
         .Bool => {
-            if (mask.boolean) {
-                if (callbacks.unwrap_bool) |cb| {
-                    var result: bool = undefined;
-                    if (cb(call, value, &result) == .OK) {
-                        return result;
-                    }
+            if (callbacks.unwrap_bool) |cb| {
+                var result: bool = undefined;
+                if (cb(call, value, &result) == .OK) {
+                    return result;
                 }
             }
         },
         .Int => |int| {
-            if (mask.number) {
-                inline for (.{ i32, i64 }) |IT| {
-                    if (@field(callbacks, "unwrap_int" ++ @typeName(IT)[1..])) |cb| {
-                        var result: IT = undefined;
-                        if (cb(call, value, &result) == .OK) {
-                            return castInt(T, result);
-                        }
-                    }
-                }
-                if (callbacks.unwrap_double) |cb| {
-                    var result: f64 = undefined;
+            inline for (.{ i32, i64 }) |IT| {
+                if (@field(callbacks, "unwrap_int" ++ @typeName(IT)[1..])) |cb| {
+                    var result: IT = undefined;
                     if (cb(call, value, &result) == .OK) {
-                        if (result > maxSafeInteger or result < minSafeInteger) {
-                            return Error.IntegerUnsafe;
-                        }
-                        const integer = @floatToInt(i64, result);
-                        return castInt(T, integer);
+                        return castInt(T, result);
                     }
                 }
             }
-            if (mask.bigInt) {
-                if (callbacks.unwrap_bigint) |cb| {
-                    var result: BigInt(T) = undefined;
-                    result.word_count = @sizeOf(@TypeOf(result.int)) / 8;
-                    const ptr = @ptrCast(*BigInt(u64), &result);
-                    if (cb(call, value, ptr) == .OK) {
-                        if (result.flags.overflow) {
-                            if (result.flags.negative) {
-                                return Error.IntegerUnderflow;
-                            } else {
-                                return Error.IntegerOverflow;
-                            }
-                        }
-                        if (int.signedness == .signed) {
-                            if (result.flags.negative) {
-                                // negating the value might require an extra bit that we don't have
-                                if (std.math.negateCast(result.int)) |nv| {
-                                    return castInt(T, nv);
-                                } else |_| {
-                                    return Error.IntegerUnderflow;
-                                }
-                            }
-                            return castInt(T, result.int);
+            if (callbacks.unwrap_double) |cb| {
+                var result: f64 = undefined;
+                if (cb(call, value, &result) == .OK) {
+                    if (result > maxSafeInteger or result < minSafeInteger) {
+                        return Error.IntegerUnsafe;
+                    }
+                    const integer = @floatToInt(i64, result);
+                    return castInt(T, integer);
+                }
+            }
+            if (callbacks.unwrap_bigint) |cb| {
+                var result: BigInt(T) = undefined;
+                result.word_count = @sizeOf(@TypeOf(result.int)) / 8;
+                const ptr = @ptrCast(*BigInt(u64), &result);
+                if (cb(call, value, ptr) == .OK) {
+                    if (result.flags.overflow) {
+                        if (result.flags.negative) {
+                            return Error.IntegerUnderflow;
                         } else {
-                            if (result.flags.negative) {
+                            return Error.IntegerOverflow;
+                        }
+                    }
+                    if (int.signedness == .signed) {
+                        if (result.flags.negative) {
+                            // negating the value might require an extra bit that we don't have
+                            if (std.math.negateCast(result.int)) |nv| {
+                                return castInt(T, nv);
+                            } else |_| {
                                 return Error.IntegerUnderflow;
                             }
-                            return castInt(T, result.int);
                         }
+                        return castInt(T, result.int);
+                    } else {
+                        if (result.flags.negative) {
+                            return Error.IntegerUnderflow;
+                        }
+                        return castInt(T, result.int);
+                    }
+                }
+            }
+        },
+        .Float => {
+            inline for (.{ i32, i64 }) |IT| {
+                if (@field(callbacks, "unwrap_int" ++ @typeName(IT)[1..])) |cb| {
+                    var result: IT = undefined;
+                    if (cb(call, value, &result) == .OK) {
+                        return castFloat(T, result);
+                    }
+                }
+            }
+            if (callbacks.unwrap_double) |cb| {
+                var result: f64 = undefined;
+                if (cb(call, value, &result) == .OK) {
+                    return castFloat(T, result);
+                }
+            }
+            if (callbacks.unwrap_bigint) |cb| {
+                var result: BigInt(u64) = .{ .word_count = 1 };
+                if (cb(call, value, &result) == .OK) {
+                    if (!result.flags.overflow) {
+                        return castFloat(T, result.int);
+                    }
+                    // try again using the word_count returned by the host
+                    const IT = @Type(.{ .Int = .{
+                        .bits = result.word_count * 64,
+                        .signed = if (result.flags.negative) .signed else .unsigned,
+                    } });
+                    var result2: BigInt(IT) = undefined;
+                    result2.word_count = @sizeOf(@TypeOf(result.int)) / 8;
+                    const ptr = @ptrCast(*BigInt(u64), &result2);
+                    if (cb(call, value, ptr) == .OK) {
+                        if (result2.flags.overflow) {
+                            // shouldn't happen
+                            if (result.flags.negative) {
+                                return Error.FloatUnderflow;
+                            } else {
+                                return Error.FloatOverflow;
+                            }
+                        }
+                        return castFloat(T, result.int);
                     }
                 }
             }
         },
         .ComptimeInt => {
-            return unwrapValue(call, value, mask, i64);
-        },
-        .Float => {
-            if (mask.number) {
-                if (callbacks.unwrap_double) |cb| {
-                    var result: f64 = undefined;
-                    if (cb(call, value, &result) == .OK) {
-                        return castFloat(T, result);
-                    }
-                }
-                if (unwrapValue(call, value, mask, i64)) |integer| {
-                    const double = @intToFloat(f64, integer);
-                    return castFloat(T, double);
-                } else |err| {
-                    return err;
-                }
-            }
+            // exporting functions with comptime argument is weird, but allow it
+            return unwrapValue(call, value, i64);
         },
         .ComptimeFloat => {
-            return unwrapValue(call, value, mask, f64);
+            return unwrapValue(call, value, f64);
         },
         .Array => |ar| {
             _ = ar;
@@ -762,7 +660,7 @@ fn unwrapValue(call: Call, value: Value, mask: ValueMask, comptime T: type) !T {
     return Error.UnsupportedConversion;
 }
 
-fn wrapValue(call: Call, value: anytype, mask: ValueMask) !?Value {
+fn wrapValue(call: Call, value: anytype) !?Value {
     const T = @TypeOf(value);
     var result: Value = undefined;
     var err: ?Error = null;
@@ -772,25 +670,23 @@ fn wrapValue(call: Call, value: anytype, mask: ValueMask) !?Value {
         },
         .Optional => {
             if (value) |v| {
-                return wrapValue(call, v, mask);
+                return wrapValue(call, v);
             } else {
                 return null;
             }
         },
         .ErrorUnion => {
-            @compileError("Error should be handled prior to calling createValue");
+            @compileError("Error should be handled prior to calling wrapValue");
         },
         .Bool => {
-            if (mask.boolean) {
-                if (callbacks.wrap_bool) |cb| {
-                    if (cb(call, value, &result) == .OK) {
-                        return result;
-                    }
+            if (callbacks.wrap_bool) |cb| {
+                if (cb(call, value, &result) == .OK) {
+                    return result;
                 }
             }
         },
-        .Int => {
-            if (mask.number) {
+        .Int => |int| {
+            if (int.bits <= 53) {
                 inline for (.{ i32, i64 }) |IT| {
                     if (@field(callbacks, "wrap_int" ++ @typeName(IT)[1..])) |cb| {
                         if (value < std.math.minInt(IT)) {
@@ -813,8 +709,7 @@ fn wrapValue(call: Call, value: anytype, mask: ValueMask) !?Value {
                         }
                     }
                 }
-            }
-            if (mask.bigInt) {
+            } else {
                 if (callbacks.wrap_bigint) |cb| {
                     var bigInt: BigInt(T) = undefined;
                     bigInt.flags.negative = (std.math.sign(value) == -1);
@@ -827,50 +722,60 @@ fn wrapValue(call: Call, value: anytype, mask: ValueMask) !?Value {
                 }
             }
         },
-        .ComptimeInt => {
-            const IT = FitInt(value);
-            return wrapValue(call, @intCast(IT, value), mask);
-        },
         .Float => {
-            if (mask.number) {
-                if (callbacks.wrap_double) |cb| {
-                    if (value < std.math.f64_min) {
-                        err = Error.FloatUnderflow;
-                    } else if (value > std.math.f64_max) {
-                        err = Error.FloatOverflow;
-                    } else {
-                        const double = @floatCast(f64, value);
-                        if (cb(call, double, &result) == .OK) {
-                            return result;
-                        }
+            if (callbacks.wrap_double) |cb| {
+                if (value < std.math.f64_min) {
+                    err = Error.FloatUnderflow;
+                } else if (value > std.math.f64_max) {
+                    err = Error.FloatOverflow;
+                } else {
+                    const double = @floatCast(f64, value);
+                    if (cb(call, double, &result) == .OK) {
+                        return result;
                     }
                 }
             }
         },
+        .ComptimeInt => {
+            // determine the type based on the actual value
+            const IT = FitInt(value);
+            return wrapValue(call, @intCast(IT, value));
+        },
         .ComptimeFloat => {
-            const IT = f64;
-            return wrapValue(call, @floatCast(IT, value), mask);
+            return wrapValue(call, @floatCast(f64, value));
         },
         .Array => |ar| {
-            if (matchType(mask, arrayBufferMask)) {
-                if (callbacks.wrap_typed_array) |cb| {
+            // return TypedArray when elements are ints or floats
+            if (callbacks.wrap_typed_array) |cb| {
+                if (isInt(ar.child) or isFloat(ar.child)) {
                     const array: TypedArray = .{
                         .bytes = @constCast(@ptrCast([*]const u8, &value)),
                         .byte_size = @sizeOf(T),
-                        .element_type = getArrayType(T),
+                        .element_type = getNumberType(ar.child),
                     };
                     if (cb(call, &array, &result) == .OK) {
                         return result;
                     }
                 }
             }
-            _ = ar;
-            return Error.TODO;
+            // use regular array otherwise
+            var array: Value = undefined;
+            if (callbacks.create_array(call, value.len, &array) == .OK) {
+                for (value, 0..) |element, index| {
+                    if (try wrapValue(call, element)) |element_value| {
+                        if (callbacks.set_array_item(call, index, element_value) != .OK) {
+                            return Error.UnknownError;
+                        }
+                    }
+                }
+            }
+            return array;
         },
         .Pointer => |pt| {
             _ = pt;
             return Error.TODO;
         },
+
         else => {},
     }
     return Error.UnsupportedConversion;
@@ -883,16 +788,16 @@ fn throwException(call: Call, comptime fmt: []const u8, vars: anytype) void {
     _ = callbacks.throw_exception(call, @ptrCast([*:0]const u8, message.ptr));
 }
 
-fn setSlotObject(call: Call, value: Value, comptime S: anytype) !void {
+fn setSlotObject(call: Call, object: AnyObject, comptime S: anytype) !void {
     const slot = slotCounter.get(S);
-    if (callbacks.set_slot_object(call, slot, value) != .OK) {
+    if (callbacks.set_slot_object(call, slot, object) != .OK) {
         return Error.UnknownError;
     }
 }
 
-fn getSlotObject(call: Call, comptime S: anytype) ?Value {
+fn getSlotObject(call: Call, comptime S: anytype) ?AnyObject {
     const slot = slotCounter.get(S);
-    var value: Value = undefined;
+    var value: AnyObject = undefined;
     if (callbacks.get_slot_object(call, slot, &value) != .OK) {
         return null;
     }
@@ -908,7 +813,7 @@ fn createThunk(comptime S: type, comptime name: []const u8) Thunk {
     const ThunkType = struct {
         // we're passing the function name and argument count into getArgument() in order to allow the function
         // to be reused across different functions
-        fn unwrapArgument(call: Call, fname: []const u8, i_ptr: *usize, count: i32, comptime T: type, mask: ValueMask) ?T {
+        fn unwrapArgument(call: Call, fname: []const u8, i_ptr: *usize, count: i32, comptime T: type) ?T {
             if (comptime T == std.mem.Allocator) {
                 // TODO: provide allocator
                 return null;
@@ -916,9 +821,7 @@ fn createThunk(comptime S: type, comptime name: []const u8) Thunk {
                 const index: usize = i_ptr.*;
                 const arg = getArgument(call, index);
                 i_ptr.* = index + 1;
-                if (unwrapValue(call, arg, mask, T)) |value| {
-                    return value;
-                } else |err| {
+                return unwrapValue(call, arg, T) catch |err| {
                     const arg_count = getArgumentCount(call);
                     if (err == Error.UnsupportedConversion and arg_count < count) {
                         const fmt = "{s}() expects {d} argument(s), {d} given";
@@ -928,11 +831,11 @@ fn createThunk(comptime S: type, comptime name: []const u8) Thunk {
                         throwException(call, fmt, .{ @typeName(T), index + 1, fname, @errorName(err) });
                     }
                     return null;
-                }
+                };
             }
         }
 
-        fn wrapResult(call: Call, fname: []const u8, result: anytype, mask: ValueMask) void {
+        fn wrapResult(call: Call, fname: []const u8, result: anytype) void {
             if (comptime isErrorUnion(@TypeOf(result))) {
                 if (result) |value| {
                     wrapResult(call, fname, value);
@@ -944,13 +847,13 @@ fn createThunk(comptime S: type, comptime name: []const u8) Thunk {
                     wrapResult(call, fname, value);
                 }
             } else {
-                if (wrapValue(call, result, mask)) |value| {
-                    setReturnValue(call, value);
-                } else |err| {
+                const value = wrapValue(call, result) catch |err| {
                     const T = BaseType(@TypeOf(result));
                     const fmt = "Error encountered while converting {s} to JavaScript value for return value of {s}(): {s}";
                     throwException(call, fmt, .{ @typeName(T), fname, @errorName(err) });
-                }
+                    return;
+                };
+                setReturnValue(call, value);
             }
         }
 
@@ -959,9 +862,8 @@ fn createThunk(comptime S: type, comptime name: []const u8) Thunk {
             const fields = std.meta.fields(Args);
             const count = fields.len;
             var i: usize = 0;
-            const masks = getFunctionMasks(function);
             inline for (fields, 0..) |field, j| {
-                if (unwrapArgument(call, name, &i, count, field.type, masks[i])) |arg| {
+                if (unwrapArgument(call, name, &i, count, field.type)) |arg| {
                     args[j] = arg;
                 } else {
                     // exception thrown in getArgument()
@@ -969,7 +871,7 @@ fn createThunk(comptime S: type, comptime name: []const u8) Thunk {
                 }
             }
             var result = @call(std.builtin.CallModifier.auto, function, args);
-            wrapResult(call, name, result, masks[masks.len - 1]);
+            wrapResult(call, name, result);
         }
     };
     return ThunkType.invokeFunction;
@@ -980,14 +882,36 @@ fn createStaticGetterThunk(comptime S: type, comptime name: []const u8) Thunk {
         fn returnValue(call: Call) callconv(.C) void {
             const field = @field(S, name);
             const T = @TypeOf(field);
-            const mask = comptime getReturnType(T);
-            if (wrapValue(call, field, mask)) |value| {
-                setReturnValue(call, value);
-            } else |err| {
+            const value = wrapValue(call, field) catch |err| {
                 const fmt = "Error encountered while converting {s} to JavaScript value for property \"{s}\": {s}";
                 throwException(call, fmt, .{ @typeName(T), name, @errorName(err) });
                 return;
-            }
+            };
+            setReturnValue(call, value);
+        }
+    };
+    return ThunkType.returnValue;
+}
+
+fn createGetterThunk(comptime S: type, comptime name: []const u8) Thunk {
+    const ThunkType = struct {
+        fn returnValue(call: Call) callconv(.C) void {
+            const this = getThis(call) orelse {
+                return;
+            };
+            const self = unwrapValue(call, this, S) catch |err| {
+                const fmt = "Invoking getter function on the wrong instance: {s}";
+                throwException(call, fmt, .{@errorName(err)});
+                return;
+            };
+            const field = @field(self, name);
+            const T = @TypeOf(field);
+            const value = wrapValue(call, field) catch |err| {
+                const fmt = "Error encountered while converting {s} to JavaScript value for property \"{s}\": {s}";
+                throwException(call, fmt, .{ @typeName(T), name, @errorName(err) });
+                return;
+            };
+            setReturnValue(call, value);
         }
     };
     return ThunkType.returnValue;
@@ -996,18 +920,40 @@ fn createStaticGetterThunk(comptime S: type, comptime name: []const u8) Thunk {
 fn createStaticSetterThunk(comptime S: type, comptime name: []const u8) Thunk {
     const ThunkType = struct {
         fn assignValue(call: Call) callconv(.C) void {
-            var arg: Value = undefined;
-            _ = callbacks.get_argument(call, 0, &arg);
+            const arg = getArgument(call, 0);
             const T = @TypeOf(@field(S, name));
-            const mask = getPossibleTypes(T, false);
-            if (unwrapValue(call, arg, mask, T)) |value| {
-                var ptr = &@field(S, name);
-                ptr.* = value;
-            } else |err| {
+            const value = unwrapValue(call, arg, T) catch |err| {
                 const fmt = "Error encountered while converting JavaScript value to {s} for property \"{s}\": {s}";
                 throwException(call, fmt, .{ @typeName(T), name, @errorName(err) });
                 return;
-            }
+            };
+            var ptr = &@field(S, name);
+            ptr.* = value;
+        }
+    };
+    return ThunkType.assignValue;
+}
+
+fn createSetterThunk(comptime S: type, comptime name: []const u8) Thunk {
+    const ThunkType = struct {
+        fn assignValue(call: Call) callconv(.C) void {
+            const this = getThis(call) orelse {
+                return;
+            };
+            const self = unwrapValue(call, this, S) catch |err| {
+                const fmt = "Invoking setter function on the wrong instance: {s}";
+                throwException(call, fmt, .{@errorName(err)});
+                return;
+            };
+            const arg = getArgument(call, 0);
+            const T = @TypeOf(@field(self, name));
+            const value = unwrapValue(call, arg, T) catch |err| {
+                const fmt = "Error encountered while converting JavaScript value to {s} for property \"{s}\": {s}";
+                throwException(call, fmt, .{ @typeName(T), name, @errorName(err) });
+                return;
+            };
+            var ptr = &@field(self, name);
+            ptr.* = value;
         }
     };
     return ThunkType.assignValue;
@@ -1032,13 +978,12 @@ fn createEnumerationThunk(comptime T: type) Thunk {
                 return;
             }
             const IT = FitEnum(T);
-            const mask = getEnumerationType(T);
             const arg = getArgument(call, 0);
-            const value = unwrapValue(call, arg, mask, IT) catch return;
+            const value = unwrapValue(call, arg, IT) catch return;
             inline for (@typeInfo(T).Enum.fields) |field| {
                 if (field.value == value) {
-                    const item = getSlotObject(call, .{ .enumeration = T, .value = field.value });
-                    setReturnValue(call, item);
+                    const item = getSlotObject(call, .{ .Enum = T, .Value = field.value });
+                    setReturnValue(call, @ptrCast(Value, item));
                     return;
                 }
             }
@@ -1052,9 +997,20 @@ fn createEnumerationThunk(comptime T: type) Thunk {
 //-----------------------------------------------------------------------------
 fn attachValue(call: Call, container: Construct, comptime S: type, comptime name: []const u8) !void {
     const zig_func = @field(S, name);
-    const masks = getFunctionMasks(zig_func);
-    // the last item is for the return value
-    const arg_count = masks.len - 1;
+    const info = @typeInfo(@TypeOf(zig_func)).Fn;
+    const arg_count = count: {
+        comptime var n = 0;
+        inline for (info.params, 0..) |param, index| {
+            const T = param.type orelse void;
+            if (T == std.mem.Allocator) {
+                continue;
+            } else if (T == @This() and index == 0) {
+                continue;
+            }
+            n += 1;
+        }
+        break :count n;
+    };
     const thunk = createThunk(S, name);
     const key = createString(call, name);
     const function: Function = try createFunction(call, key, arg_count, thunk);
@@ -1065,6 +1021,13 @@ fn attachStaticProperty(call: Call, container: Construct, comptime S: type, comp
     const writable = comptime checkWritability(S, name);
     const getter = createStaticGetterThunk(S, name);
     const setter = if (writable) createStaticSetterThunk(S, name) else null;
+    const key = createString(call, name);
+    try addStaticAccessors(call, container, key, getter, setter);
+}
+
+fn attachProperty(call: Call, container: Construct, comptime S: type, comptime name: []const u8) !void {
+    const getter = createGetterThunk(S, name);
+    const setter = createSetterThunk(S, name);
     const key = createString(call, name);
     try addStaticAccessors(call, container, key, getter, setter);
 }
@@ -1086,45 +1049,42 @@ fn attachType(call: Call, container: Construct, comptime S: type, comptime name:
 fn attachDeclarations(call: Call, container: Construct, comptime T: type, comptime decls: anytype) !void {
     inline for (decls) |decl| {
         if (decl.is_pub) {
-            const name = decl.name;
-            const field = @field(T, name);
+            const field = @field(T, decl.name);
             const FT = @TypeOf(field);
             switch (@typeInfo(FT)) {
                 .NoReturn, .Pointer, .Opaque, .Frame, .AnyFrame => {},
-                .Fn => try attachValue(call, container, T, name),
-                .Type => try attachType(call, container, T, name),
-                else => try attachStaticProperty(call, container, T, name),
+                .Fn => try attachValue(call, container, T, decl.name),
+                .Type => try attachType(call, container, T, decl.name),
+                else => try attachStaticProperty(call, container, T, decl.name),
             }
         }
     }
 }
 
 fn attachStructureFields(call: Call, container: Class, comptime T: type, comptime fields: anytype) !void {
-    _ = T;
-    _ = container;
-    _ = call;
     inline for (fields) |field| {
-        switch (@TypeOf(field)) {}
+        if (!field.is_comptime) {
+            try attachProperty(call, container, T, field.name);
+        }
     }
 }
 
 fn attachUnionFields(call: Call, container: Class, comptime T: type, comptime fields: anytype) !void {
-    _ = T;
-    _ = container;
-    _ = call;
     inline for (fields) |field| {
-        switch (@TypeOf(field)) {}
+        if (!field.is_comptime) {
+            try attachProperty(call, container, T, field.name);
+        }
     }
 }
 
 fn attachEnumerationFields(call: Call, container: Enumeration, comptime T: type, comptime fields: anytype) !void {
-    const mask = getEnumerationType(T);
+    const ET = FitEnum(T);
     inline for (fields) |field| {
         const name = createString(call, field.name);
-        const value = try wrapValue(call, field.value, mask) orelse return Error.UnknownError;
+        const value = try wrapValue(call, @intCast(ET, field.value)) orelse return Error.UnknownError;
         const item = try addEnumerationItem(call, container, name, value);
         // save item into slot
-        try setSlotObject(call, item, .{ .enumeration = T, .value = field.value });
+        try setSlotObject(call, item, .{ .Enum = T, .Value = field.value });
     }
 }
 
@@ -1139,6 +1099,10 @@ fn exportStructure(call: Call, comptime T: type, comptime name: []const u8) !Cla
     };
     try attachDeclarations(call, container, T, info.decls);
     try attachStructureFields(call, container, T, info.fields);
+    if (info.fields.len > 0) {
+        // associate struct with new class
+        try setSlotObject(call, container, .{ .Struct = T });
+    }
     return container;
 }
 
@@ -1153,6 +1117,9 @@ fn exportUnion(call: Call, comptime T: type, comptime name: []const u8) !Class {
     };
     try attachDeclarations(call, container, T, info.decls);
     try attachUnionFields(call, container, T, info.fields);
+    if (info.fields.len > 0) {
+        try setSlotObject(call, container, .{ .Union = T });
+    }
     return container;
 }
 
@@ -1163,6 +1130,7 @@ fn exportEnumeration(call: Call, comptime T: type, comptime name: []const u8) !E
     const container = try createEnumeration(call, enum_name, thunk);
     try attachDeclarations(call, container, T, info.decls);
     try attachEnumerationFields(call, container, T, info.fields);
+    try setSlotObject(call, container, .{ .Enum = T });
     return container;
 }
 

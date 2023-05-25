@@ -12,7 +12,6 @@ enum class Result : int {
   failure = 1,
 };
 enum class NumberType : int {
-  unknown,
   i8,
   u8,
   i16,
@@ -137,6 +136,7 @@ struct Callbacks {
   Result (*unwrap_double)(Call*, Local<Value>, double*);
   Result (*unwrap_string)(Call*, Local<Value>, ::TypedArray*);
   Result (*unwrap_typed_array)(Call*, Local<Value>, ::TypedArray*);
+  Result (*unwrap_structure)(Call*, Local<v8::Function>, Local<Value>, ::TypedArray*);
 
   Result (*wrap_bool)(Call*, bool, Local<Value>*);
   Result (*wrap_int32)(Call*, int32_t, Local<Value>*);
@@ -145,6 +145,7 @@ struct Callbacks {
   Result (*wrap_double)(Call*, double, Local<Value>*);
   Result (*wrap_string)(Call*, const ::TypedArray&, Local<Value>*);
   Result (*wrap_typed_array)(Call*, const ::TypedArray&, Local<Value>*);
+  Result (*wrap_structure)(Call*, Local<v8::Function>, const ::TypedArray&, Local<Value>*);
 
   Result (*throw_exception)(Call*, const char*);
 };
