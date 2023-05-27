@@ -87,5 +87,14 @@ describe("JavaScript Struct DataView creation", function() {
     const Hello = defineStruct('Hello', 8, fields, { exposeDataView: true });
     expect(() => new Hello(buffer)).to.throw();
   })
+  it('should throw when a value exceed the maximum capability of the type', function () {
+    const fields = {
+      dog: { type: Int, bits: 32, offset: 0, signed: true, bitOffset: 0, defaultValue: 43, writable: true },
+      cat: { type: Int, bits: 32, offset: 4, signed: true, bitOffset: 0, defaultValue: 3332 },
+    };
+    const Hello = defineStruct('Hello', 8, fields, { exposeDataView: true });
+    const obj = new Hello();
+    expect(() => obj.dog = 0x1FFFFFFFF).to.throw();
+  })
 
 })

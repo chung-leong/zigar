@@ -154,6 +154,7 @@ export function defineStruct(structName, structSize, fields, options = {}) {
   const {
     littleEndian = true,
     exposeDataView = false,
+    runtimeSafety = true,
   } = options;
   const defaultValues = {};
   const oneTimeSetters = {};
@@ -207,6 +208,11 @@ export function defineStruct(structName, structSize, fields, options = {}) {
     }
   }
 
+  function overflow(bits, signed, v) {
+    const typeName = getTypeName(Int, bits, signed);
+    throw new Error(`${typeName} cannot represent value '${v}'`);
+  }
+
   const lines = [];
   lines.push(`(class ${structName} {`);
   lines.push(`constructor(...arg) { construct.apply(this, arg) }`);
@@ -223,10 +229,18 @@ export function defineStruct(structName, structSize, fields, options = {}) {
       getters[getter] = { type, bits, signed, bitOffset };
       if (writable || defaultValue) {
         const setter = `set${typeName}${suffix}`;
+        var check = '';
+        if (runtimeSafety && type === Int) {
+          const suffix = (bits <= 53) ? '' : 'n';
+          const max = (2 ** (signed ? bits - 1 : bits)- 1) + suffix;
+          const min = ((signed) ? -(2 ** (bits - 1)) : 0) + suffix;
+          check = `if (v < ${min} || v > ${max}) overflow(${bits}, ${signed}, v); `;
+        }
+        const stmt = `{ ${check}${dv}.${setter}(${offset}, v${lastArg}) }`;
         if (writable) {
-          lines.push(`set ${prop}(v) { ${dv}.${setter}(${offset}, v${lastArg}) }`);
+          lines.push(`set ${prop}(v) ${stmt}`);
         } else {
-          oneTimeSetters[name] = eval(`(function(v) { ${dv}.${setter}(${offset}, v${lastArg}) })`);
+          oneTimeSetters[name] = eval(`(function(v) ${stmt})`);
         }
         setters[setter] = { type, bits, signed, bitOffset };
       }
