@@ -4,7 +4,7 @@ describe('Enumeration', async function() {
   let mod;
   before(async function () {
     this.timeout(30000);
-    const pkg = await import('../zig/integration/enumeration.zig');
+    const pkg = await import('./integration/enumeration.zig');
     mod = pkg.default;
   })
   it ('should export a pub enumeration', function() {

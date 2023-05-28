@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { defineStruct } from '../../src/js/dataview.js';
+import { defineStruct } from '../src/dataview.js';
 
 const Pointer = 0;
 const Bool = 1;

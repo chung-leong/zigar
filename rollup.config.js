@@ -1,9 +1,13 @@
 export default {
-  input: 'src/js/dataview.js',
+  input: 'src/dataview.js',
   output: {
-		file: 'src/cc/addon.js.txt',
+		file: 'src/addon.js.txt',
 		format: 'esm',
     banner: 'R"=====(',
     footer: ')====="',
-	}
+	},
+  onwarn(warning, warn) {
+    if (warning.code === 'EVAL') return
+    warn(warning)
+  }  
 };

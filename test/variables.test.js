@@ -4,7 +4,7 @@ describe('Module properities getter/setter', async function() {
   let mod;
   before(async function () {
     this.timeout(30000);
-    const pkg = await import('../zig/integration/variables.zig');
+    const pkg = await import('./integration/variables.zig');
     mod = pkg.default;
   })
   it('should not expose private variables', function() {      
