@@ -23,7 +23,7 @@ function createGetter(name, type, bits, signed, bitOffset) {
     return methodCache[name];
   }
   var fn;
-  if (bitOffset === 0) {
+  if (bitOffset === 0 && bits >= 8) {
     if (type === Int) {
       if (bits < 64) {
         // actual number of bits needed when stored byte-aligned
@@ -66,7 +66,7 @@ function createGetter(name, type, bits, signed, bitOffset) {
         const n = get.call(this, offset);
         return !!(n & mask);
       };
-    } else if (bitOffset + bits <= 8) {
+    } else if (type === Int && bitOffset + bits <= 8) {
       // sub-8-bit numbers also have real use cases
       if (signed) {
         const signMask = ((bits - 1) ** 2) << bitOffset;
@@ -120,34 +120,42 @@ function createGetter(name, type, bits, signed, bitOffset) {
       };
     }
   }
-  Object.defineProperties(fn, 'name', { value: name, writable: false });
+  Object.defineProperty(fn, 'name', { value: name, writable: false });
   methodCache[name] = fn;
   return fn;
 }
 
-function createSetter(name, type, bits, signed) {        
+function createSetter(name, type, bits, signed, bitOffset) {        
   if (methodCache[name]) {
     return methodCache[name];
   }
-  var fn;
-  if (bitOffset === 0) {
+  // TODO remove empty function once all code paths are covered
+  var fn = function() {};
+  if (bitOffset === 0 && bits >= 8) {
     if (type === Int) {
       if (bits < 64) {
       }
     }
   } else {
+    const get = DataView.prototype.getInt8;
+    const set = DataView.prototype.setInt8;
     if (type === Bool && bits === 1) {
       const mask = 1 << bitOffset;
-      const get = DataView.prototype.getInt8;
-      fn = function(offset) {
-        var n = get.call(this, offset);
-        set.call(this, n | mask);
+      fn = function(offset, value) {
+        const n = get.call(this, offset);
+        const byte = (value) ? n | mask : n & ~mask;
+        set.call(this, offset, byte);
       };
     }
   }
-  Object.defineProperties(fn, 'name', { value: name, writable: false });
+  Object.defineProperty(fn, 'name', { value: name, writable: false });
   methodCache[name] = fn;
   return fn;
+}
+
+function throwOverflow(bits, signed, v) {
+  const typeName = getTypeName(Int, bits, signed);
+  throw new TypeError(`${typeName} cannot represent value '${v}'`);
 }
 
 export function defineStruct(structName, structSize, fields, options = {}) {
@@ -208,11 +216,6 @@ export function defineStruct(structName, structSize, fields, options = {}) {
     }
   }
 
-  function overflow(bits, signed, v) {
-    const typeName = getTypeName(Int, bits, signed);
-    throw new Error(`${typeName} cannot represent value '${v}'`);
-  }
-
   const lines = [];
   lines.push(`(class ${structName} {`);
   lines.push(`constructor(...arg) { construct.apply(this, arg) }`);
@@ -234,7 +237,7 @@ export function defineStruct(structName, structSize, fields, options = {}) {
           const suffix = (bits <= 53) ? '' : 'n';
           const max = (2 ** (signed ? bits - 1 : bits)- 1) + suffix;
           const min = ((signed) ? -(2 ** (bits - 1)) : 0) + suffix;
-          check = `if (v < ${min} || v > ${max}) overflow(${bits}, ${signed}, v); `;
+          check = `if (v < ${min} || v > ${max}) throwOverflow(${bits}, ${signed}, v); `;
         }
         const stmt = `{ ${check}${dv}.${setter}(${offset}, v${lastArg}) }`;
         if (writable) {

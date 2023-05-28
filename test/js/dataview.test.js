@@ -92,9 +92,31 @@ describe("JavaScript Struct DataView creation", function() {
       dog: { type: Int, bits: 32, offset: 0, signed: true, bitOffset: 0, defaultValue: 43, writable: true },
       cat: { type: Int, bits: 32, offset: 4, signed: true, bitOffset: 0, defaultValue: 3332 },
     };
-    const Hello = defineStruct('Hello', 8, fields, { exposeDataView: true });
+    const Hello = defineStruct('Hello', 8, fields);
     const obj = new Hello();
     expect(() => obj.dog = 0x1FFFFFFFF).to.throw();
+  })
+  it('should be able to handle bitfields', function() {
+    const fields = {
+      dog: { type: Bool, bits: 1, offset: 0, bitOffset: 0, defaultValue: false, writable: true },
+      cat: { type: Bool, bits: 1, offset: 0, bitOffset: 1, defaultValue: true, writable: true },
+    };
+    const Hello = defineStruct('Hello', 8, fields, { exposeDataView: true });
+    const obj = new Hello();
+    expect(obj.dog).to.be.false;
+    expect(obj.cat).to.be.true;
+  })
+  it('should be able to small int type', function() {
+    const fields = {
+      dog: { type: Int, bits: 2, offset: 0, signed: false, bitOffset: 0, writable: true },
+      cat: { type: Int, bits: 2, offset: 0, signed: false, bitOffset: 2, writable: true },
+    };
+    const Hello = defineStruct('Hello', 8, fields, { exposeDataView: true, runtimeSafty: true });
+    const obj = new Hello();
+    obj.dataView.setUint8(0, 7);
+    expect(obj.dog).to.equal(3);
+    expect(obj.cat).to.equal(1);
+    expect(() => obj.dog = 4).to.throw();
   })
 
 })
