@@ -659,6 +659,19 @@ static Result ThrowException(Call* call,
   return Result::ok;
 }
 
+static MaybeLocal<Value> CompileJavaScript(Isolate* isolate) {
+  const char *code = 
+    #include "addon.js.txt"
+  ;
+  ScriptCompiler::Source source(NewString(isolate, code));
+  MaybeLocal<v8::Module> result = ScriptCompiler::CompileModule(isolate, &source);
+  if (result.IsEmpty()) {
+    return MaybeLocal<Value>();
+  }
+  Local<v8::Module> module = result.ToLocalChecked();
+  return module->Evaluate(isolate->GetCurrentContext());
+}
+
 //-----------------------------------------------------------------------------
 //  Function for loading Zig modules
 //-----------------------------------------------------------------------------
@@ -686,6 +699,12 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   if (!symbol) {
     ThrowException(isolate, "Unable to find the symbol \"zig_module\"");
     return;
+  }
+
+  // compile JavaScript code
+  MaybeLocal<Value> comp_result = CompileJavaScript(isolate);
+  if (comp_result.IsEmpty()) {
+    ThrowException(isolate, "Unable to compile JavaScript code");
   }
 
   // attach callbacks to module

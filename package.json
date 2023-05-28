@@ -9,7 +9,8 @@
   },
   "scripts": {
     "test": "NODE_ENV=development node --experimental-loader ./src/js/loader.js --no-warnings ./node_modules/mocha/bin/mocha.js -- test/js/*.test.js",
-    "install": "node-gyp rebuild"
+    "install": "node-gyp rebuild",
+    "rollup": "rollup -c rollup.config.js"
   },
   "repository": {
     "type": "git",
@@ -28,6 +29,7 @@
   "devDependencies": {
     "chai": "^4.3.7",
     "mocha": "^10.2.0",
-    "mocha-skip-if": "^1.0.4"
+    "mocha-skip-if": "^1.0.4",
+    "rollup": "^3.23.0"
   }
 }
