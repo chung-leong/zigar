@@ -8,26 +8,26 @@ using namespace v8;
 //  (need to keep these in sync with their Zig definitions)
 //-----------------------------------------------------------------------------
 enum class Result : int {
-  ok = 0,
-  failure = 1,
+  OK = 0,
+  Failure = 1,
 };
 
 enum class StructureType : uint32_t {
-  normal = 0,
-  union,
-  enumeration,
-  singleton,
-  array,
-  opaque,
+  Normal = 0,
+  Union,
+  Enumeration,
+  Singleton,
+  Array,
+  Opaque,
 };
 
 enum class MemberType : uint32_t {
-  void = 0,
-  bool,
-  int,
-  float,
-  structure,
-  pointer,
+  Void = 0,
+  Bool,
+  Int,
+  Float,
+  Structure,
+  Pointer,
 };
 
 struct Member {
@@ -66,6 +66,53 @@ struct Callbacks {
 };
 
 //-----------------------------------------------------------------------------
+//  Per isolate data structures 
+//-----------------------------------------------------------------------------
+struct AddonData {
+  Global<External> external;
+
+  AddonData(Isolate* isolate) {
+    external.Reset(isolate, External::New(isolate, this));
+    external.template SetWeak<AddonData>(this, 
+      [](const v8::WeakCallbackInfo<AddonData>& data) {
+        AddonData* self = data.GetParameter();
+        self->external.Reset();
+        delete self;
+      }, WeakCallbackType::kParameter);
+  }
+
+  virtual ~AddonData() = 0;
+};
+
+
+struct ModuleData : public AddonData {
+  static int count;
+  void *so_handle;  
+
+  ModuleData(Isolate* isolate, void* so_handle) : 
+    AddonData(isolate), 
+    so_handle(so_handle) {
+    count++;
+  }
+
+  ~ModuleData() {
+    dlclose(so_handle);
+    count--;
+  }
+};
+
+struct FunctionData : public AddonData {  
+  Thunk thunk;
+  Global<Object> slot_data;
+
+  FunctionData(Isolate* isolate, Thunk thunk, Local<Object> data) :
+    AddonData(isolate),
+    thunk(thunk) {
+    slot_data.Reset(isolate, data);
+  }
+};
+
+//-----------------------------------------------------------------------------
 //  Structure used passed stuff to Zig code and back (per call)
 //-----------------------------------------------------------------------------
 struct Host {
@@ -86,3 +133,4 @@ struct Host {
     }
   }
 };
+

@@ -2,7 +2,7 @@ export default {
   input: 'src/dataview.js',
   output: {
 		file: 'src/addon.js.txt',
-		format: 'esm',
+		format: 'iife',
     banner: 'R"=====(',
     footer: ')====="',
 	},

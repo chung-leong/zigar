@@ -81,10 +81,10 @@ export async function compile(path, options = {}) {
     await mkdirp(soBuildDir);
     if (await writePID(pidPath)) {
       await createProject({
-        'stub.zig': `../zig/stub.zig`,
-        'build.zig': `../zig/build${dependent ? '-clib' : ''}.zig`,
+        'stub.zig': `./stub.zig`,
+        'build.zig': `./build${dependent ? '-clib' : ''}.zig`,
       }, {
-        EXPORTER_PATH: absolute('../zig/export.zig'),
+        EXPORTER_PATH: absolute('./export.zig'),
         PACKAGE_PATH: fullPath,
         PACKAGE_NAME: rootFile.name,
       }, soBuildDir);

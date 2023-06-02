@@ -19,83 +19,61 @@ static void ThrowException(Isolate* isolate,
   isolate->ThrowException(error);
 }
 
-static ::TypedArray GetMemory(Local<ArrayBuffer> buffer, size_t offset = 0) {
-  std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
-  ::TypedArray array;
-  array.type = NumberType::u8;
-  array.bytes = reinterpret_cast<uint8_t*>(store->Data()) + offset;
-  array.byte_size = store->ByteLength() - offset;
-  return array;
-}
-
-static size_t FindAddress(Local<ArrayBuffer> buffer, 
-                          size_t address, 
-                          size_t len, 
-                          size_t* offset_dest) {
-  std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
-  size_t buf_start = reinterpret_cast<size_t>(store->Data());
-  size_t buf_end = buf_start + store->ByteLength();
-  if (buf_start <= address && address + len <= buf_end) {
-    *offset_dest = address - buf_start;
-    return true;
-  }        
-  return false;
-}
-
 //-----------------------------------------------------------------------------
 //  Callback functions that zig modules will invoke
 //-----------------------------------------------------------------------------
 static Result GetSlot(Host* call, 
                       size_t slot_id, 
                       Local<Value> *dest) {
-  Local<Array> array = Local<Array>::New(call->isolate, call->zig_func->slot_data);
-  MaybeLocal<Value> result = array->Get(call->exec_context, slot_id);
+  Local<Object> slots = Local<Object>::New(call->isolate, call->zig_func->slot_data);
+  MaybeLocal<Value> result = slots->Get(call->exec_context, slot_id);
   if (result.IsEmpty()) {
-    return Result::failure;
+    return Result::Failure;
   }  
   *dest = result.ToLocalChecked();
-  return Result::ok;
+  return Result::OK;
 }
 
 static Result SetSlot(Host* call, 
                       size_t slot_id, 
                       Local<Value> object) {
-  Local<Array> array = Local<Array>::New(call->isolate, call->zig_func->slot_data);
-  array->Set(call->exec_context, slot_id, object).Check();
-  return Result::ok;  
+  Local<Object> slots = Local<Object>::New(call->isolate, call->zig_func->slot_data);
+  slots->Set(call->exec_context, slot_id, object).Check();
+  return Result::OK;  
 }
 
 static Result AllocateMemory(Host* call, 
                              size_t size, 
-                             ::TypedArray* dest) {
+                             uint8_t **dest) {
   if (call->mem_pool.IsEmpty()) {
     call->mem_pool = Array::New(call->isolate);
   }
   Local<ArrayBuffer> buffer = ArrayBuffer::New(call->isolate, size);
   uint32_t index = call->mem_pool->Length();
   call->mem_pool->Set(call->exec_context, index, buffer).Check();
-  *dest = GetMemory(buffer);
-  return Result::ok;
+
+  std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
+  *dest = reinterpret_cast<uint8_t *>(store->Data());
+  return Result::OK;
 }
 
 static MaybeLocal<Value> CompileJavaScript(Isolate* isolate) {
   const char *code = 
     #include "addon.js.txt"
   ;
-  ScriptCompiler::Source source(NewString(isolate, code));
-  MaybeLocal<v8::Module> result = ScriptCompiler::CompileModule(isolate, &source);
+  Local<Context> context = isolate->GetCurrentContext();
+  Local<String> source = NewString(isolate, code);  
+  MaybeLocal<Script> result = Script::Compile(context, source);
   if (result.IsEmpty()) {
     return MaybeLocal<Value>();
   }
-  Local<v8::Module> module = result.ToLocalChecked();
-  return module->Evaluate(isolate->GetCurrentContext());
+  Local<Script> script = result.ToLocalChecked();
+  return script->Run(context);
 }
 
 //-----------------------------------------------------------------------------
 //  Function for loading Zig modules
 //-----------------------------------------------------------------------------
-int so_count = 0;
-
 static void Load(const FunctionCallbackInfo<Value>& info) {
   Isolate* isolate = info.GetIsolate();
 
@@ -124,46 +102,36 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   MaybeLocal<Value> comp_result = CompileJavaScript(isolate);
   if (comp_result.IsEmpty()) {
     ThrowException(isolate, "Unable to compile JavaScript code");
+    return;
   }
 
   // attach callbacks to module
   ::Module* module = reinterpret_cast<::Module*>(symbol);
   Callbacks* callbacks = module->callbacks;
+  callbacks->allocate_memory = AllocateMemory;
   callbacks->get_slot = GetSlot;
   callbacks->set_slot = SetSlot;
-
   callbacks->begin_structure = nullptr;
   callbacks->add_member = nullptr;
   callbacks->finalize_structure = nullptr;
 
-  // create array for storing slot data
-  Local<Array> slot_data = Array::New(isolate, 1);
+  printf("Creating slots\n");
 
-  // save shared library in an external object
-  ModuleData *md = new ModuleData;
-  md->so_handle = handle;
-  Local<External> external = External::New(isolate, md);
-  md->external.Reset(isolate, external);
-  md->external.template SetWeak<ModuleData>(md, 
-    [](const v8::WeakCallbackInfo<ModuleData>& data) {
-      ModuleData* md = data.GetParameter();
-      md->external.Reset();
-      // unload shared library when external object is gc'ed
-      dlclose(md->so_handle);
-      so_count--;
-      delete md;
-    }, WeakCallbackType::kParameter);
-  // save external object into slot 0, which is never used
-  slot_data->Set(isolate->GetCurrentContext(), 0, external).Check();
+  // create object for storing slot data
+  Local<Object> slot_data = Object::New(isolate);
+
+  // place shared library handle in an external object and keep it in slot 0
+  ModuleData *md = new ModuleData(isolate, handle);
+  slot_data->Set(isolate->GetCurrentContext(), 0, Local<External>::New(isolate, md->external)).Check();
+
+  printf("Module data\n");
 
   // call the factory function
   Host ctx(info);
-  FunctionData fds;
-  fds.slot_data.Reset(isolate, slot_data);
-  fds.thunk = nullptr;
-  ctx.zig_func = &fds;
+  auto fd = new FunctionData(isolate, nullptr, slot_data);
+  ctx.zig_func = fd;
   Local<Value> ns;
-  if (module->factory(&ctx, &ns) == Result::ok) {
+  if (module->factory(&ctx, &ns) == Result::OK) {
     info.GetReturnValue().Set(ns);
   } else {
     ThrowException(isolate, "Unable to create namespace");
@@ -171,7 +139,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
 }
 
 static void GetLibraryCount(const FunctionCallbackInfo<Value>& info) {
-  info.GetReturnValue().Set(so_count);
+  info.GetReturnValue().Set(ModuleData::count);
 }
 
 NODE_MODULE_INIT(/* exports, module, context */) {
@@ -187,3 +155,5 @@ NODE_MODULE_INIT(/* exports, module, context */) {
   add("load", Load);
   add("getLibraryCount", GetLibraryCount);
 } 
+
+int ModuleData::count = 0;

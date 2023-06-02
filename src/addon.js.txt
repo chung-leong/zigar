@@ -1,86 +1,95 @@
 R"=====(
-const Pointer = 0;
-const Bool = 1;
-const Int = 2;
-const Float = 3;
+(function (exports) {
+  'use strict';
 
-const dataSymbol = Symbol('data');
-const shadowSymbol = Symbol('shadow');
- 
-function getTypeName(type, bits, signed) {
-  if (type === Int) {
-    return `${bits <= 32 ? '' : 'Big' }${signed ? 'Int' : 'Uint'}${bits}`;
-  } else if (type === Float) {
-    return `Float${bits}`;
-  } else if (type === Bool) {
-    return `Bool${bits}`;
-  }
-}
+  const Pointer = 0;
+  const Bool = 1;
+  const Int = 2;
+  const Float = 3;
 
-function defineStruct(structName, structSize, fields, options = {}) {
-  const {
-    littleEndian = true,
-    exposeDataView = false,
-    runtimeSafety = true,
-  } = options;
-  for (const [ name, { defaultValue } ] of Object.entries(fields)) {
+  const dataSymbol = Symbol('data');
+  const shadowSymbol = Symbol('shadow');
+   
+  function getTypeName(type, bits, signed) {
+    if (type === Int) {
+      return `${bits <= 32 ? '' : 'Big' }${signed ? 'Int' : 'Uint'}${bits}`;
+    } else if (type === Float) {
+      return `Float${bits}`;
+    } else if (type === Bool) {
+      return `Bool${bits}`;
+    }
   }
 
-  const lines = [];
-  lines.push(`(class ${structName} {`);
-  lines.push(`constructor(...arg) { construct.apply(this, arg) }`);
-  const dv = 'this[dataSymbol]';
-  const getters = {}, setters = {};
-  for (const [ name, { type, bits, signed, offset, bitOffset, writable, defaultValue } ] of Object.entries(fields)) {
-    if (type !== Pointer) {
-      const typeName = getTypeName(type, bits, signed);
-      const prop = JSON.stringify(name);
-      const suffix = (bitOffset > 0) ? `Bit${bitOffset}` : ``;
-      const getter = `get${typeName}${suffix}`;
-      const lastArg = (type === Int && bits > 8) ? `, ${littleEndian}` : ``;
-      lines.push(`get ${prop}() { return ${dv}.${getter}(${offset}${lastArg}) }`);
-      getters[getter] = { type, bits, signed, bitOffset };
-      if (writable || defaultValue) {
-        const setter = `set${typeName}${suffix}`;
-        var check = '';
-        if (runtimeSafety && type === Int) {
-          const suffix = (bits <= 53) ? '' : 'n';
-          const max = (2 ** (signed ? bits - 1 : bits)- 1) + suffix;
-          const min = ((signed) ? -(2 ** (bits - 1)) : 0) + suffix;
-          check = `if (v < ${min} || v > ${max}) throwOverflow(${bits}, ${signed}, v); `;
+  function defineStruct(structName, structSize, fields, options = {}) {
+    const {
+      littleEndian = true,
+      exposeDataView = false,
+      runtimeSafety = true,
+    } = options;
+    for (const [ name, { defaultValue } ] of Object.entries(fields)) {
+    }
+
+    const lines = [];
+    lines.push(`(class ${structName} {`);
+    lines.push(`constructor(...arg) { construct.apply(this, arg) }`);
+    const dv = 'this[dataSymbol]';
+    const getters = {}, setters = {};
+    for (const [ name, { type, bits, signed, offset, bitOffset, writable, defaultValue } ] of Object.entries(fields)) {
+      if (type !== Pointer) {
+        const typeName = getTypeName(type, bits, signed);
+        const prop = JSON.stringify(name);
+        const suffix = (bitOffset > 0) ? `Bit${bitOffset}` : ``;
+        const getter = `get${typeName}${suffix}`;
+        const lastArg = (type === Int && bits > 8) ? `, ${littleEndian}` : ``;
+        lines.push(`get ${prop}() { return ${dv}.${getter}(${offset}${lastArg}) }`);
+        getters[getter] = { type, bits, signed, bitOffset };
+        if (writable || defaultValue) {
+          const setter = `set${typeName}${suffix}`;
+          var check = '';
+          if (runtimeSafety && type === Int) {
+            const suffix = (bits <= 53) ? '' : 'n';
+            const max = (2 ** (signed ? bits - 1 : bits)- 1) + suffix;
+            const min = ((signed) ? -(2 ** (bits - 1)) : 0) + suffix;
+            check = `if (v < ${min} || v > ${max}) throwOverflow(${bits}, ${signed}, v); `;
+          }
+          const stmt = `{ ${check}${dv}.${setter}(${offset}, v${lastArg}) }`;
+          if (writable) {
+            lines.push(`set ${prop}(v) ${stmt}`);
+          } else {
+            eval(`(function(v) ${stmt})`);
+          }
+          setters[setter] = { type, bits, signed, bitOffset };
         }
-        const stmt = `{ ${check}${dv}.${setter}(${offset}, v${lastArg}) }`;
-        if (writable) {
-          lines.push(`set ${prop}(v) ${stmt}`);
-        } else {
-          eval(`(function(v) ${stmt})`);
-        }
-        setters[setter] = { type, bits, signed, bitOffset };
       }
     }
+
+    if (exposeDataView) {
+      if (!fields.hasOwnProperty('dataView')) {
+        lines.push(`get dataView() { return ${dv} }`);
+      }
+    }
+
+    lines.push(`addMissing() {`);
+    for (const [ name, { type, bits, signed, bitOffset } ] of Object.entries(getters)) {
+      if (!DataView.prototype.hasOwnProperty(name)) {
+        lines.push(`${dv}.${name} = createGetter('${name}', ${type}, ${bits}, ${signed}, ${bitOffset});`);
+      }
+    }
+    for (const [ name, { type, bits, signed, bitOffset } ] of Object.entries(setters)) {
+      if (!DataView.prototype.hasOwnProperty(name)) {
+        lines.push(`${dv}.${name} = createSetter('${name}', ${type}, ${bits}, ${signed}, ${bitOffset});`);
+      }
+    }
+    lines.push(`}`);     // end of addMissing()
+    lines.push(`})`);     // end of class
+    return eval(lines.join('\n'));
   }
 
-  if (exposeDataView) {
-    if (!fields.hasOwnProperty('dataView')) {
-      lines.push(`get dataView() { return ${dv} }`);
-    }
-  }
+  exports.dataSymbol = dataSymbol;
+  exports.defineStruct = defineStruct;
+  exports.shadowSymbol = shadowSymbol;
 
-  lines.push(`addMissing() {`);
-  for (const [ name, { type, bits, signed, bitOffset } ] of Object.entries(getters)) {
-    if (!DataView.prototype.hasOwnProperty(name)) {
-      lines.push(`${dv}.${name} = createGetter('${name}', ${type}, ${bits}, ${signed}, ${bitOffset});`);
-    }
-  }
-  for (const [ name, { type, bits, signed, bitOffset } ] of Object.entries(setters)) {
-    if (!DataView.prototype.hasOwnProperty(name)) {
-      lines.push(`${dv}.${name} = createSetter('${name}', ${type}, ${bits}, ${signed}, ${bitOffset});`);
-    }
-  }
-  lines.push(`}`);     // end of addMissing()
-  lines.push(`})`);     // end of class
-  return eval(lines.join('\n'));
-}
+  return exports;
 
-export { dataSymbol, defineStruct, shadowSymbol };
+})({});
 )====="

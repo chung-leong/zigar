@@ -17,17 +17,6 @@ fn getStructure(h: Host, comptime T: type) !Value {
     };
 }
 
-fn getMemberType(comptime T: type) MemberType {
-    return switch (@typeInfo(T)) {
-        .Bool => .Bool,
-        .Int => .Int,
-        .Float => .Float,
-        .Struct, .Union, .Array, .Enum, .Opaque => .Structure,
-        .Pointer => .Pointer,
-        else => .Void,
-    };
-}
-
 fn getStructureType(comptime T: type) StructureType {
     return switch (@typeInfo(T)) {
         .Struct => .Normal,
@@ -39,21 +28,22 @@ fn getStructureType(comptime T: type) StructureType {
     };
 }
 
-fn defineStructure(h: Host, comptime T: type) !Value {
-    const s_type = getStructureType(T);
-    const def = try h.beginStructure(s_type);
-    if (s_type == .Singleton) {
-        h.addMember(.{
-            .type = getMemberType(T),
-            .bits = @bitSizeOf(T),
-            .bit_offset = 0,
-            .signed = switch (@typeInfo(T)) {
-                .Int => |int| int.signedness == .signed,
-                else => false,
-            },
-        });
-    }
-    return h.finalizeStructure(def);
+fn getMemberType(comptime T: type) MemberType {
+    return switch (@typeInfo(T)) {
+        .Bool => .Bool,
+        .Int => .Int,
+        .Float => .Float,
+        .Struct, .Union, .Array, .Enum, .Opaque => .Structure,
+        .Pointer => .Pointer,
+        else => .Void,
+    };
+}
+
+fn isSigned(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Int => |int| int.signedness == .signed,
+        else => false,
+    };
 }
 
 fn StaticStruct(comptime T: type) ?type {
@@ -92,6 +82,37 @@ fn StaticStruct(comptime T: type) ?type {
         .fields = fields[0..count],
         .is_tuple = false,
     } });
+}
+
+fn defineStructure(h: Host, comptime T: type) !Value {
+    const s_type = getStructureType(T);
+    const def = try h.beginStructure(s_type);
+    switch (s_type) {
+        .Normal, .Union, .Enumeration, .Opaque => {},
+        .Pointer => {
+            // TODO
+        },
+        .Array => {
+            const info = @typeInfo(T).Array;
+            const CT = info.child;
+            h.addMember(.{
+                .type = getMemberType(CT),
+                .bits = @bitSizeOf(CT),
+                .bit_offset = 0,
+                .signed = isSigned(CT),
+                .len = info.len,
+            });
+        },
+        .Singleton => {
+            h.addMember(.{
+                .type = getMemberType(T),
+                .bits = @bitSizeOf(T),
+                .bit_offset = 0,
+                .signed = isSigned(T),
+            });
+        },
+    }
+    return h.finalizeStructure(def);
 }
 
 fn ArgumentStruct(comptime function: anytype) type {

@@ -1,6 +1,6 @@
 #include <limits>
 #include <cmath>
-#include "addon.h"
+#include "addon-old.h"
 
 //-----------------------------------------------------------------------------
 //  Utility functions
