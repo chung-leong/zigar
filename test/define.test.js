@@ -1,10 +1,7 @@
 import { expect } from 'chai';
 
-import { 
-  MemberType,
-  StructureType,
-  defineStructure,
-} from '../src/define.js';
+import { MemberType, StructureType } from '../src/types.js';
+import { defineStructure } from '../src/define.js';
 
 describe('Structure definition', function() { 
   describe('Primitive', function() {
