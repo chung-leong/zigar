@@ -76,9 +76,9 @@ function obtainDataViewGetter({ type, bits, signed, bitOffset }) {
       } else {
         // TODO
       }
-    } else if (type === Float) {
+    } else if (type === MemberType.Float) {
       // TODO
-    } if (type === Bool) {
+    } if (type === MemberType.Bool) {
       const typeName = `Int${bits}`;
       const get = DataView.prototype[`get${typeName}`];
       fn = function(offset, littleEndian) {
@@ -87,7 +87,7 @@ function obtainDataViewGetter({ type, bits, signed, bitOffset }) {
     }     
   } else {
     const get = DataView.prototype.getUint8;
-    if (type === Bool && bits === 1) {
+    if (type === MemberType.Bool && bits === 1) {
       // bitfield--common enough to warrant special handle
       const mask = 1 << bitPos;
       fn = function(offset) {
@@ -172,7 +172,7 @@ function obtainDataViewSetter({ type, bits, signed, bitOffset }) {
   } else {
     const get = DataView.prototype.getInt8;
     const set = DataView.prototype.setInt8;
-    if (type === Bool && bits === 1) {
+    if (type === MemberType.Bool && bits === 1) {
       const mask = 1 << bitPos;
       fn = function(offset, value) {
         const n = get.call(this, offset);
@@ -226,7 +226,7 @@ function getIntRange(bits, signed) {
 }
 
 function throwOverflow(bits, signed, v) {
-  const typeName = getTypeName(Int, bits, signed);
+  const typeName = getTypeName(MemberType.Int, bits, signed);
   throw new TypeError(`${typeName} cannot represent value '${v}'`);
 }
 
