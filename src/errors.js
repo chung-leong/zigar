@@ -1,3 +1,5 @@
+import { getTypeName  } from './types.js';
+
 export function throwOverflow(bits, signed, v) {
   const typeName = getTypeName(MemberType.Int, bits, signed);
   throw new TypeError(`${typeName} cannot represent value '${v}'`);

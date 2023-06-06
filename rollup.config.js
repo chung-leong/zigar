@@ -1,5 +1,5 @@
 export default {
-  input: 'src/dataview.js',
+  input: 'src/define.js',
   output: {
 		file: 'src/addon.js.txt',
 		format: 'iife',
