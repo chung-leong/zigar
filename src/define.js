@@ -1,3 +1,5 @@
+const { defineProperty } = Object;
+
 export const MemberType = {
   Void: 0,
   Bool: 1,
@@ -8,7 +10,7 @@ export const MemberType = {
 };
 
 export const StructureType = {
-  Singleton: 0,
+  Primitive: 0,
   Array: 1,
   Struct: 2,
   Union: 3,
@@ -97,27 +99,27 @@ function obtainDataViewGetter({ type, bits, signed, bitOffset }) {
     } else if (type === MemberType.Int && bitPos + bits <= 8) {
       // sub-8-bit numbers also have real use cases
       if (signed) {
-        const signMask = ((bits - 1) ** 2) << bitPos;
-        const valueMask = signMask - 1; 
+        const signMask = (bits - 1) ** 2;
+        const valueMask = signMask - 1;
         fn = function(offset) {
           const n = get.call(this, offset);
-          const v = (n & valueMask) >>> bitPos;
-          return (n & signMask) ? -v : v;
+          const s = n >>> bitPos;
+          const v = s & valueMask;
+          return (s & signMask) ? -v : v;
         };
       } else {
         const valueMask = (bits ** 2 - 1) << bitPos; 
         fn = function(offset) {
           const n = get.call(this, offset);
-          return (n & valueMask) >>> bitPos;
+          const s = n >>> bitPos;
+          return s & valueMask;
         };
       }
     } else {
       // pathological usage--handle it anyway by copying the bits into a 
       // temporary buffer, bit-aligning the data
       const dest = new DataView(new ArrayBuffer(Math.ceil(bits / 8)));
-      const typeName = getTypeName(type, bits, signed);
-      const getter = `get${typeName}`;
-      const getAligned = dest[getter] ?? createGetter(getter, type, bits, signed, 0);
+      const getAligned = obtainDataViewGetter({ type, bits, signed, bitOffset: 0 });
       const shift = 8 - bitPos;
       const leadMask = ((2 ** shift) - 1) << bitPos;
       const trailMask = 0xFF ^ leadMask;
@@ -126,13 +128,13 @@ function obtainDataViewGetter({ type, bits, signed, bitOffset }) {
         var i = offset, j = 0;
         // read leading byte, mask off bits before bit offset, and shift them to the start of the byte
         var n = get.call(this, i++);
-        var overhang = (byte & leadMask) >>> bitPos;
+        var overhang = (n & leadMask) >>> bitPos;
         var remaining = bits - shift;
-        var byte;
+        var b;
         while (remaining >= 8) {
           // read next bytes, shift it forward, and combine it with bits that came before
           n = get.call(this, i++);
-          byte = overhang | ((n & trailMask) << shift);
+          b = overhang | ((n & trailMask) << shift);
           set.call(dest, j++, b);
           // new leftover
           overhang = (n & leadMask) >>> bitPos;
@@ -141,10 +143,10 @@ function obtainDataViewGetter({ type, bits, signed, bitOffset }) {
         if (remaining > 0) {
           const finalMask = ((2 ** remaining) - 1) << bitPos;
           n = get.call(this, i);
-          byte = overhang | ((n & finalMask) << shift);
+          b = overhang | ((n & finalMask) << shift);
           set.call(dest, j, b);
         }
-        return getAligned(dest, 0, littleEndian);
+        return getAligned.call(dest, 0, littleEndian);
       };
     }
   }
@@ -167,6 +169,16 @@ function obtainDataViewSetter({ type, bits, signed, bitOffset }) {
   if (bitPos === 0 && bits >= 8) {
     if (type === Int) {
       if (bits < 64) {
+        const abits = [ 8, 16, 32, 64 ].find(b => b >= bits);
+        const typeName = getTypeName(type, abits, signed);
+        const set = DataView.prototype[`set${typeName}`];
+        if (signed) {
+
+        } else {
+
+        }
+      } else {
+
       }
     }
   } else {
@@ -176,8 +188,39 @@ function obtainDataViewSetter({ type, bits, signed, bitOffset }) {
       const mask = 1 << bitPos;
       fn = function(offset, value) {
         const n = get.call(this, offset);
-        const byte = (value) ? n | mask : n & ~mask;
-        set.call(this, offset, byte);
+        const b = (value) ? n | mask : n & ~mask;
+        set.call(this, offset, b);
+      };
+    } else if (type === MemberType.Int && bitPos + bits <= 8) {
+      if (signed) {
+        const signMask = (bits - 1) ** 2;
+        const valueMask = signMask - 1;
+        const outsideMask = 0xFF ^ ((valueMask | signMask) << bitPos);
+        fn = function(offset, value) {
+          const n = get.call(this, offset);
+          const v = (value < 0) ? (-value & valueMask) | signMask : value & valueMask;
+          const b = (n & outsideMask) | (v << bitPos);
+          set.call(this, offset, b);
+        };
+      } else {
+        const valueMask = (bits ** 2) - 1; 
+        const outsideMask = 0xFF ^ (valueMask << bitPos);
+        fn = function(offset, value) {
+          const n = get.call(this, offset);
+          const v = value & valueMask;
+          const b = (n & outsideMask) | (v << bitPos);
+          set.call(this, offset, b);
+        };
+      }
+    } else {
+      const dest = new DataView(new ArrayBuffer(Math.ceil(bits / 8)));
+      const setAligned = obtainDataViewSetter({ type, bits, signed, bitOffset: 0 });
+      const shift = 8 - bitPos;
+      const leadMask = ((2 ** shift) - 1) << bitPos;
+      const trailMask = 0xFF ^ leadMask;
+      fn = function(offset, value, littleEndian) {
+        setAligned.call(dest, 0, value, littleEndian);
+
       };
     }
   }
@@ -223,11 +266,6 @@ function getIntRange(bits, signed) {
     const min = (signed) ? -(2n ** (bits - 1n)) : 0n;
     return { min, max };
   }
-}
-
-function throwOverflow(bits, signed, v) {
-  const typeName = getTypeName(MemberType.Int, bits, signed);
-  throw new TypeError(`${typeName} cannot represent value '${v}'`);
 }
 
 function obtainSetter(member, options) {
@@ -340,6 +378,136 @@ function obtainTypedArrayGetter(members) {
   return fn;
 }
 
+function obtainArrayLengthGetter(member, options) {
+  const { align } = member;
+  var fn = function() {
+    const dv = this[DATA];
+    return dv.byteLength / align;
+  };
+  return fn;
+}
+
+function obtainArrayGetter(member, options) {
+  const {
+    littleEndian = true,
+  } = options;
+  switch (member.type) {
+    case MemberType.Compound: {
+      const { struct, align } = member;
+      return function(index) { 
+        const relocs = this[RELOCATABLE];
+        if (!relocs[index]) {
+          const dv = this[DATA];
+          const offset = index * align;
+          if (offset >= 0 && offset + align <= dv.byteLength) {
+            const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
+            relocs[index] = new struct(slice);
+          } else {
+            throwOutOfBound(dv, align, index);
+          }
+        }
+        return relocs[index]; 
+      };
+    }
+    case MemberType.Pointer: {
+      return function(index) { return this[RELOCATABLE][index] };
+    } 
+    case MemberType.Bool:
+    case MemberType.Int:
+    case MemberType.Float: {
+      const { align } = member;
+      const get = obtainDataViewGetter(member);
+      return function(index) { 
+        const offset = index * align;
+        return get.call(this[DATA], offset, littleEndian) ;
+      };
+    }
+  }
+}
+
+function obtainArraySetter(member, options) {
+  const {
+    littleEndian = true,
+    runtimeSafety = true,
+  } = options;
+  var fn;
+  switch (member.type) {
+    case MemberType.Compound: {
+      const { struct, align } = member;
+      fn = function(index, v) {
+        if (!(v instanceof struct)) {
+          v = new struct(v);
+        }
+        const relocs = this[RELOCATABLE];
+        if (!relocs[index]) {
+          const dv = this[DATA];
+          const offset = index * align;
+          if (offset >= 0 && offset + align <= dv.byteLength) {
+            const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
+            relocs[index] = new struct(slice);
+          } else {
+            throwOutOfBound(dv, align, index);
+          }
+        }
+        const copy = struct[COPY];
+        copy.call(relocs[index], v);
+      };  
+    } break;
+    case MemberType.Pointer: {
+      const { struct, mutable, align } = member;
+      if (!mutable) {
+        return;
+      } 
+      return function(index, v) {
+        if (!(v instanceof struct)) {
+          v = new struct(v);
+        }
+        const dv = this[DATA];
+        const offset = index * align;
+        if (offset >= 0 && offset + align <= dv.byteLength) {
+          this[RELOCATABLE][index] = v;
+        } else {
+          throwOutOfBound(dv, align, index);
+        }
+      };    
+    }
+    case MemberType.Bool:
+    case MemberType.Int:
+    case MemberType.Float: {
+      // change buffer through DataView
+      const set = obtainDataViewSetter(member);
+      const { type, bitOffset } = member;
+      const offset = bitOffset >> 3;
+      if (runtimeSafety && type === MemberType.Int) {
+        const { bits, signed, align } = member;
+        const { min, max } = getIntRange(bits, signed);
+        fn = function(index, v) { 
+          if (v < min || v > max) {
+            throwOverflow(bits, signed, v);
+          }
+          const offset = index * align;
+          try {
+            set.call(this[DATA], offset, v, littleEndian);
+          } catch (err) {
+            throwOutOfBound(dv, align, index);
+          }
+        };
+      } else {
+        fn = function(index, v) { 
+          const offset = index * align;
+          try {
+            set.call(this[DATA], offset, v, littleEndian);
+          } catch (err) {
+            throwOutOfBound(dv, align, index);
+          }
+        };
+      }
+    } break;
+  }
+  return fn;
+}
+
+
 function copy1(dest, src) {
   for (let i = 0, len = dest.byteLength; i < len; i++) {
     dest.setInt8(i, src.getInt8(i));
@@ -357,21 +525,26 @@ export function defineStructure(def, options = {}) {
     size,
     type,
     members,
-    staticStruct,
+    staticMembers,
     defaultData,
     defaultPointers,
+    staticPointers,
     exposeDataView = false,
   } = def;
   // create prototype
   const proto = {};
   switch (type) {
-    case StructureType.Singleton: {
+    case StructureType.Primitive: {
       const [ member ] = members;
-      proto.get = obtainGetter(member, options);
+      proto.get = proto[Symbol.toPrimitive] = obtainGetter(member, options);
       proto.set = obtainSetter(member, options);
     } break;
     case StructureType.Array: {
-
+      const [ member ] = members;
+      proto.get = proto[Symbol.toPrimitive] = obtainArrayGetter(member, options);
+      proto.set = obtainArraySetter(member, options);
+      const getLength = obtainArrayLengthGetter(member, options);
+      defineProperty(proto, 'length', { get: getLength, configurable: true, enumerable: true })
     } break;
     case StructureType.Struct: {
       for (const member of members) {
@@ -404,11 +577,13 @@ export function defineStructure(def, options = {}) {
     }
     if (dv) {
       if (dv.byteLength !== size) {
-        throw new Error(`Struct size mismatch: ${dv.byteLength} != ${size}`);
+        throwSizeMismatch(dv, size);
       }
     } else if (size > 0) {
       dv = new DataView(new ArrayBuffer(size));
-      copy(dv, defaultData);
+      if (defaultData) {
+        copy(dv, defaultData);
+      }
     }   
     if (dv) {
       this[DATA] = dv;
@@ -432,9 +607,19 @@ export function defineStructure(def, options = {}) {
       } 
     } 
   };  
-  if (staticStruct) {
-    Object.setPrototypeOf(struct, staticStruct.prototype);
-  }
   Object.defineProperty(struct, 'prototype', { value: proto });
   return struct;
+}
+
+function throwOverflow(bits, signed, v) {
+  const typeName = getTypeName(MemberType.Int, bits, signed);
+  throw new TypeError(`${typeName} cannot represent value '${v}'`);
+}
+
+function throwSizeMismatch(dv, size) {
+  throw new TypeError(`Struct size mismatch: ${dv.byteLength} != ${size}`);
+}
+
+function throwOutOfBound() {
+  throw new RangeError(`Illegal array index: ${index}`);
 }
