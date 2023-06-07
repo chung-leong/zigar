@@ -3,7 +3,7 @@ import { DATA, TYPED_ARRAY } from './symbols.js';
 
 export function obtainTypedArrayGetter(members) {
   const hash = {};
-  for (const { type, bits, bitOffset, signed } of members) {
+  for (const { type, bits, signed } of members) {
     if (type === MemberType.Int || type === MemberType.Float) {
       const typeName = getTypeName(type, bits, signed);
       const constructor = typedArrays[typeName];

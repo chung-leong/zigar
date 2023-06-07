@@ -21,7 +21,7 @@ export function getTypeName(type, bits, signed) {
   } else if (type === MemberType.Float) {
     return `Float${bits}`;
   } else if (type === MemberType.Bool) {
-    return `Bool${bits}`;
+    return `Bool`;
   } else if (type === MemberType.Void) {
     return `Null`;
   }
