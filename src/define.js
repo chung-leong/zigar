@@ -66,7 +66,7 @@ export function defineStructure(def, options = {}) {
     }
     if (dv) {
       if (dv.byteLength !== size) {
-        throwSizeMismatch(dv, size);
+        throwSizeMismatch(dv.byteLength, size);
       }
     } else if (size > 0) {
       dv = new DataView(new ArrayBuffer(size));

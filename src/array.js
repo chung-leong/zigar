@@ -28,7 +28,7 @@ export function obtainArrayGetter(member, options) {
             const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
             relocs[index] = new struct(slice);
           } else {
-            throwOutOfBound(dv, align, index);
+            throwOutOfBound(dv.byteLength, align, index);
           }
         }
         return relocs[index]; 
@@ -43,7 +43,7 @@ export function obtainArrayGetter(member, options) {
           if (offset >= 0 && offset + align <= dv.byteLength) {
             // pointer isn't pointing to something
           } else {
-            throwOutOfBound(dv, align, index);
+            throwOutOfBound(dv.byteLength, align, index);
           }
         }
         return relocs[index]; 
@@ -60,7 +60,7 @@ export function obtainArrayGetter(member, options) {
         try {
           return get.call(dv, offset, littleEndian) ;
         } catch {
-          throwOutOfBound(dv, align, index);
+          throwOutOfBound(dv.byteLength, align, index);
         }
       };
     }
@@ -88,7 +88,7 @@ export function obtainArraySetter(member, options) {
             const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
             relocs[index] = new struct(slice);
           } else {
-            throwOutOfBound(dv, align, index);
+            throwOutOfBound(dv.byteLength, align, index);
           }
         }
         const copy = struct[COPY];
@@ -109,7 +109,7 @@ export function obtainArraySetter(member, options) {
         if (offset >= 0 && offset + align <= dv.byteLength) {
           this[RELOCATABLE][index] = v;
         } else {
-          throwOutOfBound(dv, align, index);
+          throwOutOfBound(dv.byteLength, align, index);
         }
       };    
     }
@@ -131,7 +131,7 @@ export function obtainArraySetter(member, options) {
           try {
             set.call(dv, offset, v, littleEndian);
           } catch (err) {
-            rethrowRangeError(err);
+            rethrowRangeError(err, dv.byteLength, align, index);
           }
         };
       } else {
@@ -141,7 +141,7 @@ export function obtainArraySetter(member, options) {
           try {
             set.call(dv, offset, v, littleEndian);
           } catch (err) {
-            rethrowRangeError(err, dv, align, index);
+            rethrowRangeError(err, dv.byteLength, align, index);
           }
         };
       }
