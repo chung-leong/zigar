@@ -1,4 +1,4 @@
-export function copyBits(src, dest, offset, bitOffset, bits) {
+export function copyBits(dest, src, offset, bitOffset, bits) {
   const shift = 8 - bitOffset;
   const leadMask = ((2 ** shift) - 1) << bitOffset;
   const trailMask = 0xFF ^ leadMask;
@@ -14,36 +14,39 @@ export function copyBits(src, dest, offset, bitOffset, bits) {
     b = overhang | ((n & trailMask) << shift);
     dest.setUint8(j++, b);
     // new overhang
-    overhang = (n & leadMask) >>> bitPos;
+    overhang = (n & leadMask) >>> bitOffset;
     remaining -= 8;
   }
   if (remaining > 0) {
-    const finalMask = ((2 ** remaining) - 1) << bitPos;
+    const finalMask = ((2 ** remaining) - 1) << bitOffset;    
     n = src.getUint8(i);
     b = overhang | ((n & finalMask) << shift);
-    dest.setUint8(j, b);
+  } else {
+    b = overhang;
   }
+  dest.setUint8(j, b);
 }
 
-export function applyBits(src, dest, offset, bitOffset, bits) {
+export function applyBits(dest, src, offset, bitOffset, bits) {
   const shift = 8 - bitOffset;
   const leadMask = ((2 ** shift) - 1) << bitOffset;
   const trailMask = 0xFF ^ leadMask;
   var i = offset, j = 0;
   var b = dest.getUint8(i);
   var leftOver = b & trailMask;
-  var remaining = bits - shift;
+  var remaining = bits + bitOffset;
+  var n;
   while (remaining >= 8) {
     n = src.getUint8(j++);
-    b = leftOver | ((n << bitOffset) & leadMask) ;
+    b = leftOver | ((n << bitOffset) & leadMask);
     dest.setUint8(i++, b);
     leftOver = (n >> shift) & trailMask;
     remaining -= 8;
   }
   if (remaining > 0) {
-    const finalMask = ((2 ** remaining) - 1) << bitPos;
+    const finalMask = ((2 ** remaining) - 1) << bitOffset;
     b = dest.getUint8(i);
-    b = (b & (0xFF ^ finalMask)) | (leftOver & finalMask);
+    b = (b & finalMask) | (leftOver & (0xFF ^ finalMask));   
     dest.setUint8(i, b)
   }
 }

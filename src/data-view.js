@@ -1,7 +1,8 @@
 import { MemberType, getTypeName } from './types.js';
+import { copyBits, applyBits } from './memory.js';
 import { DATA } from './symbols.js';
 
-export function obtainDataViewGetter({ type, bits, signed, bitOffset }) {
+export function obtainDataViewGetter({ type, bits, signed, align, bitOffset }) {
   const bitPos = bitOffset & 0x07;
   const name = getMethodName('get', type, bits, signed, bitPos);
   if (DataView.prototype[name]) {
@@ -11,11 +12,11 @@ export function obtainDataViewGetter({ type, bits, signed, bitOffset }) {
     return methodCache[name];
   }
   var fn;
-  if (bitPos === 0 && bits >= 8) {
+  if (align !== 0) {
     if (type === MemberType.Int) {
       if (bits < 64) {
         // actual number of bits needed when stored byte-aligned
-        const abits = [ 8, 16, 32, 64 ].find(b => b >= bits);
+        const abits = align * 8;
         const typeName = getTypeName(type, abits, signed);
         const get = DataView.prototype[`get${typeName}`];
         if (signed) {
@@ -78,32 +79,8 @@ export function obtainDataViewGetter({ type, bits, signed, bitOffset }) {
       // temporary buffer, bit-aligning the data
       const dest = new DataView(new ArrayBuffer(Math.ceil(bits / 8)));
       const getAligned = obtainDataViewGetter({ type, bits, signed, bitOffset: 0 });
-      const shift = 8 - bitPos;
-      const leadMask = ((2 ** shift) - 1) << bitPos;
-      const trailMask = 0xFF ^ leadMask;
-      const set = DataView.prototype.setUint8;
       fn = function(offset, littleEndian) {
-        var i = offset, j = 0;
-        // read leading byte, mask off bits before bit offset, and shift them to the start of the byte
-        var n = get.call(this, i++);
-        var overhang = (n & leadMask) >>> bitPos;
-        var remaining = bits - shift;
-        var b;
-        while (remaining >= 8) {
-          // read next bytes, shift it forward, and combine it with bits that came before
-          n = get.call(this, i++);
-          b = overhang | ((n & trailMask) << shift);
-          set.call(dest, j++, b);
-          // new leftover
-          overhang = (n & leadMask) >>> bitPos;
-          remaining -= 8;
-        }
-        if (remaining > 0) {
-          const finalMask = ((2 ** remaining) - 1) << bitPos;
-          n = get.call(this, i);
-          b = overhang | ((n & finalMask) << shift);
-          set.call(dest, j, b);
-        }
+        copyBits(dest, this, offset, bitPos, bits);
         return getAligned.call(dest, 0, littleEndian);
       };
     }
@@ -113,7 +90,7 @@ export function obtainDataViewGetter({ type, bits, signed, bitOffset }) {
   return fn;
 }
 
-export function obtainDataViewSetter({ type, bits, signed, bitOffset }) {
+export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
   const bitPos = bitOffset & 0x07;
   const name = getMethodName('set', type, bits, signed, bitPos);
   if (DataView.prototype[name]) {
@@ -124,10 +101,10 @@ export function obtainDataViewSetter({ type, bits, signed, bitOffset }) {
   }
   // TODO remove empty function once all code paths are covered
   var fn = function() {};
-  if (bitPos === 0 && bits >= 8) {
+  if (align !== 0) {
     if (type === Int) {
       if (bits < 64) {
-        const abits = [ 8, 16, 32, 64 ].find(b => b >= bits);
+        const abits = align * 8;
         const typeName = getTypeName(type, abits, signed);
         const set = DataView.prototype[`set${typeName}`];
         if (signed) {
@@ -171,14 +148,11 @@ export function obtainDataViewSetter({ type, bits, signed, bitOffset }) {
         };
       }
     } else {
-      const dest = new DataView(new ArrayBuffer(Math.ceil(bits / 8)));
+      const src = new DataView(new ArrayBuffer(Math.ceil(bits / 8)));
       const setAligned = obtainDataViewSetter({ type, bits, signed, bitOffset: 0 });
-      const shift = 8 - bitPos;
-      const leadMask = ((2 ** shift) - 1) << bitPos;
-      const trailMask = 0xFF ^ leadMask;
       fn = function(offset, value, littleEndian) {
-        setAligned.call(dest, 0, value, littleEndian);
-
+        setAligned.call(src, 0, value, littleEndian);
+        applyBits(this, src, offset, bitPos, bits);
       };
     }
   }
