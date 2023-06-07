@@ -1,6 +1,6 @@
 import { StructureType, MemberType } from './types.js';
 import { obtainGetter, obtainSetter } from './struct.js';
-import { obtainArrayGetter, obtainArraySetter, obtainArrayLengthGetter } from './array.js';
+import { obtainArrayGetter, obtainArraySetter, obtainArrayLengthGetter, getArrayIterator } from './array.js';
 import { obtainTypedArrayGetter } from './typed-array.js';
 import { obtainCopyFunction } from './memory.js';
 import { getDataView } from './data-view.js';
@@ -32,7 +32,8 @@ export function defineStructure(def, options = {}) {
       proto.get = obtainArrayGetter(member, options);
       proto.set = obtainArraySetter(member, options);
       const getLength = obtainArrayLengthGetter(member, options);
-      defineProperty(proto, 'length', { get: getLength, configurable: true, enumerable: true })
+      defineProperty(proto, 'length', { get: getLength, configurable: true, enumerable: true });
+      defineProperty(proto, Symbol.iterator, { value: getArrayIterator, configurable: true });
     } break;
     case StructureType.Struct: {
       for (const member of members) {

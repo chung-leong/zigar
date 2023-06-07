@@ -12,3 +12,11 @@ export function throwSizeMismatch(dv, size) {
 export function throwOutOfBound(dv, align, index) {
   throw new RangeError(`Illegal array index: ${index}`);
 }
+
+export function rethrowRangeError(err, dv, align, index) {
+  if (err instanceof RangeError) {
+    throwOutOfBound(dv, align, index);
+  } else {
+    throw err;
+  }
+}

@@ -48,12 +48,40 @@ describe('Structure definition', function() {
         exposeDataView: true,
       };
       const Hello = defineStructure(def);
-      expect(Hello).to.be.a('function');      
+      expect(Hello).to.be.a('function');
       const object = new Hello();
       object.set(0, 321);
       expect(object.get(0)).to.equal(321);
       expect(object.typedArray).to.be.instanceOf(Uint32Array);
       expect(object.length).to.equal(8);
+    })
+    it('should define array that is iterable', function() {
+      const def = {
+        type: StructureType.Array,
+        size: 4 * 8,
+        members: [
+          {
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            align: 4,
+            signed: false,
+          }
+        ],
+        defaultData: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 8));
+          dv.setUint32(0, 1234, true);
+          dv.setUint32(16, 4567, true);
+          return dv;
+        })(),
+      };
+      const Hello = defineStructure(def);
+      const object = new Hello();
+      const list = [];
+      for (const value of object) {
+        list.push(value);
+      }
+      expect(list).to.eql([ 1234, 0, 0, 0, 4567, 0, 0, 0 ]);
     })
   })
   describe('Simple Struct', function() {

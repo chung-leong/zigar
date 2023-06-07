@@ -9,12 +9,12 @@ const Host = host.Host;
 const StructureType = host.StructureType;
 const MemberType = host.MemberType;
 
-fn getStructure(h: Host, comptime T: type) !Value {
-    return h.getConstruct(.{ .Struct = T }) orelse new: {
-        const structure = try defineStructure(host, T);
-        try h.setConstruct(.{ .Struct = T }, structure);
-        break :new structure;
-    };
+fn getStructure(h: Host, comptime T: type) !u32 {
+    const slot_id = h.getConstructId(.{ .Struct = T });
+    if (!h.isDefined(slot_id)) {
+        try defineStructure(host, slot_id, T);
+    }
+    return slot_id;
 }
 
 fn getStructureType(comptime T: type) StructureType {
@@ -84,18 +84,39 @@ fn StaticStruct(comptime T: type) ?type {
     } });
 }
 
-fn defineStructure(h: Host, comptime T: type) !Value {
+fn defineStructure(h: Host, comptime T: type) !void {
     const s_type = getStructureType(T);
     const def = try h.beginStructure(s_type);
     switch (s_type) {
-        .Normal, .Union, .Enumeration, .Opaque => {},
+        .Normal, .Union, .Enumeration, .Opaque => {
+            if (StaticStruct(T)) |ST| {
+                const static = defineStructure(h, ST);
+                h.attachStatic(def, static);
+            }
+            for (std.meta.fields(T)) |field| {
+                const FT = field.type;
+                try h.attachMember(.{
+                    .type = getMemberType(FT),
+                    .bits = @bitSizeOf(FT),
+                    .bit_offset = @bitOffsetOf(FT, field.name),
+                    .signed = isSigned(FT),
+                    .class_id = id: {
+                        if (getStructureType(FT) == .Singleton) {
+                            break :id 0;
+                        } else {
+                            break :id getStructure(h, FT);
+                        }
+                    },
+                });
+            }
+        },
         .Pointer => {
             // TODO
         },
         .Array => {
             const info = @typeInfo(T).Array;
             const CT = info.child;
-            h.addMember(.{
+            try h.attachMember(.{
                 .type = getMemberType(CT),
                 .bits = @bitSizeOf(CT),
                 .bit_offset = 0,
@@ -104,7 +125,7 @@ fn defineStructure(h: Host, comptime T: type) !Value {
             });
         },
         .Singleton => {
-            h.addMember(.{
+            try h.attachMember(.{
                 .type = getMemberType(T),
                 .bits = @bitSizeOf(T),
                 .bit_offset = 0,
@@ -148,12 +169,34 @@ fn setReturnValue(comptime arg_struct: anytype, comptime result: anytype) void {
     }
 }
 
-fn repointStruct(h: Host, obj: Value, T: type) *T {
-    _ = obj;
-    _ = h;
+const invalidAddress = if (@bitSizeOf(*u8) == 64) 0xaaaa_aaaa_aaaa_aaaa else 0xaaaa_aaaa;
+
+fn invalidPointer(PT: type) PT {
+    return @intToPtr(PT, invalidAddress);
 }
 
-fn depointStruct(h: Host, obj: Value, T: type) void {
+fn repointStructure(h: Host, obj: Value, T: type) !*T {
+    const ptr = try h.getPointer(obj, *T);
+    switch (@typeInfo(T)) {
+        .Struct => |st| {            
+            inline for (st.fields, 0..) |field, index| {                
+                if (getMemberType(field.type) == .Pointer) {
+                    if (@field(ptr, field.name) != invalidPointer(field.type)) {
+                        // structure has been repointed already
+                        break;
+                    }
+                    const reloc_id = try h.getRelocatableId(T, index);
+                    const reloc = try h.getRelocatable(obj, reloc_id);
+                    @field(ptr, field.name) = h.getPointer(obj, T)
+                    repointStructure(h, reloc, field.type);
+                }
+            }
+        },
+    }
+    return ptr;
+}
+
+fn depointStructure(h: Host, obj: Value, T: type) void {
     _ = h;
     _ = T;
     _ = obj;
@@ -162,24 +205,29 @@ fn depointStruct(h: Host, obj: Value, T: type) void {
 //-----------------------------------------------------------------------------
 //  Thunk creation functions (compile-time)
 //-----------------------------------------------------------------------------
+
+const Thunk = fn (h: Host, arg_obj: Value) callconv(.C) void;
+
 fn createThunk(comptime S: type, comptime name: []const u8) Thunk {
     const function = @field(S, name);
     const ArgT = ArgumentStruct(function);
-    _ = ArgT;
     const Args = std.meta.ArgsTuple(@TypeOf(function));
-    _ = Args;
     const ThunkType = struct {
-        fn invokeFunction(host: Host, arg_obj: Value) callconv(.C) void {
-            var arg_struct = repointStruct(host, arg_obj, ArgT);
+        fn tryInvokingFunction(h: Host, arg_obj: Value) !void {
+            var arg_struct = try repointStructure(h, arg_obj, ArgT);
             var args: Args = undefined;
             const fields = @typeInfo(Args).Struct.fields;
             inline for (fields, 0..) |_, i| {
                 const num = std.fmt.comptimePrint("{d}", i);
                 args[i] = @field(arg_struct, num);
             }
-            var result = @host(std.builtin.CallModifier.auto, function, args);
+            var result = @call(std.builtin.CallModifier.auto, function, args);
             setReturnValue(arg_struct, result);
-            depointStruct(host, arg_obj, ArgT);
+            try depointStructure(h, arg_obj, ArgT);
+        }
+
+        fn invokeFunction(h: Host, arg_obj: Value) callconv(.C) void {
+            tryInvokingFunction(h, arg_obj) catch {};
         }
     };
     return ThunkType.invokeFunction;

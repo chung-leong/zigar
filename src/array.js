@@ -1,6 +1,6 @@
 import { MemberType, getIntRange } from './types.js';
 import { obtainDataViewGetter, obtainDataViewSetter } from './data-view.js';
-import { throwOutOfBound, throwOverflow } from './errors.js';
+import { throwOutOfBound, throwOverflow, rethrowRangeError } from './errors.js';
 import { DATA, RELOCATABLE } from './symbols.js';
 
 export function obtainArrayLengthGetter(member, options) {
@@ -35,16 +35,33 @@ export function obtainArrayGetter(member, options) {
       };
     }
     case MemberType.Pointer: {
-      return function(index) { return this[RELOCATABLE][index] };
+      return function(index) { 
+        const relocs = this[RELOCATABLE];
+        if (!relocs[index]) {
+          const dv = this[DATA];
+          const offset = index * align;
+          if (offset >= 0 && offset + align <= dv.byteLength) {
+            // pointer isn't pointing to something
+          } else {
+            throwOutOfBound(dv, align, index);
+          }
+        }
+        return relocs[index]; 
+      };
     } 
     case MemberType.Bool:
     case MemberType.Int:
     case MemberType.Float: {
       const { align } = member;
       const get = obtainDataViewGetter(member);
-      return function(index) { 
+      return function(index) {
+        const dv = this[DATA];
         const offset = index * align;
-        return get.call(this[DATA], offset, littleEndian) ;
+        try {
+          return get.call(dv, offset, littleEndian) ;
+        } catch {
+          throwOutOfBound(dv, align, index);
+        }
       };
     }
   }
@@ -110,23 +127,44 @@ export function obtainArraySetter(member, options) {
             throwOverflow(bits, signed, v);
           }
           const offset = index * align;
+          const dv = this[DATA];
           try {
-            set.call(this[DATA], offset, v, littleEndian);
+            set.call(dv, offset, v, littleEndian);
           } catch (err) {
-            throwOutOfBound(dv, align, index);
+            rethrowRangeError(err);
           }
         };
       } else {
         fn = function(index, v) { 
           const offset = index * align;
+          const dv = this[DATA];
           try {
-            set.call(this[DATA], offset, v, littleEndian);
+            set.call(dv, offset, v, littleEndian);
           } catch (err) {
-            throwOutOfBound(dv, align, index);
+            rethrowRangeError(err, dv, align, index);
           }
         };
       }
     } break;
   }
   return fn;
+}
+
+export function getArrayIterator() {
+  const self = this;
+  const length = this.length;
+  var index = 0;
+  return {
+    next() {
+      var value, done;
+      if (index < length) {
+        value = self.get(index);
+        done = false;
+        index++;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
 }
