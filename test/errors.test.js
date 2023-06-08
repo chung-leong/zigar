@@ -3,6 +3,7 @@ import { expect } from 'chai';
 import {
   throwOverflow,
   throwSizeMismatch,
+  throwNoNewEnum,
   throwOutOfBound,
   rethrowRangeError,
 } from '../src/errors.js';
@@ -16,6 +17,16 @@ describe('Error functions', function() {
   describe('#throwSizeMismatch', function() {
     it('should throw a type error', function() {
       expect(() => throwSizeMismatch(8, 16)).to.throw(TypeError);
+    })
+  })
+  describe('#throwNoNewEnum', function() {
+    it('should throw a type error', function() {
+      expect(() => throwNoNewEnum(8, 16)).to.throw(TypeError);
+    })
+  })
+  describe('#throwInvalidEnum', function() {
+    it('should throw a type error', function() {
+      expect(() => throwNoNewEnum(18)).to.throw(TypeError);
     })
   })
   describe('#throwOutOfBound', function() {

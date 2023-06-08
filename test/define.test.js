@@ -544,5 +544,228 @@ describe('Structure definition', function() {
     })
   })
   describe('Enumeration', function() {
+    it('should define an enum class', function() {
+      const def = {
+        type: StructureType.Enumeration,
+        members: [
+          {
+            name: 'Dog',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            align: 4,
+          },
+          {
+            name: 'Cat',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            align: 4,
+          },
+        ],
+        defaultData: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 0, true);
+          dv.setUint32(4, 1, true);
+          return dv;
+        })(),
+      };
+      const Hello = defineStructure(def);
+      expect(Hello.Dog.value).to.equal(0);
+      expect(Hello.Cat.value).to.equal(1);
+      expect(Hello.Dog.name).to.equal('Dog');
+      expect(Hello.Cat.name).to.equal('Cat');
+      expect(Hello.Dog === Hello.Dog).to.be.true;
+      expect(Hello.Dog === Hello.Cat).to.be.false;
+    })
+    it('should look up the correct enum object', function() {
+      const def = {
+        type: StructureType.Enumeration,
+        members: [
+          {
+            name: 'Dog',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            signed: false,
+            align: 4,
+          },
+          {
+            name: 'Cat',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            signed: false,
+            align: 4,
+          },
+        ],
+        defaultData: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 0, true);
+          dv.setUint32(4, 1, true);
+          return dv;
+        })(),
+      };
+      const Hello = defineStructure(def);
+      expect(Hello(0)).to.equal(Hello.Dog);
+      expect(Hello(1)).to.equal(Hello.Cat);
+    })
+    it('should look up the correct enum object when values are not sequential', function() {
+      const def = {
+        type: StructureType.Enumeration,
+        members: [
+          {
+            name: 'Dog',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            signed: false,
+            align: 4,
+          },
+          {
+            name: 'Cat',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            signed: false,
+            align: 4,
+          },
+        ],
+        defaultData: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 123, true);
+          dv.setUint32(4, 456, true);
+          return dv;
+        })(),
+      };
+      const Hello = defineStructure(def);
+      expect(Hello(123)).to.equal(Hello.Dog);
+      expect(Hello(456)).to.equal(Hello.Cat);
+      expect(Hello(123).value).to.equal(123);
+      expect(Hello(456).value).to.equal(456);
+      expect(Hello(456).name).to.equal('Cat');
+    })
+    it('should look up the correct enum object when they represent bigInts', function() {
+      const def = {
+        type: StructureType.Enumeration,
+        members: [
+          {
+            name: 'Dog',
+            type: MemberType.Int,
+            bits: 64,
+            bitOffset: 0,
+            signed: false,
+            align: 8,
+          },
+          {
+            name: 'Cat',
+            type: MemberType.Int,
+            bits: 64,
+            bitOffset: 0,
+            signed: false,
+            align: 8,
+          },
+        ],
+        defaultData: (() => {
+          const dv = new DataView(new ArrayBuffer(8 * 2));
+          dv.setBigUint64(0, 1234n, true);
+          dv.setBigUint64(8, 4567n, true);
+          return dv;
+        })(),
+      };
+      const Hello = defineStructure(def);
+      expect(Hello(1234n)).to.equal(Hello.Dog);
+      // BigInt suffix missing on purpose
+      expect(Hello(4567)).to.equal(Hello.Cat);
+    })
+    it('should produce the expect output when JSON.stringify() is used', function() {
+      const def = {
+        type: StructureType.Enumeration,
+        members: [
+          {
+            name: 'Dog',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            align: 4,
+          },
+          {
+            name: 'Cat',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            align: 4,
+          },
+        ],
+        defaultData: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 0, true);
+          dv.setUint32(4, 1, true);
+          return dv;
+        })(),
+      };
+      const Hello = defineStructure(def);
+      expect(JSON.stringify(Hello.Dog)).to.equal('0');
+      expect(JSON.stringify(Hello.Cat)).to.equal('1');
+    })
+  }) 
+  it('should throw when the new operator is used on the constructor', function() {
+    const def = {
+      type: StructureType.Enumeration,
+      members: [
+        {
+          name: 'Dog',
+          type: MemberType.Int,
+          bits: 32,
+          bitOffset: 0,
+          align: 4,
+        },
+        {
+          name: 'Cat',
+          type: MemberType.Int,
+          bits: 32,
+          bitOffset: 0,
+          align: 4,
+        },
+      ],
+      defaultData: (() => {
+        const dv = new DataView(new ArrayBuffer(4 * 2));
+        dv.setUint32(0, 0, true);
+        dv.setUint32(4, 1, true);
+        return dv;
+      })(),
+    };
+    const Hello = defineStructure(def);
+    expect(() => new Hello(5)).to.throw();
+  })
+  it('should throw when look-up of enum item fails', function() {
+    const def = {
+      type: StructureType.Enumeration,
+      members: [
+        {
+          name: 'Dog',
+          type: MemberType.Int,
+          bits: 32,
+          bitOffset: 0,
+          align: 4,
+        },
+        {
+          name: 'Cat',
+          type: MemberType.Int,
+          bits: 32,
+          bitOffset: 0,
+          align: 4,
+        },
+      ],
+      defaultData: (() => {
+        const dv = new DataView(new ArrayBuffer(4 * 2));
+        dv.setUint32(0, 0, true);
+        dv.setUint32(4, 1, true);
+        return dv;
+      })(),
+    };
+    const Hello = defineStructure(def);
+    expect(() => Hello(1)).to.not.throw();
+    expect(() => Hello(5)).to.throw(TypeError);
   })
 })

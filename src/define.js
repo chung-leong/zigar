@@ -4,6 +4,7 @@ import { obtainArrayGetter, obtainArraySetter, obtainArrayLengthGetter, getArray
 import { obtainTypedArrayGetter } from './typed-array.js';
 import { obtainCopyFunction } from './memory.js';
 import { obtainDataView, getDataView } from './data-view.js';
+import { throwNoNewEnum, throwInvalidEnum } from './errors.js';
 import { DATA, RELOCATABLE } from './symbols.js';
 
 export function defineStructure(def, options = {}) {
@@ -15,12 +16,10 @@ export function defineStructure(def, options = {}) {
       return defineArray(def, options);
     case StructureType.Struct:
       return defineStruct(def, options);
-    case StructureType.Union: 
-      // TODO
-      return null;
+    case StructureType.Union:      
+      return null; // TODO
     case StructureType.Enumeration:
-      // TODO
-      return null;
+      return defineEnumeration(def, options);
   }
 }
 
@@ -125,7 +124,6 @@ function defineArray(def, options) {
 function defineStruct(def, options = {}) {
   const { 
     size,
-    type,
     members,
     staticMembers,
     defaultData,
@@ -200,6 +198,88 @@ function defineStruct(def, options = {}) {
   });
   if (exposeDataView) {
     attachDataViewAccessors(constructor, members);
+  }
+  return constructor;
+};
+
+function defineEnumeration(def, options = {}) {
+  const { 
+    members,
+    defaultData,
+  } = def;
+  const [ member ] = members;
+  const primitive = getPrimitive(member.type, member.bits);
+  const getValue = obtainArrayGetter(member, options);
+  const count = members.length;
+  const prototype = {};
+  const relocs = {};
+  const constructor = function(arg) {
+    if (this) {
+      // the "constructor" is only used to convert a number into an enum object
+      // new enum items cannot be created
+      throwNoNewEnum();    
+    }
+    var index = -1;
+    if (isSequential) {
+      // normal enums start at 0 and go up, so the value is the index 
+      index = Number(arg);
+    } else {
+      // it's not sequential, so we need to compare values
+      // casting just in case the enum is BigInt
+      const v = primitive(arg);
+      for (let i = 0; i < count; i++) {
+        const value = getValue.call(constructor, i);
+        if (value === v) {
+          index = i;
+          break;
+        }
+      }
+    }
+    if (index < 0 || index >= count) {
+      throwInvalidEnum(arg);
+    }
+    // return the enum object (created down below)
+    return relocs[index];
+  };
+  // attach the numeric values to the class as its binary data
+  // this allows us to reuse the array getter
+  Object.defineProperties(constructor, {
+    prototype: { value: prototype },
+    [DATA]: { value: defaultData },
+    [RELOCATABLE]: { value: relocs },
+  });
+  // this relies on us adding the setter for the property "value" (down below)
+  const valueOf = function() { return this.value };
+  Object.defineProperties(prototype, {
+    constructor: { value: constructor, configurable: true, writable: true },
+    [Symbol.toPrimitive]: { value: valueOf, configurable: true, writable: true },    
+    // so we don't get an empty object when JSON.stringify() is used
+    toJSON: { value: valueOf, configurable: true, writable: true },
+  });
+  // now that the class has the right hidden properties, getValue() will work 
+  // scan the array to see if the enum's numeric representation is sequential
+  const isSequential = (() => {
+    // try-block in the event that the enum has bigInt items 
+    try {
+      for (let i = 0; i < count; i++) {
+        if (get.call(constructor, i) !== i) {
+          return false;
+        }
+      }
+      return true;
+    } catch (err) {      
+      return false;
+    }
+  })();
+  // attach the enum items to the constructor and the reloc object
+  for (const [ index, { name } ] of members.entries()) {
+    // can't use the constructor since it would throw
+    const item = Object.create(prototype);
+    Object.defineProperties(item, {
+      name: { value: name },
+      value: { value: getValue.call(constructor, index) },
+    });
+    constructor[name] = relocs[index] = item;
   }
   return constructor;
 };

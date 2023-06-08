@@ -1,8 +1,8 @@
 import { MemberType, getTypeName } from './types.js';
 
-export function throwOverflow(bits, signed, v) {
+export function throwOverflow(bits, signed, value) {
   const typeName = getTypeName(MemberType.Int, bits, signed);
-  throw new TypeError(`${typeName} cannot represent value '${v}'`);
+  throw new TypeError(`${typeName} cannot represent value '${value}'`);
 }
 
 export function throwSizeMismatch(actual, expected) {
@@ -23,4 +23,12 @@ export function rethrowRangeError(err, length, align, index) {
   } else {
     throw err;
   }
+}
+
+export function throwNoNewEnum() {
+  throw new TypeError(`Cannot create new enum item\nCall function without the use of "new" to obtain an enum object`);
+}
+
+export function throwInvalidEnum(value) {
+  throw new TypeError(`Value given does not correspond to an enum item: ${value}`);
 }
