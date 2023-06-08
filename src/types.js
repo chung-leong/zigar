@@ -39,3 +39,19 @@ export function getIntRange(bits, signed) {
     return { min, max };
   }
 }
+
+export function getPrimitive(type, bits) {
+  if (type === MemberType.Int) {
+    if (bits <= 32) {
+      return Number;
+    } else {
+      return BigInt;
+    }
+  } else if (type === MemberType.Float) {
+    return Number;
+  } else if (type === MemberType.Bool) {
+    return Boolean;
+  } else {
+    return Object;
+  }
+}

@@ -119,9 +119,7 @@ describe('Structure definition', function() {
       const object = new Hello();
       expect(object).to.be.an.instanceOf(Object);
       expect(object).to.be.an.instanceOf(Hello);
-      const proto = Object.getPrototypeOf(object);
-      const descrs = Object.getOwnPropertyDescriptors(proto);
-      expect(Object.keys(descrs)).to.have.lengthOf(2);
+      expect(Object.keys(object)).to.have.lengthOf(2);
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(4567);
     })

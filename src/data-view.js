@@ -1,5 +1,6 @@
 import { MemberType, getTypeName } from './types.js';
 import { copyBits, applyBits } from './memory.js';
+import { throwSizeMismatch, throwBufferExpected } from './errors.js';
 import { DATA } from './symbols.js';
 
 export function obtainDataViewGetter({ type, bits, signed, align, bitOffset }) {
@@ -159,6 +160,27 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
   Object.defineProperty(fn, 'name', { value: name, writable: false });
   methodCache[name] = fn;
   return fn;
+}
+
+export function obtainDataView(arg, size, multiple = false) {
+  var dv;
+  if (arg instanceof DataView) {
+    dv = arg;
+  } else if (arg instanceof ArrayBuffer || arg instanceof SharedArrayBuffer) {
+    dv = new DataView(arg);
+  } else {
+    throwBufferExpected(size);
+  }
+  if (multiple) {
+    if (dv.byteLength % size !== 0) {
+      throwSizeMismatch(dv.byteLength, size, true);
+    }
+  } else {
+    if (dv.byteLength !== size) {
+      throwSizeMismatch(dv.byteLength, size);
+    } 
+  }
+  return dv;
 }
 
 export function getDataView() {
