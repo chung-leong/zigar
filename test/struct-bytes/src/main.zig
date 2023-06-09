@@ -35,6 +35,22 @@ const Structs = struct {
     const BigInt5 = struct {
         number: i65 = -0xFFFF_FFFF_FFFF_FFFF,
     };
+    const Float16 = struct {
+        number1: f16 = 3.14,
+        number2: f16 = 0.0,
+        number3: f16 = -0.0,
+        number4: f16 = std.math.inf(f16),
+        number5: f16 = -std.math.inf(f16),
+        number6: f16 = std.math.nan(f16),
+    };
+    const Float128 = struct {
+        number1: f128 = 3.14,
+        number2: f128 = 0.0,
+        number3: f128 = -0.0,
+        number4: f128 = std.math.inf(f128),
+        number5: f128 = -std.math.inf(f128),
+        number6: f128 = std.math.nan(f128),
+    };
 };
 
 pub fn main() !void {

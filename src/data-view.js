@@ -35,7 +35,7 @@ export function obtainDataViewGetter({ type, bits, signed, align, bitOffset }) {
           };
         }
       } else {
-        const getWord = DataView.prototype[`getBigUint64`];
+        const getWord = DataView.prototype.getBigUint64;
         const word_count = Math.ceil(bits / 64);
         const get = function(offset, littleEndian) {
           var n = 0n;
@@ -68,7 +68,54 @@ export function obtainDataViewGetter({ type, bits, signed, align, bitOffset }) {
         }
       }
     } else if (type === MemberType.Float) {
-      // TODO
+      if (bits === 16) {
+        const dest = new DataView(new ArrayBuffer(4));
+        const get = DataView.prototype.getUint16;
+        fn = function(offset, littleEndian) {
+          const n = get.call(this, offset, littleEndian);
+          const sign = n >>> 15;
+          const exp = (n & 0x7C00) >> 10;
+          const frac = n & 0x03FF;
+          if (exp === 0) {
+            return (sign) ? -0 : 0;
+          } else if (exp === 0x1F) {
+            if (!frac) {
+              return (sign) ? -Infinity : Infinity;
+            } else {
+              return NaN;
+            }
+          }
+          const n32 = (sign << 31) | ((exp - 15 + 127) << 23) | (frac << 13);
+          dest.setUint32(0, n32, littleEndian);
+          return dest.getFloat32(0, littleEndian);
+        }
+      } else if (bits === 128) {
+        const dest = new DataView(new ArrayBuffer(8));
+        const getWord = DataView.prototype.getBigUint64;
+        const get = function(offset, littleEndian) {
+          const w1 = getWord.call(this, offset, littleEndian);
+          const w2 = getWord.call(this, offset + 8, littleEndian);
+          return (littleEndian) ? w1 | w2 << 64n : w1 << 64n | w2;
+        };
+        fn = function(offset, littleEndian) {
+          const n = get.call(this, offset, littleEndian);
+          const sign = n >> 127n;
+          const exp = (n & 0x7FFF0000000000000000000000000000n) >> 112n;
+          const frac = n & 0x0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFn;
+          if (exp === 0n) {
+            return (sign) ? -0 : 0;
+          } else if (exp === 0x7FFFn) {
+            if (!frac) {
+              return (sign) ? -Infinity : Infinity;
+            } else {
+              return NaN;
+            }
+          }
+          const n64 = (sign << 63n) | ((exp - 16383n + 1023n) << 52n) | (frac >> 60n);
+          dest.setBigUint64(0, n64, littleEndian);
+          return dest.getFloat64(0, littleEndian);
+        }
+      }
     } if (type === MemberType.Bool) {
       const typeName = `Int${bits}`;
       const get = DataView.prototype[`get${typeName}`];
@@ -188,6 +235,8 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
           };
         }
       }
+    } else if (type === MemberType.Float) {
+
     }
   } else {
     const get = DataView.prototype.getInt8;
