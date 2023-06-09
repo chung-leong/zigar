@@ -3,7 +3,7 @@ import { expect } from 'chai';
 import { MemberType, getTypeName, getIntRange } from '../src/types.js';
 
 describe('Type functions', function() {
-  describe('#getTypeName', function() {
+  describe('getTypeName', function() {
     it('should return the name for a integer type', function() {
       const name = getTypeName(MemberType.Int, 32, true);
       expect(name).to.equal('Int32');
@@ -33,7 +33,7 @@ describe('Type functions', function() {
       expect(name).to.equal('Null');
     })
   })
-  describe('#getIntRange', function() {
+  describe('getIntRange', function() {
     it('should return expected range for a 8-bit signed integer', function() {
       const { min, max } = getIntRange(8, true);
       expect(max).to.equal(127);

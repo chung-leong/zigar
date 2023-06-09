@@ -5,7 +5,7 @@ import { DATA, RELOCATABLE } from '../src/symbols.js';
 import { obtainGetter, obtainSetter } from '../src/struct.js';
 
 describe('Struct functions', function() {
-  describe('#obtainGetter', function() {
+  describe('obtainGetter', function() {
     it('should return a function for getting int', function() {
       const object = {
         [DATA]: (() => {
@@ -162,7 +162,7 @@ describe('Struct functions', function() {
       expect(res).to.equal(1234);
     })
   })
-  describe('#obtainSetter', function() {
+  describe('obtainSetter', function() {
     it('should return a function for setting int', function() {
       const dv = new DataView(new ArrayBuffer(8));
       const object = {

@@ -3,7 +3,7 @@ import { expect } from 'chai';
 import { copyBits, applyBits, obtainCopyFunction } from '../src/memory.js';
 
 describe('Memory copying functions', function() {
-  describe('#obtainCopyFunction', function() {
+  describe('obtainCopyFunction', function() {
     it ('should return a function for copying unaligned data', function() {
       const te = new TextEncoder();
       const ta = te.encode('123456789'.repeat(5));
@@ -31,7 +31,7 @@ describe('Memory copying functions', function() {
       expect(s).to.equal('123456789'.repeat(8));      
     })
   })
-  describe('#copyBits', function() {
+  describe('copyBits', function() {
     it('should copy unaligned bits into an aligned buffer', function() {
       const src = new DataView(new ArrayBuffer(8));
       // create this bit pattern
@@ -63,7 +63,7 @@ describe('Memory copying functions', function() {
       expect(dest3.getUint8(0)).to.equal(3);
     })
   })
-  describe('#applyBits', function() {
+  describe('applyBits', function() {
     it('should insert bits into unaligned positions at destination buffer', function() {
       const dest = new DataView(new ArrayBuffer(8));
       // create this bit pattern
