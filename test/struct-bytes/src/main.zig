@@ -36,7 +36,7 @@ const Structs = struct {
         number: i65 = -0xFFFF_FFFF_FFFF_FFFF,
     };
     const Float16 = struct {
-        number1: f16 = 3.14,
+        number1: f16 = 3.141592653589793238462643383279502884197169399375105820974,
         number2: f16 = 0.0,
         number3: f16 = -0.0,
         number4: f16 = std.math.inf(f16),
@@ -44,7 +44,7 @@ const Structs = struct {
         number6: f16 = std.math.nan(f16),
     };
     const Float128 = struct {
-        number1: f128 = 3.14,
+        number1: f128 = 3.141592653589793238462643383279502884197169399375105820974,
         number2: f128 = 0.0,
         number3: f128 = -0.0,
         number4: f128 = std.math.inf(f128),

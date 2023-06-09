@@ -140,6 +140,62 @@ describe('DataView functions', function() {
       const res = f.call(dv, 0, true);
       expect(res).to.equal(-0xFFFFFFFFFFFFFFFFn);
     })
+    it('should return functions for getting non-standard float types (16-bit)', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      // from struct-bytes: Float16
+      const bytes = [ 72, 66, 0, 0, 0, 128, 0, 124, 0, 252, 1, 124, ];
+      for (const [ i, b ] of bytes.entries()) {
+        dv.setUint8(i, b);
+      }
+      const member = {
+        type: MemberType.Float,
+        bits: 16,
+        bitOffset: 0,
+        signed: true,
+        align: 2,
+      };
+      const f = obtainDataViewGetter(member);     
+      const res1 = f.call(dv, 0, true);
+      expect(res1.toFixed(2)).to.equal('3.14');
+      const res2 = f.call(dv, 2, true);
+      expect(Object.is(res2, 0)).to.be.true;
+      const res3 = f.call(dv, 4, true);
+      expect(Object.is(res3, -0)).to.be.true;
+      const res4 = f.call(dv, 6, true);
+      expect(Object.is(res4, Infinity)).to.be.true;
+      const res5 = f.call(dv, 8, true);
+      expect(Object.is(res5, -Infinity)).to.be.true;
+      const res6 = f.call(dv, 10, true);
+      expect(Object.is(res6, NaN)).to.be.true;
+    })
+    it('should return functions for getting non-standard float types (128-bit)', function() {
+      const dv = new DataView(new ArrayBuffer(96));
+      // from struct-bytes: Float16
+      const bytes = [ 184, 1, 23, 197, 140, 137, 105, 132, 209, 66, 68, 181, 31, 146, 0, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 127, ];
+      for (const [ i, b ] of bytes.entries()) {
+        dv.setUint8(i, b);
+      }
+      const member = {
+        type: MemberType.Float,
+        bits: 128,
+        bitOffset: 0,
+        signed: true,
+        align: 16,
+      };
+      const f = obtainDataViewGetter(member);     
+      const res1 = f.call(dv, 0, true);
+      expect(res1.toFixed(15)).to.equal('3.141592653589793');
+      const res2 = f.call(dv, 16, true);
+      expect(Object.is(res2, 0)).to.be.true;
+      const res3 = f.call(dv, 32, true);
+      expect(Object.is(res3, -0)).to.be.true;
+      const res4 = f.call(dv, 48, true);
+      expect(Object.is(res4, Infinity)).to.be.true;
+      const res5 = f.call(dv, 64, true);
+      expect(Object.is(res5, -Infinity)).to.be.true;
+      const res6 = f.call(dv, 80, true);
+      expect(Object.is(res6, NaN)).to.be.true;
+    })
   })
   describe('obtainDataViewSetter', function() {
     it('should return functions for setting standard int types', function() {
