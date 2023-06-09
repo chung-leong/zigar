@@ -45,7 +45,7 @@ describe('DataView functions', function() {
         expect(res.toFixed(2)).to.equal('3.14');
       }      
     })
-    it('should return functions for getting non-standard int types (aligned, < 64 bits)', function() {
+    it('should return functions for getting non-standard int types (aligned, < 64-bit)', function() {
       const dv = new DataView(new ArrayBuffer(16));
       dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn);
       for (const signed of [ false, true ]) {
@@ -71,6 +71,74 @@ describe('DataView functions', function() {
           }
         }      
       }
+    })
+    it('should return functions for getting non-standard int types (128-bit)', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      // from struct-bytes: BigInt1
+      const bytes = [ 255, 255, 255, 255, 255, 255, 255, 31, 0, 0, 0, 0, 0, 0, 0, 0, ];
+      for (const [ i, b ] of bytes.entries()) {
+        dv.setUint8(i, b);
+      }
+      const member = {
+        type: MemberType.Int,
+        bits: 128,
+        bitOffset: 0,
+        signed: false,
+        align: 16,
+      };
+      const f = obtainDataViewGetter(member);     
+      const res1 = f.call(dv, 0, true);
+      expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
+      // from struct-bytes: BigInt2
+      const bytesBE = [ 0, 0, 0, 0, 0, 0, 0, 0, 31, 255, 255, 255, 255, 255, 255, 255, ];
+      for (const [ i, b ] of bytes.entries()) {
+        dv.setUint8(i, b);
+      }
+      const res2 = f.call(dv, 0, false);
+      expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
+    })
+    it('should return functions for getting non-standard int types (72-bit)', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      // from struct-bytes: BigInt3
+      const bytes = [ 255, 255, 255, 255, 255, 255, 255, 31, 0, 0, 0, 0, 0, 0, 0, 0, ];
+      for (const [ i, b ] of bytes.entries()) {
+        dv.setUint8(i, b);
+      }
+      const member = {
+        type: MemberType.Int,
+        bits: 72,
+        bitOffset: 0,
+        signed: false,
+        align: 16,
+      };
+      const f = obtainDataViewGetter(member);     
+      const res1 = f.call(dv, 0, true);
+      expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
+      // from struct-bytes: BigInt4
+      const bytesBE = [ 0, 31, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, ];
+      for (const [ i, b ] of bytes.entries()) {
+        dv.setUint8(i, b);
+      }
+      const res2 = f.call(dv, 0, false);
+      expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
+    })
+    it('should return functions for getting non-standard int types (65-bit)', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      // from struct-bytes: BigInt5
+      const bytes = [ 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, ];
+      for (const [ i, b ] of bytes.entries()) {
+        dv.setUint8(i, b);
+      }
+      const member = {
+        type: MemberType.Int,
+        bits: 65,
+        bitOffset: 0,
+        signed: true,
+        align: 16,
+      };
+      const f = obtainDataViewGetter(member);     
+      const res = f.call(dv, 0, true);
+      expect(res).to.equal(-0xFFFFFFFFFFFFFFFFn);
     })
   })
   describe('obtainDataViewSetter', function() {
@@ -98,7 +166,7 @@ describe('DataView functions', function() {
         }      
       }
     })
-    it('should return functions for getting standard float types', function() {
+    it('should return functions for setting standard float types', function() {
       const dv = new DataView(new ArrayBuffer(16));
       for (const bits of [ 32, 64 ]) {
         const member = {
@@ -115,7 +183,7 @@ describe('DataView functions', function() {
       expect(dv.getFloat64(8, true).toFixed(2)).to.equal('3.14');
     })
     it('should return functions for setting non-standard int types (aligned, < 64 bits)', function() {
-      for (const signed of [ true ]) {
+      for (const signed of [ false, true ]) {
         const standard = [ 8, 16, 32, 64 ];
         for (let bits = 2; bits < 64; bits++) {
           const dv = new DataView(new ArrayBuffer(16));
@@ -137,6 +205,91 @@ describe('DataView functions', function() {
           const get = obtainDataViewGetter(member);
           expect(get.call(dv, 0, true)).to.equal(min);
           expect(get.call(dv, 8, true)).to.equal(max);
+        }      
+      }
+    })
+    it('should return functions for setting non-standard int types (128 bits)', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      // from struct-bytes: BigInt1
+      const bytes = [ 255, 255, 255, 255, 255, 255, 255, 31, 0, 0, 0, 0, 0, 0, 0, 0, ];
+      const member = {
+        type: MemberType.Int,
+        bits: 128,
+        bitOffset: 0,
+        signed: false,
+        align: 16,
+      };
+      const f = obtainDataViewSetter(member);     
+      f.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, true);
+      for (const [ i, b ] of bytes.entries()) {
+        expect(dv.getUint8(i)).to.equal(b);
+      }
+      // from struct-bytes: BigInt2
+      const bytesBE = [ 0, 0, 0, 0, 0, 0, 0, 0, 31, 255, 255, 255, 255, 255, 255, 255, ];
+      f.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, false);
+      for (const [ i, b ] of bytesBE.entries()) {
+        expect(dv.getUint8(i)).to.equal(b);
+      }
+    });
+    it('should return functions for setting non-standard int types (72 bits)', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      // from struct-bytes: BigInt3
+      const bytes = [ 255, 255, 255, 255, 255, 255, 255, 31, 0, 0, 0, 0, 0, 0, 0, 0, ];
+      const member = {
+        type: MemberType.Int,
+        bits: 72,
+        bitOffset: 0,
+        signed: false,
+        align: 16,
+      };
+      const f = obtainDataViewSetter(member);     
+      f.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, true);
+      for (const [ i, b ] of bytes.entries()) {
+        expect(dv.getUint8(i)).to.equal(b);
+      }
+      // from struct-bytes: BigInt4
+      const bytesBE = [ 0, 31, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, ];
+      f.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, false);
+      for (const [ i, b ] of bytesBE.entries()) {
+        expect(dv.getUint8(i)).to.equal(b);
+      }
+    });
+    it('should return functions for getting non-standard int types (65-bit)', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      // from struct-bytes: BigInt5
+      const bytes = [ 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, ];
+      const member = {
+        type: MemberType.Int,
+        bits: 65,
+        bitOffset: 0,
+        signed: true,
+        align: 16,
+      };
+      const f = obtainDataViewSetter(member);     
+      f.call(dv, 0, -0xFFFFFFFFFFFFFFFFn, true);
+      for (const [ i, b ] of bytes.entries()) {
+        expect(dv.getUint8(i)).to.equal(b);
+      }
+    })
+    it('should return functions for setting non-standard int types (> 64 bits)', function() {
+      for (const signed of [ false, true ]) {
+        for (let bits = 65; bits < 1024; bits += 33) {
+          const dv = new DataView(new ArrayBuffer(256));
+          const { min, max } = getIntRange(bits, signed);
+          const member = {
+            type: MemberType.Int,
+            bits,
+            bitOffset: 0,
+            signed,
+            align: Math.ceil(bits / 64) * 8,
+          };
+          const f = obtainDataViewSetter(member);
+          f.call(dv, 0, min, true);
+          f.call(dv, 128, max, true);
+          // assuming that the getter works properly here
+          const get = obtainDataViewGetter(member);
+          expect(get.call(dv, 0, true)).to.equal(min);
+          expect(get.call(dv, 128, true)).to.equal(max);
         }      
       }
     })

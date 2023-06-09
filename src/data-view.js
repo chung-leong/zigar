@@ -28,14 +28,44 @@ export function obtainDataViewGetter({ type, bits, signed, align, bitOffset }) {
             return (n & valueMask) - (n & signMask);
           };
         } else {
-          const valueMask = (bits <= 32) ? (2 ** bits) - 1: (2n ** BigInt(bits)) - 1n; 
+          const valueMask = (bits <= 32) ? (2 ** bits) - 1 : (2n ** BigInt(bits)) - 1n; 
           fn = function(offset, littleEndian) {
             const n = get.call(this, offset, littleEndian);
             return n & valueMask;
           };
         }
       } else {
-        // TODO
+        const getWord = DataView.prototype[`getBigUint64`];
+        const word_count = Math.ceil(bits / 64);
+        const get = function(offset, littleEndian) {
+          var n = 0n;
+          if (littleEndian) {
+            for (let i = 0, j = offset + (word_count - 1) * 8; i < word_count; i++, j -= 8) {
+              const w = getWord.call(this, j, littleEndian);
+              n = (n << 64n) | w;
+            }
+          } else {
+            for (let i = 0, j = offset; i < word_count; i++, j += 8) {
+              const w = getWord.call(this, j, littleEndian);
+              n = (n << 64n) | w;
+            }
+          }
+          return n;
+        };
+        if (signed) {
+          const signMask = 2n ** BigInt(bits - 1);
+          const valueMask = signMask - 1n; 
+          fn = function(offset, littleEndian) {
+            const n = get.call(this, offset, littleEndian);
+            return (n & valueMask) - (n & signMask);
+          };
+        } else {
+          const valueMask =  (2n ** BigInt(bits)) - 1n; 
+          fn = function(offset, littleEndian) {
+            const n = get.call(this, offset, littleEndian);
+            return n & valueMask;
+          };
+        }
       }
     } else if (type === MemberType.Float) {
       // TODO
@@ -122,7 +152,41 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
           };
         }
       } else {
-
+        const setWord = DataView.prototype[`setBigUint64`];
+        const word_count = Math.ceil(bits / 64);
+        const set = function(offset, v, littleEndian) {
+          var n = v;
+          const mask = 0xFFFFFFFFFFFFFFFFn; 
+          if (littleEndian) {
+            for (let i = 0, j = offset; i < word_count; i++, j += 8) {
+              const w = n & mask;
+              setWord.call(this, j, w, littleEndian);
+              n >>= 64n;
+            }
+          } else {
+            n <<= BigInt(word_count * 64 - bits);
+            for (let i = 0, j = offset + (word_count - 1) * 8; i < word_count; i++, j -= 8) {
+              const w = n & mask;
+              setWord.call(this, j, w, littleEndian);
+              n >>= 64n;
+            }
+          }
+          return n;
+        };
+        if (signed) {
+          const signMask = (bits <= 32) ? 2 ** (bits - 1) : 2n ** BigInt(bits - 1);
+          const valueMask = (bits <= 32) ? signMask - 1 : signMask - 1n; 
+          fn = function(offset, v, littleEndian) {
+            const n = (v < 0) ? signMask | (v & valueMask) : v & valueMask;
+            set.call(this, offset, n, littleEndian);
+          };
+        } else {
+          const valueMask = (bits <= 32) ? (2 ** bits) - 1: (2n ** BigInt(bits)) - 1n; 
+          fn = function(offset, v, littleEndian) {
+            const n = v & valueMask;
+            set.call(this, offset, n, littleEndian);
+          };
+        }
       }
     }
   } else {

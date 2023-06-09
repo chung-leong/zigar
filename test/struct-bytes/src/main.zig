@@ -20,6 +20,21 @@ const Structs = struct {
         dog: i32,
         monkey: i64,
     };
+    const BigInt1 = struct {
+        number: u128 = 0x0_1FFF_FFFF_FFFF_FFFF,
+    };
+    const BigInt2 = struct {
+        number: u128 = std.mem.nativeToBig(u128, 0x0_1FFF_FFFF_FFFF_FFFF),
+    };
+    const BigInt3 = struct {
+        number: u72 = 0x0_1FFF_FFFF_FFFF_FFFF,
+    };
+    const BigInt4 = struct {
+        number: u72 = std.mem.nativeToBig(u72, 0x0_1FFF_FFFF_FFFF_FFFF),
+    };
+    const BigInt5 = struct {
+        number: i65 = -0xFFFF_FFFF_FFFF_FFFF,
+    };
 };
 
 pub fn main() !void {
@@ -48,9 +63,11 @@ pub fn main() !void {
             const ptr = @ptrCast([*]u8, &s);
             const len = @sizeOf(T);
             var i: usize = 0;
+            try stdout.print("[ ", .{});
             while (i < len) : (i += 1) {
                 try stdout.print("{d}, ", .{ptr[i]});
             }
+            try stdout.print("]", .{});
             try stdout.print("\n\n", .{});
             found = true;
             break;
