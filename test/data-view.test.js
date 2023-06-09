@@ -45,6 +45,33 @@ describe('DataView functions', function() {
         expect(res.toFixed(2)).to.equal('3.14');
       }      
     })
+    it('should return functions for getting non-standard int types (aligned, < 64 bits)', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn);
+      for (const signed of [ false, true ]) {
+        const standard = [ 8, 16, 32, 64 ];
+        for (let bits = 2; bits < 64; bits++) {
+          if (standard.includes(bits)) {
+            continue;
+          }
+          const { max } = getIntRange(bits, signed);
+          const member = {
+            type: MemberType.Int,
+            bits,
+            bitOffset: 64,
+            signed,
+            align: [ 1, 2, 4, 8 ].find(b => b * 8 > bits),
+          };
+          const f = obtainDataViewGetter(member);
+          const res = f.call(dv, 8, true);
+          if (signed) {
+            expect(Number(res)).to.equal(-1);
+          } else {
+            expect(res).to.equal(max);
+          }
+        }      
+      }
+    })
   })
   describe('obtainDataViewSetter', function() {
     it('should return functions for setting standard int types', function() {
@@ -86,6 +113,32 @@ describe('DataView functions', function() {
       }      
       expect(dv.getFloat32(0, true).toFixed(2)).to.equal('3.14');
       expect(dv.getFloat64(8, true).toFixed(2)).to.equal('3.14');
+    })
+    it('should return functions for setting non-standard int types (aligned, < 64 bits)', function() {
+      for (const signed of [ true ]) {
+        const standard = [ 8, 16, 32, 64 ];
+        for (let bits = 2; bits < 64; bits++) {
+          const dv = new DataView(new ArrayBuffer(16));
+          if (standard.includes(bits)) {
+            continue;
+          }
+          const { min, max } = getIntRange(bits, signed);
+          const member = {
+            type: MemberType.Int,
+            bits,
+            bitOffset: 64,
+            signed,
+            align: [ 1, 2, 4, 8 ].find(b => b * 8 > bits),
+          };
+          const f = obtainDataViewSetter(member);
+          f.call(dv, 0, min, true);
+          f.call(dv, 8, max, true);
+          // assuming that the getter works properly here
+          const get = obtainDataViewGetter(member);
+          expect(get.call(dv, 0, true)).to.equal(min);
+          expect(get.call(dv, 8, true)).to.equal(max);
+        }      
+      }
     })
   })
 })

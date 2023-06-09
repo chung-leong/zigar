@@ -21,15 +21,14 @@ export function obtainDataViewGetter({ type, bits, signed, align, bitOffset }) {
         const typeName = getTypeName(type, abits, signed);
         const get = DataView.prototype[`get${typeName}`];
         if (signed) {
-          const signMask = (bits <= 32) ? (abits - 1) ** 2 : BigInt((abits - 1) ** 2);
-          const valueMask = signMask - 1; 
+          const signMask = (bits <= 32) ? 2 ** (bits - 1) : 2n ** BigInt(bits - 1);
+          const valueMask = (bits <= 32) ? signMask - 1 : signMask - 1n; 
           fn = function(offset, littleEndian) {
             const n = get.call(this, offset, littleEndian);
-            const v = n & valueMask;
-            return (n & signMask) ? -v : v;
+            return (n & valueMask) - (n & signMask);
           };
         } else {
-          const valueMask = (bits <= 32) ? abits ** 2  - 1: BigInt(abits ** 2 - 1); 
+          const valueMask = (bits <= 32) ? (2 ** bits) - 1: (2n ** BigInt(bits)) - 1n; 
           fn = function(offset, littleEndian) {
             const n = get.call(this, offset, littleEndian);
             return n & valueMask;
@@ -103,15 +102,24 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
   // TODO remove empty function once all code paths are covered
   var fn = function() {};
   if (align !== 0) {
-    if (type === Int) {
+    if (type === MemberType.Int) {
       if (bits < 64) {
         const abits = align * 8;
         const typeName = getTypeName(type, abits, signed);
         const set = DataView.prototype[`set${typeName}`];
         if (signed) {
-
+          const signMask = (bits <= 32) ? 2 ** (bits - 1) : 2n ** BigInt(bits - 1);
+          const valueMask = (bits <= 32) ? signMask - 1 : signMask - 1n; 
+          fn = function(offset, v, littleEndian) {
+            const n = (v < 0) ? signMask | (v & valueMask) : v & valueMask;
+            set.call(this, offset, n, littleEndian);
+          };
         } else {
-
+          const valueMask = (bits <= 32) ? (2 ** bits) - 1: (2n ** BigInt(bits)) - 1n; 
+          fn = function(offset, v, littleEndian) {
+            const n = v & valueMask;
+            set.call(this, offset, n, littleEndian);
+          };
         }
       } else {
 
@@ -129,7 +137,7 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
       };
     } else if (type === MemberType.Int && bitPos + bits <= 8) {
       if (signed) {
-        const signMask = (bits - 1) ** 2;
+        const signMask = 2 ** (bits - 1);
         const valueMask = signMask - 1;
         const outsideMask = 0xFF ^ ((valueMask | signMask) << bitPos);
         fn = function(offset, value) {
