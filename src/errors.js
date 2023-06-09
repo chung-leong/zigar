@@ -17,6 +17,10 @@ export function throwOutOfBound(length, align, index) {
   throw new RangeError(`Illegal array index: ${index}`);
 }
 
+export function throwNotNull() {
+  throw new RangeError(`Property can only be null`);
+}
+
 export function rethrowRangeError(err, length, align, index) {
   if (err instanceof RangeError) {
     throwOutOfBound(length, align, index);
@@ -31,4 +35,8 @@ export function throwNoNewEnum() {
 
 export function throwInvalidEnum(value) {
   throw new TypeError(`Value given does not correspond to an enum item: ${value}`);
+}
+
+export function throwEnumExpected(struct) {
+  throw new TypeError(`Enum item expected: ${struct.name}`);
 }

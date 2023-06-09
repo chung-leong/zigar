@@ -537,10 +537,8 @@ describe('Structure definition', function() {
       };
       const Hello = defineStructure(def);
       const object = new Hello();
-      // TODO: pointer to primitives should be automatically dereferenced
-      expect(object.dog).to.be.instanceOf(Int32);
-      expect(object.cat).to.be.instanceOf(Int32);
-      expect(Number(object.cat)).to.equal(4567);
+      expect(object.dog).to.equal(1234);
+      expect(object.cat).to.equal(4567);
     })
   })
   describe('Enumeration', function() {
@@ -738,7 +736,7 @@ describe('Structure definition', function() {
     const Hello = defineStructure(def);
     expect(() => new Hello(5)).to.throw();
   })
-  it('should throw when look-up of enum item fails', function() {
+  it('should return undefined when look-up of enum item fails', function() {
     const def = {
       type: StructureType.Enumeration,
       members: [
@@ -765,7 +763,7 @@ describe('Structure definition', function() {
       })(),
     };
     const Hello = defineStructure(def);
-    expect(() => Hello(1)).to.not.throw();
-    expect(() => Hello(5)).to.throw(TypeError);
+    expect(Hello(1)).to.be.an('object');
+    expect(Hello(5)).to.be.undefined;
   })
 })

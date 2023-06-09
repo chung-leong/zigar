@@ -4,7 +4,7 @@ import { obtainArrayGetter, obtainArraySetter, obtainArrayLengthGetter, getArray
 import { obtainTypedArrayGetter } from './typed-array.js';
 import { obtainCopyFunction } from './memory.js';
 import { obtainDataView, getDataView } from './data-view.js';
-import { throwNoNewEnum, throwInvalidEnum } from './errors.js';
+import { throwNoNewEnum } from './errors.js';
 import { DATA, RELOCATABLE } from './symbols.js';
 
 export function defineStructure(def, options = {}) {
@@ -15,8 +15,9 @@ export function defineStructure(def, options = {}) {
     case StructureType.Array:
       return defineArray(def, options);
     case StructureType.Struct:
+    case StructureType.ExternUnion:
       return defineStruct(def, options);
-    case StructureType.Union:      
+    case StructureType.TaggedUnion:
       return null; // TODO
     case StructureType.Enumeration:
       return defineEnumeration(def, options);
@@ -33,7 +34,6 @@ function definePrimitive(def, options) {
   const primitive = getPrimitive(member.type, member.bits);
   const get = obtainGetter(member, options);
   const set = obtainSetter(member, options);
-  const prototype = {};
   const constructor = function(arg) {
     var self, dv, init;
     if (this) {
@@ -47,7 +47,7 @@ function definePrimitive(def, options) {
         copy(dv, defaultData);
       }
     } else {
-      self = Object.create(prototype);
+      self = Object.create(constructor.prototype);
       dv = obtainDataView(arg, size);
     }
     Object.defineProperties(self, {
@@ -57,11 +57,7 @@ function definePrimitive(def, options) {
       return self;
     }
   };
-  Object.defineProperties(constructor, {
-    prototype: { value: prototype },
-  });
-  Object.defineProperties(prototype, {
-    constructor: { value: constructor, configurable: true, writable: true },
+  Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
@@ -80,7 +76,6 @@ function defineArray(def, options) {
   const get = obtainArrayGetter(member, options);
   const set = obtainArraySetter(member, options);
   const getLength = obtainArrayLengthGetter(member, options);
-  const prototype = {};
   const constructor = function(arg) {
     var self, dv, init;
     if (this) {
@@ -95,7 +90,7 @@ function defineArray(def, options) {
         copy(dv, defaultData);
       }
     } else {
-      self = Object.create(prototype);
+      self = Object.create(constructor.prototype);
       dv = obtainDataView(arg, size);
     }
     Object.defineProperties(self, {
@@ -105,11 +100,7 @@ function defineArray(def, options) {
       return self;
     }
   };
-  Object.defineProperties(constructor, {
-    prototype: { value: prototype },
-  });
-  Object.defineProperties(prototype, {
-    constructor: { value: constructor, configurable: true, writable: true },
+  Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { get: getLength, configurable: true },
@@ -132,7 +123,6 @@ function defineStruct(def, options = {}) {
     exposeDataView = false,
   } = def;
   const copy = obtainCopyFunction(size);
-  const prototype = {};
   const descriptors = {};
   for (const member of members) {
     const get = obtainGetter(member, options);
@@ -158,7 +148,7 @@ function defineStruct(def, options = {}) {
         copy(dv, defaultData);
       }
     } else {
-      self = Object.create(prototype);
+      self = Object.create(constructor.prototype);
       dv = obtainDataView(arg, size);
     }
     Object.defineProperties(self, {
@@ -190,12 +180,6 @@ function defineStruct(def, options = {}) {
       return self;
     }
   };
-  Object.defineProperties(constructor, {
-    prototype: { value: prototype },
-  });
-  Object.defineProperties(prototype, {
-    constructor: { value: constructor, configurable: true, writable: true },
-  });
   if (exposeDataView) {
     attachDataViewAccessors(constructor, members);
   }
@@ -211,7 +195,6 @@ function defineEnumeration(def, options = {}) {
   const primitive = getPrimitive(member.type, member.bits);
   const getValue = obtainArrayGetter(member, options);
   const count = members.length;
-  const prototype = {};
   const relocs = {};
   const constructor = function(arg) {
     if (this) {
@@ -235,23 +218,18 @@ function defineEnumeration(def, options = {}) {
         }
       }
     }
-    if (index < 0 || index >= count) {
-      throwInvalidEnum(arg);
-    }
     // return the enum object (created down below)
     return relocs[index];
   };
   // attach the numeric values to the class as its binary data
   // this allows us to reuse the array getter
   Object.defineProperties(constructor, {
-    prototype: { value: prototype },
     [DATA]: { value: defaultData },
     [RELOCATABLE]: { value: relocs },
   });
   // this relies on us adding the setter for the property "value" (down below)
   const valueOf = function() { return this.value };
-  Object.defineProperties(prototype, {
-    constructor: { value: constructor, configurable: true, writable: true },
+  Object.defineProperties(constructor.prototype, {
     [Symbol.toPrimitive]: { value: valueOf, configurable: true, writable: true },    
     // so we don't get an empty object when JSON.stringify() is used
     toJSON: { value: valueOf, configurable: true, writable: true },
@@ -274,7 +252,7 @@ function defineEnumeration(def, options = {}) {
   // attach the enum items to the constructor and the reloc object
   for (const [ index, { name } ] of members.entries()) {
     // can't use the constructor since it would throw
-    const item = Object.create(prototype);
+    const item = Object.create(constructor.prototype);
     Object.defineProperties(item, {
       name: { value: name },
       value: { value: getValue.call(constructor, index) },

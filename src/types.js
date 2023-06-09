@@ -3,16 +3,18 @@ export const MemberType = {
   Bool: 1,
   Int: 2,
   Float: 3,
-  Compound: 4,
-  Pointer: 5,
+  Enum: 4,
+  Compound: 5,
+  Pointer: 6,
 };
 
 export const StructureType = {
   Primitive: 0,
   Array: 1,
   Struct: 2,
-  Union: 3,
-  Enumeration: 4,
+  ExternUnion: 3,
+  TaggedUnion: 4,
+  Enumeration: 5,
 };
 
 export function getTypeName(type, bits, signed) {
