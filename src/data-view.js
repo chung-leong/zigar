@@ -199,7 +199,7 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
           };
         }
       } else {
-        const setWord = DataView.prototype[`setBigUint64`];
+        const setWord = DataView.prototype.setBigUint64;
         const word_count = Math.ceil(bits / 64);
         const set = function(offset, v, littleEndian) {
           var n = v;
@@ -236,7 +236,51 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
         }
       }
     } else if (type === MemberType.Float) {
-
+      if (bits === 16) {
+        const src = new DataView(new ArrayBuffer(4));
+        const set = DataView.prototype.setUint16;
+        fn = function(offset, v, littleEndian) {
+          src.setFloat32(0, v, littleEndian);
+          const n = src.getUint32(0, littleEndian);
+          const sign = n >>> 31;
+          const exp = (n & 0x7F800000) >> 23;
+          const frac = n & 0x007FFFFF;
+          var n16;
+          if (exp === 0) {
+            n16 = sign << 15;
+          } else if (exp === 0xFF) {
+            n16 = sign << 15 | 0x1F << 10 | ((frac) ? 1 : 0);
+          } else {
+            n16 = sign << 15 | (exp - 127 + 15) << 10 | (frac >> 13);
+          }
+          set.call(this, offset, n16, littleEndian);
+        }
+      } else if (bits === 128) {
+        const src = new DataView(new ArrayBuffer(8));
+        const setWord = DataView.prototype.setBigUint64;
+        const set = function(offset, v, littleEndian) {
+          const w1 = v & 0xFFFFFFFFFFFFFFFFn;
+          const w2 = v >> 64n;
+          setWord.call(this, offset + (littleEndian ? 0 : 8), w1, littleEndian);
+          setWord.call(this, offset + (littleEndian ? 8 : 0), w2, littleEndian);
+        };
+        fn = function(offset, v, littleEndian) {
+          src.setFloat64(0, v, littleEndian);
+          const n = src.getBigUint64(0, littleEndian);
+          const sign = n >> 63n;
+          const exp = (n & 0x7FF0000000000000n) >> 52n;
+          const frac = n & 0x000FFFFFFFFFFFFFn;
+          var n128;
+          if (exp === 0n) {
+            n128 = sign << 127n | (frac << 60n);
+          } else if (exp === 0x07FFn) {
+            n128 = sign << 127n | 0x7FFFn << 112n | ((frac) ? 1n : 0n);
+          } else {
+            n128 = sign << 127n | (exp - 1023n + 16383n) << 112n | (frac << 60n);
+          }
+          set.call(this, offset, n128, littleEndian);
+        }
+      }
     }
   } else {
     const get = DataView.prototype.getInt8;
