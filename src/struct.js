@@ -129,7 +129,7 @@ export function obtainSetter(member, options) {
         if (!(v instanceof struct)) {
           throwEnumExpected(struct);
         }
-        set.call(this[DATA], offset, v.value, littleEndian);
+        set.call(this[DATA], offset, v.valueOf(), littleEndian);
       }; 
     }
   }

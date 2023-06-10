@@ -197,7 +197,6 @@ describe('Struct functions', function() {
     })
     it('should return a function for setting bool', function() {
       const dv = new DataView(new ArrayBuffer(8));
-      dv.setUint32(4, 2, true);
       const object = {
         [DATA]: dv,
       };
@@ -210,7 +209,7 @@ describe('Struct functions', function() {
       };
       const f = obtainSetter(member, {});
       f.call(object, true);
-      expect(dv.getUint32(4, true)).to.equal(3);
+      expect(dv.getUint32(4, true)).to.equal(1);
     })
     it('should return a function for setting void', function() {
       const dv = new DataView(new ArrayBuffer(8));
@@ -230,7 +229,9 @@ describe('Struct functions', function() {
       expect(() => f.call(object, 44)).to.throw();
     })   
     it('should return a function for setting enum', function() {
-      const DummyValue = { value: 1 };
+      const DummyValue = {
+        valueOf() { return 1 }
+      };
       const DummyEnum = function(v) {
         if (v === 1) {
           return DummyValue;

@@ -5,7 +5,7 @@ import { DATA } from './symbols.js';
 
 export function obtainDataViewGetter({ type, bits, signed, align, bitOffset }) {
   const bitPos = bitOffset & 0x07;
-  const name = getMethodName('get', type, bits, signed, bitPos);
+  const name = getMethodName('get', type, bits, signed, align, bitPos);
   if (DataView.prototype[name]) {
     return DataView.prototype[name];
   }
@@ -116,8 +116,9 @@ export function obtainDataViewGetter({ type, bits, signed, align, bitOffset }) {
           return dest.getFloat64(0, littleEndian);
         }
       }
-    } if (type === MemberType.Bool) {
-      const typeName = `Int${bits}`;
+    } else if (type === MemberType.Bool) {
+      const abits = align * 8;
+      const typeName = `Int${abits}`;
       const get = DataView.prototype[`get${typeName}`];
       fn = function(offset, littleEndian) {
         return !!get.call(this, offset, littleEndian);
@@ -162,6 +163,9 @@ export function obtainDataViewGetter({ type, bits, signed, align, bitOffset }) {
       };
     }
   }
+  if (!fn) {
+    throw new Error(`Missing getter: ${type}`)
+  }
   Object.defineProperty(fn, 'name', { value: name, writable: false });
   methodCache[name] = fn;
   return fn;
@@ -169,15 +173,14 @@ export function obtainDataViewGetter({ type, bits, signed, align, bitOffset }) {
 
 export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
   const bitPos = bitOffset & 0x07;
-  const name = getMethodName('set', type, bits, signed, bitPos);
+  const name = getMethodName('set', type, bits, signed, align, bitPos);
   if (DataView.prototype[name]) {
     return DataView.prototype[name];
   }
   if (methodCache[name]) {
     return methodCache[name];
   }
-  // TODO remove empty function once all code paths are covered
-  var fn = function() {};
+  var fn;
   if (align !== 0) {
     if (type === MemberType.Int) {
       if (bits < 64) {
@@ -281,6 +284,13 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
           set.call(this, offset, n128, littleEndian);
         }
       }
+    } else if (type === MemberType.Bool) {
+      const abits = align * 8;
+      const typeName = `Int${abits}`;
+      const set = DataView.prototype[`set${typeName}`];
+      fn = function(offset, v, littleEndian) {
+        set.call(this, offset, v ? 1 : 0, littleEndian);
+      };
     }
   } else {
     const get = DataView.prototype.getInt8;
@@ -322,6 +332,9 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
       };
     }
   }
+  if (!fn) {
+    throw new Error(`Missing setter: ${type}`)
+  }
   Object.defineProperty(fn, 'name', { value: name, writable: false });
   methodCache[name] = fn;
   return fn;
@@ -352,9 +365,9 @@ export function getDataView() {
   return this[DATA];
 }
 
-function getMethodName(prefix, type, bits, signed, bitPos) {
+function getMethodName(prefix, type, bits, signed, align, bitPos) {
   const typeName = getTypeName(type, bits, signed);
-  const suffix = (bitPos > 0) ? `Bit${bitPos}` : ``;
+  const suffix = (align === 0) ? `Bit${bitPos}` : ``;
   return `${prefix}${typeName}${suffix}`;
 }
   

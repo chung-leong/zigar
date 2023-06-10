@@ -5,7 +5,7 @@ import { obtainTypedArrayGetter } from './typed-array.js';
 import { obtainCopyFunction } from './memory.js';
 import { obtainDataView, getDataView } from './data-view.js';
 import { throwNoNewEnum } from './errors.js';
-import { DATA, RELOCATABLE } from './symbols.js';
+import { DATA, RELOCATABLE, ENUM_INDEX } from './symbols.js';
 
 export function defineStructure(def, options = {}) {
   var struct;
@@ -227,8 +227,10 @@ function defineEnumeration(def, options = {}) {
     [DATA]: { value: defaultData },
     [RELOCATABLE]: { value: relocs },
   });
-  // this relies on us adding the setter for the property "value" (down below)
-  const valueOf = function() { return this.value };
+  const valueOf = function() { 
+    const index = this[ENUM_INDEX] ;
+    return getValue.call(constructor, index);
+  };
   Object.defineProperties(constructor.prototype, {
     [Symbol.toPrimitive]: { value: valueOf, configurable: true, writable: true },    
     // so we don't get an empty object when JSON.stringify() is used
@@ -254,10 +256,12 @@ function defineEnumeration(def, options = {}) {
     // can't use the constructor since it would throw
     const item = Object.create(constructor.prototype);
     Object.defineProperties(item, {
-      name: { value: name },
-      value: { value: getValue.call(constructor, index) },
+      [ENUM_INDEX]: { value: index },
     });
-    constructor[name] = relocs[index] = item;
+    Object.defineProperties(constructor, {
+      [name]: { value: item, configurable: true, enumerable: true, writable: true },
+    });
+    relocs[index] = item;
   }
   return constructor;
 };
@@ -275,4 +279,58 @@ function attachDataViewAccessors(constructor, members) {
       typedArray: { get: getTypedArray, configurable: true, enumerable: true },
     });
   }
+}
+
+export function attachFunction(constructor, def) {
+  const {
+    name,
+    argStruct,   
+    thunk,
+    isMethod,
+  } = def;
+  const f = function(...args) {
+    const a = new argStruct;
+    for (const [ index, arg ] of args.entries()) {
+      if (arg !== undefined) {
+        a[index] = arg;
+      }
+    }
+    thunk(a);
+    return argStruct.return_value;
+  }
+  Object.defineProperties(f, {
+    name: { value: name, writable: false },
+  });
+  Object.defineProperties(constructor, { 
+    [name]: { value: f, configurable: true, writable: true },
+  });
+  if (def.isMethod) {
+    attachMethod(constructor, def);
+  }
+}
+
+function attachMethod(constructor, def) {
+  const {
+    name,
+    argStruct,   
+    thunk,
+  } = def;
+  const f = function(...args) {
+    const a = new argStruct;
+    a[0] = this;
+    for (const [ index, arg ] of args.entries()) {
+      if (arg !== undefined) {
+        debugger;
+        a[index + 1] = arg;
+      }
+    }
+    thunk(a);
+    return a.return_value;
+  }
+  Object.defineProperties(f, {
+    name: { value: name, writable: false }, 
+  });
+  Object.defineProperties(constructor.prototype, {
+    [name]: { value: f, configurable: true, writable: true },
+  });
 }
