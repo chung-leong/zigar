@@ -136,16 +136,15 @@ export function obtainDataViewGetter({ type, bits, signed, align, bitOffset }) {
     } else if (type === MemberType.Int && bitPos + bits <= 8) {
       // sub-8-bit numbers also have real use cases
       if (signed) {
-        const signMask = (bits - 1) ** 2;
+        const signMask = 2 ** (bits - 1);
         const valueMask = signMask - 1;
         fn = function(offset) {
           const n = get.call(this, offset);
           const s = n >>> bitPos;
-          const v = s & valueMask;
-          return (s & signMask) ? -v : v;
+          return (s & valueMask) - (s & signMask);
         };
       } else {
-        const valueMask = (bits ** 2 - 1) << bitPos; 
+        const valueMask = (2 ** bits - 1) << bitPos; 
         fn = function(offset) {
           const n = get.call(this, offset);
           const s = n >>> bitPos;
@@ -156,7 +155,7 @@ export function obtainDataViewGetter({ type, bits, signed, align, bitOffset }) {
       // pathological usage--handle it anyway by copying the bits into a 
       // temporary buffer, bit-aligning the data
       const dest = new DataView(new ArrayBuffer(Math.ceil(bits / 8)));
-      const getAligned = obtainDataViewGetter({ type, bits, signed, bitOffset: 0 });
+      const getAligned = obtainDataViewGetter({ type, bits, signed, bitOffset: 0, align: alignOf(bits) });
       fn = function(offset, littleEndian) {
         copyBits(dest, this, offset, bitPos, bits);
         return getAligned.call(dest, 0, littleEndian);
@@ -304,17 +303,17 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
       };
     } else if (type === MemberType.Int && bitPos + bits <= 8) {
       if (signed) {
-        const signMask = 2 ** (bits - 1);
+        const signMask = 2 ** (bits - 1);        
         const valueMask = signMask - 1;
         const outsideMask = 0xFF ^ ((valueMask | signMask) << bitPos);
-        fn = function(offset, value) {
-          const n = get.call(this, offset);
-          const v = (value < 0) ? (-value & valueMask) | signMask : value & valueMask;
-          const b = (n & outsideMask) | (v << bitPos);
+        fn = function(offset, v) {
+          var b = get.call(this, offset);
+          const n = (v < 0) ? signMask | (v & valueMask) : v & valueMask;
+          b = (b & outsideMask) | (n << bitPos);
           set.call(this, offset, b);
         };
       } else {
-        const valueMask = (bits ** 2) - 1; 
+        const valueMask = (2 ** bits) - 1; 
         const outsideMask = 0xFF ^ (valueMask << bitPos);
         fn = function(offset, value) {
           const n = get.call(this, offset);
@@ -325,7 +324,7 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
       }
     } else {
       const src = new DataView(new ArrayBuffer(Math.ceil(bits / 8)));
-      const setAligned = obtainDataViewSetter({ type, bits, signed, bitOffset: 0 });
+      const setAligned = obtainDataViewSetter({ type, bits, signed, bitOffset: 0, align: alignOf(bits) });
       fn = function(offset, value, littleEndian) {
         setAligned.call(src, 0, value, littleEndian);
         applyBits(this, src, offset, bitPos, bits);
@@ -369,6 +368,10 @@ function getMethodName(prefix, type, bits, signed, align, bitPos) {
   const typeName = getTypeName(type, bits, signed);
   const suffix = (align === 0) ? `Bit${bitPos}` : ``;
   return `${prefix}${typeName}${suffix}`;
+}
+
+function alignOf(bits) {
+  return [ 1, 2, 4, 8 ].find(b => b * 8 >= bits);
 }
   
 const methodCache = {};
