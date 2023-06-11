@@ -1,4 +1,4 @@
-import { MemberType, getIntRange } from './types.js';
+import { MemberType, StructureType, getIntRange } from './types.js';
 import { obtainDataViewGetter, obtainDataViewSetter } from './data-view.js';
 import { throwNotNull, throwOverflow, throwInvalidEnum, throwEnumExpected } from './errors.js';
 import { DATA, RELOCATABLE } from './symbols.js';
@@ -12,8 +12,8 @@ export function obtainGetter(member, options) {
     case MemberType.Compound:
     case MemberType.Pointer: {
       // get object from slot
-      const { slot, struct } = member;
-      if (struct.prototype.hasOwnProperty(Symbol.toPrimitive)) {
+      const { slot, structure } = member;
+      if (structure.type === StructureType.Primitive) {
         // automatically deferencing pointers to primitives
         return function() { return this[RELOCATABLE][slot].get() };
       } else {
@@ -30,14 +30,15 @@ export function obtainGetter(member, options) {
       return function() { return get.call(this[DATA], offset, littleEndian) };
     }
     case MemberType.Enum: {
-      const { bitOffset, struct } = member;
+      const { bitOffset, structure } = member;
+      const { constructor } = structure;
       const offset = bitOffset >> 3;
       const get = obtainDataViewGetter({ ...member, type: MemberType.Int });
       if (runtimeSafety) {
         return function() {
           const value = get.call(this[DATA], offset, littleEndian);
           // the enumeration constructor returns the singleton object for the value
-          const object = struct(value);
+          const object = constructor(value);
           if (!object) {
             throwInvalidEnum(value)
           }
@@ -46,7 +47,7 @@ export function obtainGetter(member, options) {
       } else {
         return function() {
           const value = get.call(this[DATA], offset, littleEndian);
-          return struct(value);
+          return constructor(value);
         }; 
       }
     }
@@ -64,27 +65,28 @@ export function obtainSetter(member, options) {
   var fn;
   switch (member.type) {
     case MemberType.Compound: {
-      const { slot, struct } = member;
+      const { slot, structure } = member;
+      const { constructor, copier } = structure;
       fn = function(v) {
-        if (!(v instanceof struct)) {
-          v = new struct(v);
+        if (!(v instanceof constructor)) {
+          v = new constructor(v);
         }
         const reloc = this[RELOCATABLE][slot];
-        const copy = reloc[COPY];
-        copy.call(reloc, v);
+        copier(reloc, v);
       };  
     } break;
     case MemberType.Pointer: {
-      const { slot, struct, mutable } = member;
+      const { slot, structure, mutable } = member;
       if (!mutable) {
         return;
       } 
-      if (struct.prototype.hasOwnProperty(Symbol.toPrimitive)) {
+      if (structure.type === StructureType.Primitive) {
         return function(v) { this[RELOCATABLE][slot].set(v) };
       } else {
+        const { constructor } = structure;
         return function(v) {
-          if (!(v instanceof struct)) {
-            v = new struct(v);
+          if (!(v instanceof constructor)) {
+            v = new constructor(v);
           }
           this[RELOCATABLE][slot] = v;
         };
@@ -122,12 +124,13 @@ export function obtainSetter(member, options) {
       }
     } break;
     case MemberType.Enum: {
-      const { bitOffset, struct } = member;
+      const { bitOffset, structure } = member;
+      const { constructor } = structure;
       const offset = bitOffset >> 3;
       const set = obtainDataViewSetter({ ...member, type: MemberType.Int });
       return function(v) {
-        if (!(v instanceof struct)) {
-          throwEnumExpected(struct);
+        if (!(v instanceof constructor)) {
+          throwEnumExpected(constructor);
         }
         set.call(this[DATA], offset, v.valueOf(), littleEndian);
       }; 

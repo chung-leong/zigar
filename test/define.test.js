@@ -1,13 +1,12 @@
 import { expect } from 'chai';
 
 import { MemberType, StructureType } from '../src/types.js';
-import { defineStructure, attachFunction } from '../src/define.js';
+import { createStructure, shapeStructure, attachFunction } from '../src/define.js';
 
 describe('Structure definition', function() { 
   describe('Primitive', function() {
     it('should define a structure for holding a primitive', function() {
       const def = {
-        type: StructureType.Primitive,
         size: 8,
         members: [
           {
@@ -24,7 +23,8 @@ describe('Structure definition', function() {
           return dv;
         })(),
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Primitive, 'Hello');
+      const Hello = shapeStructure(structure, def);
       expect(Hello).to.be.a('function');
       const object = new Hello();
       expect(object.get()).to.equal(0x7FFFFFFFFFFFFFFFn);
@@ -34,7 +34,6 @@ describe('Structure definition', function() {
   describe('Basic Array', function() {
     it('should define structure for holding an int array', function() {
       const def = {
-        type: StructureType.Array,
         size: 4 * 8,
         members: [
           {
@@ -47,7 +46,8 @@ describe('Structure definition', function() {
         ],
         exposeDataView: true,
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Array, 'Hello');
+      const Hello = shapeStructure(structure, def);
       expect(Hello).to.be.a('function');
       const object = new Hello();
       object.set(0, 321);
@@ -57,7 +57,6 @@ describe('Structure definition', function() {
     })
     it('should define array that is iterable', function() {
       const def = {
-        type: StructureType.Array,
         size: 4 * 8,
         members: [
           {
@@ -75,7 +74,8 @@ describe('Structure definition', function() {
           return dv;
         })(),
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Array, 'Hello');
+      const Hello = shapeStructure(structure, def);
       const object = new Hello();
       const list = [];
       for (const value of object) {
@@ -87,7 +87,6 @@ describe('Structure definition', function() {
   describe('Simple Struct', function() {
     it('should define a simple struct', function() {
       const def = {
-        type: StructureType.Struct,
         size: 4 * 2,
         members: [
           {
@@ -113,8 +112,9 @@ describe('Structure definition', function() {
           dv.setInt32(4, 4567, true);
           return dv;
         })(),
-      };
-      const Hello = defineStructure(def);
+      };      
+      const structure = createStructure(StructureType.Struct, 'Hello');
+      const Hello = shapeStructure(structure, def);
       expect(Hello).to.be.a('function');
       const object = new Hello();
       expect(object).to.be.an.instanceOf(Object);
@@ -125,7 +125,6 @@ describe('Structure definition', function() {
     })
     it('should work correctly with big-endian data', function() {
       const def = {
-        type: StructureType.Struct,
         size: 4 * 2,
         members: [
           {
@@ -152,14 +151,14 @@ describe('Structure definition', function() {
           return dv;
         })(),
       };
-      const Hello = defineStructure(def, { littleEndian: false });
+      const structure = createStructure(StructureType.Struct, 'Hello');
+      const Hello = shapeStructure(structure, def, { littleEndian: false });
       const object = new Hello();
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(4567);
     })
     it('should create functional setters', function() {
       const def = {
-        type: StructureType.Struct,
         size: 4 * 2,
         members: [
           {
@@ -186,7 +185,8 @@ describe('Structure definition', function() {
           return dv;
         })(),
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Struct, 'Hello');
+      const Hello = shapeStructure(structure, def);
       const object = new Hello();
       object.dog = 72;
       expect(object.dog).to.equal(72);
@@ -197,7 +197,6 @@ describe('Structure definition', function() {
     })
     it('should have dataView property when exposeDataView is true', function() {
       const def = {
-        type: StructureType.Struct,
         size: 4 * 2,
         members: [
           {
@@ -225,13 +224,13 @@ describe('Structure definition', function() {
         })(),
         exposeDataView: true,
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Struct, 'Hello');
+      const Hello = shapeStructure(structure, def);
       const object = new Hello();
       expect(object.dataView).to.be.instanceOf(DataView);
     })
     it('should have typedArray property when exposeDataView is true and all struct members are of the same supported type', function() {
       const def = {
-        type: StructureType.Struct,
         size: 4 * 2,
         members: [
           {
@@ -259,7 +258,8 @@ describe('Structure definition', function() {
         })(),
         exposeDataView: true,
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Struct, 'Hello');
+      const Hello = shapeStructure(structure, def);
       const object = new Hello();
       expect(object.typedArray).to.be.instanceOf(Int32Array);
       object.cat = 777;
@@ -267,7 +267,6 @@ describe('Structure definition', function() {
     })
     it('should not have typedArray property when struct members are different', function() {
       const def = {
-        type: StructureType.Struct,
         size: 4 * 2,
         members: [
           {
@@ -295,13 +294,13 @@ describe('Structure definition', function() {
         })(),
         exposeDataView: true,
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Struct, 'Hello');
+      const Hello = shapeStructure(structure, def);
       const object = new Hello();
       expect(object.typedArray).to.be.undefined;
     })
     it('should throw when a value exceed the maximum capability of the type', function () {
       const def = {
-        type: StructureType.Struct,
         size: 4 * 2,
         members: [
           {
@@ -329,13 +328,13 @@ describe('Structure definition', function() {
         })(),
         exposeDataView: true,
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Struct, 'Hello');
+      const Hello = shapeStructure(structure, def);
       const object = new Hello();
       expect(() => object.dog = 0x1FFFFFFFF).to.throw();
     })
     it('should permit overflow when runtime safety is off', function () {
       const def = {
-        type: StructureType.Struct,
         size: 4 * 2,
         members: [
           {
@@ -363,14 +362,14 @@ describe('Structure definition', function() {
         })(),
         exposeDataView: true,
       };
-      const Hello = defineStructure(def, { runtimeSafety: false });
+      const structure = createStructure(StructureType.Struct, 'Hello');
+      const Hello = shapeStructure(structure, def, { runtimeSafety: false });
       const object = new Hello();
       expect(() => object.dog = 0x1FFFFFFFF).to.not.throw();
     })
   
     it('should be able to handle bitfields', function() {
       const def = {
-        type: StructureType.Struct,
         size: 1,
         members: [
           {
@@ -395,7 +394,8 @@ describe('Structure definition', function() {
         })(),
         exposeDataView: true,
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Struct, 'Hello');
+      const Hello = shapeStructure(structure, def);
       const object = new Hello();
       expect(object.dog).to.be.false;
       expect(object.cat).to.be.true;
@@ -407,7 +407,6 @@ describe('Structure definition', function() {
     })
     it('should be able to handle small int type', function() {
       const def = {
-        type: StructureType.Struct,
         size: 1,
         members: [
           {
@@ -434,7 +433,8 @@ describe('Structure definition', function() {
         })(),
         exposeDataView: true,
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Struct, 'Hello');
+      const Hello = shapeStructure(structure, def);
       const object = new Hello();
       expect(object.dog).to.equal(3);
       expect(object.cat).to.equal(1);
@@ -448,7 +448,6 @@ describe('Structure definition', function() {
     }) 
     it('should be able to handle bit-misalignment', function() {
       const def = {
-        type: StructureType.Struct,
         size: 5,
         members: [
           {
@@ -475,7 +474,8 @@ describe('Structure definition', function() {
         })(),
         exposeDataView: true,
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Struct, 'Hello');
+      const Hello = shapeStructure(structure, def);
       const object = new Hello();
       expect(object.dog).to.equal(0);
       expect(object.cat).to.equal(2);
@@ -484,8 +484,8 @@ describe('Structure definition', function() {
   })
   describe('Complex Struct', function() {
     it('should define a struct that contains pointers', function() {
-      const Int32 = defineStructure({
-        type: StructureType.Primitive,
+      const intStructure = createStructure(StructureType.Primitive, 'Int32');
+      const Int32 = shapeStructure(intStructure, {
         size: 4,
         members: [
           {
@@ -502,7 +502,6 @@ describe('Structure definition', function() {
       number1.set(1234);
       number2.set(4567);
       const def = {
-        type: StructureType.Struct,
         size: 8 * 2,
         members: [
           {
@@ -512,7 +511,7 @@ describe('Structure definition', function() {
             bitOffset: 0,
             align: 8,
             slot: 0,
-            struct: Int32,
+            structure: intStructure,
           },
           {
             name: 'cat',
@@ -521,7 +520,7 @@ describe('Structure definition', function() {
             bitOffset: 8,
             align: 8,
             slot: 1,
-            struct: Int32,
+            structure: intStructure,
           },
         ],
         defaultData: (() => {
@@ -535,7 +534,8 @@ describe('Structure definition', function() {
           1: number2 
         },
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Struct, 'Hello');
+      const Hello = shapeStructure(structure, def);
       const object = new Hello();
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(4567);
@@ -568,7 +568,8 @@ describe('Structure definition', function() {
           return dv;
         })(),
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Enumeration, 'Hello');
+      const Hello = shapeStructure(structure, def);
       expect(Number(Hello.Dog)).to.equal(0);
       expect(Number(Hello.Cat)).to.equal(1);
       expect(Hello.Dog === Hello.Dog).to.be.true;
@@ -602,13 +603,13 @@ describe('Structure definition', function() {
           return dv;
         })(),
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Enumeration, 'Hello');
+      const Hello = shapeStructure(structure, def);
       expect(Hello(0)).to.equal(Hello.Dog);
       expect(Hello(1)).to.equal(Hello.Cat);
     })
     it('should look up the correct enum object when values are not sequential', function() {
       const def = {
-        type: StructureType.Enumeration,
         members: [
           {
             name: 'Dog',
@@ -634,7 +635,8 @@ describe('Structure definition', function() {
           return dv;
         })(),
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Enumeration, 'Hello');
+      const Hello = shapeStructure(structure, def);
       expect(Hello(123)).to.equal(Hello.Dog);
       expect(Hello(456)).to.equal(Hello.Cat);
       expect(Number(Hello(123))).to.equal(123);
@@ -642,7 +644,6 @@ describe('Structure definition', function() {
     })
     it('should look up the correct enum object when they represent bigInts', function() {
       const def = {
-        type: StructureType.Enumeration,
         members: [
           {
             name: 'Dog',
@@ -668,14 +669,14 @@ describe('Structure definition', function() {
           return dv;
         })(),
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Enumeration, 'Hello');
+      const Hello = shapeStructure(structure, def);
       expect(Hello(1234n)).to.equal(Hello.Dog);
       // BigInt suffix missing on purpose
       expect(Hello(4567)).to.equal(Hello.Cat);
     })
     it('should produce the expect output when JSON.stringify() is used', function() {
       const def = {
-        type: StructureType.Enumeration,
         members: [
           {
             name: 'Dog',
@@ -699,13 +700,13 @@ describe('Structure definition', function() {
           return dv;
         })(),
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Enumeration, 'Hello');
+      const Hello = shapeStructure(structure, def);
       expect(JSON.stringify(Hello.Dog)).to.equal('0');
       expect(JSON.stringify(Hello.Cat)).to.equal('1');
     })
     it('should throw when the new operator is used on the constructor', function() {
       const def = {
-        type: StructureType.Enumeration,
         members: [
           {
             name: 'Dog',
@@ -729,12 +730,12 @@ describe('Structure definition', function() {
           return dv;
         })(),
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Enumeration, 'Hello');
+      const Hello = shapeStructure(structure, def);
       expect(() => new Hello(5)).to.throw();
     })
     it('should return undefined when look-up of enum item fails', function() {
       const def = {
-        type: StructureType.Enumeration,
         members: [
           {
             name: 'Dog',
@@ -758,13 +759,13 @@ describe('Structure definition', function() {
           return dv;
         })(),
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Enumeration, 'Hello');
+      const Hello = shapeStructure(structure, def);
       expect(Hello(1)).to.be.an('object');
       expect(Hello(5)).to.be.undefined;
     })
     it('should attach methods to enum items', function() {
       const def = {
-        type: StructureType.Enumeration,
         members: [
           {
             name: 'Dog',
@@ -788,7 +789,8 @@ describe('Structure definition', function() {
           return dv;
         })(),
       };
-      const Hello = defineStructure(def);
+      const structure = createStructure(StructureType.Enumeration, 'Hello');
+      const Hello = shapeStructure(structure, def);
       // argument struct
       const argDef = {
         type: StructureType.Struct,
@@ -800,7 +802,7 @@ describe('Structure definition', function() {
             bits: 32,
             bitOffset: 0,
             align: 4,
-            struct: Hello,
+            structure,
           },
           {
             name: '1',
@@ -824,14 +826,15 @@ describe('Structure definition', function() {
         arg2 = args[1];
         args.return_value = true;
       };
-      const argStruct = defineStructure(argDef);
+      const argStructure = createStructure(StructureType.Struct, undefined);
+      const argStruct = shapeStructure(argStructure, argDef);
       const fnDef = {
         name: 'foo',
         argStruct,
         isMethod: true,
         thunk, 
       };
-      attachFunction(Hello, fnDef);
+      attachFunction(structure, fnDef);
       expect(Hello.foo).to.be.a('function');
       expect(Hello.foo).to.have.property('name', 'foo');
       expect(Hello.prototype.foo).to.be.a('function');

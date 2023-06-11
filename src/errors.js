@@ -37,6 +37,6 @@ export function throwInvalidEnum(value) {
   throw new TypeError(`Value given does not correspond to an enum item: ${value}`);
 }
 
-export function throwEnumExpected(struct) {
-  throw new TypeError(`Enum item expected: ${struct.name}`);
+export function throwEnumExpected(constructor) {
+  throw new TypeError(`Enum item expected: ${constructor.name}`);
 }

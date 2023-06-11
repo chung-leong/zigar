@@ -18,7 +18,8 @@ export function obtainArrayGetter(member, options) {
   } = options;
   switch (member.type) {
     case MemberType.Compound: {
-      const { struct, align } = member;
+      const { structure, align } = member;
+      const { constructor } = structure;
       return function(index) { 
         const relocs = this[RELOCATABLE];
         if (!relocs[index]) {
@@ -26,7 +27,7 @@ export function obtainArrayGetter(member, options) {
           const offset = index * align;
           if (offset >= 0 && offset + align <= dv.byteLength) {
             const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
-            relocs[index] = new struct(slice);
+            relocs[index] = new constructor(slice);
           } else {
             throwOutOfBound(dv.byteLength, align, index);
           }
@@ -75,34 +76,35 @@ export function obtainArraySetter(member, options) {
   var fn;
   switch (member.type) {
     case MemberType.Compound: {
-      const { struct, align } = member;
+      const { structure, align } = member;
+      const { constructor, copier } = structure;
       fn = function(index, v) {
-        if (!(v instanceof struct)) {
-          v = new struct(v);
+        if (!(v instanceof constructor)) {
+          v = new constructor(v);
         }
         const relocs = this[RELOCATABLE];
-        if (!relocs[index]) {
-          const dv = this[DATA];
+        var reloc = relocs[index];
+        if (!reloc) {
           const offset = index * align;
           if (offset >= 0 && offset + align <= dv.byteLength) {
             const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
-            relocs[index] = new struct(slice);
+            reloc = relocs[index] = new constructor(slice);
           } else {
             throwOutOfBound(dv.byteLength, align, index);
           }
         }
-        const copy = struct[COPY];
-        copy.call(relocs[index], v);
+        copier(reloc, v);
       };  
     } break;
     case MemberType.Pointer: {
-      const { struct, mutable, align } = member;
+      const { structure, mutable, align } = member;
+      const { constructor } = structure;
       if (!mutable) {
         return;
       } 
       return function(index, v) {
-        if (!(v instanceof struct)) {
-          v = new struct(v);
+        if (!(v instanceof constructor)) {
+          v = new constructor(v);
         }
         const dv = this[DATA];
         const offset = index * align;

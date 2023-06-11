@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { MemberType } from '../src/types.js';
+import { StructureType, MemberType } from '../src/types.js';
 import { DATA, RELOCATABLE } from '../src/symbols.js';
 import { obtainGetter, obtainSetter } from '../src/struct.js';
 
@@ -102,7 +102,7 @@ describe('Struct functions', function() {
         bitOffset: 32,
         align: 0,
         signed: false,
-        struct: DummyEnum,
+        structure: { type: StructureType.Enumeration, constructor: DummyEnum },
       };
       const f = obtainGetter(member, {});
       const res = f.call(object);
@@ -126,7 +126,7 @@ describe('Struct functions', function() {
         slot: 1,
         signed: false,
         mutable: true,
-        struct: DummyStruct,
+        structure: { type: StructureType.Struct, constructor: DummyStruct },
       };
       const f = obtainGetter(member, {});
       const res = f.call(object);
@@ -155,7 +155,7 @@ describe('Struct functions', function() {
         slot: 1,
         signed: false,
         mutable: true,
-        struct: DummyStruct,
+        structure: { type: StructureType.Primitive, constructor: DummyStruct },
       };
       const f = obtainGetter(member, {});
       const res = f.call(object);
@@ -248,7 +248,7 @@ describe('Struct functions', function() {
         bitOffset: 32,
         align: 0,
         signed: false,
-        struct: DummyEnum,
+        structure: { type: StructureType.Enumeration, constructor: DummyEnum },
       };
       const f = obtainSetter(member, {});
       f.call(object, DummyEnum(1));
@@ -271,7 +271,7 @@ describe('Struct functions', function() {
         slot: 1,
         signed: false,
         mutable: true,
-        struct: DummyStruct,
+        structure: { type: StructureType.Struct, constructor: DummyStruct },
       };
       const f = obtainSetter(member, {});
       f.call(object, DummyValue);
@@ -300,7 +300,7 @@ describe('Struct functions', function() {
         slot: 1,
         signed: false,
         mutable: true,
-        struct: DummyStruct,        
+        structure: { type: StructureType.Primitive, constructor: DummyStruct },
       };
       const f = obtainSetter(member, {});
       const res = f.call(object, 4567);
