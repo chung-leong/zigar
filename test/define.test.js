@@ -36,7 +36,7 @@ describe('Structure definition', function() {
       expect(BigInt(object)).to.equal(0x7FFFFFFFFFFFFFFFn);
     })
   })
-  describe('Basic Array', function() {
+  describe('Basic array', function() {
     it('should define structure for holding an int array', function() {
       const def = {
         size: 4 * 8,
@@ -89,7 +89,7 @@ describe('Structure definition', function() {
       expect(list).to.eql([ 1234, 0, 0, 0, 4567, 0, 0, 0 ]);
     })
   })
-  describe('Simple Struct', function() {
+  describe('Simple struct', function() {
     it('should define a simple struct', function() {
       const def = {
         size: 4 * 2,
@@ -544,6 +544,48 @@ describe('Structure definition', function() {
       const object = new Hello();
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(4567);
+    })
+  })
+  describe('Simple extern union', function() {
+    it('should define a simple extern union', function() {
+      const def = {
+        size: 4,
+        members: [
+          {
+            name: 'dog',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            align: 4,
+            signed: true,
+          },
+          {
+            name: 'cat',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            align: 4,
+            signed: true,
+          }
+        ],
+        defaultData: (() => {
+          const dv = new DataView(new ArrayBuffer(4));
+          dv.setInt32(0, 1234, true);
+          return dv;
+        })(),
+      };      
+      const structure = createStructure(StructureType.ExternUnion, 'Hello');
+      const Hello = shapeStructure(structure, def);
+      expect(Hello).to.be.a('function');
+      const object = new Hello();
+      expect(object).to.be.an.instanceOf(Object);
+      expect(object).to.be.an.instanceOf(Hello);
+      expect(Object.keys(object)).to.have.lengthOf(2);
+      expect(object.dog).to.equal(1234);
+      expect(object.cat).to.equal(1234);
+      object.dog = 777;
+      expect(object.dog).to.equal(777);
+      expect(object.cat).to.equal(777);
     })
   })
   describe('Enumeration', function() {
