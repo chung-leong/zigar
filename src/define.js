@@ -5,7 +5,7 @@ import { obtainTypedArrayGetter } from './typed-array.js';
 import { obtainCopyFunction } from './memory.js';
 import { obtainDataView, getDataView } from './data-view.js';
 import { throwNoNewEnum } from './errors.js';
-import { DATA, RELOCATABLE, ENUM_INDEX } from './symbols.js';
+import { DATA, RELOCATABLE, ENUM_INDEX, ENUM_ITEMS } from './symbols.js';
 
 export function createStructure(type, name) {
   return { type, name, constructor: null, copier: null };
@@ -167,18 +167,13 @@ function shapeStruct(s, def, options) {
     });
     Object.defineProperties(self, descriptors);
     if (hasRelocatable) {
-      const relocs = {};
-      if (defaultPointers) {
-        for (const [ slot, value ] of Object.entries(defaultPointers)) {
-          relocs[slot] = value;
-        }
-      }
+      const relocs = Object.assign({}, defaultPointers);
       if (internalPointers) {
         // initialize compound members (array, struct, etc.), storing them 
         // in relocatables even through they aren't actually relocatable
-        for (const { structure, slot, offset, align } of internalPointers) {
+        for (const { constructor, slot, offset, align } of internalPointers) {
           const mdv = new DataView(dv.buffer, offset, align);
-          const obj = new structure(mdv);
+          const obj = new constructor(mdv);
           relocs[slot] = obj;
         }
       }
@@ -188,6 +183,12 @@ function shapeStruct(s, def, options) {
     } 
     if (!this) {
       return self;
+    }
+  };
+  s.copier = function(dest, src) {
+    copy(dest[DATA], src[DATA]);
+    if (hasRelocatable) {
+      Object.assign(dest[RELOCATABLE], src[RELOCATABLE]);
     }
   };
   s.size = size;
@@ -207,7 +208,7 @@ function shapeEnumeration(s, def, options) {
   const primitive = getPrimitive(member.type, member.bits);
   const getValue = obtainArrayGetter(member, options);
   const count = members.length;
-  const relocs = {};
+  const items = {};
   const constructor = s.constructor = function(arg) {
     if (this) {
       // the "constructor" is only used to convert a number into an enum object
@@ -231,14 +232,14 @@ function shapeEnumeration(s, def, options) {
       }
     }
     // return the enum object (created down below)
-    return relocs[index];
+    return items[index];
   };
   s.size = size;
   // attach the numeric values to the class as its binary data
   // this allows us to reuse the array getter
   Object.defineProperties(constructor, {
     [DATA]: { value: defaultData },
-    [RELOCATABLE]: { value: relocs },
+    [ENUM_ITEMS]: { value: items },
   });
   const valueOf = function() { 
     const index = this[ENUM_INDEX] ;
@@ -274,7 +275,7 @@ function shapeEnumeration(s, def, options) {
     Object.defineProperties(constructor, {
       [name]: { value: item, configurable: true, enumerable: true, writable: true },
     });
-    relocs[index] = item;
+    items[index] = item;
   }
   return constructor;
 };
@@ -294,58 +295,67 @@ function attachDataViewAccessors(s, members) {
   }
 }
 
-export function attachFunction(s, def) {
+export function attachVariables(s, def, options = {}) {
   const { constructor } = s;
   const {
-    name,
-    argStruct,   
-    thunk,
-    isMethod,
+    members,
+    defaultPointers,
   } = def;
-  const f = function(...args) {
-    const a = new argStruct;
-    for (const [ index, arg ] of args.entries()) {
-      if (arg !== undefined) {
-        a[index] = arg;
-      }
-    }
-    thunk(a);
-    return a.return_value;
-  }
-  Object.defineProperties(f, {
-    name: { value: name, writable: false },
-  });
-  Object.defineProperties(constructor, { 
-    [name]: { value: f, configurable: true, writable: true },
-  });
-  if (def.isMethod) {
-    attachMethod(s, def);
-  }
+  const descriptors = {};
+  // static variables are all pointers
+  for (const member of members) {
+    const get = obtainGetter(member, options);
+    const set = obtainSetter(member, options);
+    descriptors[member.name] = { get, set, configurable: true, enumerable: true };
+  };
+  const relocs = Object.assign({}, defaultPointers);
+  descriptors[RELOCATABLE] = { value: relocs };
+  Object.defineProperties(constructor, descriptors);
 }
 
-function attachMethod(s, def) {
+export function attachFunctions(s, functions) {
   const { constructor } = s;
-  const {
-    name,
-    argStruct,   
-    thunk,
-  } = def;
-  const f = function(...args) {
-    const a = new argStruct;
-    a[0] = this;
-    for (const [ index, arg ] of args.entries()) {
-      if (arg !== undefined) {
-        debugger;
-        a[index + 1] = arg;
+  for (const def of functions) {
+    const {
+      name,
+      argStruct,   
+      thunk,
+      isMethod,
+    } = def;
+    const f = function(...args) {
+      const a = new argStruct;
+      for (const [ index, arg ] of args.entries()) {
+        if (arg !== undefined) {
+          a[index] = arg;
+        }
       }
+      thunk(a);
+      return a.return_value;
     }
-    thunk(a);
-    return a.return_value;
+    Object.defineProperties(f, {
+      name: { value: name, writable: false },
+    });
+    Object.defineProperties(constructor, { 
+      [name]: { value: f, configurable: true, writable: true },
+    });
+    if (isMethod) {
+      const m = function(...args) {
+        const a = new argStruct;
+        a[0] = this;
+        for (const [ index, arg ] of args.entries()) {
+          if (arg !== undefined) {
+            a[index + 1] = arg;
+          }
+        }
+        thunk(a);
+        return a.return_value;
+      }
+      Object.defineProperties(m, {
+        name: { value: name, writable: false }, 
+      });
+      Object.defineProperties(constructor.prototype, {
+        [name]: { value: m, configurable: true, writable: true },
+      });
+    } 
   }
-  Object.defineProperties(f, {
-    name: { value: name, writable: false }, 
-  });
-  Object.defineProperties(constructor.prototype, {
-    [name]: { value: f, configurable: true, writable: true },
-  });
 }

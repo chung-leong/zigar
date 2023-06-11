@@ -1,7 +1,12 @@
 import { expect } from 'chai';
 
 import { MemberType, StructureType } from '../src/types.js';
-import { createStructure, shapeStructure, attachFunction } from '../src/define.js';
+import { 
+  createStructure, 
+  shapeStructure,
+  attachVariables, 
+  attachFunctions,
+} from '../src/define.js';
 
 describe('Structure definition', function() { 
   describe('Primitive', function() {
@@ -517,7 +522,7 @@ describe('Structure definition', function() {
             name: 'cat',
             type: MemberType.Pointer,
             bits: 64,
-            bitOffset: 8,
+            bitOffset: 64,
             align: 8,
             slot: 1,
             structure: intStructure,
@@ -764,8 +769,254 @@ describe('Structure definition', function() {
       expect(Hello(1)).to.be.an('object');
       expect(Hello(5)).to.be.undefined;
     })
+  }) 
+  describe('Static variables', function() {
+    it('should attach variables to a struct', function() {
+      const def = {
+        size: 8 * 2,
+        members: [
+          {
+            name: 'dog',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            align: 4,
+          },
+          {
+            name: 'cat',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 32,
+            align: 4,
+          },
+        ],
+      };
+      const structure = createStructure(StructureType.Struct, 'Hello');
+      const Hello = shapeStructure(structure, def);
+      // define structure for integer variables
+      // in practice this structure will have a SharedArrayBuffer that points to 
+      // memory in the Zig code's data segment; we'll test with a regular 
+      // ArrayBuffer here
+      const intStructure = createStructure(StructureType.Primitive, 'Int32');
+      const Int32 = shapeStructure(intStructure, {
+        size: 4,
+        members: [
+          {
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            align: 4,
+            signed: false,
+          }
+        ],
+      });
+      const number1 = new Int32();
+      const number2 = new Int32();
+      number1.set(1234);
+      number2.set(4567);
+      // the "static structure" doesn't have binary data attach to it, 
+      // since it does not appear on the Zig side; hence no need to 
+      // provide a size (or defaultData); we only need the slot numbers
+      const staticDef = {
+        members: [
+          {
+            name: 'superdog',
+            type: MemberType.Pointer,
+            bits: 64,
+            bitOffset: 0,
+            align: 8,
+            slot: 0,
+            structure: intStructure,
+            mutable: true,
+          },
+          {
+            name: 'supercat',
+            type: MemberType.Pointer,
+            bits: 64,
+            bitOffset: 64,
+            align: 8,
+            slot: 1,
+            structure: intStructure,
+            mutable: false,
+          },
+        ],
+        defaultPointers: { 
+          0: number1, 
+          1: number2 
+        },
+      };
+      attachVariables(structure, staticDef);
+      expect(Hello.superdog).to.equal(1234);
+      Hello.superdog = 43;
+      expect(Hello.superdog).to.equal(43);
+      expect(Hello.supercat).to.equal(4567);
+      expect(() => Hello.supercat = 777).to.throw();
+      expect(Hello.supercat).to.equal(4567);
+      const object = new Hello();
+      expect(object.dog).to.equal(0);
+      object.dog = 123;
+      expect(object.dog).to.equal(123);
+      expect(Hello.superdog).to.equal(43);
+    })
+    it('should attach variables to an enumeration', function() {
+      const def = {
+        members: [
+          {
+            name: 'Dog',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            align: 4,
+          },
+          {
+            name: 'Cat',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            align: 4,
+          },
+        ],
+        defaultData: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 0, true);
+          dv.setUint32(4, 1, true);
+          return dv;
+        })(),
+      };
+      const structure = createStructure(StructureType.Enumeration, 'Hello');
+      const Hello = shapeStructure(structure, def);
+      const intStructure = createStructure(StructureType.Primitive, 'Int32');
+      const Int32 = shapeStructure(intStructure, {
+        size: 4,
+        members: [
+          {
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            align: 4,
+            signed: false,
+          }
+        ],
+      });
+      const number1 = new Int32();
+      const number2 = new Int32();
+      number1.set(1234);
+      number2.set(4567);
+      const staticDef = {
+        members: [
+          {
+            name: 'superdog',
+            type: MemberType.Pointer,
+            bits: 64,
+            bitOffset: 0,
+            align: 8,
+            slot: 0,
+            structure: intStructure,
+            mutable: true,
+          },
+          {
+            name: 'supercat',
+            type: MemberType.Pointer,
+            bits: 64,
+            bitOffset: 64,
+            align: 8,
+            slot: 1,
+            structure: intStructure,
+            mutable: false,
+          },
+        ],
+        defaultPointers: { 
+          0: number1, 
+          1: number2 
+        },
+      };
+      attachVariables(structure, staticDef);
+      expect(Hello.superdog).to.equal(1234);
+      Hello.superdog = 43;
+      expect(Hello.superdog).to.equal(43);
+      expect(Hello.supercat).to.equal(4567);
+      // make sure the variables aren't overwriting the enum slots
+      expect(Hello(0)).to.equal(Hello.Dog);
+      expect(Hello(1)).to.equal(Hello.Cat);
+    })
+  })
+  describe('Functions', function() {
+    it('should attach methods to a struct', function() {
+      const def = {
+        size: 8,
+        members: [
+          {
+            name: 'dog',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 0,
+            signed: true,
+            align: 4,
+          },
+          {
+            name: 'cat',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 32,
+            signed: true,
+            align: 4,
+          },
+        ]
+      };
+      const structure = createStructure(StructureType.Struct, 'Hello');
+      const Hello = shapeStructure(structure, def);
+      const object = new Hello();
+      // argument struct
+      const argDef = {
+        type: StructureType.Struct,
+        size: 12,
+        members: [
+          {
+            name: '0',
+            type: MemberType.Compound,
+            bits: 32,
+            bitOffset: 0,
+            align: 8,
+            structure,
+          },
+          {
+            name: 'return_value',
+            type: MemberType.Int,
+            bits: 32,
+            bitOffset: 64,
+            signed: true,
+            align: 4,
+          },
+        ],
+      };
+      const thunk = (args) => {
+        args.return_value = args[0].dog + args[0].cat;
+      };
+      const argStructure = createStructure(StructureType.Struct, undefined);
+      const argStruct = shapeStructure(argStructure, argDef);
+      const functions = [
+        {
+          name: 'merge',
+          argStruct,
+          isMethod: true,
+          thunk, 
+        },
+      ];
+      attachFunctions(structure, functions);
+      expect(Hello.merge).to.be.a('function');
+      expect(Hello.merge).to.have.property('name', 'merge');
+      expect(Hello.prototype.merge).to.be.a('function');
+      expect(Hello.prototype.merge).to.have.property('name', 'merge');
+      object.dog = 10;
+      object.cat = 13;
+      const res1 = object.merge();
+      expect(res1).to.equal(23);
+      const res2 = Hello.merge(object);
+      expect(res2).to.equal(23);
+    })
     it('should attach methods to enum items', function() {
       const def = {
+        size: 4,
         members: [
           {
             name: 'Dog',
@@ -828,13 +1079,15 @@ describe('Structure definition', function() {
       };
       const argStructure = createStructure(StructureType.Struct, undefined);
       const argStruct = shapeStructure(argStructure, argDef);
-      const fnDef = {
-        name: 'foo',
-        argStruct,
-        isMethod: true,
-        thunk, 
-      };
-      attachFunction(structure, fnDef);
+      const functions = [
+        {
+          name: 'foo',
+          argStruct,
+          isMethod: true,
+          thunk, 
+        },
+      ];
+      attachFunctions(structure, functions);
       expect(Hello.foo).to.be.a('function');
       expect(Hello.foo).to.have.property('name', 'foo');
       expect(Hello.prototype.foo).to.be.a('function');
@@ -848,5 +1101,5 @@ describe('Structure definition', function() {
       expect(arg1).to.equal(Hello.Dog);
       expect(arg2).to.equal(4567);
     }) 
-  }) 
+  })
 })
