@@ -6,6 +6,8 @@ const UnionTag = enum {
     monkey,
 };
 
+const Error = error{UnknownError};
+
 const Structs = struct {
     const SingleInt32 = struct {
         number: i32 = 1234,
@@ -51,6 +53,24 @@ const Structs = struct {
         number5: f128 = -std.math.inf(f128),
         number6: f128 = std.math.nan(f128),
     };
+    const OptionalIntSet = struct {
+        number: ?i64 = 0x00000FFFF,
+    };
+    const OptionalIntEmpty = struct {
+        number: ?i64 = null,
+    };
+    const IntNoError = struct {
+        number: anyerror!i8 = 0x1F,
+    };
+    const IntWithError = struct {
+        number: anyerror!i8 = Error.UnknownError,
+    };
+    const OptionalIntSetNoError = struct {
+        number: anyerror!?i64 = 0x00000FFFF,
+    };
+    const OptionalIntWithError = struct {
+        number: anyerror!?i64 = Error.UnknownError,
+    };
 };
 
 pub fn main() !void {
@@ -71,7 +91,7 @@ pub fn main() !void {
     inline for (@typeInfo(Structs).Struct.decls) |decl| {
         if (std.mem.eql(u8, arg1, decl.name)) {
             const T = @field(Structs, decl.name);
-            try stdout.print("{s} ({d}): \n\n", .{ @typeName(T), @sizeOf(T) });
+            try stdout.print("{s} ({d}/{d}/{d}): \n\n", .{ @typeName(T), @bitSizeOf(T), @sizeOf(T), @alignOf(T) });
             var s: T = switch (T) {
                 Structs.BasicUnion => .{ .dog = 17 },
                 else => .{},
