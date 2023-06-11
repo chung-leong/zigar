@@ -839,9 +839,14 @@ describe('Structure definition', function() {
       expect(Hello.foo).to.have.property('name', 'foo');
       expect(Hello.prototype.foo).to.be.a('function');
       expect(Hello.prototype.foo).to.have.property('name', 'foo');
-      const res = Hello.Cat.foo(1234);
-      expect(res).to.be.true;
+      const res1 = Hello.Cat.foo(1234);
+      expect(res1).to.be.true;
       expect(arg1).to.equal(Hello.Cat);
+      expect(arg2).to.equal(1234);
+      const res2 = Hello.foo(Hello.Dog, 4567);
+      expect(res2).to.be.true;
+      expect(arg1).to.equal(Hello.Dog);
+      expect(arg2).to.equal(4567);
     }) 
   }) 
 })

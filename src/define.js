@@ -310,7 +310,7 @@ export function attachFunction(s, def) {
       }
     }
     thunk(a);
-    return argStruct.return_value;
+    return a.return_value;
   }
   Object.defineProperties(f, {
     name: { value: name, writable: false },
