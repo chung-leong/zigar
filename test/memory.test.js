@@ -71,7 +71,7 @@ describe('Memory copying functions', function() {
       const toAligned = obtainBitAlignFunction(1, 10, true);
       toAligned(aligned, misaligned, 2);
       expect(aligned.getUint8(0)).to.equal(0xF0);
-      expect(aligned.getUint8(1)).to.equal(0x03);
+      expect(aligned.getUint8(1)).to.equal(0x01);
       const fromAligned = obtainBitAlignFunction(1, 10, false);
       misaligned.setUint8(2, 0);
       misaligned.setUint8(3, 0xFF);
@@ -81,6 +81,12 @@ describe('Memory copying functions', function() {
       misaligned.setUint8(3, 0x0C);
       fromAligned(misaligned, aligned, 2);
       expect(misaligned.getUint8(3)).to.equal(0x0B);
+      // 9-bit int: -256, offset 1
+      misaligned.setUint8(1, 0x00);
+      misaligned.setUint8(2, 0x02)
+      toAligned(aligned, misaligned, 1);
+      expect(aligned.getUint8(0)).to.equal(0x00);
+      expect(aligned.getUint8(1)).to.equal(0x01);
     })
     it ('should return functions for copying to and from a bit offset (crossing multiple byte boundaries)', function() {
       const misaligned = new DataView(new ArrayBuffer(5));

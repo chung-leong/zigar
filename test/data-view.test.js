@@ -424,9 +424,9 @@ describe('DataView functions', function() {
         expect(dv.getUint8(i)).to.equal(b);
       }
     })
-    it('should return functions for setting non-aligned integers (<= 32 bits)', function() {
+    it('should return functions for setting non-aligned integers', function() {
       const signed = true;
-      for (let bits = 2; bits <= 32; bits++) {
+      for (let bits = 2; bits <= 64; bits++) {
         for (let bitOffset = 1; bitOffset <= 7; bitOffset++) {
           const guard1 = {
             type: MemberType.Int,
@@ -452,7 +452,7 @@ describe('DataView functions', function() {
           const offsetG1 = Math.floor(guard1.bitOffset / 8);
           const offsetG2 = Math.floor(guard2.bitOffset / 8);
           const offset = Math.floor(member.bitOffset / 8);
-          const dv = new DataView(new ArrayBuffer(8));
+          const dv = new DataView(new ArrayBuffer(16));
           const getG1 = obtainDataViewGetter(guard1);
           const setG1 = obtainDataViewSetter(guard1);
           const getG2 = obtainDataViewGetter(guard2);
@@ -462,13 +462,23 @@ describe('DataView functions', function() {
           const { min, max } = getIntRange(bits, signed);
           const { max: maxG1 } = getIntRange(guard1.bits, false);
           const { max: maxG2 } = getIntRange(guard2.bits, false);
-          for (let i = min; i <= max; i++) {
+          let step;
+          if (bits <= 8) {
+            step = 1;
+          } else if (bits <= 16) {
+            step = 2 ** (bits - 8) + 1;
+          } else if (bits <= 32) {
+            step = 2 ** (bits - 6) + 1;
+          } else {
+            step = (2n ** BigInt(bits - 3)) + 1n; 
+          }
+          for (let i = min; i <= max; i += step) {
             // clear guard bits and set the value
             setG1.call(dv, offsetG1, 0);
             setG2.call(dv, offsetG2, 0);
-            set.call(dv, offset, i);
+            set.call(dv, offset, i, true);
             // check if setter set the correct value 
-            const value1 = get.call(dv, offset);
+            const value1 = get.call(dv, offset, true);
             expect(value1).to.equal(i);
             // ensure setter doesn't write outside of the bit range
             const g1 = getG1.call(dv, offsetG1);
@@ -478,7 +488,7 @@ describe('DataView functions', function() {
             // make sure getter isn't reading outside of its bit range
             setG1.call(dv, offsetG1, maxG1);
             setG2.call(dv, offsetG2, maxG2);
-            const value2 = get.call(dv, offset);
+            const value2 = get.call(dv, offset, true);
             expect(value2).to.equal(i);
           }
         }           

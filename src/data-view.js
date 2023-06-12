@@ -154,8 +154,9 @@ export function obtainDataViewGetter({ type, bits, signed, align, bitOffset }) {
     } else {
       // pathological usage--handle it anyway by copying the bits into a 
       // temporary buffer, bit-aligning the data
-      const dest = new DataView(new ArrayBuffer(Math.ceil(bits / 8)));
-      const getAligned = obtainDataViewGetter({ type, bits, signed, bitOffset: 0, align: alignOf(bits) });
+      const align = alignOf(bits);
+      const dest = new DataView(new ArrayBuffer(align));
+      const getAligned = obtainDataViewGetter({ type, bits, signed, bitOffset: 0, align });
       const copyBits = obtainBitAlignFunction(bitPos, bits, true);
       fn = function(offset, littleEndian) {
         copyBits(dest, this, offset);
@@ -324,8 +325,9 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
         };
       }
     } else {
-      const src = new DataView(new ArrayBuffer(Math.ceil(bits / 8)));
-      const setAligned = obtainDataViewSetter({ type, bits, signed, bitOffset: 0, align: alignOf(bits) });
+      const align = alignOf(bits);
+      const src = new DataView(new ArrayBuffer(align));
+      const setAligned = obtainDataViewSetter({ type, bits, signed, bitOffset: 0, align });
       const applyBits = obtainBitAlignFunction(bitPos, bits, false);
       fn = function(offset, value, littleEndian) {
         setAligned.call(src, 0, value, littleEndian);
