@@ -1,57 +1,122 @@
-export function copyBits(dest, src, offset, bitOffset, bits) {
-  const shift = 8 - bitOffset;
-  const bitCount = (bits > shift) ? shift : bits;
-  const leadMask = ((2 ** bitCount) - 1) << bitOffset;
-  const trailMask = 0xFF ^ leadMask;
-  let i = offset, j = 0;
-  // read leading byte, mask off bits before bit offset, and shift them to the start of the byte
-  let n = src.getUint8(i++);
-  let overhang = (n & leadMask) >>> bitOffset;
-  let remaining = bits - bitCount;
-  let b;
-  while (remaining >= 8) {
-    // read next bytes, shift it forward, and combine it with bits that came before
-    n = src.getUint8(i++);
-    b = overhang | ((n & trailMask) << shift);
-    dest.setUint8(j++, b);
-    // new overhang
-    overhang = (n & leadMask) >>> bitOffset;
-    remaining -= 8;
-  }
-  if (remaining > 0) {
-    const finalMask = (2 ** remaining) - 1;
-    n = src.getUint8(i);
-    b = overhang | ((n & finalMask) << shift);
+export function obtainBitAlignFunction(bitPos, bits, toAligned) {
+  if (bitPos + bits <= 8) {
+    const mask = ((2 ** bits) - 1) << bitPos;
+    if (toAligned) {
+      // from single byte
+      return function(dest, src, offset) {
+        const n = src.getUint8(offset);
+        const b = (n & mask) >> bitPos;
+        dest.setUint8(0, b);
+      };
+    } else {
+      // to single byte
+      return function(dest, src, offset) {
+        const n = src.getUint8(0);
+        const d = dest.getUint8(offset);
+        const b = (d & (0xFF ^ mask)) | ((n << bitPos) & mask);
+        dest.setUint8(offset, b);
+      };
+    }
+  } else if (bitPos + bits <= 16) {
+    const leadBits = 8 - bitPos;
+    const leadMask = ((2 ** leadBits) - 1) << bitPos;
+    const trailBits = bits - leadBits;
+    const trailMask = (2 ** trailBits) - 1; 
+    if (toAligned) {
+      // from two bytes
+      if (bits <= 8) {
+        // to one byte
+        return function(dest, src, offset) {
+          const n1 = src.getUint8(offset);
+          const n2 = src.getUint8(offset + 1);
+          const b = ((n1 & leadMask) >> bitPos) | ((n2 & trailMask) << leadBits);
+          dest.setUint8(0, b);
+        }; 
+      } else {
+        // to two bytes
+        return function(dest, src, offset) {
+          const n1 = src.getUint8(offset);
+          const n2 = src.getUint8(offset + 1);
+          const b1 = ((n1 & leadMask) >> bitPos) | ((n2 << leadBits) & 0xFF);
+          const b2 = n2 & trailMask;
+          dest.setUint8(0, b1);
+          dest.setUint8(1, b2);
+        };
+      }
+    } else {
+      // to two bytes
+      if (bits <= 8) {
+        // from one byte
+        return function(dest, src, offset) {
+          const n = src.getUint8(0);
+          const d1 = dest.getUint8(offset);
+          const d2 = dest.getUint8(offset + 1);
+          const b1 = (d1 & (0xFF ^ leadMask)) | ((n << bitPos) & leadMask);
+          const b2 = (d2 & (0xFF ^ trailMask)) | ((n >> leadBits) & trailMask);
+          dest.setUint8(offset, b1);
+          dest.setUint8(offset + 1, b2);
+        }; 
+      } else {
+        // from two bytes
+        return function(dest, src, offset) {
+          const n1 = src.getUint8(0);
+          const n2 = src.getUint8(1);
+          const d1 = dest.getUint8(offset);
+          const d2 = dest.getUint8(offset + 1);
+          const b1 = (d1 & (0xFF ^ leadMask)) | ((n1 << bitPos) & leadMask);
+          const b2 = (d2 & (0xFF ^ trailMask)) | ((n1 >> leadBits) & 0xFF) | (n2 & trailMask);
+          dest.setUint8(offset, b1);
+          dest.setUint8(offset + 1, b2);
+        }; 
+      }
+    }
   } else {
-    b = overhang;
-  }
-  dest.setUint8(j, b);
-}
-
-export function applyBits(dest, src, offset, bitOffset, bits) {
-  const shift = 8 - bitOffset;
-  const bitCount = (bits > shift) ? shift : bits;
-  const leadMask = ((2 ** bitCount) - 1) << bitOffset;
-  const trailMask = 0xFF ^ leadMask;
-  let i = offset, j = 0;
-  let b = dest.getUint8(i);
-  let n = src.getUint8(j++);
-  b = (b & trailMask) | ((n << bitOffset) & leadMask);
-  dest.setUint8(i++, b);
-  let leftOver = (n >> shift) & trailMask;
-  let remaining = bits - bitCount;
-  while (remaining >= 8) {
-    n = src.getUint8(j++);
-    b = leftOver | ((n << bitOffset) & leadMask);
-    dest.setUint8(i++, b);
-    leftOver = (n >> shift) & trailMask;
-    remaining -= 8;
-  }
-  if (remaining > 0) {
-    const finalMask = (2 ** remaining) - 1;
-    b = dest.getUint8(i);
-    b = leftOver | (b & (0xFF ^ finalMask));
-    dest.setUint8(i, b)
+    const leadBits = 8 - bitPos;
+    const leadMask = ((2 ** leadBits) - 1) << bitPos;
+    if (toAligned) {
+      const trailBits = bits % 8;
+      const trailMask = (2 ** trailBits) - 1;  
+      return function(dest, src, offset) {
+        let i = offset, j = 0;
+        let n = src.getUint8(i++), b;
+        let bitBuf = n >> bitPos; 
+        let remaining = bits;
+        do {
+          n = src.getUint8(i++);
+          bitBuf = bitBuf | (n << leadBits); 
+          b = (remaining >= 8) ? bitBuf & 0xFF : bitBuf & trailMask;
+          dest.setUint8(j++, b);
+          bitBuf >>= 8;
+          remaining -= 8;
+        } while (remaining > 0);
+      }
+    } else {
+      const trailBits = (bits - leadBits) % 8;
+      const trailMask = (2 ** trailBits) - 1;  
+      return function(dest, src, offset) {
+        let i = 0, j = offset;
+        // preserve bits ahead of bitPos
+        let d = dest.getUint8(j), n, b;   
+        let bitBuf = (d & (0xFF ^ leadMask));
+        let remaining = bits + bitPos;
+        do {
+          if (remaining > bitPos) {
+            n = src.getUint8(i++);
+            bitBuf = bitBuf | (n << bitPos);
+          }
+          if (remaining >= 8) {
+            b = bitBuf & 0xFF;
+          } else {
+            // preserve bits at the destination sitting behind the trailing bits 
+            d = dest.getUint8(j);
+            b = (d & (0xFF ^ trailMask)) | (bitBuf & trailMask);
+          }
+          dest.setUint8(j++, b);
+          bitBuf >>= 8;
+          remaining -= 8;
+        } while (remaining > 0);
+      }
+    }
   }
 }
 
@@ -70,3 +135,14 @@ function copy4(dest, src) {
     dest.setInt32(i, src.getInt32(i));
   }
 }
+
+/*
+function showBits(object) {
+  const bitObj = {};
+  for (const [ name, value ] of Object.entries(object)) {
+    const s = value.toString(2);
+    bitObj[name] = s.padStart(Math.ceil(s.length / 8) * 8, '0');
+  }
+  console.log(bitObj);
+}
+*/

@@ -483,6 +483,7 @@ describe('Structure definition', function() {
       const Hello = shapeStructure(structure, def);
       const object = new Hello();
       expect(object.dog).to.equal(0);
+      debugger;
       expect(object.cat).to.equal(2);
       // TODO
     }) 

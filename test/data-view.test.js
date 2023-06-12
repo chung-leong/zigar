@@ -426,7 +426,7 @@ describe('DataView functions', function() {
     })
     it('should return functions for setting non-aligned integers (<= 32 bits)', function() {
       const signed = true;
-      for (let bits = 9; bits <= 32; bits++) {
+      for (let bits = 2; bits <= 32; bits++) {
         for (let bitOffset = 1; bitOffset <= 7; bitOffset++) {
           const guard1 = {
             type: MemberType.Int,

@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { copyBits, applyBits, obtainCopyFunction } from '../src/memory.js';
+import { obtainCopyFunction, obtainBitAlignFunction } from '../src/memory.js';
 
 describe('Memory copying functions', function() {
   describe('obtainCopyFunction', function() {
@@ -31,89 +31,76 @@ describe('Memory copying functions', function() {
       expect(s).to.equal('123456789'.repeat(8));      
     })
   })
-  describe('copyBits', function() {
-    it('should copy unaligned bits into an aligned buffer', function() {
-      const src = new DataView(new ArrayBuffer(8));
-      // create this bit pattern
-      //  byte 7                                                         byte 0
-      // 11111111 11111111 11111111 11111111 11100000 00010000 00011111 11111111
-      //                                                v        ^- bit 5
-      //                                        00000000 10000000
-      src.setUint8(7, 0xFF);
-      src.setUint8(6, 0xFF);
-      src.setUint8(5, 0xFF);
-      src.setUint8(4, 0xFF);
-      src.setUint8(3, 0xE0);
-      src.setUint8(2, 0x10);
-      src.setUint8(1, 0x1F);
-      src.setUint8(0, 0xFF);
-      const dest1 = new DataView(new ArrayBuffer(2));
-      copyBits(dest1, src, 1, 5, 16);
-      expect(dest1.getUint8(0)).to.equal(0x80);
-      expect(dest1.getUint8(1)).to.equal(0x00);
-      // copy 3 more bits to get 00000111 00000000 10000000
-      const dest2 = new DataView(new ArrayBuffer(3));
-      copyBits(dest2, src, 1, 5, 19);
-      expect(dest2.getUint8(0)).to.equal(0x80);
-      expect(dest2.getUint8(1)).to.equal(0x00);
-      expect(dest2.getUint8(2)).to.equal(0x07);
-      // copy 3 bits at bit 3 to get 00000011
-      const dest3 = new DataView(new ArrayBuffer(1))
-      copyBits(dest3, src, 1, 3, 3);
-      expect(dest3.getUint8(0)).to.equal(0x03);
-      const dest4 = new DataView(new ArrayBuffer(1))
-      debugger;
-      copyBits(dest4, src, 1, 7, 7);
-      // copy 7 bits at bit 7 to get 00100000
-      expect(dest4.getUint8(0)).to.equal(0x20);
+  describe('obtainBitAlignFunction', function() {
+    it ('should return functions for copying to and from a bit offset (not crossing byte boundary)', function() {
+      const misaligned = new DataView(new ArrayBuffer(4));
+      const aligned = new DataView(new ArrayBuffer(1));
+      misaligned.setUint8(2, 0xE0); // 11100000
+                                    //    ^ bit 4
+      const toAligned = obtainBitAlignFunction(4, 3, true);
+      toAligned(aligned, misaligned, 2);
+      expect(aligned.getUint8(0)).to.equal(0x06);
+      const fromAligned = obtainBitAlignFunction(4, 3, false);
+      misaligned.setUint8(2, 0);
+      fromAligned(misaligned, aligned, 2);
+      expect(misaligned.getUint8(2)).to.equal(0x60);
+      misaligned.setUint8(2, 0xFF);
+      fromAligned(misaligned, aligned, 2);
+      expect(misaligned.getUint8(2)).to.equal(0xEF);
     })
-  })
-  describe('applyBits', function() {
-    it('should insert bits into unaligned positions at destination buffer', function() {
-      const dest = new DataView(new ArrayBuffer(8));
-      // create this bit pattern
-      //  byte 7                                                         byte 0
-      // 11111111 11111111 11111111 11111111 11100000 00010000 00011111 11111111
-      //                                                         ^- bit 5
-      dest.setUint8(7, 0xFF);
-      dest.setUint8(6, 0xFF);
-      dest.setUint8(5, 0xFF);
-      dest.setUint8(4, 0xFF);
-      dest.setUint8(3, 0xE0);
-      dest.setUint8(2, 0x10);
-      dest.setUint8(1, 0x1F);
-      dest.setUint8(0, 0xFF);
-      // insert 11110000 00101111 to get:
-      //  byte 7                                                         byte 0 
-      // 11111111 11111111 11111111 11111111 11111110 00000101 11111111 11111111 
-      const src1 = new DataView(new ArrayBuffer(2));
-      src1.setUint8(0, 0x2F);
-      src1.setUint8(1, 0xF0);
-      debugger;
-      applyBits(dest, src1, 1, 5, 16);
-      expect(dest.getUint8(1)).to.equal(0xFF);
-      expect(dest.getUint8(2)).to.equal(0x05);
-      expect(dest.getUint8(3)).to.equal(0xFE);
-      // insert 000 00000000 00000000 to get:
-      // 11111111 11111111 11111111 11111111 00000000 00000000 00011111 11111111
-      const src2 = new DataView(new ArrayBuffer(3));
-      applyBits(dest, src2, 1, 5, 19);
-      expect(dest.getUint8(1)).to.equal(0x1F);
-      expect(dest.getUint8(2)).to.equal(0x00);
-      expect(dest.getUint8(3)).to.equal(0x00);
-      expect(dest.getUint8(4)).to.equal(0xFF);
-      // insert 000 at bit 1 of byte 1 to get:
-      // 11111111 11111111 11111111 11111111 00000000 00000000 00010001 11111111
-      const src3 = new DataView(new ArrayBuffer(1))
-      applyBits(dest, src3, 1, 1, 3);
-      expect(dest.getUint8(1)).to.equal(0x11);
-      // insert 0000 at bit 7 of byte 4 to get:
-      // 11111111 11111111 11111000 01111111 00000000 00000000 00010001 11111111
-      const src4 = new DataView(new ArrayBuffer(1))
-      debugger;
-      applyBits(dest, src4, 4, 7, 4);
-      expect(dest.getUint8(4)).to.equal(0x7F);
-      expect(dest.getUint8(5)).to.equal(0xF8);
+    it ('should return functions for copying to and from a bit offset (crossing one byte boundary, less than 8 bits)', function() {
+      const misaligned = new DataView(new ArrayBuffer(4));
+      const aligned = new DataView(new ArrayBuffer(1));
+      misaligned.setUint8(2, 0xE0); //          11100000
+      misaligned.setUint8(3, 0x03); // 00000011    ^ bit 4
+      const toAligned = obtainBitAlignFunction(4, 7, true);
+      toAligned(aligned, misaligned, 2);
+      expect(aligned.getUint8(0)).to.equal(0x3E);
+      const fromAligned = obtainBitAlignFunction(4, 7, false);
+      misaligned.setUint8(2, 0);
+      misaligned.setUint8(3, 0xFF);
+      fromAligned(misaligned, aligned, 2);
+      expect(misaligned.getUint8(2)).to.equal(0xE0);
+      expect(misaligned.getUint8(3)).to.equal(0xFB);
+    })
+    it ('should return functions for copying to and from a bit offset (crossing one byte boundary, more than 8 bits)', function() {
+      const misaligned = new DataView(new ArrayBuffer(4));
+      const aligned = new DataView(new ArrayBuffer(2));
+      misaligned.setUint8(2, 0xE0); //          11100000
+      misaligned.setUint8(3, 0x1B); // 00011011       ^ bit 1
+      const toAligned = obtainBitAlignFunction(1, 10, true);
+      toAligned(aligned, misaligned, 2);
+      expect(aligned.getUint8(0)).to.equal(0xF0);
+      expect(aligned.getUint8(1)).to.equal(0x03);
+      const fromAligned = obtainBitAlignFunction(1, 10, false);
+      misaligned.setUint8(2, 0);
+      misaligned.setUint8(3, 0xFF);
+      fromAligned(misaligned, aligned, 2);
+      expect(misaligned.getUint8(2)).to.equal(0xE0);
+      expect(misaligned.getUint8(3)).to.equal(0xFB);
+      misaligned.setUint8(3, 0x0C);
+      fromAligned(misaligned, aligned, 2);
+      expect(misaligned.getUint8(3)).to.equal(0x0B);
+    })
+    it ('should return functions for copying to and from a bit offset (crossing multiple byte boundaries)', function() {
+      const misaligned = new DataView(new ArrayBuffer(5));
+      const aligned = new DataView(new ArrayBuffer(3));
+      misaligned.setUint8(0, 0xFF); //                                     11111111  
+      misaligned.setUint8(1, 0x1F); //                            00011111
+      misaligned.setUint8(2, 0x10); //                   00010000   ^- bit 5
+      misaligned.setUint8(3, 0xE0); //          11100000
+      misaligned.setUint8(4, 0xFF); // 11111111
+      const toAligned = obtainBitAlignFunction(5, 20, true);
+      toAligned(aligned, misaligned, 1);
+      expect(aligned.getUint8(0)).to.equal(0x80);
+      expect(aligned.getUint8(1)).to.equal(0x00);
+      expect(aligned.getUint8(2)).to.equal(0x0F);
+      const fromAligned = obtainBitAlignFunction(5, 20, false);
+      fromAligned(misaligned, aligned, 1);
+      expect(misaligned.getUint8(1)).to.equal(0x1F);
+      expect(misaligned.getUint8(2)).to.equal(0x10);
+      expect(misaligned.getUint8(3)).to.equal(0xE0);
+      expect(misaligned.getUint8(4)).to.equal(0xFF);
     })
   })
 })

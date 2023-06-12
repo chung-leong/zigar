@@ -1,5 +1,5 @@
 import { MemberType, getTypeName } from './types.js';
-import { copyBits, applyBits } from './memory.js';
+import { obtainBitAlignFunction } from './memory.js';
 import { throwSizeMismatch, throwBufferExpected } from './errors.js';
 import { DATA } from './symbols.js';
 
@@ -156,8 +156,9 @@ export function obtainDataViewGetter({ type, bits, signed, align, bitOffset }) {
       // temporary buffer, bit-aligning the data
       const dest = new DataView(new ArrayBuffer(Math.ceil(bits / 8)));
       const getAligned = obtainDataViewGetter({ type, bits, signed, bitOffset: 0, align: alignOf(bits) });
+      const copyBits = obtainBitAlignFunction(bitPos, bits, true);
       fn = function(offset, littleEndian) {
-        copyBits(dest, this, offset, bitPos, bits);
+        copyBits(dest, this, offset);
         return getAligned.call(dest, 0, littleEndian);
       };
     }
@@ -325,9 +326,10 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
     } else {
       const src = new DataView(new ArrayBuffer(Math.ceil(bits / 8)));
       const setAligned = obtainDataViewSetter({ type, bits, signed, bitOffset: 0, align: alignOf(bits) });
+      const applyBits = obtainBitAlignFunction(bitPos, bits, false);
       fn = function(offset, value, littleEndian) {
         setAligned.call(src, 0, value, littleEndian);
-        applyBits(this, src, offset, bitPos, bits);
+        applyBits(this, src, offset);
       };
     }
   }
