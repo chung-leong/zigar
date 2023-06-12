@@ -38,7 +38,7 @@ function shapePrimitive(s, def, options) {
   const get = obtainGetter(member, options);
   const set = obtainSetter(member, options);
   const constructor = s.constructor = function(arg) {
-    var self, dv, init;
+    let self, dv, init;
     if (this) {
       // new operation--expect matching primitive
       if (arg !== undefined) {
@@ -84,7 +84,7 @@ function shapeArray(s, def, options) {
   const set = obtainArraySetter(member, options);
   const getLength = obtainArrayLengthGetter(member, options);
   const constructor = s.constructor = function(arg) {
-    var self, dv, init;
+    let self, dv, init;
     if (this) {
       // new operation--expect an array
       // TODO: validate
@@ -146,7 +146,7 @@ function shapeStruct(s, def, options) {
     };
   });
   const constructor = s.constructor = function(arg) {
-    var self, dv, init;
+    let self, dv, init;
     if (this) {
       // new operation--expect an object
       // TODO: validate
@@ -215,7 +215,7 @@ function shapeEnumeration(s, def, options) {
       // new enum items cannot be created
       throwNoNewEnum();    
     }
-    var index = -1;
+    let index = -1;
     if (isSequential) {
       // normal enums start at 0 and go up, so the value is the index 
       index = Number(arg);

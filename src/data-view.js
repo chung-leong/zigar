@@ -12,7 +12,7 @@ export function obtainDataViewGetter({ type, bits, signed, align, bitOffset }) {
   if (methodCache[name]) {
     return methodCache[name];
   }
-  var fn;
+  let fn;
   if (align !== 0) {
     if (type === MemberType.Int) {
       if (bits < 64) {
@@ -38,7 +38,7 @@ export function obtainDataViewGetter({ type, bits, signed, align, bitOffset }) {
         const getWord = DataView.prototype.getBigUint64;
         const word_count = Math.ceil(bits / 64);
         const get = function(offset, littleEndian) {
-          var n = 0n;
+          let n = 0n;
           if (littleEndian) {
             for (let i = 0, j = offset + (word_count - 1) * 8; i < word_count; i++, j -= 8) {
               const w = getWord.call(this, j, littleEndian);
@@ -179,7 +179,7 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
   if (methodCache[name]) {
     return methodCache[name];
   }
-  var fn;
+  let fn;
   if (align !== 0) {
     if (type === MemberType.Int) {
       if (bits < 64) {
@@ -204,7 +204,7 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
         const setWord = DataView.prototype.setBigUint64;
         const word_count = Math.ceil(bits / 64);
         const set = function(offset, v, littleEndian) {
-          var n = v;
+          let n = v;
           const mask = 0xFFFFFFFFFFFFFFFFn; 
           if (littleEndian) {
             for (let i = 0, j = offset; i < word_count; i++, j += 8) {
@@ -247,7 +247,7 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
           const sign = n >>> 31;
           const exp = (n & 0x7F800000) >> 23;
           const frac = n & 0x007FFFFF;
-          var n16;
+          let n16;
           if (exp === 0) {
             n16 = sign << 15;
           } else if (exp === 0xFF) {
@@ -272,7 +272,7 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
           const sign = n >> 63n;
           const exp = (n & 0x7FF0000000000000n) >> 52n;
           const frac = n & 0x000FFFFFFFFFFFFFn;
-          var n128;
+          let n128;
           if (exp === 0n) {
             n128 = sign << 127n | (frac << 60n);
           } else if (exp === 0x07FFn) {
@@ -307,7 +307,7 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
         const valueMask = signMask - 1;
         const outsideMask = 0xFF ^ ((valueMask | signMask) << bitPos);
         fn = function(offset, v) {
-          var b = get.call(this, offset);
+          let b = get.call(this, offset);
           const n = (v < 0) ? signMask | (v & valueMask) : v & valueMask;
           b = (b & outsideMask) | (n << bitPos);
           set.call(this, offset, b);
@@ -340,7 +340,7 @@ export function obtainDataViewSetter({ type, bits, signed, align, bitOffset }) {
 }
 
 export function obtainDataView(arg, size, multiple = false) {
-  var dv;
+  let dv;
   if (arg instanceof DataView) {
     dv = arg;
   } else if (arg instanceof ArrayBuffer || arg instanceof SharedArrayBuffer) {

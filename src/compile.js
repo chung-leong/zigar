@@ -40,7 +40,7 @@ export async function compile(path, options = {}) {
   // scan the dir containing the file to see if recompilation is necessary
   // also check if there's a custom build file and for C dependency
   const customBuildFileName = rootFile.name + '.build.zig';
-  var custom = false, changed = false, dependent = false;
+  let custom = false, changed = false, dependent = false;
   await walk(rootFile.dir, /\.(zig|c|cc|cpp|h|hh)$/i, (dir, name, { mtime }) => {
     if (dir === rootFile.dir && name === customBuildFileName) {
       custom = true;
@@ -76,7 +76,7 @@ export async function compile(path, options = {}) {
   if (!changed) {
     return soPath;
   }
-  var done = false, errorLog;
+  let done = false, errorLog;
   while (!done) {
     await mkdirp(soBuildDir);
     if (await writePID(pidPath)) {
@@ -207,7 +207,7 @@ async function createProject(fileMap, vars, dir) {
   for (const [ name, src ] of Object.entries(fileMap)) {
     const path = absolute(src);
     const destPath = join(dir, name);
-    var s = await readFile(path, 'utf8');
+    let s = await readFile(path, 'utf8');
     s = s.replace(/"\${(\w+)}"/g, (m0, m1) => JSON.stringify(vars[m1] ?? m1));
     s = s.replace(/\${(\w+)}/g, (m0, m1) => vars[m1] ?? m1);
     await writeFile(destPath, s);

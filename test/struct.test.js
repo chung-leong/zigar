@@ -133,7 +133,7 @@ describe('Struct functions', function() {
       expect(res).to.equal(DummyValue);
     })
     it('should return a function that dereferences a pointer to a primitive', function() {
-      var value = 1234;
+      let value = 1234;
       const DummyStruct = class {
         get() { return value }
         set(v) { value = v }
@@ -278,7 +278,7 @@ describe('Struct functions', function() {
       expect(object[RELOCATABLE][1]).to.equal(DummyValue);
     })
     it('should return a function that set a primitive referenced by a pointer', function() {
-      var value = 1234;
+      let value = 1234;
       const DummyStruct = class {
         get() { return value }
         set(v) { value = v }

@@ -5,7 +5,7 @@ import { DATA, RELOCATABLE } from './symbols.js';
 
 export function obtainArrayLengthGetter(member, options) {
   const { align } = member;
-  var fn = function() {
+  let fn = function() {
     const dv = this[DATA];
     return dv.byteLength / align;
   };
@@ -73,7 +73,7 @@ export function obtainArraySetter(member, options) {
     littleEndian = true,
     runtimeSafety = true,
   } = options;
-  var fn;
+  let fn;
   switch (member.type) {
     case MemberType.Compound: {
       const { structure, align } = member;
@@ -83,7 +83,7 @@ export function obtainArraySetter(member, options) {
           v = new constructor(v);
         }
         const relocs = this[RELOCATABLE];
-        var reloc = relocs[index];
+        let reloc = relocs[index];
         if (!reloc) {
           const offset = index * align;
           if (offset >= 0 && offset + align <= dv.byteLength) {
@@ -155,10 +155,10 @@ export function obtainArraySetter(member, options) {
 export function getArrayIterator() {
   const self = this;
   const length = this.length;
-  var index = 0;
+  let index = 0;
   return {
     next() {
-      var value, done;
+      let value, done;
       if (index < length) {
         value = self.get(index);
         done = false;

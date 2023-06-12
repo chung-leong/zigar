@@ -60,7 +60,12 @@ describe('Memory copying functions', function() {
       // copy 3 bits at bit 3 to get 00000011
       const dest3 = new DataView(new ArrayBuffer(1))
       copyBits(dest3, src, 1, 3, 3);
-      expect(dest3.getUint8(0)).to.equal(3);
+      expect(dest3.getUint8(0)).to.equal(0x03);
+      const dest4 = new DataView(new ArrayBuffer(1))
+      debugger;
+      copyBits(dest4, src, 1, 7, 7);
+      // copy 7 bits at bit 7 to get 00100000
+      expect(dest4.getUint8(0)).to.equal(0x20);
     })
   })
   describe('applyBits', function() {
@@ -84,6 +89,7 @@ describe('Memory copying functions', function() {
       const src1 = new DataView(new ArrayBuffer(2));
       src1.setUint8(0, 0x2F);
       src1.setUint8(1, 0xF0);
+      debugger;
       applyBits(dest, src1, 1, 5, 16);
       expect(dest.getUint8(1)).to.equal(0xFF);
       expect(dest.getUint8(2)).to.equal(0x05);
@@ -96,6 +102,18 @@ describe('Memory copying functions', function() {
       expect(dest.getUint8(2)).to.equal(0x00);
       expect(dest.getUint8(3)).to.equal(0x00);
       expect(dest.getUint8(4)).to.equal(0xFF);
+      // insert 000 at bit 1 of byte 1 to get:
+      // 11111111 11111111 11111111 11111111 00000000 00000000 00010001 11111111
+      const src3 = new DataView(new ArrayBuffer(1))
+      applyBits(dest, src3, 1, 1, 3);
+      expect(dest.getUint8(1)).to.equal(0x11);
+      // insert 0000 at bit 7 of byte 4 to get:
+      // 11111111 11111111 11111000 01111111 00000000 00000000 00010001 11111111
+      const src4 = new DataView(new ArrayBuffer(1))
+      debugger;
+      applyBits(dest, src4, 4, 7, 4);
+      expect(dest.getUint8(4)).to.equal(0x7F);
+      expect(dest.getUint8(5)).to.equal(0xF8);
     })
   })
 })

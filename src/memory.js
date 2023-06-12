@@ -1,13 +1,14 @@
 export function copyBits(dest, src, offset, bitOffset, bits) {
   const shift = 8 - bitOffset;
-  const leadMask = ((2 ** shift) - 1) << bitOffset;
+  const bitCount = (bits > shift) ? shift : bits;
+  const leadMask = ((2 ** bitCount) - 1) << bitOffset;
   const trailMask = 0xFF ^ leadMask;
-  var i = offset, j = 0;
+  let i = offset, j = 0;
   // read leading byte, mask off bits before bit offset, and shift them to the start of the byte
-  var n = src.getUint8(i++);
-  var overhang = (n & leadMask) >>> bitOffset;
-  var remaining = bits - shift;
-  var b;
+  let n = src.getUint8(i++);
+  let overhang = (n & leadMask) >>> bitOffset;
+  let remaining = bits - bitCount;
+  let b;
   while (remaining >= 8) {
     // read next bytes, shift it forward, and combine it with bits that came before
     n = src.getUint8(i++);
@@ -18,7 +19,7 @@ export function copyBits(dest, src, offset, bitOffset, bits) {
     remaining -= 8;
   }
   if (remaining > 0) {
-    const finalMask = ((2 ** remaining) - 1) << bitOffset;    
+    const finalMask = (2 ** remaining) - 1;
     n = src.getUint8(i);
     b = overhang | ((n & finalMask) << shift);
   } else {
@@ -29,13 +30,16 @@ export function copyBits(dest, src, offset, bitOffset, bits) {
 
 export function applyBits(dest, src, offset, bitOffset, bits) {
   const shift = 8 - bitOffset;
-  const leadMask = ((2 ** shift) - 1) << bitOffset;
+  const bitCount = (bits > shift) ? shift : bits;
+  const leadMask = ((2 ** bitCount) - 1) << bitOffset;
   const trailMask = 0xFF ^ leadMask;
-  var i = offset, j = 0;
-  var b = dest.getUint8(i);
-  var leftOver = b & trailMask;
-  var remaining = bits + bitOffset;
-  var n;
+  let i = offset, j = 0;
+  let b = dest.getUint8(i);
+  let n = src.getUint8(j++);
+  b = (b & trailMask) | ((n << bitOffset) & leadMask);
+  dest.setUint8(i++, b);
+  let leftOver = (n >> shift) & trailMask;
+  let remaining = bits - bitCount;
   while (remaining >= 8) {
     n = src.getUint8(j++);
     b = leftOver | ((n << bitOffset) & leadMask);
@@ -44,9 +48,9 @@ export function applyBits(dest, src, offset, bitOffset, bits) {
     remaining -= 8;
   }
   if (remaining > 0) {
-    const finalMask = ((2 ** remaining) - 1) << bitOffset;
+    const finalMask = (2 ** remaining) - 1;
     b = dest.getUint8(i);
-    b = (b & finalMask) | (leftOver & (0xFF ^ finalMask));   
+    b = leftOver | (b & (0xFF ^ finalMask));
     dest.setUint8(i, b)
   }
 }

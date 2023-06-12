@@ -1113,7 +1113,7 @@ describe('Structure definition', function() {
           },
         ],
       };
-      var arg1, arg2;
+      let arg1, arg2;
       const thunk = (args) => {
         arg1 = args[0];
         arg2 = args[1];

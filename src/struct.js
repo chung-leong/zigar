@@ -62,7 +62,7 @@ export function obtainSetter(member, options) {
     littleEndian = true,
     runtimeSafety = true,
   } = options;
-  var fn;
+  let fn;
   switch (member.type) {
     case MemberType.Compound: {
       const { slot, structure } = member;
