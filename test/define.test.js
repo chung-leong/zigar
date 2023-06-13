@@ -5,7 +5,7 @@ import {
   createStructure, 
   shapeStructure,
   attachVariables, 
-  attachFunctions,
+  attachMethods,
 } from '../src/define.js';
 
 describe('Structure definition', function() { 
@@ -983,7 +983,7 @@ describe('Structure definition', function() {
       expect(Hello(1)).to.equal(Hello.Cat);
     })
   })
-  describe('Functions', function() {
+  describe('Methods', function() {
     it('should attach methods to a struct', function() {
       const def = {
         size: 8,
@@ -1037,15 +1037,15 @@ describe('Structure definition', function() {
       };
       const argStructure = createStructure(StructureType.Struct, undefined);
       const argStruct = shapeStructure(argStructure, argDef);
-      const functions = [
+      const methods = [
         {
           name: 'merge',
           argStruct,
-          isMethod: true,
+          staticOnly: false,
           thunk, 
         },
       ];
-      attachFunctions(structure, functions);
+      attachMethods(structure, methods);
       expect(Hello.merge).to.be.a('function');
       expect(Hello.merge).to.have.property('name', 'merge');
       expect(Hello.prototype.merge).to.be.a('function');
@@ -1122,15 +1122,15 @@ describe('Structure definition', function() {
       };
       const argStructure = createStructure(StructureType.Struct, undefined);
       const argStruct = shapeStructure(argStructure, argDef);
-      const functions = [
+      const methods = [
         {
           name: 'foo',
           argStruct,
-          isMethod: true,
+          staticOnly: false,
           thunk, 
         },
       ];
-      attachFunctions(structure, functions);
+      attachMethods(structure, methods);
       expect(Hello.foo).to.be.a('function');
       expect(Hello.foo).to.have.property('name', 'foo');
       expect(Hello.prototype.foo).to.be.a('function');

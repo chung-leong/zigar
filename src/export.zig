@@ -178,8 +178,8 @@ fn invalidPointer(PT: type) PT {
 fn repointStructure(h: Host, obj: Value, T: type) !*T {
     const ptr = try h.getPointer(obj, *T);
     switch (@typeInfo(T)) {
-        .Struct => |st| {            
-            inline for (st.fields, 0..) |field, index| {                
+        .Struct => |st| {
+            inline for (st.fields, 0..) |field, index| {
                 if (getMemberType(field.type) == .Pointer) {
                     if (@field(ptr, field.name) != invalidPointer(field.type)) {
                         // structure has been repointed already
@@ -187,7 +187,7 @@ fn repointStructure(h: Host, obj: Value, T: type) !*T {
                     }
                     const reloc_id = try h.getRelocatableId(T, index);
                     const reloc = try h.getRelocatable(obj, reloc_id);
-                    @field(ptr, field.name) = h.getPointer(obj, T)
+                    @field(ptr, field.name) = h.getPointer(obj, T);
                     repointStructure(h, reloc, field.type);
                 }
             }

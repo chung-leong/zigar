@@ -1,32 +1,15 @@
 #include "addon.h"
 
 //-----------------------------------------------------------------------------
-//  Utility functions
-//-----------------------------------------------------------------------------
-static Local<String> NewString(Isolate* isolate, 
-                               const char* string) {
-  if (string) {
-    return String::NewFromUtf8(isolate, string).ToLocalChecked();
-  } else {
-    return Local<String>();
-  }
-}
-
-static void ThrowException(Isolate* isolate, 
-                           const char* message) {
-  Local<String> string = NewString(isolate, message);
-  Local<Value> error = Exception::Error(string);
-  isolate->ThrowException(error);
-}
-
-//-----------------------------------------------------------------------------
 //  Callback functions that zig modules will invoke
 //-----------------------------------------------------------------------------
 static Result GetSlot(Host* call, 
                       size_t slot_id, 
                       Local<Value> *dest) {
-  Local<Object> slots = Local<Object>::New(call->isolate, call->zig_func->slot_data);
-  MaybeLocal<Value> result = slots->Get(call->exec_context, slot_id);
+  if (call->slots.IsEmpty()) {
+    call->slots = Local<Object>::New(call->isolate, call->zig_func->slots);
+  }
+  MaybeLocal<Value> result = call->slots->Get(call->exec_context, slot_id);
   if (result.IsEmpty()) {
     return Result::Failure;
   }  
@@ -37,14 +20,16 @@ static Result GetSlot(Host* call,
 static Result SetSlot(Host* call, 
                       size_t slot_id, 
                       Local<Value> object) {
-  Local<Object> slots = Local<Object>::New(call->isolate, call->zig_func->slot_data);
-  slots->Set(call->exec_context, slot_id, object).Check();
+  if (call->slots.IsEmpty()) {
+    call->slots = Local<Object>::New(call->isolate, call->zig_func->slots);
+  }
+  call->slots->Set(call->exec_context, slot_id, object).Check();
   return Result::OK;  
 }
 
 static Result AllocateMemory(Host* call, 
                              size_t size, 
-                             uint8_t **dest) {
+                             uint8_t** dest) {
   if (call->mem_pool.IsEmpty()) {
     call->mem_pool = Array::New(call->isolate);
   }
@@ -57,18 +42,86 @@ static Result AllocateMemory(Host* call,
   return Result::OK;
 }
 
-static MaybeLocal<Value> CompileJavaScript(Isolate* isolate) {
-  const char *code = 
-    #include "addon.js.txt"
-  ;
-  Local<Context> context = isolate->GetCurrentContext();
-  Local<String> source = NewString(isolate, code);  
-  MaybeLocal<Script> result = Script::Compile(context, source);
-  if (result.IsEmpty()) {
-    return MaybeLocal<Value>();
+static Result CreateStructure(Host* call,
+                              StructureType type,
+                              const char* name,
+                              Local<Object>* dest) {
+  JSBridge *jsb = call->js_bridge;
+  Local<Function> f = jsb->create_structure;
+  Local<Value> recv;
+  Local<Value> args[2] = {
+    Uint32::NewFromUnsigned(call->isolate, static_cast<uint32_t>(type)),
+    String::NewFromUtf8(call->isolate, name).ToLocalChecked(),
+  };
+  MaybeLocal<Value> result = f->CallAsFunction(call->exec_context, recv, 2, args); 
+  Local<Value> value;
+  if (!result.ToLocal<Value>(&value) || !value->IsObject()) {
+    return Result::Failure;
   }
-  Local<Script> script = result.ToLocalChecked();
-  return script->Run(context);
+  *dest = value.As<Object>();
+  return Result::OK;
+}
+
+static Result ShapeStructure(Host* call,
+                             Local<Object> structure,
+                             const Member members[], 
+                             size_t count, 
+                             size_t size) {
+  JSBridge *jsb = call->js_bridge;
+  Local<Function> f = jsb->shape_structure;
+  Local<Array> array = Array::New(call->isolate, count);
+  for (size_t i = 0; i < count; i++) {
+    array->Set(jsb->context, i, jsb->NewMemberRecord(members[i])).Check();
+  }
+  Local<Object> def = Object::New(call->isolate);
+  def->Set(call->exec_context, jsb->n_size, Uint32::NewFromUnsigned(call->isolate, size)).Check();
+  def->Set(call->exec_context, jsb->n_members, array).Check();
+  Local<Value> recv;
+  Local<Value> args[3] = { structure, def, jsb->options };
+  MaybeLocal<Value> result = f->CallAsFunction(call->exec_context, recv, 3, args);
+  if (result.IsEmpty()) {
+    return Result::Failure;
+  }
+  return Result::OK;
+}
+
+static Result AttachVariables(Host* call,
+                              Local<Object> structure,
+                              const Member members[], 
+                              size_t count) {
+  JSBridge *jsb = call->js_bridge;
+  Local<Function> f = jsb->attach_variables;
+  Local<Array> array = Array::New(call->isolate, count);
+  for (size_t i = 0; i < count; i++) {
+    array->Set(jsb->context, i, jsb->NewMemberRecord(members[i])).Check();
+  }
+  Local<Object> def = Object::New(call->isolate);
+  Local<Value> recv;
+  Local<Value> args[3] = { structure, def, jsb->options };
+  MaybeLocal<Value> result = f->CallAsFunction(call->exec_context, recv, 3, args);
+  if (result.IsEmpty()) {
+    return Result::Failure;
+  }
+  return Result::OK;
+}
+
+static Result AttachMethods(Host* call,
+                            Local<Object> structure,
+                            const Method methods[], 
+                            size_t count) {
+  JSBridge *jsb = call->js_bridge;
+  Local<Function> f = jsb->attach_methods;
+  Local<Array> array = Array::New(call->isolate, count);
+  for (size_t i = 0; i < count; i++) {
+    array->Set(jsb->context, i, jsb->NewMethodRecord(methods[i])).Check();
+  }
+  Local<Value> recv;
+  Local<Value> args[3] = { structure, array, jsb->options };
+  MaybeLocal<Value> result = f->CallAsFunction(call->exec_context, recv, 3, args);
+  if (result.IsEmpty()) {
+    return Result::Failure;
+  }
+  return Result::OK;
 }
 
 //-----------------------------------------------------------------------------
@@ -76,10 +129,19 @@ static MaybeLocal<Value> CompileJavaScript(Isolate* isolate) {
 //-----------------------------------------------------------------------------
 static void Load(const FunctionCallbackInfo<Value>& info) {
   Isolate* isolate = info.GetIsolate();
+  AddonData* ad = reinterpret_cast<AddonData*>(info.Data().As<External>()->Value());
+
+  auto Throw = [&](const char *message) {
+    Local<String> string;
+    if (String::NewFromUtf8(isolate, message).ToLocal<String>(&string)) {
+      Local<Value> error = Exception::Error(string);
+      isolate->ThrowException(error);
+    }
+  };
 
   // check arguments
   if (info.Length() < 1 || !info[0]->IsString()) {
-    ThrowException(isolate, "Invalid arguments");
+    Throw("Invalid arguments");
     return;
   }
 
@@ -87,22 +149,40 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
 	String::Utf8Value path(isolate, info[0]);
   void* handle = dlopen(*path, RTLD_LAZY);
   if (!handle) {
-    ThrowException(isolate, "Unable to load shared library");
+    Throw("Unable to load shared library");
     return;
   }
 
   // find the zig module
   void* symbol = dlsym(handle, "zig_module");
   if (!symbol) {
-    ThrowException(isolate, "Unable to find the symbol \"zig_module\"");
+    Throw("Unable to find the symbol \"zig_module\"");
     return;
   }
 
-  // compile JavaScript code
-  MaybeLocal<Value> comp_result = CompileJavaScript(isolate);
-  if (comp_result.IsEmpty()) {
-    ThrowException(isolate, "Unable to compile JavaScript code");
-    return;
+  // compile JavaScript code if it hasn't happened already
+  Local<Object> js_module;
+  if (!ad->js_module.IsEmpty()) {
+    const char *code = 
+      #include "addon.js.txt"
+    ;
+    Local<Context> context = isolate->GetCurrentContext();
+    Local<String> source = String::NewFromUtf8(isolate, code).ToLocalChecked();  
+    MaybeLocal<Script> compile_result = Script::Compile(context, source);
+    if (compile_result.IsEmpty()) {
+      Throw("Unable to compile JavaScript code");
+      return;
+    }
+    Local<Script> script = compile_result.ToLocalChecked();
+    MaybeLocal<Value> run_result = script->Run(context);
+    if (run_result.IsEmpty()) {
+      Throw("Failed to obtain result from JavaScript code");
+      return;
+    }
+    js_module = run_result.ToLocalChecked().As<Object>();
+    ad->js_module.Reset(isolate, js_module);
+  } else {
+    js_module = Local<Object>::New(isolate, ad->js_module);
   }
 
   // attach callbacks to module
@@ -111,30 +191,24 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->allocate_memory = AllocateMemory;
   callbacks->get_slot = GetSlot;
   callbacks->set_slot = SetSlot;
-  callbacks->begin_structure = nullptr;
-  callbacks->add_member = nullptr;
-  callbacks->finalize_structure = nullptr;
+  callbacks->create_structure = CreateStructure;
+  callbacks->shape_structure = ShapeStructure;
+  callbacks->attach_variables = AttachVariables;
+  callbacks->attach_methods = AttachMethods;
 
-  printf("Creating slots\n");
-
-  // create object for storing slot data
-  Local<Object> slot_data = Object::New(isolate);
-
-  // place shared library handle in an external object and keep it in slot 0
+  // save handle to external object
   ModuleData *md = new ModuleData(isolate, handle);
-  slot_data->Set(isolate->GetCurrentContext(), 0, Local<External>::New(isolate, md->external)).Check();
-
-  printf("Module data\n");
 
   // call the factory function
   Host ctx(info);
-  auto fd = new FunctionData(isolate, nullptr, slot_data);
+  auto fd = new FunctionData(isolate, nullptr, Local<External>::New(isolate, md->external));
   ctx.zig_func = fd;
+  ctx.js_bridge = new JSBridge(isolate, js_module, module->flags);
   Local<Value> ns;
   if (module->factory(&ctx, &ns) == Result::OK) {
     info.GetReturnValue().Set(ns);
   } else {
-    ThrowException(isolate, "Unable to create namespace");
+    Throw("Unable to import functions");
   }
 }
 
@@ -144,16 +218,16 @@ static void GetLibraryCount(const FunctionCallbackInfo<Value>& info) {
 
 NODE_MODULE_INIT(/* exports, module, context */) {
   Isolate* isolate = context->GetIsolate();
-  auto add = [&](const char *name, void (*f)(const FunctionCallbackInfo<Value>& info)) {
+  auto ad = new AddonData(isolate);
+  auto add = [&](Local<String> name, void (*f)(const FunctionCallbackInfo<Value>& info)) {
     Local<Signature> signature;
-    Local<Value> data;
+    Local<Value> data = Local<External>::New(isolate, ad->external);
     Local<FunctionTemplate> tmpl = FunctionTemplate::New(isolate, f, data, signature, 1);
-    Local<v8::Function> function = tmpl->GetFunction(isolate->GetCurrentContext()).ToLocalChecked();
-    Local<String> n = NewString(isolate, name);
-    exports->Set(context, n, function).Check();
+    Local<Function> function = tmpl->GetFunction(isolate->GetCurrentContext()).ToLocalChecked();
+    exports->Set(context, name, function).Check();
   };
-  add("load", Load);
-  add("getLibraryCount", GetLibraryCount);
+  add(String::NewFromUtf8Literal(isolate, "load"), Load);
+  add(String::NewFromUtf8Literal(isolate, "getLibraryCount"), GetLibraryCount);
 } 
 
 int ModuleData::count = 0;
