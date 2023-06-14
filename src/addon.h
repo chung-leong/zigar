@@ -18,7 +18,10 @@ enum class StructureType : uint32_t {
   Struct,
   ExternUnion,
   TaggedUnion,
+  ErrorUnion,
   Enumeration,
+  Optional,
+  Opaque,
 };
 
 enum class MemberType : uint32_t {
@@ -34,12 +37,10 @@ enum class MemberType : uint32_t {
 struct Member {
   const char* name;
   MemberType type;
-  uint32_t bit_offset;
-  uint32_t bits;
-  uint32_t align;
   bool is_signed;
-  bool is_optional;
-  bool is_fallible;
+  uint32_t bit_offset;
+  uint32_t bit_size;
+  uint32_t byte_size;
   Local<Value> structure;
 };
 
@@ -48,7 +49,7 @@ typedef void (*Thunk)(Host*, Local<Value>);
 
 struct Method {
   const char *name;  
-  bool is_static;
+  bool is_static_only;
   Thunk thunk;
   Local<Value> structure;
 };
@@ -71,18 +72,25 @@ struct Module {
   Factory factory;
 };
 
+struct Memory {
+  uint8_t *bytes;
+  size_t len;
+};
+
 //-----------------------------------------------------------------------------
 //  Function-pointer table used by Zig code
 //-----------------------------------------------------------------------------
 struct Callbacks {
-  Result (*allocate_memory)(Host*, size_t, uint8_t **dest);
-  Result (*reallocate_memory)(Host*, size_t, uint8_t **dest);
-  Result (*free_memory)(Host*, uint8_t **dest);
+  Result (*allocate_memory)(Host*, size_t, Memory*);
+  Result (*reallocate_memory)(Host*, size_t, Memory*);
+  Result (*free_memory)(Host*, Memory*);
+  Result (*get_memory)(Host*, Local<Object>, Memory*);
+  Result (*get_relocatable)(Host*, Local<Object>, uint32_t, Memory*);
 
   Result (*get_slot)(Host*, size_t, Local<Value>*);
   Result (*set_slot)(Host*, size_t, Local<Value>);
 
-  Result (*create_structure)(Host*, StructureType, const char *, Local<Object>*);
+  Result (*create_structure)(Host*, StructureType, const char*, Local<Object>*);
   Result (*shape_structure)(Host*, Local<Object>, const Member[], size_t, size_t);
   Result (*attach_variables)(Host*, Local<Object>, const Member[], size_t);
   Result (*attach_methods)(Host*, Local<Object>, const Method[], size_t);
@@ -167,12 +175,10 @@ struct JSBridge {
   Local<Function> attach_methods;
 
   Local<String> n_type;
-  Local<String> n_bits;
-  Local<String> n_bit_offset;
-  Local<String> n_align;
   Local<String> n_signed;
-  Local<String> n_optional;
-  Local<String> n_fallible;
+  Local<String> n_bit_offset;
+  Local<String> n_bit_size;
+  Local<String> n_byte_size;
   Local<String> n_name;
   Local<String> n_size;
   Local<String> n_members;
@@ -182,7 +188,7 @@ struct JSBridge {
   Local<String> n_expose_data_view;
   Local<String> n_arg_struct;
   Local<String> n_thunk;
-  Local<String> n_static;
+  Local<String> n_static_only;
 
   Local<Object> options;
 
@@ -192,10 +198,10 @@ struct JSBridge {
     isolate(isolate),
     context(isolate->GetCurrentContext()),
     n_type(String::NewFromUtf8Literal(isolate, "type")),
-    n_bits(String::NewFromUtf8Literal(isolate, "bits")),
-    n_bit_offset(String::NewFromUtf8Literal(isolate, "bitOffset")),
-    n_align(String::NewFromUtf8Literal(isolate, "align")),
     n_signed(String::NewFromUtf8Literal(isolate, "signed")),
+    n_bit_offset(String::NewFromUtf8Literal(isolate, "bitOffset")),
+    n_bit_size(String::NewFromUtf8Literal(isolate, "bitSize")),
+    n_byte_size(String::NewFromUtf8Literal(isolate, "byteSize")),
     n_name(String::NewFromUtf8Literal(isolate, "name")),
     n_size(String::NewFromUtf8Literal(isolate, "size")),
     n_members(String::NewFromUtf8Literal(isolate, "members")),
@@ -205,7 +211,7 @@ struct JSBridge {
     n_expose_data_view(String::NewFromUtf8Literal(isolate, "exposeDataView")),
     n_arg_struct(String::NewFromUtf8Literal(isolate, "argStruct")),
     n_thunk(String::NewFromUtf8Literal(isolate, "thunk")),
-    n_static(String::NewFromUtf8Literal(isolate, "static")),
+    n_static_only(String::NewFromUtf8Literal(isolate, "staticOnly")),
     options(Object::New(isolate)) {
     // set options
     Local<Boolean> little_endian = Boolean::New(isolate, flags.little_endian);
@@ -232,16 +238,11 @@ struct JSBridge {
     Local<Object> member = Object::New(isolate);
     member->Set(context, n_name, String::NewFromUtf8(isolate, m.name).ToLocalChecked()).Check();
     member->Set(context, n_type, Int32::New(isolate, static_cast<int32_t>(m.type))).Check();
-    member->Set(context, n_bits, Int32::New(isolate, m.bits)).Check();
+    member->Set(context, n_bit_size, Int32::New(isolate, m.bit_size)).Check();
     member->Set(context, n_bit_offset, Int32::New(isolate, m.bit_offset)).Check();
-    member->Set(context, n_align, Int32::New(isolate, m.align)).Check();
+    member->Set(context, n_byte_size, Int32::New(isolate, m.byte_size)).Check();
     if (m.type == MemberType::Int) {
       member->Set(context, n_signed, Boolean::New(isolate, m.is_signed)).Check();
-    }
-    member->Set(context, n_optional, Boolean::New(isolate, m.is_optional)).Check();
-    member->Set(context, n_fallible, Boolean::New(isolate, m.is_fallible)).Check();
-    if (!m.structure.IsEmpty()) {
-      member->Set(context, n_fallible, m.structure).Check();
     }
     return member;
   }
@@ -253,7 +254,7 @@ struct JSBridge {
     def->Set(context, n_name, String::NewFromUtf8(isolate, m.name).ToLocalChecked()).Check();
     def->Set(context, n_arg_struct, m.structure).Check();
     def->Set(context, n_thunk, function).Check();
-    def->Set(context, n_static, Boolean::New(isolate, m.is_static)).Check();
+    def->Set(context, n_static_only, Boolean::New(isolate, m.is_static_only)).Check();
     return def;   
   }
 

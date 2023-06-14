@@ -1,7 +1,7 @@
-import { MemberType, StructureType, getIntRange } from './types.js';
+import { MemberType, StructureType, getIntRange } from './type.js';
 import { obtainDataViewGetter, obtainDataViewSetter } from './data-view.js';
-import { throwNotNull, throwOverflow, throwInvalidEnum, throwEnumExpected } from './errors.js';
-import { DATA, RELOCATABLE } from './symbols.js';
+import { throwNotNull, throwOverflow, throwInvalidEnum, throwEnumExpected } from './error.js';
+import { DATA, RELOCATABLE } from './symbol.js';
 
 export function obtainGetter(member, options) {
   const {
@@ -100,11 +100,11 @@ export function obtainSetter(member, options) {
       const { type, bitOffset } = member;
       const offset = bitOffset >> 3;
       if (runtimeSafety && type === MemberType.Int) {
-        const { bits, signed } = member;
-        const { min, max } = getIntRange(bits, signed);
+        const { signed, bitSize } = member;
+        const { min, max } = getIntRange(signed, bitSize);
         fn = function(v) { 
           if (v < min || v > max) {
-            throwOverflow(bits, signed, v);
+            throwOverflow(signed, bitSize, v);
           }
           set.call(this[DATA], offset, v, littleEndian);
         };

@@ -1,13 +1,13 @@
-import { MemberType, getIntRange } from './types.js';
+import { MemberType, getIntRange } from './type.js';
 import { obtainDataViewGetter, obtainDataViewSetter } from './data-view.js';
-import { throwOutOfBound, throwOverflow, rethrowRangeError } from './errors.js';
-import { DATA, RELOCATABLE } from './symbols.js';
+import { throwOutOfBound, throwOverflow, rethrowRangeError } from './error.js';
+import { DATA, RELOCATABLE } from './symbol.js';
 
 export function obtainArrayLengthGetter(member, options) {
-  const { align } = member;
+  const { byteSize } = member;
   let fn = function() {
     const dv = this[DATA];
-    return dv.byteLength / align;
+    return dv.byteLength / byteSize;
   };
   return fn;
 }
@@ -18,18 +18,18 @@ export function obtainArrayGetter(member, options) {
   } = options;
   switch (member.type) {
     case MemberType.Compound: {
-      const { structure, align } = member;
+      const { structure, byteSize } = member;
       const { constructor } = structure;
       return function(index) { 
         const relocs = this[RELOCATABLE];
         if (!relocs[index]) {
           const dv = this[DATA];
-          const offset = index * align;
-          if (offset >= 0 && offset + align <= dv.byteLength) {
+          const offset = index * byteSize;
+          if (offset >= 0 && offset + byteSize <= dv.byteLength) {
             const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
             relocs[index] = new constructor(slice);
           } else {
-            throwOutOfBound(dv.byteLength, align, index);
+            throwOutOfBound(dv.byteLength, byteSize, index);
           }
         }
         return relocs[index]; 
@@ -40,11 +40,11 @@ export function obtainArrayGetter(member, options) {
         const relocs = this[RELOCATABLE];
         if (!relocs[index]) {
           const dv = this[DATA];
-          const offset = index * align;
-          if (offset >= 0 && offset + align <= dv.byteLength) {
+          const offset = index * byteSize;
+          if (offset >= 0 && offset + byteSize <= dv.byteLength) {
             // pointer isn't pointing to something
           } else {
-            throwOutOfBound(dv.byteLength, align, index);
+            throwOutOfBound(dv.byteLength, byteSize, index);
           }
         }
         return relocs[index]; 
@@ -53,15 +53,15 @@ export function obtainArrayGetter(member, options) {
     case MemberType.Bool:
     case MemberType.Int:
     case MemberType.Float: {
-      const { align } = member;
+      const { byteSize } = member;
       const get = obtainDataViewGetter(member);
       return function(index) {
         const dv = this[DATA];
-        const offset = index * align;
+        const offset = index * byteSize;
         try {
           return get.call(dv, offset, littleEndian) ;
         } catch {
-          throwOutOfBound(dv.byteLength, align, index);
+          throwOutOfBound(dv.byteLength, byteSize, index);
         }
       };
     }
@@ -76,7 +76,7 @@ export function obtainArraySetter(member, options) {
   let fn;
   switch (member.type) {
     case MemberType.Compound: {
-      const { structure, align } = member;
+      const { structure, byteSize } = member;
       const { constructor, copier } = structure;
       fn = function(index, v) {
         if (!(v instanceof constructor)) {
@@ -85,19 +85,19 @@ export function obtainArraySetter(member, options) {
         const relocs = this[RELOCATABLE];
         let reloc = relocs[index];
         if (!reloc) {
-          const offset = index * align;
-          if (offset >= 0 && offset + align <= dv.byteLength) {
+          const offset = index * byteSize;
+          if (offset >= 0 && offset + byteSize <= dv.byteLength) {
             const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
             reloc = relocs[index] = new constructor(slice);
           } else {
-            throwOutOfBound(dv.byteLength, align, index);
+            throwOutOfBound(dv.byteLength, byteSize, index);
           }
         }
         copier(reloc, v);
       };  
     } break;
     case MemberType.Pointer: {
-      const { structure, mutable, align } = member;
+      const { structure, mutable, byteSize } = member;
       const { constructor } = structure;
       if (!mutable) {
         return;
@@ -107,11 +107,11 @@ export function obtainArraySetter(member, options) {
           v = new constructor(v);
         }
         const dv = this[DATA];
-        const offset = index * align;
-        if (offset >= 0 && offset + align <= dv.byteLength) {
+        const offset = index * byteSize;
+        if (offset >= 0 && offset + byteSize <= dv.byteLength) {
           this[RELOCATABLE][index] = v;
         } else {
-          throwOutOfBound(dv.byteLength, align, index);
+          throwOutOfBound(dv.byteLength, byteSize, index);
         }
       };    
     }
@@ -122,28 +122,28 @@ export function obtainArraySetter(member, options) {
       const set = obtainDataViewSetter(member);
       const { type } = member;
       if (runtimeSafety && type === MemberType.Int) {
-        const { bits, signed, align } = member;
-        const { min, max } = getIntRange(bits, signed);
+        const { signed, bitSize, byteSize } = member;
+        const { min, max } = getIntRange(signed, bitSize);
         fn = function(index, v) { 
           if (v < min || v > max) {
-            throwOverflow(bits, signed, v);
+            throwOverflow(signed, bitSize, v);
           }
-          const offset = index * align;
+          const offset = index * byteSize;
           const dv = this[DATA];
           try {
             set.call(dv, offset, v, littleEndian);
           } catch (err) {
-            rethrowRangeError(err, dv.byteLength, align, index);
+            rethrowRangeError(err, dv.byteLength, byteSize, index);
           }
         };
       } else {
         fn = function(index, v) { 
-          const offset = index * align;
+          const offset = index * byteSize;
           const dv = this[DATA];
           try {
             set.call(dv, offset, v, littleEndian);
           } catch (err) {
-            rethrowRangeError(err, dv.byteLength, align, index);
+            rethrowRangeError(err, dv.byteLength, byteSize, index);
           }
         };
       }

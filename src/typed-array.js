@@ -1,11 +1,11 @@
-import { MemberType, getTypeName } from './types.js';
-import { DATA, TYPED_ARRAY } from './symbols.js';
+import { MemberType, getTypeName } from './type.js';
+import { DATA, TYPED_ARRAY } from './symbol.js';
 
 export function obtainTypedArrayGetter(members) {
   const hash = {};
-  for (const { type, bits, signed } of members) {
+  for (const { type, signed, bitSize, byteSize } of members) {
     if (type === MemberType.Int || type === MemberType.Float) {
-      const typeName = getTypeName(type, bits, signed);
+      const typeName = getTypeName(type, signed, bitSize);
       const constructor = typedArrays[typeName];
       if (!constructor) {
         return;
@@ -23,11 +23,11 @@ export function obtainTypedArrayGetter(members) {
   if (typedArrayGetters[typeName]) {
     return typedArrayGetters[typeName];
   }
-  const size = members[0].bits >> 3;
+  const { byteSize } = members[0];
   const fn = function() {
     if (!this[TYPED_ARRAY]) {
       const dv = this[DATA];
-      this[TYPED_ARRAY] = new constructor(dv.buffer, dv.byteOffset, dv.byteLength / size);
+      this[TYPED_ARRAY] = new constructor(dv.buffer, dv.byteOffset, dv.byteLength / byteSize);
     }
     return this[TYPED_ARRAY];
   };

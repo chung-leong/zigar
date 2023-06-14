@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { MemberType, getIntRange } from '../src/types.js';
+import { MemberType, getIntRange } from '../src/type.js';
 import { obtainDataViewGetter, obtainDataViewSetter } from '../src/data-view.js';
 
 describe('DataView functions', function() {
@@ -9,14 +9,14 @@ describe('DataView functions', function() {
       const dv = new DataView(new ArrayBuffer(16));
       dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn);
       for (const signed of [ false, true ]) {
-        for (const bits of [ 8, 16, 32, 64 ]) {
-          const { max } = getIntRange(bits, signed);
+        for (const bitSize of [ 8, 16, 32, 64 ]) {
+          const { max } = getIntRange(signed, bitSize);
           const member = {
             type: MemberType.Int,
-            bits,
-            bitOffset: 64,
             signed,
-            align: bits / 8
+            bitSize,
+            bitOffset: 64,
+            byteSize: bitSize / 8
           }
           const f = obtainDataViewGetter(member);    
           const res = f.call(dv, 8, true);
@@ -32,16 +32,16 @@ describe('DataView functions', function() {
       const dv = new DataView(new ArrayBuffer(16));
       dv.setFloat32(0, 3.14, true);
       dv.setFloat64(8, 3.14, true);
-      for (const bits of [ 32, 64 ]) {
+      for (const bitSize of [ 32, 64 ]) {
         const member = {
           type: MemberType.Float,
-          bits,
-          bitOffset: (bits === 32) ? 0 : 64,
           signed: true,
-          align: bits / 8
+          bitSize,
+          bitOffset: (bitSize === 32) ? 0 : 64,
+          byteSize: bitSize / 8
         };
         const f = obtainDataViewGetter(member);    
-        const res = f.call(dv, (bits === 32) ? 0 : 8, true);
+        const res = f.call(dv, (bitSize === 32) ? 0 : 8, true);
         expect(res.toFixed(2)).to.equal('3.14');
       }      
     })
@@ -50,17 +50,17 @@ describe('DataView functions', function() {
       dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn);
       for (const signed of [ false, true ]) {
         const standard = [ 8, 16, 32, 64 ];
-        for (let bits = 2; bits < 64; bits++) {
-          if (standard.includes(bits)) {
+        for (let bitSize = 2; bitSize < 64; bitSize++) {
+          if (standard.includes(bitSize)) {
             continue;
           }
-          const { max } = getIntRange(bits, signed);
+          const { max } = getIntRange(signed, bitSize);
           const member = {
             type: MemberType.Int,
-            bits,
-            bitOffset: 64,
             signed,
-            align: [ 1, 2, 4, 8 ].find(b => b * 8 > bits),
+            bitSize,
+            bitOffset: 64,
+            byteSize: [ 1, 2, 4, 8 ].find(b => b * 8 > bitSize),
           };
           const f = obtainDataViewGetter(member);
           const res = f.call(dv, 8, true);
@@ -81,10 +81,10 @@ describe('DataView functions', function() {
       }
       const member = {
         type: MemberType.Int,
-        bits: 128,
-        bitOffset: 0,
         signed: false,
-        align: 16,
+        bitSize: 128,
+        bitOffset: 0,
+        byteSize: 16,
       };
       const f = obtainDataViewGetter(member);     
       const res1 = f.call(dv, 0, true);
@@ -106,10 +106,10 @@ describe('DataView functions', function() {
       }
       const member = {
         type: MemberType.Int,
-        bits: 72,
+        bitSize: 72,
         bitOffset: 0,
+        byteSize: 16,
         signed: false,
-        align: 16,
       };
       const f = obtainDataViewGetter(member);     
       const res1 = f.call(dv, 0, true);
@@ -131,10 +131,10 @@ describe('DataView functions', function() {
       }
       const member = {
         type: MemberType.Int,
-        bits: 65,
+        bitSize: 65,
         bitOffset: 0,
         signed: true,
-        align: 16,
+        byteSize: 16,
       };
       const f = obtainDataViewGetter(member);     
       const res = f.call(dv, 0, true);
@@ -149,10 +149,10 @@ describe('DataView functions', function() {
       }
       const member = {
         type: MemberType.Float,
-        bits: 16,
-        bitOffset: 0,
         signed: true,
-        align: 2,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
       };
       const f = obtainDataViewGetter(member);     
       const res1 = f.call(dv, 0, true);
@@ -177,10 +177,10 @@ describe('DataView functions', function() {
       }
       const member = {
         type: MemberType.Float,
-        bits: 128,
-        bitOffset: 0,
         signed: true,
-        align: 16,
+        bitSize: 128,
+        bitOffset: 0,
+        byteSize: 16,
       };
       const f = obtainDataViewGetter(member);     
       const res1 = f.call(dv, 0, true);
@@ -202,18 +202,18 @@ describe('DataView functions', function() {
       const dv = new DataView(new ArrayBuffer(16));
       dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn);
       for (const signed of [ false, true ]) {
-        for (const bits of [ 8, 16, 32, 64 ]) {
-          const { max } = getIntRange(bits, signed);
+        for (const bitSize of [ 8, 16, 32, 64 ]) {
+          const { max } = getIntRange(signed, bitSize);
           const member = {
             type: MemberType.Int,
-            bits,
-            bitOffset: 64,
             signed,
-            align: bits / 8
+            bitSize,
+            bitOffset: 64,
+            byteSize: bitSize / 8
           }
           const f = obtainDataViewSetter(member);
           if (signed) {
-            f.call(dv, 8, (bits == 64) ? -1n : -1, true);
+            f.call(dv, 8, (bitSize == 64) ? -1n : -1, true);
           } else {
             f.call(dv, 8, max, true);
           }
@@ -224,35 +224,35 @@ describe('DataView functions', function() {
     })
     it('should return functions for setting standard float types', function() {
       const dv = new DataView(new ArrayBuffer(16));
-      for (const bits of [ 32, 64 ]) {
+      for (const bitSize of [ 32, 64 ]) {
         const member = {
           type: MemberType.Float,
-          bits,
-          bitOffset: (bits === 32) ? 0 : 64,
           signed: true,
-          align: bits / 8
+          bitSize,
+          bitOffset: (bitSize === 32) ? 0 : 64,
+          byteSize: bitSize / 8
         };
         const f = obtainDataViewSetter(member);    
-        f.call(dv, (bits === 32) ? 0 : 8, 3.14, true);
+        f.call(dv, (bitSize === 32) ? 0 : 8, 3.14, true);
       }      
       expect(dv.getFloat32(0, true).toFixed(2)).to.equal('3.14');
       expect(dv.getFloat64(8, true).toFixed(2)).to.equal('3.14');
     })
-    it('should return functions for setting non-standard int types (aligned, < 64 bits)', function() {
+    it('should return functions for setting non-standard int types (aligned, < 64-bit)', function() {
       for (const signed of [ false, true ]) {
         const standard = [ 8, 16, 32, 64 ];
-        for (let bits = 2; bits < 64; bits++) {
+        for (let bitSize = 2; bitSize < 64; bitSize++) {
           const dv = new DataView(new ArrayBuffer(16));
-          if (standard.includes(bits)) {
+          if (standard.includes(bitSize)) {
             continue;
           }
-          const { min, max } = getIntRange(bits, signed);
+          const { min, max } = getIntRange(signed, bitSize);
           const member = {
             type: MemberType.Int,
-            bits,
-            bitOffset: 64,
             signed,
-            align: [ 1, 2, 4, 8 ].find(b => b * 8 > bits),
+            bitSize,
+            bitOffset: 64,
+            byteSize: [ 1, 2, 4, 8 ].find(b => b * 8 > bitSize),
           };
           const f = obtainDataViewSetter(member);
           f.call(dv, 0, min, true);
@@ -264,16 +264,16 @@ describe('DataView functions', function() {
         }      
       }
     })
-    it('should return functions for setting non-standard int types (128 bits)', function() {
+    it('should return functions for setting non-standard int types (128-bit)', function() {
       const dv = new DataView(new ArrayBuffer(16));
       // from struct-bytes: BigInt1
       const bytes = [ 255, 255, 255, 255, 255, 255, 255, 31, 0, 0, 0, 0, 0, 0, 0, 0, ];
       const member = {
         type: MemberType.Int,
-        bits: 128,
-        bitOffset: 0,
         signed: false,
-        align: 16,
+        bitSize: 128,
+        bitOffset: 0,
+        byteSize: 16,
       };
       const f = obtainDataViewSetter(member);     
       f.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, true);
@@ -287,16 +287,16 @@ describe('DataView functions', function() {
         expect(dv.getUint8(i)).to.equal(b);
       }
     });
-    it('should return functions for setting non-standard int types (72 bits)', function() {
+    it('should return functions for setting non-standard int types (72-bit)', function() {
       const dv = new DataView(new ArrayBuffer(16));
       // from struct-bytes: BigInt3
       const bytes = [ 255, 255, 255, 255, 255, 255, 255, 31, 0, 0, 0, 0, 0, 0, 0, 0, ];
       const member = {
         type: MemberType.Int,
-        bits: 72,
-        bitOffset: 0,
         signed: false,
-        align: 16,
+        bitSize: 72,
+        bitOffset: 0,
+        byteSize: 16,
       };
       const f = obtainDataViewSetter(member);     
       f.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, true);
@@ -316,10 +316,10 @@ describe('DataView functions', function() {
       const bytes = [ 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, ];
       const member = {
         type: MemberType.Int,
-        bits: 65,
-        bitOffset: 0,
         signed: true,
-        align: 16,
+        bitSize: 65,
+        bitOffset: 0,
+        byteSize: 16,
       };
       const f = obtainDataViewSetter(member);     
       f.call(dv, 0, -0xFFFFFFFFFFFFFFFFn, true);
@@ -327,17 +327,17 @@ describe('DataView functions', function() {
         expect(dv.getUint8(i)).to.equal(b);
       }
     })
-    it('should return functions for setting non-standard int types (> 64 bits)', function() {
+    it('should return functions for setting non-standard int types (> 64-bit)', function() {
       for (const signed of [ false, true ]) {
-        for (let bits = 65; bits < 1024; bits += 33) {
+        for (let bitSize = 65; bitSize < 1024; bitSize += 33) {
           const dv = new DataView(new ArrayBuffer(256));
-          const { min, max } = getIntRange(bits, signed);
+          const { min, max } = getIntRange(signed, bitSize);
           const member = {
             type: MemberType.Int,
-            bits,
-            bitOffset: 0,
             signed,
-            align: Math.ceil(bits / 64) * 8,
+            bitSize,
+            bitOffset: 0,
+            byteSize: Math.ceil(bitSize / 64) * 8,
           };
           const f = obtainDataViewSetter(member);
           f.call(dv, 0, min, true);
@@ -355,10 +355,10 @@ describe('DataView functions', function() {
       const bytes = [ 72, 66, 0, 0, 0, 128, 0, 124, 0, 252, 1, 124, ];
       const member = {
         type: MemberType.Float,
-        bits: 16,
-        bitOffset: 0,
         signed: true,
-        align: 2,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
       };
       const f = obtainDataViewSetter(member);
       f.call(dv, 0, 3.14159, true);
@@ -392,10 +392,10 @@ describe('DataView functions', function() {
       const bytes = [ 184, 1, 23, 197, 140, 137, 105, 132, 209, 66, 68, 181, 31, 146, 0, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 127, ];
       const member = {
         type: MemberType.Float,
-        bits: 128,
-        bitOffset: 0,
         signed: true,
-        align: 16,
+        bitSize: 128,
+        bitOffset: 0,
+        byteSize: 16,
       };
       const f = obtainDataViewSetter(member);
       // we lose precision f64 to f128 so not all bytes will match
@@ -426,28 +426,28 @@ describe('DataView functions', function() {
     })
     it('should return functions for setting non-aligned integers', function() {
       const signed = true;
-      for (let bits = 2; bits <= 64; bits++) {
+      for (let bitSize = 2; bitSize <= 64; bitSize++) {
         for (let bitOffset = 1; bitOffset <= 7; bitOffset++) {
           const guard1 = {
             type: MemberType.Int,
-            bits : bitOffset,
-            bitOffset: 0,
             signed: false, 
-            align: 0,
+            bitSize : bitOffset,
+            bitOffset: 0,
+            byteSize: 0,
           };
           const member = {
             type: MemberType.Int,
-            bits,
-            bitOffset,
             signed,
-            align: 0,
+            bitSize,
+            bitOffset,
+            byteSize: 0,
           };
           const guard2 = {
             type: MemberType.Int,
-            bits: 3,
-            bitOffset: bitOffset + bits,
             signed: false,
-            align: 0,
+            bitSize: 3,
+            bitOffset: bitOffset + bitSize,
+            byteSize: 0,
           };
           const offsetG1 = Math.floor(guard1.bitOffset / 8);
           const offsetG2 = Math.floor(guard2.bitOffset / 8);
@@ -459,18 +459,18 @@ describe('DataView functions', function() {
           const setG2 = obtainDataViewSetter(guard2);
           const get = obtainDataViewGetter(member);
           const set = obtainDataViewSetter(member);
-          const { min, max } = getIntRange(bits, signed);
-          const { max: maxG1 } = getIntRange(guard1.bits, false);
-          const { max: maxG2 } = getIntRange(guard2.bits, false);
+          const { min, max } = getIntRange(signed, bitSize);
+          const { max: maxG1 } = getIntRange(false, guard1.bitSize);
+          const { max: maxG2 } = getIntRange(false, guard2.bitSize);
           let step;
-          if (bits <= 8) {
+          if (bitSize <= 8) {
             step = 1;
-          } else if (bits <= 16) {
-            step = 2 ** (bits - 8) + 1;
-          } else if (bits <= 32) {
-            step = 2 ** (bits - 6) + 1;
+          } else if (bitSize <= 16) {
+            step = 2 ** (bitSize - 8) + 1;
+          } else if (bitSize <= 32) {
+            step = 2 ** (bitSize - 6) + 1;
           } else {
-            step = (2n ** BigInt(bits - 3)) + 1n; 
+            step = (2n ** BigInt(bitSize - 3)) + 1n; 
           }
           for (let i = min; i <= max; i += step) {
             // clear guard bits and set the value

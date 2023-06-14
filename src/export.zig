@@ -1,6 +1,8 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const slot = @import("slot");
 const host = @import("host");
+const t = @import("type");
 
 pub const api_version = 1;
 
@@ -9,40 +11,83 @@ const Host = host.Host;
 const StructureType = host.StructureType;
 const MemberType = host.MemberType;
 
-fn getStructure(h: Host, comptime T: type) !u32 {
-    const slot_id = h.getConstructId(.{ .Struct = T });
-    if (!h.isDefined(slot_id)) {
-        try defineStructure(host, slot_id, T);
+fn getStructureMembers(comptime T: type) []const Member {
+    const count = switch (@typeInfo(T)) {
+        .Struct, .Union => |st| st.fields.len,
+        else => 1,
+    };
+    var members: [count]Member = undefined;
+    switch (@typeInfo(BT)) {
+        .Bool, .Int, .Float, .Void => {
+            members[0] = .{
+                .member_type = t.getMemberType(T),
+                .bits = @bitSizeOf(T),
+                .bit_offset = 0,
+                .bytes = @sizeOf(T),
+                .signed = isSigned(T),
+            };
+        },
+        .Array => {},
+        .Struct, .Union => |st| {},
+        .Enum => |en| {},
     }
-    return slot_id;
+    return members;
 }
 
-fn getStructureType(comptime T: type) StructureType {
-    return switch (@typeInfo(T)) {
-        .Struct => .Normal,
-        .Union => .Union,
-        .Enum => .Enumeration,
-        .Array => .Array,
-        .Opaque => .Opaque,
-        .Bool, .Int, .Float, .Void => .Singleton,
-    };
-}
+fn getStructure(h: Host, comptime T: type) !Value {
+    const slot_id = h.getConstructId(.{ .Struct = T });
+    return h.getSlot(slot_id) catch undefined: {
+        const s_type = getStructureType(T);
+        const name = @typeName(T);
+        // create the structure and place it in the slot immediately
+        // so that recursive definition work correctly
+        const structure = h.createStructure(s_type, name);
+        h.setSlot(slot_id, structure);
+        // define the shape of the structure
+        switch (s_type) {
+            .Normal, .Union => {
+                for (std.meta.fields(T)) |field| {
+                    const FT = field.type;
+                    try h.attachMember(.{
+                        .type = getMemberType(FT),
+                        .bits = @bitSizeOf(FT),
+                        .bit_offset = @bitOffsetOf(FT, field.name),
+                        .signed = isSigned(FT),
+                        .class_id = id: {
+                            if (getStructureType(FT) == .Singleton) {
+                                break :id 0;
+                            } else {
+                                break :id getStructure(h, FT);
+                            }
+                        },
+                    });
+                }
+            },
+            .Pointer => {
+                // TODO
+            },
+            .Array => {
+                const info = @typeInfo(T).Array;
+                const CT = info.child;
+                try h.attachMember(.{
+                    .type = getMemberType(CT),
+                    .bits = @bitSizeOf(CT),
+                    .bit_offset = 0,
+                    .signed = isSigned(CT),
+                    .len = info.len,
+                });
+            },
+            .Singleton => {
+                try h.attachMember(.{
+                    .type = getMemberType(T),
+                    .bits = @bitSizeOf(T),
+                    .bit_offset = 0,
+                    .signed = isSigned(T),
+                });
+            },
+        }
 
-fn getMemberType(comptime T: type) MemberType {
-    return switch (@typeInfo(T)) {
-        .Bool => .Bool,
-        .Int => .Int,
-        .Float => .Float,
-        .Struct, .Union, .Array, .Enum, .Opaque => .Structure,
-        .Pointer => .Pointer,
-        else => .Void,
-    };
-}
-
-fn isSigned(comptime T: type) bool {
-    return switch (@typeInfo(T)) {
-        .Int => |int| int.signedness == .signed,
-        else => false,
+        break :undefined structure;
     };
 }
 
@@ -82,58 +127,6 @@ fn StaticStruct(comptime T: type) ?type {
         .fields = fields[0..count],
         .is_tuple = false,
     } });
-}
-
-fn defineStructure(h: Host, comptime T: type) !void {
-    const s_type = getStructureType(T);
-    const def = try h.beginStructure(s_type);
-    switch (s_type) {
-        .Normal, .Union, .Enumeration, .Opaque => {
-            if (StaticStruct(T)) |ST| {
-                const static = defineStructure(h, ST);
-                h.attachStatic(def, static);
-            }
-            for (std.meta.fields(T)) |field| {
-                const FT = field.type;
-                try h.attachMember(.{
-                    .type = getMemberType(FT),
-                    .bits = @bitSizeOf(FT),
-                    .bit_offset = @bitOffsetOf(FT, field.name),
-                    .signed = isSigned(FT),
-                    .class_id = id: {
-                        if (getStructureType(FT) == .Singleton) {
-                            break :id 0;
-                        } else {
-                            break :id getStructure(h, FT);
-                        }
-                    },
-                });
-            }
-        },
-        .Pointer => {
-            // TODO
-        },
-        .Array => {
-            const info = @typeInfo(T).Array;
-            const CT = info.child;
-            try h.attachMember(.{
-                .type = getMemberType(CT),
-                .bits = @bitSizeOf(CT),
-                .bit_offset = 0,
-                .signed = isSigned(CT),
-                .len = info.len,
-            });
-        },
-        .Singleton => {
-            try h.attachMember(.{
-                .type = getMemberType(T),
-                .bits = @bitSizeOf(T),
-                .bit_offset = 0,
-                .signed = isSigned(T),
-            });
-        },
-    }
-    return h.finalizeStructure(def);
 }
 
 fn ArgumentStruct(comptime function: anytype) type {
@@ -202,10 +195,6 @@ fn depointStructure(h: Host, obj: Value, T: type) void {
     _ = obj;
 }
 
-//-----------------------------------------------------------------------------
-//  Thunk creation functions (compile-time)
-//-----------------------------------------------------------------------------
-
 const Thunk = fn (h: Host, arg_obj: Value) callconv(.C) void;
 
 fn createThunk(comptime S: type, comptime name: []const u8) Thunk {
@@ -234,15 +223,14 @@ fn createThunk(comptime S: type, comptime name: []const u8) Thunk {
 }
 
 //-----------------------------------------------------------------------------
-//  Data types that appear in the exported module struct
+//  Module functions
 //-----------------------------------------------------------------------------
 
 pub fn createRootFactory(comptime S: type) host.Factory {
-    _ = S;
     const RootFactory = struct {
         fn exportNamespace(h: Host, dest: *Value) callconv(.C) host.Result {
-            if (getClass(h, S)) |ns| {
-                dest.* = ns;
+            if (getStructure(h, S)) |s| {
+                dest.* = s;
                 return .OK;
             } else |_| {
                 return .Failure;
@@ -255,6 +243,13 @@ pub fn createRootFactory(comptime S: type) host.Factory {
 pub fn createModule(comptime S: type) host.Module {
     return .{
         .version = api_version,
+        .flags = .{
+            .little_endian = builtin.target.cpu.arch.endian() == .Little,
+            .runtime_safety = switch (builtin.mode) {
+                .Debug, .ReleaseSafe => true,
+                else => false,
+            },
+        },
         .callbacks = &host.callbacks,
         .factory = createRootFactory(S),
     };

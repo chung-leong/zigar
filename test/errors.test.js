@@ -6,7 +6,7 @@ import {
   throwNoNewEnum,
   throwOutOfBound,
   rethrowRangeError,
-} from '../src/errors.js';
+} from '../src/error.js';
 
 describe('Error functions', function() {
   describe('throwOverflow', function() {

@@ -29,16 +29,16 @@ static Result SetSlot(Host* call,
 
 static Result AllocateMemory(Host* call, 
                              size_t size, 
-                             uint8_t** dest) {
+                             Memory* dest) {
   if (call->mem_pool.IsEmpty()) {
     call->mem_pool = Array::New(call->isolate);
   }
   Local<ArrayBuffer> buffer = ArrayBuffer::New(call->isolate, size);
   uint32_t index = call->mem_pool->Length();
   call->mem_pool->Set(call->exec_context, index, buffer).Check();
-
   std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
-  *dest = reinterpret_cast<uint8_t *>(store->Data());
+  dest->bytes = reinterpret_cast<uint8_t *>(store->Data());
+  dest->len = store->ByteLength();
   return Result::OK;
 }
 

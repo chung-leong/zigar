@@ -1,11 +1,11 @@
-import { StructureType, MemberType, getPrimitive } from './types.js';
+import { StructureType, MemberType, getPrimitive } from './type.js';
 import { obtainGetter, obtainSetter } from './struct.js';
 import { obtainArrayGetter, obtainArraySetter, obtainArrayLengthGetter, getArrayIterator } from './array.js';
 import { obtainTypedArrayGetter } from './typed-array.js';
 import { obtainCopyFunction } from './memory.js';
 import { obtainDataView, getDataView } from './data-view.js';
-import { throwNoNewEnum } from './errors.js';
-import { DATA, RELOCATABLE, ENUM_INDEX, ENUM_ITEMS } from './symbols.js';
+import { throwNoNewEnum } from './error.js';
+import { DATA, RELOCATABLE, ENUM_INDEX, ENUM_ITEMS } from './symbol.js';
 
 export function createStructure(type, name) {
   return { type, name, constructor: null, copier: null };
@@ -34,7 +34,7 @@ function shapePrimitive(s, def, options) {
     defaultData,
   } = def;
   const copy = obtainCopyFunction(size);
-  const primitive = getPrimitive(member.type, member.bits);
+  const primitive = getPrimitive(member.type, member.bitSize);
   const get = obtainGetter(member, options);
   const set = obtainSetter(member, options);
   const constructor = s.constructor = function(arg) {
@@ -204,9 +204,8 @@ function shapeEnumeration(s, def, options) {
     members,
     defaultData,
   } = def;
-  const [ member ] = members;
-  const primitive = getPrimitive(member.type, member.bits);
-  const getValue = obtainArrayGetter(member, options);
+  const primitive = getPrimitive(members[0].type, members[0].bitSize);
+  const getValue = obtainArrayGetter(members[0], options);
   const count = members.length;
   const items = {};
   const constructor = s.constructor = function(arg) {

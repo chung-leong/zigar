@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { MemberType, StructureType } from '../src/types.js';
+import { MemberType, StructureType } from '../src/type.js';
 import { 
   createStructure, 
   shapeStructure,
@@ -16,10 +16,10 @@ describe('Structure definition', function() {
         members: [
           {
             type: MemberType.Int,
-            bits: 64,
-            bitOffset: 0,
-            align: 8,
             signed: false,
+            bitSize: 64,
+            bitOffset: 0,
+            byteSize: 8,
           }
         ],
         defaultData: (() => {
@@ -43,10 +43,10 @@ describe('Structure definition', function() {
         members: [
           {
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
-            align: 4,
             signed: false,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           }
         ],
         exposeDataView: true,
@@ -66,10 +66,10 @@ describe('Structure definition', function() {
         members: [
           {
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
-            align: 4,
             signed: false,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           }
         ],
         defaultData: (() => {
@@ -97,18 +97,18 @@ describe('Structure definition', function() {
           {
             name: 'dog',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
-            align: 4,
             signed: true,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           },
           {
             name: 'cat',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 32,
-            align: 4,
             signed: true,
+            bitSize: 32,
+            bitOffset: 32,
+            byteSize: 4,
           }
         ],
         defaultData: (() => {
@@ -135,18 +135,18 @@ describe('Structure definition', function() {
           {
             name: 'dog',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
-            align: 4,
             signed: true,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           },
           {
             name: 'cat',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 32,
-            align: 4,
             signed: true,
+            bitSize: 32,
+            bitOffset: 32,
+            byteSize: 4,
           }
         ],
         defaultData: (() => {
@@ -169,18 +169,18 @@ describe('Structure definition', function() {
           {
             name: 'dog',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
-            align: 4,
             signed: true,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           },
           {
             name: 'cat',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 32,
-            align: 4,
             signed: true,
+            bitSize: 32,
+            bitOffset: 32,
+            byteSize: 4,
           }
         ],
         defaultData: (() => {
@@ -207,18 +207,18 @@ describe('Structure definition', function() {
           {
             name: 'dog',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
-            align: 4,
             signed: true,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           },
           {
             name: 'cat',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 32,
-            align: 4,
             signed: true,
+            bitSize: 32,
+            bitOffset: 32,
+            byteSize: 4,
           }
         ],
         defaultData: (() => {
@@ -241,18 +241,18 @@ describe('Structure definition', function() {
           {
             name: 'dog',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
-            align: 4,
             signed: true,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           },
           {
             name: 'cat',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 32,
-            align: 4,
             signed: true,
+            bitSize: 32,
+            bitOffset: 32,
+            byteSize: 4,
           }
         ],
         defaultData: (() => {
@@ -277,18 +277,18 @@ describe('Structure definition', function() {
           {
             name: 'dog',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
-            align: 4,
             signed: true,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           },
           {
             name: 'cat',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 32,
-            align: 4,
             signed: false,
+            bitSize: 32,
+            bitOffset: 32,
+            byteSize: 4,
           }
         ],
         defaultData: (() => {
@@ -311,18 +311,18 @@ describe('Structure definition', function() {
           {
             name: 'dog',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
-            align: 4,
             signed: true,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           },
           {
             name: 'cat',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 32,
-            align: 4,
             signed: false,
+            bitSize: 32,
+            bitOffset: 32,
+            byteSize: 4,
           }
         ],
         defaultData: (() => {
@@ -345,18 +345,18 @@ describe('Structure definition', function() {
           {
             name: 'dog',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
-            align: 4,
             signed: true,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           },
           {
             name: 'cat',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 32,
-            align: 4,
             signed: false,
+            bitSize: 32,
+            bitOffset: 32,
+            byteSize: 4,
           }
         ],
         defaultData: (() => {
@@ -380,16 +380,16 @@ describe('Structure definition', function() {
           {
             name: 'dog',
             type: MemberType.Bool,
-            bits: 1,
+            bitSize: 1,
             bitOffset: 0,
-            align: 0,
+            byteSize: 0,
           },
           {
             name: 'cat',
             type: MemberType.Bool,
-            bits: 1,
+            bitSize: 1,
             bitOffset: 1,
-            align: 0,
+            byteSize: 0,
           },
         ],
         defaultData: (() => {
@@ -417,18 +417,18 @@ describe('Structure definition', function() {
           {
             name: 'dog',
             type: MemberType.Int,
-            bits: 2,
-            bitOffset: 0,
-            align: 0,
             signed: false,
+            bitSize: 2,
+            bitOffset: 0,
+            byteSize: 0,
           },
           {
             name: 'cat',
             type: MemberType.Int,
-            bits: 3,
-            bitOffset: 2,
-            align: 0,
             signed: true,
+            bitSize: 3,
+            bitOffset: 2,
+            byteSize: 0,
           },
         ],
         defaultData: (() => {
@@ -458,18 +458,18 @@ describe('Structure definition', function() {
           {
             name: 'dog',
             type: MemberType.Int,
-            bits: 2,
-            bitOffset: 0,
-            align: 0,
             signed: false,
+            bitSize: 2,
+            bitOffset: 0,
+            byteSize: 0,
           },
           {
             name: 'cat',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 2,
-            align: 0,
             signed: false,
+            bitSize: 32,
+            bitOffset: 2,
+            byteSize: 0,
           },
         ],
         defaultData: (() => {
@@ -496,10 +496,10 @@ describe('Structure definition', function() {
         members: [
           {
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
-            align: 4,
             signed: false,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           }
         ],
       });
@@ -513,18 +513,18 @@ describe('Structure definition', function() {
           {
             name: 'dog',
             type: MemberType.Pointer,
-            bits: 64,
+            bitSize: 64,
             bitOffset: 0,
-            align: 8,
+            byteSize: 8,
             slot: 0,
             structure: intStructure,
           },
           {
             name: 'cat',
             type: MemberType.Pointer,
-            bits: 64,
+            bitSize: 64,
             bitOffset: 64,
-            align: 8,
+            byteSize: 8,
             slot: 1,
             structure: intStructure,
           },
@@ -555,18 +555,18 @@ describe('Structure definition', function() {
           {
             name: 'dog',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
-            align: 4,
             signed: true,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           },
           {
             name: 'cat',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
-            align: 4,
             signed: true,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           }
         ],
         defaultData: (() => {
@@ -597,16 +597,16 @@ describe('Structure definition', function() {
           {
             name: 'Dog',
             type: MemberType.Int,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 0,
-            align: 4,
+            byteSize: 4,
           },
           {
             name: 'Cat',
             type: MemberType.Int,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 0,
-            align: 4,
+            byteSize: 4,
           },
         ],
         defaultData: (() => {
@@ -630,18 +630,18 @@ describe('Structure definition', function() {
           {
             name: 'Dog',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
             signed: false,
-            align: 4,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           },
           {
             name: 'Cat',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
             signed: false,
-            align: 4,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           },
         ],
         defaultData: (() => {
@@ -662,18 +662,18 @@ describe('Structure definition', function() {
           {
             name: 'Dog',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
             signed: false,
-            align: 4,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           },
           {
             name: 'Cat',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
             signed: false,
-            align: 4,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           },
         ],
         defaultData: (() => {
@@ -696,18 +696,18 @@ describe('Structure definition', function() {
           {
             name: 'Dog',
             type: MemberType.Int,
-            bits: 64,
-            bitOffset: 0,
             signed: false,
-            align: 8,
+            bitSize: 64,
+            bitOffset: 0,
+            byteSize: 8,
           },
           {
             name: 'Cat',
             type: MemberType.Int,
-            bits: 64,
-            bitOffset: 0,
             signed: false,
-            align: 8,
+            bitSize: 64,
+            bitOffset: 0,
+            byteSize: 8,
           },
         ],
         defaultData: (() => {
@@ -729,16 +729,16 @@ describe('Structure definition', function() {
           {
             name: 'Dog',
             type: MemberType.Int,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 0,
-            align: 4,
+            byteSize: 4,
           },
           {
             name: 'Cat',
             type: MemberType.Int,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 0,
-            align: 4,
+            byteSize: 4,
           },
         ],
         defaultData: (() => {
@@ -759,16 +759,16 @@ describe('Structure definition', function() {
           {
             name: 'Dog',
             type: MemberType.Int,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 0,
-            align: 4,
+            byteSize: 4,
           },
           {
             name: 'Cat',
             type: MemberType.Int,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 0,
-            align: 4,
+            byteSize: 4,
           },
         ],
         defaultData: (() => {
@@ -788,16 +788,16 @@ describe('Structure definition', function() {
           {
             name: 'Dog',
             type: MemberType.Int,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 0,
-            align: 4,
+            byteSize: 4,
           },
           {
             name: 'Cat',
             type: MemberType.Int,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 0,
-            align: 4,
+            byteSize: 4,
           },
         ],
         defaultData: (() => {
@@ -821,16 +821,16 @@ describe('Structure definition', function() {
           {
             name: 'dog',
             type: MemberType.Int,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 0,
-            align: 4,
+            byteSize: 4,
           },
           {
             name: 'cat',
             type: MemberType.Int,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 32,
-            align: 4,
+            byteSize: 4,
           },
         ],
       };
@@ -846,10 +846,10 @@ describe('Structure definition', function() {
         members: [
           {
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
-            align: 4,
             signed: false,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           }
         ],
       });
@@ -865,9 +865,9 @@ describe('Structure definition', function() {
           {
             name: 'superdog',
             type: MemberType.Pointer,
-            bits: 64,
+            bitSize: 64,
             bitOffset: 0,
-            align: 8,
+            byteSize: 8,
             slot: 0,
             structure: intStructure,
             mutable: true,
@@ -875,9 +875,9 @@ describe('Structure definition', function() {
           {
             name: 'supercat',
             type: MemberType.Pointer,
-            bits: 64,
+            bitSize: 64,
             bitOffset: 64,
-            align: 8,
+            byteSize: 8,
             slot: 1,
             structure: intStructure,
             mutable: false,
@@ -907,16 +907,16 @@ describe('Structure definition', function() {
           {
             name: 'Dog',
             type: MemberType.Int,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 0,
-            align: 4,
+            byteSize: 4,
           },
           {
             name: 'Cat',
             type: MemberType.Int,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 0,
-            align: 4,
+            byteSize: 4,
           },
         ],
         defaultData: (() => {
@@ -934,10 +934,10 @@ describe('Structure definition', function() {
         members: [
           {
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
-            align: 4,
             signed: false,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           }
         ],
       });
@@ -950,9 +950,9 @@ describe('Structure definition', function() {
           {
             name: 'superdog',
             type: MemberType.Pointer,
-            bits: 64,
+            bitSize: 64,
             bitOffset: 0,
-            align: 8,
+            byteSize: 8,
             slot: 0,
             structure: intStructure,
             mutable: true,
@@ -960,9 +960,9 @@ describe('Structure definition', function() {
           {
             name: 'supercat',
             type: MemberType.Pointer,
-            bits: 64,
+            bitSize: 64,
             bitOffset: 64,
-            align: 8,
+            byteSize: 8,
             slot: 1,
             structure: intStructure,
             mutable: false,
@@ -991,18 +991,18 @@ describe('Structure definition', function() {
           {
             name: 'dog',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 0,
             signed: true,
-            align: 4,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
           },
           {
             name: 'cat',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 32,
             signed: true,
-            align: 4,
+            bitSize: 32,
+            bitOffset: 32,
+            byteSize: 4,
           },
         ]
       };
@@ -1017,18 +1017,18 @@ describe('Structure definition', function() {
           {
             name: '0',
             type: MemberType.Compound,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 0,
-            align: 8,
+            byteSize: 8,
             structure,
           },
           {
             name: 'return_value',
             type: MemberType.Int,
-            bits: 32,
-            bitOffset: 64,
             signed: true,
-            align: 4,
+            bitSize: 32,
+            bitOffset: 64,
+            byteSize: 4,
           },
         ],
       };
@@ -1064,16 +1064,16 @@ describe('Structure definition', function() {
           {
             name: 'Dog',
             type: MemberType.Int,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 0,
-            align: 4,
+            byteSize: 4,
           },
           {
             name: 'Cat',
             type: MemberType.Int,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 0,
-            align: 4,
+            byteSize: 4,
           },
         ],
         defaultData: (() => {
@@ -1093,24 +1093,24 @@ describe('Structure definition', function() {
           {
             name: '0',
             type: MemberType.Enum,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 0,
-            align: 4,
+            byteSize: 4,
             structure,
           },
           {
             name: '1',
             type: MemberType.Int,
-            bits: 32,
+            bitSize: 32,
             bitOffset: 32,
-            align: 4,
+            byteSize: 4,
           },
           {
             name: 'return_value',
             type: MemberType.Bool,
-            bits: 1,
+            bitSize: 1,
             bitOffset: 64,
-            align: 1,
+            byteSize: 1,
           },
         ],
       };

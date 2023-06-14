@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
-import { MemberType } from '../src/types.js';
-import { DATA, RELOCATABLE } from '../src/symbols.js';
+import { MemberType } from '../src/type.js';
+import { DATA, RELOCATABLE } from '../src/symbol.js';
 import { 
   obtainArrayGetter,
   obtainArraySetter,
@@ -14,9 +14,9 @@ describe('Array functions', function() {
     it('should return a function for retrieving an array item', function() {
       const member = {
         type: MemberType.Int,
-        bits: 32,
         signed: true,
-        align: 4,
+        bitSize: 32,
+        byteSize: 4,
       };
       const dv = new DataView(new ArrayBuffer(12));
       dv.setInt32(0, 1234, true);
@@ -34,9 +34,9 @@ describe('Array functions', function() {
     it('should return a function for retrieving a big int', function() {
       const member = {
         type: MemberType.Int,
-        bits: 64,
         signed: true,
-        align: 8,
+        bitSize: 64,
+        byteSize: 8,
       };
       const dv = new DataView(new ArrayBuffer(24));
       dv.setBigInt64(0, 1234n, true);
@@ -54,9 +54,9 @@ describe('Array functions', function() {
     it('should throw when index is out-of-bound', function() {
       const member = {
         type: MemberType.Int,
-        bits: 32,
         signed: true,
-        align: 4,
+        bitSize: 32,
+        byteSize: 4,
       };
       const dv = new DataView(new ArrayBuffer(12));
       dv.setInt32(0, 1234, true);
@@ -70,9 +70,9 @@ describe('Array functions', function() {
     it('should return a function employing the correct endianness', function() {
       const member = {
         type: MemberType.Int,
-        bits: 32,
         signed: true,
-        align: 4,
+        bitSize: 32,
+        byteSize: 4,
       };
       const dv = new DataView(new ArrayBuffer(12));
       dv.setInt32(0, 1234, false);
@@ -93,9 +93,9 @@ describe('Array functions', function() {
     it('should return a function for getting the array length', function() {
       const member = {
         type: MemberType.Int,
-        bits: 32,
         signed: true,
-        align: 4,
+        bitSize: 32,
+        byteSize: 4,
       };
       const dv = new DataView(new ArrayBuffer(12));
       const object = { [DATA]: dv };
@@ -108,9 +108,9 @@ describe('Array functions', function() {
     it('should return a function for setting an array item', function() {
       const member = {
         type: MemberType.Int,
-        bits: 32,
         signed: true,
-        align: 4,
+        bitSize: 32,
+        byteSize: 4,
       };
       const dv = new DataView(new ArrayBuffer(12));
       const object = { [DATA]: dv };
@@ -125,9 +125,9 @@ describe('Array functions', function() {
     it('should return a function for setting a big int', function() {
       const member = {
         type: MemberType.Int,
-        bits: 64,
         signed: true,
-        align: 8,
+        bitSize: 64,
+        byteSize: 8,
       };
       const dv = new DataView(new ArrayBuffer(24));
       const object = { [DATA]: dv };
@@ -142,9 +142,9 @@ describe('Array functions', function() {
     it('should throw when index is out-of-bound', function() {
       const member = {
         type: MemberType.Int,
-        bits: 32,
         signed: true,
-        align: 4,
+        bitSize: 32,
+        byteSize: 4,
       };
       const dv = new DataView(new ArrayBuffer(12));
       const object = { [DATA]: dv };
@@ -158,9 +158,9 @@ describe('Array functions', function() {
     it('should return a iterator', function() {
       const member = {
         type: MemberType.Int,
-        bits: 32,
         signed: true,
-        align: 4,
+        bitSize: 32,
+        byteSize: 4,
       };
       const dv = new DataView(new ArrayBuffer(12));
       dv.setInt32(0, 1234, true);

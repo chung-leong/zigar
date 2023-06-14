@@ -1,7 +1,7 @@
-import { MemberType, getTypeName } from './types.js';
+import { MemberType, getTypeName } from './type.js';
 
-export function throwOverflow(bits, signed, value) {
-  const typeName = getTypeName(MemberType.Int, bits, signed);
+export function throwOverflow(signed, bitSize, value) {
+  const typeName = getTypeName(MemberType.Int, signed, bitSize);
   throw new TypeError(`${typeName} cannot represent value '${value}'`);
 }
 

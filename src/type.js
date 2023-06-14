@@ -14,14 +14,17 @@ export const StructureType = {
   Struct: 2,
   ExternUnion: 3,
   TaggedUnion: 4,
-  Enumeration: 5,
+  ErrorUnion: 5,
+  Enumeration: 6,
+  Optional: 7,
+  Opaque: 8,
 };
 
-export function getTypeName(type, bits, signed) {
+export function getTypeName(type, signed, bitSize) {
   if (type === MemberType.Int) {
-    return `${bits <= 32 ? '' : 'Big' }${signed ? 'Int' : 'Uint'}${bits}`;
+    return `${bitSize <= 32 ? '' : 'Big' }${signed ? 'Int' : 'Uint'}${bitSize}`;
   } else if (type === MemberType.Float) {
-    return `Float${bits}`;
+    return `Float${bitSize}`;
   } else if (type === MemberType.Bool) {
     return `Bool`;
   } else if (type === MemberType.Void) {
@@ -29,22 +32,22 @@ export function getTypeName(type, bits, signed) {
   }
 }
   
-export function getIntRange(bits, signed) {
-  if (bits <= 32) {
-    const max = 2 ** (signed ? bits - 1 : bits) - 1;
-    const min = (signed) ? -(2 ** (bits - 1)) : 0;
+export function getIntRange(signed, bitSize) {
+  if (bitSize <= 32) {
+    const max = 2 ** (signed ? bitSize - 1 : bitSize) - 1;
+    const min = (signed) ? -(2 ** (bitSize - 1)) : 0;
     return { min, max };
   } else {
-    bits = BigInt(bits);
-    const max = 2n ** (signed ? bits - 1n : bits) - 1n;
-    const min = (signed) ? -(2n ** (bits - 1n)) : 0n;
+    bitSize = BigInt(bitSize);
+    const max = 2n ** (signed ? bitSize - 1n : bitSize) - 1n;
+    const min = (signed) ? -(2n ** (bitSize - 1n)) : 0n;
     return { min, max };
   }
 }
 
-export function getPrimitive(type, bits) {
+export function getPrimitive(type, bitSize) {
   if (type === MemberType.Int) {
-    if (bits <= 32) {
+    if (bitSize <= 32) {
       return Number;
     } else {
       return BigInt;

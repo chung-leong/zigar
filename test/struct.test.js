@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
-import { StructureType, MemberType } from '../src/types.js';
-import { DATA, RELOCATABLE } from '../src/symbols.js';
+import { StructureType, MemberType } from '../src/type.js';
+import { DATA, RELOCATABLE } from '../src/symbol.js';
 import { obtainGetter, obtainSetter } from '../src/struct.js';
 
 describe('Struct functions', function() {
@@ -16,10 +16,10 @@ describe('Struct functions', function() {
       };
       const member = {
         type: MemberType.Int,
-        bits: 32,
-        bitOffset: 32,
-        align: 4,
         signed: false,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
       };
       const f = obtainGetter(member, {});
       const res = f.call(object);
@@ -35,10 +35,10 @@ describe('Struct functions', function() {
       };
       const member = {
         type: MemberType.Float,
-        bits: 64,
-        bitOffset: 0,
-        align: 8,
         signed: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
       };
       const f = obtainGetter(member, {});
       const res = f.call(object);
@@ -54,10 +54,10 @@ describe('Struct functions', function() {
       };
       const member = {
         type: MemberType.Bool,
-        bits: 1,
-        bitOffset: 32,
-        align: 1,
         signed: false,
+        bitSize: 1,
+        bitOffset: 32,
+        byteSize: 1,
       };
       const f = obtainGetter(member, {});
       const res = f.call(object);
@@ -73,10 +73,10 @@ describe('Struct functions', function() {
       };
       const member = {
         type: MemberType.Void,
-        bits: 0,
-        bitOffset: 32,
-        align: 0,
         signed: false,
+        bitSize: 0,
+        bitOffset: 32,
+        byteSize: 0,
       };
       const f = obtainGetter(member, {});
       const res = f.call(object);
@@ -98,10 +98,10 @@ describe('Struct functions', function() {
       };
       const member = {
         type: MemberType.Enum,
-        bits: 4,
-        bitOffset: 32,
-        align: 0,
         signed: false,
+        bitSize: 4,
+        bitOffset: 32,
+        byteSize: 0,
         structure: { type: StructureType.Enumeration, constructor: DummyEnum },
       };
       const f = obtainGetter(member, {});
@@ -120,11 +120,11 @@ describe('Struct functions', function() {
       };
       const member = {
         type: MemberType.Pointer,
-        bits: 8,
-        bitOffset: 0,
-        align: 8,
-        slot: 1,
         signed: false,
+        bitSize: 8,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 1,
         mutable: true,
         structure: { type: StructureType.Struct, constructor: DummyStruct },
       };
@@ -149,11 +149,11 @@ describe('Struct functions', function() {
       };
       const member = {
         type: MemberType.Pointer,
-        bits: 8,
-        bitOffset: 0,
-        align: 8,
-        slot: 1,
         signed: false,
+        bitSize: 8,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 1,
         mutable: true,
         structure: { type: StructureType.Primitive, constructor: DummyStruct },
       };
@@ -170,10 +170,10 @@ describe('Struct functions', function() {
       };
       const member = {
         type: MemberType.Int,
-        bits: 32,
-        bitOffset: 32,
-        align: 4,
         signed: false,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
       };
       const f = obtainSetter(member, {});
       f.call(object, 123);
@@ -186,10 +186,10 @@ describe('Struct functions', function() {
       };
       const member = {
         type: MemberType.Float,
-        bits: 64,
-        bitOffset: 0,
-        align: 8,
         signed: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
       };
       const f = obtainSetter(member, {});
       f.call(object, 3.14);
@@ -202,10 +202,10 @@ describe('Struct functions', function() {
       };
       const member = {
         type: MemberType.Bool,
-        bits: 1,
-        bitOffset: 32,
-        align: 1,
         signed: false,
+        bitSize: 1,
+        bitOffset: 32,
+        byteSize: 1,
       };
       const f = obtainSetter(member, {});
       f.call(object, true);
@@ -218,10 +218,10 @@ describe('Struct functions', function() {
       };
       const member = {
         type: MemberType.Void,
-        bits: 0,
-        bitOffset: 32,
-        align: 0,
         signed: false,
+        bitSize: 0,
+        bitOffset: 32,
+        byteSize: 0,
       };
       const f = obtainSetter(member, {});
       f.call(object, null);
@@ -244,10 +244,10 @@ describe('Struct functions', function() {
       };
       const member = {
         type: MemberType.Enum,
-        bits: 4,
-        bitOffset: 32,
-        align: 0,
         signed: false,
+        bitSize: 4,
+        bitOffset: 32,
+        byteSize: 0,
         structure: { type: StructureType.Enumeration, constructor: DummyEnum },
       };
       const f = obtainSetter(member, {});
@@ -265,11 +265,11 @@ describe('Struct functions', function() {
       };
       const member = {
         type: MemberType.Pointer,
-        bits: 8,
-        bitOffset: 0,
-        align: 8,
-        slot: 1,
         signed: false,
+        bitSize: 8,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 1,
         mutable: true,
         structure: { type: StructureType.Struct, constructor: DummyStruct },
       };
@@ -294,11 +294,11 @@ describe('Struct functions', function() {
       };
       const member = {
         type: MemberType.Pointer,
-        bits: 8,
-        bitOffset: 0,
-        align: 8,
-        slot: 1,
         signed: false,
+        bitSize: 8,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 1,
         mutable: true,
         structure: { type: StructureType.Primitive, constructor: DummyStruct },
       };
