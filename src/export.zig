@@ -6,212 +6,244 @@ const t = @import("type");
 
 pub const api_version = 1;
 
-const Value = host.Value;
+const Value = t.Value;
 const Host = host.Host;
-const StructureType = host.StructureType;
-const MemberType = host.MemberType;
-
-fn getStructureMembers(comptime T: type) []const Member {
-    const count = switch (@typeInfo(T)) {
-        .Struct, .Union => |st| st.fields.len,
-        else => 1,
-    };
-    var members: [count]Member = undefined;
-    switch (@typeInfo(BT)) {
-        .Bool, .Int, .Float, .Void => {
-            members[0] = .{
-                .member_type = t.getMemberType(T),
-                .bits = @bitSizeOf(T),
-                .bit_offset = 0,
-                .bytes = @sizeOf(T),
-                .signed = isSigned(T),
-            };
-        },
-        .Array => {},
-        .Struct, .Union => |st| {},
-        .Enum => |en| {},
-    }
-    return members;
-}
+const StructureType = t.StructureType;
+const MemberType = t.MemberType;
+const Member = t.Member;
+const MemberSet = t.MemberSet;
+const Method = t.Method;
+const MethodSet = t.MethodSet;
 
 fn getStructure(h: Host, comptime T: type) !Value {
-    const slot_id = h.getConstructId(.{ .Struct = T });
+    const slot_id = h.getConstructSlot(.{ .Struct = T });
     return h.getSlot(slot_id) catch undefined: {
-        const s_type = getStructureType(T);
+        const s_type = t.getStructureType(T);
+        const s_size = @sizeOf(T);
         const name = @typeName(T);
         // create the structure and place it in the slot immediately
         // so that recursive definition work correctly
         const structure = h.createStructure(s_type, name);
         h.setSlot(slot_id, structure);
         // define the shape of the structure
-        switch (s_type) {
-            .Normal, .Union => {
-                for (std.meta.fields(T)) |field| {
-                    const FT = field.type;
-                    try h.attachMember(.{
-                        .type = getMemberType(FT),
-                        .bits = @bitSizeOf(FT),
-                        .bit_offset = @bitOffsetOf(FT, field.name),
-                        .signed = isSigned(FT),
-                        .class_id = id: {
-                            if (getStructureType(FT) == .Singleton) {
-                                break :id 0;
-                            } else {
-                                break :id getStructure(h, FT);
-                            }
-                        },
-                    });
-                }
-            },
-            .Pointer => {
-                // TODO
-            },
-            .Array => {
-                const info = @typeInfo(T).Array;
-                const CT = info.child;
-                try h.attachMember(.{
-                    .type = getMemberType(CT),
-                    .bits = @bitSizeOf(CT),
-                    .bit_offset = 0,
-                    .signed = isSigned(CT),
-                    .len = info.len,
-                });
-            },
-            .Singleton => {
-                try h.attachMember(.{
-                    .type = getMemberType(T),
-                    .bits = @bitSizeOf(T),
-                    .bit_offset = 0,
-                    .signed = isSigned(T),
-                });
-            },
-        }
-
+        const members = getMembers(h, T);
+        const default_data = getDefaultData(h, T);
+        const default_pointers = getDefaultPointers(h, T);
+        const def: MemberSet = .{
+            .members = members,
+            .member_count = members.set,
+            .default_data = defaultData,
+            .default_pointers = pointers,
+            .default_pointer_count = pointers.len,
+        };
+        h.shapeStructure(structure, def);
         break :undefined structure;
     };
 }
 
-fn StaticStruct(comptime T: type) ?type {
+fn getMembers(h: Host, comptime T: type) ![]const Member {
+    const count = switch (@typeInfo(T)) {
+        .Struct, .Union, .Enum => |st| st.fields.len,
+        else => 1,
+    };
+    var members: [count]Member = undefined;
+    switch (@typeInfo(T)) {
+        .Bool, .Int, .Float, .Void => {
+            // primitive
+            members[0] = .{
+                .member_type = t.getMemberType(T),
+                .signed = t.isSigned(T),
+                .bit_size = @bitSizeOf(T),
+                .bit_offset = 0,
+                .byte_size = @sizeOf(T),
+            };
+        },
+        .Array => |ar| {
+            members[0] = .{
+                .member_type = t.getMemberType(ar.child),
+                .signed = t.isSigned(ar.child),
+                .bit_size = @bitSizeOf(ar.child),
+                .bit_offset = 0,
+                .byte_size = @sizeOf(ar.child),
+            };
+        },
+        .Struct, .Union => |st| {
+            // pre-allocate relocatable slots for fields that always need them
+            inline for (st.fields) |field| {
+                switch (t.getMemberType(field.type)) {
+                    .Pointer, .Compound, .Enum => {
+                        _ = h.getRelocatableSlot(T, field.name);
+                    },
+                    else => {},
+                }
+            }
+            inline for (st.fields, 0..) |field, index| {
+                members[index] = .{
+                    .name = field.name,
+                    .member_type = t.getMemberType(field.type),
+                    .signed = t.isSigned(field.type),
+                    .bit_offset = @bitOffsetOf(T, field.name),
+                    .bit_size = @bitSizeOf(field.type),
+                    .byte_size = if (st.layout != .Packed) @sizeOf(field.type) else 0,
+                    .structure = try getStructure(h, field.type),
+                    .slot = h.getRelocatableSlot(T, field.name),
+                };
+            }
+        },
+        .Enum => |en| {
+            // find a type that fit all values
+            const IT = t.getEnumType(T);
+            inline for (en.fields, 0..) |field, index| {
+                members[index] = .{
+                    .name = field.name,
+                    .member_type = t.getMemberType(IT),
+                    .signed = t.isSigned(IT),
+                    .bit_offset = 0,
+                    .bit_size = @bitSizeOf(IT),
+                    .byte_size = @sizeOf(IT),
+                };
+            }
+        },
+    }
+    return members;
+}
+
+fn getVariables(h: Host, comptime T: type) !?[]const Member {
+    if (StaticStruct(T)) |SS| {
+        return try getMembers(h, SS);
+    }
+}
+
+fn getMethods(h: Host, comptime T: type) !?[]const Method {
     const decls = switch (@typeInfo(T)) {
-        .Struct => |st| st.decls,
-        .Union => |un| un.decls,
-        .Enum => |en| en.decls,
+        .Struct, .Union, .Enum, .Opaque => |st| st.decls,
         else => return null,
     };
-    const fields: std.builtin.Type.StructField[decls.len] = undefined;
+    var methods: [decls.len]Method = undefined;
     var count = 0;
-    for (decls) |decl| {
+    inline for (decls) |decl| {
         if (!decl.is_pub) {
             continue;
         }
         switch (@typeInfo(@field(T, decl.name))) {
-            .Fn, .Frame, .AnyFrame, .NoReturn => continue,
+            .Fn => {
+                const function = @field(T, decl.name);
+                const ArgT = ArgumentStruct(function);
+                const arg_structure = try getStructure(h, ArgT);
+                methods[count] = .{
+                    .name = decl.name,
+                    .is_static_only = true,
+                    .thunk = createThunk(function, ArgT),
+                    .structure = arg_structure,
+                };
+                count += 1;
+            },
             else => {},
         }
-        const PT = @TypeOf(&@field(T, decl.name));
-        fields[count] = .{
-            .name = decl.name,
-            .type = PT,
-            .default_value = &@field(T, decl.name),
-            .is_comptime = false,
-            .alignment = @alignOf(PT),
-        };
-        count += 1;
+    }
+    return methods[0..count];
+}
+
+fn StaticStruct(comptime T: type) ?type {
+    const decls = switch (@typeInfo(T)) {
+        .Struct, .Union, .Enum, .Opaque => |st| st.decls,
+        else => return null,
+    };
+    // create static struct
+    var fields: std.builtin.Type.StructField[decls.len] = undefined;
+    var count = 0;
+    inline for (decls) |decl| {
+        if (!decl.is_pub) {
+            continue;
+        }
+        switch (@typeInfo(@field(T, decl.name))) {
+            .Fn, .Frame, .AnyFrame, .NoReturn => {},
+            else => {
+                const PT = @TypeOf(&@field(T, decl.name));
+                fields[count] = .{
+                    .name = decl.name,
+                    .type = PT,
+                    .default_value = &@field(T, decl.name),
+                    .is_comptime = false,
+                    .alignment = @alignOf(PT),
+                };
+                count += 1;
+            },
+        }
     }
     if (count == 0) {
         return null;
     }
-    return @Type(.{ .Struct = .{
-        .layout = .Auto,
-        .decls = .{},
-        .fields = fields[0..count],
-        .is_tuple = false,
-    } });
+    return @Type(.{
+        .Struct = .{
+            .layout = .Auto,
+            .decls = .{},
+            .fields = fields[0..count],
+            .is_tuple = false,
+        },
+    });
 }
 
 fn ArgumentStruct(comptime function: anytype) type {
     const info = @typeInfo(@TypeOf(function)).Fn;
-    const fields: std.builtin.Type.StructField[info.params.len + 3] = undefined;
-    var count = 0;
-    for (info.params, 0..) |param, i| {
-        const num = std.fmt.comptimePrint("{d}", i);
-        fields[count] = .{
-            .name = num,
+    const len = info.params.len + 1;
+    const fields: std.builtin.Type.StructField[len] = undefined;
+    for (info.params, 0..) |param, index| {
+        const name = std.fmt.comptimePrint("{d}", index);
+        fields[index] = .{
+            .name = name,
             .type = param.type orelse void,
             .is_comptime = false,
             .alignment = @alignOf(param.type),
         };
-        count += 1;
     }
+    fields[len - 1] = .{
+        .name = "retval",
+        .type = info.return_type,
+        .is_comptime = false,
+        .alignment = @alignOf(info.return_type),
+    };
+    return @Type(.{
+        .Struct = .{
+            .layout = .Auto,
+            .decls = .{},
+            .fields = fields[0..len],
+            .is_tuple = false,
+        },
+    });
 }
 
-fn setReturnValue(comptime arg_struct: anytype, comptime result: anytype) void {
-    if (@hasField(arg_struct, "error_name")) |value| {
-        setReturnValue(arg_struct, value);
-    } else |err| {
-        arg_struct.error_name = @errorName(err);
-    }
-    if (@hasField(arg_struct, "no_retval")) {
-        if (result) |value| {
-            setReturnValue(arg_struct, value);
-        } else {
-            arg_struct.retval_null = true;
-        }
-    } else {
-        arg_struct.retval = result;
-    }
-}
-
-const invalidAddress = if (@bitSizeOf(*u8) == 64) 0xaaaa_aaaa_aaaa_aaaa else 0xaaaa_aaaa;
+const invalid_address = if (@bitSizeOf(*u8) == 64) 0xaaaa_aaaa_aaaa_aaaa else 0xaaaa_aaaa;
 
 fn invalidPointer(PT: type) PT {
-    return @intToPtr(PT, invalidAddress);
+    return @intToPtr(PT, invalid_address);
 }
 
 fn repointStructure(h: Host, obj: Value, T: type) !*T {
-    const ptr = try h.getPointer(obj, *T);
-    switch (@typeInfo(T)) {
-        .Struct => |st| {
-            inline for (st.fields, 0..) |field, index| {
-                if (getMemberType(field.type) == .Pointer) {
-                    if (@field(ptr, field.name) != invalidPointer(field.type)) {
-                        // structure has been repointed already
-                        break;
-                    }
-                    const reloc_id = try h.getRelocatableId(T, index);
-                    const reloc = try h.getRelocatable(obj, reloc_id);
-                    @field(ptr, field.name) = h.getPointer(obj, T);
-                    repointStructure(h, reloc, field.type);
-                }
-            }
-        },
-    }
-    return ptr;
+    _ = obj;
+    _ = h;
 }
 
 fn depointStructure(h: Host, obj: Value, T: type) void {
-    _ = h;
     _ = T;
     _ = obj;
+    _ = h;
 }
 
 const Thunk = fn (h: Host, arg_obj: Value) callconv(.C) void;
 
-fn createThunk(comptime S: type, comptime name: []const u8) Thunk {
-    const function = @field(S, name);
-    const ArgT = ArgumentStruct(function);
+fn createThunk(comptime function: anytype, comptime ArgT: type) Thunk {
     const Args = std.meta.ArgsTuple(@TypeOf(function));
-    const ThunkType = struct {
+    const S = struct {
         fn tryInvokingFunction(h: Host, arg_obj: Value) !void {
             var arg_struct = try repointStructure(h, arg_obj, ArgT);
             var args: Args = undefined;
             const fields = @typeInfo(Args).Struct.fields;
             inline for (fields, 0..) |_, i| {
-                const num = std.fmt.comptimePrint("{d}", i);
-                args[i] = @field(arg_struct, num);
+                const name = std.fmt.comptimePrint("{d}", i);
+                args[i] = @field(arg_struct, name);
             }
-            var result = @call(std.builtin.CallModifier.auto, function, args);
-            setReturnValue(arg_struct, result);
+            arg_struct.retval = @call(std.builtin.CallModifier.auto, function, args);
             try depointStructure(h, arg_obj, ArgT);
         }
 
@@ -219,12 +251,8 @@ fn createThunk(comptime S: type, comptime name: []const u8) Thunk {
             tryInvokingFunction(h, arg_obj) catch {};
         }
     };
-    return ThunkType.invokeFunction;
+    return S.invokeFunction;
 }
-
-//-----------------------------------------------------------------------------
-//  Module functions
-//-----------------------------------------------------------------------------
 
 pub fn createRootFactory(comptime S: type) host.Factory {
     const RootFactory = struct {

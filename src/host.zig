@@ -1,5 +1,4 @@
 const std = @import("std");
-const slot = @import("slot");
 const t = @import("type");
 const e = @import("error");
 
@@ -9,7 +8,9 @@ const MemberType = t.MemberType;
 const Value = t.Value;
 const Thunk = t.Thunk;
 const Member = t.Member;
+const MemberSet = t.MemberSet;
 const Method = t.Method;
+const MethodSet = t.MethodSet;
 const Memory = t.Memory;
 const ModuleFlags = t.ModuleFlags;
 const Module = t.Module;
@@ -25,20 +26,17 @@ const Callbacks = extern struct {
     get_memory: *const fn (host: Host, value: Value, dest: *Memory) callconv(.C) Result,
     get_relocatable: *const fn (host: Host, value: Value, id: u32, dest: *Value) callconv(.C) Result,
 
-    get_slot: *const fn (host: Host, id: u32, dest: *Value) callconv(.C) Result,
-    set_slot: *const fn (host: Host, id: u32, value: Value) callconv(.C) Result,
+    read_slot: *const fn (host: Host, id: u32, dest: *Value) callconv(.C) Result,
+    write_slot: *const fn (host: Host, id: u32, value: Value) callconv(.C) Result,
 
     create_structure: *const fn (host: Host, s_type: StructureType, name: [*:0]const u8, dest: *Value) callconv(.C) Result,
-    shape_structure: *const fn (host: Host, structure: Value, members: [*]const Member, count: usize, size: usize) callconv(.C) Result,
-    attach_variables: *const fn (host: Host, structure: Value, members: [*]const Member, count: usize) callconv(.C) Result,
-    attach_methods: *const fn (host: Host, structure: Value, methods: [*]const Method, count: usize) callconv(.C) Result,
+    shape_structure: *const fn (host: Host, structure: Value, def: *const MemberSet) callconv(.C) Result,
+    attach_variables: *const fn (host: Host, structure: Value, def: *const MemberSet) callconv(.C) Result,
+    attach_methods: *const fn (host: Host, structure: Value, def: *const MethodSet) callconv(.C) Result,
 };
 var callbacks: Callbacks = undefined;
 
 pub const Host = *opaque {
-    // allocate slots for classe, function, and other language constructs on the host side
-    const type_slot = slot.allocator.get(.{});
-
     fn getPointer(self: Host, value: Value, comptime PT: type) !PT {
         var memory: Memory = undefined;
         if (callbacks.get_memory(self, value, &memory) != .OK) {
@@ -55,26 +53,16 @@ pub const Host = *opaque {
         return result;
     }
 
-    fn getConstructId(_: Host, comptime S: anytype) u32 {
-        return type_slot.get(S);
-    }
-
-    fn getRelocatableId(_: Host, comptime T: anytype, index: comptime_int) u32 {
-        // per-struct slot allocator
-        const relocatable_slot = slot.allocator.get(.{ .Struct = T });
-        return relocatable_slot.get(.{ .Index = index });
-    }
-
-    fn getSlot(self: Host, id: u32) !Value {
+    fn readSlot(self: Host, slot: u32) !Value {
         var value: Value = undefined;
-        if (callbacks.get_slot(self, id, &value) != .OK) {
+        if (callbacks.read_slot(self, slot, &value) != .OK) {
             return Error.Unknown;
         }
         return value;
     }
 
-    fn setSlot(self: Host, id: u32, value: Value) !void {
-        if (callbacks.set_slot(self, id, value) != .OK) {
+    fn writeSlot(self: Host, slot: u32, value: Value) !void {
+        if (callbacks.write_slot(self, slot, value) != .OK) {
             return Error.Unknown;
         }
     }
@@ -87,20 +75,20 @@ pub const Host = *opaque {
         return def;
     }
 
-    fn shapeStructure(self: Host, structure: Value, members: []const Member, size: usize) !void {
-        if (callbacks.attach_member(self, structure, @ptrCast([*]const Member, members), members.len, size) != .OK) {
+    fn shapeStructure(self: Host, structure: Value, def: MemberSet) !void {
+        if (callbacks.shape_structure(self, structure, &def) != .OK) {
             return Error.Unknown;
         }
     }
 
-    fn attachVariables(self: Host, structure: Value, members: []const Member) !void {
-        if (callbacks.attach_variables(self, structure, @ptrCast([*]const Member, members), members.len) != .OK) {
+    fn attachVariables(self: Host, structure: Value, def: MemberSet) !void {
+        if (callbacks.attach_variables(self, structure, &def) != .OK) {
             return Error.Unknown;
         }
     }
 
-    fn attachMethods(self: Host, structure: Value, methods: []const Method) !void {
-        if (callbacks.attach_methods(self, structure, @ptrCast([*]const Method, methods), methods.len) != .OK) {
+    fn attachMethods(self: Host, structure: Value, def: MethodSet) !void {
+        if (callbacks.attach_methods(self, structure, &def) != .OK) {
             return Error.Unknown;
         }
     }

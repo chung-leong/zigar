@@ -64,17 +64,15 @@ static Result CreateStructure(Host* call,
 
 static Result ShapeStructure(Host* call,
                              Local<Object> structure,
-                             const Member members[], 
-                             size_t count, 
-                             size_t size) {
+                             const MemberSet* ms) {
   JSBridge *jsb = call->js_bridge;
   Local<Function> f = jsb->shape_structure;
-  Local<Array> array = Array::New(call->isolate, count);
-  for (size_t i = 0; i < count; i++) {
-    array->Set(jsb->context, i, jsb->NewMemberRecord(members[i])).Check();
+  Local<Array> array = Array::New(call->isolate, ms->member_count);
+  for (size_t i = 0; i < ms->member_count; i++) {
+    array->Set(jsb->context, i, jsb->NewMemberRecord(ms->members[i])).Check();
   }
   Local<Object> def = Object::New(call->isolate);
-  def->Set(call->exec_context, jsb->n_size, Uint32::NewFromUnsigned(call->isolate, size)).Check();
+  def->Set(call->exec_context, jsb->n_size, Uint32::NewFromUnsigned(call->isolate, ms->member_count)).Check();
   def->Set(call->exec_context, jsb->n_members, array).Check();
   Local<Value> recv;
   Local<Value> args[3] = { structure, def, jsb->options };
@@ -87,13 +85,12 @@ static Result ShapeStructure(Host* call,
 
 static Result AttachVariables(Host* call,
                               Local<Object> structure,
-                              const Member members[], 
-                              size_t count) {
+                              const MemberSet* ms) {
   JSBridge *jsb = call->js_bridge;
   Local<Function> f = jsb->attach_variables;
-  Local<Array> array = Array::New(call->isolate, count);
-  for (size_t i = 0; i < count; i++) {
-    array->Set(jsb->context, i, jsb->NewMemberRecord(members[i])).Check();
+  Local<Array> array = Array::New(call->isolate, ms->member_count);
+  for (size_t i = 0; i < ms->member_count; i++) {
+    array->Set(jsb->context, i, jsb->NewMemberRecord(ms->members[i])).Check();
   }
   Local<Object> def = Object::New(call->isolate);
   Local<Value> recv;
@@ -107,13 +104,12 @@ static Result AttachVariables(Host* call,
 
 static Result AttachMethods(Host* call,
                             Local<Object> structure,
-                            const Method methods[], 
-                            size_t count) {
+                            const MethodSet* ms) {
   JSBridge *jsb = call->js_bridge;
   Local<Function> f = jsb->attach_methods;
-  Local<Array> array = Array::New(call->isolate, count);
-  for (size_t i = 0; i < count; i++) {
-    array->Set(jsb->context, i, jsb->NewMethodRecord(methods[i])).Check();
+  Local<Array> array = Array::New(call->isolate, ms->method_count);
+  for (size_t i = 0; i < ms->method_count; i++) {
+    array->Set(jsb->context, i, jsb->NewMethodRecord(ms->methods[i])).Check();
   }
   Local<Value> recv;
   Local<Value> args[3] = { structure, array, jsb->options };

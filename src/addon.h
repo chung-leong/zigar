@@ -34,6 +34,11 @@ enum class MemberType : uint32_t {
   Pointer,
 };
 
+struct Memory {
+  uint8_t *bytes;
+  size_t len;
+};
+
 struct Member {
   const char* name;
   MemberType type;
@@ -44,6 +49,14 @@ struct Member {
   Local<Value> structure;
 };
 
+struct MemberSet {
+  const Member *members;
+  size_t member_count;
+  Memory default_data;
+  const Memory *default_pointers;
+  size_t default_pointer_count ;
+};
+
 struct Host;
 typedef void (*Thunk)(Host*, Local<Value>);
 
@@ -52,6 +65,11 @@ struct Method {
   bool is_static_only;
   Thunk thunk;
   Local<Value> structure;
+};
+
+struct MethodSet {
+  const Method *methods;
+  size_t method_count;
 };
 
 union ModuleFlags {
@@ -72,11 +90,6 @@ struct Module {
   Factory factory;
 };
 
-struct Memory {
-  uint8_t *bytes;
-  size_t len;
-};
-
 //-----------------------------------------------------------------------------
 //  Function-pointer table used by Zig code
 //-----------------------------------------------------------------------------
@@ -91,9 +104,9 @@ struct Callbacks {
   Result (*set_slot)(Host*, size_t, Local<Value>);
 
   Result (*create_structure)(Host*, StructureType, const char*, Local<Object>*);
-  Result (*shape_structure)(Host*, Local<Object>, const Member[], size_t, size_t);
-  Result (*attach_variables)(Host*, Local<Object>, const Member[], size_t);
-  Result (*attach_methods)(Host*, Local<Object>, const Method[], size_t);
+  Result (*shape_structure)(Host*, Local<Object>, const MemberSet*);
+  Result (*attach_variables)(Host*, Local<Object>, const MemberSet*);
+  Result (*attach_methods)(Host*, Local<Object>, const MethodSet*);
 };
 
 //-----------------------------------------------------------------------------

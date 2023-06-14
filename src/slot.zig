@@ -20,3 +20,16 @@ pub const allocator = struct {
         };
     }
 };
+
+// allocate slots for classe, function, and other language constructs on the host side
+const structure_slot = allocator.get(.{});
+
+pub fn getStructureSlot(comptime S: anytype) u32 {
+    return structure_slot.get(S);
+}
+
+pub fn getRelocatableSlot(comptime T: anytype, field_name: []const u8) u32 {
+    // per-struct slot allocator
+    const relocatable_slot = allocator.get(.{ .Struct = T });
+    return relocatable_slot.get(.{ .Field = field_name });
+}
