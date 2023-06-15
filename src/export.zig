@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const assert = std.debug.assert;
 
 // error type
 const Error = error{
@@ -14,7 +15,7 @@ const allocator = struct {
         // results of comptime functions are memoized
         // that means the same S1 will yield the same counter
         return blk: {
-            comptime var next = 1;
+            comptime var next = 0;
             const counter = struct {
                 // same principle here; the same S2 will yield the same number
                 // established by the very first call
@@ -32,15 +33,42 @@ const allocator = struct {
 
 // allocate slots for classe, function, and other language constructs on the host side
 const structure_slot = allocator.get(.{});
+const test_slot = allocator.get(.{ .Type = u32 });
 
-fn getStructureSlot(comptime S: anytype) u32 {
-    return structure_slot.get(S);
+fn getStructureSlot(comptime T: anytype) u32 {
+    return structure_slot.get(.{ .Type = T });
 }
 
-fn getRelocatableSlot(comptime T: anytype, field_name: []const u8) u32 {
+test "getStructureSlot" {
+    const A = struct {};
+    const slotA = getStructureSlot(A);
+    assert(slotA == 0);
+    const B = struct {};
+    const slotB = getStructureSlot(B);
+    assert(slotB == 1);
+    assert(getStructureSlot(A) == 0);
+    assert(getStructureSlot(B) == 1);
+}
+
+fn getRelocatableSlot(comptime T: anytype, comptime index: comptime_int) u32 {
     // per-struct slot allocator
     const relocatable_slot = allocator.get(.{ .Type = T });
-    return relocatable_slot.get(.{ .Field = field_name });
+    return relocatable_slot.get(.{ .Index = index });
+}
+
+test "getRelocatableSlot" {
+    const A = struct {};
+    const slotA1 = getRelocatableSlot(A, 0);
+    const slotA2 = getRelocatableSlot(A, 1);
+    assert(slotA1 == 0);
+    assert(slotA2 == 1);
+    const B = struct {};
+    const slotB1 = getRelocatableSlot(B, 1);
+    const slotB2 = getRelocatableSlot(B, 0);
+    assert(slotB1 == 0);
+    assert(slotB2 == 1);
+    assert(getRelocatableSlot(A, 1) == 1);
+    assert(getRelocatableSlot(A, 2) == 2);
 }
 
 // enums and external structs
@@ -69,6 +97,7 @@ const MemberType = enum(u32) {
     Enum,
     Compound,
     Pointer,
+    Type,
 };
 
 const Value = *opaque {};
@@ -127,16 +156,26 @@ const Module = extern struct {
 
 fn NextIntType(comptime T: type) type {
     var info = @typeInfo(T);
-    if (info.signedness == .signed) {
-        info.signedness = .unsigned;
+    if (info.Int.signedness == .signed) {
+        info.Int.signedness = .unsigned;
     } else {
-        info.signedness = .signed;
-        info.bits += if (info.bits == 32) 32 else 64;
+        info.Int.signedness = .signed;
+        info.Int.bits += switch (info.Int.bits) {
+            8, 16, 32 => info.Int.bits,
+            else => 64,
+        };
     }
     return @Type(info);
 }
 
-fn IntType(n: comptime_int) type {
+test "NextIntType" {
+    assert(NextIntType(u16) == i32);
+    assert(NextIntType(i32) == u32);
+    assert(NextIntType(u32) == i64);
+    assert(NextIntType(u64) == i128);
+}
+
+fn IntType(comptime n: comptime_int) type {
     var IT = i32;
     while (!isInRangeOf(n, IT)) {
         IT = NextIntType(IT);
@@ -144,10 +183,16 @@ fn IntType(n: comptime_int) type {
     return IT;
 }
 
+test "IntType" {
+    assert(IntType(0) == i32);
+    assert(IntType(0xFFFFFFFF) == u32);
+    assert(IntType(-0xFFFFFFFF) == i64);
+}
+
 fn EnumType(comptime T: type) type {
     var IT = i32;
     var all_fit = false;
-    while (!all_fit) : (IT = NextIntType(IT)) {
+    while (!all_fit) {
         all_fit = true;
         inline for (@typeInfo(T).Enum.fields) |field| {
             if (!isInRangeOf(field.value, IT)) {
@@ -155,12 +200,28 @@ fn EnumType(comptime T: type) type {
                 break;
             }
         }
+        if (!all_fit) {
+            IT = NextIntType(IT);
+        }
     }
     return IT;
 }
 
-fn isInRangeOf(n: comptime_int, comptime T: type) bool {
+test "EnumType" {
+    const Test = enum(u128) {
+        Dog = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF,
+        Cat = 0,
+    };
+    assert(EnumType(Test) == u128);
+}
+
+fn isInRangeOf(comptime n: comptime_int, comptime T: type) bool {
     return std.math.minInt(T) <= n and n <= std.math.maxInt(T);
+}
+
+test "isInRangeOf" {
+    assert(isInRangeOf(-1, i32) == true);
+    assert(isInRangeOf(-1, u32) == false);
 }
 
 fn isSigned(comptime T: type) bool {
@@ -168,6 +229,11 @@ fn isSigned(comptime T: type) bool {
         .Int => |int| int.signedness == .signed,
         else => false,
     };
+}
+
+test "isSigned" {
+    assert(isSigned(i32) == true);
+    assert(isSigned(u77) == false);
 }
 
 fn isPacked(comptime T: type) bool {
@@ -178,6 +244,19 @@ fn isPacked(comptime T: type) bool {
     };
 }
 
+test "isPacked" {
+    const A = struct {
+        number: u17,
+        flag: bool,
+    };
+    const B = packed union {
+        flag1: bool,
+        flag2: bool,
+    };
+    assert(isPacked(A) == false);
+    assert(isPacked(B) == true);
+}
+
 fn getMemberType(comptime T: type) MemberType {
     return switch (@typeInfo(T)) {
         .Bool => .Bool,
@@ -186,8 +265,15 @@ fn getMemberType(comptime T: type) MemberType {
         .Enum => .Enum,
         .Struct, .Union, .Array, .ErrorUnion, .Optional => .Compound,
         .Pointer => .Pointer,
+        .Type => .Type,
         else => .Void,
     };
+}
+
+test "getMemberType" {
+    assert(getMemberType(u32) == .Int);
+    assert(getMemberType(*u32) == .Pointer);
+    assert(getMemberType(type) == .Type);
 }
 
 fn getStructureType(comptime T: type) StructureType {
@@ -200,6 +286,12 @@ fn getStructureType(comptime T: type) StructureType {
         .Opaque => .Opaque,
         else => .Primitive,
     };
+}
+
+test "getStructureType" {
+    assert(getStructureType(i32) == .Primitive);
+    assert(getStructureType(union {}) == .TaggedUnion);
+    assert(getStructureType(extern union {}) == .ExternUnion);
 }
 
 // pointer table that's filled on the C++ side
@@ -281,7 +373,7 @@ const Host = *opaque {
 
 // export functions
 fn getStructure(host: Host, comptime T: type) !Value {
-    const s_slot = getStructureSlot(.{ .Type = T });
+    const s_slot = getStructureSlot(T);
     return host.readSlot(s_slot) catch undefined: {
         const s_type = getStructureType(T);
         const name = @typeName(T);
@@ -374,10 +466,10 @@ fn getMembers(host: Host, comptime T: type) ![]const Member {
         .Struct, .Union => {
             // pre-allocate relocatable slots for fields that always need them
             const fields = std.meta.fields(T);
-            inline for (fields) |field| {
+            inline for (fields, 0..) |field, index| {
                 switch (getMemberType(field.type)) {
                     .Pointer, .Compound, .Enum => {
-                        _ = getRelocatableSlot(T, field.name);
+                        _ = getRelocatableSlot(T, index);
                     },
                     else => {},
                 }
@@ -391,7 +483,7 @@ fn getMembers(host: Host, comptime T: type) ![]const Member {
                     .bit_size = @bitSizeOf(field.type),
                     .byte_size = if (isPacked(T)) @sizeOf(field.type) else 0,
                     .structure = try getStructure(host, field.type),
-                    .slot = getRelocatableSlot(T, field.name),
+                    .slot = getRelocatableSlot(T, index),
                 };
             }
         },
@@ -472,14 +564,97 @@ fn getDefaultPointers(comptime T: type) []const Memory {
 fn getDefaultData(comptime T: type) Memory {
     const fields = std.meta.fields(T);
     var structure: T = undefined;
-    var bytes: []u8 = @intToPtr([*]u8, @ptrToInt(&structure))[0..@sizeOf(T)];
-    @memset(bytes, 0xAA);
+    var bytes = @intToPtr([*]u8, @ptrToInt(&structure));
+    var slice = bytes[0..@sizeOf(T)];
+    @memset(slice, 0xAA);
     inline for (fields) |field| {
-        if (field.default_value) |default| {
-            @field(structure, field.name) = default;
+        if (field.default_value) |opaque_ptr| {
+            var default_ptr = @ptrCast(*const field.type, @alignCast(@alignOf(field.type), opaque_ptr));
+            @field(structure, field.name) = default_ptr.*;
         }
     }
-    return .{};
+    const all_zeros = check: {
+        comptime var i = 0;
+        inline while (i < slice.len) : (i += 1) {
+            if (slice[i] != 0) {
+                break :check false;
+            }
+        }
+        break :check true;
+    };
+    return .{
+        .bytes = if (all_zeros) null else bytes,
+        .len = if (all_zeros) 0 else slice.len,
+    };
+}
+
+test "getDefaultData" {
+    const A = struct {
+        number1: u32 = 0x11223344,
+        number2: u32,
+        number3: u16 = 0,
+    };
+    const memA = getDefaultData(A);
+    assert(memA.len == @sizeOf(A));
+    assert(memA.bytes != null);
+    if (memA.bytes) |bytes| {
+        if (builtin.target.cpu.arch.endian() == .Little) {
+            assert(bytes[0] == 0x44);
+            assert(bytes[1] == 0x33);
+            assert(bytes[2] == 0x22);
+            assert(bytes[3] == 0x11);
+            assert(bytes[4] == 0xAA);
+            assert(bytes[5] == 0xAA);
+            assert(bytes[6] == 0xAA);
+            assert(bytes[7] == 0xAA);
+            assert(bytes[8] == 0x00);
+            assert(bytes[9] == 0x00);
+        }
+    }
+    const B = struct {
+        number1: i32,
+        number2: i32,
+    };
+    const memB = getDefaultData(B);
+    assert(memB.len == @sizeOf(B));
+    assert(memB.bytes != null);
+    if (memB.bytes) |bytes| {
+        if (builtin.target.cpu.arch.endian() == .Little) {
+            assert(bytes[0] == 0xAA);
+            assert(bytes[1] == 0xAA);
+            assert(bytes[2] == 0xAA);
+            assert(bytes[3] == 0xAA);
+            assert(bytes[4] == 0xAA);
+            assert(bytes[5] == 0xAA);
+            assert(bytes[6] == 0xAA);
+            assert(bytes[7] == 0xAA);
+        }
+    }
+    const C = struct {
+        number1: i32 = 0,
+        number2: i32 = 0,
+    };
+    const memC = getDefaultData(C);
+    assert(memC.len == 0);
+    assert(memC.bytes == null);
+    const D = struct {
+        a: A = .{ .number2 = 0xFFFFFFFF },
+    };
+    const memD = getDefaultData(D);
+    assert(memD.len == @sizeOf(D));
+    assert(memD.bytes != null);
+    if (memD.bytes) |bytes| {
+        if (builtin.target.cpu.arch.endian() == .Little) {
+            assert(bytes[0] == 0x44);
+            assert(bytes[1] == 0x33);
+            assert(bytes[2] == 0x22);
+            assert(bytes[3] == 0x11);
+            assert(bytes[4] == 0xFF);
+            assert(bytes[5] == 0xFF);
+            assert(bytes[6] == 0xFF);
+            assert(bytes[7] == 0xFF);
+        }
+    }
 }
 
 fn StaticStruct(comptime T: type) ?type {
@@ -630,5 +805,5 @@ pub fn createModule(comptime S: type) Module {
 test "createModule" {
     const Test = struct {};
     const module = createModule(Test);
-    std.debug.assert(module.version == api_version);
+    assert(module.version == api_version);
 }
