@@ -332,7 +332,7 @@ export function attachMethods(s, def, options = {}) {
         }
       }
       thunk(a);
-      return a.return_value;
+      return a.retval;
     }
     Object.defineProperties(f, {
       name: { value: name, writable: false },

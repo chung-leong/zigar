@@ -541,16 +541,22 @@ fn getMethods(host: Host, comptime T: type) ![]const Method {
 
 fn getDefaultPointers(comptime T: type) []const Memory {
     const fields = std.meta.fields(T);
-    var pointers: [fields.len]Memory = undefined;
+    var pointers: [fields.len]Memory = .{};
     comptime var count = 0;
-    inline for (fields) |field| {
+    inline for (fields, 0..) |field, index| {
         switch (@typeInfo(field.type)) {
-            .Pointer => {
-                if (field.default_value) |default| {
-                    const r_slot = getRelocatableSlot(T, field.name);
+            .Pointer => |pt| {
+                if (field.default_value) |opaque_ptr| {
+                    const r_slot = getRelocatableSlot(T, index);
+                    const aligned_ptr = @alignCast(@alignOf(field.type), opaque_ptr);
+                    const typed_ptr = @ptrCast(*const field.type, aligned_ptr);
                     pointers[r_slot] = .{
-                        .bytes = @ptrCast([*]u8, default),
-                        .len = @sizeOf(@TypeOf(default.*)),
+                        .bytes = @ptrCast([*]u8, @constCast(typed_ptr.*)),
+                        .len = switch (pt.size) {
+                            .Slice => @sizeOf(pt.child) * typed_ptr.*.len,
+                            .One => @sizeOf(pt.child),
+                            else => 0,
+                        },
                     };
                     count += 1;
                 }
@@ -558,7 +564,28 @@ fn getDefaultPointers(comptime T: type) []const Memory {
             else => {},
         }
     }
-    return if (count > 0) pointers else pointers[0..0];
+    return if (count > 0) &pointers else &.{};
+}
+
+test "getDefaultPointers" {
+    const A = struct {
+        text: []const u8 = "Hello world",
+        number: i32,
+    };
+    const pointersA = getDefaultPointers(A);
+    assert(pointersA.len == 2);
+    assert(pointersA[0].len == 11);
+    assert(pointersA[0].bytes != null);
+    if (pointersA[0].bytes) |bytes| {
+        assert(bytes[0] == 'H');
+        assert(bytes[6] == 'w');
+    }
+    const B = struct {
+        text: []const u8,
+        number: i32,
+    };
+    const pointersB = getDefaultPointers(B);
+    assert(pointersB.len == 0);
 }
 
 fn getDefaultData(comptime T: type) Memory {
@@ -568,9 +595,18 @@ fn getDefaultData(comptime T: type) Memory {
     var slice = bytes[0..@sizeOf(T)];
     @memset(slice, 0xAA);
     inline for (fields) |field| {
-        if (field.default_value) |opaque_ptr| {
-            var default_ptr = @ptrCast(*const field.type, @alignCast(@alignOf(field.type), opaque_ptr));
-            @field(structure, field.name) = default_ptr.*;
+        switch (@typeInfo(field.type)) {
+            .Pointer => {
+                // pointers are always initialized to an invalid address
+                // with the real addresses provided through getDefaultPointers()
+            },
+            else => {
+                if (field.default_value) |opaque_ptr| {
+                    const aligned_ptr = @alignCast(@alignOf(field.type), opaque_ptr);
+                    const typed_ptr = @ptrCast(*const field.type, aligned_ptr);
+                    @field(structure, field.name) = typed_ptr.*;
+                }
+            },
         }
     }
     const all_zeros = check: {
@@ -676,10 +712,11 @@ fn StaticStruct(comptime T: type) ?type {
             .Fn, .Frame, .AnyFrame, .NoReturn => {},
             else => {
                 const PT = @TypeOf(&@field(T, decl.name));
+                const pointer = &@field(T, decl.name);
                 fields[count] = .{
                     .name = decl.name,
                     .type = PT,
-                    .default_value = &@field(T, decl.name),
+                    .default_value = @ptrCast(*const anyopaque, &pointer),
                     .is_comptime = false,
                     .alignment = @alignOf(PT),
                 };
@@ -701,34 +738,101 @@ fn StaticStruct(comptime T: type) ?type {
     });
 }
 
+test "StaticStruct" {
+    const A = struct {
+        pub const number: u32 = 1234;
+        pub const array: [4]u32 = .{ 1, 2, 3, 4 };
+        const private: i32 = -1;
+        pub const name: []const u8 = "Hello world";
+    };
+    const result = StaticStruct(A);
+    assert(result != null);
+    if (result) |SS| {
+        const fields = @typeInfo(SS).Struct.fields;
+        assert(fields.len == 3);
+        assert(fields[0].name[0] == 'n');
+        assert(fields[1].name[0] == 'a');
+        assert(fields[2].name[0] == 'n');
+        assert(fields[0].default_value != null);
+        assert(fields[1].default_value != null);
+        assert(fields[2].default_value != null);
+
+        const pointers = getDefaultPointers(SS);
+        assert(pointers.len == 3);
+        assert(pointers[0].bytes != null);
+        assert(pointers[0].len == 4);
+        if (pointers[0].bytes) |bytes| {
+            if (builtin.target.cpu.arch.endian() == .Little) {
+                assert(bytes[0] == 1234 & 0xFF);
+                assert(bytes[1] == 1234 >> 8);
+            }
+        }
+        assert(pointers[1].bytes != null);
+        assert(pointers[1].len == 16);
+        if (pointers[1].bytes) |bytes| {
+            if (builtin.target.cpu.arch.endian() == .Little) {
+                assert(bytes[0] == 1);
+                assert(bytes[4] == 2);
+            }
+        }
+        assert(pointers[2].bytes != null);
+        assert(pointers[2].len == @sizeOf([]u8));
+    }
+}
+
 fn ArgumentStruct(comptime function: anytype) type {
     const info = @typeInfo(@TypeOf(function)).Fn;
     const len = info.params.len + 1;
-    const fields: std.builtin.Type.StructField[len] = undefined;
+    var fields: [len]std.builtin.Type.StructField = undefined;
     for (info.params, 0..) |param, index| {
-        const name = std.fmt.comptimePrint("{d}", index);
+        const name = std.fmt.comptimePrint("{d}", .{index});
         fields[index] = .{
             .name = name,
             .type = param.type orelse void,
             .is_comptime = false,
-            .alignment = @alignOf(param.type),
+            .alignment = @alignOf(param.type orelse void),
+            .default_value = null,
         };
     }
     fields[len - 1] = .{
         .name = "retval",
-        .type = info.return_type,
+        .type = info.return_type orelse void,
         .is_comptime = false,
-        .alignment = @alignOf(info.return_type),
+        .alignment = @alignOf(info.return_type orelse void),
+        .default_value = null,
     };
     var noDecls: []const std.builtin.Type.Declaration = &.{};
     return @Type(.{
         .Struct = .{
             .layout = .Auto,
             .decls = noDecls,
-            .fields = fields[0..len],
+            .fields = &fields,
             .is_tuple = false,
         },
     });
+}
+
+test "ArgumentStruct" {
+    const Test = struct {
+        fn A(a: i32, b: bool) bool {
+            return if (a > 10 and b) true else false;
+        }
+
+        fn B(s: []const u8) void {
+            _ = s;
+        }
+    };
+    const ArgA = ArgumentStruct(Test.A);
+    const fieldsA = std.meta.fields(ArgA);
+    assert(fieldsA.len == 3);
+    assert(fieldsA[0].name[0] == '0');
+    assert(fieldsA[1].name[0] == '1');
+    assert(fieldsA[2].name[0] == 'r');
+    const ArgB = ArgumentStruct(Test.B);
+    const fieldsB = std.meta.fields(ArgB);
+    assert(fieldsB.len == 2);
+    assert(fieldsB[0].name[0] == '0');
+    assert(fieldsB[1].name[0] == 'r');
 }
 
 const invalid_address = if (@bitSizeOf(*u8) == 64) 0xaaaa_aaaa_aaaa_aaaa else 0xaaaa_aaaa;
@@ -757,7 +861,7 @@ fn createThunk(comptime function: anytype, comptime ArgT: type) Thunk {
             var args: Args = undefined;
             const fields = @typeInfo(Args).Struct.fields;
             inline for (fields, 0..) |_, i| {
-                const name = std.fmt.comptimePrint("{d}", i);
+                const name = std.fmt.comptimePrint("{d}", .{i});
                 args[i] = @field(arg_struct, name);
             }
             arg_struct.retval = @call(std.builtin.CallModifier.auto, function, args);
