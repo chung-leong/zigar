@@ -314,12 +314,13 @@ var callbacks: Callbacks = undefined;
 
 // host interface
 const Host = *opaque {
-    fn getPointer(self: Host, value: Value, comptime PT: type) !PT {
+    fn getPointer(self: Host, value: Value, comptime T: type) !*T {
         var memory: Memory = undefined;
         if (callbacks.get_memory(self, value, &memory) != .OK) {
             return Error.Unknown;
         }
-        return @ptrCast(PT, memory.bytes);
+        const aligned_ptr = @alignCast(@alignOf(T), memory.bytes);
+        return @ptrCast(*T, aligned_ptr);
     }
 
     fn getRelocatable(self: Host, value: Value, id: u32) !Value {
@@ -841,12 +842,13 @@ fn invalidPointer(PT: type) PT {
     return @intToPtr(PT, invalid_address);
 }
 
-fn repointStructure(host: Host, obj: Value, T: type) !*T {
-    _ = obj;
-    _ = host;
+fn repointStructure(host: Host, obj: Value, comptime T: type) !*T {
+    // TODO
+    return host.getPointer(obj, T);
 }
 
-fn depointStructure(host: Host, obj: Value, T: type) void {
+fn depointStructure(host: Host, obj: Value, comptime T: type) !void {
+    // TODO
     _ = T;
     _ = obj;
     _ = host;
@@ -875,9 +877,35 @@ fn createThunk(comptime function: anytype, comptime ArgT: type) Thunk {
     return S.invokeFunction;
 }
 
+test "createThunk" {
+    const Test = struct {
+        fn A(a: i32, b: bool) bool {
+            return if (a > 10 and b) true else false;
+        }
+    };
+    const ArgA = ArgumentStruct(Test.A);
+    const thunk = createThunk(Test.A, ArgA);
+    switch (@typeInfo(@TypeOf(thunk))) {
+        .Pointer => |pt| {
+            switch (@typeInfo(pt.child)) {
+                .Fn => |f| {
+                    assert(f.params.len == 2);
+                    assert(f.calling_convention == .C);
+                },
+                else => {
+                    assert(false);
+                },
+            }
+        },
+        else => {
+            assert(false);
+        },
+    }
+}
+
 fn createRootFactory(comptime S: type) Factory {
     const RootFactory = struct {
-        fn exportNamespace(host: Host, dest: *Value) callconv(.C) Result {
+        fn exportStructure(host: Host, dest: *Value) callconv(.C) Result {
             if (getStructure(host, S)) |s| {
                 dest.* = s;
                 return .OK;
@@ -886,7 +914,7 @@ fn createRootFactory(comptime S: type) Factory {
             }
         }
     };
-    return RootFactory.exportNamespace;
+    return RootFactory.exportStructure;
 }
 
 pub const api_version = 1;
@@ -910,4 +938,5 @@ test "createModule" {
     const Test = struct {};
     const module = createModule(Test);
     assert(module.version == api_version);
+    assert(module.flags.little_endian == (builtin.target.cpu.arch.endian() == .Little));
 }
