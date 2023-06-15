@@ -401,11 +401,11 @@ fn getMemberSet(host: Host, comptime T: type) !MemberSet {
     const default_data = getDefaultData(T);
     const pointers = getDefaultPointers(T);
     return .{
-        .members = @ptrCast([*]const Member, members),
+        .members = members.ptr,
         .member_count = members.len,
         .total_size = @sizeOf(T),
         .default_data = default_data,
-        .default_pointers = if (pointers.len > 0) @ptrCast([*]const Memory, pointers) else null,
+        .default_pointers = if (pointers.len > 0) pointers.ptr else null,
         .default_pointer_count = pointers.len,
     };
 }
@@ -415,7 +415,7 @@ fn getVariableSet(host: Host, comptime T: type) !?MemberSet {
         const members = getMembers(host, SS);
         const pointers = getDefaultPointers(SS);
         return .{
-            .members = @ptrCast([*]const Member, members),
+            .members = members.ptr,
             .member_count = members.len,
             .default_pointers = pointers orelse null,
             .default_pointer_count = pointers.len orelse 0,
@@ -431,7 +431,7 @@ fn getMethodSet(host: Host, comptime T: type) !?MethodSet {
         return null;
     }
     return .{
-        .methods = @ptrCast([*]const Method, methods),
+        .methods = methods.ptr,
         .method_count = methods.len,
     };
 }
@@ -939,4 +939,20 @@ test "createModule" {
     const module = createModule(Test);
     assert(module.version == api_version);
     assert(module.flags.little_endian == (builtin.target.cpu.arch.endian() == .Little));
+    switch (@typeInfo(@TypeOf(module.factory))) {
+        .Pointer => |pt| {
+            switch (@typeInfo(pt.child)) {
+                .Fn => |f| {
+                    assert(f.params.len == 2);
+                    assert(f.calling_convention == .C);
+                },
+                else => {
+                    assert(false);
+                },
+            }
+        },
+        else => {
+            assert(false);
+        },
+    }
 }
