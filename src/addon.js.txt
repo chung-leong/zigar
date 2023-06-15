@@ -1,3 +1,1296 @@
 R"=====(
-!function(t){"use strict";const n={Void:0,Bool:1,Int:2,Float:3,Enum:4,Compound:5,Pointer:6},e={Primitive:0,Array:1,Struct:2,ExternUnion:3,TaggedUnion:4,Enumeration:5};function i(t,e,i){return t===n.Int?`${e<=32?"":"Big"}${i?"Int":"Uint"}${e}`:t===n.Float?`Float${e}`:t===n.Bool?"Bool":t===n.Void?"Null":void 0}function r(t,n){if(t<=32){return{min:n?-(2**(t-1)):0,max:2**(n?t-1:t)-1}}t=BigInt(t);return{min:n?-(2n**(t-1n)):0n,max:2n**(n?t-1n:t)-1n}}function o(t,e){return t===n.Int?e<=32?Number:BigInt:t===n.Float?Number:t===n.Bool?Boolean:Object}function c(t,n,e){if(t+n<=8){const i=2**n-1;if(e)return function(n,e,r){const o=e.getUint8(r)>>t&i;n.setUint8(0,o)};{const n=255^i<<t;return function(e,r,o){const c=r.getUint8(0),s=e.getUint8(o)&n|(c&i)<<t;e.setUint8(o,s)}}}{const i=8-t,r=2**i-1;if(e){const e=2**(n%8)-1;return function(o,c,s){let a,u=s,l=0,f=c.getUint8(u++),b=f>>t&r,g=i,h=n;do{h>g&&(f=c.getUint8(u++),b|=f<<g),a=h>=8?255&b:b&e,o.setUint8(l++,a),b>>=8,h-=8}while(h>0)}}{const e=2**((n-i)%8)-1,o=255^r<<t,c=255^e;return function(i,r,s){let a,u,l=0,f=s,b=i.getUint8(f),g=b&o,h=t,y=n+h;do{y>h&&(a=r.getUint8(l++),g|=a<<h,h+=8),y>=8?u=255&g:(b=i.getUint8(f),u=b&c|g&e),i.setUint8(f++,u),g>>=8,h-=8,y-=8}while(y>0)}}}}function s(t){return 3&t?a:u}function a(t,n){for(let e=0,i=t.byteLength;e<i;e++)t.setInt8(e,n.getInt8(e))}function u(t,n){for(let e=0,i=t.byteLength;e<i;e+=4)t.setInt32(e,n.getInt32(e))}function l(t,e,r){const o=i(n.Int,t,e);throw new TypeError(`${o} cannot represent value '${r}'`)}function f(t,n){throw new TypeError(`Struct size mismatch: ${t} != ${n}`)}function b(t,n,e){throw new RangeError(`Illegal array index: ${e}`)}function g(t,n,e,i){if(!(t instanceof RangeError))throw t;b(0,0,i)}const h=Symbol("data"),y=Symbol("relocatable"),p=Symbol("typedArray"),w=Symbol("enumIndex"),F=Symbol("enumItems");function d({type:t,bits:e,signed:r,align:o,bitOffset:s}){const a=7&s,u=O("get",t,e,r,o,a);if(DataView.prototype[u])return DataView.prototype[u];if(V[u])return V[u];let l;if(0!==o){if(t===n.Int)if(e<64){const n=i(t,8*o,r),c=DataView.prototype[`get${n}`];if(r){const t=e<=32?2**(e-1):2n**BigInt(e-1),n=e<=32?t-1:t-1n;l=function(e,i){const r=c.call(this,e,i);return(r&n)-(r&t)}}else{const t=e<=32?2**e-1:2n**BigInt(e)-1n;l=function(n,e){return c.call(this,n,e)&t}}}else{const t=DataView.prototype.getBigUint64,n=Math.ceil(e/64),i=function(e,i){let r=0n;if(i)for(let o=0,c=e+8*(n-1);o<n;o++,c-=8){r=r<<64n|t.call(this,c,i)}else for(let o=0,c=e;o<n;o++,c+=8){r=r<<64n|t.call(this,c,i)}return r};if(r){const t=2n**BigInt(e-1),n=t-1n;l=function(e,r){const o=i.call(this,e,r);return(o&n)-(o&t)}}else{const t=2n**BigInt(e)-1n;l=function(n,e){return i.call(this,n,e)&t}}}else if(t===n.Float){if(16===e){const t=new DataView(new ArrayBuffer(4)),n=DataView.prototype.getUint16;l=function(e,i){const r=n.call(this,e,i),o=r>>>15,c=(31744&r)>>10,s=1023&r;if(0===c)return o?-0:0;if(31===c)return s?NaN:o?-1/0:1/0;const a=o<<31|c-15+127<<23|s<<13;return t.setUint32(0,a,i),t.getFloat32(0,i)}}else if(128===e){const t=new DataView(new ArrayBuffer(8)),n=DataView.prototype.getBigUint64,e=function(t,e){const i=n.call(this,t,e),r=n.call(this,t+8,e);return e?i|r<<64n:i<<64n|r};l=function(n,i){const r=e.call(this,n,i),o=r>>127n,c=(0x7FFF0000000000000000000000000000n&r)>>112n,s=0x0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFn&r;if(0n===c)return o?-0:0;if(0x7FFFn===c)return s?NaN:o?-1/0:1/0;const a=o<<63n|c-16383n+1023n<<52n|s>>60n;return t.setBigUint64(0,a,i),t.getFloat64(0,i)}}}else if(t===n.Bool){const t=`Int${8*o}`,n=DataView.prototype[`get${t}`];l=function(t,e){return!!n.call(this,t,e)}}}else{const i=DataView.prototype.getUint8;if(t===n.Bool&&1===e){const t=1<<a;l=function(n){return!!(i.call(this,n)&t)}}else if(t===n.Int&&a+e<=8)if(r){const t=2**(e-1),n=t-1;l=function(e){const r=i.call(this,e)>>>a;return(r&n)-(r&t)}}else{const t=2**e-1<<a;l=function(n){return i.call(this,n)>>>a&t}}else{const n=B(e),i=new DataView(new ArrayBuffer(n)),o=d({type:t,bits:e,signed:r,bitOffset:0,align:n}),s=c(a,e,!0);l=function(t,n){return s(i,this,t),o.call(i,0,n)}}}if(!l)throw new Error(`Missing getter: ${t}`);return Object.defineProperty(l,"name",{value:u,writable:!1}),V[u]=l,l}function m({type:t,bits:e,signed:r,align:o,bitOffset:s}){const a=7&s,u=O("set",t,e,r,o,a);if(DataView.prototype[u])return DataView.prototype[u];if(V[u])return V[u];let l;if(0!==o){if(t===n.Int)if(e<64){const n=i(t,8*o,r),c=DataView.prototype[`set${n}`];if(r){const t=e<=32?2**(e-1):2n**BigInt(e-1),n=e<=32?t-1:t-1n;l=function(e,i,r){const o=i<0?t|i&n:i&n;c.call(this,e,o,r)}}else{const t=e<=32?2**e-1:2n**BigInt(e)-1n;l=function(n,e,i){const r=e&t;c.call(this,n,r,i)}}}else{const t=DataView.prototype.setBigUint64,n=Math.ceil(e/64),i=function(i,r,o){let c=r;const s=0xFFFFFFFFFFFFFFFFn;if(o)for(let e=0,r=i;e<n;e++,r+=8){const n=c&s;t.call(this,r,n,o),c>>=64n}else{c<<=BigInt(64*n-e);for(let e=0,r=i+8*(n-1);e<n;e++,r-=8){const n=c&s;t.call(this,r,n,o),c>>=64n}}return c};if(r){const t=e<=32?2**(e-1):2n**BigInt(e-1),n=e<=32?t-1:t-1n;l=function(e,r,o){const c=r<0?t|r&n:r&n;i.call(this,e,c,o)}}else{const t=e<=32?2**e-1:2n**BigInt(e)-1n;l=function(n,e,r){const o=e&t;i.call(this,n,o,r)}}}else if(t===n.Float){if(16===e){const t=new DataView(new ArrayBuffer(4)),n=DataView.prototype.setUint16;l=function(e,i,r){t.setFloat32(0,i,r);const o=t.getUint32(0,r),c=o>>>31,s=(2139095040&o)>>23,a=8388607&o;let u;u=0===s?c<<15:255===s?c<<15|31744|(a?1:0):c<<15|s-127+15<<10|a>>13,n.call(this,e,u,r)}}else if(128===e){const t=new DataView(new ArrayBuffer(8)),n=DataView.prototype.setBigUint64,e=function(t,e,i){const r=0xFFFFFFFFFFFFFFFFn&e,o=e>>64n;n.call(this,t+(i?0:8),r,i),n.call(this,t+(i?8:0),o,i)};l=function(n,i,r){t.setFloat64(0,i,r);const o=t.getBigUint64(0,r),c=o>>63n,s=(0x7FF0000000000000n&o)>>52n,a=0x000FFFFFFFFFFFFFn&o;let u;u=0n===s?c<<127n|a<<60n:0x07FFn===s?c<<127n|0x7FFFn<<112n|(a?1n:0n):c<<127n|s-1023n+16383n<<112n|a<<60n,e.call(this,n,u,r)}}}else if(t===n.Bool){const t=`Int${8*o}`,n=DataView.prototype[`set${t}`];l=function(t,e,i){n.call(this,t,e?1:0,i)}}}else{const i=DataView.prototype.getInt8,o=DataView.prototype.setInt8;if(t===n.Bool&&1===e){const t=1<<a;l=function(n,e){const r=i.call(this,n),c=e?r|t:r&~t;o.call(this,n,c)}}else if(t===n.Int&&a+e<=8)if(r){const t=2**(e-1),n=t-1,r=255^(n|t)<<a;l=function(e,c){let s=i.call(this,e);s=s&r|(c<0?t|c&n:c&n)<<a,o.call(this,e,s)}}else{const t=2**e-1,n=255^t<<a;l=function(e,r){const c=i.call(this,e)&n|(r&t)<<a;o.call(this,e,c)}}else{const n=B(e),i=new DataView(new ArrayBuffer(n)),o=m({type:t,bits:e,signed:r,bitOffset:0,align:n}),s=c(a,e,!1);l=function(t,n,e){o.call(i,0,n,e),s(this,i,t)}}}if(!l)throw new Error(`Missing setter: ${t}`);return Object.defineProperty(l,"name",{value:u,writable:!1}),V[u]=l,l}function v(t,n,e=!1){let i;return t instanceof DataView?i=t:t instanceof ArrayBuffer||t instanceof SharedArrayBuffer?i=new DataView(t):function(t){throw new TypeError(`Expect an ArrayBuffer or DataView with a byte length of ${t}`)}(n),e?i.byteLength%n!=0&&f(i.byteLength,n):i.byteLength!==n&&f(i.byteLength,n),i}function I(){return this[h]}function O(t,n,e,r,o,c){return`${t}${i(n,e,r)}${0===o?`Bit${c}`:""}`}function B(t){return[1,2,4,8].find((n=>8*n>=t))}const V={};function D(t,i){const{littleEndian:r=!0,runtimeSafety:o=!0}=i;switch(t.type){case n.Compound:case n.Pointer:{const{slot:n,structure:i}=t;return i.type===e.Primitive?function(){return this[y][n].get()}:function(){return this[y][n]}}case n.Bool:case n.Int:case n.Float:{const{bitOffset:n}=t,e=n>>3,i=d(t);return function(){return i.call(this[h],e,r)}}case n.Enum:{const{bitOffset:e,structure:i}=t,{constructor:c}=i,s=e>>3,a=d({...t,type:n.Int});return o?function(){const t=a.call(this[h],s,r),n=c(t);return n||function(t){throw new TypeError(`Value given does not correspond to an enum item: ${t}`)}(t),n}:function(){const t=a.call(this[h],s,r);return c(t)}}case n.Void:return function(){return null}}}function P(t,i){const{littleEndian:o=!0,runtimeSafety:c=!0}=i;let s;switch(t.type){case n.Compound:{const{slot:n,structure:e}=t,{constructor:i,copier:r}=e;s=function(t){t instanceof i||(t=new i(t));const e=this[y][n];r(e,t)}}break;case n.Pointer:{const{slot:n,structure:i,mutable:r}=t;if(!r)return;if(i.type===e.Primitive)return function(t){this[y][n].set(t)};{const{constructor:t}=i;return function(e){e instanceof t||(e=new t(e)),this[y][n]=e}}}case n.Bool:case n.Int:case n.Float:{const e=m(t),{type:i,bitOffset:a}=t,u=a>>3;if(c&&i===n.Int){const{bits:n,signed:i}=t,{min:c,max:a}=r(n,i);s=function(t){(t<c||t>a)&&l(n,i,t),e.call(this[h],u,t,o)}}else s=function(t){e.call(this[h],u,t,o)}}break;case n.Void:s=c?function(t){null!=t&&function(){throw new RangeError("Property can only be null")}()}:function(){};break;case n.Enum:{const{bitOffset:e,structure:i}=t,{constructor:r}=i,c=e>>3,s=m({...t,type:n.Int});return function(t){t instanceof r||function(t){throw new TypeError(`Enum item expected: ${t.name}`)}(r),s.call(this[h],c,t.valueOf(),o)}}}return s}function U(t,e){const{littleEndian:i=!0}=e;switch(t.type){case n.Compound:{const{structure:n,align:e}=t,{constructor:i}=n;return function(t){const n=this[y];if(!n[t]){const r=this[h],o=t*e;if(o>=0&&o+e<=r.byteLength){const e=new DataView(r.buffer,r.byteOffset+o,size);n[t]=new i(e)}else b(r.byteLength,0,t)}return n[t]}}case n.Pointer:return function(t){const n=this[y];if(!n[t]){const n=this[h],e=t*align;e>=0&&e+align<=n.byteLength||b(n.byteLength,align,t)}return n[t]};case n.Bool:case n.Int:case n.Float:{const{align:n}=t,e=d(t);return function(t){const r=this[h],o=t*n;try{return e.call(r,o,i)}catch{b(r.byteLength,0,t)}}}}}function j(t,e){const{littleEndian:i=!0,runtimeSafety:o=!0}=e;let c;switch(t.type){case n.Compound:{const{structure:n,align:e}=t,{constructor:i,copier:r}=n;c=function(t,n){n instanceof i||(n=new i(n));const o=this[y];let c=o[t];if(!c){const n=t*e;if(n>=0&&n+e<=dv.byteLength){const e=new DataView(dv.buffer,dv.byteOffset+n,size);c=o[t]=new i(e)}else b(dv.byteLength,0,t)}r(c,n)}}break;case n.Pointer:{const{structure:n,mutable:e,align:i}=t,{constructor:r}=n;if(!e)return;return function(t,n){n instanceof r||(n=new r(n));const e=this[h],o=t*i;o>=0&&o+i<=e.byteLength?this[y][t]=n:b(e.byteLength,0,t)}}case n.Bool:case n.Int:case n.Float:{const e=m(t),{type:s}=t;if(o&&s===n.Int){const{bits:n,signed:o,align:s}=t,{min:a,max:u}=r(n,o);c=function(t,r){(r<a||r>u)&&l(n,o,r);const c=t*s,f=this[h];try{e.call(f,c,r,i)}catch(n){g(n,f.byteLength,0,t)}}}else c=function(t,n){const r=t*align,o=this[h];try{e.call(o,r,n,i)}catch(n){g(n,o.byteLength,align,t)}}}}return c}function A(){const t=this,n=this.length;let e=0;return{next(){let i,r;return e<n?(i=t.get(e),r=!1,e++):r=!0,{value:i,done:r}}}}const E={},$={Int8:Int8Array,Uint8:Uint8Array,Int16:Int16Array,Uint16:Uint16Array,Int32:Int32Array,Uint32:Uint32Array,Int64:BigInt64Array,Uint64:BigUint64Array,Float32:Float32Array,Float64:Float64Array};function x(t,e){const{prototype:r}=t.constructor;Object.getOwnPropertyDescriptor(r,"dataView")||Object.defineProperties(r,{dataView:{get:I,configurable:!0,enumerable:!0}});const o=function(t){const e={};for(const{type:r,bits:o,signed:c}of t){if(r!==n.Int&&r!==n.Float)return;{const t=i(r,o,c),n=$[t];if(!n)return;e[t]=n}}const r=Object.entries(e);if(1!==r.length)return;const[o,c]=r[0];if(E[o])return E[o];const s=t[0].bits>>3,a=function(){if(!this[p]){const t=this[h];this[p]=new c(t.buffer,t.byteOffset,t.byteLength/s)}return this[p]};return E[o]=a,a}(e);o&&!Object.getOwnPropertyDescriptor(r,"typedArray")&&Object.defineProperties(r,{typedArray:{get:o,configurable:!0,enumerable:!0}})}t.attachMethods=function(t,n,e={}){const{constructor:i}=t;for(const t of n){const{name:n,argStruct:e,thunk:r,staticOnly:o}=t,c=function(...t){const n=new e;for(const[e,i]of t.entries())void 0!==i&&(n[e]=i);return r(n),n.return_value};if(Object.defineProperties(c,{name:{value:n,writable:!1}}),Object.defineProperties(i,{[n]:{value:c,configurable:!0,writable:!0}}),!o){const t=function(...t){const n=new e;n[0]=this;for(const[e,i]of t.entries())void 0!==i&&(n[e+1]=i);return r(n),n.return_value};Object.defineProperties(t,{name:{value:n,writable:!1}}),Object.defineProperties(i.prototype,{[n]:{value:t,configurable:!0,writable:!0}})}}},t.attachVariables=function(t,n,e={}){const{constructor:i}=t,{members:r,defaultPointers:o}=n,c={};for(const t of r){const n=D(t,e),i=P(t,e);c[t.name]={get:n,set:i,configurable:!0,enumerable:!0}}const s=Object.assign({},o);c[y]={value:s},Object.defineProperties(i,c)},t.createStructure=function(t,n){return{type:t,name:n,constructor:null,copier:null}},t.shapeStructure=function(t,i,r={}){switch(t.type){case e.Primitive:return function(t,n,e){const{size:i,members:[r],defaultData:c}=n,a=s(i),u=o(r.type,r.bits),l=D(r,e),f=P(r,e),b=t.constructor=function(t){let n,e,r;if(this?(void 0!==t&&(r=u(t)),n=this,e=new DataView(new ArrayBuffer(i)),c&&void 0===r&&a(e,c)):(n=Object.create(b.prototype),e=v(t,i)),Object.defineProperties(n,{[h]:{value:e}}),!this)return n};return t.copier=function(t,n){a(t[h],n[h])},t.size=i,Object.defineProperties(b.prototype,{get:{value:l,configurable:!0,writable:!0},set:{value:f,configurable:!0,writable:!0},[Symbol.toPrimitive]:{value:l,configurable:!0,writable:!0}}),b}(t,i,r);case e.Array:return function(t,n,e){const{size:i,members:[r],defaultData:o,exposeDataView:c=!1}=n,a=s(i),u=U(r,e),l=j(r,e),f=function(t,n){const{align:e}=t;return function(){return this[h].byteLength/e}}(r),b=t.constructor=function(t){let n,e,r;if(this?(void 0!==t&&(r=t),n=this,e=new DataView(new ArrayBuffer(i)),o&&void 0===r&&a(e,o)):(n=Object.create(b.prototype),e=v(t,i)),Object.defineProperties(n,{[h]:{value:e}}),!this)return n};t.size=i,Object.defineProperties(b.prototype,{get:{value:u,configurable:!0,writable:!0},set:{value:l,configurable:!0,writable:!0},length:{get:f,configurable:!0},[Symbol.iterator]:{value:A,configurable:!0}}),c&&x(t,[r]);return b}(t,i,r);case e.Struct:case e.ExternUnion:return function(t,e,i){const{size:r,members:o,defaultData:c,defaultPointers:a,exposeDataView:u=!1}=e,l=s(r),f={};for(const t of o){const n=D(t,i),e=P(t,i);f[t.name]={get:n,set:e,configurable:!0,enumerable:!0}}const b=!!o.find((t=>t.type===n.Compound||t.type===n.Pointer)),g=o.filter((t=>t.type===n.Compound)),p=g.length>0&&g.map((({structure:t,bitOffset:n,align:e,slot:i})=>({constructor:t.constructor,slot:i,offset:n>>3,align:e}))),w=t.constructor=function(t){let n,e,i;if(this?(void 0!==t&&(i=t),n=this,e=new DataView(new ArrayBuffer(r)),c&&void 0===i&&l(e,c)):(n=Object.create(w.prototype),e=v(t,r)),Object.defineProperties(n,{[h]:{value:e}}),Object.defineProperties(n,f),b){const t=Object.assign({},a);if(p)for(const{constructor:n,slot:i,offset:r,align:o}of p){const c=new n(new DataView(e.buffer,r,o));t[i]=c}Object.defineProperties(n,{[y]:{value:t}})}if(!this)return n};t.copier=function(t,n){l(t[h],n[h]),b&&Object.assign(t[y],n[y])},t.size=r,u&&x(t,o);return w}(t,i,r);case e.TaggedUnion:return null;case e.Enumeration:return function(t,n,e){const{size:i,members:r,defaultData:c}=n,[s]=r,a=o(s.type,s.bits),u=U(s,e),l=r.length,f={},b=t.constructor=function(t){this&&function(){throw new TypeError('Cannot create new enum item\nCall function without the use of "new" to obtain an enum object')}();let n=-1;if(y)n=Number(t);else{const e=a(t);for(let t=0;t<l;t++){if(u.call(b,t)===e){n=t;break}}}return f[n]};t.size=i,Object.defineProperties(b,{[h]:{value:c},[F]:{value:f}});const g=function(){const t=this[w];return u.call(b,t)};Object.defineProperties(b.prototype,{[Symbol.toPrimitive]:{value:g,configurable:!0,writable:!0},toJSON:{value:g,configurable:!0,writable:!0}});const y=(()=>{try{for(let t=0;t<l;t++)if(get.call(b,t)!==t)return!1;return!0}catch(t){return!1}})();for(const[t,{name:n}]of r.entries()){const e=Object.create(b.prototype);Object.defineProperties(e,{[w]:{value:t}}),Object.defineProperties(b,{[n]:{value:e,configurable:!0,enumerable:!0,writable:!0}}),f[t]=e}return b}(t,i,r)}}}({});
+(function (exports) {
+  'use strict';
+
+  const MemberType = {
+    Void: 0,
+    Bool: 1,
+    Int: 2,
+    Float: 3,
+    Enum: 4,
+    Compound: 5,
+    Pointer: 6,
+  };
+
+  const StructureType = {
+    Primitive: 0,
+    Array: 1,
+    Struct: 2,
+    ExternUnion: 3,
+    TaggedUnion: 4,
+    ErrorUnion: 5,
+    Enumeration: 6,
+    Optional: 7,
+    Opaque: 8,
+  };
+
+  function getTypeName(type, signed, bitSize) {
+    if (type === MemberType.Int) {
+      return `${bitSize <= 32 ? '' : 'Big' }${signed ? 'Int' : 'Uint'}${bitSize}`;
+    } else if (type === MemberType.Float) {
+      return `Float${bitSize}`;
+    } else if (type === MemberType.Bool) {
+      return `Bool`;
+    } else if (type === MemberType.Void) {
+      return `Null`;
+    }
+  }
+    
+  function getIntRange(signed, bitSize) {
+    if (bitSize <= 32) {
+      const max = 2 ** (signed ? bitSize - 1 : bitSize) - 1;
+      const min = (signed) ? -(2 ** (bitSize - 1)) : 0;
+      return { min, max };
+    } else {
+      bitSize = BigInt(bitSize);
+      const max = 2n ** (signed ? bitSize - 1n : bitSize) - 1n;
+      const min = (signed) ? -(2n ** (bitSize - 1n)) : 0n;
+      return { min, max };
+    }
+  }
+
+  function getPrimitive(type, bitSize) {
+    if (type === MemberType.Int) {
+      if (bitSize <= 32) {
+        return Number;
+      } else {
+        return BigInt;
+      }
+    } else if (type === MemberType.Float) {
+      return Number;
+    } else if (type === MemberType.Bool) {
+      return Boolean;
+    } else {
+      return Object;
+    }
+  }
+
+  function obtainBitAlignFunction(bitPos, bitSize, toAligned) {
+    if (bitPos + bitSize <= 8) {
+      const mask = (2 ** bitSize) - 1;
+      if (toAligned) {
+        // from single byte
+        return function(dest, src, offset) {
+          const n = src.getUint8(offset);
+          const b = (n >> bitPos) & mask;
+          dest.setUint8(0, b);
+        };
+      } else {
+        // to single byte
+        const destMask = 0xFF ^ (mask << bitPos);
+        return function(dest, src, offset) {
+          const n = src.getUint8(0);
+          const d = dest.getUint8(offset);
+          const b = (d & destMask) | ((n & mask) << bitPos);
+          dest.setUint8(offset, b);
+        };
+      }
+    } else {
+      const leadBits = 8 - bitPos;
+      const leadMask = (2 ** leadBits) - 1;
+      if (toAligned) {
+        const trailBits = bitSize % 8;
+        const trailMask = (2 ** trailBits) - 1;  
+        return function(dest, src, offset) {
+          let i = offset, j = 0;
+          let n = src.getUint8(i++), b;
+          let bitBuf = (n >> bitPos) & leadMask; 
+          let bitCount = leadBits;
+          let remaining = bitSize;
+          do {
+            if (remaining > bitCount) {
+              n = src.getUint8(i++);
+              bitBuf = bitBuf | (n << bitCount);  
+              //bitCount += 8;
+            }
+            b = (remaining >= 8) ? bitBuf & 0xFF : bitBuf & trailMask;
+            dest.setUint8(j++, b);
+            bitBuf >>= 8;
+            //bitCount -= 8;
+            remaining -= 8;
+          } while (remaining > 0);
+        }
+      } else {
+        const trailBits = (bitSize - leadBits) % 8;
+        const trailMask = (2 ** trailBits) - 1;  
+        const destMask1 = 0xFF ^ (leadMask << bitPos);
+        const destMask2 = 0xFF ^ trailMask;
+        return function(dest, src, offset) {
+          let i = 0, j = offset;
+          // preserve bits ahead of bitPos
+          let d = dest.getUint8(j), n, b;
+          let bitBuf = d & destMask1;
+          let bitCount = bitPos;
+          let remaining = bitSize + bitCount;
+          do {
+            if (remaining > bitCount) {
+              n = src.getUint8(i++);
+              bitBuf = bitBuf | (n << bitCount);
+              bitCount += 8;
+            }
+            if (remaining >= 8) {
+              b = bitBuf & 0xFF;
+            } else {
+              // preserve bits at the destination sitting behind the trailing bits 
+              d = dest.getUint8(j);
+              b = (d & destMask2) | (bitBuf & trailMask);
+            }
+            dest.setUint8(j++, b);
+            bitBuf >>= 8;
+            bitCount -= 8;
+            remaining -= 8;
+          } while (remaining > 0);
+        }
+      }
+    }
+  }
+
+  function obtainCopyFunction(size) {
+    return (size & 0x03) ? copy1 : copy4;
+  }
+
+  function copy1(dest, src) {
+    for (let i = 0, len = dest.byteLength; i < len; i++) {
+      dest.setInt8(i, src.getInt8(i));
+    }
+  }
+
+  function copy4(dest, src) {
+    for (let i = 0, len = dest.byteLength; i < len; i += 4) {
+      dest.setInt32(i, src.getInt32(i));
+    }
+  }
+
+  function throwOverflow(signed, bitSize, value) {
+    const typeName = getTypeName(MemberType.Int, signed, bitSize);
+    throw new TypeError(`${typeName} cannot represent value '${value}'`);
+  }
+
+  function throwSizeMismatch(actual, expected) {
+    throw new TypeError(`Struct size mismatch: ${actual} != ${expected}`);
+  }
+
+  function throwBufferExpected(size) {
+    throw new TypeError(`Expect an ArrayBuffer or DataView with a byte length of ${size}`);
+  }
+
+  function throwOutOfBound(length, align, index) {
+    throw new RangeError(`Illegal array index: ${index}`);
+  }
+
+  function throwNotNull() {
+    throw new RangeError(`Property can only be null`);
+  }
+
+  function rethrowRangeError(err, length, align, index) {
+    if (err instanceof RangeError) {
+      throwOutOfBound(length, align, index);
+    } else {
+      throw err;
+    }
+  }
+
+  function throwNoNewEnum() {
+    throw new TypeError(`Cannot create new enum item\nCall function without the use of "new" to obtain an enum object`);
+  }
+
+  function throwInvalidEnum(value) {
+    throw new TypeError(`Value given does not correspond to an enum item: ${value}`);
+  }
+
+  function throwEnumExpected(constructor) {
+    throw new TypeError(`Enum item expected: ${constructor.name}`);
+  }
+
+  const DATA = Symbol('data');
+  const RELOCATABLE = Symbol('relocatable');
+
+  const TYPED_ARRAY = Symbol('typedArray');
+  const ENUM_INDEX = Symbol('enumIndex');
+  const ENUM_ITEMS = Symbol('enumItems');
+
+  function obtainDataViewGetter({ type, signed, bitOffset, bitSize, byteSize }) {
+    const bitPos = bitOffset & 0x07;
+    const name = getMethodName('get', type, signed, bitPos, bitSize, byteSize);
+    if (DataView.prototype[name]) {
+      return DataView.prototype[name];
+    }
+    if (methodCache[name]) {
+      return methodCache[name];
+    }
+    let fn;
+    if (byteSize !== 0) {
+      if (type === MemberType.Int) {
+        if (bitSize < 64) {
+          // actual number of bits needed when stored byte-aligned
+          const typeName = getTypeName(type, signed, byteSize * 8);
+          const get = DataView.prototype[`get${typeName}`];
+          if (signed) {
+            const signMask = (bitSize <= 32) ? 2 ** (bitSize - 1) : 2n ** BigInt(bitSize - 1);
+            const valueMask = (bitSize <= 32) ? signMask - 1 : signMask - 1n; 
+            fn = function(offset, littleEndian) {
+              const n = get.call(this, offset, littleEndian);
+              return (n & valueMask) - (n & signMask);
+            };
+          } else {
+            const valueMask = (bitSize <= 32) ? (2 ** bitSize) - 1 : (2n ** BigInt(bitSize)) - 1n; 
+            fn = function(offset, littleEndian) {
+              const n = get.call(this, offset, littleEndian);
+              return n & valueMask;
+            };
+          }
+        } else {
+          const getWord = DataView.prototype.getBigUint64;
+          const wordCount = Math.ceil(bitSize / 64);
+          const get = function(offset, littleEndian) {
+            let n = 0n;
+            if (littleEndian) {
+              for (let i = 0, j = offset + (wordCount - 1) * 8; i < wordCount; i++, j -= 8) {
+                const w = getWord.call(this, j, littleEndian);
+                n = (n << 64n) | w;
+              }
+            } else {
+              for (let i = 0, j = offset; i < wordCount; i++, j += 8) {
+                const w = getWord.call(this, j, littleEndian);
+                n = (n << 64n) | w;
+              }
+            }
+            return n;
+          };
+          if (signed) {
+            const signMask = 2n ** BigInt(bitSize - 1);
+            const valueMask = signMask - 1n; 
+            fn = function(offset, littleEndian) {
+              const n = get.call(this, offset, littleEndian);
+              return (n & valueMask) - (n & signMask);
+            };
+          } else {
+            const valueMask =  (2n ** BigInt(bitSize)) - 1n; 
+            fn = function(offset, littleEndian) {
+              const n = get.call(this, offset, littleEndian);
+              return n & valueMask;
+            };
+          }
+        }
+      } else if (type === MemberType.Float) {
+        if (bitSize === 16) {
+          const dest = new DataView(new ArrayBuffer(4));
+          const get = DataView.prototype.getUint16;
+          fn = function(offset, littleEndian) {
+            const n = get.call(this, offset, littleEndian);
+            const sign = n >>> 15;
+            const exp = (n & 0x7C00) >> 10;
+            const frac = n & 0x03FF;
+            if (exp === 0) {
+              return (sign) ? -0 : 0;
+            } else if (exp === 0x1F) {
+              if (!frac) {
+                return (sign) ? -Infinity : Infinity;
+              } else {
+                return NaN;
+              }
+            }
+            const n32 = (sign << 31) | ((exp - 15 + 127) << 23) | (frac << 13);
+            dest.setUint32(0, n32, littleEndian);
+            return dest.getFloat32(0, littleEndian);
+          };
+        } else if (bitSize === 128) {
+          const dest = new DataView(new ArrayBuffer(8));
+          const getWord = DataView.prototype.getBigUint64;
+          const get = function(offset, littleEndian) {
+            const w1 = getWord.call(this, offset, littleEndian);
+            const w2 = getWord.call(this, offset + 8, littleEndian);
+            return (littleEndian) ? w1 | w2 << 64n : w1 << 64n | w2;
+          };
+          fn = function(offset, littleEndian) {
+            const n = get.call(this, offset, littleEndian);
+            const sign = n >> 127n;
+            const exp = (n & 0x7FFF0000000000000000000000000000n) >> 112n;
+            const frac = n & 0x0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFn;
+            if (exp === 0n) {
+              return (sign) ? -0 : 0;
+            } else if (exp === 0x7FFFn) {
+              if (!frac) {
+                return (sign) ? -Infinity : Infinity;
+              } else {
+                return NaN;
+              }
+            }
+            const n64 = (sign << 63n) | ((exp - 16383n + 1023n) << 52n) | (frac >> 60n);
+            dest.setBigUint64(0, n64, littleEndian);
+            return dest.getFloat64(0, littleEndian);
+          };
+        }
+      } else if (type === MemberType.Bool) {
+        const typeName = getTypeName(MemberType.Int, true, byteSize * 8);
+        const get = DataView.prototype[`get${typeName}`];
+        fn = function(offset, littleEndian) {
+          return !!get.call(this, offset, littleEndian);
+        };
+      }     
+    } else {
+      const get = DataView.prototype.getUint8;
+      if (type === MemberType.Bool && bitSize === 1) {
+        // bitfield--common enough to warrant special handle
+        const mask = 1 << bitPos;
+        fn = function(offset) {
+          const n = get.call(this, offset);
+          return !!(n & mask);
+        };
+      } else if (type === MemberType.Int && bitPos + bitSize <= 8) {
+        // sub-8-bit numbers also have real use cases
+        if (signed) {
+          const signMask = 2 ** (bitSize - 1);
+          const valueMask = signMask - 1;
+          fn = function(offset) {
+            const n = get.call(this, offset);
+            const s = n >>> bitPos;
+            return (s & valueMask) - (s & signMask);
+          };
+        } else {
+          const valueMask = (2 ** bitSize - 1) << bitPos; 
+          fn = function(offset) {
+            const n = get.call(this, offset);
+            const s = n >>> bitPos;
+            return s & valueMask;
+          };
+        }
+      } else {
+        // pathological usage--handle it anyway by copying the bitSize into a 
+        // temporary buffer, bit-aligning the data
+        const byteSize = getByteSize(bitSize);
+        const dest = new DataView(new ArrayBuffer(byteSize));
+        const getAligned = obtainDataViewGetter({ type, bitSize, signed, bitOffset: 0, byteSize });
+        const copyBits = obtainBitAlignFunction(bitPos, bitSize, true);
+        fn = function(offset, littleEndian) {
+          copyBits(dest, this, offset);
+          return getAligned.call(dest, 0, littleEndian);
+        };
+      }
+    }
+    if (!fn) {
+      throw new Error(`Missing getter: ${type}`)
+    }
+    Object.defineProperty(fn, 'name', { value: name, writable: false });
+    methodCache[name] = fn;
+    return fn;
+  }
+
+  function obtainDataViewSetter({ type, bitSize, signed, byteSize, bitOffset }) {
+    const bitPos = bitOffset & 0x07;
+    const name = getMethodName('set', type, signed, bitPos, bitSize, byteSize);
+    if (DataView.prototype[name]) {
+      return DataView.prototype[name];
+    }
+    if (methodCache[name]) {
+      return methodCache[name];
+    }
+    let fn;
+    if (byteSize !== 0) {
+      if (type === MemberType.Int) {
+        if (bitSize < 64) {
+          const typeName = getTypeName(type, signed, byteSize * 8);
+          const set = DataView.prototype[`set${typeName}`];
+          if (signed) {
+            const signMask = (bitSize <= 32) ? 2 ** (bitSize - 1) : 2n ** BigInt(bitSize - 1);
+            const valueMask = (bitSize <= 32) ? signMask - 1 : signMask - 1n; 
+            fn = function(offset, v, littleEndian) {
+              const n = (v < 0) ? signMask | (v & valueMask) : v & valueMask;
+              set.call(this, offset, n, littleEndian);
+            };
+          } else {
+            const valueMask = (bitSize <= 32) ? (2 ** bitSize) - 1: (2n ** BigInt(bitSize)) - 1n; 
+            fn = function(offset, v, littleEndian) {
+              const n = v & valueMask;
+              set.call(this, offset, n, littleEndian);
+            };
+          }
+        } else {
+          const setWord = DataView.prototype.setBigUint64;
+          const wordCount = Math.ceil(bitSize / 64);
+          const set = function(offset, v, littleEndian) {
+            let n = v;
+            const mask = 0xFFFFFFFFFFFFFFFFn; 
+            if (littleEndian) {
+              for (let i = 0, j = offset; i < wordCount; i++, j += 8) {
+                const w = n & mask;
+                setWord.call(this, j, w, littleEndian);
+                n >>= 64n;
+              }
+            } else {
+              n <<= BigInt(wordCount * 64 - bitSize);
+              for (let i = 0, j = offset + (wordCount - 1) * 8; i < wordCount; i++, j -= 8) {
+                const w = n & mask;
+                setWord.call(this, j, w, littleEndian);
+                n >>= 64n;
+              }
+            }
+            return n;
+          };
+          if (signed) {
+            const signMask = (bitSize <= 32) ? 2 ** (bitSize - 1) : 2n ** BigInt(bitSize - 1);
+            const valueMask = (bitSize <= 32) ? signMask - 1 : signMask - 1n; 
+            fn = function(offset, v, littleEndian) {
+              const n = (v < 0) ? signMask | (v & valueMask) : v & valueMask;
+              set.call(this, offset, n, littleEndian);
+            };
+          } else {
+            const valueMask = (bitSize <= 32) ? (2 ** bitSize) - 1: (2n ** BigInt(bitSize)) - 1n; 
+            fn = function(offset, v, littleEndian) {
+              const n = v & valueMask;
+              set.call(this, offset, n, littleEndian);
+            };
+          }
+        }
+      } else if (type === MemberType.Float) {
+        if (bitSize === 16) {
+          const src = new DataView(new ArrayBuffer(4));
+          const set = DataView.prototype.setUint16;
+          fn = function(offset, v, littleEndian) {
+            src.setFloat32(0, v, littleEndian);
+            const n = src.getUint32(0, littleEndian);
+            const sign = n >>> 31;
+            const exp = (n & 0x7F800000) >> 23;
+            const frac = n & 0x007FFFFF;
+            let n16;
+            if (exp === 0) {
+              n16 = sign << 15;
+            } else if (exp === 0xFF) {
+              n16 = sign << 15 | 0x1F << 10 | ((frac) ? 1 : 0);
+            } else {
+              n16 = sign << 15 | (exp - 127 + 15) << 10 | (frac >> 13);
+            }
+            set.call(this, offset, n16, littleEndian);
+          };
+        } else if (bitSize === 128) {
+          const src = new DataView(new ArrayBuffer(8));
+          const setWord = DataView.prototype.setBigUint64;
+          const set = function(offset, v, littleEndian) {
+            const w1 = v & 0xFFFFFFFFFFFFFFFFn;
+            const w2 = v >> 64n;
+            setWord.call(this, offset + (littleEndian ? 0 : 8), w1, littleEndian);
+            setWord.call(this, offset + (littleEndian ? 8 : 0), w2, littleEndian);
+          };
+          fn = function(offset, v, littleEndian) {
+            src.setFloat64(0, v, littleEndian);
+            const n = src.getBigUint64(0, littleEndian);
+            const sign = n >> 63n;
+            const exp = (n & 0x7FF0000000000000n) >> 52n;
+            const frac = n & 0x000FFFFFFFFFFFFFn;
+            let n128;
+            if (exp === 0n) {
+              n128 = sign << 127n | (frac << 60n);
+            } else if (exp === 0x07FFn) {
+              n128 = sign << 127n | 0x7FFFn << 112n | ((frac) ? 1n : 0n);
+            } else {
+              n128 = sign << 127n | (exp - 1023n + 16383n) << 112n | (frac << 60n);
+            }
+            set.call(this, offset, n128, littleEndian);
+          };
+        }
+      } else if (type === MemberType.Bool) {
+        const typeName = getTypeName(MemberType.Int, true, byteSize * 8);
+        const set = DataView.prototype[`set${typeName}`];
+        fn = function(offset, v, littleEndian) {
+          set.call(this, offset, v ? 1 : 0, littleEndian);
+        };
+      }
+    } else {
+      const get = DataView.prototype.getInt8;
+      const set = DataView.prototype.setInt8;
+      if (type === MemberType.Bool && bitSize === 1) {
+        const mask = 1 << bitPos;
+        fn = function(offset, value) {
+          const n = get.call(this, offset);
+          const b = (value) ? n | mask : n & ~mask;
+          set.call(this, offset, b);
+        };
+      } else if (type === MemberType.Int && bitPos + bitSize <= 8) {
+        if (signed) {
+          const signMask = 2 ** (bitSize - 1);        
+          const valueMask = signMask - 1;
+          const outsideMask = 0xFF ^ ((valueMask | signMask) << bitPos);
+          fn = function(offset, v) {
+            let b = get.call(this, offset);
+            const n = (v < 0) ? signMask | (v & valueMask) : v & valueMask;
+            b = (b & outsideMask) | (n << bitPos);
+            set.call(this, offset, b);
+          };
+        } else {
+          const valueMask = (2 ** bitSize) - 1; 
+          const outsideMask = 0xFF ^ (valueMask << bitPos);
+          fn = function(offset, value) {
+            const n = get.call(this, offset);
+            const v = value & valueMask;
+            const b = (n & outsideMask) | (v << bitPos);
+            set.call(this, offset, b);
+          };
+        }
+      } else {
+        const byteSize = getByteSize(bitSize);
+        const src = new DataView(new ArrayBuffer(byteSize));
+        const setAligned = obtainDataViewSetter({ type, signed, bitOffset: 0, bitSize, byteSize });
+        const applyBits = obtainBitAlignFunction(bitPos, bitSize, false);
+        fn = function(offset, value, littleEndian) {
+          setAligned.call(src, 0, value, littleEndian);
+          applyBits(this, src, offset);
+        };
+      }
+    }
+    if (!fn) {
+      throw new Error(`Missing setter: ${type}`)
+    }
+    Object.defineProperty(fn, 'name', { value: name, writable: false });
+    methodCache[name] = fn;
+    return fn;
+  }
+
+  function obtainDataView(arg, size, multiple = false) {
+    let dv;
+    if (arg instanceof DataView) {
+      dv = arg;
+    } else if (arg instanceof ArrayBuffer || arg instanceof SharedArrayBuffer) {
+      dv = new DataView(arg);
+    } else {
+      throwBufferExpected(size);
+    }
+    if (multiple) {
+      if (dv.byteLength % size !== 0) {
+        throwSizeMismatch(dv.byteLength, size);
+      }
+    } else {
+      if (dv.byteLength !== size) {
+        throwSizeMismatch(dv.byteLength, size);
+      } 
+    }
+    return dv;
+  }
+
+  function getDataView() {
+    return this[DATA];
+  }
+
+  function getMethodName(prefix, type, signed, bitPos, bitSize, byteSize) {
+    const typeName = getTypeName(type, signed, bitSize);
+    const suffix = (byteSize === 0) ? `Bit${bitPos}` : ``;
+    return `${prefix}${typeName}${suffix}`;
+  }
+
+  function getByteSize(bitSize) {
+    return [ 1, 2, 4, 8 ].find(b => b * 8 >= bitSize) ?? Math.ceil(bitSize / 64) * 64;
+  }
+    
+  const methodCache = {};
+
+  function obtainGetter(member, options) {
+    const {
+      littleEndian = true,
+      runtimeSafety = true,
+    } = options;
+    switch (member.type) {
+      case MemberType.Compound:
+      case MemberType.Pointer: {
+        // get object from slot
+        const { slot, structure } = member;
+        if (structure.type === StructureType.Primitive) {
+          // automatically deferencing pointers to primitives
+          return function() { return this[RELOCATABLE][slot].get() };
+        } else {
+          return function() { return this[RELOCATABLE][slot] };
+        }
+      } 
+      case MemberType.Bool:
+      case MemberType.Int:
+      case MemberType.Float: {
+        // get value from buffer through DataView
+        const { bitOffset } = member;
+        const offset = bitOffset >> 3;
+        const get = obtainDataViewGetter(member);
+        return function() { return get.call(this[DATA], offset, littleEndian) };
+      }
+      case MemberType.Enum: {
+        const { bitOffset, structure } = member;
+        const { constructor } = structure;
+        const offset = bitOffset >> 3;
+        const get = obtainDataViewGetter({ ...member, type: MemberType.Int });
+        if (runtimeSafety) {
+          return function() {
+            const value = get.call(this[DATA], offset, littleEndian);
+            // the enumeration constructor returns the singleton object for the value
+            const object = constructor(value);
+            if (!object) {
+              throwInvalidEnum(value);
+            }
+            return object;
+          }; 
+        } else {
+          return function() {
+            const value = get.call(this[DATA], offset, littleEndian);
+            return constructor(value);
+          }; 
+        }
+      }
+      case MemberType.Void: {
+        return function() { return null }; 
+      }
+    }
+  }
+
+  function obtainSetter(member, options) {
+    const {
+      littleEndian = true,
+      runtimeSafety = true,
+    } = options;
+    let fn;
+    switch (member.type) {
+      case MemberType.Compound: {
+        const { slot, structure } = member;
+        const { constructor, copier } = structure;
+        fn = function(v) {
+          if (!(v instanceof constructor)) {
+            v = new constructor(v);
+          }
+          const reloc = this[RELOCATABLE][slot];
+          copier(reloc, v);
+        };  
+      } break;
+      case MemberType.Pointer: {
+        const { slot, structure, mutable } = member;
+        if (!mutable) {
+          return;
+        } 
+        if (structure.type === StructureType.Primitive) {
+          return function(v) { this[RELOCATABLE][slot].set(v); };
+        } else {
+          const { constructor } = structure;
+          return function(v) {
+            if (!(v instanceof constructor)) {
+              v = new constructor(v);
+            }
+            this[RELOCATABLE][slot] = v;
+          };
+        }
+      }
+      case MemberType.Bool:
+      case MemberType.Int:
+      case MemberType.Float: {
+        // change buffer through DataView
+        const set = obtainDataViewSetter(member);
+        const { type, bitOffset } = member;
+        const offset = bitOffset >> 3;
+        if (runtimeSafety && type === MemberType.Int) {
+          const { signed, bitSize } = member;
+          const { min, max } = getIntRange(signed, bitSize);
+          fn = function(v) { 
+            if (v < min || v > max) {
+              throwOverflow(signed, bitSize, v);
+            }
+            set.call(this[DATA], offset, v, littleEndian);
+          };
+        } else {
+          fn = function(v) { set.call(this[DATA], offset, v, littleEndian); };
+        }
+      } break;
+      case MemberType.Void: {
+        if (runtimeSafety) {
+          fn = function(v) { 
+            if (v != null) {
+              throwNotNull();
+            }
+          };
+        } else {
+          fn = function() {};
+        }
+      } break;
+      case MemberType.Enum: {
+        const { bitOffset, structure } = member;
+        const { constructor } = structure;
+        const offset = bitOffset >> 3;
+        const set = obtainDataViewSetter({ ...member, type: MemberType.Int });
+        return function(v) {
+          if (!(v instanceof constructor)) {
+            throwEnumExpected(constructor);
+          }
+          set.call(this[DATA], offset, v.valueOf(), littleEndian);
+        }; 
+      }
+    }
+    return fn;
+  }
+
+  function obtainArrayLengthGetter(member, options) {
+    const { byteSize } = member;
+    let fn = function() {
+      const dv = this[DATA];
+      return dv.byteLength / byteSize;
+    };
+    return fn;
+  }
+
+  function obtainArrayGetter(member, options) {
+    const {
+      littleEndian = true,
+    } = options;
+    switch (member.type) {
+      case MemberType.Compound: {
+        const { structure, byteSize } = member;
+        const { constructor } = structure;
+        return function(index) { 
+          const relocs = this[RELOCATABLE];
+          if (!relocs[index]) {
+            const dv = this[DATA];
+            const offset = index * byteSize;
+            if (offset >= 0 && offset + byteSize <= dv.byteLength) {
+              const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
+              relocs[index] = new constructor(slice);
+            } else {
+              throwOutOfBound(dv.byteLength, byteSize, index);
+            }
+          }
+          return relocs[index]; 
+        };
+      }
+      case MemberType.Pointer: {
+        return function(index) { 
+          const relocs = this[RELOCATABLE];
+          if (!relocs[index]) {
+            const dv = this[DATA];
+            const offset = index * byteSize;
+            if (offset >= 0 && offset + byteSize <= dv.byteLength) ; else {
+              throwOutOfBound(dv.byteLength, byteSize, index);
+            }
+          }
+          return relocs[index]; 
+        };
+      } 
+      case MemberType.Bool:
+      case MemberType.Int:
+      case MemberType.Float: {
+        const { byteSize } = member;
+        const get = obtainDataViewGetter(member);
+        return function(index) {
+          const dv = this[DATA];
+          const offset = index * byteSize;
+          try {
+            return get.call(dv, offset, littleEndian) ;
+          } catch {
+            throwOutOfBound(dv.byteLength, byteSize, index);
+          }
+        };
+      }
+    }
+  }
+
+  function obtainArraySetter(member, options) {
+    const {
+      littleEndian = true,
+      runtimeSafety = true,
+    } = options;
+    let fn;
+    switch (member.type) {
+      case MemberType.Compound: {
+        const { structure, byteSize } = member;
+        const { constructor, copier } = structure;
+        fn = function(index, v) {
+          if (!(v instanceof constructor)) {
+            v = new constructor(v);
+          }
+          const relocs = this[RELOCATABLE];
+          let reloc = relocs[index];
+          if (!reloc) {
+            const offset = index * byteSize;
+            if (offset >= 0 && offset + byteSize <= dv.byteLength) {
+              const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
+              reloc = relocs[index] = new constructor(slice);
+            } else {
+              throwOutOfBound(dv.byteLength, byteSize, index);
+            }
+          }
+          copier(reloc, v);
+        };  
+      } break;
+      case MemberType.Pointer: {
+        const { structure, mutable, byteSize } = member;
+        const { constructor } = structure;
+        if (!mutable) {
+          return;
+        } 
+        return function(index, v) {
+          if (!(v instanceof constructor)) {
+            v = new constructor(v);
+          }
+          const dv = this[DATA];
+          const offset = index * byteSize;
+          if (offset >= 0 && offset + byteSize <= dv.byteLength) {
+            this[RELOCATABLE][index] = v;
+          } else {
+            throwOutOfBound(dv.byteLength, byteSize, index);
+          }
+        };    
+      }
+      case MemberType.Bool:
+      case MemberType.Int:
+      case MemberType.Float: {
+        // change buffer through DataView
+        const set = obtainDataViewSetter(member);
+        const { type } = member;
+        if (runtimeSafety && type === MemberType.Int) {
+          const { signed, bitSize, byteSize } = member;
+          const { min, max } = getIntRange(signed, bitSize);
+          fn = function(index, v) { 
+            if (v < min || v > max) {
+              throwOverflow(signed, bitSize, v);
+            }
+            const offset = index * byteSize;
+            const dv = this[DATA];
+            try {
+              set.call(dv, offset, v, littleEndian);
+            } catch (err) {
+              rethrowRangeError(err, dv.byteLength, byteSize, index);
+            }
+          };
+        } else {
+          fn = function(index, v) { 
+            const offset = index * byteSize;
+            const dv = this[DATA];
+            try {
+              set.call(dv, offset, v, littleEndian);
+            } catch (err) {
+              rethrowRangeError(err, dv.byteLength, byteSize, index);
+            }
+          };
+        }
+      } break;
+    }
+    return fn;
+  }
+
+  function getArrayIterator() {
+    const self = this;
+    const length = this.length;
+    let index = 0;
+    return {
+      next() {
+        let value, done;
+        if (index < length) {
+          value = self.get(index);
+          done = false;
+          index++;
+        } else {
+          done = true;
+        }
+        return { value, done };
+      },
+    };
+  }
+
+  function obtainTypedArrayGetter(members) {
+    const hash = {};
+    for (const { type, signed, bitSize, byteSize } of members) {
+      if (type === MemberType.Int || type === MemberType.Float) {
+        const typeName = getTypeName(type, signed, bitSize);
+        const constructor = typedArrays[typeName];
+        if (!constructor) {
+          return;
+        }
+        hash[typeName] = constructor;
+      } else {
+        return;
+      }
+    }
+    const entries = Object.entries(hash);
+    if (entries.length !== 1) {
+      return;
+    }
+    const [ typeName, constructor ] = entries[0];
+    if (typedArrayGetters[typeName]) {
+      return typedArrayGetters[typeName];
+    }
+    const { byteSize } = members[0];
+    const fn = function() {
+      if (!this[TYPED_ARRAY]) {
+        const dv = this[DATA];
+        this[TYPED_ARRAY] = new constructor(dv.buffer, dv.byteOffset, dv.byteLength / byteSize);
+      }
+      return this[TYPED_ARRAY];
+    };
+    typedArrayGetters[typeName] = fn;
+    return fn;
+  }
+
+  const typedArrayGetters = {};
+
+  const typedArrays = {
+    Int8: Int8Array,
+    Uint8: Uint8Array,
+    Int16: Int16Array,
+    Uint16: Uint16Array,
+    Int32: Int32Array,
+    Uint32: Uint32Array,
+    Int64: BigInt64Array,
+    Uint64: BigUint64Array,
+    Float32: Float32Array,
+    Float64: Float64Array,
+  };
+
+  function createStructure(type, name) {
+    return { type, name, constructor: null, copier: null };
+  }
+
+  function shapeStructure(s, def, options = {}) {
+    switch (s.type) {
+      case StructureType.Primitive: 
+        return shapePrimitive(s, def, options);
+      case StructureType.Array:
+        return shapeArray(s, def, options);
+      case StructureType.Struct:
+      case StructureType.ExternUnion:
+        return shapeStruct(s, def, options);
+      case StructureType.TaggedUnion:
+        return null; // TODO
+      case StructureType.Enumeration:
+        return shapeEnumeration(s, def, options);
+    }
+  }
+
+  function shapePrimitive(s, def, options) {
+    const { 
+      size,
+      members: [ member ],
+      defaultData,
+    } = def;
+    const copy = obtainCopyFunction(size);
+    const primitive = getPrimitive(member.type, member.bitSize);
+    const get = obtainGetter(member, options);
+    const set = obtainSetter(member, options);
+    const constructor = s.constructor = function(arg) {
+      let self, dv, init;
+      if (this) {
+        // new operation--expect matching primitive
+        if (arg !== undefined) {
+          init = primitive(arg);
+        }
+        self = this;
+        dv = new DataView(new ArrayBuffer(size));
+        if (defaultData && init === undefined) {
+          copy(dv, defaultData);
+        }
+      } else {
+        self = Object.create(constructor.prototype);
+        dv = obtainDataView(arg, size);
+      }
+      Object.defineProperties(self, {
+        [DATA]: { value: dv },
+      });
+      if (!this) {
+        return self;
+      }
+    };
+    s.copier = function (dest, src) {
+      copy(dest[DATA], src[DATA]);
+    };
+    s.size = size;
+    Object.defineProperties(constructor.prototype, {
+      get: { value: get, configurable: true, writable: true },
+      set: { value: set, configurable: true, writable: true },
+      [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
+    });
+    return constructor;
+  }
+
+  function shapeArray(s, def, options) {
+    const {
+      size,
+      members: [ member ],
+      defaultData,
+      exposeDataView = false,
+    } = def; 
+    const copy = obtainCopyFunction(size); 
+    const get = obtainArrayGetter(member, options);
+    const set = obtainArraySetter(member, options);
+    const getLength = obtainArrayLengthGetter(member);
+    const constructor = s.constructor = function(arg) {
+      let self, dv, init;
+      if (this) {
+        // new operation--expect an array
+        // TODO: validate
+        if (arg !== undefined) {
+          init = arg;
+        }
+        self = this;
+        dv = new DataView(new ArrayBuffer(size));
+        if (defaultData && init === undefined) {
+          copy(dv, defaultData);
+        }
+      } else {
+        self = Object.create(constructor.prototype);
+        dv = obtainDataView(arg, size);
+      }
+      Object.defineProperties(self, {
+        [DATA]: { value: dv },
+      });
+      if (!this) {
+        return self;
+      }
+    };
+    s.size = size;
+    Object.defineProperties(constructor.prototype, {
+      get: { value: get, configurable: true, writable: true },
+      set: { value: set, configurable: true, writable: true },
+      length: { get: getLength, configurable: true },
+      [Symbol.iterator]: { value: getArrayIterator, configurable: true },
+    });
+    if (exposeDataView) {
+      attachDataViewAccessors(s, [ member ]);
+    }
+    return constructor;
+  }
+
+  function shapeStruct(s, def, options) {
+    const { 
+      size,
+      members,
+      defaultData,
+      defaultPointers,
+      exposeDataView = false,
+    } = def;
+    const copy = obtainCopyFunction(size);
+    const descriptors = {};
+    for (const member of members) {
+      const get = obtainGetter(member, options);
+      const set = obtainSetter(member, options);
+      descriptors[member.name] = { get, set, configurable: true, enumerable: true };
+    }
+    const hasRelocatable = !!members.find(m => m.type === MemberType.Compound || m.type === MemberType.Pointer);
+    const compoundMembers = members.filter(m => m.type === MemberType.Compound);
+    const internalPointers = (compoundMembers.length > 0) && compoundMembers.map(({ structure, bitOffset, align, slot }) => {
+      return { 
+        constructor: structure.constructor, 
+        slot, 
+        offset: bitOffset >> 3, 
+        align,
+      };
+    });
+    const constructor = s.constructor = function(arg) {
+      let self, dv, init;
+      if (this) {
+        // new operation--expect an object
+        // TODO: validate
+        if (arg !== undefined) {
+          init = arg;
+        }
+        self = this;
+        dv = new DataView(new ArrayBuffer(size));
+        if (defaultData && init === undefined) {
+          copy(dv, defaultData);
+        }
+      } else {
+        self = Object.create(constructor.prototype);
+        dv = obtainDataView(arg, size);
+      }
+      Object.defineProperties(self, {
+        [DATA]: { value: dv },
+      });
+      Object.defineProperties(self, descriptors);
+      if (hasRelocatable) {
+        const relocs = Object.assign({}, defaultPointers);
+        if (internalPointers) {
+          // initialize compound members (array, struct, etc.), storing them 
+          // in relocatables even through they aren't actually relocatable
+          for (const { constructor, slot, offset, align } of internalPointers) {
+            const mdv = new DataView(dv.buffer, offset, align);
+            const obj = new constructor(mdv);
+            relocs[slot] = obj;
+          }
+        }
+        Object.defineProperties(self, {
+          [RELOCATABLE]: { value: relocs },
+        });  
+      } 
+      if (!this) {
+        return self;
+      }
+    };
+    s.copier = function(dest, src) {
+      copy(dest[DATA], src[DATA]);
+      if (hasRelocatable) {
+        Object.assign(dest[RELOCATABLE], src[RELOCATABLE]);
+      }
+    };
+    s.size = size;
+    if (exposeDataView) {
+      attachDataViewAccessors(s, members);
+    }
+    return constructor;
+  }
+  function shapeEnumeration(s, def, options) {
+    const { 
+      size,
+      members,
+      defaultData,
+    } = def;
+    const primitive = getPrimitive(members[0].type, members[0].bitSize);
+    const getValue = obtainArrayGetter(members[0], options);
+    const count = members.length;
+    const items = {};
+    const constructor = s.constructor = function(arg) {
+      if (this) {
+        // the "constructor" is only used to convert a number into an enum object
+        // new enum items cannot be created
+        throwNoNewEnum();    
+      }
+      let index = -1;
+      if (isSequential) {
+        // normal enums start at 0 and go up, so the value is the index 
+        index = Number(arg);
+      } else {
+        // it's not sequential, so we need to compare values
+        // casting just in case the enum is BigInt
+        const v = primitive(arg);
+        for (let i = 0; i < count; i++) {
+          const value = getValue.call(constructor, i);
+          if (value === v) {
+            index = i;
+            break;
+          }
+        }
+      }
+      // return the enum object (created down below)
+      return items[index];
+    };
+    s.size = size;
+    // attach the numeric values to the class as its binary data
+    // this allows us to reuse the array getter
+    Object.defineProperties(constructor, {
+      [DATA]: { value: defaultData },
+      [ENUM_ITEMS]: { value: items },
+    });
+    const valueOf = function() { 
+      const index = this[ENUM_INDEX] ;
+      return getValue.call(constructor, index);
+    };
+    Object.defineProperties(constructor.prototype, {
+      [Symbol.toPrimitive]: { value: valueOf, configurable: true, writable: true },    
+      // so we don't get an empty object when JSON.stringify() is used
+      toJSON: { value: valueOf, configurable: true, writable: true },
+    });
+    // now that the class has the right hidden properties, getValue() will work 
+    // scan the array to see if the enum's numeric representation is sequential
+    const isSequential = (() => {
+      // try-block in the event that the enum has bigInt items 
+      try {
+        for (let i = 0; i < count; i++) {
+          if (get.call(constructor, i) !== i) {
+            return false;
+          }
+        }
+        return true;
+      } catch (err) {      
+        return false;
+      }
+    })();
+    // attach the enum items to the constructor and the reloc object
+    for (const [ index, { name } ] of members.entries()) {
+      // can't use the constructor since it would throw
+      const item = Object.create(constructor.prototype);
+      Object.defineProperties(item, {
+        [ENUM_INDEX]: { value: index },
+      });
+      Object.defineProperties(constructor, {
+        [name]: { value: item, configurable: true, enumerable: true, writable: true },
+      });
+      items[index] = item;
+    }
+    return constructor;
+  }
+  function attachDataViewAccessors(s, members) {
+    const { prototype } = s.constructor;
+    if (!Object.getOwnPropertyDescriptor(prototype, 'dataView')) {
+      Object.defineProperties(prototype, { 
+        dataView: { get: getDataView, configurable: true, enumerable: true },
+      });
+    }
+    const getTypedArray = obtainTypedArrayGetter(members);
+    if (getTypedArray && !Object.getOwnPropertyDescriptor(prototype, 'typedArray')) {
+      Object.defineProperties(prototype, {
+        typedArray: { get: getTypedArray, configurable: true, enumerable: true },
+      });
+    }
+  }
+
+  function attachVariables(s, def, options = {}) {
+    const { constructor } = s;
+    const {
+      members,
+      defaultPointers,
+    } = def;
+    const descriptors = {};
+    // static variables are all pointers
+    for (const member of members) {
+      const get = obtainGetter(member, options);
+      const set = obtainSetter(member, options);
+      descriptors[member.name] = { get, set, configurable: true, enumerable: true };
+    }  const relocs = Object.assign({}, defaultPointers);
+    descriptors[RELOCATABLE] = { value: relocs };
+    Object.defineProperties(constructor, descriptors);
+  }
+
+  function attachMethods(s, def, options = {}) {
+    const { constructor } = s;
+    const {
+      methods,
+    } = def;
+    for (const method of methods) {
+      const {
+        name,
+        argStruct,   
+        thunk,
+        staticOnly,
+      } = method;
+      const f = function(...args) {
+        const a = new argStruct;
+        for (const [ index, arg ] of args.entries()) {
+          if (arg !== undefined) {
+            a[index] = arg;
+          }
+        }
+        thunk(a);
+        return a.return_value;
+      };
+      Object.defineProperties(f, {
+        name: { value: name, writable: false },
+      });
+      Object.defineProperties(constructor, { 
+        [name]: { value: f, configurable: true, writable: true },
+      });
+      if (!staticOnly) {
+        const m = function(...args) {
+          const a = new argStruct;
+          a[0] = this;
+          for (const [ index, arg ] of args.entries()) {
+            if (arg !== undefined) {
+              a[index + 1] = arg;
+            }
+          }
+          thunk(a);
+          return a.return_value;
+        };
+        Object.defineProperties(m, {
+          name: { value: name, writable: false }, 
+        });
+        Object.defineProperties(constructor.prototype, {
+          [name]: { value: m, configurable: true, writable: true },
+        });
+      } 
+    }
+  }
+
+  exports.attachMethods = attachMethods;
+  exports.attachVariables = attachVariables;
+  exports.createStructure = createStructure;
+  exports.shapeStructure = shapeStructure;
+
+  return exports;
+
+})({});
 )====="

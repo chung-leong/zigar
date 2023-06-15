@@ -35,7 +35,7 @@ enum class MemberType : uint32_t {
 };
 
 struct Memory {
-  uint8_t *bytes;
+  uint8_t* bytes;
   size_t len;
 };
 
@@ -50,10 +50,10 @@ struct Member {
 };
 
 struct MemberSet {
-  const Member *members;
+  const Member* members;
   size_t member_count;
   Memory default_data;
-  const Memory *default_pointers;
+  const Memory* default_pointers;
   size_t default_pointer_count ;
 };
 
@@ -61,14 +61,14 @@ struct Host;
 typedef void (*Thunk)(Host*, Local<Value>);
 
 struct Method {
-  const char *name;  
+  const char* name;  
   bool is_static_only;
   Thunk thunk;
   Local<Value> structure;
 };
 
 struct MethodSet {
-  const Method *methods;
+  const Method* methods;
   size_t method_count;
 };
 
@@ -100,8 +100,8 @@ struct Callbacks {
   Result (*get_memory)(Host*, Local<Object>, Memory*);
   Result (*get_relocatable)(Host*, Local<Object>, uint32_t, Memory*);
 
-  Result (*get_slot)(Host*, size_t, Local<Value>*);
-  Result (*set_slot)(Host*, size_t, Local<Value>);
+  Result (*read_slot)(Host*, uint32_t, Local<Value>*);
+  Result (*write_slot)(Host*, uint32_t, Local<Value>);
 
   Result (*create_structure)(Host*, StructureType, const char*, Local<Object>*);
   Result (*shape_structure)(Host*, Local<Object>, const MemberSet*);
@@ -119,7 +119,7 @@ struct ExternalData {
     external(isolate, External::New(isolate, this)) {
     external.template SetWeak<ExternalData>(this, 
       [](const v8::WeakCallbackInfo<ExternalData>& data) {
-        ExternalData* self = data.GetParameter();
+        auto self = data.GetParameter();
         self->external.Reset();
         delete self;
       }, WeakCallbackType::kParameter);
@@ -139,7 +139,7 @@ struct AddonData : public ExternalData {
 
 struct ModuleData : public ExternalData {
   static int count;
-  void *so_handle;
+  void* so_handle;
 
   ModuleData(Isolate* isolate, 
              void* so_handle) : 
@@ -181,54 +181,59 @@ struct FunctionData : public ExternalData {
 struct JSBridge {
   Isolate* isolate;
   Local<Context> context;
+  Local<External> module_data;
 
   Local<Function> create_structure;
   Local<Function> shape_structure;
   Local<Function> attach_variables;
   Local<Function> attach_methods;
 
-  Local<String> n_type;
-  Local<String> n_signed;
-  Local<String> n_bit_offset;
-  Local<String> n_bit_size;
-  Local<String> n_byte_size;
-  Local<String> n_name;
-  Local<String> n_size;
-  Local<String> n_members;
-  Local<String> n_structure;
-  Local<String> n_default_data;
-  Local<String> n_default_pointers;
-  Local<String> n_expose_data_view;
-  Local<String> n_arg_struct;
-  Local<String> n_thunk;
-  Local<String> n_static_only;
+  Local<String> t_type;
+  Local<String> t_signed;
+  Local<String> t_bit_offset;
+  Local<String> t_bit_size;
+  Local<String> t_byte_size;
+  Local<String> t_name;
+  Local<String> t_size;
+  Local<String> t_members;
+  Local<String> t_methods;
+  Local<String> t_structure;
+  Local<String> t_default_data;
+  Local<String> t_default_pointers;
+  Local<String> t_expose_data_view;
+  Local<String> t_arg_struct;
+  Local<String> t_thunk;
+  Local<String> t_static_only;
 
   Local<Object> options;
 
   JSBridge(Isolate* isolate,
            Local<Object> module,
+           Local<External> module_data,
            ModuleFlags flags) :
     isolate(isolate),
     context(isolate->GetCurrentContext()),
-    n_type(String::NewFromUtf8Literal(isolate, "type")),
-    n_signed(String::NewFromUtf8Literal(isolate, "signed")),
-    n_bit_offset(String::NewFromUtf8Literal(isolate, "bitOffset")),
-    n_bit_size(String::NewFromUtf8Literal(isolate, "bitSize")),
-    n_byte_size(String::NewFromUtf8Literal(isolate, "byteSize")),
-    n_name(String::NewFromUtf8Literal(isolate, "name")),
-    n_size(String::NewFromUtf8Literal(isolate, "size")),
-    n_members(String::NewFromUtf8Literal(isolate, "members")),
-    n_structure(String::NewFromUtf8Literal(isolate, "structure")),
-    n_default_data(String::NewFromUtf8Literal(isolate, "defaultData")),
-    n_default_pointers(String::NewFromUtf8Literal(isolate, "defaultPointers")),
-    n_expose_data_view(String::NewFromUtf8Literal(isolate, "exposeDataView")),
-    n_arg_struct(String::NewFromUtf8Literal(isolate, "argStruct")),
-    n_thunk(String::NewFromUtf8Literal(isolate, "thunk")),
-    n_static_only(String::NewFromUtf8Literal(isolate, "staticOnly")),
+    module_data(module_data),
+    t_type(String::NewFromUtf8Literal(isolate, "type")),
+    t_signed(String::NewFromUtf8Literal(isolate, "signed")),
+    t_bit_offset(String::NewFromUtf8Literal(isolate, "bitOffset")),
+    t_bit_size(String::NewFromUtf8Literal(isolate, "bitSize")),
+    t_byte_size(String::NewFromUtf8Literal(isolate, "byteSize")),
+    t_name(String::NewFromUtf8Literal(isolate, "name")),
+    t_size(String::NewFromUtf8Literal(isolate, "size")),
+    t_members(String::NewFromUtf8Literal(isolate, "members")),
+    t_methods(String::NewFromUtf8Literal(isolate, "methods")),
+    t_structure(String::NewFromUtf8Literal(isolate, "structure")),
+    t_default_data(String::NewFromUtf8Literal(isolate, "defaultData")),
+    t_default_pointers(String::NewFromUtf8Literal(isolate, "defaultPointers")),
+    t_expose_data_view(String::NewFromUtf8Literal(isolate, "exposeDataView")),
+    t_arg_struct(String::NewFromUtf8Literal(isolate, "argStruct")),
+    t_thunk(String::NewFromUtf8Literal(isolate, "thunk")),
+    t_static_only(String::NewFromUtf8Literal(isolate, "staticOnly")),
     options(Object::New(isolate)) {
     // set options
-    Local<Boolean> little_endian = Boolean::New(isolate, flags.little_endian);
-    Local<Boolean> runtime_safety = Boolean::New(isolate, flags.runtime_safety);
+    auto little_endian = Boolean::New(isolate, flags.little_endian);
+    auto runtime_safety = Boolean::New(isolate, flags.runtime_safety);
     options->Set(context, String::NewFromUtf8Literal(isolate, "littleEndian"), little_endian).Check();
     options->Set(context, String::NewFromUtf8Literal(isolate, "realTimeSafety"), runtime_safety).Check();
 
@@ -248,26 +253,33 @@ struct JSBridge {
   };
 
   Local<Object> NewMemberRecord(const Member& m) {
-    Local<Object> member = Object::New(isolate);
-    member->Set(context, n_name, String::NewFromUtf8(isolate, m.name).ToLocalChecked()).Check();
-    member->Set(context, n_type, Int32::New(isolate, static_cast<int32_t>(m.type))).Check();
-    member->Set(context, n_bit_size, Int32::New(isolate, m.bit_size)).Check();
-    member->Set(context, n_bit_offset, Int32::New(isolate, m.bit_offset)).Check();
-    member->Set(context, n_byte_size, Int32::New(isolate, m.byte_size)).Check();
+    auto member = Object::New(isolate);
+    member->Set(context, t_name, String::NewFromUtf8(isolate, m.name).ToLocalChecked()).Check();
+    member->Set(context, t_type, Int32::New(isolate, static_cast<int32_t>(m.type))).Check();
+    member->Set(context, t_bit_size, Int32::New(isolate, m.bit_size)).Check();
+    member->Set(context, t_bit_offset, Int32::New(isolate, m.bit_offset)).Check();
+    member->Set(context, t_byte_size, Int32::New(isolate, m.byte_size)).Check();
     if (m.type == MemberType::Int) {
-      member->Set(context, n_signed, Boolean::New(isolate, m.is_signed)).Check();
+      member->Set(context, t_signed, Boolean::New(isolate, m.is_signed)).Check();
     }
     return member;
   }
 
   Local<Object> NewMethodRecord(const Method &m) {
+    auto fd = new FunctionData(isolate, m.thunk, module_data);
+    auto fde = Local<External>::New(isolate, fd->external);
+    auto tmpl = FunctionTemplate::New(isolate,
+      [](const FunctionCallbackInfo<Value>& info) {
+        Host ctx(info);
+        ctx.zig_func->thunk(&ctx, info[0]);
+      }, fde, Local<Signature>(), 1);
     Local<Function> function;
-
+    tmpl->GetFunction(context).ToLocal(&function);
     Local<Object> def = Object::New(isolate);
-    def->Set(context, n_name, String::NewFromUtf8(isolate, m.name).ToLocalChecked()).Check();
-    def->Set(context, n_arg_struct, m.structure).Check();
-    def->Set(context, n_thunk, function).Check();
-    def->Set(context, n_static_only, Boolean::New(isolate, m.is_static_only)).Check();
+    def->Set(context, t_name, String::NewFromUtf8(isolate, m.name).ToLocalChecked()).Check();
+    def->Set(context, t_arg_struct, m.structure).Check();
+    def->Set(context, t_thunk, function).Check();
+    def->Set(context, t_static_only, Boolean::New(isolate, m.is_static_only)).Check();
     return def;   
   }
 
@@ -275,15 +287,23 @@ struct JSBridge {
                                        Local<Array> members,
                                        Local<Object> defaultData, 
                                        Local<Object> defaultPointers) {
-    Local<Object> def = Object::New(isolate);
-    def->Set(context, n_size, Uint32::NewFromUnsigned(isolate, static_cast<uint32_t>(size))).Check();
-    def->Set(context, n_members, members).Check();
+    auto def = Object::New(isolate);
+    if (size > 0) {
+      def->Set(context, t_size, Uint32::NewFromUnsigned(isolate, static_cast<uint32_t>(size))).Check();
+    }
+    def->Set(context, t_members, members).Check();
     if (!defaultData.IsEmpty()) {
-      def->Set(context, n_default_data, defaultData).Check();
+      def->Set(context, t_default_data, defaultData).Check();
     }
     if (!defaultPointers.IsEmpty()) {
-      def->Set(context, n_default_pointers, defaultPointers).Check();
+      def->Set(context, t_default_pointers, defaultPointers).Check();
     }
+    return def;
+  }
+
+  Local<Object> NewMethodSetDefiition(Local<Array> methods) {
+    auto def = Object::New(isolate);
+    def->Set(context, t_methods, methods).Check();
     return def;
   }
 };
@@ -297,7 +317,7 @@ struct Host {
   Local<Array> mem_pool;
   Local<Object> slots;
   FunctionData* zig_func;
-  JSBridge *js_bridge;
+  JSBridge* js_bridge;
 
   Host(const FunctionCallbackInfo<Value> &info) :
     js_bridge(nullptr) {

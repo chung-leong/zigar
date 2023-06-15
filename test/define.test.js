@@ -1045,7 +1045,7 @@ describe('Structure definition', function() {
           thunk, 
         },
       ];
-      attachMethods(structure, methods);
+      attachMethods(structure, { methods });
       expect(Hello.merge).to.be.a('function');
       expect(Hello.merge).to.have.property('name', 'merge');
       expect(Hello.prototype.merge).to.be.a('function');
@@ -1130,7 +1130,7 @@ describe('Structure definition', function() {
           thunk, 
         },
       ];
-      attachMethods(structure, methods);
+      attachMethods(structure, { methods });
       expect(Hello.foo).to.be.a('function');
       expect(Hello.foo).to.have.property('name', 'foo');
       expect(Hello.prototype.foo).to.be.a('function');

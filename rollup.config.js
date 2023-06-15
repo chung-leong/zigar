@@ -1,16 +1,18 @@
 import Terser from '@rollup/plugin-terser';
 
+const minify = false;
+
 export default {
   input: 'src/define.js',
   output: {
 		file: 'src/addon.js.txt',
 		format: 'iife',
     plugins: [ 
-      Terser(),
+      minify ? Terser() : undefined,
       {
-        // turn code into C++ raw string 
+        // place JS code into a C++ raw string 
         // we can't rely on banner/footer here since those are seen by Terser, 
-        // which would prompt throw an syntax error
+        // which would promptly throw a syntax error
         name: 'C++ string',
         renderChunk (code) {
           return `R"=====(\n${code}\n)====="`;

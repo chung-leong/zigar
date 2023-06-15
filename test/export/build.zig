@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const exporter = b.createModule(.{
-        .source_file = .{ .path = "../../../src/zig/export.zig" },
+        .source_file = .{ .path = "../../src/export.zig" },
     });
     const main_tests = b.addTest(.{
         .root_source_file = .{ .path = "src/main.zig" },

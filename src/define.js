@@ -312,15 +312,18 @@ export function attachVariables(s, def, options = {}) {
   Object.defineProperties(constructor, descriptors);
 }
 
-export function attachMethods(s, methods, options = {}) {
+export function attachMethods(s, def, options = {}) {
   const { constructor } = s;
-  for (const def of methods) {
+  const {
+    methods,
+  } = def;
+  for (const method of methods) {
     const {
       name,
       argStruct,   
       thunk,
       staticOnly,
-    } = def;
+    } = method;
     const f = function(...args) {
       const a = new argStruct;
       for (const [ index, arg ] of args.entries()) {
