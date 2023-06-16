@@ -116,7 +116,7 @@ const Member = extern struct {
     bit_offset: u32,
     bit_size: u32,
     byte_size: u32,
-    slot: u32,
+    slot: u32 = 0,
     structure: ?Value = null,
 };
 
@@ -314,7 +314,7 @@ var callbacks: Callbacks = undefined;
 
 // host interface
 const Host = *opaque {
-    fn getPointer(self: Host, value: Value, comptime T: type) !*T {
+    fn getPointer(self: Host, value: Value, comptime T: type) Error!*T {
         var memory: Memory = undefined;
         if (callbacks.get_memory(self, value, &memory) != .OK) {
             return Error.Unknown;
@@ -323,7 +323,7 @@ const Host = *opaque {
         return @ptrCast(*T, aligned_ptr);
     }
 
-    fn getRelocatable(self: Host, value: Value, id: u32) !Value {
+    fn getRelocatable(self: Host, value: Value, id: u32) Error!Value {
         var result: Value = undefined;
         if (callbacks.get_relocatable(self, value, id, &result) != .OK) {
             return Error.Unknown;
@@ -331,7 +331,7 @@ const Host = *opaque {
         return result;
     }
 
-    fn readSlot(self: Host, slot: u32) !Value {
+    fn readSlot(self: Host, slot: u32) Error!Value {
         var value: Value = undefined;
         if (callbacks.read_slot(self, slot, &value) != .OK) {
             return Error.Unknown;
@@ -339,13 +339,13 @@ const Host = *opaque {
         return value;
     }
 
-    fn writeSlot(self: Host, slot: u32, value: Value) !void {
+    fn writeSlot(self: Host, slot: u32, value: Value) Error!void {
         if (callbacks.write_slot(self, slot, value) != .OK) {
             return Error.Unknown;
         }
     }
 
-    fn createStructure(self: Host, s_type: StructureType, name: []const u8) !Value {
+    fn createStructure(self: Host, s_type: StructureType, name: []const u8) Error!Value {
         var def: Value = undefined;
         if (callbacks.create_structure(self, s_type, @ptrCast([*:0]const u8, name), &def) != .OK) {
             return Error.Unknown;
@@ -353,19 +353,19 @@ const Host = *opaque {
         return def;
     }
 
-    fn shapeStructure(self: Host, structure: Value, def: MemberSet) !void {
+    fn shapeStructure(self: Host, structure: Value, def: MemberSet) Error!void {
         if (callbacks.shape_structure(self, structure, &def) != .OK) {
             return Error.Unknown;
         }
     }
 
-    fn attachVariables(self: Host, structure: Value, def: MemberSet) !void {
+    fn attachVariables(self: Host, structure: Value, def: MemberSet) Error!void {
         if (callbacks.attach_variables(self, structure, &def) != .OK) {
             return Error.Unknown;
         }
     }
 
-    fn attachMethods(self: Host, structure: Value, def: MethodSet) !void {
+    fn attachMethods(self: Host, structure: Value, def: MethodSet) Error!void {
         if (callbacks.attach_methods(self, structure, &def) != .OK) {
             return Error.Unknown;
         }
@@ -373,7 +373,7 @@ const Host = *opaque {
 };
 
 // export functions
-fn getStructure(host: Host, comptime T: type) !Value {
+fn getStructure(host: Host, comptime T: type) Error!Value {
     const s_slot = getStructureSlot(T);
     return host.readSlot(s_slot) catch undefined: {
         const s_type = getStructureType(T);
@@ -396,7 +396,7 @@ fn getStructure(host: Host, comptime T: type) !Value {
     };
 }
 
-fn getMemberSet(host: Host, comptime T: type) !MemberSet {
+fn getMemberSet(host: Host, comptime T: type) Error!MemberSet {
     const members = try getMembers(host, T);
     const default_data = getDefaultData(T);
     const pointers = getDefaultPointers(T);
@@ -410,22 +410,23 @@ fn getMemberSet(host: Host, comptime T: type) !MemberSet {
     };
 }
 
-fn getVariableSet(host: Host, comptime T: type) !?MemberSet {
+fn getVariableSet(host: Host, comptime T: type) Error!?MemberSet {
     if (StaticStruct(T)) |SS| {
-        const members = getMembers(host, SS);
+        const members = try getMembers(host, SS);
         const pointers = getDefaultPointers(SS);
         return .{
             .members = members.ptr,
             .member_count = members.len,
-            .default_pointers = pointers orelse null,
-            .default_pointer_count = pointers.len orelse 0,
+            .default_pointers = pointers.ptr,
+            .default_pointer_count = pointers.len,
+            .default_data = .{},
         };
     } else {
         return null;
     }
 }
 
-fn getMethodSet(host: Host, comptime T: type) !?MethodSet {
+fn getMethodSet(host: Host, comptime T: type) Error!?MethodSet {
     const methods = try getMethods(host, T);
     if (methods.len == 0) {
         return null;
@@ -436,7 +437,7 @@ fn getMethodSet(host: Host, comptime T: type) !?MethodSet {
     };
 }
 
-fn getMembers(host: Host, comptime T: type) ![]const Member {
+fn getMembers(host: Host, comptime T: type) Error![]const Member {
     const count = switch (@typeInfo(T)) {
         .Struct => |st| st.fields.len,
         .Union => |un| un.fields.len,
@@ -449,7 +450,7 @@ fn getMembers(host: Host, comptime T: type) ![]const Member {
         .Bool, .Int, .Float, .Void => {
             members[0] = .{
                 .member_type = getMemberType(T),
-                .signed = isSigned(T),
+                .is_signed = isSigned(T),
                 .bit_size = @bitSizeOf(T),
                 .bit_offset = 0,
                 .byte_size = @sizeOf(T),
@@ -458,7 +459,7 @@ fn getMembers(host: Host, comptime T: type) ![]const Member {
         .Array => |ar| {
             members[0] = .{
                 .member_type = getMemberType(ar.child),
-                .signed = isSigned(ar.child),
+                .is_signed = isSigned(ar.child),
                 .bit_size = @bitSizeOf(ar.child),
                 .bit_offset = 0,
                 .byte_size = @sizeOf(ar.child),
@@ -477,9 +478,9 @@ fn getMembers(host: Host, comptime T: type) ![]const Member {
             }
             inline for (fields, 0..) |field, index| {
                 members[index] = .{
-                    .name = field.name,
+                    .name = @ptrCast([*:0]const u8, field.name),
                     .member_type = getMemberType(field.type),
-                    .signed = isSigned(field.type),
+                    .is_signed = isSigned(field.type),
                     .bit_offset = @bitOffsetOf(T, field.name),
                     .bit_size = @bitSizeOf(field.type),
                     .byte_size = if (isPacked(T)) @sizeOf(field.type) else 0,
@@ -495,7 +496,7 @@ fn getMembers(host: Host, comptime T: type) ![]const Member {
                 members[index] = .{
                     .name = field.name,
                     .member_type = getMemberType(IT),
-                    .signed = isSigned(IT),
+                    .is_signed = isSigned(IT),
                     .bit_offset = 0,
                     .bit_size = @bitSizeOf(IT),
                     .byte_size = @sizeOf(IT),
@@ -507,13 +508,13 @@ fn getMembers(host: Host, comptime T: type) ![]const Member {
     return members[0..count];
 }
 
-fn getMethods(host: Host, comptime T: type) ![]const Method {
+fn getMethods(host: Host, comptime T: type) Error![]const Method {
     const decls = switch (@typeInfo(T)) {
         .Struct => |st| st.decls,
-        .Union => |st| st.decls,
-        .Enum => |st| st.decls,
-        .Opaque => |st| st.decls,
-        else => return null,
+        .Union => |un| un.decls,
+        .Enum => |en| en.decls,
+        .Opaque => |op| op.decls,
+        else => return &.{},
     };
     var methods: [decls.len]Method = undefined;
     comptime var count = 0;
@@ -521,13 +522,13 @@ fn getMethods(host: Host, comptime T: type) ![]const Method {
         if (!decl.is_pub) {
             continue;
         }
-        switch (@typeInfo(@field(T, decl.name))) {
+        switch (@typeInfo(@TypeOf(@field(T, decl.name)))) {
             .Fn => {
                 const function = @field(T, decl.name);
                 const ArgT = ArgumentStruct(function);
                 const arg_structure = try getStructure(host, ArgT);
                 methods[count] = .{
-                    .name = decl.name,
+                    .name = @ptrCast([*:0]const u8, decl.name),
                     .is_static_only = true,
                     .thunk = createThunk(function, ArgT),
                     .structure = arg_structure,
@@ -541,7 +542,12 @@ fn getMethods(host: Host, comptime T: type) ![]const Method {
 }
 
 fn getDefaultPointers(comptime T: type) []const Memory {
-    const fields = std.meta.fields(T);
+    const fields = switch (@typeInfo(T)) {
+        .Struct, .Union => std.meta.fields(T),
+        else => {
+            return &.{};
+        },
+    };
     var pointers: [fields.len]Memory = .{};
     comptime var count = 0;
     inline for (fields, 0..) |field, index| {
@@ -552,7 +558,7 @@ fn getDefaultPointers(comptime T: type) []const Memory {
                     const aligned_ptr = @alignCast(@alignOf(field.type), opaque_ptr);
                     const typed_ptr = @ptrCast(*const field.type, aligned_ptr);
                     pointers[r_slot] = .{
-                        .bytes = @ptrCast([*]u8, @constCast(typed_ptr.*)),
+                        .bytes = @ptrCast([*]u8, @alignCast(1, @constCast(typed_ptr.*))),
                         .len = switch (pt.size) {
                             .Slice => @sizeOf(pt.child) * typed_ptr.*.len,
                             .One => @sizeOf(pt.child),
@@ -590,7 +596,12 @@ test "getDefaultPointers" {
 }
 
 fn getDefaultData(comptime T: type) Memory {
-    const fields = std.meta.fields(T);
+    const fields = switch (@typeInfo(T)) {
+        .Struct, .Union => std.meta.fields(T),
+        else => {
+            return .{};
+        },
+    };
     var structure: T = undefined;
     var bytes = @intToPtr([*]u8, @ptrToInt(&structure));
     var slice = bytes[0..@sizeOf(T)];
@@ -728,11 +739,10 @@ fn StaticStruct(comptime T: type) ?type {
     if (count == 0) {
         return null;
     }
-    var noDecls: []const std.builtin.Type.Declaration = &.{};
     return @Type(.{
         .Struct = .{
             .layout = .Auto,
-            .decls = noDecls,
+            .decls = &.{},
             .fields = fields[0..count],
             .is_tuple = false,
         },
@@ -783,31 +793,34 @@ test "StaticStruct" {
 
 fn ArgumentStruct(comptime function: anytype) type {
     const info = @typeInfo(@TypeOf(function)).Fn;
-    const len = info.params.len + 1;
-    var fields: [len]std.builtin.Type.StructField = undefined;
+    var fields: [info.params.len + 1]std.builtin.Type.StructField = undefined;
+    var count = 0;
     for (info.params, 0..) |param, index| {
-        const name = std.fmt.comptimePrint("{d}", .{index});
-        fields[index] = .{
-            .name = name,
-            .type = param.type orelse void,
-            .is_comptime = false,
-            .alignment = @alignOf(param.type orelse void),
-            .default_value = null,
-        };
+        if (param.type != std.mem.Allocator) {
+            const name = std.fmt.comptimePrint("{d}", .{index});
+            fields[count] = .{
+                .name = name,
+                .type = param.type orelse void,
+                .is_comptime = false,
+                .alignment = @alignOf(param.type orelse void),
+                .default_value = null,
+            };
+            count += 1;
+        }
     }
-    fields[len - 1] = .{
+    fields[count] = .{
         .name = "retval",
         .type = info.return_type orelse void,
         .is_comptime = false,
         .alignment = @alignOf(info.return_type orelse void),
         .default_value = null,
     };
-    var noDecls: []const std.builtin.Type.Declaration = &.{};
+    count += 1;
     return @Type(.{
         .Struct = .{
             .layout = .Auto,
-            .decls = noDecls,
-            .fields = &fields,
+            .decls = &.{},
+            .fields = fields[0..count],
             .is_tuple = false,
         },
     });
@@ -822,6 +835,11 @@ test "ArgumentStruct" {
         fn B(s: []const u8) void {
             _ = s;
         }
+
+        fn C(alloc: std.mem.Allocator, arg1: i32, arg2: i32) bool {
+            _ = alloc;
+            return arg1 < arg2;
+        }
     };
     const ArgA = ArgumentStruct(Test.A);
     const fieldsA = std.meta.fields(ArgA);
@@ -834,6 +852,9 @@ test "ArgumentStruct" {
     assert(fieldsB.len == 2);
     assert(fieldsB[0].name[0] == '0');
     assert(fieldsB[1].name[0] == 'r');
+    const ArgC = ArgumentStruct(Test.C);
+    const fieldsC = std.meta.fields(ArgC);
+    assert(fieldsC.len == 3);
 }
 
 const invalid_address = if (@bitSizeOf(*u8) == 64) 0xaaaa_aaaa_aaaa_aaaa else 0xaaaa_aaaa;
@@ -842,12 +863,12 @@ fn invalidPointer(PT: type) PT {
     return @intToPtr(PT, invalid_address);
 }
 
-fn repointStructure(host: Host, obj: Value, comptime T: type) !*T {
+fn repointStructure(host: Host, obj: Value, comptime T: type) Error!*T {
     // TODO
     return host.getPointer(obj, T);
 }
 
-fn depointStructure(host: Host, obj: Value, comptime T: type) !void {
+fn depointStructure(host: Host, obj: Value, comptime T: type) Error!void {
     // TODO
     _ = T;
     _ = obj;
@@ -862,9 +883,15 @@ fn createThunk(comptime function: anytype, comptime ArgT: type) Thunk {
             // extract arguments from argument struct
             var args: Args = undefined;
             const fields = @typeInfo(Args).Struct.fields;
-            inline for (fields, 0..) |_, i| {
-                const name = std.fmt.comptimePrint("{d}", .{i});
-                args[i] = @field(arg_struct, name);
+            comptime var index = 0;
+            inline for (fields, 0..) |field, i| {
+                if (field.type == std.mem.Allocator) {
+                    // TODO: add allocator
+                } else {
+                    const name = std.fmt.comptimePrint("{d}", .{index});
+                    args[i] = @field(arg_struct, name);
+                    index += 1;
+                }
             }
             arg_struct.retval = @call(std.builtin.CallModifier.auto, function, args);
             try depointStructure(host, arg_obj, ArgT);
@@ -935,7 +962,25 @@ pub fn createModule(comptime S: type) Module {
 }
 
 test "createModule" {
-    const Test = struct {};
+    const Test = struct {
+        pub const a: i32 = 1;
+
+        const b: i32 = 2;
+
+        pub var c: bool = true;
+
+        pub const d: f64 = 3.14;
+
+        pub const e: [4]i32 = .{ 3, 4, 5, 6 };
+
+        pub const f = enum { Dog, Cat, Chicken };
+
+        pub const g = enum(c_int) { Dog = -100, Cat, Chicken };
+
+        pub fn h(arg1: i32, arg2: i32) bool {
+            return arg1 < arg2;
+        }
+    };
     const module = createModule(Test);
     assert(module.version == api_version);
     assert(module.flags.little_endian == (builtin.target.cpu.arch.endian() == .Little));
