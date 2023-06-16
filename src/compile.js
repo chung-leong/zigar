@@ -53,7 +53,7 @@ export async function compile(path, options = {}) {
     }
   });
   if (!changed) {
-    const { pathname } = new URL('../zig', import.meta.url);
+    const { pathname } = new URL('./', import.meta.url);
     await walk(pathname, /\.zig$/i, (dir, name, { mtime }) => {
       if (!(soMTime > mtime)) {
         changed = true;

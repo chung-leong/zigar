@@ -3,10 +3,6 @@
 
 using namespace v8;
 
-//-----------------------------------------------------------------------------
-//  Enum and structs used by both Zig and C++ code
-//  (need to keep these in sync with their Zig definitions)
-//-----------------------------------------------------------------------------
 enum class Result : int {
   OK = 0,
   Failure = 1,
@@ -32,6 +28,7 @@ enum class MemberType : uint32_t {
   Enum,
   Compound,
   Pointer,
+  Type,
 };
 
 struct Memory {
@@ -42,19 +39,22 @@ struct Memory {
 struct Member {
   const char* name;
   MemberType type;
+  bool is_required;
   bool is_signed;
   uint32_t bit_offset;
   uint32_t bit_size;
   uint32_t byte_size;
+  uint32_t slot;
   Local<Value> structure;
 };
 
 struct MemberSet {
   const Member* members;
   size_t member_count;
+  size_t total_size;
   Memory default_data;
   const Memory* default_pointers;
-  size_t default_pointer_count ;
+  size_t default_pointer_count;
 };
 
 struct Host;
@@ -69,7 +69,7 @@ struct Method {
 
 struct MethodSet {
   const Method* methods;
-  size_t method_count;
+  uint32_t method_count;
 };
 
 union ModuleFlags {
@@ -90,9 +90,6 @@ struct Module {
   Factory factory;
 };
 
-//-----------------------------------------------------------------------------
-//  Function-pointer table used by Zig code
-//-----------------------------------------------------------------------------
 struct Callbacks {
   Result (*allocate_memory)(Host*, size_t, Memory*);
   Result (*reallocate_memory)(Host*, size_t, Memory*);
@@ -104,14 +101,11 @@ struct Callbacks {
   Result (*write_slot)(Host*, uint32_t, Local<Value>);
 
   Result (*create_structure)(Host*, StructureType, const char*, Local<Object>*);
-  Result (*shape_structure)(Host*, Local<Object>, const MemberSet*);
-  Result (*attach_variables)(Host*, Local<Object>, const MemberSet*);
-  Result (*attach_methods)(Host*, Local<Object>, const MethodSet*);
+  Result (*shape_structure)(Host*, Local<Object>, const MemberSet&);
+  Result (*attach_variables)(Host*, Local<Object>, const MemberSet&);
+  Result (*attach_methods)(Host*, Local<Object>, const MethodSet&);
 };
 
-//-----------------------------------------------------------------------------
-//  Per isolate data structures 
-//-----------------------------------------------------------------------------
 struct ExternalData {
   Global<External> external;
 
@@ -175,9 +169,8 @@ struct FunctionData : public ExternalData {
   }
 };
 
-//-----------------------------------------------------------------------------
-//  Structure holding references used during function import (per call)
-//-----------------------------------------------------------------------------
+static void Call(const FunctionCallbackInfo<Value>& info);
+
 struct JSBridge {
   Isolate* isolate;
   Local<Context> context;
@@ -236,7 +229,6 @@ struct JSBridge {
     auto runtime_safety = Boolean::New(isolate, flags.runtime_safety);
     options->Set(context, String::NewFromUtf8Literal(isolate, "littleEndian"), little_endian).Check();
     options->Set(context, String::NewFromUtf8Literal(isolate, "realTimeSafety"), runtime_safety).Check();
-
     // look up functions
     auto find = [&](Local<String> name, Local<Function>* dest) {
       Local<Value> value;
@@ -254,12 +246,15 @@ struct JSBridge {
 
   Local<Object> NewMemberRecord(const Member& m) {
     auto member = Object::New(isolate);
-    member->Set(context, t_name, String::NewFromUtf8(isolate, m.name).ToLocalChecked()).Check();
+    printf("Member: %s (%u)\n", m.name, m.bit_size);
+    if (m.name) {
+      member->Set(context, t_name, String::NewFromUtf8(isolate, m.name).ToLocalChecked()).Check();
+    }
     member->Set(context, t_type, Int32::New(isolate, static_cast<int32_t>(m.type))).Check();
     member->Set(context, t_bit_size, Int32::New(isolate, m.bit_size)).Check();
     member->Set(context, t_bit_offset, Int32::New(isolate, m.bit_offset)).Check();
     member->Set(context, t_byte_size, Int32::New(isolate, m.byte_size)).Check();
-    if (m.type == MemberType::Int) {
+    if (m.type == MemberType::Int) {      
       member->Set(context, t_signed, Boolean::New(isolate, m.is_signed)).Check();
     }
     return member;
@@ -268,25 +263,22 @@ struct JSBridge {
   Local<Object> NewMethodRecord(const Method &m) {
     auto fd = new FunctionData(isolate, m.thunk, module_data);
     auto fde = Local<External>::New(isolate, fd->external);
-    auto tmpl = FunctionTemplate::New(isolate,
-      [](const FunctionCallbackInfo<Value>& info) {
-        Host ctx(info);
-        ctx.zig_func->thunk(&ctx, info[0]);
-      }, fde, Local<Signature>(), 1);
-    Local<Function> function;
-    tmpl->GetFunction(context).ToLocal(&function);
+    auto tmpl = FunctionTemplate::New(isolate, Call, fde, Local<Signature>(), 1);
     Local<Object> def = Object::New(isolate);
     def->Set(context, t_name, String::NewFromUtf8(isolate, m.name).ToLocalChecked()).Check();
     def->Set(context, t_arg_struct, m.structure).Check();
-    def->Set(context, t_thunk, function).Check();
+    Local<Function> function;
+    if (tmpl->GetFunction(context).ToLocal(&function)) {
+      def->Set(context, t_thunk, function).Check();
+    }
     def->Set(context, t_static_only, Boolean::New(isolate, m.is_static_only)).Check();
     return def;   
   }
 
-  Local<Object> NewStructureDefinition(size_t size,
-                                       Local<Array> members,
-                                       Local<Object> defaultData, 
-                                       Local<Object> defaultPointers) {
+  Local<Object> NewMemberSet(size_t size,
+                             Local<Array> members,
+                             Local<Object> defaultData, 
+                             Local<Object> defaultPointers) {
     auto def = Object::New(isolate);
     if (size > 0) {
       def->Set(context, t_size, Uint32::NewFromUnsigned(isolate, static_cast<uint32_t>(size))).Check();
@@ -301,16 +293,13 @@ struct JSBridge {
     return def;
   }
 
-  Local<Object> NewMethodSetDefiition(Local<Array> methods) {
+  Local<Object> NewMethodSet(Local<Array> methods) {
     auto def = Object::New(isolate);
     def->Set(context, t_methods, methods).Check();
     return def;
   }
 };
 
-//-----------------------------------------------------------------------------
-//  Structure used passed stuff to Zig code and back (per call)
-//-----------------------------------------------------------------------------
 struct Host {
   Isolate* isolate;  
   Local<Context> exec_context;

@@ -1023,7 +1023,7 @@ describe('Structure definition', function() {
             structure,
           },
           {
-            name: 'return_value',
+            name: 'retval',
             type: MemberType.Int,
             signed: true,
             bitSize: 32,
@@ -1033,7 +1033,7 @@ describe('Structure definition', function() {
         ],
       };
       const thunk = (args) => {
-        args.return_value = args[0].dog + args[0].cat;
+        args.retval = args[0].dog + args[0].cat;
       };
       const argStructure = createStructure(StructureType.Struct, undefined);
       const argStruct = shapeStructure(argStructure, argDef);
@@ -1106,7 +1106,7 @@ describe('Structure definition', function() {
             byteSize: 4,
           },
           {
-            name: 'return_value',
+            name: 'retval',
             type: MemberType.Bool,
             bitSize: 1,
             bitOffset: 64,
@@ -1118,7 +1118,7 @@ describe('Structure definition', function() {
       const thunk = (args) => {
         arg1 = args[0];
         arg2 = args[1];
-        args.return_value = true;
+        args.retval = true;
       };
       const argStructure = createStructure(StructureType.Struct, undefined);
       const argStruct = shapeStructure(argStructure, argDef);

@@ -9,6 +9,7 @@
   },
   "scripts": {
     "test": "NODE_ENV=development node --experimental-loader ./src/loader.js --no-warnings ./node_modules/mocha/bin/mocha.js -- test/*.test.js",
+    "test:gc": "NODE_ENV=development node --expose-gc ./node_modules/mocha/bin/mocha.js -- test/gc/*.test.js",
     "debug": "NODE_ENV=development node --experimental-loader ./src/loader.js --no-warnings ./node_modules/mocha/bin/mocha.js --inspect-brk -- test/*.test.js",
     "install": "node-gyp rebuild",
     "rollup": "rollup -c rollup.config.js"

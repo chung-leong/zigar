@@ -1,20 +1,18 @@
 #include "addon.h"
 
-//-----------------------------------------------------------------------------
-//  Callback functions that zig modules will invoke
-//-----------------------------------------------------------------------------
 static Result ReadSlot(Host* call, 
                        uint32_t slot_id, 
                        Local<Value> *dest) {
-  if (call->slots.IsEmpty()) {
-    call->slots = Local<Object>::New(call->isolate, call->zig_func->slots);
+  if (!call->slots.IsEmpty()) {
+    Local<Value> value;
+    if (call->slots->Get(call->exec_context, slot_id).ToLocal(&value)) {
+      if (!value->IsNullOrUndefined()) {
+        *dest = value;
+        return Result::OK;
+      }
+    }  
   }
-  auto result = call->slots->Get(call->exec_context, slot_id);
-  if (result.IsEmpty()) {
-    return Result::Failure;
-  }  
-  *dest = result.ToLocalChecked();
-  return Result::OK;
+  return Result::Failure;
 }
 
 static Result WriteSlot(Host* call, 
@@ -48,13 +46,12 @@ static Result CreateStructure(Host* call,
                               Local<Object>* dest) {
   auto jsb = call->js_bridge;
   auto f = jsb->create_structure;
-  Local<Value> recv;
   Local<Value> args[2] = {
-    Uint32::NewFromUnsigned(call->isolate, static_cast<uint32_t>(type)),
-    String::NewFromUtf8(call->isolate, name).ToLocalChecked(),
+    Uint32::NewFromUnsigned(jsb->isolate, static_cast<uint32_t>(type)),
+    String::NewFromUtf8(jsb->isolate, name).ToLocalChecked(),
   };
   Local<Value> value;
-  if (!f->CallAsFunction(call->exec_context, recv, 2, args).ToLocal<Value>(&value)) {
+  if (!f->Call(jsb->context, Null(jsb->isolate), 2, args).ToLocal<Value>(&value)) {
     return Result::Failure;
   }
   if (!value->IsObject()) {
@@ -66,37 +63,42 @@ static Result CreateStructure(Host* call,
 
 static Result ShapeStructure(Host* call,
                              Local<Object> structure,
-                             const MemberSet* ms) {
+                             const MemberSet& member_set) {
+  printf("Shaping structure...\n");
   auto jsb = call->js_bridge;
   auto f = jsb->shape_structure;
-  auto array = Array::New(call->isolate, ms->member_count);
-  for (size_t i = 0; i < ms->member_count; i++) {
-    array->Set(jsb->context, i, jsb->NewMemberRecord(ms->members[i])).Check();
+  auto array = Array::New(jsb->isolate, member_set.member_count);
+  printf("Members: %zx %zu\n", reinterpret_cast<size_t>(member_set.members), member_set.member_count);
+  for (size_t i = 0; i < member_set.member_count; i++) {
+    array->Set(jsb->context, i, jsb->NewMemberRecord(member_set.members[i])).Check();
   }
-  auto def = Object::New(call->isolate);
-  def->Set(call->exec_context, jsb->n_size, Uint32::NewFromUnsigned(call->isolate, ms->member_count)).Check();
-  def->Set(call->exec_context, jsb->n_members, array).Check();
-  Local<Value> recv;
+  Local<Object> default_data;
+  Local<Object> default_pointers;
+  auto def = jsb->NewMemberSet(member_set.total_size, array, default_data, default_pointers);
   Local<Value> args[3] = { structure, def, jsb->options };
-  if (f->CallAsFunction(call->exec_context, recv, 3, args).IsEmpty()) {
+  if (f->Call(jsb->context, Null(jsb->isolate), 3, args).IsEmpty()) {
     return Result::Failure;
   }
+  printf("Done\n");
   return Result::OK;
 }
 
 static Result AttachVariables(Host* call,
                               Local<Object> structure,
-                              const MemberSet* ms) {
+                              const MemberSet& member_set) {
+  printf("Attach variables...\n");
   auto jsb = call->js_bridge;
   auto f = jsb->attach_variables;
-  auto array = Array::New(call->isolate, ms->member_count);
-  for (size_t i = 0; i < ms->member_count; i++) {
-    array->Set(jsb->context, i, jsb->NewMemberRecord(ms->members[i])).Check();
+  auto array = Array::New(jsb->isolate, member_set.member_count);
+  printf("Members: %zu\n", member_set.member_count);
+  for (size_t i = 0; i < member_set.member_count; i++) {
+    array->Set(jsb->context, i, jsb->NewMemberRecord(member_set.members[i])).Check();
   }
-  auto def = Object::New(call->isolate);
-  Local<Value> recv;
+  Local<Object> default_data;
+  Local<Object> default_pointers;
+  auto def = jsb->NewMemberSet(member_set.total_size, array, default_data, default_pointers);
   Local<Value> args[3] = { structure, def, jsb->options };
-  if (f->CallAsFunction(call->exec_context, recv, 3, args).IsEmpty()) {
+  if (f->Call(jsb->context, Null(jsb->isolate), 3, args).IsEmpty()) {
     return Result::Failure;
   }
   return Result::OK;
@@ -104,24 +106,26 @@ static Result AttachVariables(Host* call,
 
 static Result AttachMethods(Host* call,
                             Local<Object> structure,
-                            const MethodSet* ms) {
+                            const MethodSet& method_set) {
   auto jsb = call->js_bridge;
   auto f = jsb->attach_methods;
-  auto array = Array::New(call->isolate, ms->method_count);
-  for (size_t i = 0; i < ms->method_count; i++) {
-    array->Set(jsb->context, i, jsb->NewMethodRecord(ms->methods[i])).Check();
+  auto array = Array::New(jsb->isolate, method_set.method_count);
+  for (size_t i = 0; i < method_set.method_count; i++) {
+    array->Set(jsb->context, i, jsb->NewMethodRecord(method_set.methods[i])).Check();
   }
-  Local<Value> recv;
-  Local<Value> args[3] = { structure, array, jsb->options };
-  if (f->CallAsFunction(call->exec_context, recv, 3, args).IsEmpty()) {
+  auto def = jsb->NewMethodSet(array);
+  Local<Value> args[3] = { structure, def, jsb->options };
+  if (f->Call(call->exec_context, Null(jsb->isolate), 3, args).IsEmpty()) {
     return Result::Failure;
   }
   return Result::OK;
 }
 
-//-----------------------------------------------------------------------------
-//  Function for loading Zig modules
-//-----------------------------------------------------------------------------
+static void Call(const FunctionCallbackInfo<Value>& info) {
+  Host ctx(info);
+  ctx.zig_func->thunk(&ctx, info[0]);
+}
+
 static void Load(const FunctionCallbackInfo<Value>& info) {
   auto isolate = info.GetIsolate();
   auto ad = reinterpret_cast<AddonData*>(info.Data().As<External>()->Value());
@@ -157,7 +161,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
 
   // compile JavaScript code if it hasn't happened already
   Local<Object> js_module;
-  if (!ad->js_module.IsEmpty()) {
+  if (ad->js_module.IsEmpty()) {
     const char *code = 
       #include "addon.js.txt"
     ;
@@ -201,8 +205,10 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   ctx.js_bridge = new JSBridge(isolate, js_module, mde, module->flags);
   Local<Value> ns;
   if (module->factory(&ctx, &ns) == Result::OK) {
+    printf("Factory is done!\n");
     info.GetReturnValue().Set(ns);
   } else {
+    printf("Factory failed!\n");
     Throw("Unable to import functions");
   }
 }
@@ -226,7 +232,7 @@ NODE_MODULE_INIT(/* exports, module, context */) {
   };
   add(String::NewFromUtf8Literal(isolate, "load"), Load, 1);
   add(String::NewFromUtf8Literal(isolate, "getModuleCount"), GetModuleCount, 0);
-  add(String::NewFromUtf8Literal(isolate, "getFunctionCount"), GetModuleCount, 0);
+  add(String::NewFromUtf8Literal(isolate, "getFunctionCount"), GetFunctionCount, 0);
 } 
 
 int ModuleData::count = 0;
