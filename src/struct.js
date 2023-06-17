@@ -31,11 +31,11 @@ export function obtainGetter(member, options) {
     }
     case MemberType.Enum: {
       const { bitOffset, structure } = member;
-      const { constructor } = structure;
       const offset = bitOffset >> 3;
       const get = obtainDataViewGetter({ ...member, type: MemberType.Int });
       if (runtimeSafety) {
         return function() {
+          const { constructor } = structure;
           const value = get.call(this[DATA], offset, littleEndian);
           // the enumeration constructor returns the singleton object for the value
           const object = constructor(value);
@@ -66,8 +66,8 @@ export function obtainSetter(member, options) {
   switch (member.type) {
     case MemberType.Compound: {
       const { slot, structure } = member;
-      const { constructor, copier } = structure;
       fn = function(v) {
+        const { constructor, copier } = structure;
         if (!(v instanceof constructor)) {
           v = new constructor(v);
         }
@@ -125,10 +125,10 @@ export function obtainSetter(member, options) {
     } break;
     case MemberType.Enum: {
       const { bitOffset, structure } = member;
-      const { constructor } = structure;
       const offset = bitOffset >> 3;
       const set = obtainDataViewSetter({ ...member, type: MemberType.Int });
       return function(v) {
+        const { constructor } = structure;
         if (!(v instanceof constructor)) {
           throwEnumExpected(constructor);
         }

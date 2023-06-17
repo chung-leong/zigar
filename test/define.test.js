@@ -518,60 +518,64 @@ describe('Structure definition', function() {
       expect(object.cat).to.equal(2);
     }) 
   })
-  describe('Complex Struct', function() {
-    it('should define a struct that contains pointers', function() {
-      const intStructure = createStructure(StructureType.Primitive, 'Int32');
-      const Int32 = shapeStructure(intStructure, {
+  describe('Complex struct', function() {
+    it('should define a struct that contains pointers', function() {      
+      const intStructure = beginStructure({
+        type: StructureType.Primitive, 
+        name: 'Int32',
         size: 4,
-        members: [
-          {
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          }
-        ],
       });
-      const number1 = new Int32();
-      const number2 = new Int32();
-      number1.set(1234);
-      number2.set(4567);
-      const def = {
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      finalizeStructure(intStructure);
+      const structure = beginStructure({
+        type: StructureType.Struct, 
+        name: 'Hello',
         size: 8 * 2,
-        members: [
-          {
-            name: 'dog',
-            type: MemberType.Pointer,
-            bitSize: 64,
-            bitOffset: 0,
-            byteSize: 8,
-            slot: 0,
-            structure: intStructure,
-          },
-          {
-            name: 'cat',
-            type: MemberType.Pointer,
-            bitSize: 64,
-            bitOffset: 64,
-            byteSize: 8,
-            slot: 1,
-            structure: intStructure,
-          },
-        ],
-        defaultData: (() => {
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Pointer,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Pointer,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 64,
+        byteSize: 8,
+        slot: 1,
+        structure: intStructure,
+      })
+      const dv1 = new DataView(new ArrayBuffer(4));
+      const dv2 = new DataView(new ArrayBuffer(4));
+      dv1.setInt32(0, 1234, true);
+      dv2.setInt32(0, 4567, true);
+      attachDefaultValues(structure, {
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(8 * 2));
           dv.setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
           dv.setBigUint64(8, 0xaaaaaaaaaaaaaaaan, true);
           return dv;
         })(),
-        defaultPointers: { 
-          0: number1, 
-          1: number2 
+        pointers: { 
+          0: dv1.buffer, 
+          1: dv2.buffer 
         },
-      };
-      const structure = createStructure(StructureType.Struct, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       const object = new Hello();
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(4567);
@@ -579,34 +583,38 @@ describe('Structure definition', function() {
   })
   describe('Simple extern union', function() {
     it('should define a simple extern union', function() {
-      const def = {
+      const structure = beginStructure({
+        type: StructureType.ExternUnion, 
+        name: 'Hello',
         size: 4,
-        members: [
-          {
-            name: 'dog',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'cat',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          }
-        ],
-        defaultData: (() => {
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        isStatic: false,
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4));
           dv.setInt32(0, 1234, true);
           return dv;
         })(),
-      };      
-      const structure = createStructure(StructureType.ExternUnion, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      })
+      const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
       const object = new Hello();
       expect(object).to.be.an.instanceOf(Object);
@@ -621,304 +629,332 @@ describe('Structure definition', function() {
   })
   describe('Enumeration', function() {
     it('should define an enum class', function() {
-      const def = {
-        type: StructureType.Enumeration,
-        members: [
-          {
-            name: 'Dog',
-            type: MemberType.Int,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'Cat',
-            type: MemberType.Int,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-        ],
-        defaultData: (() => {
+      const structure = beginStructure({
+        type: StructureType.Enumeration, 
+        name: 'Hello',
+      });
+      attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setUint32(0, 0, true);
           dv.setUint32(4, 1, true);
           return dv;
         })(),
-      };
-      const structure = createStructure(StructureType.Enumeration, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       expect(Number(Hello.Dog)).to.equal(0);
       expect(Number(Hello.Cat)).to.equal(1);
       expect(Hello.Dog === Hello.Dog).to.be.true;
       expect(Hello.Dog === Hello.Cat).to.be.false;
     })
     it('should look up the correct enum object', function() {
-      const def = {
-        type: StructureType.Enumeration,
-        members: [
-          {
-            name: 'Dog',
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'Cat',
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-        ],
-        defaultData: (() => {
+      const structure = beginStructure({
+        type: StructureType.Enumeration, 
+        name: 'Hello',
+      });
+      attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Int,
+        isStatic: false,        
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setUint32(0, 0, true);
           dv.setUint32(4, 1, true);
           return dv;
         })(),
-      };
-      const structure = createStructure(StructureType.Enumeration, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       expect(Hello(0)).to.equal(Hello.Dog);
       expect(Hello(1)).to.equal(Hello.Cat);
     })
     it('should look up the correct enum object when values are not sequential', function() {
-      const def = {
-        members: [
-          {
-            name: 'Dog',
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'Cat',
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-        ],
-        defaultData: (() => {
+      const structure = beginStructure({
+        type: StructureType.Enumeration, 
+        name: 'Hello'
+      });
+      attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setUint32(0, 123, true);
           dv.setUint32(4, 456, true);
           return dv;
         })(),
-      };
-      const structure = createStructure(StructureType.Enumeration, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       expect(Hello(123)).to.equal(Hello.Dog);
       expect(Hello(456)).to.equal(Hello.Cat);
       expect(Number(Hello(123))).to.equal(123);
       expect(Number(Hello(456))).to.equal(456);
     })
     it('should look up the correct enum object when they represent bigInts', function() {
-      const def = {
-        members: [
-          {
-            name: 'Dog',
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 64,
-            bitOffset: 0,
-            byteSize: 8,
-          },
-          {
-            name: 'Cat',
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 64,
-            bitOffset: 0,
-            byteSize: 8,
-          },
-        ],
-        defaultData: (() => {
+      const structure = beginStructure({
+        type: StructureType.Enumeration, 
+        name: 'Hello'
+      });
+      attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+      });
+      attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+      });
+      attachDefaultValues(structure, {
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(8 * 2));
           dv.setBigUint64(0, 1234n, true);
           dv.setBigUint64(8, 4567n, true);
           return dv;
         })(),
-      };
-      const structure = createStructure(StructureType.Enumeration, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       expect(Hello(1234n)).to.equal(Hello.Dog);
       // BigInt suffix missing on purpose
       expect(Hello(4567)).to.equal(Hello.Cat);
     })
     it('should produce the expect output when JSON.stringify() is used', function() {
-      const def = {
-        members: [
-          {
-            name: 'Dog',
-            type: MemberType.Int,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'Cat',
-            type: MemberType.Int,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-        ],
-        defaultData: (() => {
+      const structure = beginStructure({
+        type: StructureType.Enumeration, 
+        name: 'Hello'
+      });
+      attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setUint32(0, 0, true);
           dv.setUint32(4, 1, true);
           return dv;
         })(),
-      };
-      const structure = createStructure(StructureType.Enumeration, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       expect(JSON.stringify(Hello.Dog)).to.equal('0');
       expect(JSON.stringify(Hello.Cat)).to.equal('1');
     })
     it('should throw when the new operator is used on the constructor', function() {
-      const def = {
-        members: [
-          {
-            name: 'Dog',
-            type: MemberType.Int,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'Cat',
-            type: MemberType.Int,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-        ],
-        defaultData: (() => {
+      const structure = beginStructure({
+        type: StructureType.Enumeration, 
+        name: 'Hello'
+      });
+      attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setUint32(0, 0, true);
           dv.setUint32(4, 1, true);
           return dv;
         })(),
-      };
-      const structure = createStructure(StructureType.Enumeration, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       expect(() => new Hello(5)).to.throw();
     })
     it('should return undefined when look-up of enum item fails', function() {
-      const def = {
-        members: [
-          {
-            name: 'Dog',
-            type: MemberType.Int,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'Cat',
-            type: MemberType.Int,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-        ],
-        defaultData: (() => {
+      const structure = beginStructure({
+        type: StructureType.Enumeration,
+        name: 'Hello'
+      });
+      attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setUint32(0, 0, true);
           dv.setUint32(4, 1, true);
           return dv;
         })(),
-      };
-      const structure = createStructure(StructureType.Enumeration, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       expect(Hello(1)).to.be.an('object');
       expect(Hello(5)).to.be.undefined;
     })
   }) 
   describe('Static variables', function() {
     it('should attach variables to a struct', function() {
-      const def = {
-        size: 8 * 2,
-        members: [
-          {
-            name: 'dog',
-            type: MemberType.Int,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'cat',
-            type: MemberType.Int,
-            bitSize: 32,
-            bitOffset: 32,
-            byteSize: 4,
-          },
-        ],
-      };
-      const structure = createStructure(StructureType.Struct, 'Hello');
-      const Hello = shapeStructure(structure, def);
       // define structure for integer variables
-      // in practice this structure will have a SharedArrayBuffer that points to 
-      // memory in the Zig code's data segment; we'll test with a regular 
-      // ArrayBuffer here
-      const intStructure = createStructure(StructureType.Primitive, 'Int32');
-      const Int32 = shapeStructure(intStructure, {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
         size: 4,
-        members: [
-          {
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          }
-        ],
       });
-      const number1 = new Int32();
-      const number2 = new Int32();
-      number1.set(1234);
-      number2.set(4567);
-      // the "static structure" doesn't have binary data attach to it, 
-      // since it does not appear on the Zig side; hence no need to 
-      // provide a size (or defaultData); we only need the slot numbers
-      const staticDef = {
-        members: [
-          {
-            name: 'superdog',
-            type: MemberType.Pointer,
-            bitSize: 64,
-            bitOffset: 0,
-            byteSize: 8,
-            slot: 0,
-            structure: intStructure,
-            mutable: true,
-          },
-          {
-            name: 'supercat',
-            type: MemberType.Pointer,
-            bitSize: 64,
-            bitOffset: 64,
-            byteSize: 8,
-            slot: 1,
-            structure: intStructure,
-            mutable: false,
-          },
-        ],
-        defaultPointers: { 
-          0: number1, 
-          1: number2 
-        },
-      };
-      attachVariables(structure, staticDef);
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });     
+      finalizeStructure(intStructure);
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8 * 2,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'superdog',
+        type: MemberType.Pointer,
+        isStatic: true,
+        isConst: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+        mutable: true,
+      });
+      attachMember(structure, {
+        name: 'supercat',
+        type: MemberType.Pointer,
+        isStatic: true,
+        isConst: true,
+        bitSize: 64,
+        bitOffset: 64,
+        byteSize: 8,
+        slot: 1,
+        structure: intStructure,
+      });
+      // in practice the default pointers will be SharedArrayBuffers pointing to 
+      // memory in the Zig code's data segment; we'll test with ArrayBuffer
+      const dv1 = new DataView(new ArrayBuffer(4));
+      const dv2 = new DataView(new ArrayBuffer(4));
+      dv1.setInt32(0, 1234, true);
+      dv2.setInt32(0, 4567, true);     
+      attachDefaultValues(structure, {
+        isStatic: true,
+        pointers: {
+          0: dv1.buffer,
+          1: dv2.buffer,
+        }
+      });
+      const Hello = finalizeStructure(structure);
       expect(Hello.superdog).to.equal(1234);
       Hello.superdog = 43;
       expect(Hello.superdog).to.equal(43);
@@ -932,78 +968,86 @@ describe('Structure definition', function() {
       expect(Hello.superdog).to.equal(43);
     })
     it('should attach variables to an enumeration', function() {
-      const def = {
-        members: [
-          {
-            name: 'Dog',
-            type: MemberType.Int,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'Cat',
-            type: MemberType.Int,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-        ],
-        defaultData: (() => {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });     
+      finalizeStructure(intStructure);
+      const structure = beginStructure({
+        type: StructureType.Enumeration, 
+        name: 'Hello'
+      });
+      attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        isStatic: false,
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setUint32(0, 0, true);
           dv.setUint32(4, 1, true);
           return dv;
         })(),
-      };
-      const structure = createStructure(StructureType.Enumeration, 'Hello');
-      const Hello = shapeStructure(structure, def);
-      const intStructure = createStructure(StructureType.Primitive, 'Int32');
-      const Int32 = shapeStructure(intStructure, {
-        size: 4,
-        members: [
-          {
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          }
-        ],
       });
-      const number1 = new Int32();
-      const number2 = new Int32();
-      number1.set(1234);
-      number2.set(4567);
-      const staticDef = {
-        members: [
-          {
-            name: 'superdog',
-            type: MemberType.Pointer,
-            bitSize: 64,
-            bitOffset: 0,
-            byteSize: 8,
-            slot: 0,
-            structure: intStructure,
-            mutable: true,
-          },
-          {
-            name: 'supercat',
-            type: MemberType.Pointer,
-            bitSize: 64,
-            bitOffset: 64,
-            byteSize: 8,
-            slot: 1,
-            structure: intStructure,
-            mutable: false,
-          },
-        ],
-        defaultPointers: { 
-          0: number1, 
-          1: number2 
-        },
-      };
-      attachVariables(structure, staticDef);
+      attachMember(structure, {
+        name: 'superdog',
+        type: MemberType.Pointer,
+        isStatic: true,
+        isConst: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+        mutable: true,
+      });
+      attachMember(structure, {
+        name: 'supercat',
+        type: MemberType.Pointer,
+        isStatic: true,
+        isConst: true,
+        bitSize: 64,
+        bitOffset: 64,
+        byteSize: 8,
+        slot: 1,
+        structure: intStructure,
+      });
+      const dv1 = new DataView(new ArrayBuffer(4));
+      const dv2 = new DataView(new ArrayBuffer(4));
+      dv1.setInt32(0, 1234, true);
+      dv2.setInt32(0, 4567, true);     
+      attachDefaultValues(structure, {
+        isStatic: true,
+        pointers: {
+          0: dv1.buffer,
+          1: dv2.buffer,
+        }
+      });
+      const Hello = finalizeStructure(structure);
       expect(Hello.superdog).to.equal(1234);
       Hello.superdog = 43;
       expect(Hello.superdog).to.equal(43);
@@ -1015,67 +1059,64 @@ describe('Structure definition', function() {
   })
   describe('Methods', function() {
     it('should attach methods to a struct', function() {
-      const def = {
+      const structure = beginStructure({
+        type: StructureType.Struct, 
+        name: 'Hello',
         size: 8,
-        members: [
-          {
-            name: 'dog',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'cat',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 32,
-            byteSize: 4,
-          },
-        ]
-      };
-      const structure = createStructure(StructureType.Struct, 'Hello');
-      const Hello = shapeStructure(structure, def);
-      const object = new Hello();
-      // argument struct
-      const argDef = {
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      const argStructure = beginStructure({
         type: StructureType.Struct,
+        name: 'Argument',
         size: 12,
-        members: [
-          {
-            name: '0',
-            type: MemberType.Compound,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 8,
-            structure,
-          },
-          {
-            name: 'retval',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 64,
-            byteSize: 4,
-          },
-        ],
-      };
+      });
+      attachMember(argStructure, {
+        name: '0',
+        type: MemberType.Compound,
+        isStatic: false,
+        bitSize: structure.size * 8,
+        bitOffset: 0,
+        byteSize: structure.size,
+        structure,
+      });
+      attachMember(argStructure, {
+        name: 'retval',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 64,
+        byteSize: 4,
+      });
+      const argStruct = finalizeStructure(argStructure);
       const thunk = (args) => {
         args.retval = args[0].dog + args[0].cat;
       };
-      const argStructure = createStructure(StructureType.Struct, undefined);
-      const argStruct = shapeStructure(argStructure, argDef);
-      const methods = [
-        {
-          name: 'merge',
-          argStruct,
-          staticOnly: false,
-          thunk, 
-        },
-      ];
-      attachMethods(structure, { methods });
+      attachMethod(structure, {
+        name: 'merge',
+        argStruct,
+        isStaticOnly: false,
+        thunk, 
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello();
       expect(Hello.merge).to.be.a('function');
       expect(Hello.merge).to.have.property('name', 'merge');
       expect(Hello.prototype.merge).to.be.a('function');
@@ -1088,79 +1129,82 @@ describe('Structure definition', function() {
       expect(res2).to.equal(23);
     })
     it('should attach methods to enum items', function() {
-      const def = {
+      const structure = beginStructure({
+        type: StructureType.Enumeration, 
+        name: 'Hello',
         size: 4,
-        members: [
-          {
-            name: 'Dog',
-            type: MemberType.Int,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'Cat',
-            type: MemberType.Int,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-        ],
-        defaultData: (() => {
+      });
+      attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setUint32(0, 0, true);
           dv.setUint32(4, 1, true);
           return dv;
         })(),
-      };
-      const structure = createStructure(StructureType.Enumeration, 'Hello');
-      const Hello = shapeStructure(structure, def);
-      // argument struct
-      const argDef = {
-        type: StructureType.Struct,
+      });
+      const argStructure = beginStructure({
+        type: StructureType.Struct, 
+        name: 'Arguments',
         size: 12,
-        members: [
-          {
-            name: '0',
-            type: MemberType.Enum,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-            structure,
-          },
-          {
-            name: '1',
-            type: MemberType.Int,
-            bitSize: 32,
-            bitOffset: 32,
-            byteSize: 4,
-          },
-          {
-            name: 'retval',
-            type: MemberType.Bool,
-            bitSize: 1,
-            bitOffset: 64,
-            byteSize: 1,
-          },
-        ],
-      };
+      });
+      attachMember(argStructure, {
+        name: '0',
+        type: MemberType.Enum,
+        isStatic: false, 
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure,
+      });
+      attachMember(argStructure, {
+        name: '1',
+        type: MemberType.Int,
+        isStatic: false, 
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      attachMember(argStructure, {
+        name: 'retval',
+        type: MemberType.Bool,
+        isStatic: false, 
+        bitSize: 1,
+        bitOffset: 64,
+        byteSize: 1,
+      });
+      const argStruct = finalizeStructure(argStructure);
       let arg1, arg2;
       const thunk = (args) => {
         arg1 = args[0];
         arg2 = args[1];
         args.retval = true;
       };
-      const argStructure = createStructure(StructureType.Struct, undefined);
-      const argStruct = shapeStructure(argStructure, argDef);
-      const methods = [
-        {
-          name: 'foo',
-          argStruct,
-          staticOnly: false,
-          thunk, 
-        },
-      ];
-      attachMethods(structure, { methods });
+      attachMethod(structure, {
+        name: 'foo',
+        argStruct,
+        isStaticOnly: false,
+        thunk, 
+      });
+      const Hello = finalizeStructure(structure);
       expect(Hello.foo).to.be.a('function');
       expect(Hello.foo).to.have.property('name', 'foo');
       expect(Hello.prototype.foo).to.be.a('function');

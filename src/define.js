@@ -83,8 +83,9 @@ function finalizePrimitive(s) {
   const get = obtainGetter(member, options);
   const set = obtainSetter(member, options);
   const constructor = s.constructor = function(arg) {
+    const creating = this instanceof constructor;
     let self, dv, init;
-    if (this) {
+    if (creating) {
       // new operation--expect matching primitive
       if (arg !== undefined) {
         init = primitive(arg);
@@ -98,7 +99,7 @@ function finalizePrimitive(s) {
     Object.defineProperties(self, {
       [DATA]: { value: dv },
     });
-    if (!this) {
+    if (!creating) {
       return self;
     }
   };
@@ -127,8 +128,9 @@ function finalizeArray(s) {
   const set = obtainArraySetter(member, options);
   const getLength = obtainArrayLengthGetter(member, options);
   const constructor = s.constructor = function(arg) {
+    const creating = this instanceof constructor;
     let self, dv, init;
-    if (this) {
+    if (creating) {
       // new operation--expect an array
       // TODO: validate
       if (arg !== undefined) {
@@ -143,7 +145,7 @@ function finalizeArray(s) {
     Object.defineProperties(self, {
       [DATA]: { value: dv },
     });
-    if (!this) {
+    if (!creating) {
       return self;
     }
   };
@@ -175,29 +177,21 @@ function finalizeStruct(s) {
     descriptors[member.name] = { get, set, configurable: true, enumerable: true };
   }
   const relocatables = {};
-  const internals = {};
   for (const member of members) {
     if (member.type === MemberType.Pointer) {
+      const { constructor } = member.structure;
       const buffer = pointers?.[member.slot];
-      if (buffer) {
-        relocatables[member.slot] = new member.structure.constructor(buffer);
-      }
-    } else if (member.type === MemberType.Compound) {
-      relocatables[member.slot] = null;
-      internals[member.slot] = { 
-        constructor: structure.constructor, 
-        offset: bitOffset >> 3, 
-        byteSize,
-      };      
-    } else if (member.type === MemberType.Enum) {
+      relocatables[member.slot] = (buffer) ? constructor(buffer) : null;
+    } else if (member.type === MemberType.Compound || member.type === MemberType.Enum) {
       relocatables[member.slot] = null;
     }
   }
   const hasRelocatables = Object.keys(relocatables).length > 0;
-  const hasInternals = Object.keys(internals).length > 0;
+  const hasCompounds = !!members.find(m => m.type === MemberType.Compound);
   const constructor = s.constructor = function(arg) {
+    const creating = this instanceof constructor;
     let self, dv, init;
-    if (this) {
+    if (creating) {
       // new operation--expect an object
       // TODO: validate
       if (arg !== undefined) {
@@ -218,19 +212,27 @@ function finalizeStruct(s) {
     Object.defineProperties(self, descriptors);
     if (hasRelocatables) {
       const relocs = Object.assign({}, relocatables);
-      if (hasInternals) {
+      if (hasCompounds) {
         // initialize compound members (array, struct, etc.), storing them 
         // in relocatables even through they aren't actually relocatable
-        for (const [ slot, { constructor, offset, align } ] of Object.entries(internals)) {
-          // "cast" the dataview into the correct type (not using the new operator)
-          relocs[slot] = constructor(new DataView(dv.buffer, offset, align));
+        for (const member of members) {
+          if (member.type === MemberType.Compound) {
+            const { 
+              structure: { constructor },
+              bitOffset,
+              byteSize,
+              slot,
+            } = member;
+            // "cast" the dataview into the correct type (not using the new operator)
+            relocs[slot] = constructor(new DataView(dv.buffer, bitOffset >> 3, byteSize));
+          }
         }
       }
       Object.defineProperties(self, {
         [RELOCATABLE]: { value: relocs },
       });  
     } 
-    if (!this) {
+    if (!creating) {
       return self;
     }
   };
@@ -242,6 +244,7 @@ function finalizeStruct(s) {
   };
   attachDataViewAccessors(s);
   attachStaticMembers(s);
+  attachMethods(s);
   return constructor;
 };
 
@@ -258,7 +261,8 @@ function finalizeEnumeration(s) {
   const count = members.length;
   const items = {};
   const constructor = s.constructor = function(arg) {
-    if (this) {
+    const creating = this instanceof constructor;
+    if (creating) {
       // the "constructor" is only used to convert a number into an enum object
       // new enum items cannot be created
       throwNoNewEnum();    
@@ -325,6 +329,7 @@ function finalizeEnumeration(s) {
     items[index] = item;
   }
   attachStaticMembers(s);
+  attachMethods(s);
   return constructor;
 };
 
@@ -335,6 +340,7 @@ export function attachStaticMembers(s) {
       members,
       pointers,
     },
+    options,
   } = s;
   const relocs = {};
   const descriptors = {
@@ -347,7 +353,8 @@ export function attachStaticMembers(s) {
     const set = obtainSetter(member, options);
     descriptors[member.name] = { get, set, configurable: true, enumerable: true };
     const buffer = pointers[member.slot];
-    relocs[member.slot] = member.structure.constructor(buffer);
+    const { constructor } = member.structure;
+    relocs[member.slot] = constructor(buffer);
   };
   Object.defineProperties(constructor, descriptors);
 }
