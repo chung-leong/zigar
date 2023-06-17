@@ -89,9 +89,9 @@ static Result AttachDefaultValues(Host* call,
                                   const DefaultValues& values) {
   auto jsb = call->js_bridge;
   auto f = jsb->attach_method;
-  Local<Value> data;
-  Local<Value> pointers;
-  auto def = jsb->NewDefaultValues(data, pointers);
+  Local<Value> data = Null(jsb->isolate);
+  Local<Value> pointers = Null(jsb->isolate);
+  auto def = jsb->NewDefaultValues(values.is_static, data, pointers);
   Local<Value> args[2] = { structure, def };
   if (f->Call(call->exec_context, Null(jsb->isolate), 2, args).IsEmpty()) {
     return Result::Failure;
@@ -195,10 +195,8 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   ctx.js_bridge = new JSBridge(isolate, js_module, mde, module->flags);
   Local<Value> ns;
   if (module->factory(&ctx, &ns) == Result::OK) {
-    printf("Factory is done!\n");
     info.GetReturnValue().Set(ns);
   } else {
-    printf("Factory failed!\n");
     Throw("Unable to import functions");
   }
 }

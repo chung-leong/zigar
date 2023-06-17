@@ -24,9 +24,9 @@ R"=====(
     Opaque: 8,
   };
 
-  function getTypeName(type, signed, bitSize) {
+  function getTypeName(type, isSigned, bitSize) {
     if (type === MemberType.Int) {
-      return `${bitSize <= 32 ? '' : 'Big' }${signed ? 'Int' : 'Uint'}${bitSize}`;
+      return `${bitSize <= 32 ? '' : 'Big' }${isSigned ? 'Int' : 'Uint'}${bitSize}`;
     } else if (type === MemberType.Float) {
       return `Float${bitSize}`;
     } else if (type === MemberType.Bool) {
@@ -36,15 +36,15 @@ R"=====(
     }
   }
     
-  function getIntRange(signed, bitSize) {
+  function getIntRange(isSigned, bitSize) {
     if (bitSize <= 32) {
-      const max = 2 ** (signed ? bitSize - 1 : bitSize) - 1;
-      const min = (signed) ? -(2 ** (bitSize - 1)) : 0;
+      const max = 2 ** (isSigned ? bitSize - 1 : bitSize) - 1;
+      const min = (isSigned) ? -(2 ** (bitSize - 1)) : 0;
       return { min, max };
     } else {
       bitSize = BigInt(bitSize);
-      const max = 2n ** (signed ? bitSize - 1n : bitSize) - 1n;
-      const min = (signed) ? -(2n ** (bitSize - 1n)) : 0n;
+      const max = 2n ** (isSigned ? bitSize - 1n : bitSize) - 1n;
+      const min = (isSigned) ? -(2n ** (bitSize - 1n)) : 0n;
       return { min, max };
     }
   }
@@ -161,8 +161,8 @@ R"=====(
     }
   }
 
-  function throwOverflow(signed, bitSize, value) {
-    const typeName = getTypeName(MemberType.Int, signed, bitSize);
+  function throwOverflow(isSigned, bitSize, value) {
+    const typeName = getTypeName(MemberType.Int, isSigned, bitSize);
     throw new TypeError(`${typeName} cannot represent value '${value}'`);
   }
 
@@ -209,9 +209,9 @@ R"=====(
   const ENUM_INDEX = Symbol('enumIndex');
   const ENUM_ITEMS = Symbol('enumItems');
 
-  function obtainDataViewGetter({ type, signed, bitOffset, bitSize, byteSize }) {
+  function obtainDataViewGetter({ type, isSigned, bitOffset, bitSize, byteSize }) {
     const bitPos = bitOffset & 0x07;
-    const name = getMethodName('get', type, signed, bitPos, bitSize, byteSize);
+    const name = getMethodName('get', type, isSigned, bitPos, bitSize, byteSize);
     if (DataView.prototype[name]) {
       return DataView.prototype[name];
     }
@@ -223,9 +223,9 @@ R"=====(
       if (type === MemberType.Int) {
         if (bitSize < 64) {
           // actual number of bits needed when stored byte-aligned
-          const typeName = getTypeName(type, signed, byteSize * 8);
+          const typeName = getTypeName(type, isSigned, byteSize * 8);
           const get = DataView.prototype[`get${typeName}`];
-          if (signed) {
+          if (isSigned) {
             const signMask = (bitSize <= 32) ? 2 ** (bitSize - 1) : 2n ** BigInt(bitSize - 1);
             const valueMask = (bitSize <= 32) ? signMask - 1 : signMask - 1n; 
             fn = function(offset, littleEndian) {
@@ -257,7 +257,7 @@ R"=====(
             }
             return n;
           };
-          if (signed) {
+          if (isSigned) {
             const signMask = 2n ** BigInt(bitSize - 1);
             const valueMask = signMask - 1n; 
             fn = function(offset, littleEndian) {
@@ -339,7 +339,7 @@ R"=====(
         };
       } else if (type === MemberType.Int && bitPos + bitSize <= 8) {
         // sub-8-bit numbers also have real use cases
-        if (signed) {
+        if (isSigned) {
           const signMask = 2 ** (bitSize - 1);
           const valueMask = signMask - 1;
           fn = function(offset) {
@@ -360,7 +360,7 @@ R"=====(
         // temporary buffer, bit-aligning the data
         const byteSize = getByteSize(bitSize);
         const dest = new DataView(new ArrayBuffer(byteSize));
-        const getAligned = obtainDataViewGetter({ type, bitSize, signed, bitOffset: 0, byteSize });
+        const getAligned = obtainDataViewGetter({ type, bitSize, isSigned, bitOffset: 0, byteSize });
         const copyBits = obtainBitAlignFunction(bitPos, bitSize, true);
         fn = function(offset, littleEndian) {
           copyBits(dest, this, offset);
@@ -376,9 +376,9 @@ R"=====(
     return fn;
   }
 
-  function obtainDataViewSetter({ type, bitSize, signed, byteSize, bitOffset }) {
+  function obtainDataViewSetter({ type, bitSize, isSigned, byteSize, bitOffset }) {
     const bitPos = bitOffset & 0x07;
-    const name = getMethodName('set', type, signed, bitPos, bitSize, byteSize);
+    const name = getMethodName('set', type, isSigned, bitPos, bitSize, byteSize);
     if (DataView.prototype[name]) {
       return DataView.prototype[name];
     }
@@ -389,9 +389,9 @@ R"=====(
     if (byteSize !== 0) {
       if (type === MemberType.Int) {
         if (bitSize < 64) {
-          const typeName = getTypeName(type, signed, byteSize * 8);
+          const typeName = getTypeName(type, isSigned, byteSize * 8);
           const set = DataView.prototype[`set${typeName}`];
-          if (signed) {
+          if (isSigned) {
             const signMask = (bitSize <= 32) ? 2 ** (bitSize - 1) : 2n ** BigInt(bitSize - 1);
             const valueMask = (bitSize <= 32) ? signMask - 1 : signMask - 1n; 
             fn = function(offset, v, littleEndian) {
@@ -427,7 +427,7 @@ R"=====(
             }
             return n;
           };
-          if (signed) {
+          if (isSigned) {
             const signMask = (bitSize <= 32) ? 2 ** (bitSize - 1) : 2n ** BigInt(bitSize - 1);
             const valueMask = (bitSize <= 32) ? signMask - 1 : signMask - 1n; 
             fn = function(offset, v, littleEndian) {
@@ -506,7 +506,7 @@ R"=====(
           set.call(this, offset, b);
         };
       } else if (type === MemberType.Int && bitPos + bitSize <= 8) {
-        if (signed) {
+        if (isSigned) {
           const signMask = 2 ** (bitSize - 1);        
           const valueMask = signMask - 1;
           const outsideMask = 0xFF ^ ((valueMask | signMask) << bitPos);
@@ -529,7 +529,7 @@ R"=====(
       } else {
         const byteSize = getByteSize(bitSize);
         const src = new DataView(new ArrayBuffer(byteSize));
-        const setAligned = obtainDataViewSetter({ type, signed, bitOffset: 0, bitSize, byteSize });
+        const setAligned = obtainDataViewSetter({ type, isSigned, bitOffset: 0, bitSize, byteSize });
         const applyBits = obtainBitAlignFunction(bitPos, bitSize, false);
         fn = function(offset, value, littleEndian) {
           setAligned.call(src, 0, value, littleEndian);
@@ -570,8 +570,8 @@ R"=====(
     return this[DATA];
   }
 
-  function getMethodName(prefix, type, signed, bitPos, bitSize, byteSize) {
-    const typeName = getTypeName(type, signed, bitSize);
+  function getMethodName(prefix, type, isSigned, bitPos, bitSize, byteSize) {
+    const typeName = getTypeName(type, isSigned, bitSize);
     const suffix = (byteSize === 0) ? `Bit${bitPos}` : ``;
     return `${prefix}${typeName}${suffix}`;
   }
@@ -610,11 +610,11 @@ R"=====(
       }
       case MemberType.Enum: {
         const { bitOffset, structure } = member;
-        const { constructor } = structure;
         const offset = bitOffset >> 3;
         const get = obtainDataViewGetter({ ...member, type: MemberType.Int });
         if (runtimeSafety) {
           return function() {
+            const { constructor } = structure;
             const value = get.call(this[DATA], offset, littleEndian);
             // the enumeration constructor returns the singleton object for the value
             const object = constructor(value);
@@ -645,8 +645,8 @@ R"=====(
     switch (member.type) {
       case MemberType.Compound: {
         const { slot, structure } = member;
-        const { constructor, copier } = structure;
         fn = function(v) {
+          const { constructor, copier } = structure;
           if (!(v instanceof constructor)) {
             v = new constructor(v);
           }
@@ -655,8 +655,8 @@ R"=====(
         };  
       } break;
       case MemberType.Pointer: {
-        const { slot, structure, mutable } = member;
-        if (!mutable) {
+        const { slot, structure, isConst } = member;
+        if (isConst) {
           return;
         } 
         if (structure.type === StructureType.Primitive) {
@@ -679,11 +679,11 @@ R"=====(
         const { type, bitOffset } = member;
         const offset = bitOffset >> 3;
         if (runtimeSafety && type === MemberType.Int) {
-          const { signed, bitSize } = member;
-          const { min, max } = getIntRange(signed, bitSize);
+          const { isSigned, bitSize } = member;
+          const { min, max } = getIntRange(isSigned, bitSize);
           fn = function(v) { 
             if (v < min || v > max) {
-              throwOverflow(signed, bitSize, v);
+              throwOverflow(isSigned, bitSize, v);
             }
             set.call(this[DATA], offset, v, littleEndian);
           };
@@ -704,10 +704,10 @@ R"=====(
       } break;
       case MemberType.Enum: {
         const { bitOffset, structure } = member;
-        const { constructor } = structure;
         const offset = bitOffset >> 3;
         const set = obtainDataViewSetter({ ...member, type: MemberType.Int });
         return function(v) {
+          const { constructor } = structure;
           if (!(v instanceof constructor)) {
             throwEnumExpected(constructor);
           }
@@ -810,9 +810,9 @@ R"=====(
         };  
       } break;
       case MemberType.Pointer: {
-        const { structure, mutable, byteSize } = member;
+        const { structure, byteSize, isConst } = member;
         const { constructor } = structure;
-        if (!mutable) {
+        if (isConst) {
           return;
         } 
         return function(index, v) {
@@ -835,11 +835,11 @@ R"=====(
         const set = obtainDataViewSetter(member);
         const { type } = member;
         if (runtimeSafety && type === MemberType.Int) {
-          const { signed, bitSize, byteSize } = member;
-          const { min, max } = getIntRange(signed, bitSize);
+          const { isSigned, bitSize, byteSize } = member;
+          const { min, max } = getIntRange(isSigned, bitSize);
           fn = function(index, v) { 
             if (v < min || v > max) {
-              throwOverflow(signed, bitSize, v);
+              throwOverflow(isSigned, bitSize, v);
             }
             const offset = index * byteSize;
             const dv = this[DATA];
@@ -886,9 +886,9 @@ R"=====(
 
   function obtainTypedArrayGetter(members) {
     const hash = {};
-    for (const { type, signed, bitSize, byteSize } of members) {
+    for (const { type, isSigned, bitSize, byteSize } of members) {
       if (type === MemberType.Int || type === MemberType.Float) {
-        const typeName = getTypeName(type, signed, bitSize);
+        const typeName = getTypeName(type, isSigned, bitSize);
         const constructor = typedArrays[typeName];
         if (!constructor) {
           return;
@@ -933,48 +933,91 @@ R"=====(
     Float64: Float64Array,
   };
 
-  function createStructure(type, name) {
-    return { type, name, constructor: null, copier: null };
+  function beginStructure(def, options = {}) {
+    const {
+      type,
+      name,
+      size,
+    } = def;
+    return { 
+      constructor: null, 
+      copier: null,
+      type, 
+      name,
+      size, 
+      instance: {
+        members: [],
+        data: null,
+        pointers: null,
+      },
+      static: {
+        members: [],
+        data: null,
+        pointers: null,
+      },
+      methods: [],
+      options,
+    };
   }
 
-  function shapeStructure(s, def, options = {}) {
-    switch (s.type) {
-      case StructureType.Primitive: 
-        return shapePrimitive(s, def, options);
-      case StructureType.Array:
-        return shapeArray(s, def, options);
-      case StructureType.Struct:
-      case StructureType.ExternUnion:
-        return shapeStruct(s, def, options);
-      case StructureType.TaggedUnion:
-        return null; // TODO
-      case StructureType.Enumeration:
-        return shapeEnumeration(s, def, options);
+  function attachMember(s, def) {
+    const target = (def.isStatic) ? s.static : s.instance;
+    target.members.push(def);
+  }
+
+  function attachMethod(s, def) {
+    s.methods.push(def);
+  }
+
+  function attachDefaultValues(s, def) {
+    const target = (def.isStatic) ? s.static : s.instance;
+    if (def.data) {
+      target.data = def.data;
+    }
+    if (def.pointers) {
+      target.pointers = def.pointers;
     }
   }
 
-  function shapePrimitive(s, def, options) {
+  function finalizeStructure(s) {
+    switch (s.type) {
+      case StructureType.Primitive: 
+        return finalizePrimitive(s);
+      case StructureType.Array:
+        return finalizeArray(s);
+      case StructureType.Struct:
+      case StructureType.ExternUnion:
+        return finalizeStruct(s);
+      case StructureType.TaggedUnion:
+        // TODO
+        return null;
+      case StructureType.Enumeration:
+        return finalizeEnumeration(s);
+    }
+  }
+
+  function finalizePrimitive(s) {
     const { 
       size,
-      members: [ member ],
-      defaultData,
-    } = def;
+      instance: {
+        members: [ member ],
+      },
+      options,
+    } = s;
     const copy = obtainCopyFunction(size);
     const primitive = getPrimitive(member.type, member.bitSize);
     const get = obtainGetter(member, options);
     const set = obtainSetter(member, options);
     const constructor = s.constructor = function(arg) {
-      let self, dv, init;
-      if (this) {
+      const creating = this instanceof constructor;
+      let self, dv;
+      if (creating) {
         // new operation--expect matching primitive
         if (arg !== undefined) {
-          init = primitive(arg);
+          primitive(arg);
         }
         self = this;
         dv = new DataView(new ArrayBuffer(size));
-        if (defaultData && init === undefined) {
-          copy(dv, defaultData);
-        }
       } else {
         self = Object.create(constructor.prototype);
         dv = obtainDataView(arg, size);
@@ -982,7 +1025,7 @@ R"=====(
       Object.defineProperties(self, {
         [DATA]: { value: dv },
       });
-      if (!this) {
+      if (!creating) {
         return self;
       }
     };
@@ -998,30 +1041,23 @@ R"=====(
     return constructor;
   }
 
-  function shapeArray(s, def, options) {
+  function finalizeArray(s) {
     const {
       size,
-      members: [ member ],
-      defaultData,
-      exposeDataView = false,
-    } = def; 
-    const copy = obtainCopyFunction(size); 
+      instance: {
+        members: [ member ],
+      },
+      options,
+    } = s; 
     const get = obtainArrayGetter(member, options);
     const set = obtainArraySetter(member, options);
     const getLength = obtainArrayLengthGetter(member);
     const constructor = s.constructor = function(arg) {
-      let self, dv, init;
-      if (this) {
-        // new operation--expect an array
-        // TODO: validate
-        if (arg !== undefined) {
-          init = arg;
-        }
+      const creating = this instanceof constructor;
+      let self, dv;
+      if (creating) {
         self = this;
         dv = new DataView(new ArrayBuffer(size));
-        if (defaultData && init === undefined) {
-          copy(dv, defaultData);
-        }
       } else {
         self = Object.create(constructor.prototype);
         dv = obtainDataView(arg, size);
@@ -1029,31 +1065,30 @@ R"=====(
       Object.defineProperties(self, {
         [DATA]: { value: dv },
       });
-      if (!this) {
+      if (!creating) {
         return self;
       }
     };
-    s.size = size;
     Object.defineProperties(constructor.prototype, {
       get: { value: get, configurable: true, writable: true },
       set: { value: set, configurable: true, writable: true },
       length: { get: getLength, configurable: true },
       [Symbol.iterator]: { value: getArrayIterator, configurable: true },
     });
-    if (exposeDataView) {
-      attachDataViewAccessors(s, [ member ]);
-    }
+    attachDataViewAccessors(s);
     return constructor;
   }
 
-  function shapeStruct(s, def, options) {
+  function finalizeStruct(s) {
     const { 
       size,
-      members,
-      defaultData,
-      defaultPointers,
-      exposeDataView = false,
-    } = def;
+      instance: {
+        members,
+        data,
+        pointers,
+      },
+      options,
+    } = s;
     const copy = obtainCopyFunction(size);
     const descriptors = {};
     for (const member of members) {
@@ -1061,28 +1096,26 @@ R"=====(
       const set = obtainSetter(member, options);
       descriptors[member.name] = { get, set, configurable: true, enumerable: true };
     }
-    const hasRelocatable = !!members.find(m => m.type === MemberType.Compound || m.type === MemberType.Pointer);
-    const compoundMembers = members.filter(m => m.type === MemberType.Compound);
-    const internalPointers = (compoundMembers.length > 0) && compoundMembers.map(({ structure, bitOffset, align, slot }) => {
-      return { 
-        constructor: structure.constructor, 
-        slot, 
-        offset: bitOffset >> 3, 
-        align,
-      };
-    });
+    const relocatables = {};
+    for (const member of members) {
+      if (member.type === MemberType.Pointer) {
+        const { constructor } = member.structure;
+        const buffer = pointers?.[member.slot];
+        relocatables[member.slot] = (buffer) ? constructor(buffer) : null;
+      } else if (member.type === MemberType.Compound || member.type === MemberType.Enum) {
+        relocatables[member.slot] = null;
+      }
+    }
+    const hasRelocatables = Object.keys(relocatables).length > 0;
+    const hasCompounds = !!members.find(m => m.type === MemberType.Compound);
     const constructor = s.constructor = function(arg) {
-      let self, dv, init;
-      if (this) {
-        // new operation--expect an object
-        // TODO: validate
-        if (arg !== undefined) {
-          init = arg;
-        }
+      const creating = this instanceof constructor;
+      let self, dv;
+      if (creating) {
         self = this;
         dv = new DataView(new ArrayBuffer(size));
-        if (defaultData && init === undefined) {
-          copy(dv, defaultData);
+        if (data) {
+          copy(dv, data);
         }
       } else {
         self = Object.create(constructor.prototype);
@@ -1092,49 +1125,58 @@ R"=====(
         [DATA]: { value: dv },
       });
       Object.defineProperties(self, descriptors);
-      if (hasRelocatable) {
-        const relocs = Object.assign({}, defaultPointers);
-        if (internalPointers) {
+      if (hasRelocatables) {
+        const relocs = Object.assign({}, relocatables);
+        if (hasCompounds) {
           // initialize compound members (array, struct, etc.), storing them 
           // in relocatables even through they aren't actually relocatable
-          for (const { constructor, slot, offset, align } of internalPointers) {
-            const mdv = new DataView(dv.buffer, offset, align);
-            const obj = new constructor(mdv);
-            relocs[slot] = obj;
+          for (const member of members) {
+            if (member.type === MemberType.Compound) {
+              const { 
+                structure: { constructor },
+                bitOffset,
+                byteSize,
+                slot,
+              } = member;
+              // "cast" the dataview into the correct type (not using the new operator)
+              relocs[slot] = constructor(new DataView(dv.buffer, bitOffset >> 3, byteSize));
+            }
           }
         }
         Object.defineProperties(self, {
           [RELOCATABLE]: { value: relocs },
         });  
       } 
-      if (!this) {
+      if (!creating) {
         return self;
       }
     };
     s.copier = function(dest, src) {
       copy(dest[DATA], src[DATA]);
-      if (hasRelocatable) {
+      if (hasRelocatables) {
         Object.assign(dest[RELOCATABLE], src[RELOCATABLE]);
       }
     };
-    s.size = size;
-    if (exposeDataView) {
-      attachDataViewAccessors(s, members);
-    }
+    attachDataViewAccessors(s);
+    attachStaticMembers(s);
+    attachMethods(s);
     return constructor;
   }
-  function shapeEnumeration(s, def, options) {
+  function finalizeEnumeration(s) {
     const { 
-      size,
-      members,
-      defaultData,
-    } = def;
+      instance: {
+        members,
+        data,
+      },
+      options,
+    } = s;
     const primitive = getPrimitive(members[0].type, members[0].bitSize);
     const getValue = obtainArrayGetter(members[0], options);
     const count = members.length;
     const items = {};
     const constructor = s.constructor = function(arg) {
-      if (this) {
+      const creating = this instanceof constructor;
+      if (creating) {
         // the "constructor" is only used to convert a number into an enum object
         // new enum items cannot be created
         throwNoNewEnum();    
@@ -1158,11 +1200,10 @@ R"=====(
       // return the enum object (created down below)
       return items[index];
     };
-    s.size = size;
     // attach the numeric values to the class as its binary data
     // this allows us to reuse the array getter
     Object.defineProperties(constructor, {
-      [DATA]: { value: defaultData },
+      [DATA]: { value: data },
       [ENUM_ITEMS]: { value: items },
     });
     const valueOf = function() { 
@@ -1201,10 +1242,94 @@ R"=====(
       });
       items[index] = item;
     }
+    attachStaticMembers(s);
+    attachMethods(s);
     return constructor;
   }
-  function attachDataViewAccessors(s, members) {
-    const { prototype } = s.constructor;
+  function attachStaticMembers(s) {
+    const {
+      constructor,
+      static: {
+        members,
+        pointers,
+      },
+      options,
+    } = s;
+    const relocs = {};
+    const descriptors = {
+      [RELOCATABLE]: { value: relocs },
+    };
+    // static variables are all pointers, with each represented by an object 
+    // sittinng a relocatable slot
+    for (const member of members) {
+      const get = obtainGetter(member, options);
+      const set = obtainSetter(member, options);
+      descriptors[member.name] = { get, set, configurable: true, enumerable: true };
+      const buffer = pointers[member.slot];
+      const { constructor } = member.structure;
+      relocs[member.slot] = constructor(buffer);
+    }  Object.defineProperties(constructor, descriptors);
+  }
+
+  function attachMethods(s) {
+    const { 
+      constructor,
+      methods,
+    } = s;
+    for (const method of methods) {
+      const {
+        name,
+        argStruct,   
+        thunk,
+        isStaticOnly,
+      } = method;
+      const f = function(...args) {
+        const a = new argStruct;
+        for (const [ index, arg ] of args.entries()) {
+          if (arg !== undefined) {
+            a[index] = arg;
+          }
+        }
+        thunk(a);
+        return a.retval;
+      };
+      Object.defineProperties(f, {
+        name: { value: name, writable: false },
+      });
+      Object.defineProperties(constructor, { 
+        [name]: { value: f, configurable: true, writable: true },
+      });
+      if (!isStaticOnly) {
+        const m = function(...args) {
+          const a = new argStruct;
+          a[0] = this;
+          for (const [ index, arg ] of args.entries()) {
+            if (arg !== undefined) {
+              a[index + 1] = arg;
+            }
+          }
+          thunk(a);
+          return a.retval;
+        };
+        Object.defineProperties(m, {
+          name: { value: name, writable: false }, 
+        });
+        Object.defineProperties(constructor.prototype, {
+          [name]: { value: m, configurable: true, writable: true },
+        });
+      } 
+    }
+  }
+
+  function attachDataViewAccessors(s) {
+    const {
+      constructor: {
+        prototype,
+      },
+      instance: {
+        members
+      },
+    } = s;
     if (!Object.getOwnPropertyDescriptor(prototype, 'dataView')) {
       Object.defineProperties(prototype, { 
         dataView: { get: getDataView, configurable: true, enumerable: true },
@@ -1218,77 +1343,13 @@ R"=====(
     }
   }
 
-  function attachVariables(s, def, options = {}) {
-    const { constructor } = s;
-    const {
-      members,
-      defaultPointers,
-    } = def;
-    const descriptors = {};
-    // static variables are all pointers
-    for (const member of members) {
-      const get = obtainGetter(member, options);
-      const set = obtainSetter(member, options);
-      descriptors[member.name] = { get, set, configurable: true, enumerable: true };
-    }  const relocs = Object.assign({}, defaultPointers);
-    descriptors[RELOCATABLE] = { value: relocs };
-    Object.defineProperties(constructor, descriptors);
-  }
-
-  function attachMethods(s, def, options = {}) {
-    const { constructor } = s;
-    const {
-      methods,
-    } = def;
-    for (const method of methods) {
-      const {
-        name,
-        argStruct,   
-        thunk,
-        staticOnly,
-      } = method;
-      const f = function(...args) {
-        const a = new argStruct;
-        for (const [ index, arg ] of args.entries()) {
-          if (arg !== undefined) {
-            a[index] = arg;
-          }
-        }
-        thunk(a);
-        return a.return_value;
-      };
-      Object.defineProperties(f, {
-        name: { value: name, writable: false },
-      });
-      Object.defineProperties(constructor, { 
-        [name]: { value: f, configurable: true, writable: true },
-      });
-      if (!staticOnly) {
-        const m = function(...args) {
-          const a = new argStruct;
-          a[0] = this;
-          for (const [ index, arg ] of args.entries()) {
-            if (arg !== undefined) {
-              a[index + 1] = arg;
-            }
-          }
-          thunk(a);
-          return a.return_value;
-        };
-        Object.defineProperties(m, {
-          name: { value: name, writable: false }, 
-        });
-        Object.defineProperties(constructor.prototype, {
-          [name]: { value: m, configurable: true, writable: true },
-        });
-      } 
-    }
-  }
-
+  exports.attachDefaultValues = attachDefaultValues;
+  exports.attachMember = attachMember;
+  exports.attachMethod = attachMethod;
   exports.attachMethods = attachMethods;
-  exports.attachVariables = attachVariables;
-  exports.createStructure = createStructure;
-  exports.shapeStructure = shapeStructure;
+  exports.attachStaticMembers = attachStaticMembers;
+  exports.beginStructure = beginStructure;
+  exports.finalizeStructure = finalizeStructure;
 
   return exports;
 

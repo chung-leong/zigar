@@ -121,7 +121,7 @@ struct ExternalData {
       }, WeakCallbackType::kParameter);
   }
 
-  virtual ~ExternalData() = 0;
+  virtual ~ExternalData() {};
 };
 
 struct AddonData : public ExternalData {
@@ -130,7 +130,9 @@ struct AddonData : public ExternalData {
   AddonData(Isolate* isolate) :
     ExternalData(isolate) {}
 
-  ~AddonData() {}
+  ~AddonData() {
+    printf("~AddonData\n");
+  }
 };
 
 struct ModuleData : public ExternalData {
@@ -145,6 +147,7 @@ struct ModuleData : public ExternalData {
   }
 
   ~ModuleData() {
+    printf("~ModuleData\n");
     dlclose(so_handle);
     count--;
   }
@@ -167,6 +170,7 @@ struct FunctionData : public ExternalData {
   }
 
   ~FunctionData() {
+    printf("~FunctionData\n");
     count--;
   }
 };
@@ -255,7 +259,9 @@ struct JSBridge {
   Local<Object> NewStructure(const Structure& s) {
     auto def = Object::New(isolate);
     def->Set(context, t_type, Int32::New(isolate, static_cast<int32_t>(s.type))).Check();
-    def->Set(context, t_name, String::NewFromUtf8(isolate, s.name).ToLocalChecked()).Check();
+    if (s.name) {
+      def->Set(context, t_name, String::NewFromUtf8(isolate, s.name).ToLocalChecked()).Check();
+    }
     def->Set(context, t_size, Uint32::NewFromUnsigned(isolate, s.total_size)).Check();
     return def;
   }

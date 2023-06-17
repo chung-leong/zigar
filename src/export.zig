@@ -307,7 +307,7 @@ const Callbacks = extern struct {
     read_slot: *const fn (host: Host, id: u32, dest: *Value) callconv(.C) Result,
     write_slot: *const fn (host: Host, id: u32, value: Value) callconv(.C) Result,
 
-    begin_structure: *const fn (host: Host, def: Structure, dest: *Value) callconv(.C) Result,
+    begin_structure: *const fn (host: Host, def: *const Structure, dest: *Value) callconv(.C) Result,
     attach_member: *const fn (host: Host, structure: Value, member: *const Member) callconv(.C) Result,
     attach_method: *const fn (host: Host, structure: Value, method: *const Method) callconv(.C) Result,
     attach_default_values: *const fn (host: Host, structure: Value, values: *const DefaultValues) callconv(.C) Result,
@@ -350,7 +350,7 @@ const Host = *opaque {
 
     fn beginStructure(self: Host, def: Structure) Error!Value {
         var structure: Value = undefined;
-        if (callbacks.begin_structure(self, def, &structure) != .OK) {
+        if (callbacks.begin_structure(self, &def, &structure) != .OK) {
             return Error.Unknown;
         }
         return structure;
@@ -483,7 +483,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type, are_static: bool) 
             }
         },
         else => {
-            std.debug.print("Missing\n", .{});
+            std.debug.print("Missing: {s}\n", .{@typeName(T)});
         },
     }
 }

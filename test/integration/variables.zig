@@ -11,7 +11,8 @@ pub var int128: i128 = 1234;
 
 pub var int4: i4 = 7;
 
-pub const constant = 43;
+// TODO: deal with comptime_int and comptime_float
+//pub const constant = 43;
 var private: i32 = 123;
 pub var variable: i32 = 0;
 

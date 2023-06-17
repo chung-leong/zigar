@@ -13,8 +13,10 @@ describe('Garbage collection', function() {
       const { load, getModuleCount, getFunctionCount } = require(extPath);      
       global.hello = "Hello world!";
       const module = load(pathLib);
-      console.log(module);
       expect(getModuleCount()).to.equal(1);
+      gc();
+      gc();
+      expect(getModuleCount()).to.equal(0);
     })
   })
 })
