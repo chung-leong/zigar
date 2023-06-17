@@ -3,9 +3,9 @@ import { obtainBitAlignFunction } from './memory.js';
 import { throwSizeMismatch, throwBufferExpected } from './error.js';
 import { DATA } from './symbol.js';
 
-export function obtainDataViewGetter({ type, signed, bitOffset, bitSize, byteSize }) {
+export function obtainDataViewGetter({ type, isSigned, bitOffset, bitSize, byteSize }) {
   const bitPos = bitOffset & 0x07;
-  const name = getMethodName('get', type, signed, bitPos, bitSize, byteSize);
+  const name = getMethodName('get', type, isSigned, bitPos, bitSize, byteSize);
   if (DataView.prototype[name]) {
     return DataView.prototype[name];
   }
@@ -17,9 +17,9 @@ export function obtainDataViewGetter({ type, signed, bitOffset, bitSize, byteSiz
     if (type === MemberType.Int) {
       if (bitSize < 64) {
         // actual number of bits needed when stored byte-aligned
-        const typeName = getTypeName(type, signed, byteSize * 8);
+        const typeName = getTypeName(type, isSigned, byteSize * 8);
         const get = DataView.prototype[`get${typeName}`];
-        if (signed) {
+        if (isSigned) {
           const signMask = (bitSize <= 32) ? 2 ** (bitSize - 1) : 2n ** BigInt(bitSize - 1);
           const valueMask = (bitSize <= 32) ? signMask - 1 : signMask - 1n; 
           fn = function(offset, littleEndian) {
@@ -51,7 +51,7 @@ export function obtainDataViewGetter({ type, signed, bitOffset, bitSize, byteSiz
           }
           return n;
         };
-        if (signed) {
+        if (isSigned) {
           const signMask = 2n ** BigInt(bitSize - 1);
           const valueMask = signMask - 1n; 
           fn = function(offset, littleEndian) {
@@ -133,7 +133,7 @@ export function obtainDataViewGetter({ type, signed, bitOffset, bitSize, byteSiz
       };
     } else if (type === MemberType.Int && bitPos + bitSize <= 8) {
       // sub-8-bit numbers also have real use cases
-      if (signed) {
+      if (isSigned) {
         const signMask = 2 ** (bitSize - 1);
         const valueMask = signMask - 1;
         fn = function(offset) {
@@ -154,7 +154,7 @@ export function obtainDataViewGetter({ type, signed, bitOffset, bitSize, byteSiz
       // temporary buffer, bit-aligning the data
       const byteSize = getByteSize(bitSize);
       const dest = new DataView(new ArrayBuffer(byteSize));
-      const getAligned = obtainDataViewGetter({ type, bitSize, signed, bitOffset: 0, byteSize });
+      const getAligned = obtainDataViewGetter({ type, bitSize, isSigned, bitOffset: 0, byteSize });
       const copyBits = obtainBitAlignFunction(bitPos, bitSize, true);
       fn = function(offset, littleEndian) {
         copyBits(dest, this, offset);
@@ -170,9 +170,9 @@ export function obtainDataViewGetter({ type, signed, bitOffset, bitSize, byteSiz
   return fn;
 }
 
-export function obtainDataViewSetter({ type, bitSize, signed, byteSize, bitOffset }) {
+export function obtainDataViewSetter({ type, bitSize, isSigned, byteSize, bitOffset }) {
   const bitPos = bitOffset & 0x07;
-  const name = getMethodName('set', type, signed, bitPos, bitSize, byteSize);
+  const name = getMethodName('set', type, isSigned, bitPos, bitSize, byteSize);
   if (DataView.prototype[name]) {
     return DataView.prototype[name];
   }
@@ -183,9 +183,9 @@ export function obtainDataViewSetter({ type, bitSize, signed, byteSize, bitOffse
   if (byteSize !== 0) {
     if (type === MemberType.Int) {
       if (bitSize < 64) {
-        const typeName = getTypeName(type, signed, byteSize * 8);
+        const typeName = getTypeName(type, isSigned, byteSize * 8);
         const set = DataView.prototype[`set${typeName}`];
-        if (signed) {
+        if (isSigned) {
           const signMask = (bitSize <= 32) ? 2 ** (bitSize - 1) : 2n ** BigInt(bitSize - 1);
           const valueMask = (bitSize <= 32) ? signMask - 1 : signMask - 1n; 
           fn = function(offset, v, littleEndian) {
@@ -221,7 +221,7 @@ export function obtainDataViewSetter({ type, bitSize, signed, byteSize, bitOffse
           }
           return n;
         };
-        if (signed) {
+        if (isSigned) {
           const signMask = (bitSize <= 32) ? 2 ** (bitSize - 1) : 2n ** BigInt(bitSize - 1);
           const valueMask = (bitSize <= 32) ? signMask - 1 : signMask - 1n; 
           fn = function(offset, v, littleEndian) {
@@ -300,7 +300,7 @@ export function obtainDataViewSetter({ type, bitSize, signed, byteSize, bitOffse
         set.call(this, offset, b);
       };
     } else if (type === MemberType.Int && bitPos + bitSize <= 8) {
-      if (signed) {
+      if (isSigned) {
         const signMask = 2 ** (bitSize - 1);        
         const valueMask = signMask - 1;
         const outsideMask = 0xFF ^ ((valueMask | signMask) << bitPos);
@@ -323,7 +323,7 @@ export function obtainDataViewSetter({ type, bitSize, signed, byteSize, bitOffse
     } else {
       const byteSize = getByteSize(bitSize);
       const src = new DataView(new ArrayBuffer(byteSize));
-      const setAligned = obtainDataViewSetter({ type, signed, bitOffset: 0, bitSize, byteSize });
+      const setAligned = obtainDataViewSetter({ type, isSigned, bitOffset: 0, bitSize, byteSize });
       const applyBits = obtainBitAlignFunction(bitPos, bitSize, false);
       fn = function(offset, value, littleEndian) {
         setAligned.call(src, 0, value, littleEndian);
@@ -364,8 +364,8 @@ export function getDataView() {
   return this[DATA];
 }
 
-function getMethodName(prefix, type, signed, bitPos, bitSize, byteSize) {
-  const typeName = getTypeName(type, signed, bitSize);
+function getMethodName(prefix, type, isSigned, bitPos, bitSize, byteSize) {
+  const typeName = getTypeName(type, isSigned, bitSize);
   const suffix = (byteSize === 0) ? `Bit${bitPos}` : ``;
   return `${prefix}${typeName}${suffix}`;
 }

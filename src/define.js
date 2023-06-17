@@ -7,32 +7,77 @@ import { obtainDataView, getDataView } from './data-view.js';
 import { throwNoNewEnum } from './error.js';
 import { DATA, RELOCATABLE, ENUM_INDEX, ENUM_ITEMS } from './symbol.js';
 
-export function createStructure(type, name) {
-  return { type, name, constructor: null, copier: null };
+export function beginStructure(def, options = {}) {
+  const {
+    type,
+    name,
+    size,
+  } = def;
+  return { 
+    constructor: null, 
+    copier: null,
+    type, 
+    name,
+    size, 
+    instance: {
+      members: [],
+      data: null,
+      pointers: null,
+    },
+    static: {
+      members: [],
+      data: null,
+      pointers: null,
+    },
+    methods: [],
+    options,
+  };
 }
 
-export function shapeStructure(s, def, options = {}) {
-  switch (s.type) {
-    case StructureType.Primitive: 
-      return shapePrimitive(s, def, options);
-    case StructureType.Array:
-      return shapeArray(s, def, options);
-    case StructureType.Struct:
-    case StructureType.ExternUnion:
-      return shapeStruct(s, def, options);
-    case StructureType.TaggedUnion:
-      return null; // TODO
-    case StructureType.Enumeration:
-      return shapeEnumeration(s, def, options);
+export function attachMember(s, def) {
+  const target = (def.isStatic) ? s.static : s.instance;
+  target.members.push(def);
+}
+
+export function attachMethod(s, def) {
+  s.methods.push(def);
+}
+
+export function attachDefaultValues(s, def) {
+  const target = (def.isStatic) ? s.static : s.instance;
+  if (def.data) {
+    target.data = def.data;
+  }
+  if (def.pointers) {
+    target.pointers = def.pointers;
   }
 }
 
-function shapePrimitive(s, def, options) {
+export function finalizeStructure(s) {
+  switch (s.type) {
+    case StructureType.Primitive: 
+      return finalizePrimitive(s);
+    case StructureType.Array:
+      return finalizeArray(s);
+    case StructureType.Struct:
+    case StructureType.ExternUnion:
+      return finalizeStruct(s);
+    case StructureType.TaggedUnion:
+      // TODO
+      return null;
+    case StructureType.Enumeration:
+      return finalizeEnumeration(s);
+  }
+}
+
+function finalizePrimitive(s) {
   const { 
     size,
-    members: [ member ],
-    defaultData,
-  } = def;
+    instance: {
+      members: [ member ],
+    },
+    options,
+  } = s;
   const copy = obtainCopyFunction(size);
   const primitive = getPrimitive(member.type, member.bitSize);
   const get = obtainGetter(member, options);
@@ -46,9 +91,6 @@ function shapePrimitive(s, def, options) {
       }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
-      if (defaultData && init === undefined) {
-        copy(dv, defaultData);
-      }
     } else {
       self = Object.create(constructor.prototype);
       dv = obtainDataView(arg, size);
@@ -72,13 +114,14 @@ function shapePrimitive(s, def, options) {
   return constructor;
 }
 
-function shapeArray(s, def, options) {
+function finalizeArray(s) {
   const {
     size,
-    members: [ member ],
-    defaultData,
-    exposeDataView = false,
-  } = def; 
+    instance: {
+      members: [ member ],
+    },
+    options,
+  } = s; 
   const copy = obtainCopyFunction(size); 
   const get = obtainArrayGetter(member, options);
   const set = obtainArraySetter(member, options);
@@ -93,9 +136,6 @@ function shapeArray(s, def, options) {
       }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
-      if (defaultData && init === undefined) {
-        copy(dv, defaultData);
-      }
     } else {
       self = Object.create(constructor.prototype);
       dv = obtainDataView(arg, size);
@@ -107,27 +147,26 @@ function shapeArray(s, def, options) {
       return self;
     }
   };
-  s.size = size;
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { get: getLength, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true },
   });
-  if (exposeDataView) {
-    attachDataViewAccessors(s, [ member ]);
-  }
+  attachDataViewAccessors(s);
   return constructor;
 }
 
-function shapeStruct(s, def, options) {
+function finalizeStruct(s) {
   const { 
     size,
-    members,
-    defaultData,
-    defaultPointers,
-    exposeDataView = false,
-  } = def;
+    instance: {
+      members,
+      data,
+      pointers,
+    },
+    options,
+  } = s;
   const copy = obtainCopyFunction(size);
   const descriptors = {};
   for (const member of members) {
@@ -135,16 +174,27 @@ function shapeStruct(s, def, options) {
     const set = obtainSetter(member, options);
     descriptors[member.name] = { get, set, configurable: true, enumerable: true };
   }
-  const hasRelocatable = !!members.find(m => m.type === MemberType.Compound || m.type === MemberType.Pointer);
-  const compoundMembers = members.filter(m => m.type === MemberType.Compound);
-  const internalPointers = (compoundMembers.length > 0) && compoundMembers.map(({ structure, bitOffset, align, slot }) => {
-    return { 
-      constructor: structure.constructor, 
-      slot, 
-      offset: bitOffset >> 3, 
-      align,
-    };
-  });
+  const relocatables = {};
+  const internals = {};
+  for (const member of members) {
+    if (member.type === MemberType.Pointer) {
+      const buffer = pointers?.[member.slot];
+      if (buffer) {
+        relocatables[member.slot] = new member.structure.constructor(buffer);
+      }
+    } else if (member.type === MemberType.Compound) {
+      relocatables[member.slot] = null;
+      internals[member.slot] = { 
+        constructor: structure.constructor, 
+        offset: bitOffset >> 3, 
+        byteSize,
+      };      
+    } else if (member.type === MemberType.Enum) {
+      relocatables[member.slot] = null;
+    }
+  }
+  const hasRelocatables = Object.keys(relocatables).length > 0;
+  const hasInternals = Object.keys(internals).length > 0;
   const constructor = s.constructor = function(arg) {
     let self, dv, init;
     if (this) {
@@ -155,8 +205,8 @@ function shapeStruct(s, def, options) {
       }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
-      if (defaultData && init === undefined) {
-        copy(dv, defaultData);
+      if (data) {
+        copy(dv, data);
       }
     } else {
       self = Object.create(constructor.prototype);
@@ -166,15 +216,14 @@ function shapeStruct(s, def, options) {
       [DATA]: { value: dv },
     });
     Object.defineProperties(self, descriptors);
-    if (hasRelocatable) {
-      const relocs = Object.assign({}, defaultPointers);
-      if (internalPointers) {
+    if (hasRelocatables) {
+      const relocs = Object.assign({}, relocatables);
+      if (hasInternals) {
         // initialize compound members (array, struct, etc.), storing them 
         // in relocatables even through they aren't actually relocatable
-        for (const { constructor, slot, offset, align } of internalPointers) {
-          const mdv = new DataView(dv.buffer, offset, align);
-          const obj = new constructor(mdv);
-          relocs[slot] = obj;
+        for (const [ slot, { constructor, offset, align } ] of Object.entries(internals)) {
+          // "cast" the dataview into the correct type (not using the new operator)
+          relocs[slot] = constructor(new DataView(dv.buffer, offset, align));
         }
       }
       Object.defineProperties(self, {
@@ -187,23 +236,23 @@ function shapeStruct(s, def, options) {
   };
   s.copier = function(dest, src) {
     copy(dest[DATA], src[DATA]);
-    if (hasRelocatable) {
+    if (hasRelocatables) {
       Object.assign(dest[RELOCATABLE], src[RELOCATABLE]);
     }
   };
-  s.size = size;
-  if (exposeDataView) {
-    attachDataViewAccessors(s, members);
-  }
+  attachDataViewAccessors(s);
+  attachStaticMembers(s);
   return constructor;
 };
 
-function shapeEnumeration(s, def, options) {
+function finalizeEnumeration(s) {
   const { 
-    size,
-    members,
-    defaultData,
-  } = def;
+    instance: {
+      members,
+      data,
+    },
+    options,
+  } = s;
   const primitive = getPrimitive(members[0].type, members[0].bitSize);
   const getValue = obtainArrayGetter(members[0], options);
   const count = members.length;
@@ -233,11 +282,10 @@ function shapeEnumeration(s, def, options) {
     // return the enum object (created down below)
     return items[index];
   };
-  s.size = size;
   // attach the numeric values to the class as its binary data
   // this allows us to reuse the array getter
   Object.defineProperties(constructor, {
-    [DATA]: { value: defaultData },
+    [DATA]: { value: data },
     [ENUM_ITEMS]: { value: items },
   });
   const valueOf = function() { 
@@ -276,53 +324,45 @@ function shapeEnumeration(s, def, options) {
     });
     items[index] = item;
   }
+  attachStaticMembers(s);
   return constructor;
 };
 
-function attachDataViewAccessors(s, members) {
-  const { prototype } = s.constructor;
-  if (!Object.getOwnPropertyDescriptor(prototype, 'dataView')) {
-    Object.defineProperties(prototype, { 
-      dataView: { get: getDataView, configurable: true, enumerable: true },
-    });
-  }
-  const getTypedArray = obtainTypedArrayGetter(members);
-  if (getTypedArray && !Object.getOwnPropertyDescriptor(prototype, 'typedArray')) {
-    Object.defineProperties(prototype, {
-      typedArray: { get: getTypedArray, configurable: true, enumerable: true },
-    });
-  }
-}
-
-export function attachVariables(s, def, options = {}) {
-  const { constructor } = s;
+export function attachStaticMembers(s) {
   const {
-    members,
-    defaultPointers,
-  } = def;
-  const descriptors = {};
-  // static variables are all pointers
+    constructor,
+    static: {
+      members,
+      pointers,
+    },
+  } = s;
+  const relocs = {};
+  const descriptors = {
+    [RELOCATABLE]: { value: relocs },
+  };
+  // static variables are all pointers, with each represented by an object 
+  // sittinng a relocatable slot
   for (const member of members) {
     const get = obtainGetter(member, options);
     const set = obtainSetter(member, options);
     descriptors[member.name] = { get, set, configurable: true, enumerable: true };
+    const buffer = pointers[member.slot];
+    relocs[member.slot] = member.structure.constructor(buffer);
   };
-  const relocs = Object.assign({}, defaultPointers);
-  descriptors[RELOCATABLE] = { value: relocs };
   Object.defineProperties(constructor, descriptors);
 }
 
-export function attachMethods(s, def, options = {}) {
-  const { constructor } = s;
-  const {
+export function attachMethods(s) {
+  const { 
+    constructor,
     methods,
-  } = def;
+  } = s;
   for (const method of methods) {
     const {
       name,
       argStruct,   
       thunk,
-      staticOnly,
+      isStaticOnly,
     } = method;
     const f = function(...args) {
       const a = new argStruct;
@@ -340,7 +380,7 @@ export function attachMethods(s, def, options = {}) {
     Object.defineProperties(constructor, { 
       [name]: { value: f, configurable: true, writable: true },
     });
-    if (!staticOnly) {
+    if (!isStaticOnly) {
       const m = function(...args) {
         const a = new argStruct;
         a[0] = this;
@@ -359,5 +399,27 @@ export function attachMethods(s, def, options = {}) {
         [name]: { value: m, configurable: true, writable: true },
       });
     } 
+  }
+}
+
+function attachDataViewAccessors(s) {
+  const {
+    constructor: {
+      prototype,
+    },
+    instance: {
+      members
+    },
+  } = s;
+  if (!Object.getOwnPropertyDescriptor(prototype, 'dataView')) {
+    Object.defineProperties(prototype, { 
+      dataView: { get: getDataView, configurable: true, enumerable: true },
+    });
+  }
+  const getTypedArray = obtainTypedArrayGetter(members);
+  if (getTypedArray && !Object.getOwnPropertyDescriptor(prototype, 'typedArray')) {
+    Object.defineProperties(prototype, {
+      typedArray: { get: getTypedArray, configurable: true, enumerable: true },
+    });
   }
 }

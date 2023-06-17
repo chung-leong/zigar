@@ -104,15 +104,19 @@ const Value = *opaque {};
 const Thunk = *const fn (host: Host, args: Value) callconv(.C) void;
 const Factory = *const fn (host: Host, dest: *Value) callconv(.C) Result;
 
-const Memory = extern struct {
-    bytes: ?[*]u8 = null,
-    len: usize = 0,
+const Structure = extern struct {
+    name: ?[*:0]const u8 = null,
+    structure_type: StructureType,
+    total_size: usize = 0,
 };
 
 const Member = extern struct {
     name: ?[*:0]const u8 = null,
     member_type: MemberType,
+    is_static: bool = false,
+    is_required: bool = false,
     is_signed: bool = false,
+    is_const: bool = true,
     bit_offset: u32,
     bit_size: u32,
     byte_size: u32,
@@ -120,10 +124,13 @@ const Member = extern struct {
     structure: ?Value = null,
 };
 
-const MemberSet = extern struct {
-    members: [*]const Member,
-    member_count: usize,
-    total_size: usize = 0,
+const Memory = extern struct {
+    bytes: ?[*]u8 = null,
+    len: usize = 0,
+};
+
+const DefaultValues = extern struct {
+    is_static: bool = false,
     default_data: Memory,
     default_pointers: ?[*]const Memory = null,
     default_pointer_count: usize = 0,
@@ -134,11 +141,6 @@ const Method = extern struct {
     is_static_only: bool,
     thunk: Thunk,
     structure: Value,
-};
-
-const MethodSet = extern struct {
-    methods: [*]const Method,
-    method_count: usize,
 };
 
 const ModuleFlags = packed struct(u32) {
@@ -305,10 +307,11 @@ const Callbacks = extern struct {
     read_slot: *const fn (host: Host, id: u32, dest: *Value) callconv(.C) Result,
     write_slot: *const fn (host: Host, id: u32, value: Value) callconv(.C) Result,
 
-    create_structure: *const fn (host: Host, s_type: StructureType, name: [*:0]const u8, dest: *Value) callconv(.C) Result,
-    shape_structure: *const fn (host: Host, structure: Value, def: *const MemberSet) callconv(.C) Result,
-    attach_variables: *const fn (host: Host, structure: Value, def: *const MemberSet) callconv(.C) Result,
-    attach_methods: *const fn (host: Host, structure: Value, def: *const MethodSet) callconv(.C) Result,
+    begin_structure: *const fn (host: Host, def: Structure, dest: *Value) callconv(.C) Result,
+    attach_member: *const fn (host: Host, structure: Value, member: *const Member) callconv(.C) Result,
+    attach_method: *const fn (host: Host, structure: Value, method: *const Method) callconv(.C) Result,
+    attach_default_values: *const fn (host: Host, structure: Value, values: *const DefaultValues) callconv(.C) Result,
+    finalize_structure: *const fn (host: Host, structure: Value) callconv(.C) Result,
 };
 var callbacks: Callbacks = undefined;
 
@@ -345,28 +348,34 @@ const Host = *opaque {
         }
     }
 
-    fn createStructure(self: Host, s_type: StructureType, name: []const u8) Error!Value {
-        var def: Value = undefined;
-        if (callbacks.create_structure(self, s_type, @ptrCast([*:0]const u8, name), &def) != .OK) {
+    fn beginStructure(self: Host, def: Structure) Error!Value {
+        var structure: Value = undefined;
+        if (callbacks.begin_structure(self, def, &structure) != .OK) {
             return Error.Unknown;
         }
-        return def;
+        return structure;
     }
 
-    fn shapeStructure(self: Host, structure: Value, def: MemberSet) Error!void {
-        if (callbacks.shape_structure(self, structure, &def) != .OK) {
-            return Error.Unknown;
-        }
-    }
-
-    fn attachVariables(self: Host, structure: Value, def: MemberSet) Error!void {
-        if (callbacks.attach_variables(self, structure, &def) != .OK) {
+    fn attachMember(self: Host, structure: Value, member: Member) Error!void {
+        if (callbacks.attach_member(self, structure, &member) != .OK) {
             return Error.Unknown;
         }
     }
 
-    fn attachMethods(self: Host, structure: Value, def: MethodSet) Error!void {
-        if (callbacks.attach_methods(self, structure, &def) != .OK) {
+    fn attachMethod(self: Host, structure: Value, method: Method) Error!void {
+        if (callbacks.attach_method(self, structure, &method) != .OK) {
+            return Error.Unknown;
+        }
+    }
+
+    fn attachDefaultValues(self: Host, structure: Value, values: DefaultValues) Error!void {
+        if (callbacks.attach_default_values(self, structure, &values) != .OK) {
+            return Error.Unknown;
+        }
+    }
+
+    fn finalizeStructure(self: Host, structure: Value) Error!void {
+        if (callbacks.finalize_structure(self, structure) != .OK) {
             return Error.Unknown;
         }
     }
@@ -376,94 +385,62 @@ const Host = *opaque {
 fn getStructure(host: Host, comptime T: type) Error!Value {
     const s_slot = getStructureSlot(T);
     return host.readSlot(s_slot) catch undefined: {
-        const s_type = getStructureType(T);
-        const name = @typeName(T);
+        const def: Structure = .{
+            .name = @ptrCast([*:0]const u8, @typeName(T)),
+            .structure_type = getStructureType(T),
+            .total_size = @sizeOf(T),
+        };
         // create the structure and place it in the slot immediately
         // so that recursive definition works correctly
-        const structure = try host.createStructure(s_type, name);
+        const structure = try host.beginStructure(def);
         try host.writeSlot(s_slot, structure);
         // define the shape of the structure
-        const def = try getMemberSet(host, T);
-        try host.shapeStructure(structure, def);
-        if (try getVariableSet(host, T)) |set| {
-            // attach static variables
-            try host.attachVariables(structure, set);
-        }
-        if (try getMethodSet(host, T)) |set| {
-            try host.attachMethods(structure, set);
-        }
+        try addInstanceMembers(host, structure, T);
+        try addStaticMembers(host, structure, T);
+        try addMethods(host, structure, T);
         break :undefined structure;
     };
 }
 
-fn getMemberSet(host: Host, comptime T: type) Error!MemberSet {
-    const members = try getMembers(host, T);
-    const default_data = getDefaultData(T);
-    const pointers = getDefaultPointers(T);
-    return .{
-        .members = members.ptr,
-        .member_count = members.len,
-        .total_size = @sizeOf(T),
-        .default_data = default_data,
-        .default_pointers = if (pointers.len > 0) pointers.ptr else null,
-        .default_pointer_count = pointers.len,
-    };
+fn addInstanceMembers(host: Host, structure: Value, comptime T: type) Error!void {
+    return addMembers(host, structure, T, true);
 }
 
-fn getVariableSet(host: Host, comptime T: type) Error!?MemberSet {
+fn addStaticMembers(host: Host, structure: Value, comptime T: type) Error!void {
     if (StaticStruct(T)) |SS| {
-        const members = try getMembers(host, SS);
-        const pointers = getDefaultPointers(SS);
-        return .{
-            .members = members.ptr,
-            .member_count = members.len,
-            .default_pointers = pointers.ptr,
-            .default_pointer_count = pointers.len,
-            .default_data = .{},
-        };
-    } else {
-        return null;
+        return addMembers(host, structure, SS, true);
     }
 }
 
-fn getMethodSet(host: Host, comptime T: type) Error!?MethodSet {
-    const methods = try getMethods(host, T);
-    if (methods.len == 0) {
-        return null;
-    }
-    return .{
-        .methods = methods.ptr,
-        .method_count = methods.len,
-    };
-}
-
-fn getMembers(host: Host, comptime T: type) Error![]const Member {
-    const count = switch (@typeInfo(T)) {
-        .Struct => |st| st.fields.len,
-        .Union => |un| un.fields.len,
-        .Enum => |en| en.field.len,
-        .Opaque => 0,
-        else => 1,
-    };
-    var members: [count]Member = undefined;
+fn addMembers(host: Host, structure: Value, comptime T: type, are_static: bool) Error!void {
     switch (@typeInfo(T)) {
         .Bool, .Int, .Float, .Void => {
-            members[0] = .{
+            try host.attachMember(structure, .{
                 .member_type = getMemberType(T),
                 .is_signed = isSigned(T),
                 .bit_size = @bitSizeOf(T),
                 .bit_offset = 0,
                 .byte_size = @sizeOf(T),
-            };
+            });
         },
         .Array => |ar| {
-            members[0] = .{
+            try host.attachMember(structure, .{
                 .member_type = getMemberType(ar.child),
                 .is_signed = isSigned(ar.child),
                 .bit_size = @bitSizeOf(ar.child),
                 .bit_offset = 0,
                 .byte_size = @sizeOf(ar.child),
-            };
+            });
+        },
+        .Pointer => |pt| {
+            try host.attachMember(structure, .{
+                .member_type = getMemberType(T),
+                .is_const = pt.is_const,
+                .bit_size = @bitSizeOf(T),
+                .bit_offset = 0,
+                .byte_size = @sizeOf(T),
+                .structure = try getStructure(host, pt.child),
+            });
         },
         .Struct, .Union => {
             // pre-allocate relocatable slots for fields that always need them
@@ -477,68 +454,86 @@ fn getMembers(host: Host, comptime T: type) Error![]const Member {
                 }
             }
             inline for (fields, 0..) |field, index| {
-                members[index] = .{
+                try host.attachMember(structure, .{
                     .name = @ptrCast([*:0]const u8, field.name),
                     .member_type = getMemberType(field.type),
+                    .is_static = are_static,
                     .is_signed = isSigned(field.type),
+                    .is_required = field.default_value == null,
                     .bit_offset = @bitOffsetOf(T, field.name),
                     .bit_size = @bitSizeOf(field.type),
                     .byte_size = if (isPacked(T)) @sizeOf(field.type) else 0,
                     .structure = try getStructure(host, field.type),
                     .slot = getRelocatableSlot(T, index),
-                };
+                });
             }
         },
         .Enum => |en| {
             // find a type that fit all values
             const IT = EnumType(T);
-            inline for (en.fields, 0..) |field, index| {
-                members[index] = .{
-                    .name = field.name,
+            inline for (en.fields) |field| {
+                try host.attachMember(structure, .{
+                    .name = @ptrCast([*:0]const u8, field.name),
                     .member_type = getMemberType(IT),
                     .is_signed = isSigned(IT),
                     .bit_offset = 0,
                     .bit_size = @bitSizeOf(IT),
                     .byte_size = @sizeOf(IT),
-                };
+                });
             }
         },
-        else => {},
+        else => {
+            std.debug.print("Missing\n", .{});
+        },
     }
-    return members[0..count];
 }
 
-fn getMethods(host: Host, comptime T: type) Error![]const Method {
+fn addMethods(host: Host, structure: Value, comptime T: type) Error!void {
     const decls = switch (@typeInfo(T)) {
         .Struct => |st| st.decls,
         .Union => |un| un.decls,
         .Enum => |en| en.decls,
         .Opaque => |op| op.decls,
-        else => return &.{},
+        else => return,
     };
-    var methods: [decls.len]Method = undefined;
-    comptime var count = 0;
     inline for (decls) |decl| {
         if (!decl.is_pub) {
             continue;
         }
         switch (@typeInfo(@TypeOf(@field(T, decl.name)))) {
-            .Fn => {
+            .Fn => |f| {
                 const function = @field(T, decl.name);
                 const ArgT = ArgumentStruct(function);
                 const arg_structure = try getStructure(host, ArgT);
-                methods[count] = .{
+                try host.attachMethod(structure, .{
                     .name = @ptrCast([*:0]const u8, decl.name),
-                    .is_static_only = true,
+                    .is_static_only = static: {
+                        if (f.params.len > 0) {
+                            if (f.params[0].type) |PT| {
+                                if (PT == T) {
+                                    break :static false;
+                                }
+                            }
+                        }
+                        break :static true;
+                    },
                     .thunk = createThunk(function, ArgT),
                     .structure = arg_structure,
-                };
-                count += 1;
+                });
             },
             else => {},
         }
     }
-    return methods[0..count];
+}
+
+fn addDefaultValues(host: Host, structure: Value, comptime T: type) Error!void {
+    const data = comptime getDefaultData(T);
+    const pointers = comptime getDefaultPointers(T);
+    return host.attachDefaultValues(structure, .{
+        .default_data = data,
+        .default_pointers = pointers.ptr,
+        .default_pointer_count = pointers.len,
+    });
 }
 
 fn getDefaultPointers(comptime T: type) []const Memory {
@@ -933,7 +928,9 @@ test "createThunk" {
 fn createRootFactory(comptime S: type) Factory {
     const RootFactory = struct {
         fn exportStructure(host: Host, dest: *Value) callconv(.C) Result {
+            std.debug.print("Getting structure...\n", .{});
             if (getStructure(host, S)) |s| {
+                std.debug.print("Got structure\n", .{});
                 dest.* = s;
                 return .OK;
             } else |_| {
@@ -964,19 +961,12 @@ pub fn createModule(comptime S: type) Module {
 test "createModule" {
     const Test = struct {
         pub const a: i32 = 1;
-
         const b: i32 = 2;
-
         pub var c: bool = true;
-
         pub const d: f64 = 3.14;
-
         pub const e: [4]i32 = .{ 3, 4, 5, 6 };
-
         pub const f = enum { Dog, Cat, Chicken };
-
         pub const g = enum(c_int) { Dog = -100, Cat, Chicken };
-
         pub fn h(arg1: i32, arg2: i32) bool {
             return arg1 < arg2;
         }

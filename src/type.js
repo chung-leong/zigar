@@ -20,9 +20,9 @@ export const StructureType = {
   Opaque: 8,
 };
 
-export function getTypeName(type, signed, bitSize) {
+export function getTypeName(type, isSigned, bitSize) {
   if (type === MemberType.Int) {
-    return `${bitSize <= 32 ? '' : 'Big' }${signed ? 'Int' : 'Uint'}${bitSize}`;
+    return `${bitSize <= 32 ? '' : 'Big' }${isSigned ? 'Int' : 'Uint'}${bitSize}`;
   } else if (type === MemberType.Float) {
     return `Float${bitSize}`;
   } else if (type === MemberType.Bool) {
@@ -32,15 +32,15 @@ export function getTypeName(type, signed, bitSize) {
   }
 }
   
-export function getIntRange(signed, bitSize) {
+export function getIntRange(isSigned, bitSize) {
   if (bitSize <= 32) {
-    const max = 2 ** (signed ? bitSize - 1 : bitSize) - 1;
-    const min = (signed) ? -(2 ** (bitSize - 1)) : 0;
+    const max = 2 ** (isSigned ? bitSize - 1 : bitSize) - 1;
+    const min = (isSigned) ? -(2 ** (bitSize - 1)) : 0;
     return { min, max };
   } else {
     bitSize = BigInt(bitSize);
-    const max = 2n ** (signed ? bitSize - 1n : bitSize) - 1n;
-    const min = (signed) ? -(2n ** (bitSize - 1n)) : 0n;
+    const max = 2n ** (isSigned ? bitSize - 1n : bitSize) - 1n;
+    const min = (isSigned) ? -(2n ** (bitSize - 1n)) : 0n;
     return { min, max };
   }
 }

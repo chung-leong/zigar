@@ -31,16 +31,19 @@ enum class MemberType : uint32_t {
   Type,
 };
 
-struct Memory {
-  uint8_t* bytes;
-  size_t len;
+struct Structure {
+  const char* name;
+  StructureType type;
+  size_t total_size;
 };
 
 struct Member {
   const char* name;
   MemberType type;
+  bool is_static;
   bool is_required;
   bool is_signed;
+  bool is_const;
   uint32_t bit_offset;
   uint32_t bit_size;
   uint32_t byte_size;
@@ -48,10 +51,13 @@ struct Member {
   Local<Value> structure;
 };
 
-struct MemberSet {
-  const Member* members;
-  size_t member_count;
-  size_t total_size;
+struct Memory {
+  uint8_t* bytes;
+  size_t len;
+};
+
+struct DefaultValues {
+  bool is_static;
   Memory default_data;
   const Memory* default_pointers;
   size_t default_pointer_count;
@@ -65,11 +71,6 @@ struct Method {
   bool is_static_only;
   Thunk thunk;
   Local<Value> structure;
-};
-
-struct MethodSet {
-  const Method* methods;
-  uint32_t method_count;
 };
 
 union ModuleFlags {
@@ -100,10 +101,11 @@ struct Callbacks {
   Result (*read_slot)(Host*, uint32_t, Local<Value>*);
   Result (*write_slot)(Host*, uint32_t, Local<Value>);
 
-  Result (*create_structure)(Host*, StructureType, const char*, Local<Object>*);
-  Result (*shape_structure)(Host*, Local<Object>, const MemberSet&);
-  Result (*attach_variables)(Host*, Local<Object>, const MemberSet&);
-  Result (*attach_methods)(Host*, Local<Object>, const MethodSet&);
+  Result (*begin_structure)(Host*, const Structure&, Local<Object>*);
+  Result (*attach_member)(Host*, Local<Object>, const Member&);
+  Result (*attach_method)(Host*, Local<Object>, const Method&);
+  Result (*attach_default_values)(Host*, Local<Object>, const DefaultValues&);
+  Result (*finalize_structure)(Host*, Local<Object>);
 };
 
 struct ExternalData {
@@ -176,27 +178,30 @@ struct JSBridge {
   Local<Context> context;
   Local<External> module_data;
 
-  Local<Function> create_structure;
-  Local<Function> shape_structure;
-  Local<Function> attach_variables;
-  Local<Function> attach_methods;
+  Local<Function> begin_structure;
+  Local<Function> attach_member;
+  Local<Function> attach_method;
+  Local<Function> attach_default_values;
+  Local<Function> finalize_structure;
 
   Local<String> t_type;
-  Local<String> t_signed;
+  Local<String> t_is_static;
+  Local<String> t_is_signed;
+  Local<String> t_is_required;
+  Local<String> t_is_const;
   Local<String> t_bit_offset;
   Local<String> t_bit_size;
   Local<String> t_byte_size;
+  Local<String> t_slot;
   Local<String> t_name;
   Local<String> t_size;
-  Local<String> t_members;
-  Local<String> t_methods;
   Local<String> t_structure;
-  Local<String> t_default_data;
-  Local<String> t_default_pointers;
+  Local<String> t_data;
+  Local<String> t_pointers;
   Local<String> t_expose_data_view;
   Local<String> t_arg_struct;
   Local<String> t_thunk;
-  Local<String> t_static_only;
+  Local<String> t_is_static_only;
 
   Local<Object> options;
 
@@ -208,21 +213,23 @@ struct JSBridge {
     context(isolate->GetCurrentContext()),
     module_data(module_data),
     t_type(String::NewFromUtf8Literal(isolate, "type")),
-    t_signed(String::NewFromUtf8Literal(isolate, "signed")),
+    t_is_static(String::NewFromUtf8Literal(isolate, "isStatic")),
+    t_is_signed(String::NewFromUtf8Literal(isolate, "isSigned")),
+    t_is_required(String::NewFromUtf8Literal(isolate, "isRequired")),
+    t_is_const(String::NewFromUtf8Literal(isolate, "isConst")),
     t_bit_offset(String::NewFromUtf8Literal(isolate, "bitOffset")),
     t_bit_size(String::NewFromUtf8Literal(isolate, "bitSize")),
     t_byte_size(String::NewFromUtf8Literal(isolate, "byteSize")),
+    t_slot(String::NewFromUtf8Literal(isolate, "slot")),
     t_name(String::NewFromUtf8Literal(isolate, "name")),
     t_size(String::NewFromUtf8Literal(isolate, "size")),
-    t_members(String::NewFromUtf8Literal(isolate, "members")),
-    t_methods(String::NewFromUtf8Literal(isolate, "methods")),
     t_structure(String::NewFromUtf8Literal(isolate, "structure")),
-    t_default_data(String::NewFromUtf8Literal(isolate, "defaultData")),
-    t_default_pointers(String::NewFromUtf8Literal(isolate, "defaultPointers")),
+    t_data(String::NewFromUtf8Literal(isolate, "data")),
+    t_pointers(String::NewFromUtf8Literal(isolate, "pointers")),
     t_expose_data_view(String::NewFromUtf8Literal(isolate, "exposeDataView")),
     t_arg_struct(String::NewFromUtf8Literal(isolate, "argStruct")),
     t_thunk(String::NewFromUtf8Literal(isolate, "thunk")),
-    t_static_only(String::NewFromUtf8Literal(isolate, "staticOnly")),
+    t_is_static_only(String::NewFromUtf8Literal(isolate, "isStaticOnly")),
     options(Object::New(isolate)) {
     // set options
     auto little_endian = Boolean::New(isolate, flags.little_endian);
@@ -238,64 +245,70 @@ struct JSBridge {
         }
       }
     };
-    find(String::NewFromUtf8Literal(isolate, "createStructure"), &create_structure);
-    find(String::NewFromUtf8Literal(isolate, "shapeStructure"), &shape_structure);
-    find(String::NewFromUtf8Literal(isolate, "attachVariables"), &attach_variables);
-    find(String::NewFromUtf8Literal(isolate, "attachMethods"), &attach_methods);
+    find(String::NewFromUtf8Literal(isolate, "beginStructure"), &begin_structure);
+    find(String::NewFromUtf8Literal(isolate, "attachMember"), &attach_member);
+    find(String::NewFromUtf8Literal(isolate, "attachMethod"), &attach_method);
+    find(String::NewFromUtf8Literal(isolate, "attachDefaultValues"), &attach_default_values);
+    find(String::NewFromUtf8Literal(isolate, "finalizeStructure"), &finalize_structure);
   };
 
-  Local<Object> NewMemberRecord(const Member& m) {
-    auto member = Object::New(isolate);
-    printf("Member: %s (%u)\n", m.name, m.bit_size);
-    if (m.name) {
-      member->Set(context, t_name, String::NewFromUtf8(isolate, m.name).ToLocalChecked()).Check();
-    }
-    member->Set(context, t_type, Int32::New(isolate, static_cast<int32_t>(m.type))).Check();
-    member->Set(context, t_bit_size, Int32::New(isolate, m.bit_size)).Check();
-    member->Set(context, t_bit_offset, Int32::New(isolate, m.bit_offset)).Check();
-    member->Set(context, t_byte_size, Int32::New(isolate, m.byte_size)).Check();
-    if (m.type == MemberType::Int) {      
-      member->Set(context, t_signed, Boolean::New(isolate, m.is_signed)).Check();
-    }
-    return member;
+  Local<Object> NewStructure(const Structure& s) {
+    auto def = Object::New(isolate);
+    def->Set(context, t_type, Int32::New(isolate, static_cast<int32_t>(s.type))).Check();
+    def->Set(context, t_name, String::NewFromUtf8(isolate, s.name).ToLocalChecked()).Check();
+    def->Set(context, t_size, Uint32::NewFromUnsigned(isolate, s.total_size)).Check();
+    return def;
   }
 
-  Local<Object> NewMethodRecord(const Method &m) {
+  Local<Object> NewMember(const Member& m) {
+    auto def = Object::New(isolate);
+    if (m.name) {
+      def->Set(context, t_name, String::NewFromUtf8(isolate, m.name).ToLocalChecked()).Check();
+    }
+    def->Set(context, t_type, Int32::New(isolate, static_cast<int32_t>(m.type))).Check();
+    def->Set(context, t_is_static, Boolean::New(isolate, m.is_static)).Check();
+    def->Set(context, t_is_required, Boolean::New(isolate, m.is_required)).Check();
+    if (m.type == MemberType::Int) {      
+      def->Set(context, t_is_signed, Boolean::New(isolate, m.is_signed)).Check();
+    } else if (m.type == MemberType::Pointer) {
+      def->Set(context, t_is_const, Boolean::New(isolate, m.is_const)).Check();
+    }
+    def->Set(context, t_bit_size, Uint32::NewFromUnsigned(isolate, m.bit_size)).Check();
+    def->Set(context, t_bit_offset, Uint32::NewFromUnsigned(isolate, m.bit_offset)).Check();
+    def->Set(context, t_byte_size, Uint32::NewFromUnsigned(isolate, m.byte_size)).Check();
+    if (!m.structure.IsEmpty()) {
+      def->Set(context, t_structure, m.structure).Check();
+      def->Set(context, t_slot, Uint32::NewFromUnsigned(isolate, m.slot)).Check();
+    }
+    return def;
+  }
+
+  Local<Object> NewMethod(const Method &m) {
     auto fd = new FunctionData(isolate, m.thunk, module_data);
     auto fde = Local<External>::New(isolate, fd->external);
     auto tmpl = FunctionTemplate::New(isolate, Call, fde, Local<Signature>(), 1);
-    Local<Object> def = Object::New(isolate);
+    auto def = Object::New(isolate);
     def->Set(context, t_name, String::NewFromUtf8(isolate, m.name).ToLocalChecked()).Check();
     def->Set(context, t_arg_struct, m.structure).Check();
     Local<Function> function;
     if (tmpl->GetFunction(context).ToLocal(&function)) {
       def->Set(context, t_thunk, function).Check();
     }
-    def->Set(context, t_static_only, Boolean::New(isolate, m.is_static_only)).Check();
+    def->Set(context, t_is_static_only, Boolean::New(isolate, m.is_static_only)).Check();
     return def;   
   }
 
-  Local<Object> NewMemberSet(size_t size,
-                             Local<Array> members,
-                             Local<Object> defaultData, 
-                             Local<Object> defaultPointers) {
+  Local<Object> NewDefaultValues(bool is_static,
+                                 Local<Value> data,
+                                 Local<Value> pointers) {
     auto def = Object::New(isolate);
-    if (size > 0) {
-      def->Set(context, t_size, Uint32::NewFromUnsigned(isolate, static_cast<uint32_t>(size))).Check();
+    def->Set(context, t_is_static, Boolean::New(isolate, is_static)).Check();
+    if (!data.IsEmpty()) {
+      def->Set(context, t_data, data).Check();
     }
-    def->Set(context, t_members, members).Check();
-    if (!defaultData.IsEmpty()) {
-      def->Set(context, t_default_data, defaultData).Check();
+    if (!pointers.IsEmpty()) {
+      def->Set(context, t_pointers, pointers).Check();
     }
-    if (!defaultPointers.IsEmpty()) {
-      def->Set(context, t_default_pointers, defaultPointers).Check();
-    }
-    return def;
-  }
-
-  Local<Object> NewMethodSet(Local<Array> methods) {
-    auto def = Object::New(isolate);
-    def->Set(context, t_methods, methods).Check();
     return def;
   }
 };

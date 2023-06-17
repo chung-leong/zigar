@@ -40,16 +40,13 @@ static Result AllocateMemory(Host* call,
   return Result::OK;
 }
 
-static Result CreateStructure(Host* call,
-                              StructureType type,
-                              const char* name,
-                              Local<Object>* dest) {
+static Result BeginStructure(Host* call,
+                             const Structure& structure,
+                             Local<Object>* dest) {
   auto jsb = call->js_bridge;
-  auto f = jsb->create_structure;
-  Local<Value> args[2] = {
-    Uint32::NewFromUnsigned(jsb->isolate, static_cast<uint32_t>(type)),
-    String::NewFromUtf8(jsb->isolate, name).ToLocalChecked(),
-  };
+  auto f = jsb->begin_structure;
+  auto def = jsb->NewStructure(structure);
+  Local<Value> args[2] = { def, jsb->options };
   Local<Value> value;
   if (!f->Call(jsb->context, Null(jsb->isolate), 2, args).ToLocal<Value>(&value)) {
     return Result::Failure;
@@ -61,61 +58,53 @@ static Result CreateStructure(Host* call,
   return Result::OK;
 }
 
-static Result ShapeStructure(Host* call,
-                             Local<Object> structure,
-                             const MemberSet& member_set) {
-  printf("Shaping structure...\n");
+static Result AttachMember(Host* call,
+                           Local<Object> structure,
+                           const Member& member) {
   auto jsb = call->js_bridge;
-  auto f = jsb->shape_structure;
-  auto array = Array::New(jsb->isolate, member_set.member_count);
-  printf("Members: %zx %zu\n", reinterpret_cast<size_t>(member_set.members), member_set.member_count);
-  for (size_t i = 0; i < member_set.member_count; i++) {
-    array->Set(jsb->context, i, jsb->NewMemberRecord(member_set.members[i])).Check();
-  }
-  Local<Object> default_data;
-  Local<Object> default_pointers;
-  auto def = jsb->NewMemberSet(member_set.total_size, array, default_data, default_pointers);
-  Local<Value> args[3] = { structure, def, jsb->options };
-  if (f->Call(jsb->context, Null(jsb->isolate), 3, args).IsEmpty()) {
-    return Result::Failure;
-  }
-  printf("Done\n");
-  return Result::OK;
-}
-
-static Result AttachVariables(Host* call,
-                              Local<Object> structure,
-                              const MemberSet& member_set) {
-  printf("Attach variables...\n");
-  auto jsb = call->js_bridge;
-  auto f = jsb->attach_variables;
-  auto array = Array::New(jsb->isolate, member_set.member_count);
-  printf("Members: %zu\n", member_set.member_count);
-  for (size_t i = 0; i < member_set.member_count; i++) {
-    array->Set(jsb->context, i, jsb->NewMemberRecord(member_set.members[i])).Check();
-  }
-  Local<Object> default_data;
-  Local<Object> default_pointers;
-  auto def = jsb->NewMemberSet(member_set.total_size, array, default_data, default_pointers);
-  Local<Value> args[3] = { structure, def, jsb->options };
-  if (f->Call(jsb->context, Null(jsb->isolate), 3, args).IsEmpty()) {
+  auto f = jsb->attach_member;
+  auto def = jsb->NewMember(member);
+  Local<Value> args[2] = { structure, def };
+  if (f->Call(jsb->context, Null(jsb->isolate), 2, args).IsEmpty()) {
     return Result::Failure;
   }
   return Result::OK;
 }
 
-static Result AttachMethods(Host* call,
-                            Local<Object> structure,
-                            const MethodSet& method_set) {
+static Result AttachMethod(Host* call,
+                           Local<Object> structure,
+                           const Method& method) {
   auto jsb = call->js_bridge;
-  auto f = jsb->attach_methods;
-  auto array = Array::New(jsb->isolate, method_set.method_count);
-  for (size_t i = 0; i < method_set.method_count; i++) {
-    array->Set(jsb->context, i, jsb->NewMethodRecord(method_set.methods[i])).Check();
+  auto f = jsb->attach_method;
+  auto def = jsb->NewMethod(method);
+  Local<Value> args[2] = { structure, def };
+  if (f->Call(call->exec_context, Null(jsb->isolate), 2, args).IsEmpty()) {
+    return Result::Failure;
   }
-  auto def = jsb->NewMethodSet(array);
-  Local<Value> args[3] = { structure, def, jsb->options };
-  if (f->Call(call->exec_context, Null(jsb->isolate), 3, args).IsEmpty()) {
+  return Result::OK;
+}
+
+static Result AttachDefaultValues(Host* call,
+                                  Local<Object> structure,
+                                  const DefaultValues& values) {
+  auto jsb = call->js_bridge;
+  auto f = jsb->attach_method;
+  Local<Value> data;
+  Local<Value> pointers;
+  auto def = jsb->NewDefaultValues(data, pointers);
+  Local<Value> args[2] = { structure, def };
+  if (f->Call(call->exec_context, Null(jsb->isolate), 2, args).IsEmpty()) {
+    return Result::Failure;
+  }
+  return Result::OK;
+}
+
+static Result FinalizeStructure(Host* call,
+                                Local<Object> structure) {
+  auto jsb = call->js_bridge;
+  auto f = jsb->finalize_structure;
+  Local<Value> args[1] = { structure };
+  if (f->Call(call->exec_context, Null(jsb->isolate), 1, args).IsEmpty()) {
     return Result::Failure;
   }
   return Result::OK;
@@ -189,10 +178,11 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->allocate_memory = AllocateMemory;
   callbacks->read_slot = ReadSlot;
   callbacks->write_slot = WriteSlot;
-  callbacks->create_structure = CreateStructure;
-  callbacks->shape_structure = ShapeStructure;
-  callbacks->attach_variables = AttachVariables;
-  callbacks->attach_methods = AttachMethods;
+  callbacks->begin_structure = BeginStructure;
+  callbacks->attach_member = AttachMember;
+  callbacks->attach_method = AttachMethod;
+  callbacks->attach_default_values = AttachDefaultValues;
+  callbacks->finalize_structure = FinalizeStructure;
 
   // save handle to external object
   auto md = new ModuleData(isolate, handle);

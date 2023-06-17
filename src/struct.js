@@ -76,8 +76,8 @@ export function obtainSetter(member, options) {
       };  
     } break;
     case MemberType.Pointer: {
-      const { slot, structure, mutable } = member;
-      if (!mutable) {
+      const { slot, structure, isConst } = member;
+      if (isConst) {
         return;
       } 
       if (structure.type === StructureType.Primitive) {
@@ -100,11 +100,11 @@ export function obtainSetter(member, options) {
       const { type, bitOffset } = member;
       const offset = bitOffset >> 3;
       if (runtimeSafety && type === MemberType.Int) {
-        const { signed, bitSize } = member;
-        const { min, max } = getIntRange(signed, bitSize);
+        const { isSigned, bitSize } = member;
+        const { min, max } = getIntRange(isSigned, bitSize);
         fn = function(v) { 
           if (v < min || v > max) {
-            throwOverflow(signed, bitSize, v);
+            throwOverflow(isSigned, bitSize, v);
           }
           set.call(this[DATA], offset, v, littleEndian);
         };

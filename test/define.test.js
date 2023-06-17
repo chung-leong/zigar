@@ -2,57 +2,54 @@ import { expect } from 'chai';
 
 import { MemberType, StructureType } from '../src/type.js';
 import { 
-  createStructure, 
-  shapeStructure,
-  attachVariables, 
-  attachMethods,
+  beginStructure, 
+  attachMember,
+  attachMethod,
+  attachDefaultValues,
+  finalizeStructure,
 } from '../src/define.js';
 
 describe('Structure definition', function() { 
   describe('Primitive', function() {
     it('should define a structure for holding a primitive', function() {
-      const def = {
+      const structure = beginStructure({ 
+        type: StructureType.Primitive, 
+        name: 'Hello', 
         size: 8,
-        members: [
-          {
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 64,
-            bitOffset: 0,
-            byteSize: 8,
-          }
-        ],
-        defaultData: (() => {
-          const dv = new DataView(new ArrayBuffer(8));
-          dv.setBigUint64(0, 0x7FFFFFFFFFFFFFFFn, true);
-          return dv;
-        })(),
-      };
-      const structure = createStructure(StructureType.Primitive, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isSigned: false,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+      });
+      const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
-      const object = new Hello();
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setBigUint64(0, 0x7FFFFFFFFFFFFFFFn, true);
+      const object = Hello(dv);
       expect(object.get()).to.equal(0x7FFFFFFFFFFFFFFFn);
       expect(BigInt(object)).to.equal(0x7FFFFFFFFFFFFFFFn);
     })
   })
   describe('Basic array', function() {
     it('should define structure for holding an int array', function() {
-      const def = {
+      const structure = beginStructure({
+        type: StructureType.Array, 
+        name: 'Hello', 
         size: 4 * 8,
-        members: [
-          {
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          }
-        ],
-        exposeDataView: true,
-      };
-      const structure = createStructure(StructureType.Array, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        signed: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
       const object = new Hello();
       object.set(0, 321);
@@ -61,27 +58,24 @@ describe('Structure definition', function() {
       expect(object.length).to.equal(8);
     })
     it('should define array that is iterable', function() {
-      const def = {
+      const structure = beginStructure({
+        type: StructureType.Array, 
+        name: 'Hello', 
         size: 4 * 8,
-        members: [
-          {
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          }
-        ],
-        defaultData: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 8));
-          dv.setUint32(0, 1234, true);
-          dv.setUint32(16, 4567, true);
-          return dv;
-        })(),
-      };
-      const structure = createStructure(StructureType.Array, 'Hello');
-      const Hello = shapeStructure(structure, def);
-      const object = new Hello();
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        signed: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      const dv = new DataView(new ArrayBuffer(4 * 8));
+      dv.setUint32(0, 1234, true);
+      dv.setUint32(16, 4567, true);
+      const object = Hello(dv);
       const list = [];
       for (const value of object) {
         list.push(value);
@@ -91,35 +85,39 @@ describe('Structure definition', function() {
   })
   describe('Simple struct', function() {
     it('should define a simple struct', function() {
-      const def = {
+      const structure = beginStructure({
+        type: StructureType.Struct, 
+        name: 'Hello',
         size: 4 * 2,
-        members: [
-          {
-            name: 'dog',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'cat',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 32,
-            byteSize: 4,
-          }
-        ],
-        defaultData: (() => {
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        isStatic: false,
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setInt32(0, 1234, true);
           dv.setInt32(4, 4567, true);
           return dv;
         })(),
-      };      
-      const structure = createStructure(StructureType.Struct, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
       const object = new Hello();
       expect(object).to.be.an.instanceOf(Object);
@@ -129,69 +127,81 @@ describe('Structure definition', function() {
       expect(object.cat).to.equal(4567);
     })
     it('should work correctly with big-endian data', function() {
-      const def = {
+      const structure = beginStructure({
+        type: StructureType.Struct, 
+        name: 'Hello',
         size: 4 * 2,
-        members: [
-          {
-            name: 'dog',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'cat',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 32,
-            byteSize: 4,
-          }
-        ],
-        defaultData: (() => {
+      }, { littleEndian: false });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        isStatic: false,
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setInt32(0, 1234, false);
           dv.setInt32(4, 4567, false);
           return dv;
         })(),
-      };
-      const structure = createStructure(StructureType.Struct, 'Hello');
-      const Hello = shapeStructure(structure, def, { littleEndian: false });
+      });
+      const Hello = finalizeStructure(structure);
+      expect(Hello).to.be.a('function');
       const object = new Hello();
+      expect(object).to.be.an.instanceOf(Object);
+      expect(object).to.be.an.instanceOf(Hello);
+      expect(Object.keys(object)).to.have.lengthOf(2);
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(4567);
     })
     it('should create functional setters', function() {
-      const def = {
+      const structure = beginStructure({
+        type: StructureType.Struct, 
+        name: 'Hello',
         size: 4 * 2,
-        members: [
-          {
-            name: 'dog',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'cat',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 32,
-            byteSize: 4,
-          }
-        ],
-        defaultData: (() => {
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        isStatic: false,
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setInt32(0, 1234, true);
           dv.setInt32(4, 4567, true);
           return dv;
         })(),
-      };
-      const structure = createStructure(StructureType.Struct, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       const object = new Hello();
       object.dog = 72;
       expect(object.dog).to.equal(72);
@@ -200,207 +210,225 @@ describe('Structure definition', function() {
       expect(object.cat).to.equal(882);
       expect(object.dog).to.equal(72);
     })
-    it('should have dataView property when exposeDataView is true', function() {
-      const def = {
+    it('should have dataView property', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct, 
+        name: 'Hello',
         size: 4 * 2,
-        members: [
-          {
-            name: 'dog',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'cat',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 32,
-            byteSize: 4,
-          }
-        ],
-        defaultData: (() => {
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        isStatic: false,
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setInt32(0, 1234, true);
           dv.setInt32(4, 4567, true);
           return dv;
         })(),
-        exposeDataView: true,
-      };
-      const structure = createStructure(StructureType.Struct, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       const object = new Hello();
       expect(object.dataView).to.be.instanceOf(DataView);
     })
-    it('should have typedArray property when exposeDataView is true and all struct members are of the same supported type', function() {
-      const def = {
+    it('should have typedArray property when all struct members are of the same supported type', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct, 
+        name: 'Hello',
         size: 4 * 2,
-        members: [
-          {
-            name: 'dog',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'cat',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 32,
-            byteSize: 4,
-          }
-        ],
-        defaultData: (() => {
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        isStatic: false,
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setInt32(0, 1234, true);
           dv.setInt32(4, 4567, true);
           return dv;
         })(),
-        exposeDataView: true,
-      };
-      const structure = createStructure(StructureType.Struct, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       const object = new Hello();
       expect(object.typedArray).to.be.instanceOf(Int32Array);
       object.cat = 777;
       expect(object.typedArray[1]).to.equal(777);
     })
     it('should not have typedArray property when struct members are different', function() {
-      const def = {
+      const structure = beginStructure({
+        type: StructureType.Struct, 
+        name: 'Hello',
         size: 4 * 2,
-        members: [
-          {
-            name: 'dog',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'cat',
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 32,
-            bitOffset: 32,
-            byteSize: 4,
-          }
-        ],
-        defaultData: (() => {
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        isStatic: false,
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setInt32(0, 1234, true);
           dv.setInt32(4, 4567, true);
           return dv;
         })(),
-        exposeDataView: true,
-      };
-      const structure = createStructure(StructureType.Struct, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       const object = new Hello();
       expect(object.typedArray).to.be.undefined;
     })
     it('should throw when a value exceed the maximum capability of the type', function () {
-      const def = {
+      const structure = beginStructure({
+        type: StructureType.Struct, 
+        name: 'Hello',
         size: 4 * 2,
-        members: [
-          {
-            name: 'dog',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'cat',
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 32,
-            bitOffset: 32,
-            byteSize: 4,
-          }
-        ],
-        defaultData: (() => {
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        isStatic: false,
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setInt32(0, 1234, true);
           dv.setInt32(4, 4567, true);
           return dv;
         })(),
-        exposeDataView: true,
-      };
-      const structure = createStructure(StructureType.Struct, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       const object = new Hello();
       expect(() => object.dog = 0x1FFFFFFFF).to.throw();
     })
     it('should permit overflow when runtime safety is off', function () {
-      const def = {
+      const structure = beginStructure({
+        type: StructureType.Struct, 
+        name: 'Hello',
         size: 4 * 2,
-        members: [
-          {
-            name: 'dog',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 32,
-            bitOffset: 0,
-            byteSize: 4,
-          },
-          {
-            name: 'cat',
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 32,
-            bitOffset: 32,
-            byteSize: 4,
-          }
-        ],
-        defaultData: (() => {
+      }, { runtimeSafety: false });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      attachDefaultValues(structure, {
+        isStatic: false,
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setInt32(0, 1234, true);
           dv.setInt32(4, 4567, true);
           return dv;
         })(),
-        exposeDataView: true,
-      };
-      const structure = createStructure(StructureType.Struct, 'Hello');
-      const Hello = shapeStructure(structure, def, { runtimeSafety: false });
+      });
+      const Hello = finalizeStructure(structure);
       const object = new Hello();
       expect(() => object.dog = 0x1FFFFFFFF).to.not.throw();
     })
   
     it('should be able to handle bitfields', function() {
-      const def = {
+      const structure = beginStructure({
+        type: StructureType.Struct, 
+        name: 'Hello',
         size: 1,
-        members: [
-          {
-            name: 'dog',
-            type: MemberType.Bool,
-            bitSize: 1,
-            bitOffset: 0,
-            byteSize: 0,
-          },
-          {
-            name: 'cat',
-            type: MemberType.Bool,
-            bitSize: 1,
-            bitOffset: 1,
-            byteSize: 0,
-          },
-        ],
-        defaultData: (() => {
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Bool,
+        isStatic: false,
+        bitSize: 1,
+        bitOffset: 0,
+        byteSize: 0,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Bool,
+        isStatic: false,
+        bitSize: 1,
+        bitOffset: 1,
+        byteSize: 0,
+      });
+      attachDefaultValues(structure, {
+        isStatic: false,
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(1));
           dv.setInt8(0, 2, true);
           return dv;
         })(),
-        exposeDataView: true,
-      };
-      const structure = createStructure(StructureType.Struct, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       const object = new Hello();
       expect(object.dog).to.be.false;
       expect(object.cat).to.be.true;
@@ -411,35 +439,37 @@ describe('Structure definition', function() {
       expect(object.cat).to.be.false;
     })
     it('should be able to handle small int type', function() {
-      const def = {
+      const structure = beginStructure({
+        type: StructureType.Struct, 
+        name: 'Hello',
         size: 1,
-        members: [
-          {
-            name: 'dog',
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 2,
-            bitOffset: 0,
-            byteSize: 0,
-          },
-          {
-            name: 'cat',
-            type: MemberType.Int,
-            signed: true,
-            bitSize: 3,
-            bitOffset: 2,
-            byteSize: 0,
-          },
-        ],
-        defaultData: (() => {
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 2,
+        bitOffset: 0,
+        byteSize: 0,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 3,
+        bitOffset: 2,
+        byteSize: 0,
+      });
+      attachDefaultValues(structure, {
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(1));
           dv.setInt8(0, 7, true);
           return dv;
         })(),
-        exposeDataView: true,
-      };
-      const structure = createStructure(StructureType.Struct, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       const object = new Hello();
       expect(object.dog).to.equal(3);
       expect(object.cat).to.equal(1);
@@ -452,40 +482,40 @@ describe('Structure definition', function() {
       expect(object.dog).to.equal(3);
     }) 
     it('should be able to handle bit-misalignment', function() {
-      const def = {
+      const structure = beginStructure({
+        type: StructureType.Struct, 
+        name: 'Hello',
         size: 5,
-        members: [
-          {
-            name: 'dog',
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 2,
-            bitOffset: 0,
-            byteSize: 0,
-          },
-          {
-            name: 'cat',
-            type: MemberType.Int,
-            signed: false,
-            bitSize: 32,
-            bitOffset: 2,
-            byteSize: 0,
-          },
-        ],
-        defaultData: (() => {
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 2,
+        bitOffset: 0,
+        byteSize: 0,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 2,
+        byteSize: 0,
+      });
+      attachDefaultValues(structure, {
+        data: (() => {
           const dv = new DataView(new ArrayBuffer(5));
           dv.setUint32(0, 8, true);
           return dv;
         })(),
-        exposeDataView: true,
-      };
-      const structure = createStructure(StructureType.Struct, 'Hello');
-      const Hello = shapeStructure(structure, def);
+      });
+      const Hello = finalizeStructure(structure);
       const object = new Hello();
       expect(object.dog).to.equal(0);
-      debugger;
       expect(object.cat).to.equal(2);
-      // TODO
     }) 
   })
   describe('Complex Struct', function() {

@@ -3,9 +3,9 @@ import { DATA, TYPED_ARRAY } from './symbol.js';
 
 export function obtainTypedArrayGetter(members) {
   const hash = {};
-  for (const { type, signed, bitSize, byteSize } of members) {
+  for (const { type, isSigned, bitSize, byteSize } of members) {
     if (type === MemberType.Int || type === MemberType.Float) {
-      const typeName = getTypeName(type, signed, bitSize);
+      const typeName = getTypeName(type, isSigned, bitSize);
       const constructor = typedArrays[typeName];
       if (!constructor) {
         return;

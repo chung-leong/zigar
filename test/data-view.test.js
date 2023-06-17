@@ -8,19 +8,19 @@ describe('DataView functions', function() {
     it('should return functions for getting standard int types', function() {
       const dv = new DataView(new ArrayBuffer(16));
       dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn);
-      for (const signed of [ false, true ]) {
+      for (const isSigned of [ false, true ]) {
         for (const bitSize of [ 8, 16, 32, 64 ]) {
-          const { max } = getIntRange(signed, bitSize);
+          const { max } = getIntRange(isSigned, bitSize);
           const member = {
             type: MemberType.Int,
-            signed,
+            isSigned,
             bitSize,
             bitOffset: 64,
             byteSize: bitSize / 8
           }
           const f = obtainDataViewGetter(member);    
           const res = f.call(dv, 8, true);
-          if (signed) {
+          if (isSigned) {
             expect(Number(res)).to.equal(-1);
           } else {
             expect(res).to.equal(max);
@@ -35,7 +35,7 @@ describe('DataView functions', function() {
       for (const bitSize of [ 32, 64 ]) {
         const member = {
           type: MemberType.Float,
-          signed: true,
+          isSigned: true,
           bitSize,
           bitOffset: (bitSize === 32) ? 0 : 64,
           byteSize: bitSize / 8
@@ -48,23 +48,23 @@ describe('DataView functions', function() {
     it('should return functions for getting non-standard int types (aligned, < 64-bit)', function() {
       const dv = new DataView(new ArrayBuffer(16));
       dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn);
-      for (const signed of [ false, true ]) {
+      for (const isSigned of [ false, true ]) {
         const standard = [ 8, 16, 32, 64 ];
         for (let bitSize = 2; bitSize < 64; bitSize++) {
           if (standard.includes(bitSize)) {
             continue;
           }
-          const { max } = getIntRange(signed, bitSize);
+          const { max } = getIntRange(isSigned, bitSize);
           const member = {
             type: MemberType.Int,
-            signed,
+            isSigned,
             bitSize,
             bitOffset: 64,
             byteSize: [ 1, 2, 4, 8 ].find(b => b * 8 > bitSize),
           };
           const f = obtainDataViewGetter(member);
           const res = f.call(dv, 8, true);
-          if (signed) {
+          if (isSigned) {
             expect(Number(res)).to.equal(-1);
           } else {
             expect(res).to.equal(max);
@@ -81,7 +81,7 @@ describe('DataView functions', function() {
       }
       const member = {
         type: MemberType.Int,
-        signed: false,
+        isSigned: false,
         bitSize: 128,
         bitOffset: 0,
         byteSize: 16,
@@ -109,7 +109,7 @@ describe('DataView functions', function() {
         bitSize: 72,
         bitOffset: 0,
         byteSize: 16,
-        signed: false,
+        isSigned: false,
       };
       const f = obtainDataViewGetter(member);     
       const res1 = f.call(dv, 0, true);
@@ -133,7 +133,7 @@ describe('DataView functions', function() {
         type: MemberType.Int,
         bitSize: 65,
         bitOffset: 0,
-        signed: true,
+        isSigned: true,
         byteSize: 16,
       };
       const f = obtainDataViewGetter(member);     
@@ -149,7 +149,7 @@ describe('DataView functions', function() {
       }
       const member = {
         type: MemberType.Float,
-        signed: true,
+        isSigned: true,
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
@@ -177,7 +177,7 @@ describe('DataView functions', function() {
       }
       const member = {
         type: MemberType.Float,
-        signed: true,
+        isSigned: true,
         bitSize: 128,
         bitOffset: 0,
         byteSize: 16,
@@ -201,18 +201,18 @@ describe('DataView functions', function() {
     it('should return functions for setting standard int types', function() {
       const dv = new DataView(new ArrayBuffer(16));
       dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn);
-      for (const signed of [ false, true ]) {
+      for (const isSigned of [ false, true ]) {
         for (const bitSize of [ 8, 16, 32, 64 ]) {
-          const { max } = getIntRange(signed, bitSize);
+          const { max } = getIntRange(isSigned, bitSize);
           const member = {
             type: MemberType.Int,
-            signed,
+            isSigned,
             bitSize,
             bitOffset: 64,
             byteSize: bitSize / 8
           }
           const f = obtainDataViewSetter(member);
-          if (signed) {
+          if (isSigned) {
             f.call(dv, 8, (bitSize == 64) ? -1n : -1, true);
           } else {
             f.call(dv, 8, max, true);
@@ -227,7 +227,7 @@ describe('DataView functions', function() {
       for (const bitSize of [ 32, 64 ]) {
         const member = {
           type: MemberType.Float,
-          signed: true,
+          isSigned: true,
           bitSize,
           bitOffset: (bitSize === 32) ? 0 : 64,
           byteSize: bitSize / 8
@@ -239,17 +239,17 @@ describe('DataView functions', function() {
       expect(dv.getFloat64(8, true).toFixed(2)).to.equal('3.14');
     })
     it('should return functions for setting non-standard int types (aligned, < 64-bit)', function() {
-      for (const signed of [ false, true ]) {
+      for (const isSigned of [ false, true ]) {
         const standard = [ 8, 16, 32, 64 ];
         for (let bitSize = 2; bitSize < 64; bitSize++) {
           const dv = new DataView(new ArrayBuffer(16));
           if (standard.includes(bitSize)) {
             continue;
           }
-          const { min, max } = getIntRange(signed, bitSize);
+          const { min, max } = getIntRange(isSigned, bitSize);
           const member = {
             type: MemberType.Int,
-            signed,
+            isSigned,
             bitSize,
             bitOffset: 64,
             byteSize: [ 1, 2, 4, 8 ].find(b => b * 8 > bitSize),
@@ -270,7 +270,7 @@ describe('DataView functions', function() {
       const bytes = [ 255, 255, 255, 255, 255, 255, 255, 31, 0, 0, 0, 0, 0, 0, 0, 0, ];
       const member = {
         type: MemberType.Int,
-        signed: false,
+        isSigned: false,
         bitSize: 128,
         bitOffset: 0,
         byteSize: 16,
@@ -293,7 +293,7 @@ describe('DataView functions', function() {
       const bytes = [ 255, 255, 255, 255, 255, 255, 255, 31, 0, 0, 0, 0, 0, 0, 0, 0, ];
       const member = {
         type: MemberType.Int,
-        signed: false,
+        isSigned: false,
         bitSize: 72,
         bitOffset: 0,
         byteSize: 16,
@@ -316,7 +316,7 @@ describe('DataView functions', function() {
       const bytes = [ 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, ];
       const member = {
         type: MemberType.Int,
-        signed: true,
+        isSigned: true,
         bitSize: 65,
         bitOffset: 0,
         byteSize: 16,
@@ -328,13 +328,13 @@ describe('DataView functions', function() {
       }
     })
     it('should return functions for setting non-standard int types (> 64-bit)', function() {
-      for (const signed of [ false, true ]) {
+      for (const isSigned of [ false, true ]) {
         for (let bitSize = 65; bitSize < 1024; bitSize += 33) {
           const dv = new DataView(new ArrayBuffer(256));
-          const { min, max } = getIntRange(signed, bitSize);
+          const { min, max } = getIntRange(isSigned, bitSize);
           const member = {
             type: MemberType.Int,
-            signed,
+            isSigned,
             bitSize,
             bitOffset: 0,
             byteSize: Math.ceil(bitSize / 64) * 8,
@@ -355,7 +355,7 @@ describe('DataView functions', function() {
       const bytes = [ 72, 66, 0, 0, 0, 128, 0, 124, 0, 252, 1, 124, ];
       const member = {
         type: MemberType.Float,
-        signed: true,
+        isSigned: true,
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
@@ -392,7 +392,7 @@ describe('DataView functions', function() {
       const bytes = [ 184, 1, 23, 197, 140, 137, 105, 132, 209, 66, 68, 181, 31, 146, 0, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 127, ];
       const member = {
         type: MemberType.Float,
-        signed: true,
+        isSigned: true,
         bitSize: 128,
         bitOffset: 0,
         byteSize: 16,
@@ -425,26 +425,26 @@ describe('DataView functions', function() {
       }
     })
     it('should return functions for setting non-aligned integers', function() {
-      const signed = true;
+      const isSigned = true;
       for (let bitSize = 2; bitSize <= 64; bitSize++) {
         for (let bitOffset = 1; bitOffset <= 7; bitOffset++) {
           const guard1 = {
             type: MemberType.Int,
-            signed: false, 
+            isSigned: false, 
             bitSize : bitOffset,
             bitOffset: 0,
             byteSize: 0,
           };
           const member = {
             type: MemberType.Int,
-            signed,
+            isSigned,
             bitSize,
             bitOffset,
             byteSize: 0,
           };
           const guard2 = {
             type: MemberType.Int,
-            signed: false,
+            isSigned: false,
             bitSize: 3,
             bitOffset: bitOffset + bitSize,
             byteSize: 0,
@@ -459,7 +459,7 @@ describe('DataView functions', function() {
           const setG2 = obtainDataViewSetter(guard2);
           const get = obtainDataViewGetter(member);
           const set = obtainDataViewSetter(member);
-          const { min, max } = getIntRange(signed, bitSize);
+          const { min, max } = getIntRange(isSigned, bitSize);
           const { max: maxG1 } = getIntRange(false, guard1.bitSize);
           const { max: maxG2 } = getIntRange(false, guard2.bitSize);
           let step;

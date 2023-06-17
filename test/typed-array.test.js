@@ -11,7 +11,7 @@ describe('Typed array functions', function() {
         {
           name: 'dog',
           type: MemberType.Int,
-          signed: true,
+          isSigned: true,
           bitSize: 32,
           bitOffset: 0,
           byteSize: 4,
@@ -19,7 +19,7 @@ describe('Typed array functions', function() {
         {
           name: 'cat',
           type: MemberType.Int,
-          signed: true,
+          isSigned: true,
           bitSize: 32,
           bitOffset: 32,
           byteSize: 4,
@@ -38,7 +38,7 @@ describe('Typed array functions', function() {
         {
           name: 'dog',
           type: MemberType.Int,
-          signed: true,
+          isSigned: true,
           bitSize: 32,
           bitOffset: 0,
           byteSize: 4,
@@ -46,7 +46,7 @@ describe('Typed array functions', function() {
         {
           name: 'cat',
           type: MemberType.Int,
-          signed: false,
+          isSigned: false,
           bitSize: 32,
           bitOffset: 32,
           byteSize: 4,

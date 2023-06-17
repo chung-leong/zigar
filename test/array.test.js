@@ -14,7 +14,7 @@ describe('Array functions', function() {
     it('should return a function for retrieving an array item', function() {
       const member = {
         type: MemberType.Int,
-        signed: true,
+        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       };
@@ -34,7 +34,7 @@ describe('Array functions', function() {
     it('should return a function for retrieving a big int', function() {
       const member = {
         type: MemberType.Int,
-        signed: true,
+        isSigned: true,
         bitSize: 64,
         byteSize: 8,
       };
@@ -54,7 +54,7 @@ describe('Array functions', function() {
     it('should throw when index is out-of-bound', function() {
       const member = {
         type: MemberType.Int,
-        signed: true,
+        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       };
@@ -70,7 +70,7 @@ describe('Array functions', function() {
     it('should return a function employing the correct endianness', function() {
       const member = {
         type: MemberType.Int,
-        signed: true,
+        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       };
@@ -93,7 +93,7 @@ describe('Array functions', function() {
     it('should return a function for getting the array length', function() {
       const member = {
         type: MemberType.Int,
-        signed: true,
+        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       };
@@ -108,7 +108,7 @@ describe('Array functions', function() {
     it('should return a function for setting an array item', function() {
       const member = {
         type: MemberType.Int,
-        signed: true,
+        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       };
@@ -125,7 +125,7 @@ describe('Array functions', function() {
     it('should return a function for setting a big int', function() {
       const member = {
         type: MemberType.Int,
-        signed: true,
+        isSigned: true,
         bitSize: 64,
         byteSize: 8,
       };
@@ -142,7 +142,7 @@ describe('Array functions', function() {
     it('should throw when index is out-of-bound', function() {
       const member = {
         type: MemberType.Int,
-        signed: true,
+        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       };
@@ -158,7 +158,7 @@ describe('Array functions', function() {
     it('should return a iterator', function() {
       const member = {
         type: MemberType.Int,
-        signed: true,
+        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       };

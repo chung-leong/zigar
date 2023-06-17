@@ -97,9 +97,9 @@ export function obtainArraySetter(member, options) {
       };  
     } break;
     case MemberType.Pointer: {
-      const { structure, mutable, byteSize } = member;
+      const { structure, byteSize, isConst } = member;
       const { constructor } = structure;
-      if (!mutable) {
+      if (isConst) {
         return;
       } 
       return function(index, v) {
@@ -122,11 +122,11 @@ export function obtainArraySetter(member, options) {
       const set = obtainDataViewSetter(member);
       const { type } = member;
       if (runtimeSafety && type === MemberType.Int) {
-        const { signed, bitSize, byteSize } = member;
-        const { min, max } = getIntRange(signed, bitSize);
+        const { isSigned, bitSize, byteSize } = member;
+        const { min, max } = getIntRange(isSigned, bitSize);
         fn = function(index, v) { 
           if (v < min || v > max) {
-            throwOverflow(signed, bitSize, v);
+            throwOverflow(isSigned, bitSize, v);
           }
           const offset = index * byteSize;
           const dv = this[DATA];
