@@ -155,18 +155,30 @@ struct FunctionData : public ExternalData {
   Global<Object> slots;
   Global<External> module_data;
 
+  // for the factory function
   FunctionData(Isolate* isolate, 
-               Thunk thunk, 
                Local<External> module_data) :
     ExternalData(isolate),
-    thunk(thunk),
+    thunk(nullptr),
     slots(isolate, Object::New(isolate)),
     module_data(isolate, module_data) {
+  }
+
+  // for actual zig function
+  FunctionData(Isolate* isolate,
+               FunctionData* fd,
+               Thunk thunk) :
+    ExternalData(isolate),
+    thunk(thunk),
+    slots(isolate, Local<Object>::New(isolate, fd->slots)),
+    module_data(isolate, Local<External>::New(isolate, fd->module_data)) {
     count++;
   }
 
   ~FunctionData() {
-    count--;
+    if (thunk) {
+      count--;
+    }
   }
 };
 
@@ -185,12 +197,38 @@ struct ExternalMemoryData {
   }
 };
 
-static void Call(const FunctionCallbackInfo<Value>& info);
+struct JSBridge;
+
+struct Host {
+  Isolate* isolate;  
+  Local<Context> context;
+  Local<Array> mem_pool;
+  Local<Object> slots;
+  Local<Object> argument;
+  Local<Symbol> data_symbol;
+  Local<Symbol> relocatable_symbol;
+  FunctionData* zig_func;
+  JSBridge* js_bridge;
+
+  Host(const FunctionCallbackInfo<Value> &info) :
+    js_bridge(nullptr) {
+    isolate = info.GetIsolate();
+    context = isolate->GetCurrentContext();
+    if (info.Data()->IsExternal()) {
+      zig_func = reinterpret_cast<FunctionData*>(info.Data().As<External>()->Value());
+      argument = info[0].As<Object>();
+      data_symbol = info[1].As<Symbol>();
+      relocatable_symbol = info[2].As<Symbol>();
+    } else {
+      zig_func = nullptr;
+    }
+  }
+};
 
 struct JSBridge {
+  Host* host;
   Isolate* isolate;
   Local<Context> context;
-  Local<External> module_data;
 
   Local<Function> begin_structure;
   Local<Function> attach_member;
@@ -219,13 +257,12 @@ struct JSBridge {
 
   Local<Object> options;
 
-  JSBridge(Isolate* isolate,
+  JSBridge(Host* host,
            Local<Object> module,
-           Local<External> module_data,
            ModuleFlags flags) :
-    isolate(isolate),
-    context(isolate->GetCurrentContext()),
-    module_data(module_data),
+    host(host),
+    isolate(host->isolate),
+    context(host->context),
     t_type(String::NewFromUtf8Literal(isolate, "type")),
     t_is_static(String::NewFromUtf8Literal(isolate, "isStatic")),
     t_is_signed(String::NewFromUtf8Literal(isolate, "isSigned")),
@@ -300,16 +337,19 @@ struct JSBridge {
   }
 
   Local<Object> NewMethod(const Method &m) {
-    auto fd = new FunctionData(isolate, m.thunk, module_data);
+    auto fd = new FunctionData(isolate, host->zig_func, m.thunk);
     auto fde = Local<External>::New(isolate, fd->external);
-    auto tmpl = FunctionTemplate::New(isolate, Call, fde, Local<Signature>(), 1);
+    auto function = Function::New(context, [](const FunctionCallbackInfo<Value>& info) {
+      // Host will extract the FunctionData object created above from the External object
+      // which we get from FunctionCallbackInfo::Data()      
+      Host ctx(info);
+      // ctx.zig_func->thunk == m.thunk
+      ctx.zig_func->thunk(&ctx, ctx.argument);
+    }, fde, 3).ToLocalChecked();
     auto def = Object::New(isolate);
     def->Set(context, t_name, String::NewFromUtf8(isolate, m.name).ToLocalChecked()).Check();
     def->Set(context, t_arg_struct, m.structure).Check();
-    Local<Function> function;
-    if (tmpl->GetFunction(context).ToLocal(&function)) {
-      def->Set(context, t_thunk, function).Check();
-    }
+    def->Set(context, t_thunk, function).Check();
     def->Set(context, t_is_static_only, Boolean::New(isolate, m.is_static_only)).Check();
     return def;   
   }
@@ -326,31 +366,5 @@ struct JSBridge {
       def->Set(context, t_pointers, pointers).Check();
     }
     return def;
-  }
-};
-
-struct Host {
-  Isolate* isolate;  
-  Local<Context> context;
-  Local<Array> mem_pool;
-  Local<Object> slots;
-  Local<Object> argument;
-  Local<Symbol> data_symbol;
-  Local<Symbol> relocatable_symbol;
-  FunctionData* zig_func;
-  JSBridge* js_bridge;
-
-  Host(const FunctionCallbackInfo<Value> &info) :
-    js_bridge(nullptr) {
-    isolate = info.GetIsolate();
-    context = isolate->GetCurrentContext();
-    if (info.Data()->IsExternal()) {
-      zig_func = reinterpret_cast<FunctionData*>(info.Data().As<External>()->Value());
-      argument = info[0].As<Object>();
-      data_symbol = info[1].As<Symbol>();
-      relocatable_symbol = info[2].As<Symbol>();
-    } else {
-      zig_func = nullptr;
-    }
   }
 };

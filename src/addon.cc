@@ -158,11 +158,6 @@ static Result FinalizeStructure(Host* call,
   return Result::OK;
 }
 
-static void Call(const FunctionCallbackInfo<Value>& info) {
-  Host ctx(info);
-  ctx.zig_func->thunk(&ctx, ctx.argument);
-}
-
 static void Load(const FunctionCallbackInfo<Value>& info) {
   auto isolate = info.GetIsolate();
   auto ad = reinterpret_cast<AddonData*>(info.Data().As<External>()->Value());
@@ -239,9 +234,10 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   // call the factory function
   Host ctx(info);
   auto mde = Local<External>::New(isolate, md->external);
-  auto fd = new FunctionData(isolate, nullptr, mde);
+  auto fd = new FunctionData(isolate, mde);
   ctx.zig_func = fd;
-  ctx.js_bridge = new JSBridge(isolate, js_module, mde, module->flags);
+  // TODO: create the bridge on demand
+  ctx.js_bridge = new JSBridge(&ctx, js_module, module->flags);
   Local<Object> structure;
   Local<Value> constructor;
   if (module->factory(&ctx, &structure) == Result::OK) {
