@@ -5,7 +5,7 @@ static Result ReadSlot(Host* call,
                        Local<Value> *dest) {
   if (!call->slots.IsEmpty()) {
     Local<Value> value;
-    if (call->slots->Get(call->exec_context, slot_id).ToLocal(&value)) {
+    if (call->slots->Get(call->context, slot_id).ToLocal(&value)) {
       if (!value->IsNullOrUndefined()) {
         *dest = value;
         return Result::OK;
@@ -21,7 +21,7 @@ static Result WriteSlot(Host* call,
   if (call->slots.IsEmpty()) {
     call->slots = Local<Object>::New(call->isolate, call->zig_func->slots);
   }
-  call->slots->Set(call->exec_context, slot_id, object).Check();
+  call->slots->Set(call->context, slot_id, object).Check();
   return Result::OK;  
 }
 
@@ -33,10 +33,24 @@ static Result AllocateMemory(Host* call,
   }
   auto buffer = ArrayBuffer::New(call->isolate, size);
   uint32_t index = call->mem_pool->Length();
-  call->mem_pool->Set(call->exec_context, index, buffer).Check();
+  call->mem_pool->Set(call->context, index, buffer).Check();
   std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
   dest->bytes = reinterpret_cast<uint8_t *>(store->Data());
   dest->len = store->ByteLength();
+  return Result::OK;
+}
+
+static Result GetMemory(Host* call,
+                        Local<Object> object,
+                        Memory* dest) {
+  Local<Value> value;  
+  if (!object->Get(call->context, call->data_symbol).ToLocal(&value) || !value->IsDataView()) {
+    return Result::Failure;
+  }
+  auto buffer = value.As<DataView>()->Buffer();
+  auto content = buffer->GetBackingStore();
+  dest->bytes = reinterpret_cast<uint8_t*>(content->Data());
+  dest->len = content->ByteLength();
   return Result::OK;
 }
 
@@ -138,7 +152,7 @@ static Result FinalizeStructure(Host* call,
   auto jsb = call->js_bridge;
   auto f = jsb->finalize_structure;
   Local<Value> args[1] = { structure };
-  if (f->Call(call->exec_context, Null(jsb->isolate), 1, args).IsEmpty()) {
+  if (f->Call(call->context, Null(jsb->isolate), 1, args).IsEmpty()) {
     return Result::Failure;
   }
   return Result::OK;
@@ -146,7 +160,7 @@ static Result FinalizeStructure(Host* call,
 
 static void Call(const FunctionCallbackInfo<Value>& info) {
   Host ctx(info);
-  ctx.zig_func->thunk(&ctx, info[0]);
+  ctx.zig_func->thunk(&ctx, ctx.argument);
 }
 
 static void Load(const FunctionCallbackInfo<Value>& info) {
@@ -210,6 +224,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   auto module = reinterpret_cast<::Module*>(symbol);
   auto callbacks = module->callbacks;
   callbacks->allocate_memory = AllocateMemory;
+  callbacks->get_memory = GetMemory;
   callbacks->read_slot = ReadSlot;
   callbacks->write_slot = WriteSlot;
   callbacks->begin_structure = BeginStructure;
@@ -227,13 +242,19 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   auto fd = new FunctionData(isolate, nullptr, mde);
   ctx.zig_func = fd;
   ctx.js_bridge = new JSBridge(isolate, js_module, mde, module->flags);
-  Local<Value> ns;
-  if (module->factory(&ctx, &ns) == Result::OK) {
-    info.GetReturnValue().Set(ns);
-  } else {
-    Throw("Unable to import functions");
+  Local<Object> structure;
+  Local<Value> constructor;
+  if (module->factory(&ctx, &structure) == Result::OK) {
+    auto context = isolate->GetCurrentContext();
+    auto t_constructor = String::NewFromUtf8Literal(isolate, "constructor");
+    if (structure->Get(context, t_constructor).ToLocal(&constructor)) {
+      info.GetReturnValue().Set(constructor);
+    }
   }
   delete fd;
+  if (constructor.IsEmpty()) {
+    Throw("Unable to import functions");
+  }
 }
 
 static void GetGCStatistics(const FunctionCallbackInfo<Value>& info) {

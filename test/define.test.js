@@ -1082,12 +1082,12 @@ describe('Structure definition', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      const argStructure = beginStructure({
+      const argStruct = beginStructure({
         type: StructureType.Struct,
         name: 'Argument',
         size: 12,
       });
-      attachMember(argStructure, {
+      attachMember(argStruct, {
         name: '0',
         type: MemberType.Compound,
         isStatic: false,
@@ -1096,7 +1096,7 @@ describe('Structure definition', function() {
         byteSize: structure.size,
         structure,
       });
-      attachMember(argStructure, {
+      attachMember(argStruct, {
         name: 'retval',
         type: MemberType.Int,
         isStatic: false,
@@ -1105,7 +1105,7 @@ describe('Structure definition', function() {
         bitOffset: 64,
         byteSize: 4,
       });
-      const argStruct = finalizeStructure(argStructure);
+      finalizeStructure(argStruct);
       const thunk = (args) => {
         args.retval = args[0].dog + args[0].cat;
       };
@@ -1160,12 +1160,12 @@ describe('Structure definition', function() {
           return dv;
         })(),
       });
-      const argStructure = beginStructure({
+      const argStruct = beginStructure({
         type: StructureType.Struct, 
         name: 'Arguments',
         size: 12,
       });
-      attachMember(argStructure, {
+      attachMember(argStruct, {
         name: '0',
         type: MemberType.Enum,
         isStatic: false, 
@@ -1174,7 +1174,7 @@ describe('Structure definition', function() {
         byteSize: 4,
         structure,
       });
-      attachMember(argStructure, {
+      attachMember(argStruct, {
         name: '1',
         type: MemberType.Int,
         isStatic: false, 
@@ -1183,7 +1183,7 @@ describe('Structure definition', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      attachMember(argStructure, {
+      attachMember(argStruct, {
         name: 'retval',
         type: MemberType.Bool,
         isStatic: false, 
@@ -1191,12 +1191,15 @@ describe('Structure definition', function() {
         bitOffset: 64,
         byteSize: 1,
       });
-      const argStruct = finalizeStructure(argStructure);
-      let arg1, arg2;
-      const thunk = (args) => {
+      finalizeStructure(argStruct);
+      let arg1, arg2, symbol1, symbol2, argDV;
+      const thunk = (args, s1, s2) => {
+        symbol1 = s1;
+        symbol2 = s2;
         arg1 = args[0];
         arg2 = args[1];
         args.retval = true;
+        argDV = args[s1];
       };
       attachMethod(structure, {
         name: 'foo',
@@ -1217,6 +1220,9 @@ describe('Structure definition', function() {
       expect(res2).to.be.true;
       expect(arg1).to.equal(Hello.Dog);
       expect(arg2).to.equal(4567);
+      expect(symbol1).to.be.a('symbol');
+      expect(symbol2).to.be.a('symbol');
+      expect(argDV).to.be.an.instanceOf(DataView);
     }) 
   })
 })

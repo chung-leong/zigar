@@ -1289,31 +1289,33 @@ R"=====(
         isStaticOnly,
       } = method;
       const f = function(...args) {
-        const a = new argStruct;
+        const { constructor } = argStruct;
+        const a = new constructor();
         for (const [ index, arg ] of args.entries()) {
           if (arg !== undefined) {
             a[index] = arg;
           }
         }
-        thunk(a);
+        thunk(a, DATA, RELOCATABLE);
         return a.retval;
       };
       Object.defineProperties(f, {
         name: { value: name, writable: false },
       });
       Object.defineProperties(constructor, { 
-        [name]: { value: f, configurable: true, writable: true },
+        [name]: { value: f, configurable: true, enumerable: true, writable: true },
       });
       if (!isStaticOnly) {
         const m = function(...args) {
-          const a = new argStruct;
+          const { constructor } = argStruct;
+          const a = new constructor();
           a[0] = this;
           for (const [ index, arg ] of args.entries()) {
             if (arg !== undefined) {
               a[index + 1] = arg;
             }
           }
-          thunk(a);
+          thunk(a, DATA, RELOCATABLE);
           return a.retval;
         };
         Object.defineProperties(m, {

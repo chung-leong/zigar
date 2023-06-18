@@ -82,7 +82,7 @@ union ModuleFlags {
 };
 
 struct Callbacks;
-typedef Result (*Factory)(Host*, Local<Value>*);
+typedef Result (*Factory)(Host*, Local<Object>*);
 
 struct Module {
   uint32_t version;
@@ -331,18 +331,24 @@ struct JSBridge {
 
 struct Host {
   Isolate* isolate;  
-  Local<Context> exec_context;
+  Local<Context> context;
   Local<Array> mem_pool;
   Local<Object> slots;
+  Local<Object> argument;
+  Local<Symbol> data_symbol;
+  Local<Symbol> relocatable_symbol;
   FunctionData* zig_func;
   JSBridge* js_bridge;
 
   Host(const FunctionCallbackInfo<Value> &info) :
     js_bridge(nullptr) {
     isolate = info.GetIsolate();
-    exec_context = isolate->GetCurrentContext();
+    context = isolate->GetCurrentContext();
     if (info.Data()->IsExternal()) {
       zig_func = reinterpret_cast<FunctionData*>(info.Data().As<External>()->Value());
+      argument = info[0].As<Object>();
+      data_symbol = info[1].As<Symbol>();
+      relocatable_symbol = info[2].As<Symbol>();
     } else {
       zig_func = nullptr;
     }

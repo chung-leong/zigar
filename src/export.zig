@@ -322,7 +322,7 @@ const Host = *opaque {
         if (callbacks.get_memory(self, value, &memory) != .OK) {
             return Error.Unknown;
         }
-        const aligned_ptr = @alignCast(@alignOf(T), memory.bytes);
+        const aligned_ptr = @alignCast(@max(@alignOf(T), 1), memory.bytes);
         return @ptrCast(*T, aligned_ptr);
     }
 
