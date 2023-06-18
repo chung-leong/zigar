@@ -1,5 +1,5 @@
 R"=====(
-(function (exports) {
+((function (exports) {
   'use strict';
 
   const MemberType = {
@@ -1358,5 +1358,5 @@ R"=====(
 
   return exports;
 
-})({});
+})({}))
 )====="
