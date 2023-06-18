@@ -116,7 +116,6 @@ struct ExternalData {
     external.template SetWeak<ExternalData>(this, 
       [](const v8::WeakCallbackInfo<ExternalData>& data) {
         auto self = data.GetParameter();
-        self->external.Reset();
         delete self;
       }, WeakCallbackType::kParameter);
   }
@@ -130,9 +129,7 @@ struct AddonData : public ExternalData {
   AddonData(Isolate* isolate) :
     ExternalData(isolate) {}
 
-  ~AddonData() {
-    printf("~AddonData\n");
-  }
+  ~AddonData() {}
 };
 
 struct ModuleData : public ExternalData {
@@ -147,7 +144,6 @@ struct ModuleData : public ExternalData {
   }
 
   ~ModuleData() {
-    printf("~ModuleData\n");
     dlclose(so_handle);
     count--;
   }
@@ -170,7 +166,21 @@ struct FunctionData : public ExternalData {
   }
 
   ~FunctionData() {
-    printf("~FunctionData\n");
+    count--;
+  }
+};
+
+struct ExternalMemoryData {
+  static int count;
+  Global<External> module_data;
+
+  ExternalMemoryData(Isolate* isolate, 
+                     Local<External> module_data) : 
+    module_data(isolate, module_data) {
+    count++;
+  }
+
+  ~ExternalMemoryData() {
     count--;
   }
 };
@@ -305,8 +315,8 @@ struct JSBridge {
   }
 
   Local<Object> NewDefaultValues(bool is_static,
-                                 Local<Value> data,
-                                 Local<Value> pointers) {
+                                 Local<SharedArrayBuffer> data,
+                                 Local<Object> pointers) {
     auto def = Object::New(isolate);
     def->Set(context, t_is_static, Boolean::New(isolate, is_static)).Check();
     if (!data.IsEmpty()) {

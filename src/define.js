@@ -54,19 +54,24 @@ export function attachDefaultValues(s, def) {
 }
 
 export function finalizeStructure(s) {
-  switch (s.type) {
-    case StructureType.Primitive: 
-      return finalizePrimitive(s);
-    case StructureType.Array:
-      return finalizeArray(s);
-    case StructureType.Struct:
-    case StructureType.ExternUnion:
-      return finalizeStruct(s);
-    case StructureType.TaggedUnion:
-      // TODO
-      return null;
-    case StructureType.Enumeration:
-      return finalizeEnumeration(s);
+  try {
+    switch (s.type) {
+      case StructureType.Primitive: 
+        return finalizePrimitive(s);
+      case StructureType.Array:
+        return finalizeArray(s);
+      case StructureType.Struct:
+      case StructureType.ExternUnion:
+        return finalizeStruct(s);
+      case StructureType.TaggedUnion:
+        // TODO
+        return null;
+      case StructureType.Enumeration:
+        return finalizeEnumeration(s);
+    } 
+  } catch (err) {
+    console.error(err);
+    throw err;
   }
 }
 

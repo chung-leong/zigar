@@ -131,9 +131,9 @@ const Memory = extern struct {
 
 const DefaultValues = extern struct {
     is_static: bool = false,
-    default_data: Memory,
-    default_pointers: ?[*]const Memory = null,
-    default_pointer_count: usize = 0,
+    data: Memory,
+    pointers: ?[*]const Memory = null,
+    pointer_count: usize = 0,
 };
 
 const Method = extern struct {
@@ -398,17 +398,20 @@ fn getStructure(host: Host, comptime T: type) Error!Value {
         try addInstanceMembers(host, structure, T);
         try addStaticMembers(host, structure, T);
         try addMethods(host, structure, T);
+        try host.finalizeStructure(structure);
         break :undefined structure;
     };
 }
 
 fn addInstanceMembers(host: Host, structure: Value, comptime T: type) Error!void {
-    return addMembers(host, structure, T, true);
+    try addMembers(host, structure, T, false);
+    try addDefaultValues(host, structure, T, false);
 }
 
 fn addStaticMembers(host: Host, structure: Value, comptime T: type) Error!void {
     if (StaticStruct(T)) |SS| {
-        return addMembers(host, structure, SS, true);
+        try addMembers(host, structure, SS, true);
+        try addDefaultValues(host, structure, SS, true);
     }
 }
 
@@ -430,6 +433,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type, are_static: bool) 
                 .bit_size = @bitSizeOf(ar.child),
                 .bit_offset = 0,
                 .byte_size = @sizeOf(ar.child),
+                .structure = try getStructure(host, ar.child),
             });
         },
         .Pointer => |pt| {
@@ -454,6 +458,10 @@ fn addMembers(host: Host, structure: Value, comptime T: type, are_static: bool) 
                 }
             }
             inline for (fields, 0..) |field, index| {
+                const MT = switch (@typeInfo(field.type)) {
+                    .Pointer => |pt| pt.child,
+                    else => field.type,
+                };
                 try host.attachMember(structure, .{
                     .name = @ptrCast([*:0]const u8, field.name),
                     .member_type = getMemberType(field.type),
@@ -463,8 +471,8 @@ fn addMembers(host: Host, structure: Value, comptime T: type, are_static: bool) 
                     .bit_offset = @bitOffsetOf(T, field.name),
                     .bit_size = @bitSizeOf(field.type),
                     .byte_size = if (isPacked(T)) @sizeOf(field.type) else 0,
-                    .structure = try getStructure(host, field.type),
                     .slot = getRelocatableSlot(T, index),
+                    .structure = try getStructure(host, MT),
                 });
             }
         },
@@ -526,26 +534,41 @@ fn addMethods(host: Host, structure: Value, comptime T: type) Error!void {
     }
 }
 
-fn addDefaultValues(host: Host, structure: Value, comptime T: type) Error!void {
-    const data = comptime getDefaultData(T);
-    const pointers = comptime getDefaultPointers(T);
-    return host.attachDefaultValues(structure, .{
-        .default_data = data,
-        .default_pointers = pointers.ptr,
-        .default_pointer_count = pointers.len,
-    });
+fn addDefaultValues(host: Host, structure: Value, comptime T: type, comptime is_static: bool) Error!void {
+    const count = getFieldCount(T);
+    if (comptime count == 0) {
+        return;
+    }
+    var pointers: [count]Memory = undefined;
+    var data: [@sizeOf(T)]u8 = undefined;
+    const has_data = writeDefaultData(&data, T);
+    const has_pointers = writeDefaultPointers(&pointers, T);
+    if (has_data or has_pointers) {
+        return host.attachDefaultValues(structure, .{
+            .is_static = is_static,
+            .data = .{
+                .bytes = if (has_data) &data else null,
+                .len = if (has_data) data.len else 0,
+            },
+            .pointers = if (has_pointers) &pointers else null,
+            .pointer_count = if (has_pointers) pointers.len else 0,
+        });
+    }
 }
 
-fn getDefaultPointers(comptime T: type) []const Memory {
-    const fields = switch (@typeInfo(T)) {
-        .Struct, .Union => std.meta.fields(T),
-        else => {
-            return &.{};
-        },
+fn getFieldCount(comptime T: type) comptime_int {
+    return switch (@typeInfo(T)) {
+        .Struct, .Union => std.meta.fields(T).len,
+        else => 0,
     };
-    var pointers: [fields.len]Memory = .{};
+}
+
+fn writeDefaultPointers(pointers: []Memory, comptime T: type) bool {
+    for (pointers, 0..) |_, index| {
+        pointers[index] = .{};
+    }
     comptime var count = 0;
-    inline for (fields, 0..) |field, index| {
+    inline for (std.meta.fields(T), 0..) |field, index| {
         switch (@typeInfo(field.type)) {
             .Pointer => |pt| {
                 if (field.default_value) |opaque_ptr| {
@@ -566,138 +589,130 @@ fn getDefaultPointers(comptime T: type) []const Memory {
             else => {},
         }
     }
-    return if (count > 0) &pointers else &.{};
+    return count > 0;
 }
 
-test "getDefaultPointers" {
+test "writeDefaultPointers" {
     const A = struct {
         text: []const u8 = "Hello world",
         number: i32,
     };
-    const pointersA = getDefaultPointers(A);
-    assert(pointersA.len == 2);
+    var pointersA: [getFieldCount(A)]Memory = undefined;
+    const resultA = writeDefaultPointers(&pointersA, A);
     assert(pointersA[0].len == 11);
     assert(pointersA[0].bytes != null);
     if (pointersA[0].bytes) |bytes| {
         assert(bytes[0] == 'H');
         assert(bytes[6] == 'w');
     }
+    assert(resultA == true);
     const B = struct {
         text: []const u8,
         number: i32,
     };
-    const pointersB = getDefaultPointers(B);
-    assert(pointersB.len == 0);
+    var pointersB: [getFieldCount(B)]Memory = undefined;
+    const resultB = writeDefaultPointers(&pointersB, B);
+    assert(pointersB.len == 2);
+    assert(pointersB[0].len == 0);
+    assert(pointersB[0].bytes == null);
+    assert(pointersB[1].len == 0);
+    assert(pointersB[1].bytes == null);
+    assert(resultB == false);
 }
 
-fn getDefaultData(comptime T: type) Memory {
+fn writeDefaultData(bytes: []u8, comptime T: type) bool {
     const fields = switch (@typeInfo(T)) {
         .Struct, .Union => std.meta.fields(T),
         else => {
             return .{};
         },
     };
-    var structure: T = undefined;
-    var bytes = @intToPtr([*]u8, @ptrToInt(&structure));
-    var slice = bytes[0..@sizeOf(T)];
-    @memset(slice, 0xAA);
+    @memset(bytes, 0xAA);
+    const ptr = @intToPtr(*T, @ptrToInt(bytes.ptr));
     inline for (fields) |field| {
         switch (@typeInfo(field.type)) {
             .Pointer => {
                 // pointers are always initialized to an invalid address
-                // with the real addresses provided through getDefaultPointers()
+                // with the real addresses provided by writeDefaultPointers()
             },
             else => {
                 if (field.default_value) |opaque_ptr| {
                     const aligned_ptr = @alignCast(@alignOf(field.type), opaque_ptr);
                     const typed_ptr = @ptrCast(*const field.type, aligned_ptr);
-                    @field(structure, field.name) = typed_ptr.*;
+                    @field(ptr.*, field.name) = typed_ptr.*;
                 }
             },
         }
     }
-    const all_zeros = check: {
-        comptime var i = 0;
-        inline while (i < slice.len) : (i += 1) {
-            if (slice[i] != 0) {
-                break :check false;
-            }
+    for (bytes) |byte| {
+        if (byte != 0) {
+            return true;
         }
-        break :check true;
-    };
-    return .{
-        .bytes = if (all_zeros) null else bytes,
-        .len = if (all_zeros) 0 else slice.len,
-    };
+    }
+    return false;
 }
 
-test "getDefaultData" {
+test "writeDefaultData" {
     const A = struct {
         number1: u32 = 0x11223344,
         number2: u32,
         number3: u16 = 0,
     };
-    const memA = getDefaultData(A);
-    assert(memA.len == @sizeOf(A));
-    assert(memA.bytes != null);
-    if (memA.bytes) |bytes| {
-        if (builtin.target.cpu.arch.endian() == .Little) {
-            assert(bytes[0] == 0x44);
-            assert(bytes[1] == 0x33);
-            assert(bytes[2] == 0x22);
-            assert(bytes[3] == 0x11);
-            assert(bytes[4] == 0xAA);
-            assert(bytes[5] == 0xAA);
-            assert(bytes[6] == 0xAA);
-            assert(bytes[7] == 0xAA);
-            assert(bytes[8] == 0x00);
-            assert(bytes[9] == 0x00);
-        }
+    var bytesA: [@sizeOf(A)]u8 = undefined;
+    const resultA = writeDefaultData(&bytesA, A);
+    if (builtin.target.cpu.arch.endian() == .Little) {
+        assert(bytesA[0] == 0x44);
+        assert(bytesA[1] == 0x33);
+        assert(bytesA[2] == 0x22);
+        assert(bytesA[3] == 0x11);
+        assert(bytesA[4] == 0xAA);
+        assert(bytesA[5] == 0xAA);
+        assert(bytesA[6] == 0xAA);
+        assert(bytesA[7] == 0xAA);
+        assert(bytesA[8] == 0x00);
+        assert(bytesA[9] == 0x00);
     }
+    assert(resultA == true);
     const B = struct {
         number1: i32,
         number2: i32,
     };
-    const memB = getDefaultData(B);
-    assert(memB.len == @sizeOf(B));
-    assert(memB.bytes != null);
-    if (memB.bytes) |bytes| {
-        if (builtin.target.cpu.arch.endian() == .Little) {
-            assert(bytes[0] == 0xAA);
-            assert(bytes[1] == 0xAA);
-            assert(bytes[2] == 0xAA);
-            assert(bytes[3] == 0xAA);
-            assert(bytes[4] == 0xAA);
-            assert(bytes[5] == 0xAA);
-            assert(bytes[6] == 0xAA);
-            assert(bytes[7] == 0xAA);
-        }
+    var bytesB: [@sizeOf(B)]u8 = undefined;
+    const resultB = writeDefaultData(&bytesB, B);
+    if (builtin.target.cpu.arch.endian() == .Little) {
+        assert(bytesB[0] == 0xAA);
+        assert(bytesB[1] == 0xAA);
+        assert(bytesB[2] == 0xAA);
+        assert(bytesB[3] == 0xAA);
+        assert(bytesB[4] == 0xAA);
+        assert(bytesB[5] == 0xAA);
+        assert(bytesB[6] == 0xAA);
+        assert(bytesB[7] == 0xAA);
     }
+    assert(resultB == true);
     const C = struct {
         number1: i32 = 0,
         number2: i32 = 0,
     };
-    const memC = getDefaultData(C);
-    assert(memC.len == 0);
-    assert(memC.bytes == null);
+    var bytesC: [@sizeOf(C)]u8 = undefined;
+    const resultC = writeDefaultData(&bytesC, C);
+    assert(resultC == false);
     const D = struct {
         a: A = .{ .number2 = 0xFFFFFFFF },
     };
-    const memD = getDefaultData(D);
-    assert(memD.len == @sizeOf(D));
-    assert(memD.bytes != null);
-    if (memD.bytes) |bytes| {
-        if (builtin.target.cpu.arch.endian() == .Little) {
-            assert(bytes[0] == 0x44);
-            assert(bytes[1] == 0x33);
-            assert(bytes[2] == 0x22);
-            assert(bytes[3] == 0x11);
-            assert(bytes[4] == 0xFF);
-            assert(bytes[5] == 0xFF);
-            assert(bytes[6] == 0xFF);
-            assert(bytes[7] == 0xFF);
-        }
+    var bytesD: [@sizeOf(D)]u8 = undefined;
+    const resultD = writeDefaultData(&bytesD, D);
+    if (builtin.target.cpu.arch.endian() == .Little) {
+        assert(bytesD[0] == 0x44);
+        assert(bytesD[1] == 0x33);
+        assert(bytesD[2] == 0x22);
+        assert(bytesD[3] == 0x11);
+        assert(bytesD[4] == 0xFF);
+        assert(bytesD[5] == 0xFF);
+        assert(bytesD[6] == 0xFF);
+        assert(bytesD[7] == 0xFF);
     }
+    assert(resultD == true);
 }
 
 fn StaticStruct(comptime T: type) ?type {
@@ -763,8 +778,9 @@ test "StaticStruct" {
         assert(fields[1].default_value != null);
         assert(fields[2].default_value != null);
 
-        const pointers = getDefaultPointers(SS);
-        assert(pointers.len == 3);
+        var pointers: [getFieldCount(SS)]Memory = undefined;
+        const has_pointers = writeDefaultPointers(&pointers, SS);
+        assert(has_pointers == true);
         assert(pointers[0].bytes != null);
         assert(pointers[0].len == 4);
         if (pointers[0].bytes) |bytes| {
@@ -928,9 +944,7 @@ test "createThunk" {
 fn createRootFactory(comptime S: type) Factory {
     const RootFactory = struct {
         fn exportStructure(host: Host, dest: *Value) callconv(.C) Result {
-            std.debug.print("Getting structure...\n", .{});
             if (getStructure(host, S)) |s| {
-                std.debug.print("Got structure\n", .{});
                 dest.* = s;
                 return .OK;
             } else |_| {

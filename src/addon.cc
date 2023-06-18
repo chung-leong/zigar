@@ -40,6 +40,23 @@ static Result AllocateMemory(Host* call,
   return Result::OK;
 }
 
+static Result CreateSharedBuffer(Host* call,
+                                 const Memory& memory,
+                                 Local<SharedArrayBuffer>* dest) {
+  // create a reference to the module so that the shared library doesn't get unloaded
+  // while the shared buffer is still around pointing to it
+  auto mde = Local<External>::New(call->isolate, call->zig_func->module_data);
+  auto emd = new ExternalMemoryData(call->isolate, mde);
+  std::shared_ptr<BackingStore> store = SharedArrayBuffer::NewBackingStore(memory.bytes, memory.len, 
+    [](void*, size_t, void* deleter_data) {
+      // get rid of the reference
+      auto emd = reinterpret_cast<ExternalMemoryData*>(deleter_data);
+      delete emd;
+    }, emd); 
+  *dest = SharedArrayBuffer::New(call->isolate, store);
+  return Result::OK;
+}
+
 static Result BeginStructure(Host* call,
                              const Structure& structure,
                              Local<Object>* dest) {
@@ -78,7 +95,7 @@ static Result AttachMethod(Host* call,
   auto f = jsb->attach_method;
   auto def = jsb->NewMethod(method);
   Local<Value> args[2] = { structure, def };
-  if (f->Call(call->exec_context, Null(jsb->isolate), 2, args).IsEmpty()) {
+  if (f->Call(jsb->context, Null(jsb->isolate), 2, args).IsEmpty()) {
     return Result::Failure;
   }
   return Result::OK;
@@ -88,12 +105,29 @@ static Result AttachDefaultValues(Host* call,
                                   Local<Object> structure,
                                   const DefaultValues& values) {
   auto jsb = call->js_bridge;
-  auto f = jsb->attach_method;
-  Local<Value> data = Null(jsb->isolate);
-  Local<Value> pointers = Null(jsb->isolate);
+  auto f = jsb->attach_default_values;
+  Local<SharedArrayBuffer> data;
+  if (values.default_data.len > 0) {
+    if (CreateSharedBuffer(call, values.default_data, &data) != Result::OK) {
+      return Result::Failure;
+    }
+  }
+  Local<Object> pointers;
+  if (values.default_pointer_count > 0) {
+    pointers = Object::New(jsb->isolate);
+    for (size_t i = 0; i < values.default_pointer_count; i++) {
+      if (values.default_pointers[i].len > 0) {
+        Local<SharedArrayBuffer> buffer;
+        if (CreateSharedBuffer(call, values.default_pointers[i], &buffer) != Result::OK) {
+          return Result::Failure;
+        }
+        pointers->Set(jsb->context, i, buffer).Check();
+      }
+    }
+  }
   auto def = jsb->NewDefaultValues(values.is_static, data, pointers);
   Local<Value> args[2] = { structure, def };
-  if (f->Call(call->exec_context, Null(jsb->isolate), 2, args).IsEmpty()) {
+  if (f->Call(jsb->context, Null(jsb->isolate), 2, args).IsEmpty()) {
     return Result::Failure;
   }
   return Result::OK;
@@ -199,14 +233,20 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   } else {
     Throw("Unable to import functions");
   }
+  delete fd;
 }
 
-static void GetModuleCount(const FunctionCallbackInfo<Value>& info) {
-  info.GetReturnValue().Set(ModuleData::count);
-}
-
-static void GetFunctionCount(const FunctionCallbackInfo<Value>& info) {
-  info.GetReturnValue().Set(FunctionData::count);
+static void GetGCStatistics(const FunctionCallbackInfo<Value>& info) {
+  auto isolate = info.GetIsolate();
+  auto context = isolate->GetCurrentContext();
+  auto stats = Object::New(isolate);
+  auto set = [&](Local<String> name, int count) {    
+    stats->Set(context, name, Int32::NewFromUnsigned(isolate, count)).Check();
+  };
+  set(String::NewFromUtf8Literal(isolate, "modules"), ModuleData::count);
+  set(String::NewFromUtf8Literal(isolate, "functions"), FunctionData::count);
+  set(String::NewFromUtf8Literal(isolate, "buffers"), ExternalMemoryData::count);
+  info.GetReturnValue().Set(stats);
 }
 
 NODE_MODULE_INIT(/* exports, module, context */) {
@@ -219,9 +259,9 @@ NODE_MODULE_INIT(/* exports, module, context */) {
     exports->Set(context, name, function).Check();
   };
   add(String::NewFromUtf8Literal(isolate, "load"), Load, 1);
-  add(String::NewFromUtf8Literal(isolate, "getModuleCount"), GetModuleCount, 0);
-  add(String::NewFromUtf8Literal(isolate, "getFunctionCount"), GetFunctionCount, 0);
+  add(String::NewFromUtf8Literal(isolate, "getGCStatistics"), GetGCStatistics, 0);
 } 
 
 int ModuleData::count = 0;
 int FunctionData::count = 0;
+int ExternalMemoryData::count = 0;
