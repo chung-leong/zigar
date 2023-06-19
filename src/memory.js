@@ -94,6 +94,7 @@ function copy4(dest, src) {
   }
 }
 
+/*
 function showBits(object) {
   const bitObj = {};
   for (const [ name, value ] of Object.entries(object)) {
@@ -102,3 +103,4 @@ function showBits(object) {
   }
   console.log(bitObj);
 }
+*/

@@ -90,6 +90,7 @@ export function finalizeStructure(s) {
 function finalizePrimitive(s) {
   const { 
     size,
+    name,
     instance: {
       members: [ member ],
     },
@@ -120,6 +121,9 @@ function finalizePrimitive(s) {
       return self;
     }
   };
+  if (name) {
+    Object.defineProperty(constructor, 'name', { value: name, writable: false });
+  }
   s.copier = function (dest, src) {
     copy(dest[DATA], src[DATA]);
   };
@@ -135,6 +139,7 @@ function finalizePrimitive(s) {
 function finalizeArray(s) {
   const {
     size,
+    name,
     instance: {
       members: [ member ],
     },
@@ -166,6 +171,9 @@ function finalizeArray(s) {
       return self;
     }
   };
+  if (name) {
+    Object.defineProperty(constructor, 'name', { value: name, writable: false });
+  }
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
@@ -179,6 +187,7 @@ function finalizeArray(s) {
 function finalizeStruct(s) {
   const { 
     size,
+    name,
     instance: {
       members,
       data,
@@ -197,8 +206,8 @@ function finalizeStruct(s) {
   for (const member of members) {
     if (member.type === MemberType.Pointer) {
       const { constructor } = member.structure;
-      const buffer = pointers?.[member.slot];
-      relocatables[member.slot] = (buffer) ? constructor(buffer) : null;
+      const dv = pointers?.[member.slot];
+      relocatables[member.slot] = (dv) ? constructor(dv) : null;
     } else if (member.type === MemberType.Compound || member.type === MemberType.Enum) {
       relocatables[member.slot] = null;
     }
@@ -253,6 +262,9 @@ function finalizeStruct(s) {
       return self;
     }
   };
+  if (name) {
+    Object.defineProperty(constructor, 'name', { value: name, writable: false });
+  }
   s.copier = function(dest, src) {
     copy(dest[DATA], src[DATA]);
     if (hasRelocatables) {
@@ -267,6 +279,7 @@ function finalizeStruct(s) {
 
 function finalizeEnumeration(s) {
   const { 
+    name,
     instance: {
       members,
       data,
@@ -303,10 +316,13 @@ function finalizeEnumeration(s) {
     // return the enum object (created down below)
     return items[index];
   };
+  if (name) {
+    Object.defineProperty(constructor, 'name', { value: name, writable: false });
+  }
   // attach the numeric values to the class as its binary data
   // this allows us to reuse the array getter
   Object.defineProperties(constructor, {
-    [DATA]: { value: data },
+    [DATA]: { value: new DataView(data) },
     [ENUM_ITEMS]: { value: items },
   });
   const valueOf = function() { 
@@ -369,9 +385,9 @@ export function attachStaticMembers(s) {
     const get = obtainGetter(member, options);
     const set = obtainSetter(member, options);
     descriptors[member.name] = { get, set, configurable: true, enumerable: true };
-    const buffer = pointers[member.slot];
+    const dv = pointers[member.slot];
     const { constructor } = member.structure;
-    relocs[member.slot] = constructor(buffer);
+    relocs[member.slot] = constructor(dv);
   };
   Object.defineProperties(constructor, descriptors);
 }

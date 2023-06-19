@@ -187,8 +187,9 @@ static Local<Object> NewDefaultValues(Host* call,
   auto is_static = Boolean::New(isolate, values.is_static);
   def->Set(context, String::NewFromUtf8Literal(isolate, "isStatic"), is_static).Check();
   if (values.default_data.len > 0) {
-    Local<SharedArrayBuffer> data;
-    CreateSharedBuffer(call, values.default_data, &data);
+    Local<SharedArrayBuffer> buffer;
+    CreateSharedBuffer(call, values.default_data, &buffer);
+    auto data = DataView::New(buffer, 0, buffer->ByteLength());
     def->Set(context, String::NewFromUtf8Literal(isolate, "data"), data).Check();
   }
   if (values.default_pointer_count > 0) {
@@ -197,7 +198,8 @@ static Local<Object> NewDefaultValues(Host* call,
       if (values.default_pointers[i].len > 0) {
         Local<SharedArrayBuffer> buffer;
         CreateSharedBuffer(call, values.default_pointers[i], &buffer);
-        pointers->Set(context, i, buffer).Check();
+        auto data = DataView::New(buffer, 0, buffer->ByteLength());
+        pointers->Set(context, i, data).Check();
       }
     }
     def->Set(context, String::NewFromUtf8Literal(isolate, "pointers"), pointers).Check();

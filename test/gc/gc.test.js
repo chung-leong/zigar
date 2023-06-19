@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 describe('Garbage collection', function() {
   describe('load', function() {
     it('should hang onto module when variables from it are accessible', async function() {
-      const { pathname: zigPath } = new URL('../integration/variables.zig', import.meta.url);
+      const { pathname: zigPath } = new URL('../integration/integers.zig', import.meta.url);
       const pathLib = await compile(zigPath);
       const { pathname: extPath } = new URL('../../build/Release/addon', import.meta.url);
       const { load, getGCStatistics } = require(extPath);      
@@ -32,7 +32,7 @@ describe('Garbage collection', function() {
     })
 
     it('should hang onto module when methods from it are accessible', async function() {
-      const { pathname: zigPath } = new URL('../integration/simple.zig', import.meta.url);
+      const { pathname: zigPath } = new URL('../integration/simple-function.zig', import.meta.url);
       const pathLib = await compile(zigPath);
       const { pathname: extPath } = new URL('../../build/Release/addon', import.meta.url);
       const { load, getGCStatistics } = require(extPath);      

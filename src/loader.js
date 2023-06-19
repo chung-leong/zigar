@@ -26,7 +26,7 @@ export async function load(url, context, nextLoad) {
     // use require() to load the C++ addon
     const { createRequire } = await import('module');
     const require = createRequire(import.meta.url);
-    const extPath = fileURLToPath(new URL('../../build/Release/addon', import.meta.url));
+    const extPath = fileURLToPath(new URL('../build/Release/addon', import.meta.url));
     const { load } = require(extPath);
     // load the zig module and see which of its properties can be exported
     const module = load(soPath);

@@ -1106,8 +1106,8 @@ describe('Structure definition', function() {
         byteSize: 4,
       });
       finalizeStructure(argStruct);
-      const thunk = (args) => {
-        args.retval = args[0].dog + args[0].cat;
+      const thunk = function() {
+        this.retval = this[0].dog + this[0].cat;
       };
       attachMethod(structure, {
         name: 'merge',
@@ -1192,14 +1192,15 @@ describe('Structure definition', function() {
         byteSize: 1,
       });
       finalizeStructure(argStruct);
-      let arg1, arg2, symbol1, symbol2, argDV;
-      const thunk = (args, s1, s2) => {
-        symbol1 = s1;
-        symbol2 = s2;
-        arg1 = args[0];
-        arg2 = args[1];
-        args.retval = true;
-        argDV = args[s1];
+      let arg1, arg2, symbol1, symbol2, argDV, slots;
+      const thunk = function(...args) {
+        symbol1 = args[0];
+        symbol2 = args[1];
+        slots = args[2];
+        arg1 = this[0];
+        arg2 = this[1];
+        this.retval = true;
+        argDV = this[symbol1];
       };
       attachMethod(structure, {
         name: 'foo',
@@ -1222,7 +1223,9 @@ describe('Structure definition', function() {
       expect(arg2).to.equal(4567);
       expect(symbol1).to.be.a('symbol');
       expect(symbol2).to.be.a('symbol');
+      expect(slots).to.be.an('object');
       expect(argDV).to.be.an.instanceOf(DataView);
+      expect(argDV).to.have.property('byteLength', 12);
     }) 
   })
 })
