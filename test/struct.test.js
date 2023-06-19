@@ -155,7 +155,7 @@ describe('Struct functions', function() {
         byteSize: 8,
         slot: 1,
         mutable: true,
-        structure: { type: StructureType.Primitive, constructor: DummyStruct },
+        structure: { type: StructureType.Singleton, constructor: DummyStruct },
       };
       const f = obtainGetter(member, {});
       const res = f.call(object);
@@ -300,7 +300,7 @@ describe('Struct functions', function() {
         byteSize: 8,
         slot: 1,
         mutable: true,
-        structure: { type: StructureType.Primitive, constructor: DummyStruct },
+        structure: { type: StructureType.Singleton, constructor: DummyStruct },
       };
       const f = obtainSetter(member, {});
       const res = f.call(object, 4567);

@@ -13,7 +13,7 @@ export function obtainGetter(member, options) {
     case MemberType.Pointer: {
       // get object from slot
       const { slot, structure } = member;
-      if (structure.type === StructureType.Primitive) {
+      if (structure.type === StructureType.Singleton) {
         // automatically deferencing pointers to primitives
         return function() { return this[RELOCATABLE][slot].get() };
       } else {
@@ -80,7 +80,7 @@ export function obtainSetter(member, options) {
       if (isConst) {
         return;
       } 
-      if (structure.type === StructureType.Primitive) {
+      if (structure.type === StructureType.Singleton) {
         return function(v) { this[RELOCATABLE][slot].set(v) };
       } else {
         const { constructor } = structure;

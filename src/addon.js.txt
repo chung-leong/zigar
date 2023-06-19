@@ -13,7 +13,7 @@ R"=====(
   };
 
   const StructureType = {
-    Primitive: 0,
+    Singleton: 0,
     Array: 1,
     Struct: 2,
     ExternUnion: 3,
@@ -60,8 +60,6 @@ R"=====(
       return Number;
     } else if (type === MemberType.Bool) {
       return Boolean;
-    } else {
-      return Object;
     }
   }
 
@@ -603,7 +601,7 @@ R"=====(
       case MemberType.Pointer: {
         // get object from slot
         const { slot, structure } = member;
-        if (structure.type === StructureType.Primitive) {
+        if (structure.type === StructureType.Singleton) {
           // automatically deferencing pointers to primitives
           return function() { return this[RELOCATABLE][slot].get() };
         } else {
@@ -670,7 +668,7 @@ R"=====(
         if (isConst) {
           return;
         } 
-        if (structure.type === StructureType.Primitive) {
+        if (structure.type === StructureType.Singleton) {
           return function(v) { this[RELOCATABLE][slot].set(v); };
         } else {
           const { constructor } = structure;
@@ -1005,8 +1003,8 @@ R"=====(
   function finalizeStructure(s) {
     try {
       switch (s.type) {
-        case StructureType.Primitive: 
-          return finalizePrimitive(s);
+        case StructureType.Singleton: 
+          return finalizeSingleton(s);
         case StructureType.Array:
           return finalizeArray(s);
         case StructureType.Struct:
@@ -1024,7 +1022,7 @@ R"=====(
     }
   }
 
-  function finalizePrimitive(s) {
+  function finalizeSingleton(s) {
     const { 
       size,
       name,
@@ -1042,8 +1040,10 @@ R"=====(
       let self, dv;
       if (creating) {
         // new operation--expect matching primitive
-        if (arg !== undefined) {
-          primitive(arg);
+        if (primitive !== undefined) {
+          if (arg !== undefined) {
+            primitive(arg);
+          } 
         }
         self = this;
         dv = new DataView(new ArrayBuffer(size));

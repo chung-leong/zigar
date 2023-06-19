@@ -9,7 +9,7 @@ export const MemberType = {
 };
 
 export const StructureType = {
-  Primitive: 0,
+  Singleton: 0,
   Array: 1,
   Struct: 2,
   ExternUnion: 3,
@@ -56,7 +56,5 @@ export function getPrimitive(type, bitSize) {
     return Number;
   } else if (type === MemberType.Bool) {
     return Boolean;
-  } else {
-    return Object;
   }
 }

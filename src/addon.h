@@ -9,7 +9,7 @@ enum class Result : int {
 };
 
 enum class StructureType : uint32_t {
-  Primitive = 0,
+  Singleton = 0,
   Array,
   Struct,
   ExternUnion,

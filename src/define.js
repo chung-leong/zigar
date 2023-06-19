@@ -68,8 +68,8 @@ export function attachDefaultValues(s, def) {
 export function finalizeStructure(s) {
   try {
     switch (s.type) {
-      case StructureType.Primitive: 
-        return finalizePrimitive(s);
+      case StructureType.Singleton: 
+        return finalizeSingleton(s);
       case StructureType.Array:
         return finalizeArray(s);
       case StructureType.Struct:
@@ -87,7 +87,7 @@ export function finalizeStructure(s) {
   }
 }
 
-function finalizePrimitive(s) {
+function finalizeSingleton(s) {
   const { 
     size,
     name,
@@ -105,8 +105,10 @@ function finalizePrimitive(s) {
     let self, dv, init;
     if (creating) {
       // new operation--expect matching primitive
-      if (arg !== undefined) {
-        init = primitive(arg);
+      if (primitive !== undefined) {
+        if (arg !== undefined) {
+          init = primitive(arg);
+        } 
       }
       self = this;
       dv = new DataView(new ArrayBuffer(size));

@@ -78,7 +78,7 @@ const Result = enum(u32) {
 };
 
 const StructureType = enum(u32) {
-    Primitive = 0,
+    Singleton = 0,
     Array,
     Struct,
     ExternUnion,
@@ -291,18 +291,18 @@ test "getMemberType" {
 
 fn getStructureType(comptime T: type) StructureType {
     return switch (@typeInfo(T)) {
-        .Bool, .Int, .Float, .Void => .Primitive,
+        .Bool, .Int, .Float, .Void, .Type => .Singleton,
         .Struct => .Struct,
         .Union => |un| if (un.layout == .Extern) .ExternUnion else .TaggedUnion,
         .Enum => .Enumeration,
         .Array => .Array,
         .Opaque => .Opaque,
-        else => .Primitive,
+        else => .Singleton,
     };
 }
 
 test "getStructureType" {
-    assert(getStructureType(i32) == .Primitive);
+    assert(getStructureType(i32) == .Singleton);
     assert(getStructureType(union {}) == .TaggedUnion);
     assert(getStructureType(extern union {}) == .ExternUnion);
 }
