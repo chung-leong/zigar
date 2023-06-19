@@ -13,13 +13,15 @@ describe('Garbage collection', function() {
       const { load, getGCStatistics } = require(extPath);      
       let module = load(pathLib);
       const stats1 = getGCStatistics();
-      expect(stats1.modules).to.equal(1);
-      expect(stats1.functions).to.equal(0);
+      expect(stats1.modules).to.equal(1);     
+      // the factory function 
+      expect(stats1.functions).to.equal(1);   
       expect(stats1.buffers).to.be.at.least(1);
       for (let i = 0; i < 2; i++) gc();
       const stats2 = getGCStatistics();
       expect(stats2.modules).to.equal(1);
-      expect(stats2.functions).to.equal(0);
+      // factory function got gc'ed
+      expect(stats2.functions).to.equal(0);   
       expect(stats2.buffers).to.be.at.least(1);
       module = null;
       for (let i = 0; i < 2; i++) gc();
@@ -36,12 +38,17 @@ describe('Garbage collection', function() {
       const { load, getGCStatistics } = require(extPath);      
       let module = load(pathLib);
       const stats1 = getGCStatistics();
+      expect(stats1.scripts).to.equal(1);
       expect(stats1.modules).to.equal(1);
-      expect(stats1.functions).to.equal(1);
+      // actual exported function plus factory function
+      expect(stats1.functions).to.equal(2);
       expect(stats1.buffers).to.equal(0);
       for (let i = 0; i < 2; i++) gc();
       const stats2 = getGCStatistics();
+      // script unloaded after import is done
+      expect(stats2.scripts).to.equal(0);
       expect(stats2.modules).to.equal(1);
+      // factory function got gc'ed
       expect(stats2.functions).to.equal(1);
       expect(stats1.buffers).to.equal(0);
       module = null;

@@ -933,6 +933,18 @@ R"=====(
     Float64: Float64Array,
   };
 
+  const slots = {};
+
+  function invokeThunk(thunk, args) {
+    thunk.call(args, DATA, RELOCATABLE, slots);
+  }
+
+  function invokeFactory(thunk) {
+    const args = { [RELOCATABLE]: {} };
+    thunk.call(args, DATA, RELOCATABLE, slots);
+    return args[RELOCATABLE][0].constructor;
+  }
+
   function beginStructure(def, options = {}) {
     const {
       type,
@@ -1296,7 +1308,7 @@ R"=====(
             a[index] = arg;
           }
         }
-        thunk(a, DATA, RELOCATABLE);
+        invokeThunk(thunk, a);
         return a.retval;
       };
       Object.defineProperties(f, {
@@ -1315,7 +1327,7 @@ R"=====(
               a[index + 1] = arg;
             }
           }
-          thunk(a, DATA, RELOCATABLE);
+          invokeThunk(thunk, a);
           return a.retval;
         };
         Object.defineProperties(m, {
@@ -1357,6 +1369,8 @@ R"=====(
   exports.attachStaticMembers = attachStaticMembers;
   exports.beginStructure = beginStructure;
   exports.finalizeStructure = finalizeStructure;
+  exports.invokeFactory = invokeFactory;
+  exports.slots = slots;
 
   return exports;
 

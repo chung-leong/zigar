@@ -102,7 +102,6 @@ const MemberType = enum(u32) {
 
 const Value = *opaque {};
 const Thunk = *const fn (host: Host, args: Value) callconv(.C) void;
-const Factory = *const fn (host: Host, dest: *Value) callconv(.C) Result;
 
 const Structure = extern struct {
     name: ?[*:0]const u8 = null,
@@ -153,7 +152,7 @@ const Module = extern struct {
     version: u32,
     flags: ModuleFlags,
     callbacks: *Callbacks,
-    factory: Factory,
+    factory: Thunk,
 };
 
 fn NextIntType(comptime T: type) type {
@@ -301,8 +300,9 @@ const Callbacks = extern struct {
     allocate_memory: *const fn (host: Host, size: usize, dest: *[*]u8) callconv(.C) Result,
     reallocate_memory: *const fn (host: Host, size: usize, dest: *[*]u8) callconv(.C) Result,
     free_memory: *const fn (host: Host, dest: *[*]u8) callconv(.C) Result,
-    get_memory: *const fn (host: Host, value: Value, dest: *Memory) callconv(.C) Result,
-    get_relocatable: *const fn (host: Host, value: Value, id: u32, dest: *Value) callconv(.C) Result,
+    get_memory: *const fn (host: Host, container: Value, dest: *Memory) callconv(.C) Result,
+    get_relocatable: *const fn (host: Host, container: Value, id: u32, dest: *Value) callconv(.C) Result,
+    set_relocatable: *const fn (host: Host, container: Value, id: u32, value: Value) callconv(.C) Result,
 
     read_slot: *const fn (host: Host, id: u32, dest: *Value) callconv(.C) Result,
     write_slot: *const fn (host: Host, id: u32, value: Value) callconv(.C) Result,
@@ -317,21 +317,27 @@ var callbacks: Callbacks = undefined;
 
 // host interface
 const Host = *opaque {
-    fn getPointer(self: Host, value: Value, comptime T: type) Error!*T {
+    fn getMemory(self: Host, container: Value, comptime T: type) Error!*T {
         var memory: Memory = undefined;
-        if (callbacks.get_memory(self, value, &memory) != .OK) {
+        if (callbacks.get_memory(self, container, &memory) != .OK) {
             return Error.Unknown;
         }
         const aligned_ptr = @alignCast(@max(@alignOf(T), 1), memory.bytes);
         return @ptrCast(*T, aligned_ptr);
     }
 
-    fn getRelocatable(self: Host, value: Value, id: u32) Error!Value {
+    fn getRelocatable(self: Host, container: Value, id: u32) Error!Value {
         var result: Value = undefined;
-        if (callbacks.get_relocatable(self, value, id, &result) != .OK) {
+        if (callbacks.get_relocatable(self, container, id, &result) != .OK) {
             return Error.Unknown;
         }
         return result;
+    }
+
+    fn setRelocatable(self: Host, container: Value, id: u32, value: Value) Error!void {
+        if (callbacks.set_relocatable(self, container, id, value) != .OK) {
+            return Error.Unknown;
+        }
     }
 
     fn readSlot(self: Host, slot: u32) Error!Value {
@@ -876,7 +882,7 @@ fn invalidPointer(PT: type) PT {
 
 fn repointStructure(host: Host, obj: Value, comptime T: type) Error!*T {
     // TODO
-    return host.getPointer(obj, T);
+    return host.getMemory(obj, T);
 }
 
 fn depointStructure(host: Host, obj: Value, comptime T: type) Error!void {
@@ -941,14 +947,15 @@ test "createThunk" {
     }
 }
 
-fn createRootFactory(comptime S: type) Factory {
+fn createRootFactory(comptime S: type) Thunk {
     const RootFactory = struct {
-        fn exportStructure(host: Host, dest: *Value) callconv(.C) Result {
-            if (getStructure(host, S)) |s| {
-                dest.* = s;
-                return .OK;
+        fn exportStructure(host: Host, args: Value) callconv(.C) void {
+            if (getStructure(host, S)) |result| {
+                host.setRelocatable(args, 0, result) catch {};
             } else |_| {
-                return .Failure;
+                if (@errorReturnTrace()) |trace| {
+                    std.debug.dumpStackTrace(trace.*);
+                }
             }
         }
     };

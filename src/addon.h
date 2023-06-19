@@ -82,13 +82,12 @@ union ModuleFlags {
 };
 
 struct Callbacks;
-typedef Result (*Factory)(Host*, Local<Object>*);
 
 struct Module {
   uint32_t version;
   ModuleFlags flags;
   Callbacks* callbacks;
-  Factory factory;
+  Thunk factory;
 };
 
 struct Callbacks {
@@ -96,7 +95,8 @@ struct Callbacks {
   Result (*reallocate_memory)(Host*, size_t, Memory*);
   Result (*free_memory)(Host*, Memory*);
   Result (*get_memory)(Host*, Local<Object>, Memory*);
-  Result (*get_relocatable)(Host*, Local<Object>, uint32_t, Memory*);
+  Result (*get_relocatable)(Host*, Local<Object>, uint32_t, Local<Object>*);
+  Result (*set_relocatable)(Host*, Local<Object>, uint32_t, Local<Object>);
 
   Result (*read_slot)(Host*, uint32_t, Local<Value>*);
   Result (*write_slot)(Host*, uint32_t, Local<Value>);
@@ -124,7 +124,8 @@ struct ExternalData {
 };
 
 struct AddonData : public ExternalData {
-  Global<Object> js_module;
+  static int script_count;
+  Global<Script> js_script;
 
   AddonData(Isolate* isolate) :
     ExternalData(isolate) {}
@@ -135,11 +136,18 @@ struct AddonData : public ExternalData {
 struct ModuleData : public ExternalData {
   static int count;
   void* so_handle;
+  Global<Object> js_module;
+  Global<Object> js_options;
+  Global<External> addon_data;
 
   ModuleData(Isolate* isolate, 
-             void* so_handle) : 
+             void* so_handle,
+             Local<Object> js_options,
+             Local<External> addon_data) : 
     ExternalData(isolate), 
-    so_handle(so_handle) {
+    so_handle(so_handle),
+    js_options(isolate, js_options),
+    addon_data(isolate, addon_data) {
     count++;
   }
 
@@ -152,33 +160,19 @@ struct ModuleData : public ExternalData {
 struct FunctionData : public ExternalData {  
   static int count;
   Thunk thunk;
-  Global<Object> slots;
   Global<External> module_data;
 
-  // for the factory function
-  FunctionData(Isolate* isolate, 
+  FunctionData(Isolate* isolate,
+               Thunk thunk,
                Local<External> module_data) :
     ExternalData(isolate),
-    thunk(nullptr),
-    slots(isolate, Object::New(isolate)),
-    module_data(isolate, module_data) {
-  }
-
-  // for actual zig function
-  FunctionData(Isolate* isolate,
-               FunctionData* fd,
-               Thunk thunk) :
-    ExternalData(isolate),
     thunk(thunk),
-    slots(isolate, Local<Object>::New(isolate, fd->slots)),
-    module_data(isolate, Local<External>::New(isolate, fd->module_data)) {
+    module_data(isolate, module_data) {
     count++;
   }
 
   ~FunctionData() {
-    if (thunk) {
-      count--;
-    }
+    count--;
   }
 };
 
@@ -203,168 +197,36 @@ struct Host {
   Isolate* isolate;  
   Local<Context> context;
   Local<Array> mem_pool;
-  Local<Object> slots;
   Local<Object> argument;
+  Local<Object> slots;
+  Local<Object> js_module;
   Local<Symbol> data_symbol;
   Local<Symbol> relocatable_symbol;
-  FunctionData* zig_func;
-  JSBridge* js_bridge;
+  FunctionData* function_data;
+  bool remove_function_data;
+
+  Host(Isolate* isolate,
+       Local<External> module_data) :
+    isolate(isolate),
+    context(isolate->GetCurrentContext()),    
+    function_data(new FunctionData(isolate, nullptr, module_data)),
+    remove_function_data(true) {
+  }
 
   Host(const FunctionCallbackInfo<Value> &info) :
-    js_bridge(nullptr) {
-    isolate = info.GetIsolate();
-    context = isolate->GetCurrentContext();
-    if (info.Data()->IsExternal()) {
-      zig_func = reinterpret_cast<FunctionData*>(info.Data().As<External>()->Value());
-      argument = info[0].As<Object>();
-      data_symbol = info[1].As<Symbol>();
-      relocatable_symbol = info[2].As<Symbol>();
-    } else {
-      zig_func = nullptr;
-    }
-  }
-};
-
-struct JSBridge {
-  Host* host;
-  Isolate* isolate;
-  Local<Context> context;
-
-  Local<Function> begin_structure;
-  Local<Function> attach_member;
-  Local<Function> attach_method;
-  Local<Function> attach_default_values;
-  Local<Function> finalize_structure;
-
-  Local<String> t_type;
-  Local<String> t_is_static;
-  Local<String> t_is_signed;
-  Local<String> t_is_required;
-  Local<String> t_is_const;
-  Local<String> t_bit_offset;
-  Local<String> t_bit_size;
-  Local<String> t_byte_size;
-  Local<String> t_slot;
-  Local<String> t_name;
-  Local<String> t_size;
-  Local<String> t_structure;
-  Local<String> t_data;
-  Local<String> t_pointers;
-  Local<String> t_expose_data_view;
-  Local<String> t_arg_struct;
-  Local<String> t_thunk;
-  Local<String> t_is_static_only;
-
-  Local<Object> options;
-
-  JSBridge(Host* host,
-           Local<Object> module,
-           ModuleFlags flags) :
-    host(host),
-    isolate(host->isolate),
-    context(host->context),
-    t_type(String::NewFromUtf8Literal(isolate, "type")),
-    t_is_static(String::NewFromUtf8Literal(isolate, "isStatic")),
-    t_is_signed(String::NewFromUtf8Literal(isolate, "isSigned")),
-    t_is_required(String::NewFromUtf8Literal(isolate, "isRequired")),
-    t_is_const(String::NewFromUtf8Literal(isolate, "isConst")),
-    t_bit_offset(String::NewFromUtf8Literal(isolate, "bitOffset")),
-    t_bit_size(String::NewFromUtf8Literal(isolate, "bitSize")),
-    t_byte_size(String::NewFromUtf8Literal(isolate, "byteSize")),
-    t_slot(String::NewFromUtf8Literal(isolate, "slot")),
-    t_name(String::NewFromUtf8Literal(isolate, "name")),
-    t_size(String::NewFromUtf8Literal(isolate, "size")),
-    t_structure(String::NewFromUtf8Literal(isolate, "structure")),
-    t_data(String::NewFromUtf8Literal(isolate, "data")),
-    t_pointers(String::NewFromUtf8Literal(isolate, "pointers")),
-    t_expose_data_view(String::NewFromUtf8Literal(isolate, "exposeDataView")),
-    t_arg_struct(String::NewFromUtf8Literal(isolate, "argStruct")),
-    t_thunk(String::NewFromUtf8Literal(isolate, "thunk")),
-    t_is_static_only(String::NewFromUtf8Literal(isolate, "isStaticOnly")),
-    options(Object::New(isolate)) {
-    // set options
-    auto little_endian = Boolean::New(isolate, flags.little_endian);
-    auto runtime_safety = Boolean::New(isolate, flags.runtime_safety);
-    options->Set(context, String::NewFromUtf8Literal(isolate, "littleEndian"), little_endian).Check();
-    options->Set(context, String::NewFromUtf8Literal(isolate, "realTimeSafety"), runtime_safety).Check();
-    // look up functions
-    auto find = [&](Local<String> name, Local<Function>* dest) {
-      Local<Value> value;
-      if (module->Get(context, name).ToLocal<Value>(&value)) {
-        if (value->IsFunction()) {
-          *dest = value.As<Function>();
-        }
-      }
-    };
-    find(String::NewFromUtf8Literal(isolate, "beginStructure"), &begin_structure);
-    find(String::NewFromUtf8Literal(isolate, "attachMember"), &attach_member);
-    find(String::NewFromUtf8Literal(isolate, "attachMethod"), &attach_method);
-    find(String::NewFromUtf8Literal(isolate, "attachDefaultValues"), &attach_default_values);
-    find(String::NewFromUtf8Literal(isolate, "finalizeStructure"), &finalize_structure);
-  };
-
-  Local<Object> NewStructure(const Structure& s) {
-    auto def = Object::New(isolate);
-    def->Set(context, t_type, Int32::New(isolate, static_cast<int32_t>(s.type))).Check();
-    if (s.name) {
-      def->Set(context, t_name, String::NewFromUtf8(isolate, s.name).ToLocalChecked()).Check();
-    }
-    def->Set(context, t_size, Uint32::NewFromUnsigned(isolate, s.total_size)).Check();
-    return def;
+    isolate(info.GetIsolate()),
+    context(isolate->GetCurrentContext()),
+    argument(info.This()),
+    slots(info[2].As<Object>()),
+    data_symbol(info[0].As<Symbol>()),
+    relocatable_symbol(info[1].As<Symbol>()),
+    function_data(reinterpret_cast<FunctionData*>(info.Data().As<External>()->Value())),
+    remove_function_data(false) {
   }
 
-  Local<Object> NewMember(const Member& m) {
-    auto def = Object::New(isolate);
-    if (m.name) {
-      def->Set(context, t_name, String::NewFromUtf8(isolate, m.name).ToLocalChecked()).Check();
+  ~Host() {
+    if (remove_function_data) {
+      delete function_data;
     }
-    def->Set(context, t_type, Int32::New(isolate, static_cast<int32_t>(m.type))).Check();
-    def->Set(context, t_is_static, Boolean::New(isolate, m.is_static)).Check();
-    def->Set(context, t_is_required, Boolean::New(isolate, m.is_required)).Check();
-    if (m.type == MemberType::Int) {      
-      def->Set(context, t_is_signed, Boolean::New(isolate, m.is_signed)).Check();
-    } else if (m.type == MemberType::Pointer) {
-      def->Set(context, t_is_const, Boolean::New(isolate, m.is_const)).Check();
-    }
-    def->Set(context, t_bit_size, Uint32::NewFromUnsigned(isolate, m.bit_size)).Check();
-    def->Set(context, t_bit_offset, Uint32::NewFromUnsigned(isolate, m.bit_offset)).Check();
-    def->Set(context, t_byte_size, Uint32::NewFromUnsigned(isolate, m.byte_size)).Check();
-    if (!m.structure.IsEmpty()) {
-      def->Set(context, t_structure, m.structure).Check();
-      def->Set(context, t_slot, Uint32::NewFromUnsigned(isolate, m.slot)).Check();
-    }
-    return def;
-  }
-
-  Local<Object> NewMethod(const Method &m) {
-    auto fd = new FunctionData(isolate, host->zig_func, m.thunk);
-    auto fde = Local<External>::New(isolate, fd->external);
-    auto function = Function::New(context, [](const FunctionCallbackInfo<Value>& info) {
-      // Host will extract the FunctionData object created above from the External object
-      // which we get from FunctionCallbackInfo::Data()      
-      Host ctx(info);
-      // ctx.zig_func->thunk == m.thunk
-      ctx.zig_func->thunk(&ctx, ctx.argument);
-    }, fde, 3).ToLocalChecked();
-    auto def = Object::New(isolate);
-    def->Set(context, t_name, String::NewFromUtf8(isolate, m.name).ToLocalChecked()).Check();
-    def->Set(context, t_arg_struct, m.structure).Check();
-    def->Set(context, t_thunk, function).Check();
-    def->Set(context, t_is_static_only, Boolean::New(isolate, m.is_static_only)).Check();
-    return def;   
-  }
-
-  Local<Object> NewDefaultValues(bool is_static,
-                                 Local<SharedArrayBuffer> data,
-                                 Local<Object> pointers) {
-    auto def = Object::New(isolate);
-    def->Set(context, t_is_static, Boolean::New(isolate, is_static)).Check();
-    if (!data.IsEmpty()) {
-      def->Set(context, t_data, data).Check();
-    }
-    if (!pointers.IsEmpty()) {
-      def->Set(context, t_pointers, pointers).Check();
-    }
-    return def;
   }
 };

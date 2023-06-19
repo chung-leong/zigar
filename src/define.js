@@ -7,6 +7,18 @@ import { obtainDataView, getDataView } from './data-view.js';
 import { throwNoNewEnum } from './error.js';
 import { DATA, RELOCATABLE, ENUM_INDEX, ENUM_ITEMS } from './symbol.js';
 
+export const slots = {};
+
+function invokeThunk(thunk, args) {
+  thunk.call(args, DATA, RELOCATABLE, slots);
+}
+
+export function invokeFactory(thunk) {
+  const args = { [RELOCATABLE]: {} };
+  thunk.call(args, DATA, RELOCATABLE, slots);
+  return args[RELOCATABLE][0].constructor;
+}
+
 export function beginStructure(def, options = {}) {
   const {
     type,
@@ -384,7 +396,7 @@ export function attachMethods(s) {
           a[index] = arg;
         }
       }
-      thunk(a, DATA, RELOCATABLE);
+      invokeThunk(thunk, a);
       return a.retval;
     }
     Object.defineProperties(f, {
@@ -403,7 +415,7 @@ export function attachMethods(s) {
             a[index + 1] = arg;
           }
         }
-        thunk(a, DATA, RELOCATABLE);
+        invokeThunk(thunk, a);
         return a.retval;
       }
       Object.defineProperties(m, {
