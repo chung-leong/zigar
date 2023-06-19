@@ -237,6 +237,18 @@ test "isSigned" {
     assert(isSigned(u77) == false);
 }
 
+fn isConst(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Pointer => |pt| pt.is_const,
+        else => false,
+    };
+}
+
+test "isConst" {
+    assert(isConst(i32) == false);
+    assert(isConst(*const i32) == true);
+}
+
 fn isPacked(comptime T: type) bool {
     return switch (@typeInfo(T)) {
         .Struct => |st| st.layout == .Packed,
@@ -409,6 +421,14 @@ fn getStructure(host: Host, comptime T: type) Error!Value {
     };
 }
 
+fn getMemberStructure(host: Host, comptime T: type) Error!Value {
+    const MT = switch (@typeInfo(T)) {
+        .Pointer => |pt| pt.child,
+        else => T,
+    };
+    return getStructure(host, MT);
+}
+
 fn addInstanceMembers(host: Host, structure: Value, comptime T: type) Error!void {
     try addMembers(host, structure, T, false);
     try addDefaultValues(host, structure, T, false);
@@ -464,21 +484,18 @@ fn addMembers(host: Host, structure: Value, comptime T: type, are_static: bool) 
                 }
             }
             inline for (fields, 0..) |field, index| {
-                const MT = switch (@typeInfo(field.type)) {
-                    .Pointer => |pt| pt.child,
-                    else => field.type,
-                };
                 try host.attachMember(structure, .{
                     .name = @ptrCast([*:0]const u8, field.name),
                     .member_type = getMemberType(field.type),
                     .is_static = are_static,
                     .is_signed = isSigned(field.type),
+                    .is_const = isConst(field.type),
                     .is_required = field.default_value == null,
                     .bit_offset = @bitOffsetOf(T, field.name),
                     .bit_size = @bitSizeOf(field.type),
                     .byte_size = if (isPacked(T)) @sizeOf(field.type) else 0,
                     .slot = getRelocatableSlot(T, index),
-                    .structure = try getStructure(host, MT),
+                    .structure = try getMemberStructure(host, field.type),
                 });
             }
         },
@@ -738,6 +755,37 @@ fn StaticStruct(comptime T: type) ?type {
         }
         switch (@typeInfo(@TypeOf(@field(T, decl.name)))) {
             .Fn, .Frame, .AnyFrame, .NoReturn => {},
+            .ComptimeInt => {
+                // comptime_int doesn't actually occupy a place in memory
+                // we need to determine what actual type is needed to hold the value
+                // then create that variable at comptime so that we can obtain an address
+                const IT = IntType(@field(T, decl.name));
+                const PT = *IT;
+                const value: IT = @field(T, decl.name);
+                const pointer = &value;
+                fields[count] = .{
+                    .name = decl.name,
+                    .type = PT,
+                    .default_value = @ptrCast(*const anyopaque, &pointer),
+                    .is_comptime = false,
+                    .alignment = @alignOf(PT),
+                };
+                count += 1;
+            },
+            .ComptimeFloat => {
+                const FT = f64;
+                const PT = *FT;
+                const value: FT = @field(T, decl.name);
+                const pointer = &value;
+                fields[count] = .{
+                    .name = decl.name,
+                    .type = PT,
+                    .default_value = @ptrCast(*const anyopaque, &pointer),
+                    .is_comptime = false,
+                    .alignment = @alignOf(PT),
+                };
+                count += 1;
+            },
             else => {
                 const PT = @TypeOf(&@field(T, decl.name));
                 const pointer = &@field(T, decl.name);

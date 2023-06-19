@@ -322,7 +322,7 @@ function finalizeEnumeration(s) {
   // attach the numeric values to the class as its binary data
   // this allows us to reuse the array getter
   Object.defineProperties(constructor, {
-    [DATA]: { value: new DataView(data) },
+    [DATA]: { value: data },
     [ENUM_ITEMS]: { value: items },
   });
   const valueOf = function() { 
