@@ -212,8 +212,8 @@ R"=====(
     throw new TypeError(`Enum item expected: ${constructor.name}`);
   }
 
-  const DATA = Symbol('data');
-  const RELOCATABLE = Symbol('relocatable');
+  const MEMORY = Symbol('memory');
+  const SLOTS = Symbol('slots');
 
   const TYPED_ARRAY = Symbol('typedArray');
   const ENUM_INDEX = Symbol('enumIndex');
@@ -303,6 +303,32 @@ R"=====(
             const n32 = (sign << 31) | ((exp - 15 + 127) << 23) | (frac << 13);
             dest.setUint32(0, n32, littleEndian);
             return dest.getFloat32(0, littleEndian);
+          };
+        } else if (bitSize === 80) {
+          const dest = new DataView(new ArrayBuffer(8));
+          const getWord = DataView.prototype.getBigUint64;
+          const get = function(offset, littleEndian) {
+            const w1 = getWord.call(this, offset, littleEndian);
+            const w2 = getWord.call(this, offset + 8, littleEndian);
+            return (littleEndian) ? w1 | w2 << 64n : w1 << 64n | w2;
+          };
+          fn = function(offset, littleEndian) {
+            const n = get.call(this, offset, littleEndian);
+            const sign = n >> 79n;
+            const exp = (n & 0x7FFF0000000000000000n) >> 64n;
+            const frac = n & 0x00007FFFFFFFFFFFFFFFn;
+            if (exp === 0n) {
+              return (sign) ? -0 : 0;
+            } else if (exp === 0x7FFFn) {
+              if (!frac) {
+                return (sign) ? -Infinity : Infinity;
+              } else {
+                return NaN;
+              }
+            }
+            const n64 = (sign << 63n) | ((exp - 16383n + 1023n) << 52n) | (frac >> 11n);
+            dest.setBigUint64(0, n64, littleEndian);
+            return dest.getFloat64(0, littleEndian);
           };
         } else if (bitSize === 128) {
           const dest = new DataView(new ArrayBuffer(8));
@@ -466,11 +492,37 @@ R"=====(
             if (exp === 0) {
               n16 = sign << 15;
             } else if (exp === 0xFF) {
-              n16 = sign << 15 | 0x1F << 10 | ((frac) ? 1 : 0);
+              n16 = sign << 15 | 0x1F << 10 | (frac ? 1 : 0);
             } else {
               n16 = sign << 15 | (exp - 127 + 15) << 10 | (frac >> 13);
             }
             set.call(this, offset, n16, littleEndian);
+          };
+        } else if (bitSize === 80) {
+          const src = new DataView(new ArrayBuffer(8));
+          const setWord = DataView.prototype.setBigUint64;
+          const set = function(offset, v, littleEndian) {
+            const w1 = v & 0xFFFFFFFFFFFFFFFFn;
+            const w2 = v >> 64n;
+            setWord.call(this, offset + (littleEndian ? 0 : 8), w1, littleEndian);
+            setWord.call(this, offset + (littleEndian ? 8 : 0), w2, littleEndian);
+          };
+          fn = function(offset, v, littleEndian) {
+            src.setFloat64(0, v, littleEndian);
+            const n = src.getBigUint64(0, littleEndian);
+            const sign = n >> 63n;
+            const exp = (n & 0x7FF0000000000000n) >> 52n;
+            const frac = n & 0x000FFFFFFFFFFFFFn;
+            let n80;
+            if (exp === 0n) {
+              n80 = sign << 79n | (frac << 11n);
+            } else if (exp === 0x07FFn) {
+              n80 = sign << 79n | 0x7FFFn << 64n | (frac ? 0x00002000000000000000n : 0n) | 0x00008000000000000000n;
+              //                                                 ^ bit 61                       ^ bit 63 
+            } else {
+              n80 = sign << 79n | (exp - 1023n + 16383n) << 64n | (frac << 11n) | 0x00008000000000000000n;
+            }
+            set.call(this, offset, n80, littleEndian);
           };
         } else if (bitSize === 128) {
           const src = new DataView(new ArrayBuffer(8));
@@ -491,7 +543,7 @@ R"=====(
             if (exp === 0n) {
               n128 = sign << 127n | (frac << 60n);
             } else if (exp === 0x07FFn) {
-              n128 = sign << 127n | 0x7FFFn << 112n | ((frac) ? 1n : 0n);
+              n128 = sign << 127n | 0x7FFFn << 112n | (frac ? 1n : 0n);
             } else {
               n128 = sign << 127n | (exp - 1023n + 16383n) << 112n | (frac << 60n);
             }
@@ -577,7 +629,7 @@ R"=====(
   }
 
   function getDataView() {
-    return this[DATA];
+    return this[MEMORY];
   }
 
   function getMethodName(prefix, type, isSigned, bitPos, bitSize, byteSize) {
@@ -604,9 +656,9 @@ R"=====(
         const { slot, structure } = member;
         if (structure.type === StructureType.Singleton) {
           // automatically deferencing pointers to primitives
-          return function() { return this[RELOCATABLE][slot].get() };
+          return function() { return this[SLOTS][slot].get() };
         } else {
-          return function() { return this[RELOCATABLE][slot] };
+          return function() { return this[SLOTS][slot] };
         }
       } 
       case MemberType.Bool:
@@ -616,7 +668,7 @@ R"=====(
         const { bitOffset } = member;
         const offset = bitOffset >> 3;
         const get = obtainDataViewGetter(member);
-        return function() { return get.call(this[DATA], offset, littleEndian) };
+        return function() { return get.call(this[MEMORY], offset, littleEndian) };
       }
       case MemberType.Void: {
         return function() { return null }; 
@@ -628,7 +680,7 @@ R"=====(
         if (runtimeSafety) {
           return function() {
             const { constructor } = structure;
-            const value = get.call(this[DATA], offset, littleEndian);
+            const value = get.call(this[MEMORY], offset, littleEndian);
             // the enumeration constructor returns the singleton object for the value
             const object = constructor(value);
             if (!object) {
@@ -638,7 +690,7 @@ R"=====(
           }; 
         } else {
           return function() {
-            const value = get.call(this[DATA], offset, littleEndian);
+            const value = get.call(this[MEMORY], offset, littleEndian);
             return constructor(value);
           }; 
         }
@@ -664,8 +716,8 @@ R"=====(
           if (!(v instanceof constructor)) {
             v = new constructor(v);
           }
-          const reloc = this[RELOCATABLE][slot];
-          copier(reloc, v);
+          const object = this[SLOTS][slot];
+          copier(object, v);
         };  
       } break;
       case MemberType.Pointer: {
@@ -674,14 +726,14 @@ R"=====(
           return;
         } 
         if (structure.type === StructureType.Singleton) {
-          return function(v) { this[RELOCATABLE][slot].set(v); };
+          return function(v) { this[SLOTS][slot].set(v); };
         } else {
           const { constructor } = structure;
           return function(v) {
             if (!(v instanceof constructor)) {
               v = new constructor(v);
             }
-            this[RELOCATABLE][slot] = v;
+            this[SLOTS][slot] = v;
           };
         }
       }
@@ -699,10 +751,10 @@ R"=====(
             if (v < min || v > max) {
               throwOverflow(isSigned, bitSize, v);
             }
-            set.call(this[DATA], offset, v, littleEndian);
+            set.call(this[MEMORY], offset, v, littleEndian);
           };
         } else {
-          fn = function(v) { set.call(this[DATA], offset, v, littleEndian); };
+          fn = function(v) { set.call(this[MEMORY], offset, v, littleEndian); };
         }
       } break;
       case MemberType.Void: {
@@ -725,7 +777,7 @@ R"=====(
           if (!(v instanceof constructor)) {
             throwEnumExpected(constructor);
           }
-          set.call(this[DATA], offset, v.valueOf(), littleEndian);
+          set.call(this[MEMORY], offset, v.valueOf(), littleEndian);
         }; 
       }
     }
@@ -735,7 +787,7 @@ R"=====(
   function obtainArrayLengthGetter(member, options) {
     const { byteSize } = member;
     let fn = function() {
-      const dv = this[DATA];
+      const dv = this[MEMORY];
       return dv.byteLength / byteSize;
     };
     return fn;
@@ -750,31 +802,31 @@ R"=====(
         const { structure, byteSize } = member;
         const { constructor } = structure;
         return function(index) { 
-          const relocs = this[RELOCATABLE];
-          if (!relocs[index]) {
-            const dv = this[DATA];
+          const slots = this[SLOTS];
+          if (!slots[index]) {
+            const dv = this[MEMORY];
             const offset = index * byteSize;
             if (offset >= 0 && offset + byteSize <= dv.byteLength) {
               const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
-              relocs[index] = new constructor(slice);
+              slots[index] = new constructor(slice);
             } else {
               throwOutOfBound(dv.byteLength, byteSize, index);
             }
           }
-          return relocs[index]; 
+          return slots[index]; 
         };
       }
       case MemberType.Pointer: {
         return function(index) { 
-          const relocs = this[RELOCATABLE];
-          if (!relocs[index]) {
-            const dv = this[DATA];
+          const slots = this[SLOTS];
+          if (!slots[index]) {
+            const dv = this[MEMORY];
             const offset = index * byteSize;
             if (offset >= 0 && offset + byteSize <= dv.byteLength) ; else {
               throwOutOfBound(dv.byteLength, byteSize, index);
             }
           }
-          return relocs[index]; 
+          return slots[index]; 
         };
       } 
       case MemberType.Bool:
@@ -783,7 +835,7 @@ R"=====(
         const { byteSize } = member;
         const get = obtainDataViewGetter(member);
         return function(index) {
-          const dv = this[DATA];
+          const dv = this[MEMORY];
           const offset = index * byteSize;
           try {
             return get.call(dv, offset, littleEndian) ;
@@ -809,13 +861,13 @@ R"=====(
           if (!(v instanceof constructor)) {
             v = new constructor(v);
           }
-          const relocs = this[RELOCATABLE];
-          let reloc = relocs[index];
+          const slots = this[SLOTS];
+          let reloc = slots[index];
           if (!reloc) {
             const offset = index * byteSize;
             if (offset >= 0 && offset + byteSize <= dv.byteLength) {
               const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
-              reloc = relocs[index] = new constructor(slice);
+              reloc = slots[index] = new constructor(slice);
             } else {
               throwOutOfBound(dv.byteLength, byteSize, index);
             }
@@ -833,10 +885,10 @@ R"=====(
           if (!(v instanceof constructor)) {
             v = new constructor(v);
           }
-          const dv = this[DATA];
+          const dv = this[MEMORY];
           const offset = index * byteSize;
           if (offset >= 0 && offset + byteSize <= dv.byteLength) {
-            this[RELOCATABLE][index] = v;
+            this[SLOTS][index] = v;
           } else {
             throwOutOfBound(dv.byteLength, byteSize, index);
           }
@@ -856,7 +908,7 @@ R"=====(
               throwOverflow(isSigned, bitSize, v);
             }
             const offset = index * byteSize;
-            const dv = this[DATA];
+            const dv = this[MEMORY];
             try {
               set.call(dv, offset, v, littleEndian);
             } catch (err) {
@@ -866,7 +918,7 @@ R"=====(
         } else {
           fn = function(index, v) { 
             const offset = index * byteSize;
-            const dv = this[DATA];
+            const dv = this[MEMORY];
             try {
               set.call(dv, offset, v, littleEndian);
             } catch (err) {
@@ -923,7 +975,7 @@ R"=====(
     const { byteSize } = members[0];
     const fn = function() {
       if (!this[TYPED_ARRAY]) {
-        const dv = this[DATA];
+        const dv = this[MEMORY];
         this[TYPED_ARRAY] = new constructor(dv.buffer, dv.byteOffset, dv.byteLength / byteSize);
       }
       return this[TYPED_ARRAY];
@@ -947,16 +999,16 @@ R"=====(
     Float64: Float64Array,
   };
 
-  const slots = {};
+  const globalSlots = {};
 
   function invokeThunk(thunk, args) {
-    thunk.call(args, DATA, RELOCATABLE, slots);
+    thunk.call(args, globalSlots, SLOTS, MEMORY);
   }
 
   function invokeFactory(thunk) {
-    const args = { [RELOCATABLE]: {} };
-    thunk.call(args, DATA, RELOCATABLE, slots);
-    return args[RELOCATABLE][0].constructor;
+    const args = { [SLOTS]: {} };
+    thunk.call(args, globalSlots, SLOTS, MEMORY);
+    return args[SLOTS][0].constructor;
   }
 
   function beginStructure(def, options = {}) {
@@ -1057,7 +1109,7 @@ R"=====(
         dv = obtainDataView(arg, size);
       }
       Object.defineProperties(self, {
-        [DATA]: { value: dv },
+        [MEMORY]: { value: dv },
       });
       if (!creating) {
         return self;
@@ -1067,7 +1119,7 @@ R"=====(
       Object.defineProperty(constructor, 'name', { value: name, writable: false });
     }
     s.copier = function (dest, src) {
-      copy(dest[DATA], src[DATA]);
+      copy(dest[MEMORY], src[MEMORY]);
     };
     s.size = size;
     Object.defineProperties(constructor.prototype, {
@@ -1101,7 +1153,7 @@ R"=====(
         dv = obtainDataView(arg, size);
       }
       Object.defineProperties(self, {
-        [DATA]: { value: dv },
+        [MEMORY]: { value: dv },
       });
       if (!creating) {
         return self;
@@ -1164,11 +1216,11 @@ R"=====(
         dv = obtainDataView(arg, size);
       }
       Object.defineProperties(self, {
-        [DATA]: { value: dv },
+        [MEMORY]: { value: dv },
       });
       Object.defineProperties(self, descriptors);
       if (hasRelocatables) {
-        const relocs = Object.assign({}, relocatables);
+        const slots = Object.assign({}, relocatables);
         if (hasCompounds) {
           // initialize compound members (array, struct, etc.), storing them 
           // in relocatables even through they aren't actually relocatable
@@ -1181,12 +1233,12 @@ R"=====(
                 slot,
               } = member;
               // "cast" the dataview into the correct type (not using the new operator)
-              relocs[slot] = constructor(new DataView(dv.buffer, bitOffset >> 3, byteSize));
+              slots[slot] = constructor(new DataView(dv.buffer, bitOffset >> 3, byteSize));
             }
           }
         }
         Object.defineProperties(self, {
-          [RELOCATABLE]: { value: relocs },
+          [SLOTS]: { value: slots },
         });  
       } 
       if (!creating) {
@@ -1197,9 +1249,9 @@ R"=====(
       Object.defineProperty(constructor, 'name', { value: name, writable: false });
     }
     s.copier = function(dest, src) {
-      copy(dest[DATA], src[DATA]);
+      copy(dest[MEMORY], src[MEMORY]);
       if (hasRelocatables) {
-        Object.assign(dest[RELOCATABLE], src[RELOCATABLE]);
+        Object.assign(dest[SLOTS], src[SLOTS]);
       }
     };
     attachDataViewAccessors(s);
@@ -1252,7 +1304,7 @@ R"=====(
     // attach the numeric values to the class as its binary data
     // this allows us to reuse the array getter
     Object.defineProperties(constructor, {
-      [DATA]: { value: data },
+      [MEMORY]: { value: data },
       [ENUM_ITEMS]: { value: items },
     });
     const valueOf = function() { 
@@ -1304,9 +1356,9 @@ R"=====(
       },
       options,
     } = s;
-    const relocs = {};
+    const slots = {};
     const descriptors = {
-      [RELOCATABLE]: { value: relocs },
+      [SLOTS]: { value: slots },
     };
     // static variables are all pointers, with each represented by an object 
     // sittinng a relocatable slot
@@ -1317,7 +1369,7 @@ R"=====(
       if (member.type != MemberType.Type) {
         const dv = pointers[member.slot];
         const { constructor } = member.structure;
-        relocs[member.slot] = constructor(dv);
+        slots[member.slot] = constructor(dv);
       }
     }  Object.defineProperties(constructor, descriptors);
   }
@@ -1403,8 +1455,8 @@ R"=====(
   exports.attachStaticMembers = attachStaticMembers;
   exports.beginStructure = beginStructure;
   exports.finalizeStructure = finalizeStructure;
+  exports.globalSlots = globalSlots;
   exports.invokeFactory = invokeFactory;
-  exports.slots = slots;
 
   return exports;
 

@@ -44,6 +44,18 @@ describe('Integration tests', function() {
       expect(object.number1).to.equal(123);
       expect(object.number2).to.equal(456);
     })
+    it('should import primitive arrays', async function() {
+      this.timeout(10000);
+      const { default: module } = await import(resolve('./integration/primitive-arrays.zig'));
+      expect(module.int32Array4).to.be.an('object');
+      expect(module.int32Array4.get(0)).to.equal(1);
+      expect([ ...module.int32Array4 ]).to.eql([ 1, 2, 3, 4 ]);
+      module.int32Array4.set(1, 123);
+      expect([ ...module.int32Array4 ]).to.eql([ 1, 123, 3, 4 ]);
+      expect(module.float64Array4x4).to.be.an('object');
+      const row1 = module.float64Array4x4.get(1);
+      expect(row1).to.be.an('object');
+    })
   })
   describe('Methods', function() {
     it('should import simple function', async function() {

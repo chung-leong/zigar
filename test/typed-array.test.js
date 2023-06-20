@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
 import { MemberType } from '../src/type.js';
-import { DATA } from '../src/symbol.js';
+import { MEMORY } from '../src/symbol.js';
 import { obtainTypedArrayGetter } from '../src/typed-array.js';
 
 describe('Typed array functions', function() { 
@@ -28,7 +28,7 @@ describe('Typed array functions', function() {
       const f = obtainTypedArrayGetter(members);
       expect(f).to.be.a('function');
       const object = {
-        [DATA]: new DataView(new ArrayBuffer(8)),
+        [MEMORY]: new DataView(new ArrayBuffer(8)),
       };
       const array = f.call(object);
       expect(array).to.be.an.instanceOf(Int32Array);

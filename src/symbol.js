@@ -1,5 +1,5 @@
-export const DATA = Symbol('data');
-export const RELOCATABLE = Symbol('relocatable');
+export const MEMORY = Symbol('memory');
+export const SLOTS = Symbol('slots');
 
 export const TYPED_ARRAY = Symbol('typedArray');
 export const ENUM_INDEX = Symbol('enumIndex');

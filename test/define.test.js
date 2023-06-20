@@ -1194,13 +1194,13 @@ describe('Structure definition', function() {
       finalizeStructure(argStruct);
       let arg1, arg2, symbol1, symbol2, argDV, slots;
       const thunk = function(...args) {
-        symbol1 = args[0];
-        symbol2 = args[1];
-        slots = args[2];
+        slots = args[0];
+        symbol1 = args[1];
+        symbol2 = args[2];
         arg1 = this[0];
         arg2 = this[1];
         this.retval = true;
-        argDV = this[symbol1];
+        argDV = this[symbol2];
       };
       attachMethod(structure, {
         name: 'foo',

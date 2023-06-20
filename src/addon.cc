@@ -1,25 +1,5 @@
 #include "addon.h"
 
-static Result ReadSlot(Host* call, 
-                       uint32_t slot_id, 
-                       Local<Value> *dest) {
-  Local<Value> value;
-  if (call->slots->Get(call->context, slot_id).ToLocal(&value)) {
-    if (!value->IsNullOrUndefined()) {
-      *dest = value;
-      return Result::OK;
-    }
-  }  
-  return Result::Failure;
-}
-
-static Result WriteSlot(Host* call, 
-                        uint32_t slot_id, 
-                        Local<Value> object) {
-  call->slots->Set(call->context, slot_id, object).Check();
-  return Result::OK;  
-}
-
 static Result AllocateMemory(Host* call, 
                              size_t size, 
                              Memory* dest) {
@@ -39,7 +19,7 @@ static Result GetMemory(Host* call,
                         Local<Object> object,
                         Memory* dest) {
   Local<Value> value;  
-  if (!object->Get(call->context, call->data_symbol).ToLocal(&value) || !value->IsDataView()) {
+  if (!object->Get(call->context, call->symbol_memory).ToLocal(&value) || !value->IsDataView()) {
     return Result::Failure;
   }
   auto buffer = value.As<DataView>()->Buffer();
@@ -49,12 +29,32 @@ static Result GetMemory(Host* call,
   return Result::OK;
 }
 
-static Result GetRelocatable(Host* call,
+static Result ReadGlobalSlot(Host* call, 
+                             uint32_t slot_id, 
+                             Local<Value> *dest) {
+  Local<Value> value;
+  if (call->global_slots->Get(call->context, slot_id).ToLocal(&value)) {
+    if (!value->IsNullOrUndefined()) {
+      *dest = value;
+      return Result::OK;
+    }
+  }  
+  return Result::Failure;
+}
+
+static Result WriteGlobalSlot(Host* call, 
+                              uint32_t slot_id, 
+                              Local<Value> object) {
+  call->global_slots->Set(call->context, slot_id, object).Check();
+  return Result::OK;  
+}
+
+static Result ReadObjectSlot(Host* call,
                              Local<Object> object,
                              uint32_t slot,
                              Local<Object>* dest) {
   Local<Value> value;  
-  if (!object->Get(call->context, call->relocatable_symbol).ToLocal(&value) || !value->IsObject()) {
+  if (!object->Get(call->context, call->symbol_slots).ToLocal(&value) || !value->IsObject()) {
     return Result::Failure;
   }
   auto relocs = value.As<Object>();
@@ -65,12 +65,12 @@ static Result GetRelocatable(Host* call,
   return Result::OK;
 }
 
-static Result SetRelocatable(Host* call,
-                             Local<Object> object,
-                             uint32_t slot,
-                             Local<Object> child) {
+static Result WriteObjectSlot(Host* call,
+                              Local<Object> object,
+                              uint32_t slot,
+                              Local<Object> child) {
   Local<Value> value;  
-  if (!object->Get(call->context, call->relocatable_symbol).ToLocal(&value) || !value->IsObject()) {
+  if (!object->Get(call->context, call->symbol_slots).ToLocal(&value) || !value->IsObject()) {
     return Result::Failure;
   }
   auto relocs = value.As<Object>();
@@ -410,10 +410,10 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   auto callbacks = module->callbacks;
   callbacks->allocate_memory = AllocateMemory;
   callbacks->get_memory = GetMemory;
-  callbacks->get_relocatable = GetRelocatable;
-  callbacks->set_relocatable = SetRelocatable;
-  callbacks->read_slot = ReadSlot;
-  callbacks->write_slot = WriteSlot;
+  callbacks->read_global_slot = ReadGlobalSlot;
+  callbacks->write_global_slot = WriteGlobalSlot;
+  callbacks->read_object_slot = ReadObjectSlot;
+  callbacks->write_object_slot = WriteObjectSlot;
   callbacks->begin_structure = BeginStructure;
   callbacks->attach_member = AttachMember;
   callbacks->attach_method = AttachMethod;

@@ -1,12 +1,12 @@
 import { MemberType, getIntRange } from './type.js';
 import { obtainDataViewGetter, obtainDataViewSetter } from './data-view.js';
 import { throwOutOfBound, throwOverflow, rethrowRangeError } from './error.js';
-import { DATA, RELOCATABLE } from './symbol.js';
+import { MEMORY, SLOTS } from './symbol.js';
 
 export function obtainArrayLengthGetter(member, options) {
   const { byteSize } = member;
   let fn = function() {
-    const dv = this[DATA];
+    const dv = this[MEMORY];
     return dv.byteLength / byteSize;
   };
   return fn;
@@ -21,25 +21,25 @@ export function obtainArrayGetter(member, options) {
       const { structure, byteSize } = member;
       const { constructor } = structure;
       return function(index) { 
-        const relocs = this[RELOCATABLE];
-        if (!relocs[index]) {
-          const dv = this[DATA];
+        const slots = this[SLOTS];
+        if (!slots[index]) {
+          const dv = this[MEMORY];
           const offset = index * byteSize;
           if (offset >= 0 && offset + byteSize <= dv.byteLength) {
             const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
-            relocs[index] = new constructor(slice);
+            slots[index] = new constructor(slice);
           } else {
             throwOutOfBound(dv.byteLength, byteSize, index);
           }
         }
-        return relocs[index]; 
+        return slots[index]; 
       };
     }
     case MemberType.Pointer: {
       return function(index) { 
-        const relocs = this[RELOCATABLE];
-        if (!relocs[index]) {
-          const dv = this[DATA];
+        const slots = this[SLOTS];
+        if (!slots[index]) {
+          const dv = this[MEMORY];
           const offset = index * byteSize;
           if (offset >= 0 && offset + byteSize <= dv.byteLength) {
             // pointer isn't pointing to something
@@ -47,7 +47,7 @@ export function obtainArrayGetter(member, options) {
             throwOutOfBound(dv.byteLength, byteSize, index);
           }
         }
-        return relocs[index]; 
+        return slots[index]; 
       };
     } 
     case MemberType.Bool:
@@ -56,7 +56,7 @@ export function obtainArrayGetter(member, options) {
       const { byteSize } = member;
       const get = obtainDataViewGetter(member);
       return function(index) {
-        const dv = this[DATA];
+        const dv = this[MEMORY];
         const offset = index * byteSize;
         try {
           return get.call(dv, offset, littleEndian) ;
@@ -82,13 +82,13 @@ export function obtainArraySetter(member, options) {
         if (!(v instanceof constructor)) {
           v = new constructor(v);
         }
-        const relocs = this[RELOCATABLE];
-        let reloc = relocs[index];
+        const slots = this[SLOTS];
+        let reloc = slots[index];
         if (!reloc) {
           const offset = index * byteSize;
           if (offset >= 0 && offset + byteSize <= dv.byteLength) {
             const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
-            reloc = relocs[index] = new constructor(slice);
+            reloc = slots[index] = new constructor(slice);
           } else {
             throwOutOfBound(dv.byteLength, byteSize, index);
           }
@@ -106,10 +106,10 @@ export function obtainArraySetter(member, options) {
         if (!(v instanceof constructor)) {
           v = new constructor(v);
         }
-        const dv = this[DATA];
+        const dv = this[MEMORY];
         const offset = index * byteSize;
         if (offset >= 0 && offset + byteSize <= dv.byteLength) {
-          this[RELOCATABLE][index] = v;
+          this[SLOTS][index] = v;
         } else {
           throwOutOfBound(dv.byteLength, byteSize, index);
         }
@@ -129,7 +129,7 @@ export function obtainArraySetter(member, options) {
             throwOverflow(isSigned, bitSize, v);
           }
           const offset = index * byteSize;
-          const dv = this[DATA];
+          const dv = this[MEMORY];
           try {
             set.call(dv, offset, v, littleEndian);
           } catch (err) {
@@ -139,7 +139,7 @@ export function obtainArraySetter(member, options) {
       } else {
         fn = function(index, v) { 
           const offset = index * byteSize;
-          const dv = this[DATA];
+          const dv = this[MEMORY];
           try {
             set.call(dv, offset, v, littleEndian);
           } catch (err) {

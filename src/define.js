@@ -5,18 +5,18 @@ import { obtainTypedArrayGetter } from './typed-array.js';
 import { obtainCopyFunction } from './memory.js';
 import { obtainDataView, getDataView } from './data-view.js';
 import { throwNoNewEnum } from './error.js';
-import { DATA, RELOCATABLE, ENUM_INDEX, ENUM_ITEMS } from './symbol.js';
+import { MEMORY, SLOTS, ENUM_INDEX, ENUM_ITEMS } from './symbol.js';
 
-export const slots = {};
+export const globalSlots = {};
 
 function invokeThunk(thunk, args) {
-  thunk.call(args, DATA, RELOCATABLE, slots);
+  thunk.call(args, globalSlots, SLOTS, MEMORY);
 }
 
 export function invokeFactory(thunk) {
-  const args = { [RELOCATABLE]: {} };
-  thunk.call(args, DATA, RELOCATABLE, slots);
-  return args[RELOCATABLE][0].constructor;
+  const args = { [SLOTS]: {} };
+  thunk.call(args, globalSlots, SLOTS, MEMORY);
+  return args[SLOTS][0].constructor;
 }
 
 export function beginStructure(def, options = {}) {
@@ -117,7 +117,7 @@ function finalizeSingleton(s) {
       dv = obtainDataView(arg, size);
     }
     Object.defineProperties(self, {
-      [DATA]: { value: dv },
+      [MEMORY]: { value: dv },
     });
     if (!creating) {
       return self;
@@ -127,7 +127,7 @@ function finalizeSingleton(s) {
     Object.defineProperty(constructor, 'name', { value: name, writable: false });
   }
   s.copier = function (dest, src) {
-    copy(dest[DATA], src[DATA]);
+    copy(dest[MEMORY], src[MEMORY]);
   };
   s.size = size;
   Object.defineProperties(constructor.prototype, {
@@ -167,7 +167,7 @@ function finalizeArray(s) {
       dv = obtainDataView(arg, size);
     }
     Object.defineProperties(self, {
-      [DATA]: { value: dv },
+      [MEMORY]: { value: dv },
     });
     if (!creating) {
       return self;
@@ -235,11 +235,11 @@ function finalizeStruct(s) {
       dv = obtainDataView(arg, size);
     }
     Object.defineProperties(self, {
-      [DATA]: { value: dv },
+      [MEMORY]: { value: dv },
     });
     Object.defineProperties(self, descriptors);
     if (hasRelocatables) {
-      const relocs = Object.assign({}, relocatables);
+      const slots = Object.assign({}, relocatables);
       if (hasCompounds) {
         // initialize compound members (array, struct, etc.), storing them 
         // in relocatables even through they aren't actually relocatable
@@ -252,12 +252,12 @@ function finalizeStruct(s) {
               slot,
             } = member;
             // "cast" the dataview into the correct type (not using the new operator)
-            relocs[slot] = constructor(new DataView(dv.buffer, bitOffset >> 3, byteSize));
+            slots[slot] = constructor(new DataView(dv.buffer, bitOffset >> 3, byteSize));
           }
         }
       }
       Object.defineProperties(self, {
-        [RELOCATABLE]: { value: relocs },
+        [SLOTS]: { value: slots },
       });  
     } 
     if (!creating) {
@@ -268,9 +268,9 @@ function finalizeStruct(s) {
     Object.defineProperty(constructor, 'name', { value: name, writable: false });
   }
   s.copier = function(dest, src) {
-    copy(dest[DATA], src[DATA]);
+    copy(dest[MEMORY], src[MEMORY]);
     if (hasRelocatables) {
-      Object.assign(dest[RELOCATABLE], src[RELOCATABLE]);
+      Object.assign(dest[SLOTS], src[SLOTS]);
     }
   };
   attachDataViewAccessors(s);
@@ -324,7 +324,7 @@ function finalizeEnumeration(s) {
   // attach the numeric values to the class as its binary data
   // this allows us to reuse the array getter
   Object.defineProperties(constructor, {
-    [DATA]: { value: data },
+    [MEMORY]: { value: data },
     [ENUM_ITEMS]: { value: items },
   });
   const valueOf = function() { 
@@ -377,9 +377,9 @@ export function attachStaticMembers(s) {
     },
     options,
   } = s;
-  const relocs = {};
+  const slots = {};
   const descriptors = {
-    [RELOCATABLE]: { value: relocs },
+    [SLOTS]: { value: slots },
   };
   // static variables are all pointers, with each represented by an object 
   // sittinng a relocatable slot
@@ -390,7 +390,7 @@ export function attachStaticMembers(s) {
     if (member.type != MemberType.Type) {
       const dv = pointers[member.slot];
       const { constructor } = member.structure;
-      relocs[member.slot] = constructor(dv);
+      slots[member.slot] = constructor(dv);
     }
   };
   Object.defineProperties(constructor, descriptors);

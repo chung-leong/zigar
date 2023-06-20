@@ -1,7 +1,7 @@
 import { MemberType, getTypeName } from './type.js';
 import { obtainBitAlignFunction } from './memory.js';
 import { throwSizeMismatch, throwBufferExpected } from './error.js';
-import { DATA } from './symbol.js';
+import { MEMORY } from './symbol.js';
 
 export function obtainDataViewGetter({ type, isSigned, bitOffset, bitSize, byteSize }) {
   const bitPos = bitOffset & 0x07;
@@ -413,7 +413,7 @@ export function obtainDataView(arg, size, multiple = false) {
 }
 
 export function getDataView() {
-  return this[DATA];
+  return this[MEMORY];
 }
 
 function getMethodName(prefix, type, isSigned, bitPos, bitSize, byteSize) {

@@ -1,7 +1,7 @@
 import { MemberType, StructureType, getIntRange } from './type.js';
 import { obtainDataViewGetter, obtainDataViewSetter } from './data-view.js';
 import { throwNotNull, throwOverflow, throwInvalidEnum, throwEnumExpected } from './error.js';
-import { DATA, RELOCATABLE } from './symbol.js';
+import { MEMORY, SLOTS } from './symbol.js';
 
 export function obtainGetter(member, options) {
   const {
@@ -15,9 +15,9 @@ export function obtainGetter(member, options) {
       const { slot, structure } = member;
       if (structure.type === StructureType.Singleton) {
         // automatically deferencing pointers to primitives
-        return function() { return this[RELOCATABLE][slot].get() };
+        return function() { return this[SLOTS][slot].get() };
       } else {
-        return function() { return this[RELOCATABLE][slot] };
+        return function() { return this[SLOTS][slot] };
       }
     } 
     case MemberType.Bool:
@@ -27,7 +27,7 @@ export function obtainGetter(member, options) {
       const { bitOffset } = member;
       const offset = bitOffset >> 3;
       const get = obtainDataViewGetter(member);
-      return function() { return get.call(this[DATA], offset, littleEndian) };
+      return function() { return get.call(this[MEMORY], offset, littleEndian) };
     }
     case MemberType.Void: {
       return function() { return null }; 
@@ -39,7 +39,7 @@ export function obtainGetter(member, options) {
       if (runtimeSafety) {
         return function() {
           const { constructor } = structure;
-          const value = get.call(this[DATA], offset, littleEndian);
+          const value = get.call(this[MEMORY], offset, littleEndian);
           // the enumeration constructor returns the singleton object for the value
           const object = constructor(value);
           if (!object) {
@@ -49,7 +49,7 @@ export function obtainGetter(member, options) {
         }; 
       } else {
         return function() {
-          const value = get.call(this[DATA], offset, littleEndian);
+          const value = get.call(this[MEMORY], offset, littleEndian);
           return constructor(value);
         }; 
       }
@@ -75,8 +75,8 @@ export function obtainSetter(member, options) {
         if (!(v instanceof constructor)) {
           v = new constructor(v);
         }
-        const reloc = this[RELOCATABLE][slot];
-        copier(reloc, v);
+        const object = this[SLOTS][slot];
+        copier(object, v);
       };  
     } break;
     case MemberType.Pointer: {
@@ -85,14 +85,14 @@ export function obtainSetter(member, options) {
         return;
       } 
       if (structure.type === StructureType.Singleton) {
-        return function(v) { this[RELOCATABLE][slot].set(v) };
+        return function(v) { this[SLOTS][slot].set(v) };
       } else {
         const { constructor } = structure;
         return function(v) {
           if (!(v instanceof constructor)) {
             v = new constructor(v);
           }
-          this[RELOCATABLE][slot] = v;
+          this[SLOTS][slot] = v;
         };
       }
     }
@@ -110,10 +110,10 @@ export function obtainSetter(member, options) {
           if (v < min || v > max) {
             throwOverflow(isSigned, bitSize, v);
           }
-          set.call(this[DATA], offset, v, littleEndian);
+          set.call(this[MEMORY], offset, v, littleEndian);
         };
       } else {
-        fn = function(v) { set.call(this[DATA], offset, v, littleEndian) };
+        fn = function(v) { set.call(this[MEMORY], offset, v, littleEndian) };
       }
     } break;
     case MemberType.Void: {
@@ -136,7 +136,7 @@ export function obtainSetter(member, options) {
         if (!(v instanceof constructor)) {
           throwEnumExpected(constructor);
         }
-        set.call(this[DATA], offset, v.valueOf(), littleEndian);
+        set.call(this[MEMORY], offset, v.valueOf(), littleEndian);
       }; 
     }
     case MemberType.Type: {

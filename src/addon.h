@@ -95,11 +95,11 @@ struct Callbacks {
   Result (*reallocate_memory)(Host*, size_t, Memory*);
   Result (*free_memory)(Host*, Memory*);
   Result (*get_memory)(Host*, Local<Object>, Memory*);
-  Result (*get_relocatable)(Host*, Local<Object>, uint32_t, Local<Object>*);
-  Result (*set_relocatable)(Host*, Local<Object>, uint32_t, Local<Object>);
 
-  Result (*read_slot)(Host*, uint32_t, Local<Value>*);
-  Result (*write_slot)(Host*, uint32_t, Local<Value>);
+  Result (*read_global_slot)(Host*, uint32_t, Local<Value>*);
+  Result (*write_global_slot)(Host*, uint32_t, Local<Value>);
+  Result (*read_object_slot)(Host*, Local<Object>, uint32_t, Local<Object>*);
+  Result (*write_object_slot)(Host*, Local<Object>, uint32_t, Local<Object>);
 
   Result (*begin_structure)(Host*, const Structure&, Local<Object>*);
   Result (*attach_member)(Host*, Local<Object>, const Member&);
@@ -197,11 +197,11 @@ struct Host {
   Isolate* isolate;  
   Local<Context> context;
   Local<Array> mem_pool;
-  Local<Object> argument;
-  Local<Object> slots;
   Local<Object> js_module;
-  Local<Symbol> data_symbol;
-  Local<Symbol> relocatable_symbol;
+  Local<Object> argument;
+  Local<Object> global_slots;
+  Local<Symbol> symbol_slots;
+  Local<Symbol> symbol_memory;
   FunctionData* function_data;
   bool remove_function_data;
 
@@ -217,9 +217,9 @@ struct Host {
     isolate(info.GetIsolate()),
     context(isolate->GetCurrentContext()),
     argument(info.This()),
-    slots(info[2].As<Object>()),
-    data_symbol(info[0].As<Symbol>()),
-    relocatable_symbol(info[1].As<Symbol>()),
+    global_slots(info[0].As<Object>()),
+    symbol_slots(info[1].As<Symbol>()),
+    symbol_memory(info[2].As<Symbol>()),
     function_data(reinterpret_cast<FunctionData*>(info.Data().As<External>()->Value())),
     remove_function_data(false) {
   }

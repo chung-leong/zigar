@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
 import { MemberType } from '../src/type.js';
-import { DATA, RELOCATABLE } from '../src/symbol.js';
+import { MEMORY, SLOTS } from '../src/symbol.js';
 import { 
   obtainArrayGetter,
   obtainArraySetter,
@@ -22,7 +22,7 @@ describe('Array functions', function() {
       dv.setInt32(0, 1234, true);
       dv.setInt32(4, -2, true);
       dv.setInt32(8, -1, true);
-      const object = { [DATA]: dv };
+      const object = { [MEMORY]: dv };
       const fn = obtainArrayGetter(member, {});
       const res1 = fn.call(object, 0);
       const res2 = fn.call(object, 1);
@@ -42,7 +42,7 @@ describe('Array functions', function() {
       dv.setBigInt64(0, 1234n, true);
       dv.setBigInt64(8, -2n, true);
       dv.setBigInt64(16, -1n, true);
-      const object = { [DATA]: dv };
+      const object = { [MEMORY]: dv };
       const fn = obtainArrayGetter(member, {});
       const res1 = fn.call(object, 0);
       const res2 = fn.call(object, 1);
@@ -62,7 +62,7 @@ describe('Array functions', function() {
       dv.setInt32(0, 1234, true);
       dv.setInt32(4, -2, true);
       dv.setInt32(8, -1, true);
-      const object = { [DATA]: dv };
+      const object = { [MEMORY]: dv };
       const fn = obtainArrayGetter(member, {});
       expect(() => fn.call(object, -1)).to.throw();
       expect(() => fn.call(object, 4)).to.throw();
@@ -78,7 +78,7 @@ describe('Array functions', function() {
       dv.setInt32(0, 1234, false);
       dv.setInt32(4, -2, false);
       dv.setInt32(8, -1, false);
-      const object = { [DATA]: dv };
+      const object = { [MEMORY]: dv };
       const fn = obtainArrayGetter(member, { littleEndian: false });
       const res1 = fn.call(object, 0);
       const res2 = fn.call(object, 1);
@@ -98,7 +98,7 @@ describe('Array functions', function() {
         byteSize: 4,
       };
       const dv = new DataView(new ArrayBuffer(12));
-      const object = { [DATA]: dv };
+      const object = { [MEMORY]: dv };
       const fn = obtainArrayLengthGetter(member, {});
       const res = fn.call(object);
       expect(res).to.equal(3);
@@ -113,7 +113,7 @@ describe('Array functions', function() {
         byteSize: 4,
       };
       const dv = new DataView(new ArrayBuffer(12));
-      const object = { [DATA]: dv };
+      const object = { [MEMORY]: dv };
       const fn = obtainArraySetter(member, {});
       fn.call(object, 0, 1234);
       fn.call(object, 1, -2);
@@ -130,7 +130,7 @@ describe('Array functions', function() {
         byteSize: 8,
       };
       const dv = new DataView(new ArrayBuffer(24));
-      const object = { [DATA]: dv };
+      const object = { [MEMORY]: dv };
       const fn = obtainArraySetter(member, {});
       fn.call(object, 0, 1234n);
       fn.call(object, 1, -2n);
@@ -147,7 +147,7 @@ describe('Array functions', function() {
         byteSize: 4,
       };
       const dv = new DataView(new ArrayBuffer(12));
-      const object = { [DATA]: dv };
+      const object = { [MEMORY]: dv };
       const fn = obtainArraySetter(member, {});
       expect(() => fn.call(object, -1, 1234)).to.throw();
       expect(() => fn.call(object, 4, 1234)).to.throw();
@@ -166,7 +166,7 @@ describe('Array functions', function() {
       dv.setInt32(0, 1234, true);
       dv.setInt32(4, -2, true);
       dv.setInt32(8, -1, true);
-      const object = { [DATA]: dv };
+      const object = { [MEMORY]: dv };
       Object.defineProperty(object, 'get', { value: obtainArrayGetter(member, {}) });
       Object.defineProperty(object, 'length', { get: obtainArrayLengthGetter(member, {}) });
       const it = getArrayIterator.call(object);

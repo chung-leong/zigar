@@ -1,4 +1,4 @@
-pub const int32Array4: [4]i32 = .{ 1, 2, 3, 4 };
+pub var int32Array4: [4]i32 = .{ 1, 2, 3, 4 };
 pub const float64Array4x4: [4][4]f64 = .{
     .{ 1.1, 1.2, 1.3, 1.4 },
     .{ 2.1, 2.2, 2.3, 2.4 },

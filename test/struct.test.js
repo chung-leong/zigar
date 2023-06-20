@@ -1,14 +1,14 @@
 import { expect } from 'chai';
 
 import { StructureType, MemberType } from '../src/type.js';
-import { DATA, RELOCATABLE } from '../src/symbol.js';
+import { MEMORY, SLOTS } from '../src/symbol.js';
 import { obtainGetter, obtainSetter } from '../src/struct.js';
 
 describe('Struct functions', function() {
   describe('obtainGetter', function() {
     it('should return a function for getting int', function() {
       const object = {
-        [DATA]: (() => {
+        [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
           dv.setUint32(4, 1234, true);
           return dv;
@@ -27,7 +27,7 @@ describe('Struct functions', function() {
     })
     it('should return a function for getting float', function() {
       const object = {
-        [DATA]: (() => {
+        [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
           dv.setFloat64(0, 3.14, true);
           return dv;
@@ -46,7 +46,7 @@ describe('Struct functions', function() {
     })
     it('should return a function for getting bool', function() {
       const object = {
-        [DATA]: (() => {
+        [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
           dv.setUint32(4, 1, true);
           return dv;
@@ -65,7 +65,7 @@ describe('Struct functions', function() {
     })
     it('should return a function for getting void', function() {
       const object = {
-        [DATA]: (() => {
+        [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
           dv.setUint32(4, 1, true);
           return dv;
@@ -90,7 +90,7 @@ describe('Struct functions', function() {
         }
       };
       const object = {
-        [DATA]: (() => {
+        [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
           dv.setUint32(4, 1, true);
           return dv;
@@ -113,8 +113,8 @@ describe('Struct functions', function() {
       const DummyValue = new DummyStruct;
       const dv = new DataView(new ArrayBuffer(8));
       const object = {
-        [DATA]: dv,
-        [RELOCATABLE]: {
+        [MEMORY]: dv,
+        [SLOTS]: {
           1: DummyValue,
         },
       };
@@ -142,8 +142,8 @@ describe('Struct functions', function() {
       const DummyValue = new DummyStruct;
       const dv = new DataView(new ArrayBuffer(8));
       const object = {
-        [DATA]: dv,
-        [RELOCATABLE]: {
+        [MEMORY]: dv,
+        [SLOTS]: {
           1: DummyValue,
         },
       };
@@ -166,7 +166,7 @@ describe('Struct functions', function() {
     it('should return a function for setting int', function() {
       const dv = new DataView(new ArrayBuffer(8));
       const object = {
-        [DATA]: dv,
+        [MEMORY]: dv,
       };
       const member = {
         type: MemberType.Int,
@@ -182,7 +182,7 @@ describe('Struct functions', function() {
     it('should return a function for setting float', function() {
       const dv = new DataView(new ArrayBuffer(8));
       const object = {
-        [DATA]: dv,
+        [MEMORY]: dv,
       };
       const member = {
         type: MemberType.Float,
@@ -198,7 +198,7 @@ describe('Struct functions', function() {
     it('should return a function for setting bool', function() {
       const dv = new DataView(new ArrayBuffer(8));
       const object = {
-        [DATA]: dv,
+        [MEMORY]: dv,
       };
       const member = {
         type: MemberType.Bool,
@@ -214,7 +214,7 @@ describe('Struct functions', function() {
     it('should return a function for setting void', function() {
       const dv = new DataView(new ArrayBuffer(8));
       const object = {
-        [DATA]: dv,
+        [MEMORY]: dv,
       };
       const member = {
         type: MemberType.Void,
@@ -240,7 +240,7 @@ describe('Struct functions', function() {
       Object.setPrototypeOf(DummyValue, DummyEnum.prototype);
       const dv = new DataView(new ArrayBuffer(8));
       const object = {
-        [DATA]: dv,
+        [MEMORY]: dv,
       };
       const member = {
         type: MemberType.Enum,
@@ -259,8 +259,8 @@ describe('Struct functions', function() {
       const DummyValue = new DummyStruct;
       const dv = new DataView(new ArrayBuffer(8));
       const object = {
-        [DATA]: dv,
-        [RELOCATABLE]: {
+        [MEMORY]: dv,
+        [SLOTS]: {
         },
       };
       const member = {
@@ -275,7 +275,7 @@ describe('Struct functions', function() {
       };
       const f = obtainSetter(member, {});
       f.call(object, DummyValue);
-      expect(object[RELOCATABLE][1]).to.equal(DummyValue);
+      expect(object[SLOTS][1]).to.equal(DummyValue);
     })
     it('should return a function that set a primitive referenced by a pointer', function() {
       let value = 1234;
@@ -287,8 +287,8 @@ describe('Struct functions', function() {
       const DummyValue = new DummyStruct;
       const dv = new DataView(new ArrayBuffer(8));
       const object = {
-        [DATA]: dv,
-        [RELOCATABLE]: {
+        [MEMORY]: dv,
+        [SLOTS]: {
           1: DummyValue,
         },
       };

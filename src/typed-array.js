@@ -1,5 +1,5 @@
 import { MemberType, getTypeName } from './type.js';
-import { DATA, TYPED_ARRAY } from './symbol.js';
+import { MEMORY, TYPED_ARRAY } from './symbol.js';
 
 export function obtainTypedArrayGetter(members) {
   const hash = {};
@@ -26,7 +26,7 @@ export function obtainTypedArrayGetter(members) {
   const { byteSize } = members[0];
   const fn = function() {
     if (!this[TYPED_ARRAY]) {
-      const dv = this[DATA];
+      const dv = this[MEMORY];
       this[TYPED_ARRAY] = new constructor(dv.buffer, dv.byteOffset, dv.byteLength / byteSize);
     }
     return this[TYPED_ARRAY];

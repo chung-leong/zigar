@@ -50,25 +50,25 @@ test "getStructureSlot" {
     assert(getStructureSlot(B) == 1);
 }
 
-fn getRelocatableSlot(comptime T: anytype, comptime index: comptime_int) u32 {
+fn getObjectSlot(comptime T: anytype, comptime index: comptime_int) u32 {
     // per-struct slot allocator
     const relocatable_slot = allocator.get(.{ .Type = T });
     return relocatable_slot.get(.{ .Index = index });
 }
 
-test "getRelocatableSlot" {
+test "getObjectSlot" {
     const A = struct {};
-    const slotA1 = getRelocatableSlot(A, 0);
-    const slotA2 = getRelocatableSlot(A, 1);
+    const slotA1 = getObjectSlot(A, 0);
+    const slotA2 = getObjectSlot(A, 1);
     assert(slotA1 == 0);
     assert(slotA2 == 1);
     const B = struct {};
-    const slotB1 = getRelocatableSlot(B, 1);
-    const slotB2 = getRelocatableSlot(B, 0);
+    const slotB1 = getObjectSlot(B, 1);
+    const slotB2 = getObjectSlot(B, 0);
     assert(slotB1 == 0);
     assert(slotB2 == 1);
-    assert(getRelocatableSlot(A, 1) == 1);
-    assert(getRelocatableSlot(A, 2) == 2);
+    assert(getObjectSlot(A, 1) == 1);
+    assert(getObjectSlot(A, 2) == 2);
 }
 
 // enums and external structs
@@ -313,11 +313,11 @@ const Callbacks = extern struct {
     reallocate_memory: *const fn (host: Host, size: usize, dest: *[*]u8) callconv(.C) Result,
     free_memory: *const fn (host: Host, dest: *[*]u8) callconv(.C) Result,
     get_memory: *const fn (host: Host, container: Value, dest: *Memory) callconv(.C) Result,
-    get_relocatable: *const fn (host: Host, container: Value, id: u32, dest: *Value) callconv(.C) Result,
-    set_relocatable: *const fn (host: Host, container: Value, id: u32, value: Value) callconv(.C) Result,
 
-    read_slot: *const fn (host: Host, id: u32, dest: *Value) callconv(.C) Result,
-    write_slot: *const fn (host: Host, id: u32, value: Value) callconv(.C) Result,
+    read_global_slot: *const fn (host: Host, id: u32, dest: *Value) callconv(.C) Result,
+    write_global_slot: *const fn (host: Host, id: u32, value: Value) callconv(.C) Result,
+    read_object_slot: *const fn (host: Host, container: Value, id: u32, dest: *Value) callconv(.C) Result,
+    write_object_slot: *const fn (host: Host, container: Value, id: u32, value: Value) callconv(.C) Result,
 
     begin_structure: *const fn (host: Host, def: *const Structure, dest: *Value) callconv(.C) Result,
     attach_member: *const fn (host: Host, structure: Value, member: *const Member) callconv(.C) Result,
@@ -338,30 +338,30 @@ const Host = *opaque {
         return @ptrCast(*T, aligned_ptr);
     }
 
-    fn getRelocatable(self: Host, container: Value, id: u32) Error!Value {
-        var result: Value = undefined;
-        if (callbacks.get_relocatable(self, container, id, &result) != .OK) {
-            return Error.Unknown;
-        }
-        return result;
-    }
-
-    fn setRelocatable(self: Host, container: Value, id: u32, value: Value) Error!void {
-        if (callbacks.set_relocatable(self, container, id, value) != .OK) {
-            return Error.Unknown;
-        }
-    }
-
-    fn readSlot(self: Host, slot: u32) Error!Value {
+    fn readGlobalSlot(self: Host, slot: u32) Error!Value {
         var value: Value = undefined;
-        if (callbacks.read_slot(self, slot, &value) != .OK) {
+        if (callbacks.read_global_slot(self, slot, &value) != .OK) {
             return Error.Unknown;
         }
         return value;
     }
 
-    fn writeSlot(self: Host, slot: u32, value: Value) Error!void {
-        if (callbacks.write_slot(self, slot, value) != .OK) {
+    fn writeGlobalSlot(self: Host, slot: u32, value: Value) Error!void {
+        if (callbacks.write_global_slot(self, slot, value) != .OK) {
+            return Error.Unknown;
+        }
+    }
+
+    fn readObjectSlot(self: Host, container: Value, id: u32) Error!Value {
+        var result: Value = undefined;
+        if (callbacks.read_object_slot(self, container, id, &result) != .OK) {
+            return Error.Unknown;
+        }
+        return result;
+    }
+
+    fn writeObjectSlot(self: Host, container: Value, id: u32, value: Value) Error!void {
+        if (callbacks.write_object_slot(self, container, id, value) != .OK) {
             return Error.Unknown;
         }
     }
@@ -402,7 +402,7 @@ const Host = *opaque {
 // export functions
 fn getStructure(host: Host, comptime T: type) Error!Value {
     const s_slot = getStructureSlot(T);
-    return host.readSlot(s_slot) catch undefined: {
+    return host.readGlobalSlot(s_slot) catch undefined: {
         const def: Structure = .{
             .name = @ptrCast([*:0]const u8, @typeName(T)),
             .structure_type = getStructureType(T),
@@ -411,7 +411,7 @@ fn getStructure(host: Host, comptime T: type) Error!Value {
         // create the structure and place it in the slot immediately
         // so that recursive definition works correctly
         const structure = try host.beginStructure(def);
-        try host.writeSlot(s_slot, structure);
+        try host.writeGlobalSlot(s_slot, structure);
         // define the shape of the structure
         try addMembers(host, structure, T);
         try addStaticMembers(host, structure, T);
@@ -466,7 +466,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) Error!void {
             inline for (fields, 0..) |field, index| {
                 switch (getMemberType(field.type)) {
                     .Pointer, .Compound, .Enum => {
-                        _ = getRelocatableSlot(T, index);
+                        _ = getObjectSlot(T, index);
                     },
                     else => {},
                 }
@@ -492,7 +492,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) Error!void {
                     .bit_offset = @bitOffsetOf(T, field.name),
                     .bit_size = @bitSizeOf(field.type),
                     .byte_size = if (isPacked(T)) @sizeOf(field.type) else 0,
-                    .slot = getRelocatableSlot(T, index),
+                    .slot = getObjectSlot(T, index),
                     .structure = try getMemberStructure(host, field.type),
                 };
                 try host.attachMember(structure, member);
@@ -599,11 +599,11 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) Error!void {
                 .name = name,
                 .member_type = .Type,
                 .is_static = true,
-                .slot = getRelocatableSlot(S, index),
+                .slot = getObjectSlot(S, index),
                 .structure = try getMemberStructure(host, @field(T, decl.name)),
             });
         } else {
-            const slot = getRelocatableSlot(S, index);
+            const slot = getObjectSlot(S, index);
             try host.attachMember(structure, .{
                 .name = name,
                 .member_type = .Pointer,
@@ -835,7 +835,7 @@ fn createRootFactory(comptime S: type) Thunk {
     const RootFactory = struct {
         fn exportStructure(host: Host, args: Value) callconv(.C) void {
             if (getStructure(host, S)) |result| {
-                host.setRelocatable(args, 0, result) catch {};
+                host.writeObjectSlot(args, 0, result) catch {};
             } else |_| {
                 if (@errorReturnTrace()) |trace| {
                     std.debug.dumpStackTrace(trace.*);
