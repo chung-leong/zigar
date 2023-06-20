@@ -20,13 +20,29 @@ describe('Integration tests', function() {
       expect(module.uint16).to.equal(123);
       expect(() => module.int16 = 0).to.throw();
     })
-    it('should import comptime constant', async function() {
+    it('should import comptime constants', async function() {
       this.timeout(10000);
       const { default: module } = await import(resolve('./integration/comptime-numbers.zig'));
       expect(module.small).to.equal(127);
       expect(module.negative).to.equal(-167);
       expect(module.larger).to.equal(0x1234_5678);
       expect(module.pi.toFixed(4)).to.equal('3.1416');
+    })
+    it('should import types', async function() {
+      this.timeout(10000);
+      const { default: module } = await import(resolve('./integration/types.zig'));
+      const { Int32, Int128, Struct } = module;
+      expect(Int32).to.be.a('function');
+      const int32 = new Int32();
+      int32.set(1234);
+      expect(int32.get()).to.equal(1234);
+      expect(Int128).to.be.a('function');
+      const int128 = new Int128();
+      int128.set(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn);
+      expect(int128.get()).to.equal(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn);
+      const object = new Struct();
+      expect(object.number1).to.equal(123);
+      expect(object.number2).to.equal(456);
     })
   })
   describe('Methods', function() {

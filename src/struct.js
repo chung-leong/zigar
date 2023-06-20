@@ -29,6 +29,9 @@ export function obtainGetter(member, options) {
       const get = obtainDataViewGetter(member);
       return function() { return get.call(this[DATA], offset, littleEndian) };
     }
+    case MemberType.Void: {
+      return function() { return null }; 
+    }
     case MemberType.Enum: {
       const { bitOffset, structure } = member;
       const offset = bitOffset >> 3;
@@ -51,8 +54,9 @@ export function obtainGetter(member, options) {
         }; 
       }
     }
-    case MemberType.Void: {
-      return function() { return null }; 
+    case MemberType.Type: {
+      const { structure } = member;
+      return function() { return structure.constructor }; 
     }
   }
 }
@@ -134,6 +138,9 @@ export function obtainSetter(member, options) {
         }
         set.call(this[DATA], offset, v.valueOf(), littleEndian);
       }; 
+    }
+    case MemberType.Type: {
+      // no setter
     }
   }
   return fn;

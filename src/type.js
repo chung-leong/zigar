@@ -6,6 +6,7 @@ export const MemberType = {
   Enum: 4,
   Compound: 5,
   Pointer: 6,
+  Type: 7,
 };
 
 export const StructureType = {

@@ -387,9 +387,11 @@ export function attachStaticMembers(s) {
     const get = obtainGetter(member, options);
     const set = obtainSetter(member, options);
     descriptors[member.name] = { get, set, configurable: true, enumerable: true };
-    const dv = pointers[member.slot];
-    const { constructor } = member.structure;
-    relocs[member.slot] = constructor(dv);
+    if (member.type != MemberType.Type) {
+      const dv = pointers[member.slot];
+      const { constructor } = member.structure;
+      relocs[member.slot] = constructor(dv);
+    }
   };
   Object.defineProperties(constructor, descriptors);
 }

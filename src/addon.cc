@@ -95,6 +95,42 @@ static Result CreateSharedBuffer(Host* call,
   return Result::OK;
 }
 
+static Result CreateStackBuffer(Host* call,
+                                const Memory& memory,
+                                Local<ArrayBuffer>* dest) {
+  // see if the memory is on the stack
+  // since the Host struct is allocated on the stack, its address is the 
+  // starting point of stack space used by Zig code
+  size_t stack_top = reinterpret_cast<size_t>(call) + sizeof(Host);
+  size_t stack_bottom = reinterpret_cast<size_t>(&stack_top);
+  size_t address = reinterpret_cast<size_t>(memory.bytes);
+  if (!(stack_bottom <= address && address + memory.len <= stack_top)) {
+    return Result::Failure;
+  }
+  Local<ArrayBuffer> buffer = ArrayBuffer::New(call->isolate, memory.len);
+  std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
+  uint8_t *bytes = reinterpret_cast<uint8_t *>(store->Data());
+  memcpy(bytes, memory.bytes, memory.len);
+  *dest = buffer;
+  return Result::OK;
+}
+
+static Result CreateDefaultDataView(Host* call,
+                                    const Memory& memory,
+                                    Local<DataView>* dest) {
+  Local<ArrayBuffer> stack_buffer;
+  if (CreateStackBuffer(call, memory, &stack_buffer) == Result::OK) {
+    *dest = DataView::New(stack_buffer, 0, stack_buffer->ByteLength());
+    return Result::OK;
+  }
+  Local<SharedArrayBuffer> shared_buffer;
+  if (CreateSharedBuffer(call, memory, &shared_buffer) == Result::OK) {
+    *dest = DataView::New(shared_buffer, 0, shared_buffer->ByteLength());
+    return Result::OK;
+  }
+  return Result::Failure;
+}
+
 static Local<Object> NewStructure(Host* call, 
                                   const Structure& s) {
   auto isolate = call->isolate;
@@ -187,19 +223,17 @@ static Local<Object> NewDefaultValues(Host* call,
   auto is_static = Boolean::New(isolate, values.is_static);
   def->Set(context, String::NewFromUtf8Literal(isolate, "isStatic"), is_static).Check();
   if (values.default_data.len > 0) {
-    Local<SharedArrayBuffer> buffer;
-    CreateSharedBuffer(call, values.default_data, &buffer);
-    auto data = DataView::New(buffer, 0, buffer->ByteLength());
-    def->Set(context, String::NewFromUtf8Literal(isolate, "data"), data).Check();
+    Local<DataView> dv;
+    CreateDefaultDataView(call, values.default_data, &dv);
+    def->Set(context, String::NewFromUtf8Literal(isolate, "data"), dv).Check();
   }
   if (values.default_pointer_count > 0) {
     auto pointers = Object::New(isolate);
     for (size_t i = 0; i < values.default_pointer_count; i++) {
       if (values.default_pointers[i].len > 0) {
-        Local<SharedArrayBuffer> buffer;
-        CreateSharedBuffer(call, values.default_pointers[i], &buffer);
-        auto data = DataView::New(buffer, 0, buffer->ByteLength());
-        pointers->Set(context, i, data).Check();
+        Local<DataView> dv;
+        CreateDefaultDataView(call, values.default_pointers[i], &dv);
+        pointers->Set(context, i, dv).Check();
       }
     }
     def->Set(context, String::NewFromUtf8Literal(isolate, "pointers"), pointers).Check();

@@ -10,6 +10,7 @@ R"=====(
     Enum: 4,
     Compound: 5,
     Pointer: 6,
+    Type: 7,
   };
 
   const StructureType = {
@@ -617,6 +618,9 @@ R"=====(
         const get = obtainDataViewGetter(member);
         return function() { return get.call(this[DATA], offset, littleEndian) };
       }
+      case MemberType.Void: {
+        return function() { return null }; 
+      }
       case MemberType.Enum: {
         const { bitOffset, structure } = member;
         const offset = bitOffset >> 3;
@@ -639,8 +643,9 @@ R"=====(
           }; 
         }
       }
-      case MemberType.Void: {
-        return function() { return null }; 
+      case MemberType.Type: {
+        const { structure } = member;
+        return function() { return structure.constructor }; 
       }
     }
   }
@@ -1309,9 +1314,11 @@ R"=====(
       const get = obtainGetter(member, options);
       const set = obtainSetter(member, options);
       descriptors[member.name] = { get, set, configurable: true, enumerable: true };
-      const dv = pointers[member.slot];
-      const { constructor } = member.structure;
-      relocs[member.slot] = constructor(dv);
+      if (member.type != MemberType.Type) {
+        const dv = pointers[member.slot];
+        const { constructor } = member.structure;
+        relocs[member.slot] = constructor(dv);
+      }
     }  Object.defineProperties(constructor, descriptors);
   }
 
