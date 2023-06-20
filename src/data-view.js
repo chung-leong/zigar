@@ -88,6 +88,32 @@ export function obtainDataViewGetter({ type, isSigned, bitOffset, bitSize, byteS
           dest.setUint32(0, n32, littleEndian);
           return dest.getFloat32(0, littleEndian);
         }
+      } else if (bitSize === 80) {
+        const dest = new DataView(new ArrayBuffer(8));
+        const getWord = DataView.prototype.getBigUint64;
+        const get = function(offset, littleEndian) {
+          const w1 = getWord.call(this, offset, littleEndian);
+          const w2 = getWord.call(this, offset + 8, littleEndian);
+          return (littleEndian) ? w1 | w2 << 64n : w1 << 64n | w2;
+        };
+        fn = function(offset, littleEndian) {
+          const n = get.call(this, offset, littleEndian);
+          const sign = n >> 79n;
+          const exp = (n & 0x7FFF0000000000000000n) >> 64n;
+          const frac = n & 0x00007FFFFFFFFFFFFFFFn;
+          if (exp === 0n) {
+            return (sign) ? -0 : 0;
+          } else if (exp === 0x7FFFn) {
+            if (!frac) {
+              return (sign) ? -Infinity : Infinity;
+            } else {
+              return NaN;
+            }
+          }
+          const n64 = (sign << 63n) | ((exp - 16383n + 1023n) << 52n) | (frac >> 11n);
+          dest.setBigUint64(0, n64, littleEndian);
+          return dest.getFloat64(0, littleEndian);
+        }
       } else if (bitSize === 128) {
         const dest = new DataView(new ArrayBuffer(8));
         const getWord = DataView.prototype.getBigUint64;
@@ -250,11 +276,37 @@ export function obtainDataViewSetter({ type, bitSize, isSigned, byteSize, bitOff
           if (exp === 0) {
             n16 = sign << 15;
           } else if (exp === 0xFF) {
-            n16 = sign << 15 | 0x1F << 10 | ((frac) ? 1 : 0);
+            n16 = sign << 15 | 0x1F << 10 | (frac ? 1 : 0);
           } else {
             n16 = sign << 15 | (exp - 127 + 15) << 10 | (frac >> 13);
           }
           set.call(this, offset, n16, littleEndian);
+        }
+      } else if (bitSize === 80) {
+        const src = new DataView(new ArrayBuffer(8));
+        const setWord = DataView.prototype.setBigUint64;
+        const set = function(offset, v, littleEndian) {
+          const w1 = v & 0xFFFFFFFFFFFFFFFFn;
+          const w2 = v >> 64n;
+          setWord.call(this, offset + (littleEndian ? 0 : 8), w1, littleEndian);
+          setWord.call(this, offset + (littleEndian ? 8 : 0), w2, littleEndian);
+        };
+        fn = function(offset, v, littleEndian) {
+          src.setFloat64(0, v, littleEndian);
+          const n = src.getBigUint64(0, littleEndian);
+          const sign = n >> 63n;
+          const exp = (n & 0x7FF0000000000000n) >> 52n;
+          const frac = n & 0x000FFFFFFFFFFFFFn;
+          let n80;
+          if (exp === 0n) {
+            n80 = sign << 79n | (frac << 11n);
+          } else if (exp === 0x07FFn) {
+            n80 = sign << 79n | 0x7FFFn << 64n | (frac ? 0x00002000000000000000n : 0n) | 0x00008000000000000000n;
+            //                                                 ^ bit 61                       ^ bit 63 
+          } else {
+            n80 = sign << 79n | (exp - 1023n + 16383n) << 64n | (frac << 11n) | 0x00008000000000000000n;
+          }
+          set.call(this, offset, n80, littleEndian);
         }
       } else if (bitSize === 128) {
         const src = new DataView(new ArrayBuffer(8));
@@ -275,7 +327,7 @@ export function obtainDataViewSetter({ type, bitSize, isSigned, byteSize, bitOff
           if (exp === 0n) {
             n128 = sign << 127n | (frac << 60n);
           } else if (exp === 0x07FFn) {
-            n128 = sign << 127n | 0x7FFFn << 112n | ((frac) ? 1n : 0n);
+            n128 = sign << 127n | 0x7FFFn << 112n | (frac ? 1n : 0n);
           } else {
             n128 = sign << 127n | (exp - 1023n + 16383n) << 112n | (frac << 60n);
           }

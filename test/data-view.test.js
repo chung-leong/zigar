@@ -168,6 +168,34 @@ describe('DataView functions', function() {
       const res6 = f.call(dv, 10, true);
       expect(Object.is(res6, NaN)).to.be.true;
     })
+    it('should return functions for getting non-standard float types (80-bit)', function() {
+      const dv = new DataView(new ArrayBuffer(96));
+      // from struct-bytes: Float80
+      const bytes = [ 53, 194, 104, 33, 162, 218, 15, 201, 0, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 255, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 160, 255, 127, 0, 0, 0, 0, 0, 0, ];
+      for (const [ i, b ] of bytes.entries()) {
+        dv.setUint8(i, b);
+      }
+      const member = {
+        type: MemberType.Float,
+        isSigned: true,
+        bitSize: 80,
+        bitOffset: 0,
+        byteSize: 16,
+      };
+      const f = obtainDataViewGetter(member);     
+      const res1 = f.call(dv, 0, true);
+      expect(res1.toFixed(2)).to.equal('3.14');
+      const res2 = f.call(dv, 16, true);
+      expect(Object.is(res2, 0)).to.be.true;
+      const res3 = f.call(dv, 32, true);
+      expect(Object.is(res3, -0)).to.be.true;
+      const res4 = f.call(dv, 48, true);
+      expect(Object.is(res4, Infinity)).to.be.true;
+      const res5 = f.call(dv, 64, true);
+      expect(Object.is(res5, -Infinity)).to.be.true;
+      const res6 = f.call(dv, 80, true);
+      expect(Object.is(res6, NaN)).to.be.true;
+    })
     it('should return functions for getting non-standard float types (128-bit)', function() {
       const dv = new DataView(new ArrayBuffer(96));
       // from struct-bytes: Float16
@@ -386,9 +414,47 @@ describe('DataView functions', function() {
         expect(dv.getUint8(i)).to.equal(b);
       }
     })
+    it('should return functions for setting non-standard float types (80-bit)', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      // from struct-bytes: Float80
+      const bytes = [ 53, 194, 104, 33, 162, 218, 15, 201, 0, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 255, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 160, 255, 127, 0, 0, 0, 0, 0, 0, ];
+      const member = {
+        type: MemberType.Float,
+        isSigned: true,
+        bitSize: 80,
+        bitOffset: 0,
+        byteSize: 16,
+      };
+      const f = obtainDataViewSetter(member);
+      // we lose precision f64 to f80 so not all bytes will match
+      f.call(dv, 0, 3.141592653589793, true);
+      for (const [ i, b ] of bytes.slice(2, 16).entries()) {
+        expect(dv.getUint8(i + 2)).to.equal(b);
+      }
+      f.call(dv, 0, 0, true);
+      for (const [ i, b ] of bytes.slice(16, 32).entries()) {
+        expect(dv.getUint8(i)).to.equal(b);
+      }
+      f.call(dv, 0, -0, true);
+      for (const [ i, b ] of bytes.slice(32, 48).entries()) {
+        expect(dv.getUint8(i)).to.equal(b);
+      }
+      f.call(dv, 0, Infinity, true);
+      for (const [ i, b ] of bytes.slice(48, 64).entries()) {
+        expect(dv.getUint8(i)).to.equal(b);
+      }
+      f.call(dv, 0, -Infinity, true);
+      for (const [ i, b ] of bytes.slice(64, 80).entries()) {
+        expect(dv.getUint8(i)).to.equal(b);
+      }
+      f.call(dv, 0, NaN, true);
+      for (const [ i, b ] of bytes.slice(80, 96).entries()) {
+        expect(dv.getUint8(i)).to.equal(b);
+      }
+    })
     it('should return functions for setting non-standard float types (128-bit)', function() {
       const dv = new DataView(new ArrayBuffer(16));
-      // from struct-bytes: Float16
+      // from struct-bytes: Float128
       const bytes = [ 184, 1, 23, 197, 140, 137, 105, 132, 209, 66, 68, 181, 31, 146, 0, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 127, ];
       const member = {
         type: MemberType.Float,
