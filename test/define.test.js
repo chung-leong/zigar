@@ -1,11 +1,12 @@
 import { expect } from 'chai';
 
 import { MemberType, StructureType } from '../src/type.js';
+import { MEMORY, SLOTS } from '../src/symbol.js';
 import { 
   beginStructure, 
   attachMember,
   attachMethod,
-  attachDefaultValues,
+  attachTemplate,
   finalizeStructure,
 } from '../src/define.js';
 
@@ -108,14 +109,17 @@ describe('Structure definition', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
+      attachTemplate(structure, {
         isStatic: false,
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setInt32(0, 1234, true);
-          dv.setInt32(4, 4567, true);
-          return dv;
-        })(),
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setInt32(0, 1234, true);
+            dv.setInt32(4, 4567, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        }
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
@@ -150,14 +154,17 @@ describe('Structure definition', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
+      attachTemplate(structure, {
         isStatic: false,
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setInt32(0, 1234, false);
-          dv.setInt32(4, 4567, false);
-          return dv;
-        })(),
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setInt32(0, 1234, false);
+            dv.setInt32(4, 4567, false);
+            return dv;
+          })(), 
+          [SLOTS]: {},
+        },
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
@@ -192,14 +199,17 @@ describe('Structure definition', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
+      attachTemplate(structure, {
         isStatic: false,
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setInt32(0, 1234, true);
-          dv.setInt32(4, 4567, true);
-          return dv;
-        })(),
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setInt32(0, 1234, true);
+            dv.setInt32(4, 4567, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello();
@@ -234,14 +244,17 @@ describe('Structure definition', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
+      attachTemplate(structure, {
         isStatic: false,
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setInt32(0, 1234, true);
-          dv.setInt32(4, 4567, true);
-          return dv;
-        })(),
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setInt32(0, 1234, true);
+            dv.setInt32(4, 4567, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello();
@@ -271,14 +284,17 @@ describe('Structure definition', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
+      attachTemplate(structure, {
         isStatic: false,
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setInt32(0, 1234, true);
-          dv.setInt32(4, 4567, true);
-          return dv;
-        })(),
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setInt32(0, 1234, true);
+            dv.setInt32(4, 4567, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello();
@@ -310,14 +326,17 @@ describe('Structure definition', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
+      attachTemplate(structure, {
         isStatic: false,
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setInt32(0, 1234, true);
-          dv.setInt32(4, 4567, true);
-          return dv;
-        })(),
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setInt32(0, 1234, true);
+            dv.setInt32(4, 4567, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello();
@@ -347,14 +366,17 @@ describe('Structure definition', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
+      attachTemplate(structure, {
         isStatic: false,
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setInt32(0, 1234, true);
-          dv.setInt32(4, 4567, true);
-          return dv;
-        })(),
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setInt32(0, 1234, true);
+            dv.setInt32(4, 4567, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello();
@@ -384,14 +406,17 @@ describe('Structure definition', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
+      attachTemplate(structure, {
         isStatic: false,
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setInt32(0, 1234, true);
-          dv.setInt32(4, 4567, true);
-          return dv;
-        })(),
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setInt32(0, 1234, true);
+            dv.setInt32(4, 4567, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello();
@@ -420,13 +445,16 @@ describe('Structure definition', function() {
         bitOffset: 1,
         byteSize: 0,
       });
-      attachDefaultValues(structure, {
+      attachTemplate(structure, {
         isStatic: false,
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(1));
-          dv.setInt8(0, 2, true);
-          return dv;
-        })(),
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(1));
+            dv.setInt8(0, 2, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello();
@@ -462,12 +490,16 @@ describe('Structure definition', function() {
         bitOffset: 2,
         byteSize: 0,
       });
-      attachDefaultValues(structure, {
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(1));
-          dv.setInt8(0, 7, true);
-          return dv;
-        })(),
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(1));
+            dv.setInt8(0, 7, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },       
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello();
@@ -505,12 +537,16 @@ describe('Structure definition', function() {
         bitOffset: 2,
         byteSize: 0,
       });
-      attachDefaultValues(structure, {
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(5));
-          dv.setUint32(0, 8, true);
-          return dv;
-        })(),
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(5));
+            dv.setUint32(0, 8, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello();
@@ -533,7 +569,7 @@ describe('Structure definition', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      finalizeStructure(intStructure);
+      const Int32 = finalizeStructure(intStructure);
       const structure = beginStructure({
         type: StructureType.Struct, 
         name: 'Hello',
@@ -559,20 +595,21 @@ describe('Structure definition', function() {
         slot: 1,
         structure: intStructure,
       })
-      const dv1 = new DataView(new ArrayBuffer(4));
-      const dv2 = new DataView(new ArrayBuffer(4));
-      dv1.setInt32(0, 1234, true);
-      dv2.setInt32(0, 4567, true);
-      attachDefaultValues(structure, {
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(8 * 2));
-          dv.setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
-          dv.setBigUint64(8, 0xaaaaaaaaaaaaaaaan, true);
-          return dv;
-        })(),
-        pointers: { 
-          0: dv1.buffer, 
-          1: dv2.buffer 
+      const int1 = new Int32(1234);
+      const int2 = new Int32(4567);
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(8 * 2));
+            dv.setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
+            dv.setBigUint64(8, 0xaaaaaaaaaaaaaaaan, true);
+            return dv;
+          })(),
+          [SLOTS]: {
+            0: int1, 
+            1: int2,
+          }
         },
       });
       const Hello = finalizeStructure(structure);
@@ -606,13 +643,16 @@ describe('Structure definition', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
+      attachTemplate(structure, {
         isStatic: false,
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4));
-          dv.setInt32(0, 1234, true);
-          return dv;
-        })(),
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4));
+            dv.setInt32(0, 1234, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       })
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
@@ -651,13 +691,17 @@ describe('Structure definition', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setUint32(0, 0, true);
-          dv.setUint32(4, 1, true);
-          return dv;
-        })(),
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setUint32(0, 0, true);
+            dv.setUint32(4, 1, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       });
       const Hello = finalizeStructure(structure);
       expect(Number(Hello.Dog)).to.equal(0);
@@ -688,13 +732,17 @@ describe('Structure definition', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setUint32(0, 0, true);
-          dv.setUint32(4, 1, true);
-          return dv;
-        })(),
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setUint32(0, 0, true);
+            dv.setUint32(4, 1, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       });
       const Hello = finalizeStructure(structure);
       expect(Hello(0)).to.equal(Hello.Dog);
@@ -723,13 +771,17 @@ describe('Structure definition', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setUint32(0, 123, true);
-          dv.setUint32(4, 456, true);
-          return dv;
-        })(),
+      attachTemplate(structure, {
+        isStatic: false, 
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setUint32(0, 123, true);
+            dv.setUint32(4, 456, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       });
       const Hello = finalizeStructure(structure);
       expect(Hello(123)).to.equal(Hello.Dog);
@@ -760,13 +812,17 @@ describe('Structure definition', function() {
         bitOffset: 0,
         byteSize: 8,
       });
-      attachDefaultValues(structure, {
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(8 * 2));
-          dv.setBigUint64(0, 1234n, true);
-          dv.setBigUint64(8, 4567n, true);
-          return dv;
-        })(),
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(8 * 2));
+            dv.setBigUint64(0, 1234n, true);
+            dv.setBigUint64(8, 4567n, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       });
       const Hello = finalizeStructure(structure);
       expect(Hello(1234n)).to.equal(Hello.Dog);
@@ -796,13 +852,17 @@ describe('Structure definition', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setUint32(0, 0, true);
-          dv.setUint32(4, 1, true);
-          return dv;
-        })(),
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setUint32(0, 0, true);
+            dv.setUint32(4, 1, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       });
       const Hello = finalizeStructure(structure);
       expect(JSON.stringify(Hello.Dog)).to.equal('0');
@@ -831,13 +891,17 @@ describe('Structure definition', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setUint32(0, 0, true);
-          dv.setUint32(4, 1, true);
-          return dv;
-        })(),
+      attachTemplate(structure, {
+        isStatic: false, 
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setUint32(0, 0, true);
+            dv.setUint32(4, 1, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       });
       const Hello = finalizeStructure(structure);
       expect(() => new Hello(5)).to.throw();
@@ -865,13 +929,17 @@ describe('Structure definition', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setUint32(0, 0, true);
-          dv.setUint32(4, 1, true);
-          return dv;
-        })(),
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setUint32(0, 0, true);
+            dv.setUint32(4, 1, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       });
       const Hello = finalizeStructure(structure);
       expect(Hello(1)).to.be.an('object');
@@ -894,7 +962,7 @@ describe('Structure definition', function() {
         bitOffset: 0,
         byteSize: 4,
       });     
-      finalizeStructure(intStructure);
+      const Int32 = finalizeStructure(intStructure);
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -1004,14 +1072,17 @@ describe('Structure definition', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
+      attachTemplate(structure, {
         isStatic: false,
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setUint32(0, 0, true);
-          dv.setUint32(4, 1, true);
-          return dv;
-        })(),
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setUint32(0, 0, true);
+            dv.setUint32(4, 1, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
       });
       attachMember(structure, {
         name: 'superdog',
@@ -1152,13 +1223,17 @@ describe('Structure definition', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      attachDefaultValues(structure, {
-        data: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setUint32(0, 0, true);
-          dv.setUint32(4, 1, true);
-          return dv;
-        })(),
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setUint32(0, 0, true);
+            dv.setUint32(4, 1, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        }
       });
       const argStruct = beginStructure({
         type: StructureType.Struct, 

@@ -116,10 +116,13 @@ function finalizeSingleton(s) {
     },
     options,
   } = s;
-  const copy = obtainCopyFunction(size);
   const primitive = getPrimitive(member.type, member.bitSize);
   const get = obtainGetter(member, options);
   const set = obtainSetter(member, options);
+  const copy = obtainCopyFunction(size);
+  const copier = s.copier = function (dest, src) {
+    copy(dest[MEMORY], src[MEMORY]);
+  };
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv, init;
@@ -146,9 +149,6 @@ function finalizeSingleton(s) {
   if (name) {
     Object.defineProperty(constructor, 'name', { value: name, writable: false });
   }
-  s.copier = function (dest, src) {
-    copy(dest[MEMORY], src[MEMORY]);
-  };
   s.size = size;
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
@@ -171,6 +171,9 @@ function finalizeArray(s) {
   const get = obtainArrayGetter(member, options);
   const set = obtainArraySetter(member, options);
   const getLength = obtainArrayLengthGetter(member, options);
+  const copier = s.copier = function(dest, src) {
+    copy(dest[MEMORY], src[MEMORY]);   
+  };
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv, init;
@@ -223,21 +226,10 @@ function finalizeStruct(s) {
     const set = obtainSetter(member, options);
     descriptors[member.name] = { get, set, configurable: true, enumerable: true };
   }
-  const relocatables = {};
-  for (const member of members) {
-    if (member.type === MemberType.Pointer) {
-      const { constructor } = member.structure;
-      const dv = pointers?.[member.slot];
-      relocatables[member.slot] = (dv) ? constructor(dv) : null;
-    } else if (member.type === MemberType.Compound || member.type === MemberType.Enum) {
-      relocatables[member.slot] = null;
-    }
-  }
-  const hasRelocatables = Object.keys(relocatables).length > 0;
-  const hasCompounds = !!members.find(m => m.type === MemberType.Compound);
+  const hasSlots = true; // TODO
   const copier = s.copier = function(dest, src) {
     copy(dest[MEMORY], src[MEMORY]);
-    if (hasRelocatables) {
+    if (hasSlots) {
       Object.assign(dest[SLOTS], src[SLOTS]);
     }
   };
@@ -252,9 +244,6 @@ function finalizeStruct(s) {
       }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
-      if (template) {
-        copier(this, template);
-      }
     } else {
       self = Object.create(constructor.prototype);
       dv = obtainDataView(arg, size);
@@ -263,29 +252,16 @@ function finalizeStruct(s) {
       [MEMORY]: { value: dv },
     });
     Object.defineProperties(self, descriptors);
-    if (hasRelocatables) {
-      const slots = Object.assign({}, relocatables);
-      if (hasCompounds) {
-        // initialize compound members (array, struct, etc.), storing them 
-        // in relocatables even through they aren't actually relocatable
-        for (const member of members) {
-          if (member.type === MemberType.Compound) {
-            const { 
-              structure: { constructor },
-              bitOffset,
-              byteSize,
-              slot,
-            } = member;
-            // "cast" the dataview into the correct type (not using the new operator)
-            slots[slot] = constructor(new DataView(dv.buffer, bitOffset >> 3, byteSize));
-          }
-        }
-      }
+    if (hasSlots) {
       Object.defineProperties(self, {
-        [SLOTS]: { value: slots },
+        [SLOTS]: { value: {} },
       });  
     } 
-    if (!creating) {
+    if (creating) {
+      if (template) {
+        copier(this, template);
+      }
+    } else {
       return self;
     }
   };
@@ -396,7 +372,9 @@ export function attachStaticMembers(s) {
     },
     options,
   } = s;
-  const slots = {};
+  if (!template) {
+    return;
+  }
   const descriptors = {
     [SLOTS]: { value: template[SLOTS] },
   };

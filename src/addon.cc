@@ -336,7 +336,7 @@ static Local<Object> NewTemplate(Host* call,
   auto def = Object::New(isolate);
   auto is_static = Boolean::New(isolate, obj_templ.is_static);
   def->Set(context, String::NewFromUtf8Literal(isolate, "isStatic"), is_static).Check();
-  def->Set(context, String::NewFromUtf8Literal(isolate, "object"), obj_templ.object).Check();
+  def->Set(context, String::NewFromUtf8Literal(isolate, "template"), obj_templ.object).Check();
   return def;
 }
 
