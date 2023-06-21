@@ -10,7 +10,7 @@ static Result AllocateMemory(Host* call,
   uint32_t index = call->mem_pool->Length();
   call->mem_pool->Set(call->context, index, buffer).Check();
   std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
-  dest->bytes = reinterpret_cast<uint8_t *>(store->Data());
+  dest->bytes = reinterpret_cast<uint8_t*>(store->Data());
   dest->len = store->ByteLength();
   return Result::OK;
 }
@@ -26,55 +26,6 @@ static Result GetMemory(Host* call,
   auto content = buffer->GetBackingStore();
   dest->bytes = reinterpret_cast<uint8_t*>(content->Data());
   dest->len = content->ByteLength();
-  return Result::OK;
-}
-
-static Result ReadGlobalSlot(Host* call, 
-                             uint32_t slot_id, 
-                             Local<Value> *dest) {
-  Local<Value> value;
-  if (call->global_slots->Get(call->context, slot_id).ToLocal(&value)) {
-    if (!value->IsNullOrUndefined()) {
-      *dest = value;
-      return Result::OK;
-    }
-  }  
-  return Result::Failure;
-}
-
-static Result WriteGlobalSlot(Host* call, 
-                              uint32_t slot_id, 
-                              Local<Value> object) {
-  call->global_slots->Set(call->context, slot_id, object).Check();
-  return Result::OK;  
-}
-
-static Result ReadObjectSlot(Host* call,
-                             Local<Object> object,
-                             uint32_t slot,
-                             Local<Object>* dest) {
-  Local<Value> value;  
-  if (!object->Get(call->context, call->symbol_slots).ToLocal(&value) || !value->IsObject()) {
-    return Result::Failure;
-  }
-  auto relocs = value.As<Object>();
-  if (!relocs->Get(call->context, slot).ToLocal(&value) || !value->IsObject()) {
-    return Result::Failure;
-  }
-  *dest = value.As<Object>();
-  return Result::OK;
-}
-
-static Result WriteObjectSlot(Host* call,
-                              Local<Object> object,
-                              uint32_t slot,
-                              Local<Object> child) {
-  Local<Value> value;  
-  if (!object->Get(call->context, call->symbol_slots).ToLocal(&value) || !value->IsObject()) {
-    return Result::Failure;
-  }
-  auto relocs = value.As<Object>();
-  relocs->Set(call->context, slot, child).Check();
   return Result::OK;
 }
 
@@ -109,26 +60,189 @@ static Result CreateStackBuffer(Host* call,
   }
   Local<ArrayBuffer> buffer = ArrayBuffer::New(call->isolate, memory.len);
   std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
-  uint8_t *bytes = reinterpret_cast<uint8_t *>(store->Data());
+  uint8_t* bytes = reinterpret_cast<uint8_t*>(store->Data());
   memcpy(bytes, memory.bytes, memory.len);
   *dest = buffer;
   return Result::OK;
 }
 
-static Result CreateDefaultDataView(Host* call,
-                                    const Memory& memory,
-                                    Local<DataView>* dest) {
-  Local<ArrayBuffer> stack_buffer;
-  if (CreateStackBuffer(call, memory, &stack_buffer) == Result::OK) {
-    *dest = DataView::New(stack_buffer, 0, stack_buffer->ByteLength());
+static Result FindBuffer(Host* call,
+                         const Memory& memory,
+                         Local<Array> array,
+                         Local<ArrayBuffer>* dest,
+                         size_t* offset_dest) {
+  int buf_count = array->Length();
+  size_t address = reinterpret_cast<size_t>(memory.bytes);
+  for (int i = 0; i < buf_count; i++) {
+    MaybeLocal<Value> item = array->Get(call->context, i);
+    if (!item.IsEmpty()) {
+      Local<ArrayBuffer> buffer = item.ToLocalChecked().As<ArrayBuffer>();
+      if (buffer->ByteLength() >= memory.len) {
+        std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
+        size_t buf_start = reinterpret_cast<size_t>(store->Data());
+        size_t buf_end = buf_start + store->ByteLength();
+        if (buf_start <= address && address + memory.len <= buf_end) {
+          *offset_dest = address - buf_start;
+          return Result::OK;
+        }        
+      }
+    }
+  }
+  return Result::Failure;
+}
+
+static Result GetArgumentBuffers(Host* call);
+
+static Result ObtainDataView(Host* call,
+                             const Memory& memory,
+                             Local<DataView>* dest) {
+  // see if the memory is on the stack
+  Local<ArrayBuffer> buffer;
+  size_t offset;
+  if (CreateStackBuffer(call, memory, &buffer) == Result::OK) {
+    *dest = DataView::New(buffer, 0, buffer->ByteLength());
     return Result::OK;
   }
+  // see if it's from the memory pool
+  if (!call->mem_pool.IsEmpty()) {
+    if (FindBuffer(call, memory, call->mem_pool, &buffer, &offset) == Result::OK) {
+      *dest = DataView::New(buffer, offset, memory.len);
+      return Result::OK;
+    }
+  }
+  // see if it's from the arguments
+  if (call->arg_buffers.IsEmpty()) {
+    if (GetArgumentBuffers(call) != Result::OK) {
+      return Result::Failure;
+    }
+  }
+  if (FindBuffer(call, memory, call->arg_buffers, &buffer, &offset) == Result::OK) {
+    *dest = DataView::New(buffer, offset, memory.len);
+    return Result::OK;
+  }
+  // mystery memory, create a shared buffer
   Local<SharedArrayBuffer> shared_buffer;
   if (CreateSharedBuffer(call, memory, &shared_buffer) == Result::OK) {
     *dest = DataView::New(shared_buffer, 0, shared_buffer->ByteLength());
     return Result::OK;
   }
   return Result::Failure;
+}
+
+static Result WrapMemory(Host* call, 
+                         Local<Object> structure, 
+                         const Memory& memory, 
+                         Local<Object>* dest) {
+  // find or create array buffer and create data view 
+  Local<DataView> dv;
+  if (ObtainDataView(call, memory, &dv) != Result::OK) {
+    return Result::Failure;
+  }
+  // find constructor
+  Local<Value> value;
+  auto name = String::NewFromUtf8Literal(call->isolate, "constructor", NewStringType::kInternalized);
+  if (!structure->Get(call->context, name).ToLocal(&value) || !value->IsFunction()) {
+    return Result::Failure;
+  }
+  // and call it
+  auto f = value.As<Function>();
+  Local<Value> args[1] = { dv };
+  if (!f->CallAsConstructor(call->context, 1, args).ToLocal(&value) || !value->IsObject()) {
+    return Result::Failure;
+  }
+  *dest = value.As<Object>();
+  return Result::OK;
+}
+
+static Result CreateTemplate(Host* call,
+                             const Memory& memory,
+                             Local<Object>* dest) {
+  Local<Object> templ = Object::New(call->isolate);
+  if (memory.bytes) {
+    Local<DataView> dv;
+    if (ObtainDataView(call, memory, &dv) != Result::OK) {
+      return Result::Failure;
+    }
+    templ->Set(call->context, call->symbol_memory, dv).Check();
+  }
+  Local<Object> slots = Object::New(call->isolate);
+  templ->Set(call->context, call->symbol_slots, slots).Check();
+  return Result::OK;
+}
+
+static Result GetPointerStatus(Host* call,
+                               Local<Object> object,
+                               bool* dest) {
+  Local<Value> value;  
+  if (!object->Get(call->context, call->symbol_sync).ToLocal(&value) || !value->IsBoolean()) {
+    return Result::Failure;
+  }
+  *dest = value.As<Boolean>()->IsTrue();
+  return Result::OK;
+}
+
+static Result SetPointerStatus(Host* call,
+                               Local<Object> object,
+                               bool sync) {
+  object->Set(call->context, call->symbol_sync, Boolean::New(call->isolate, sync)).Check();
+  return Result::OK;
+}
+
+static Result ReadGlobalSlot(Host* call, 
+                             uint32_t slot_id, 
+                             Local<Value>* dest) {
+  Local<Value> value;
+  if (call->global_slots->Get(call->context, slot_id).ToLocal(&value)) {
+    if (!value->IsNullOrUndefined()) {
+      *dest = value;
+      return Result::OK;
+    }
+  }  
+  return Result::Failure;
+}
+
+static Result WriteGlobalSlot(Host* call, 
+                              uint32_t slot_id, 
+                              Local<Value> object) {
+  if (!object.IsEmpty()) {
+    call->global_slots->Set(call->context, slot_id, object).Check();
+  } else {
+    call->global_slots->Set(call->context, slot_id, Null(call->isolate)).Check();
+  }
+  return Result::OK;  
+}
+
+static Result ReadObjectSlot(Host* call,
+                             Local<Object> object,
+                             uint32_t slot,
+                             Local<Object>* dest) {
+  Local<Value> value;  
+  if (!object->Get(call->context, call->symbol_slots).ToLocal(&value) || !value->IsObject()) {
+    return Result::Failure;
+  }
+  auto relocs = value.As<Object>();
+  if (!relocs->Get(call->context, slot).ToLocal(&value) || !value->IsObject()) {
+    return Result::Failure;
+  }
+  *dest = value.As<Object>();
+  return Result::OK;
+}
+
+static Result WriteObjectSlot(Host* call,
+                              Local<Object> object,
+                              uint32_t slot,
+                              Local<Object> child) {
+  Local<Value> value;  
+  if (!object->Get(call->context, call->symbol_slots).ToLocal(&value) || !value->IsObject()) {
+    return Result::Failure;
+  }
+  auto relocs = value.As<Object>();
+  if (!child.IsEmpty()) {
+    relocs->Set(call->context, slot, child).Check();
+  } else {
+    relocs->Set(call->context, slot, Null(call->isolate)).Check();
+  }
+  return Result::OK;
 }
 
 static Local<Object> NewStructure(Host* call, 
@@ -215,34 +329,19 @@ static Local<Object> NewMethod(Host* call,
   return def;   
 }
 
-static Local<Object> NewDefaultValues(Host* call,
-                                      const DefaultValues& values) {
+static Local<Object> NewTemplate(Host* call,
+                                 const ::Template& obj_templ) {
   auto isolate = call->isolate;
   auto context = call->context;
   auto def = Object::New(isolate);
-  auto is_static = Boolean::New(isolate, values.is_static);
+  auto is_static = Boolean::New(isolate, obj_templ.is_static);
   def->Set(context, String::NewFromUtf8Literal(isolate, "isStatic"), is_static).Check();
-  if (values.default_data.len > 0) {
-    Local<DataView> dv;
-    CreateDefaultDataView(call, values.default_data, &dv);
-    def->Set(context, String::NewFromUtf8Literal(isolate, "data"), dv).Check();
-  }
-  if (values.default_pointer_count > 0) {
-    auto pointers = Object::New(isolate);
-    for (size_t i = 0; i < values.default_pointer_count; i++) {
-      if (values.default_pointers[i].len > 0) {
-        Local<DataView> dv;
-        CreateDefaultDataView(call, values.default_pointers[i], &dv);
-        pointers->Set(context, i, dv).Check();
-      }
-    }
-    def->Set(context, String::NewFromUtf8Literal(isolate, "pointers"), pointers).Check();
-  }
+  def->Set(context, String::NewFromUtf8Literal(isolate, "object"), obj_templ.object).Check();
   return def;
 }
 
 static Result GetJavaScript(Host* call,
-                            Local<Object> *dest) {
+                            Local<Object>* dest) {
   if (call->js_module.IsEmpty()) {
     auto isolate = call->isolate;
     auto context = call->context;
@@ -355,12 +454,12 @@ static Result AttachMethod(Host* call,
   return CallFunction(call, name, 2, args);
 }
 
-static Result AttachDefaultValues(Host* call,
-                                  Local<Object> structure,
-                                  const DefaultValues& values) {
+static Result AttachTemplate(Host* call,
+                             Local<Object> structure,
+                             const ::Template& obj_templ) {
   auto isolate = call->isolate;
   auto name = String::NewFromUtf8Literal(isolate, "attachDefaultValues");
-  auto def = NewDefaultValues(call, values);
+  auto def = NewTemplate(call, obj_templ);
   Local<Value> args[2] = { structure, def };
   return CallFunction(call, name, 2, args);
 }
@@ -373,10 +472,22 @@ static Result FinalizeStructure(Host* call,
   return CallFunction(call, name, 1, args);
 }
 
+static Result GetArgumentBuffers(Host* call) {
+  auto isolate = call->isolate;
+  auto name = String::NewFromUtf8Literal(isolate, "getArgumentBuffers");
+  Local<Value> args[] = { call->argument };
+  Local<Value> result;
+  if (CallFunction(call, name, 1, args, &result) != Result::OK || !result->IsArray()) {
+    return Result::Failure;
+  }
+  call->arg_buffers = result.As<Array>();
+  return Result::OK;
+}
+
 static void Load(const FunctionCallbackInfo<Value>& info) {
   auto isolate = info.GetIsolate();
   auto context = isolate->GetCurrentContext();
-  auto Throw = [&](const char *message) {
+  auto Throw = [&](const char* message) {
     Local<String> string;
     if (String::NewFromUtf8(isolate, message).ToLocal<String>(&string)) {
       Local<Value> error = Exception::Error(string);
@@ -410,6 +521,9 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   auto callbacks = module->callbacks;
   callbacks->allocate_memory = AllocateMemory;
   callbacks->get_memory = GetMemory;
+  callbacks->wrap_memory = WrapMemory;
+  callbacks->get_pointer_status = GetPointerStatus;
+  callbacks->set_pointer_status = SetPointerStatus;
   callbacks->read_global_slot = ReadGlobalSlot;
   callbacks->write_global_slot = WriteGlobalSlot;
   callbacks->read_object_slot = ReadObjectSlot;
@@ -417,8 +531,9 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->begin_structure = BeginStructure;
   callbacks->attach_member = AttachMember;
   callbacks->attach_method = AttachMethod;
-  callbacks->attach_default_values = AttachDefaultValues;
+  callbacks->attach_template = AttachTemplate;
   callbacks->finalize_structure = FinalizeStructure;
+  callbacks->create_template = CreateTemplate;
 
   // save handle to external object, along with options and AddonData
   auto options = Object::New(isolate);

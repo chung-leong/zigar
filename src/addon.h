@@ -56,11 +56,9 @@ struct Memory {
   size_t len;
 };
 
-struct DefaultValues {
+struct Template {
   bool is_static;
-  Memory default_data;
-  const Memory* default_pointers;
-  size_t default_pointer_count;
+  Local<Value> object;
 };
 
 struct Host;
@@ -95,6 +93,10 @@ struct Callbacks {
   Result (*reallocate_memory)(Host*, size_t, Memory*);
   Result (*free_memory)(Host*, Memory*);
   Result (*get_memory)(Host*, Local<Object>, Memory*);
+  Result (*wrap_memory)(Host*, Local<Object>, const Memory&, Local<Object>*);
+
+  Result (*get_pointer_status)(Host*, Local<Object>, bool*);
+  Result (*set_pointer_status)(Host*, Local<Object>, bool);
 
   Result (*read_global_slot)(Host*, uint32_t, Local<Value>*);
   Result (*write_global_slot)(Host*, uint32_t, Local<Value>);
@@ -104,8 +106,9 @@ struct Callbacks {
   Result (*begin_structure)(Host*, const Structure&, Local<Object>*);
   Result (*attach_member)(Host*, Local<Object>, const Member&);
   Result (*attach_method)(Host*, Local<Object>, const Method&);
-  Result (*attach_default_values)(Host*, Local<Object>, const DefaultValues&);
+  Result (*attach_template)(Host*, Local<Object>, const ::Template&);
   Result (*finalize_structure)(Host*, Local<Object>);
+  Result (*create_template)(Host*, const Memory&, Local<Object>*);
 };
 
 struct ExternalData {
@@ -197,11 +200,13 @@ struct Host {
   Isolate* isolate;  
   Local<Context> context;
   Local<Array> mem_pool;
+  Local<Array> arg_buffers;
   Local<Object> js_module;
   Local<Object> argument;
-  Local<Object> global_slots;
+  Local<Object> global_slots;  
   Local<Symbol> symbol_slots;
   Local<Symbol> symbol_memory;
+  Local<Symbol> symbol_sync;
   FunctionData* function_data;
   bool remove_function_data;
 
@@ -220,6 +225,7 @@ struct Host {
     global_slots(info[0].As<Object>()),
     symbol_slots(info[1].As<Symbol>()),
     symbol_memory(info[2].As<Symbol>()),
+    symbol_sync(info[3].As<Symbol>()),
     function_data(reinterpret_cast<FunctionData*>(info.Data().As<External>()->Value())),
     remove_function_data(false) {
   }

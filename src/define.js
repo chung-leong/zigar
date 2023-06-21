@@ -5,18 +5,45 @@ import { obtainTypedArrayGetter } from './typed-array.js';
 import { obtainCopyFunction } from './memory.js';
 import { obtainDataView, getDataView } from './data-view.js';
 import { throwNoNewEnum } from './error.js';
-import { MEMORY, SLOTS, ENUM_INDEX, ENUM_ITEMS } from './symbol.js';
+import { MEMORY, SLOTS, SYNC, ENUM_INDEX, ENUM_ITEMS } from './symbol.js';
 
 export const globalSlots = {};
 
 function invokeThunk(thunk, args) {
-  thunk.call(args, globalSlots, SLOTS, MEMORY);
+  thunk.call(args, globalSlots, SLOTS, MEMORY, SYNC);
 }
 
 export function invokeFactory(thunk) {
   const args = { [SLOTS]: {} };
-  thunk.call(args, globalSlots, SLOTS, MEMORY);
+  thunk.call(args, globalSlots, SLOTS, MEMORY, SYNC);
   return args[SLOTS][0].constructor;
+}
+
+export function getArgumentBuffers(args) {
+  const buffers = [];
+  const included = new WeakMap();
+  const scanned = new WeakMap();
+  const scan = (object) => {
+    if (scanned.get(object)) {
+      return;
+    }
+    const memory = object[MEMORY];
+    if (memory.buffer instanceof ArrayBuffer) {
+      if (!included.get(memory.buffer)) {
+        buffers.push(memory.buffer);
+        included.set(memory.buffer, true);
+      }
+    }
+    scanned.set(object, true);
+    const slots = object[SLOTS];
+    if (slots) {
+      for (const child of Object.values(slots)) {
+        scan(child);
+      }
+    }
+  };
+  scan(args);
+  return buffers;
 }
 
 export function beginStructure(def, options = {}) {
@@ -33,13 +60,11 @@ export function beginStructure(def, options = {}) {
     size, 
     instance: {
       members: [],
-      data: null,
-      pointers: null,
+      template: null,
     },
     static: {
       members: [],
-      data: null,
-      pointers: null,
+      template: null,
     },
     methods: [],
     options,
@@ -55,14 +80,9 @@ export function attachMethod(s, def) {
   s.methods.push(def);
 }
 
-export function attachDefaultValues(s, def) {
+export function attachTemplate(s, def) {
   const target = (def.isStatic) ? s.static : s.instance;
-  if (def.data) {
-    target.data = def.data;
-  }
-  if (def.pointers) {
-    target.pointers = def.pointers;
-  }
+  target.template = def.template;
 }
 
 export function finalizeStructure(s) {
@@ -192,8 +212,7 @@ function finalizeStruct(s) {
     name,
     instance: {
       members,
-      data,
-      pointers,
+      template,
     },
     options,
   } = s;
@@ -216,6 +235,12 @@ function finalizeStruct(s) {
   }
   const hasRelocatables = Object.keys(relocatables).length > 0;
   const hasCompounds = !!members.find(m => m.type === MemberType.Compound);
+  const copier = s.copier = function(dest, src) {
+    copy(dest[MEMORY], src[MEMORY]);
+    if (hasRelocatables) {
+      Object.assign(dest[SLOTS], src[SLOTS]);
+    }
+  };
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv, init;
@@ -227,8 +252,8 @@ function finalizeStruct(s) {
       }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
-      if (data) {
-        copy(dv, data);
+      if (template) {
+        copier(this, template);
       }
     } else {
       self = Object.create(constructor.prototype);
@@ -267,12 +292,6 @@ function finalizeStruct(s) {
   if (name) {
     Object.defineProperty(constructor, 'name', { value: name, writable: false });
   }
-  s.copier = function(dest, src) {
-    copy(dest[MEMORY], src[MEMORY]);
-    if (hasRelocatables) {
-      Object.assign(dest[SLOTS], src[SLOTS]);
-    }
-  };
   attachDataViewAccessors(s);
   attachStaticMembers(s);
   attachMethods(s);
@@ -284,7 +303,7 @@ function finalizeEnumeration(s) {
     name,
     instance: {
       members,
-      data,
+      template,
     },
     options,
   } = s;
@@ -324,7 +343,7 @@ function finalizeEnumeration(s) {
   // attach the numeric values to the class as its binary data
   // this allows us to reuse the array getter
   Object.defineProperties(constructor, {
-    [MEMORY]: { value: data },
+    [MEMORY]: { value: template[MEMORY] },
     [ENUM_ITEMS]: { value: items },
   });
   const valueOf = function() { 
@@ -373,13 +392,13 @@ export function attachStaticMembers(s) {
     constructor,
     static: {
       members,
-      pointers,
+      template,
     },
     options,
   } = s;
   const slots = {};
   const descriptors = {
-    [SLOTS]: { value: slots },
+    [SLOTS]: { value: template[SLOTS] },
   };
   // static variables are all pointers, with each represented by an object 
   // sittinng a relocatable slot
@@ -387,11 +406,6 @@ export function attachStaticMembers(s) {
     const get = obtainGetter(member, options);
     const set = obtainSetter(member, options);
     descriptors[member.name] = { get, set, configurable: true, enumerable: true };
-    if (member.type != MemberType.Type) {
-      const dv = pointers[member.slot];
-      const { constructor } = member.structure;
-      slots[member.slot] = constructor(dv);
-    }
   };
   Object.defineProperties(constructor, descriptors);
 }

@@ -6,6 +6,7 @@ const assert = std.debug.assert;
 const Error = error{
     TODO,
     Unknown,
+    Recursion,
 };
 
 // slot allocators
@@ -128,11 +129,9 @@ const Memory = extern struct {
     len: usize = 0,
 };
 
-const DefaultValues = extern struct {
+const Template = extern struct {
     is_static: bool = false,
-    data: Memory,
-    pointers: ?[*]const Memory = null,
-    pointer_count: usize = 0,
+    object: Value,
 };
 
 const Method = extern struct {
@@ -313,17 +312,22 @@ const Callbacks = extern struct {
     reallocate_memory: *const fn (host: Host, size: usize, dest: *[*]u8) callconv(.C) Result,
     free_memory: *const fn (host: Host, dest: *[*]u8) callconv(.C) Result,
     get_memory: *const fn (host: Host, container: Value, dest: *Memory) callconv(.C) Result,
+    wrap_memory: *const fn (host: Host, structure: Value, memory: *const Memory, dest: *Value) callconv(.C) Result,
+
+    get_pointer_status: *const fn (host: Host, pointer: Value, dest: *bool) callconv(.C) Result,
+    set_pointer_status: *const fn (host: Host, pointer: Value, sync: bool) callconv(.C) Result,
 
     read_global_slot: *const fn (host: Host, id: u32, dest: *Value) callconv(.C) Result,
-    write_global_slot: *const fn (host: Host, id: u32, value: Value) callconv(.C) Result,
+    write_global_slot: *const fn (host: Host, id: u32, value: ?Value) callconv(.C) Result,
     read_object_slot: *const fn (host: Host, container: Value, id: u32, dest: *Value) callconv(.C) Result,
-    write_object_slot: *const fn (host: Host, container: Value, id: u32, value: Value) callconv(.C) Result,
+    write_object_slot: *const fn (host: Host, container: Value, id: u32, value: ?Value) callconv(.C) Result,
 
     begin_structure: *const fn (host: Host, def: *const Structure, dest: *Value) callconv(.C) Result,
     attach_member: *const fn (host: Host, structure: Value, member: *const Member) callconv(.C) Result,
     attach_method: *const fn (host: Host, structure: Value, method: *const Method) callconv(.C) Result,
-    attach_default_values: *const fn (host: Host, structure: Value, values: *const DefaultValues) callconv(.C) Result,
+    attach_template: *const fn (host: Host, structure: Value, template: *const Template) callconv(.C) Result,
     finalize_structure: *const fn (host: Host, structure: Value) callconv(.C) Result,
+    create_template: *const fn (host: Host, memory: *const Memory, dest: *Value) callconv(.C) Result,
 };
 var callbacks: Callbacks = undefined;
 
@@ -336,6 +340,30 @@ const Host = *opaque {
         }
         const aligned_ptr = @alignCast(@max(@alignOf(T), 1), memory.bytes);
         return @ptrCast(*T, aligned_ptr);
+    }
+
+    fn wrapMemory(self: Host, memory: Memory, comptime T: type) Error!Value {
+        const slot = getStructureSlot(T);
+        const structure = try self.readGlobalSlot(slot);
+        var value: Value = undefined;
+        if (callbacks.wrap_memory(self, structure, &memory, &value) != .OK) {
+            return Error.Unknown;
+        }
+        return value;
+    }
+
+    fn getPointerStatus(self: Host, pointer: Value) Error!bool {
+        var sync: bool = undefined;
+        if (callbacks.get_pointer_status(self, pointer, &sync) != .OK) {
+            return Error.Unknown;
+        }
+        return sync;
+    }
+
+    fn setPointerStatus(self: Host, pointer: Value, sync: bool) Error!void {
+        if (callbacks.set_pointer_status(self, pointer, sync) != .OK) {
+            return Error.Unknown;
+        }
     }
 
     fn readGlobalSlot(self: Host, slot: u32) Error!Value {
@@ -360,7 +388,7 @@ const Host = *opaque {
         return result;
     }
 
-    fn writeObjectSlot(self: Host, container: Value, id: u32, value: Value) Error!void {
+    fn writeObjectSlot(self: Host, container: Value, id: u32, value: ?Value) Error!void {
         if (callbacks.write_object_slot(self, container, id, value) != .OK) {
             return Error.Unknown;
         }
@@ -386,8 +414,8 @@ const Host = *opaque {
         }
     }
 
-    fn attachDefaultValues(self: Host, structure: Value, values: DefaultValues) Error!void {
-        if (callbacks.attach_default_values(self, structure, &values) != .OK) {
+    fn attachTemplate(self: Host, structure: Value, template: Template) Error!void {
+        if (callbacks.attach_template(self, structure, &template) != .OK) {
             return Error.Unknown;
         }
     }
@@ -396,6 +424,18 @@ const Host = *opaque {
         if (callbacks.finalize_structure(self, structure) != .OK) {
             return Error.Unknown;
         }
+    }
+
+    fn createTemplate(self: Host, bytes: []u8) Error!Value {
+        const memory: Memory = .{
+            .bytes = if (bytes.len > 0) bytes.ptr else null,
+            .len = bytes.len,
+        };
+        var value: Value = undefined;
+        if (callbacks.create_template(self, &memory, &value) != .OK) {
+            return Error.Unknown;
+        }
+        return value;
     }
 };
 
@@ -419,14 +459,6 @@ fn getStructure(host: Host, comptime T: type) Error!Value {
         try host.finalizeStructure(structure);
         break :undefined structure;
     };
-}
-
-fn getMemberStructure(host: Host, comptime T: type) Error!Value {
-    const MT = switch (@typeInfo(T)) {
-        .Pointer => |pt| pt.child,
-        else => T,
-    };
-    return getStructure(host, MT);
 }
 
 fn addMembers(host: Host, structure: Value, comptime T: type) Error!void {
@@ -477,11 +509,6 @@ fn addMembers(host: Host, structure: Value, comptime T: type) Error!void {
             for (data, 0..) |_, index| {
                 data[index] = 0xAA;
             }
-            // default pointers
-            var pointers: [fields.len]Memory = undefined;
-            for (pointers, 0..) |_, index| {
-                pointers[index] = .{};
-            }
             inline for (fields, 0..) |field, index| {
                 const member: Member = .{
                     .name = @ptrCast([*:0]const u8, field.name),
@@ -493,28 +520,14 @@ fn addMembers(host: Host, structure: Value, comptime T: type) Error!void {
                     .bit_size = @bitSizeOf(field.type),
                     .byte_size = if (isPacked(T)) @sizeOf(field.type) else 0,
                     .slot = getObjectSlot(T, index),
-                    .structure = try getMemberStructure(host, field.type),
+                    .structure = try getStructure(host, field.type),
                 };
                 try host.attachMember(structure, member);
                 if (field.default_value) |opaque_ptr| {
                     // set default value
                     const aligned_ptr = @alignCast(@alignOf(field.type), opaque_ptr);
                     const typed_ptr = @ptrCast(*const field.type, aligned_ptr);
-                    switch (@typeInfo(field.type)) {
-                        .Pointer => |pt| {
-                            pointers[member.slot] = .{
-                                .bytes = @ptrCast([*]u8, @alignCast(1, @constCast(typed_ptr.*))),
-                                .len = switch (pt.size) {
-                                    .Slice => @sizeOf(pt.child) * typed_ptr.*.len,
-                                    .One => @sizeOf(pt.child),
-                                    else => 0,
-                                },
-                            };
-                        },
-                        else => {
-                            @field(ptr.*, field.name) = typed_ptr.*;
-                        },
-                    }
+                    @field(ptr.*, field.name) = typed_ptr.*;
                 }
             }
             const has_data = check_data: {
@@ -525,22 +538,12 @@ fn addMembers(host: Host, structure: Value, comptime T: type) Error!void {
                 }
                 break :check_data false;
             };
-            const has_pointers = check_pointers: {
-                for (pointers) |pointer| {
-                    if (pointer.bytes != null) {
-                        break :check_pointers true;
-                    }
-                }
-                break :check_pointers false;
-            };
-            if (has_data or has_pointers) {
-                return host.attachDefaultValues(structure, .{
-                    .data = .{
-                        .bytes = if (has_data) &data else null,
-                        .len = if (has_data) data.len else 0,
-                    },
-                    .pointers = if (has_pointers) &pointers else null,
-                    .pointer_count = if (has_pointers) pointers.len else 0,
+            if (has_data) {
+                const template = try host.createTemplate(&data);
+                try desyncStructure(host, template, T);
+                return host.attachTemplate(structure, .{
+                    .is_static = false,
+                    .object = template,
                 });
             }
         },
@@ -573,11 +576,7 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) Error!void {
         else => return,
     };
     const S = opaque {};
-    // default pointers
-    var pointers: [decls.len]Memory = undefined;
-    for (pointers, 0..) |_, index| {
-        pointers[index] = .{};
-    }
+    var template_maybe: ?Value = null;
     inline for (decls, 0..) |decl, index| {
         if (!decl.is_pub) {
             continue;
@@ -600,7 +599,7 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) Error!void {
                 .member_type = .Type,
                 .is_static = true,
                 .slot = getObjectSlot(S, index),
-                .structure = try getMemberStructure(host, @field(T, decl.name)),
+                .structure = try getStructure(host, @field(T, decl.name)),
             });
         } else {
             const slot = getObjectSlot(S, index);
@@ -610,39 +609,47 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) Error!void {
                 .is_static = true,
                 .is_const = isConst(PT),
                 .slot = slot,
-                .structure = try getMemberStructure(host, PT),
+                .structure = try getStructure(host, PT),
             });
             // get address to variable
-            const typed_ptr = switch (decl_info) {
+            var typed_ptr = switch (decl_info) {
                 .ComptimeInt, .ComptimeFloat => ptr: {
                     // need to create variable in memory for comptime value
-                    const VT = @typeInfo(PT).Pointer.child;
-                    const value: VT = @field(T, decl.name);
+                    const CT = @typeInfo(PT).Pointer.child;
+                    var value: CT = @field(T, decl.name);
                     break :ptr &value;
                 },
-                else => &@field(T, decl.name),
+                else => ptr: {
+                    if (@typeInfo(PT).Pointer.is_const) {
+                        // put a copy on the stack so the constant doesn't force the
+                        // shared library to stay in memory
+                        var value = @field(T, decl.name);
+                        break :ptr &value;
+                    } else {
+                        break :ptr &@field(T, decl.name);
+                    }
+                },
             };
-            const aligned_ptr = @constCast(@alignCast(1, typed_ptr));
-            pointers[slot] = .{
-                .bytes = @ptrCast([*]u8, aligned_ptr),
-                .len = @sizeOf(@TypeOf(typed_ptr.*)),
+            // create the pointer object
+            const memory: Memory = .{
+                .bytes = @ptrCast([*]u8, &typed_ptr),
+                .len = @sizeOf(PT),
             };
+            const ptr_obj = try host.wrapMemory(memory, PT);
+            // desync it, creating SharedArrayBuffer or ArrayBuffer
+            try desyncPointer(host, ptr_obj, PT);
+            const template = template_maybe orelse create: {
+                const obj = try host.createTemplate(&.{});
+                template_maybe = obj;
+                break :create obj;
+            };
+            try host.writeObjectSlot(template, slot, ptr_obj);
         }
     }
-    const has_pointers = check_pointers: {
-        for (pointers) |pointer| {
-            if (pointer.bytes != null) {
-                break :check_pointers true;
-            }
-        }
-        break :check_pointers false;
-    };
-    if (has_pointers) {
-        return host.attachDefaultValues(structure, .{
+    if (template_maybe) |template| {
+        return host.attachTemplate(structure, .{
             .is_static = true,
-            .data = .{},
-            .pointers = &pointers,
-            .pointer_count = pointers.len,
+            .object = template,
         });
     }
 }
@@ -764,23 +771,104 @@ fn invalidPointer(PT: type) PT {
     return @intToPtr(PT, invalid_address);
 }
 
-fn repointStructure(host: Host, obj: Value, comptime T: type) Error!*T {
-    // TODO
-    return host.getMemory(obj, T);
+fn resyncPointer(host: Host, ptr_obj: Value, comptime T: type) Error!void {
+    if (try host.getPointerStatus(ptr_obj)) {
+        return Error.Recursion;
+    }
+    var ptr_ptr = try host.getMemory(ptr_obj, T);
+    var ptr = undefined;
+    if (try host.readObjectSlot(ptr_obj, 0)) |child_obj| {
+        const CT = @typeInfo(T).Pointer.child;
+        ptr = try resyncStructure(host, child_obj, CT);
+    } else {
+        ptr = null;
+    }
+    if (!@typeInfo(T).Pointer.is_const) {
+        ptr_ptr.* = null;
+    }
+    try host.setPointerStatus(ptr_obj, true);
 }
 
-fn depointStructure(host: Host, obj: Value, comptime T: type) Error!void {
-    // TODO
-    _ = T;
-    _ = obj;
-    _ = host;
+fn desyncPointer(host: Host, ptr_obj: Value, comptime T: type) Error!void {
+    if (!try host.getPointerStatus(ptr_obj)) {
+        return Error.Recursion;
+    }
+    var ptr_ptr = try host.getMemory(ptr_obj, T);
+    const CT = @typeInfo(T).Pointer.child;
+    if (host.readObjectSlot(ptr_obj, 0)) |child_obj| {
+        var ptr = try host.getMemory(child_obj, CT);
+        // see if pointer is still pointing to what it was before
+        if (ptr == ptr_ptr.*) {
+            try desyncStructure(host, child_obj, CT);
+            return;
+        }
+    } else |_| {}
+    // ask the host to create a new object
+    const memory: Memory = .{
+        .bytes = @intToPtr([*]u8, @ptrToInt(ptr_ptr.*)),
+        .len = @sizeOf(CT),
+    };
+    const new_obj = try host.wrapMemory(memory, CT);
+    try desyncStructure(host, new_obj, CT);
+    try host.writeObjectSlot(ptr_obj, 0, new_obj);
+    try host.setPointerStatus(ptr_obj, false);
+}
+
+fn resyncStructure(host: Host, obj: Value, comptime T: type) Error!*T {
+    var ptr = try host.getMemory(obj, T);
+    switch (@typeInfo(T)) {
+        .Struct => |st| {
+            inline for (st.fields, 0..) |field, index| {
+                switch (@typeInfo(field.type)) {
+                    .Pointer => {
+                        const slot = getObjectSlot(T, index);
+                        const ptr_obj = try host.readObjectSlot(obj, slot);
+                        resyncPointer(host, ptr_obj, field.type) catch |err| {
+                            if (err == Error.Recursion) {
+                                break;
+                            } else {
+                                return err;
+                            }
+                        };
+                    },
+                    else => {},
+                }
+            }
+        },
+        else => {},
+    }
+    return ptr;
+}
+
+fn desyncStructure(host: Host, obj: Value, comptime T: type) Error!void {
+    switch (@typeInfo(T)) {
+        .Struct => |st| {
+            inline for (st.fields, 0..) |field, index| {
+                switch (@typeInfo(field.type)) {
+                    .Pointer => {
+                        const slot = getObjectSlot(T, index);
+                        const ptr_obj = try host.readObjectSlot(obj, slot);
+                        desyncPointer(host, ptr_obj, field.type) catch |err| {
+                            if (err == Error.Recursion) {
+                                break;
+                            } else {
+                                return err;
+                            }
+                        };
+                    },
+                    else => {},
+                }
+            }
+        },
+        else => {},
+    }
 }
 
 fn createThunk(comptime function: anytype, comptime ArgT: type) Thunk {
     const Args = std.meta.ArgsTuple(@TypeOf(function));
     const S = struct {
         fn tryFunction(host: Host, arg_obj: Value) !void {
-            var arg_struct = try repointStructure(host, arg_obj, ArgT);
+            var arg_struct = try resyncStructure(host, arg_obj, ArgT);
             // extract arguments from argument struct
             var args: Args = undefined;
             const fields = @typeInfo(Args).Struct.fields;
@@ -795,7 +883,7 @@ fn createThunk(comptime function: anytype, comptime ArgT: type) Thunk {
                 }
             }
             arg_struct.retval = @call(std.builtin.CallModifier.auto, function, args);
-            try depointStructure(host, arg_obj, ArgT);
+            try desyncStructure(host, arg_obj, ArgT);
         }
 
         fn invokeFunction(host: Host, arg_obj: Value) callconv(.C) void {
