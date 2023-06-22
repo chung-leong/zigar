@@ -1015,7 +1015,7 @@ describe('Structure definition', function() {
       });     
       const Int32 = finalizeStructure(intStructure);
       const intPtrStructure = beginStructure({
-        type: StructureType.Singleton,
+        type: StructureType.Pointer, 
         name: '*Int32',
         size: 8,
       });
@@ -1025,9 +1025,10 @@ describe('Structure definition', function() {
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
-        structure: intStructure
+        slot: 0,
+        structure: intStructure,
       });
-      const PtrInt32 = finalizeStructure(intStructure);    
+      const PInt32 = finalizeStructure(intPtrStructure);
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -1074,8 +1075,17 @@ describe('Structure definition', function() {
         slot: 1,
         structure: intPtrStructure,
       });
-
-
+      const int1 = new Int32(1234);
+      const int2 = new Int32(4567);
+      attachTemplate(structure, {
+        isStatic: true,
+        template: {
+          [SLOTS]: {
+           0: new PInt32(int1),
+           1: new PInt32(int2),
+          },
+        }
+      });
       const Hello = finalizeStructure(structure);
       expect(Hello.superdog).to.equal(1234);
       Hello.superdog = 43;
@@ -1103,7 +1113,22 @@ describe('Structure definition', function() {
         bitOffset: 0,
         byteSize: 4,
       });     
-      finalizeStructure(intStructure);
+      const Int32 = finalizeStructure(intStructure);
+      const intPtrStructure = beginStructure({
+        type: StructureType.Pointer, 
+        name: '*Int32',
+        size: 8,
+      });
+      attachMember(intPtrStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const PInt32 = finalizeStructure(intPtrStructure);
       const structure = beginStructure({
         type: StructureType.Enumeration, 
         name: 'Hello'
@@ -1147,7 +1172,7 @@ describe('Structure definition', function() {
         bitOffset: 0,
         byteSize: 8,
         slot: 0,
-        structure: intStructure,
+        structure: intPtrStructure,
         mutable: true,
       });
       attachMember(structure, {
@@ -1159,18 +1184,18 @@ describe('Structure definition', function() {
         bitOffset: 64,
         byteSize: 8,
         slot: 1,
-        structure: intStructure,
+        structure: intPtrStructure,
       });
-      const dv1 = new DataView(new ArrayBuffer(4));
-      const dv2 = new DataView(new ArrayBuffer(4));
-      dv1.setInt32(0, 1234, true);
-      dv2.setInt32(0, 4567, true);     
-      attachDefaultValues(structure, {
+      const int1 = new Int32(1234);
+      const int2 = new Int32(4567);
+      attachTemplate(structure, {
         isStatic: true,
-        pointers: {
-          0: dv1.buffer,
-          1: dv2.buffer,
-        }
+        template: {
+          [SLOTS]: {
+            0: new PInt32(int1),
+            1: new PInt32(int2),  
+          },
+        },
       });
       const Hello = finalizeStructure(structure);
       expect(Hello.superdog).to.equal(1234);
