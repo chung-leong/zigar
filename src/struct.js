@@ -50,20 +50,20 @@ export function obtainGetter(member, options) {
     } break;
     case MemberType.Object: {
       // automatically dereference pointer
-      const { structure } = member;
+      const { structure, slot } = member;
       if (structure.type === StructureType.Pointer) {
-        const { members: [ target ] } = structure;
-        if (target.type === StructureType.Singleton) {
+        const { instance: { members: [ target ] } } = structure;
+        if (target.structure.type === StructureType.Singleton) {
           fn = function() { 
             const pointer = this[SLOTS][slot];
-            const target = pointer['*'];
-            return target.get() 
+            const object = pointer['*'];
+            return object.get() 
           };  
         } else {
           fn = function() { 
-            const pointer = this[SLOTS][slot]['*'];
-            const target = pointer['*'];
-            return target;
+            const pointer = this[SLOTS][slot];
+            const object = pointer['*'];
+            return object;
           };  
         }
       } else {
@@ -132,19 +132,19 @@ export function obtainSetter(member, options) {
     case MemberType.Object: {
       const { slot, structure, isConst } = member;
       if (structure.type === StructureType.Pointer) {
-        if (member.isConst) {
+        if (isConst) {
           break;
         }
-        const { members: [ target ] } = structure;
-        if (target.type === StructureType.Singleton) {
+        const { instance: { members: [ target ] } } = structure;
+        if (target.structure.type === StructureType.Singleton) {
           fn = function(v) { 
             const pointer = this[SLOTS][slot];
-            const target = pointer['*'];
-            target.set(v); 
+            const object = pointer['*'];
+            object.set(v); 
           };
         } else {
           fn = function(v) { 
-            const pointer = this[SLOTS][slot]['*'];
+            const pointer = this[SLOTS][slot];            
             pointer['*'] = v;
           };
         }

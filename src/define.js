@@ -142,14 +142,9 @@ function finalizeSingleton(s) {
   };
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
-    let self, dv, init;
+    let self, dv;
     if (creating) {
       // new operation--expect matching primitive
-      if (primitive !== undefined) {
-        if (arg !== undefined) {
-          init = primitive(arg);
-        } 
-      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {
@@ -159,7 +154,13 @@ function finalizeSingleton(s) {
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },
     });
-    if (!creating) {
+    if (creating) {
+      if (primitive !== undefined) {
+        if (arg !== undefined) {
+          this.set(primitive(arg));
+        } 
+      }
+    } else {
       return self;
     }
   };
@@ -272,7 +273,7 @@ function finalizeStruct(s) {
       ptrDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
     }
   }
-  const hasSlots = !members.find(m => m.type === MemberType.Object);
+  const hasSlots = !!members.find(m => m.type === MemberType.Object);
   const copier = s.copier = function(dest, src) {
     copy(dest[MEMORY], src[MEMORY]);
     if (hasSlots) {
@@ -281,13 +282,10 @@ function finalizeStruct(s) {
   };
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
-    let self, dv, init;
+    let self, dv;
     if (creating) {
       // new operation--expect an object
-      // TODO: validate
-      if (arg !== undefined) {
-        init = arg;
-      }
+      // TODO: validate argument
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {
@@ -307,6 +305,11 @@ function finalizeStruct(s) {
       if (template) {
         copier(this, template);
       }
+      if (arg) {
+        for (const [ key, value ] of Object.entries(arg)) {
+          this[key] = value;
+        }
+      }
     } else {
       return self;
     }
@@ -324,7 +327,7 @@ function finalizeStruct(s) {
       return ptrSource;
     };
     Object.defineProperties(constructor.prototype, {
-      '&': { get, configurable: true, enumerable: true, writable: false }
+      '&': { get, configurable: true, enumerable: true },
     });
   }
   attachDataViewAccessors(s);
@@ -447,17 +450,18 @@ export function finalizePointer(s) {
     if (creating) {
       self = this;
       dv = new DataView(new ArrayBuffer(size));
+      // TODO: validate arg
     } else {
       self = Object.create(constructor.prototype);
       dv = obtainDataView(arg, size);
     }
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },
-      [SLOTS]: slots,
-      [SYNC]: false,
+      [SLOTS]: { value: slots },
+      [SYNC]: { value: false, writable: true },
     });
     if (creating) {
-      this['*'] = arg;
+      slots[0] = arg;
     } else {
       return self;
     }
@@ -468,7 +472,7 @@ export function finalizePointer(s) {
     });
   }
   Object.defineProperties(constructor.prototype, {
-    '*': { get, set, configurable: true, enumerable: true, writable: true },
+    '*': { get, set, configurable: true, enumerable: true },
   });
   return constructor;
 }
