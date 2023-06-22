@@ -554,8 +554,43 @@ describe('Structure definition', function() {
       expect(object.cat).to.equal(2);
     }) 
   })
+  describe('Pointer', function() {
+    it('should define a pointer for pointing to integers', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Singleton, 
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer, 
+        name: '*Int32',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const PInt32 = finalizeStructure(structure);
+
+
+    })
+  })
   describe('Complex struct', function() {
-    it('should define a struct that contains pointers', function() {      
+    it('should define a struct that contains pointers', function() { 
       const intStructure = beginStructure({
         type: StructureType.Singleton, 
         name: 'Int32',
@@ -577,7 +612,7 @@ describe('Structure definition', function() {
       });
       attachMember(structure, {
         name: 'dog',
-        type: MemberType.Pointer,
+        type: MemberType.Object,
         isStatic: false,
         bitSize: 64,
         bitOffset: 0,
@@ -587,7 +622,7 @@ describe('Structure definition', function() {
       });
       attachMember(structure, {
         name: 'cat',
-        type: MemberType.Pointer,
+        type: MemberType.Object,
         isStatic: false,
         bitSize: 64,
         bitOffset: 64,
@@ -963,6 +998,20 @@ describe('Structure definition', function() {
         byteSize: 4,
       });     
       const Int32 = finalizeStructure(intStructure);
+      const intPtrStructure = beginStructure({
+        type: StructureType.Singleton,
+        name: '*Int32',
+        size: 8,
+      });
+      attachMember(intPtrStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        structure: intStructure
+      });
+      const PtrInt32 = finalizeStructure(intStructure);    
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -988,40 +1037,29 @@ describe('Structure definition', function() {
       });
       attachMember(structure, {
         name: 'superdog',
-        type: MemberType.Pointer,
+        type: MemberType.Object,
         isStatic: true,
         isConst: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
         slot: 0,
-        structure: intStructure,
+        structure: intPtrStructure,
         mutable: true,
       });
       attachMember(structure, {
         name: 'supercat',
-        type: MemberType.Pointer,
+        type: MemberType.Object,
         isStatic: true,
         isConst: true,
         bitSize: 64,
         bitOffset: 64,
         byteSize: 8,
         slot: 1,
-        structure: intStructure,
+        structure: intPtrStructure,
       });
-      // in practice the default pointers will be SharedArrayBuffers pointing to 
-      // memory in the Zig code's data segment; we'll test with ArrayBuffer
-      const dv1 = new DataView(new ArrayBuffer(4));
-      const dv2 = new DataView(new ArrayBuffer(4));
-      dv1.setInt32(0, 1234, true);
-      dv2.setInt32(0, 4567, true);     
-      attachDefaultValues(structure, {
-        isStatic: true,
-        pointers: {
-          0: dv1.buffer,
-          1: dv2.buffer,
-        }
-      });
+
+
       const Hello = finalizeStructure(structure);
       expect(Hello.superdog).to.equal(1234);
       Hello.superdog = 43;
@@ -1086,7 +1124,7 @@ describe('Structure definition', function() {
       });
       attachMember(structure, {
         name: 'superdog',
-        type: MemberType.Pointer,
+        type: MemberType.Object,
         isStatic: true,
         isConst: false,
         bitSize: 64,
@@ -1098,7 +1136,7 @@ describe('Structure definition', function() {
       });
       attachMember(structure, {
         name: 'supercat',
-        type: MemberType.Pointer,
+        type: MemberType.Object,
         isStatic: true,
         isConst: true,
         bitSize: 64,
@@ -1160,7 +1198,7 @@ describe('Structure definition', function() {
       });
       attachMember(argStruct, {
         name: '0',
-        type: MemberType.Compound,
+        type: MemberType.Object,
         isStatic: false,
         bitSize: structure.size * 8,
         bitOffset: 0,
@@ -1242,7 +1280,7 @@ describe('Structure definition', function() {
       });
       attachMember(argStruct, {
         name: '0',
-        type: MemberType.Enum,
+        type: MemberType.EnumerationItem,
         isStatic: false, 
         bitSize: 32,
         bitOffset: 0,

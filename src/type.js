@@ -3,10 +3,9 @@ export const MemberType = {
   Bool: 1,
   Int: 2,
   Float: 3,
-  Enum: 4,
-  Compound: 5,
-  Pointer: 6,
-  Type: 7,
+  EnumerationItem: 4,
+  Object: 5,
+  Type: 6,
 };
 
 export const StructureType = {
@@ -18,7 +17,9 @@ export const StructureType = {
   ErrorUnion: 5,
   Enumeration: 6,
   Optional: 7,
-  Opaque: 8,
+  Pointer: 8,
+  Slice: 9,
+  Opaque: 10,
 };
 
 export function getTypeName(type, isSigned, bitSize) {

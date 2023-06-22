@@ -97,7 +97,7 @@ describe('Struct functions', function() {
         })(),
       };
       const member = {
-        type: MemberType.Enum,
+        type: MemberType.EnumerationItem,
         signed: false,
         bitSize: 4,
         bitOffset: 32,
@@ -119,7 +119,7 @@ describe('Struct functions', function() {
         },
       };
       const member = {
-        type: MemberType.Pointer,
+        type: MemberType.Object,
         signed: false,
         bitSize: 8,
         bitOffset: 0,
@@ -148,7 +148,7 @@ describe('Struct functions', function() {
         },
       };
       const member = {
-        type: MemberType.Pointer,
+        type: MemberType.Object,
         signed: false,
         bitSize: 8,
         bitOffset: 0,
@@ -243,7 +243,7 @@ describe('Struct functions', function() {
         [MEMORY]: dv,
       };
       const member = {
-        type: MemberType.Enum,
+        type: MemberType.EnumerationItem,
         signed: false,
         bitSize: 4,
         bitOffset: 32,
@@ -264,7 +264,7 @@ describe('Struct functions', function() {
         },
       };
       const member = {
-        type: MemberType.Pointer,
+        type: MemberType.Object,
         signed: false,
         bitSize: 8,
         bitOffset: 0,
@@ -293,7 +293,7 @@ describe('Struct functions', function() {
         },
       };
       const member = {
-        type: MemberType.Pointer,
+        type: MemberType.Object,
         signed: false,
         bitSize: 8,
         bitOffset: 0,

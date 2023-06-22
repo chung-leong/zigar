@@ -7,10 +7,9 @@ R"=====(
     Bool: 1,
     Int: 2,
     Float: 3,
-    Enum: 4,
-    Compound: 5,
-    Pointer: 6,
-    Type: 7,
+    EnumerationItem: 4,
+    Object: 5,
+    Type: 6,
   };
 
   const StructureType = {
@@ -22,7 +21,9 @@ R"=====(
     ErrorUnion: 5,
     Enumeration: 6,
     Optional: 7,
-    Opaque: 8,
+    Pointer: 8,
+    Slice: 9,
+    Opaque: 10,
   };
 
   function getTypeName(type, isSigned, bitSize) {
@@ -212,9 +213,14 @@ R"=====(
     throw new TypeError(`Enum item expected: ${constructor.name}`);
   }
 
+  function throwInvalidType(constructor) {
+    throw new TypeError(`Object of specific type expected: ${constructor.name}`);
+  }
+
   const MEMORY = Symbol('memory');
   const SLOTS = Symbol('slots');
   const SYNC = Symbol('SYNC');
+  const SOURCE$1 = Symbol('SOURCE');
 
   const TYPED_ARRAY = Symbol('typedArray');
   const ENUM_INDEX = Symbol('enumIndex');
@@ -650,18 +656,8 @@ R"=====(
       littleEndian = true,
       runtimeSafety = true,
     } = options;
+    let fn;
     switch (member.type) {
-      case MemberType.Compound:
-      case MemberType.Pointer: {
-        // get object from slot
-        const { slot, structure } = member;
-        if (structure.type === StructureType.Singleton) {
-          // automatically deferencing pointers to primitives
-          return function() { return this[SLOTS][slot].get() };
-        } else {
-          return function() { return this[SLOTS][slot] };
-        }
-      } 
       case MemberType.Bool:
       case MemberType.Int:
       case MemberType.Float: {
@@ -669,17 +665,21 @@ R"=====(
         const { bitOffset } = member;
         const offset = bitOffset >> 3;
         const get = obtainDataViewGetter(member);
-        return function() { return get.call(this[MEMORY], offset, littleEndian) };
-      }
+        fn = function() { 
+          return get.call(this[MEMORY], offset, littleEndian);
+        };
+      } break;
       case MemberType.Void: {
-        return function() { return null }; 
-      }
-      case MemberType.Enum: {
+        fn = function() { 
+          return null;
+        }; 
+      } break;
+      case MemberType.EnumerationItem: {
         const { bitOffset, structure } = member;
         const offset = bitOffset >> 3;
         const get = obtainDataViewGetter({ ...member, type: MemberType.Int });
         if (runtimeSafety) {
-          return function() {
+          fn = function() {
             const { constructor } = structure;
             const value = get.call(this[MEMORY], offset, littleEndian);
             // the enumeration constructor returns the singleton object for the value
@@ -690,17 +690,39 @@ R"=====(
             return object;
           }; 
         } else {
-          return function() {
+          fn = function() {
             const value = get.call(this[MEMORY], offset, littleEndian);
             return constructor(value);
           }; 
         }
-      }
-      case MemberType.Type: {
+      } break;
+      case MemberType.Object: {
+        // automatically dereference pointer
         const { structure } = member;
-        return function() { return structure.constructor }; 
-      }
+        if (structure.type === StructureType.Pointer) {
+          const { members: [ target ] } = structure;
+          if (target.type === StructureType.Singleton) {
+            fn = function() { 
+              const pointer = this[SLOTS][slot];
+              const target = pointer['*'];
+              return target.get() 
+            };  
+          } else {
+            fn = function() { 
+              const pointer = this[SLOTS][slot]['*'];
+              const target = pointer['*'];
+              return target;
+            };  
+          }
+        } else {
+          fn = function() { 
+            const object = this[SLOTS][slot];
+            return object;
+          }; 
+        }
+      } break;
     }
+    return fn;
   }
 
   function obtainSetter(member, options) {
@@ -710,34 +732,6 @@ R"=====(
     } = options;
     let fn;
     switch (member.type) {
-      case MemberType.Compound: {
-        const { slot, structure } = member;
-        fn = function(v) {
-          const { constructor, copier } = structure;
-          if (!(v instanceof constructor)) {
-            v = new constructor(v);
-          }
-          const object = this[SLOTS][slot];
-          copier(object, v);
-        };  
-      } break;
-      case MemberType.Pointer: {
-        const { slot, structure, isConst } = member;
-        if (isConst) {
-          return;
-        } 
-        if (structure.type === StructureType.Singleton) {
-          return function(v) { this[SLOTS][slot].set(v); };
-        } else {
-          const { constructor } = structure;
-          return function(v) {
-            if (!(v instanceof constructor)) {
-              v = new constructor(v);
-            }
-            this[SLOTS][slot] = v;
-          };
-        }
-      }
       case MemberType.Bool:
       case MemberType.Int:
       case MemberType.Float: {
@@ -755,7 +749,9 @@ R"=====(
             set.call(this[MEMORY], offset, v, littleEndian);
           };
         } else {
-          fn = function(v) { set.call(this[MEMORY], offset, v, littleEndian); };
+          fn = function(v) { 
+            set.call(this[MEMORY], offset, v, littleEndian);
+          };
         }
       } break;
       case MemberType.Void: {
@@ -769,11 +765,11 @@ R"=====(
           fn = function() {};
         }
       } break;
-      case MemberType.Enum: {
+      case MemberType.EnumerationItem: {
         const { bitOffset, structure } = member;
         const offset = bitOffset >> 3;
         const set = obtainDataViewSetter({ ...member, type: MemberType.Int });
-        return function(v) {
+        fn = function(v) {
           const { constructor } = structure;
           if (!(v instanceof constructor)) {
             throwEnumExpected(constructor);
@@ -781,6 +777,36 @@ R"=====(
           set.call(this[MEMORY], offset, v.valueOf(), littleEndian);
         }; 
       }
+      case MemberType.Object: {
+        const { slot, structure, isConst } = member;
+        if (structure.type === StructureType.Pointer) {
+          if (member.isConst) {
+            break;
+          }
+          const { members: [ target ] } = structure;
+          if (target.type === StructureType.Singleton) {
+            fn = function(v) { 
+              const pointer = this[SLOTS][slot];
+              const target = pointer['*'];
+              target.set(v); 
+            };
+          } else {
+            fn = function(v) { 
+              const pointer = this[SLOTS][slot]['*'];
+              pointer['*'] = v;
+            };
+          }
+        } else {
+          fn = function(v) {
+            const { constructor, copier } = structure;
+            if (!(v instanceof constructor)) {
+              v = new constructor(v);
+            }
+            const object = this[SLOTS][slot];
+            copier(object, v);
+          };  
+        }
+      } break;
     }
     return fn;
   }
@@ -798,44 +824,14 @@ R"=====(
     const {
       littleEndian = true,
     } = options;
+    let fn;
     switch (member.type) {
-      case MemberType.Compound: {
-        const { structure, byteSize } = member;
-        const { constructor } = structure;
-        return function(index) { 
-          const slots = this[SLOTS];
-          if (!slots[index]) {
-            const dv = this[MEMORY];
-            const offset = index * byteSize;
-            if (offset >= 0 && offset + byteSize <= dv.byteLength) {
-              const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
-              slots[index] = new constructor(slice);
-            } else {
-              throwOutOfBound(dv.byteLength, byteSize, index);
-            }
-          }
-          return slots[index]; 
-        };
-      }
-      case MemberType.Pointer: {
-        return function(index) { 
-          const slots = this[SLOTS];
-          if (!slots[index]) {
-            const dv = this[MEMORY];
-            const offset = index * byteSize;
-            if (offset >= 0 && offset + byteSize <= dv.byteLength) ; else {
-              throwOutOfBound(dv.byteLength, byteSize, index);
-            }
-          }
-          return slots[index]; 
-        };
-      } 
       case MemberType.Bool:
       case MemberType.Int:
       case MemberType.Float: {
         const { byteSize } = member;
         const get = obtainDataViewGetter(member);
-        return function(index) {
+        fn = function(index) {
           const dv = this[MEMORY];
           const offset = index * byteSize;
           try {
@@ -844,8 +840,18 @@ R"=====(
             throwOutOfBound(dv.byteLength, byteSize, index);
           }
         };
-      }
-    }
+      } break;
+      case MemberType.Object: {
+        const { byteSize } = member;
+        return function(index) { 
+          const child = this[SLOTS][index];
+          if (!child) {
+            throwOutOfBound(dv.byteLength, byteSize, index);
+          }
+          return slots[index]; 
+        };
+      }  }
+    return fn;
   }
 
   function obtainArraySetter(member, options) {
@@ -855,46 +861,6 @@ R"=====(
     } = options;
     let fn;
     switch (member.type) {
-      case MemberType.Compound: {
-        const { structure, byteSize } = member;
-        const { constructor, copier } = structure;
-        fn = function(index, v) {
-          if (!(v instanceof constructor)) {
-            v = new constructor(v);
-          }
-          const slots = this[SLOTS];
-          let reloc = slots[index];
-          if (!reloc) {
-            const offset = index * byteSize;
-            if (offset >= 0 && offset + byteSize <= dv.byteLength) {
-              const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
-              reloc = slots[index] = new constructor(slice);
-            } else {
-              throwOutOfBound(dv.byteLength, byteSize, index);
-            }
-          }
-          copier(reloc, v);
-        };  
-      } break;
-      case MemberType.Pointer: {
-        const { structure, byteSize, isConst } = member;
-        const { constructor } = structure;
-        if (isConst) {
-          return;
-        } 
-        return function(index, v) {
-          if (!(v instanceof constructor)) {
-            v = new constructor(v);
-          }
-          const dv = this[MEMORY];
-          const offset = index * byteSize;
-          if (offset >= 0 && offset + byteSize <= dv.byteLength) {
-            this[SLOTS][index] = v;
-          } else {
-            throwOutOfBound(dv.byteLength, byteSize, index);
-          }
-        };    
-      }
       case MemberType.Bool:
       case MemberType.Int:
       case MemberType.Float: {
@@ -928,6 +894,20 @@ R"=====(
           };
         }
       } break;
+      case MemberType.Object: {
+        const { structure, byteSize } = member;
+        const { constructor, copier } = structure;
+        fn = function(index, v) {
+          if (!(v instanceof constructor)) {
+            v = new constructor(v);
+          }
+          this[SLOTS][index];
+          if (!child) {
+            throwOutOfBound(dv.byteLength, byteSize, index);
+          }
+          copier(child, v);
+        };  
+      } break;
     }
     return fn;
   }
@@ -949,6 +929,78 @@ R"=====(
         return { value, done };
       },
     };
+  }
+
+  function obtainPointerGetter(member, options) {
+    let fn;
+    if (member.type === MemberType.Object) {
+      const { structure, slot } = member;
+      if (structure.type === StructureType.Pointer) {
+        // get pointer from slot
+        fn = function() { 
+          const pointer = this[SOURCE$1][SLOTS][slot];
+          return pointer;
+        };
+      }
+    }
+    return fn;
+  }
+
+  function obtainPointerSetter(member, options) {
+    let fn;
+    if (member.type === MemberType.Object) {
+      const { structure, slot } = member;
+      if (structure.type === StructureType.Pointer) {
+        // set pointer itself
+        fn = function(v) { 
+          const { constructor, copier } = structure;
+          if (!(v instanceof constructor)) {
+            throwInvalidType(constructor);
+          }
+          copier(this[SOURCE$1][SLOTS][slot], v);
+        };
+      }
+    }
+    return fn;
+  }
+
+  function obtainPointerArrayGetter(member, options) {
+    let fn;
+    if (member.type === MemberType.Object) {
+      const { structure } = member;
+      if (structure.type === StructureType.Pointer) {
+        fn = function(index) { 
+          const pointer = this[SOURCE$1][SLOTS][index];
+          return pointer;
+        };
+      }
+    }
+    return fn;
+  }
+
+  function obtainPointerArraySetter(member, options) {
+    let fn;
+    if (member.type === MemberType.Object) {
+      const { structure } = member;
+      if (structure.type === StructureType.Pointer) {
+        fn = function(index, v) { 
+          const { constructor, copier } = structure;
+          if (!(v instanceof constructor)) {
+            throwInvalidType(constructor);
+          }
+          const object = this[SOURCE$1][SLOTS][index];
+          copier(object, v);
+        };
+      }
+    }
+    return fn;
+  }
+
+  function obtainPointerArrayLengthGetter(member, options) {
+    let fn = function() {
+      return this[SOURCE$1].length;
+    };
+    return fn;
   }
 
   function obtainTypedArrayGetter(members) {
@@ -1093,6 +1145,11 @@ R"=====(
           return null;
         case StructureType.Enumeration:
           return finalizeEnumeration(s);
+        case StructureType.Pointer:
+          return finalizePointer(s);
+        case StructureType.Slice:
+          // TODO
+          return null; 
       } 
     } catch (err) {
       console.error(err);
@@ -1142,7 +1199,6 @@ R"=====(
     if (name) {
       Object.defineProperty(constructor, 'name', { value: name, writable: false });
     }
-    s.size = size;
     Object.defineProperties(constructor.prototype, {
       get: { value: get, configurable: true, writable: true },
       set: { value: set, configurable: true, writable: true },
@@ -1164,6 +1220,9 @@ R"=====(
     const get = obtainArrayGetter(member, options);
     const set = obtainArraySetter(member, options);
     const getLength = obtainArrayLengthGetter(member);
+    const getPointer = obtainPointerArrayGetter(member);
+    const setPointer = obtainPointerArraySetter(member);
+    const getPointerLength = obtainPointerArrayLengthGetter();
     s.copier = function(dest, src) {
       copy(dest[MEMORY], src[MEMORY]);   
     };
@@ -1185,7 +1244,9 @@ R"=====(
       }
     };
     if (name) {
-      Object.defineProperty(constructor, 'name', { value: name, writable: false });
+      Object.defineProperties(constructor, {
+        name: { value: name, writable: false }
+      });
     }
     Object.defineProperties(constructor.prototype, {
       get: { value: get, configurable: true, writable: true },
@@ -1193,6 +1254,22 @@ R"=====(
       length: { get: getLength, configurable: true },
       [Symbol.iterator]: { value: getArrayIterator, configurable: true },
     });
+    if (getPointer) {
+      const ptrSourceProto = Object.defineProperties({}, {
+        get: { value: getPointer, configurable: true, writable: true },
+        set: { value: setPointer, configurable: true, writable: true },
+        length: { get: getPointerLength, configurable: true },
+        [Symbol.iterator]: { value: getArrayIterator, configurable: true },
+      });
+      const get = function() {
+        const ptrSource = Object.create(ptrSourceProto);
+        ptrSource[SOURCE] = this;
+        return ptrSource;
+      };
+      Object.defineProperties(constructor.prototype, {
+        '&': { get, configurable: true, enumerable: true, writable: false }
+      });
+    }
     attachDataViewAccessors(s);
     return constructor;
   }
@@ -1214,9 +1291,19 @@ R"=====(
       const set = obtainSetter(member, options);
       descriptors[member.name] = { get, set, configurable: true, enumerable: true };
     }
+    // pointer
+    const ptrDescriptors = {};
+    for (const member of members) {
+      const get = obtainPointerGetter(member);
+      const set = obtainPointerSetter(member);
+      if (get) {
+        ptrDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
+      }
+    }
+    const hasSlots = !members.find(m => m.type === MemberType.Object);
     const copier = s.copier = function(dest, src) {
       copy(dest[MEMORY], src[MEMORY]);
-      {
+      if (hasSlots) {
         Object.assign(dest[SLOTS], src[SLOTS]);
       }
     };
@@ -1234,7 +1321,7 @@ R"=====(
         [MEMORY]: { value: dv },
       });
       Object.defineProperties(self, descriptors);
-      {
+      if (hasSlots) {
         Object.defineProperties(self, {
           [SLOTS]: { value: {} },
         });  
@@ -1248,7 +1335,20 @@ R"=====(
       }
     };
     if (name) {
-      Object.defineProperty(constructor, 'name', { value: name, writable: false });
+      Object.defineProperties(constructor, {
+        name: { value: name, writable: false }
+      });
+    }
+    if (Object.keys(ptrDescriptors).length > 0) {
+      const ptrSourceProto = Object.defineProperties({}, ptrDescriptors);
+      const get = function() {
+        const ptrSource = Object.create(ptrSourceProto);
+        ptrSource[SOURCE] = this;
+        return ptrSource;
+      };
+      Object.defineProperties(constructor.prototype, {
+        '&': { get, configurable: true, enumerable: true, writable: false }
+      });
     }
     attachDataViewAccessors(s);
     attachStaticMembers(s);
@@ -1295,7 +1395,9 @@ R"=====(
       return items[index];
     };
     if (name) {
-      Object.defineProperty(constructor, 'name', { value: name, writable: false });
+      Object.defineProperties(constructor, {
+        name: { value: name, writable: false }
+      });
     }
     // attach the numeric values to the class as its binary data
     // this allows us to reuse the array getter
@@ -1343,6 +1445,55 @@ R"=====(
     attachMethods(s);
     return constructor;
   }
+  function finalizePointer(s) {
+    const { 
+      size,
+      name,
+      instance: {
+        members: [ member ],
+      },
+      options,
+    } = s;
+    const get = obtainGetter(member, options);
+    const set = obtainSetter(member, options);
+    const copy = obtainCopyFunction(size);
+    s.copier = function (dest, src) {
+      copy(dest[MEMORY], src[MEMORY]);
+      Object.assign(dest[SLOTS], src[SLOTS]);
+    };
+    const constructor = s.constructor = function(arg) {
+      const creating = this instanceof constructor;
+      let self, dv;
+      const slots = { 0: null };
+      if (creating) {
+        self = this;
+        dv = new DataView(new ArrayBuffer(size));
+      } else {
+        self = Object.create(constructor.prototype);
+        dv = obtainDataView(arg, size);
+      }
+      Object.defineProperties(self, {
+        [MEMORY]: { value: dv },
+        [SLOTS]: slots,
+        [SYNC]: false,
+      });
+      if (creating) {
+        this['*'] = arg;
+      } else {
+        return self;
+      }
+    };
+    if (name) {
+      Object.defineProperties(constructor, {
+        name: { value: name, writable: false }
+      });
+    }
+    Object.defineProperties(constructor.prototype, {
+      '*': { get, set, configurable: true, enumerable: true, writable: true },
+    });
+    return constructor;
+  }
+
   function attachStaticMembers(s) {
     const {
       constructor,
@@ -1358,8 +1509,6 @@ R"=====(
     const descriptors = {
       [SLOTS]: { value: template[SLOTS] },
     };
-    // static variables are all pointers, with each represented by an object 
-    // sittinng a relocatable slot
     for (const member of members) {
       const get = obtainGetter(member, options);
       const set = obtainSetter(member, options);
@@ -1447,6 +1596,7 @@ R"=====(
   exports.attachStaticMembers = attachStaticMembers;
   exports.attachTemplate = attachTemplate;
   exports.beginStructure = beginStructure;
+  exports.finalizePointer = finalizePointer;
   exports.finalizeStructure = finalizeStructure;
   exports.getArgumentBuffers = getArgumentBuffers;
   exports.globalSlots = globalSlots;

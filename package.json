@@ -29,8 +29,10 @@
   },
   "homepage": "https://github.com/chung-leong/node-zig#readme",
   "devDependencies": {
+    "@rollup/plugin-replace": "^5.0.2",
     "@rollup/plugin-terser": "^0.4.3",
     "chai": "^4.3.7",
+    "mersenne-twister": "^1.1.0",
     "mocha": "^10.2.0",
     "mocha-skip-if": "^1.0.4",
     "rollup": "^3.23.0"

@@ -281,7 +281,7 @@ static Local<Object> NewMember(Host* call,
   if (m.type == MemberType::Int) { 
     auto is_signed = Boolean::New(isolate, m.is_signed);     
     def->Set(context, String::NewFromUtf8Literal(isolate, "isSigned"), is_signed).Check();
-  } else if (m.type == MemberType::Pointer) {
+  } else if (m.type == MemberType::Object) {
     auto is_const = Boolean::New(isolate, m.is_const);
     def->Set(context, String::NewFromUtf8Literal(isolate, "isConst"), is_const).Check();
   }

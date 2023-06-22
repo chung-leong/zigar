@@ -40,3 +40,7 @@ export function throwInvalidEnum(value) {
 export function throwEnumExpected(constructor) {
   throw new TypeError(`Enum item expected: ${constructor.name}`);
 }
+
+export function throwInvalidType(constructor) {
+  throw new TypeError(`Object of specific type expected: ${constructor.name}`);
+}

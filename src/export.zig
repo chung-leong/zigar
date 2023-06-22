@@ -87,6 +87,8 @@ const StructureType = enum(u32) {
     ErrorUnion,
     Enumeration,
     Optional,
+    Pointer,
+    Slice,
     Opaque,
 };
 
@@ -95,9 +97,8 @@ const MemberType = enum(u32) {
     Bool,
     Int,
     Float,
-    Enum,
-    Compound,
-    Pointer,
+    EnumerationItem,
+    Object,
     Type,
 };
 
@@ -274,9 +275,8 @@ fn getMemberType(comptime T: type) MemberType {
         .Bool => .Bool,
         .Int => .Int,
         .Float => .Float,
-        .Enum => .Enum,
-        .Struct, .Union, .Array, .ErrorUnion, .Optional => .Compound,
-        .Pointer => .Pointer,
+        .Enum => .EnumerationItem,
+        .Struct, .Union, .Array, .ErrorUnion, .Optional, .Pointer => .Object,
         .Type => .Type,
         else => .Void,
     };
@@ -284,7 +284,7 @@ fn getMemberType(comptime T: type) MemberType {
 
 test "getMemberType" {
     assert(getMemberType(u32) == .Int);
-    assert(getMemberType(*u32) == .Pointer);
+    assert(getMemberType(*u32) == .Object);
     assert(getMemberType(type) == .Type);
 }
 
@@ -296,6 +296,7 @@ fn getStructureType(comptime T: type) StructureType {
         .Enum => .Enumeration,
         .Array => .Array,
         .Opaque => .Opaque,
+        .Pointer => |pt| if (pt.size == .One) .Pointer else .Slice,
         else => .Singleton,
     };
 }
@@ -497,9 +498,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) Error!void {
             const fields = std.meta.fields(T);
             inline for (fields, 0..) |field, index| {
                 switch (getMemberType(field.type)) {
-                    .Pointer, .Compound, .Enum => {
-                        _ = getObjectSlot(T, index);
-                    },
+                    .Object => _ = getObjectSlot(T, index),
                     else => {},
                 }
             }
@@ -605,7 +604,7 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) Error!void {
             const slot = getObjectSlot(S, index);
             try host.attachMember(structure, .{
                 .name = name,
-                .member_type = .Pointer,
+                .member_type = .Object,
                 .is_static = true,
                 .is_const = isConst(PT),
                 .slot = slot,

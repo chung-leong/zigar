@@ -16,46 +16,14 @@ export function obtainArrayGetter(member, options) {
   const {
     littleEndian = true,
   } = options;
+  let fn;
   switch (member.type) {
-    case MemberType.Compound: {
-      const { structure, byteSize } = member;
-      const { constructor } = structure;
-      return function(index) { 
-        const slots = this[SLOTS];
-        if (!slots[index]) {
-          const dv = this[MEMORY];
-          const offset = index * byteSize;
-          if (offset >= 0 && offset + byteSize <= dv.byteLength) {
-            const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
-            slots[index] = new constructor(slice);
-          } else {
-            throwOutOfBound(dv.byteLength, byteSize, index);
-          }
-        }
-        return slots[index]; 
-      };
-    }
-    case MemberType.Pointer: {
-      return function(index) { 
-        const slots = this[SLOTS];
-        if (!slots[index]) {
-          const dv = this[MEMORY];
-          const offset = index * byteSize;
-          if (offset >= 0 && offset + byteSize <= dv.byteLength) {
-            // pointer isn't pointing to something
-          } else {
-            throwOutOfBound(dv.byteLength, byteSize, index);
-          }
-        }
-        return slots[index]; 
-      };
-    } 
     case MemberType.Bool:
     case MemberType.Int:
     case MemberType.Float: {
       const { byteSize } = member;
       const get = obtainDataViewGetter(member);
-      return function(index) {
+      fn = function(index) {
         const dv = this[MEMORY];
         const offset = index * byteSize;
         try {
@@ -64,8 +32,19 @@ export function obtainArrayGetter(member, options) {
           throwOutOfBound(dv.byteLength, byteSize, index);
         }
       };
-    }
+    } break;
+    case MemberType.Object: {
+      const { byteSize } = member;
+      return function(index) { 
+        const child = this[SLOTS][index];
+        if (!child) {
+          throwOutOfBound(dv.byteLength, byteSize, index);
+        }
+        return slots[index]; 
+      };
+    } break;
   }
+  return fn;
 }
 
 export function obtainArraySetter(member, options) {
@@ -75,46 +54,6 @@ export function obtainArraySetter(member, options) {
   } = options;
   let fn;
   switch (member.type) {
-    case MemberType.Compound: {
-      const { structure, byteSize } = member;
-      const { constructor, copier } = structure;
-      fn = function(index, v) {
-        if (!(v instanceof constructor)) {
-          v = new constructor(v);
-        }
-        const slots = this[SLOTS];
-        let reloc = slots[index];
-        if (!reloc) {
-          const offset = index * byteSize;
-          if (offset >= 0 && offset + byteSize <= dv.byteLength) {
-            const slice = new DataView(dv.buffer, dv.byteOffset + offset, size);
-            reloc = slots[index] = new constructor(slice);
-          } else {
-            throwOutOfBound(dv.byteLength, byteSize, index);
-          }
-        }
-        copier(reloc, v);
-      };  
-    } break;
-    case MemberType.Pointer: {
-      const { structure, byteSize, isConst } = member;
-      const { constructor } = structure;
-      if (isConst) {
-        return;
-      } 
-      return function(index, v) {
-        if (!(v instanceof constructor)) {
-          v = new constructor(v);
-        }
-        const dv = this[MEMORY];
-        const offset = index * byteSize;
-        if (offset >= 0 && offset + byteSize <= dv.byteLength) {
-          this[SLOTS][index] = v;
-        } else {
-          throwOutOfBound(dv.byteLength, byteSize, index);
-        }
-      };    
-    }
     case MemberType.Bool:
     case MemberType.Int:
     case MemberType.Float: {
@@ -147,6 +86,20 @@ export function obtainArraySetter(member, options) {
           }
         };
       }
+    } break;
+    case MemberType.Object: {
+      const { structure, byteSize } = member;
+      const { constructor, copier } = structure;
+      fn = function(index, v) {
+        if (!(v instanceof constructor)) {
+          v = new constructor(v);
+        }
+        const slots = this[SLOTS][index];
+        if (!child) {
+          throwOutOfBound(dv.byteLength, byteSize, index);
+        }
+        copier(child, v);
+      };  
     } break;
   }
   return fn;

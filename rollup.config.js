@@ -1,15 +1,22 @@
 import Terser from '@rollup/plugin-terser';
+import Replace from '@rollup/plugin-replace';
 
-const minify = false;
+const production = false;
 
 export default {
   input: 'src/define.js',
+  plugins: [
+    production && Replace({ 
+      preventAssignment: true,
+      'process.env.NODE_ENV': '"production"',
+    }),
+  ],
   output: {
 		file: 'src/addon.js.txt',
 		format: 'iife',
     name: 'variable',
     plugins: [ 
-      minify ? Terser() : undefined,
+      production && Terser(),
       {
         // place JS code into a C++ raw string 
         // we can't rely on banner/footer here since those are seen by Terser, 

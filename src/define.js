@@ -1,6 +1,18 @@
 import { StructureType, MemberType, getPrimitive } from './type.js';
 import { obtainGetter, obtainSetter } from './struct.js';
-import { obtainArrayGetter, obtainArraySetter, obtainArrayLengthGetter, getArrayIterator } from './array.js';
+import { 
+  obtainArrayGetter, 
+  obtainArraySetter,
+  obtainArrayLengthGetter,
+  getArrayIterator,
+} from './array.js';
+import { 
+  obtainPointerGetter, 
+  obtainPointerSetter, 
+  obtainPointerArrayGetter, 
+  obtainPointerArraySetter,
+  obtainPointerArrayLengthGetter,
+} from './pointer.js';
 import { obtainTypedArrayGetter } from './typed-array.js';
 import { obtainCopyFunction } from './memory.js';
 import { obtainDataView, getDataView } from './data-view.js';
@@ -100,6 +112,11 @@ export function finalizeStructure(s) {
         return null;
       case StructureType.Enumeration:
         return finalizeEnumeration(s);
+      case StructureType.Pointer:
+        return finalizePointer(s);
+      case StructureType.Slice:
+        // TODO
+        return null; 
     } 
   } catch (err) {
     console.error(err);
@@ -149,7 +166,6 @@ function finalizeSingleton(s) {
   if (name) {
     Object.defineProperty(constructor, 'name', { value: name, writable: false });
   }
-  s.size = size;
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
@@ -171,6 +187,9 @@ function finalizeArray(s) {
   const get = obtainArrayGetter(member, options);
   const set = obtainArraySetter(member, options);
   const getLength = obtainArrayLengthGetter(member, options);
+  const getPointer = obtainPointerArrayGetter(member, options);
+  const setPointer = obtainPointerArraySetter(member, options);
+  const getPointerLength = obtainPointerArrayLengthGetter(member, options);
   const copier = s.copier = function(dest, src) {
     copy(dest[MEMORY], src[MEMORY]);   
   };
@@ -197,7 +216,9 @@ function finalizeArray(s) {
     }
   };
   if (name) {
-    Object.defineProperty(constructor, 'name', { value: name, writable: false });
+    Object.defineProperties(constructor, {
+      name: { value: name, writable: false }
+    });
   }
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
@@ -205,6 +226,22 @@ function finalizeArray(s) {
     length: { get: getLength, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true },
   });
+  if (getPointer) {
+    const ptrSourceProto = Object.defineProperties({}, {
+      get: { value: getPointer, configurable: true, writable: true },
+      set: { value: setPointer, configurable: true, writable: true },
+      length: { get: getPointerLength, configurable: true },
+      [Symbol.iterator]: { value: getArrayIterator, configurable: true },
+    });
+    const get = function() {
+      const ptrSource = Object.create(ptrSourceProto);
+      ptrSource[SOURCE] = this;
+      return ptrSource;
+    };
+    Object.defineProperties(constructor.prototype, {
+      '&': { get, configurable: true, enumerable: true, writable: false }
+    });
+  }
   attachDataViewAccessors(s);
   return constructor;
 }
@@ -226,7 +263,16 @@ function finalizeStruct(s) {
     const set = obtainSetter(member, options);
     descriptors[member.name] = { get, set, configurable: true, enumerable: true };
   }
-  const hasSlots = true; // TODO
+  // pointer
+  const ptrDescriptors = {};
+  for (const member of members) {
+    const get = obtainPointerGetter(member, options);
+    const set = obtainPointerSetter(member, options);
+    if (get) {
+      ptrDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
+    }
+  }
+  const hasSlots = !members.find(m => m.type === MemberType.Object);
   const copier = s.copier = function(dest, src) {
     copy(dest[MEMORY], src[MEMORY]);
     if (hasSlots) {
@@ -266,7 +312,20 @@ function finalizeStruct(s) {
     }
   };
   if (name) {
-    Object.defineProperty(constructor, 'name', { value: name, writable: false });
+    Object.defineProperties(constructor, {
+      name: { value: name, writable: false }
+    });
+  }
+  if (Object.keys(ptrDescriptors).length > 0) {
+    const ptrSourceProto = Object.defineProperties({}, ptrDescriptors);
+    const get = function() {
+      const ptrSource = Object.create(ptrSourceProto);
+      ptrSource[SOURCE] = this;
+      return ptrSource;
+    };
+    Object.defineProperties(constructor.prototype, {
+      '&': { get, configurable: true, enumerable: true, writable: false }
+    });
   }
   attachDataViewAccessors(s);
   attachStaticMembers(s);
@@ -314,7 +373,9 @@ function finalizeEnumeration(s) {
     return items[index];
   };
   if (name) {
-    Object.defineProperty(constructor, 'name', { value: name, writable: false });
+    Object.defineProperties(constructor, {
+      name: { value: name, writable: false }
+    });
   }
   // attach the numeric values to the class as its binary data
   // this allows us to reuse the array getter
@@ -363,6 +424,55 @@ function finalizeEnumeration(s) {
   return constructor;
 };
 
+export function finalizePointer(s) {
+  const { 
+    size,
+    name,
+    instance: {
+      members: [ member ],
+    },
+    options,
+  } = s;
+  const get = obtainGetter(member, options);
+  const set = obtainSetter(member, options);
+  const copy = obtainCopyFunction(size);
+  const copier = s.copier = function (dest, src) {
+    copy(dest[MEMORY], src[MEMORY]);
+    Object.assign(dest[SLOTS], src[SLOTS]);
+  };
+  const constructor = s.constructor = function(arg) {
+    const creating = this instanceof constructor;
+    let self, dv;
+    const slots = { 0: null };
+    if (creating) {
+      self = this;
+      dv = new DataView(new ArrayBuffer(size));
+    } else {
+      self = Object.create(constructor.prototype);
+      dv = obtainDataView(arg, size);
+    }
+    Object.defineProperties(self, {
+      [MEMORY]: { value: dv },
+      [SLOTS]: slots,
+      [SYNC]: false,
+    });
+    if (creating) {
+      this['*'] = arg;
+    } else {
+      return self;
+    }
+  };
+  if (name) {
+    Object.defineProperties(constructor, {
+      name: { value: name, writable: false }
+    });
+  }
+  Object.defineProperties(constructor.prototype, {
+    '*': { get, set, configurable: true, enumerable: true, writable: true },
+  });
+  return constructor;
+}
+
 export function attachStaticMembers(s) {
   const {
     constructor,
@@ -378,8 +488,6 @@ export function attachStaticMembers(s) {
   const descriptors = {
     [SLOTS]: { value: template[SLOTS] },
   };
-  // static variables are all pointers, with each represented by an object 
-  // sittinng a relocatable slot
   for (const member of members) {
     const get = obtainGetter(member, options);
     const set = obtainSetter(member, options);

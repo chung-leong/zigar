@@ -17,6 +17,8 @@ enum class StructureType : uint32_t {
   ErrorUnion,
   Enumeration,
   Optional,
+  Pointer,
+  Slice,
   Opaque,
 };
 
@@ -26,8 +28,7 @@ enum class MemberType : uint32_t {
   Int,
   Float,
   Enum,
-  Compound,
-  Pointer,
+  Object,
   Type,
 };
 
