@@ -84,6 +84,28 @@ describe('Structure definition', function() {
       expect(list).to.eql([ 1234, 0, 0, 0, 4567, 0, 0, 0 ]);
     })
   })
+  describe('Basic slice', function() {
+    it('should define structure for holding an int slice', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice, 
+        name: 'Hello', 
+        size: 4 * 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        signed: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(Hello).to.be.a('function');
+      const object = new Hello();
+      object.set(0, 321);
+      expect(object.get(0)).to.equal(321);
+    })
+  })
   describe('Simple struct', function() {
     it('should define a simple struct', function() {
       const structure = beginStructure({
@@ -666,7 +688,86 @@ describe('Structure definition', function() {
       const Hello = finalizeStructure(structure);      
       const object = new Hello();
       expect(object.dog).to.equal(1234);
-      //expect(object.cat).to.equal(4567);
+      expect(object.cat).to.equal(4567);
+    })
+    it('should expose pointers through special & property', function() { 
+      const intStructure = beginStructure({
+        type: StructureType.Singleton, 
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer, 
+        name: '*Int32',
+        size: 8,
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const PInt32 = finalizeStructure(ptrStructure);
+      const structure = beginStructure({
+        type: StructureType.Struct, 
+        name: 'Hello',
+        size: 8 * 2,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 64,
+        byteSize: 8,
+        slot: 1,
+        structure: ptrStructure,
+      })
+      const int1 = new Int32(1234);
+      const int2 = new Int32(4567);
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(8 * 2));
+            dv.setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
+            dv.setBigUint64(8, 0xaaaaaaaaaaaaaaaan, true);
+            return dv;
+          })(),
+          [SLOTS]: {
+            0: new PInt32(int1), 
+            1: new PInt32(int2),
+          }
+        },
+      });
+      const Hello = finalizeStructure(structure);      
+      const object = new Hello();
+      const ptr1 = object['&'].dog;
+      const ptr2 = object['&'].cat;
+      expect(ptr1['*'].get()).to.equal(1234);
+      expect(ptr2['*'].get()).to.equal(4567);
     })
   })
   describe('Simple extern union', function() {

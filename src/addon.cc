@@ -146,8 +146,8 @@ static Result WrapMemory(Host* call,
   }
   // and call it
   auto f = value.As<Function>();
-  Local<Value> args[1] = { dv };
-  if (!f->CallAsConstructor(call->context, 1, args).ToLocal(&value) || !value->IsObject()) {
+  Local<Value> args[1] = { dv };  
+  if (!f->Call(call->context, Null(call->isolate), 1, args).ToLocal(&value) || !value->IsObject()) {
     return Result::Failure;
   }
   *dest = value.As<Object>();
@@ -167,6 +167,7 @@ static Result CreateTemplate(Host* call,
   }
   Local<Object> slots = Object::New(call->isolate);
   templ->Set(call->context, call->symbol_slots, slots).Check();
+  *dest = templ;
   return Result::OK;
 }
 
@@ -236,11 +237,11 @@ static Result WriteObjectSlot(Host* call,
   if (!object->Get(call->context, call->symbol_slots).ToLocal(&value) || !value->IsObject()) {
     return Result::Failure;
   }
-  auto relocs = value.As<Object>();
+  auto slots = value.As<Object>();
   if (!child.IsEmpty()) {
-    relocs->Set(call->context, slot, child).Check();
+    slots->Set(call->context, slot, child).Check();
   } else {
-    relocs->Set(call->context, slot, Null(call->isolate)).Check();
+    slots->Set(call->context, slot, Null(call->isolate)).Check();
   }
   return Result::OK;
 }
@@ -458,7 +459,7 @@ static Result AttachTemplate(Host* call,
                              Local<Object> structure,
                              const ::Template& obj_templ) {
   auto isolate = call->isolate;
-  auto name = String::NewFromUtf8Literal(isolate, "attachDefaultValues");
+  auto name = String::NewFromUtf8Literal(isolate, "attachTemplate");
   auto def = NewTemplate(call, obj_templ);
   Local<Value> args[2] = { structure, def };
   return CallFunction(call, name, 2, args);

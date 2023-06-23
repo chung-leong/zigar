@@ -5,25 +5,23 @@ import { MEMORY, SLOTS } from './symbol.js';
 
 export function obtainArrayLengthGetter(member, options) {
   const { byteSize } = member;
-  let fn = function() {
+  return function() {
     const dv = this[MEMORY];
     return dv.byteLength / byteSize;
   };
-  return fn;
 }
 
 export function obtainArrayGetter(member, options) {
   const {
     littleEndian = true,
   } = options;
-  let fn;
   switch (member.type) {
     case MemberType.Bool:
     case MemberType.Int:
     case MemberType.Float: {
       const { byteSize } = member;
       const get = obtainDataViewGetter(member);
-      fn = function(index) {
+      return function(index) {
         const dv = this[MEMORY];
         const offset = index * byteSize;
         try {
@@ -32,7 +30,7 @@ export function obtainArrayGetter(member, options) {
           throwOutOfBound(dv.byteLength, byteSize, index);
         }
       };
-    } break;
+    }
     case MemberType.Object: {
       const { byteSize } = member;
       return function(index) { 
@@ -42,9 +40,8 @@ export function obtainArrayGetter(member, options) {
         }
         return slots[index]; 
       };
-    } break;
+    }
   }
-  return fn;
 }
 
 export function obtainArraySetter(member, options) {
@@ -52,7 +49,6 @@ export function obtainArraySetter(member, options) {
     littleEndian = true,
     runtimeSafety = true,
   } = options;
-  let fn;
   switch (member.type) {
     case MemberType.Bool:
     case MemberType.Int:
@@ -63,7 +59,7 @@ export function obtainArraySetter(member, options) {
       if (runtimeSafety && type === MemberType.Int) {
         const { isSigned, bitSize, byteSize } = member;
         const { min, max } = getIntRange(isSigned, bitSize);
-        fn = function(index, v) { 
+        return function(index, v) { 
           if (v < min || v > max) {
             throwOverflow(isSigned, bitSize, v);
           }
@@ -76,7 +72,7 @@ export function obtainArraySetter(member, options) {
           }
         };
       } else {
-        fn = function(index, v) { 
+        return function(index, v) { 
           const offset = index * byteSize;
           const dv = this[MEMORY];
           try {
@@ -86,11 +82,11 @@ export function obtainArraySetter(member, options) {
           }
         };
       }
-    } break;
+    }
     case MemberType.Object: {
       const { structure, byteSize } = member;
       const { constructor, copier } = structure;
-      fn = function(index, v) {
+      return function(index, v) {
         if (!(v instanceof constructor)) {
           v = new constructor(v);
         }
@@ -100,9 +96,8 @@ export function obtainArraySetter(member, options) {
         }
         copier(child, v);
       };  
-    } break;
+    }
   }
-  return fn;
 }
 
 export function getArrayIterator() {

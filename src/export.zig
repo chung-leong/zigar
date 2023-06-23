@@ -635,7 +635,8 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) Error!void {
                 .len = @sizeOf(PT),
             };
             const ptr_obj = try host.wrapMemory(memory, PT);
-            // desync it, creating SharedArrayBuffer or ArrayBuffer
+            // resync/desync it, creating SharedArrayBuffer or ArrayBuffer
+            _ = try resyncPointer(host, ptr_obj, PT);
             try desyncPointer(host, ptr_obj, PT);
             const template = template_maybe orelse create: {
                 const obj = try host.createTemplate(&.{});
@@ -772,25 +773,22 @@ fn invalidPointer(PT: type) PT {
 
 fn resyncPointer(host: Host, ptr_obj: Value, comptime T: type) Error!void {
     if (try host.getPointerStatus(ptr_obj)) {
-        return Error.Recursion;
+        return;
     }
     var ptr_ptr = try host.getMemory(ptr_obj, T);
-    var ptr = undefined;
-    if (try host.readObjectSlot(ptr_obj, 0)) |child_obj| {
+    if (host.readObjectSlot(ptr_obj, 0)) |child_obj| {
         const CT = @typeInfo(T).Pointer.child;
-        ptr = try resyncStructure(host, child_obj, CT);
-    } else {
-        ptr = null;
-    }
-    if (!@typeInfo(T).Pointer.is_const) {
-        ptr_ptr.* = null;
-    }
+        const ptr = try resyncStructure(host, child_obj, CT);
+        if (!@typeInfo(T).Pointer.is_const) {
+            ptr_ptr.* = ptr;
+        }
+    } else |_| {}
     try host.setPointerStatus(ptr_obj, true);
 }
 
 fn desyncPointer(host: Host, ptr_obj: Value, comptime T: type) Error!void {
     if (!try host.getPointerStatus(ptr_obj)) {
-        return Error.Recursion;
+        return;
     }
     var ptr_ptr = try host.getMemory(ptr_obj, T);
     const CT = @typeInfo(T).Pointer.child;
@@ -822,13 +820,7 @@ fn resyncStructure(host: Host, obj: Value, comptime T: type) Error!*T {
                     .Pointer => {
                         const slot = getObjectSlot(T, index);
                         const ptr_obj = try host.readObjectSlot(obj, slot);
-                        resyncPointer(host, ptr_obj, field.type) catch |err| {
-                            if (err == Error.Recursion) {
-                                break;
-                            } else {
-                                return err;
-                            }
-                        };
+                        try resyncPointer(host, ptr_obj, field.type);
                     },
                     else => {},
                 }
@@ -847,13 +839,7 @@ fn desyncStructure(host: Host, obj: Value, comptime T: type) Error!void {
                     .Pointer => {
                         const slot = getObjectSlot(T, index);
                         const ptr_obj = try host.readObjectSlot(obj, slot);
-                        desyncPointer(host, ptr_obj, field.type) catch |err| {
-                            if (err == Error.Recursion) {
-                                break;
-                            } else {
-                                return err;
-                            }
-                        };
+                        try desyncPointer(host, ptr_obj, field.type);
                     },
                     else => {},
                 }
@@ -923,7 +909,8 @@ fn createRootFactory(comptime S: type) Thunk {
         fn exportStructure(host: Host, args: Value) callconv(.C) void {
             if (getStructure(host, S)) |result| {
                 host.writeObjectSlot(args, 0, result) catch {};
-            } else |_| {
+            } else |err| {
+                std.debug.print("Error: {s}\n", .{@errorName(err)});
                 if (@errorReturnTrace()) |trace| {
                     std.debug.dumpStackTrace(trace.*);
                 }

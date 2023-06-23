@@ -220,7 +220,7 @@ R"=====(
   const MEMORY = Symbol('memory');
   const SLOTS = Symbol('slots');
   const SYNC = Symbol('SYNC');
-  const SOURCE$1 = Symbol('SOURCE');
+  const SOURCE = Symbol('SOURCE');
 
   const TYPED_ARRAY = Symbol('typedArray');
   const ENUM_INDEX = Symbol('enumIndex');
@@ -656,7 +656,6 @@ R"=====(
       littleEndian = true,
       runtimeSafety = true,
     } = options;
-    let fn;
     switch (member.type) {
       case MemberType.Bool:
       case MemberType.Int:
@@ -665,21 +664,21 @@ R"=====(
         const { bitOffset } = member;
         const offset = bitOffset >> 3;
         const get = obtainDataViewGetter(member);
-        fn = function() { 
+        return function() { 
           return get.call(this[MEMORY], offset, littleEndian);
         };
-      } break;
+      }
       case MemberType.Void: {
-        fn = function() { 
+        return function() { 
           return null;
         }; 
-      } break;
+      }
       case MemberType.EnumerationItem: {
         const { bitOffset, structure } = member;
         const offset = bitOffset >> 3;
         const get = obtainDataViewGetter({ ...member, type: MemberType.Int });
         if (runtimeSafety) {
-          fn = function() {
+          return function() {
             const { constructor } = structure;
             const value = get.call(this[MEMORY], offset, littleEndian);
             // the enumeration constructor returns the singleton object for the value
@@ -690,39 +689,38 @@ R"=====(
             return object;
           }; 
         } else {
-          fn = function() {
+          return function() {
             const value = get.call(this[MEMORY], offset, littleEndian);
             return constructor(value);
           }; 
         }
-      } break;
+      }
       case MemberType.Object: {
         // automatically dereference pointer
         const { structure, slot } = member;
         if (structure.type === StructureType.Pointer) {
           const { instance: { members: [ target ] } } = structure;
           if (target.structure.type === StructureType.Singleton) {
-            fn = function() { 
+            return function() { 
               const pointer = this[SLOTS][slot];
               const object = pointer['*'];
               return object.get() 
             };  
           } else {
-            fn = function() { 
+            return function() { 
               const pointer = this[SLOTS][slot];
               const object = pointer['*'];
               return object;
             };  
           }
         } else {
-          fn = function() { 
+          return function() { 
             const object = this[SLOTS][slot];
             return object;
           }; 
         }
-      } break;
+      }
     }
-    return fn;
   }
 
   function obtainSetter(member, options) {
@@ -730,7 +728,6 @@ R"=====(
       littleEndian = true,
       runtimeSafety = true,
     } = options;
-    let fn;
     switch (member.type) {
       case MemberType.Bool:
       case MemberType.Int:
@@ -742,34 +739,33 @@ R"=====(
         if (runtimeSafety && type === MemberType.Int) {
           const { isSigned, bitSize } = member;
           const { min, max } = getIntRange(isSigned, bitSize);
-          fn = function(v) { 
+          return function(v) { 
             if (v < min || v > max) {
               throwOverflow(isSigned, bitSize, v);
             }
             set.call(this[MEMORY], offset, v, littleEndian);
           };
         } else {
-          fn = function(v) { 
+          return function(v) { 
             set.call(this[MEMORY], offset, v, littleEndian);
           };
         }
-      } break;
-      case MemberType.Void: {
+      }    case MemberType.Void: {
         if (runtimeSafety) {
-          fn = function(v) { 
+          return function(v) { 
             if (v != null) {
               throwNotNull();
             }
           };
         } else {
-          fn = function() {};
+          return function() {};
         }
-      } break;
+      }
       case MemberType.EnumerationItem: {
         const { bitOffset, structure } = member;
         const offset = bitOffset >> 3;
         const set = obtainDataViewSetter({ ...member, type: MemberType.Int });
-        fn = function(v) {
+        return function(v) {
           const { constructor } = structure;
           if (!(v instanceof constructor)) {
             throwEnumExpected(constructor);
@@ -785,19 +781,19 @@ R"=====(
           }
           const { instance: { members: [ target ] } } = structure;
           if (target.structure.type === StructureType.Singleton) {
-            fn = function(v) { 
+            return function(v) { 
               const pointer = this[SLOTS][slot];
               const object = pointer['*'];
               object.set(v); 
             };
           } else {
-            fn = function(v) { 
+            return function(v) { 
               const pointer = this[SLOTS][slot];            
               pointer['*'] = v;
             };
           }
         } else {
-          fn = function(v) {
+          return function(v) {
             const { constructor, copier } = structure;
             if (!(v instanceof constructor)) {
               v = new constructor(v);
@@ -806,32 +802,29 @@ R"=====(
             copier(object, v);
           };  
         }
-      } break;
+      }
     }
-    return fn;
   }
 
   function obtainArrayLengthGetter(member, options) {
     const { byteSize } = member;
-    let fn = function() {
+    return function() {
       const dv = this[MEMORY];
       return dv.byteLength / byteSize;
     };
-    return fn;
   }
 
   function obtainArrayGetter(member, options) {
     const {
       littleEndian = true,
     } = options;
-    let fn;
     switch (member.type) {
       case MemberType.Bool:
       case MemberType.Int:
       case MemberType.Float: {
         const { byteSize } = member;
         const get = obtainDataViewGetter(member);
-        fn = function(index) {
+        return function(index) {
           const dv = this[MEMORY];
           const offset = index * byteSize;
           try {
@@ -840,7 +833,7 @@ R"=====(
             throwOutOfBound(dv.byteLength, byteSize, index);
           }
         };
-      } break;
+      }
       case MemberType.Object: {
         const { byteSize } = member;
         return function(index) { 
@@ -850,8 +843,8 @@ R"=====(
           }
           return slots[index]; 
         };
-      }  }
-    return fn;
+      }
+    }
   }
 
   function obtainArraySetter(member, options) {
@@ -859,7 +852,6 @@ R"=====(
       littleEndian = true,
       runtimeSafety = true,
     } = options;
-    let fn;
     switch (member.type) {
       case MemberType.Bool:
       case MemberType.Int:
@@ -870,7 +862,7 @@ R"=====(
         if (runtimeSafety && type === MemberType.Int) {
           const { isSigned, bitSize, byteSize } = member;
           const { min, max } = getIntRange(isSigned, bitSize);
-          fn = function(index, v) { 
+          return function(index, v) { 
             if (v < min || v > max) {
               throwOverflow(isSigned, bitSize, v);
             }
@@ -883,7 +875,7 @@ R"=====(
             }
           };
         } else {
-          fn = function(index, v) { 
+          return function(index, v) { 
             const offset = index * byteSize;
             const dv = this[MEMORY];
             try {
@@ -893,11 +885,11 @@ R"=====(
             }
           };
         }
-      } break;
+      }
       case MemberType.Object: {
         const { structure, byteSize } = member;
         const { constructor, copier } = structure;
-        fn = function(index, v) {
+        return function(index, v) {
           if (!(v instanceof constructor)) {
             v = new constructor(v);
           }
@@ -907,9 +899,8 @@ R"=====(
           }
           copier(child, v);
         };  
-      } break;
+      }
     }
-    return fn;
   }
 
   function getArrayIterator() {
@@ -932,75 +923,66 @@ R"=====(
   }
 
   function obtainPointerGetter(member, options) {
-    let fn;
     if (member.type === MemberType.Object) {
       const { structure, slot } = member;
       if (structure.type === StructureType.Pointer) {
         // get pointer from slot
-        fn = function() { 
-          const pointer = this[SOURCE$1][SLOTS][slot];
+        return function() { 
+          const pointer = this[SOURCE][SLOTS][slot];
           return pointer;
         };
       }
     }
-    return fn;
   }
 
   function obtainPointerSetter(member, options) {
-    let fn;
     if (member.type === MemberType.Object) {
       const { structure, slot } = member;
       if (structure.type === StructureType.Pointer) {
         // set pointer itself
-        fn = function(v) { 
+        return function(v) { 
           const { constructor, copier } = structure;
           if (!(v instanceof constructor)) {
             throwInvalidType(constructor);
           }
-          copier(this[SOURCE$1][SLOTS][slot], v);
+          copier(this[SOURCE][SLOTS][slot], v);
         };
       }
     }
-    return fn;
   }
 
   function obtainPointerArrayGetter(member, options) {
-    let fn;
     if (member.type === MemberType.Object) {
       const { structure } = member;
       if (structure.type === StructureType.Pointer) {
-        fn = function(index) { 
-          const pointer = this[SOURCE$1][SLOTS][index];
+        return function(index) { 
+          const pointer = this[SOURCE][SLOTS][index];
           return pointer;
         };
       }
     }
-    return fn;
   }
 
   function obtainPointerArraySetter(member, options) {
-    let fn;
     if (member.type === MemberType.Object) {
       const { structure } = member;
       if (structure.type === StructureType.Pointer) {
-        fn = function(index, v) { 
+        return function(index, v) { 
           const { constructor, copier } = structure;
           if (!(v instanceof constructor)) {
             throwInvalidType(constructor);
           }
-          const object = this[SOURCE$1][SLOTS][index];
+          const object = this[SOURCE][SLOTS][index];
           copier(object, v);
         };
       }
     }
-    return fn;
   }
 
   function obtainPointerArrayLengthGetter(member, options) {
-    let fn = function() {
-      return this[SOURCE$1].length;
+    return function() {
+      return this[SOURCE].length;
     };
-    return fn;
   }
 
   function obtainTypedArrayGetter(members) {
@@ -1058,6 +1040,10 @@ R"=====(
     thunk.call(args, globalSlots, SLOTS, MEMORY, SYNC);
   }
 
+  function log(...args) {
+    console.log(...args);
+  }
+
   function invokeFactory(thunk) {
     const args = { [SLOTS]: {} };
     thunk.call(args, globalSlots, SLOTS, MEMORY, SYNC);
@@ -1073,7 +1059,7 @@ R"=====(
         return;
       }
       const memory = object[MEMORY];
-      if (memory.buffer instanceof ArrayBuffer) {
+      if (memory && memory.buffer instanceof ArrayBuffer) {
         if (!included.get(memory.buffer)) {
           buffers.push(memory.buffer);
           included.set(memory.buffer, true);
@@ -1087,7 +1073,7 @@ R"=====(
         }
       }
     };
-    scan(args);
+    scan(args); 
     return buffers;
   }
 
@@ -1127,7 +1113,7 @@ R"=====(
 
   function attachTemplate(s, def) {
     const target = (def.isStatic) ? s.static : s.instance;
-    target.template = def.template;
+    target.template = def.template;  
   }
 
   function finalizeStructure(s) {
@@ -1136,6 +1122,7 @@ R"=====(
         case StructureType.Singleton: 
           return finalizeSingleton(s);
         case StructureType.Array:
+        case StructureType.Slice:
           return finalizeArray(s);
         case StructureType.Struct:
         case StructureType.ExternUnion:
@@ -1240,7 +1227,7 @@ R"=====(
       Object.defineProperties(self, {
         [MEMORY]: { value: dv },
       });
-      if (!creating) {
+      if (creating) ; else {
         return self;
       }
     };
@@ -1301,10 +1288,10 @@ R"=====(
         ptrDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
       }
     }
-    const hasSlots = !!members.find(m => m.type === MemberType.Object);
+    const objectMembers = members.filter(m => m.type === MemberType.Object);
     const copier = s.copier = function(dest, src) {
       copy(dest[MEMORY], src[MEMORY]);
-      if (hasSlots) {
+      if (objectMembers.length > 0) {
         Object.assign(dest[SLOTS], src[SLOTS]);
       }
     };
@@ -1324,10 +1311,17 @@ R"=====(
         [MEMORY]: { value: dv },
       });
       Object.defineProperties(self, descriptors);
-      if (hasSlots) {
+      if (objectMembers.length > 0) {
+        // create child objects
+        const slots = {};
+        for (const { structure: { constructor }, bitOffset, byteSize, slot } of objectMembers) {
+          const offset = bitOffset >> 3;
+          const childDV = new DataView(dv.buffer, offset, byteSize);
+          slots[slot] = constructor(childDV);
+        }
         Object.defineProperties(self, {
-          [SLOTS]: { value: {} },
-        });  
+          [SLOTS]: { value: slots },
+        });
       } 
       if (creating) {
         if (template) {
@@ -1610,6 +1604,7 @@ R"=====(
   exports.getArgumentBuffers = getArgumentBuffers;
   exports.globalSlots = globalSlots;
   exports.invokeFactory = invokeFactory;
+  exports.log = log;
 
   return exports;
 

@@ -17,12 +17,16 @@ import { obtainTypedArrayGetter } from './typed-array.js';
 import { obtainCopyFunction } from './memory.js';
 import { obtainDataView, getDataView } from './data-view.js';
 import { throwNoNewEnum } from './error.js';
-import { MEMORY, SLOTS, SYNC, ENUM_INDEX, ENUM_ITEMS } from './symbol.js';
+import { MEMORY, SLOTS, SYNC, SOURCE, ENUM_INDEX, ENUM_ITEMS } from './symbol.js';
 
 export const globalSlots = {};
 
 function invokeThunk(thunk, args) {
   thunk.call(args, globalSlots, SLOTS, MEMORY, SYNC);
+}
+
+export function log(...args) {
+  console.log(...args);
 }
 
 export function invokeFactory(thunk) {
@@ -40,7 +44,7 @@ export function getArgumentBuffers(args) {
       return;
     }
     const memory = object[MEMORY];
-    if (memory.buffer instanceof ArrayBuffer) {
+    if (memory && memory.buffer instanceof ArrayBuffer) {
       if (!included.get(memory.buffer)) {
         buffers.push(memory.buffer);
         included.set(memory.buffer, true);
@@ -54,7 +58,7 @@ export function getArgumentBuffers(args) {
       }
     }
   };
-  scan(args);
+  scan(args); 
   return buffers;
 }
 
@@ -94,7 +98,7 @@ export function attachMethod(s, def) {
 
 export function attachTemplate(s, def) {
   const target = (def.isStatic) ? s.static : s.instance;
-  target.template = def.template;
+  target.template = def.template;  
 }
 
 export function finalizeStructure(s) {
@@ -103,6 +107,7 @@ export function finalizeStructure(s) {
       case StructureType.Singleton: 
         return finalizeSingleton(s);
       case StructureType.Array:
+      case StructureType.Slice:
         return finalizeArray(s);
       case StructureType.Struct:
       case StructureType.ExternUnion:
@@ -196,13 +201,8 @@ function finalizeArray(s) {
   };
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
-    let self, dv, init;
+    let self, dv;
     if (creating) {
-      // new operation--expect an array
-      // TODO: validate
-      if (arg !== undefined) {
-        init = arg;
-      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {
@@ -212,7 +212,11 @@ function finalizeArray(s) {
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },
     });
-    if (!creating) {
+    if (creating) {
+      // expect an array
+      // TODO: validate
+
+    } else {
       return self;
     }
   };
@@ -273,10 +277,10 @@ function finalizeStruct(s) {
       ptrDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
     }
   }
-  const hasSlots = !!members.find(m => m.type === MemberType.Object);
+  const objectMembers = members.filter(m => m.type === MemberType.Object);
   const copier = s.copier = function(dest, src) {
     copy(dest[MEMORY], src[MEMORY]);
-    if (hasSlots) {
+    if (objectMembers.length > 0) {
       Object.assign(dest[SLOTS], src[SLOTS]);
     }
   };
@@ -296,10 +300,17 @@ function finalizeStruct(s) {
       [MEMORY]: { value: dv },
     });
     Object.defineProperties(self, descriptors);
-    if (hasSlots) {
+    if (objectMembers.length > 0) {
+      // create child objects
+      const slots = {};
+      for (const { structure: { constructor }, bitOffset, byteSize, slot } of objectMembers) {
+        const offset = bitOffset >> 3;
+        const childDV = new DataView(dv.buffer, offset, byteSize);
+        slots[slot] = constructor(childDV);
+      }
       Object.defineProperties(self, {
-        [SLOTS]: { value: {} },
-      });  
+        [SLOTS]: { value: slots },
+      });
     } 
     if (creating) {
       if (template) {
