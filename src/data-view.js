@@ -176,7 +176,7 @@ export function obtainDataViewGetter({ type, isSigned, bitOffset, bitSize, byteS
           return (s & valueMask) - (s & signMask);
         };
       } else {
-        const valueMask = (2 ** bitSize - 1) << bitPos; 
+        const valueMask = (2 ** bitSize - 1); 
         fn = function(offset) {
           const n = get.call(this, offset);
           const s = n >>> bitPos;

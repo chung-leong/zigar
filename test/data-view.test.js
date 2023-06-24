@@ -555,6 +555,7 @@ describe('DataView functions', function() {
       }
     })
     it('should return functions for setting non-aligned integers', function() {
+      this.timeout(10000);
       const isSigned = true;
       for (const isSigned of [ true, false ]) {
         for (let bitSize = 2; bitSize <= 64; bitSize++) {
@@ -627,6 +628,7 @@ describe('DataView functions', function() {
       }
     })
     it('should return functions for setting non-aligned floats', function() {
+      this.timeout(10000);
       const error = (n1, n2) => {
         const diff = n1 - n2;
         return diff ? diff / Math.max(n1, n2) : 0;
