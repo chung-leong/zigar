@@ -61,6 +61,16 @@ const Structs = struct {
         number5: f128 = -std.math.inf(f128),
         number6: f128 = std.math.nan(f128),
     };
+    const OverflowFloat80 = struct {
+        max: f80 = std.math.floatMax(f64),
+        maxx2: f80 = @floatCast(f80, std.math.floatMax(f64)) * 2,
+        minusMaxx2: f80 = -@floatCast(f80, std.math.floatMax(f64)) * 2,
+    };
+    const OverflowFloat128 = struct {
+        max: f128 = std.math.floatMax(f64),
+        maxx2: f128 = @floatCast(f128, std.math.floatMax(f64)) * 2,
+        minusMaxx2: f128 = -@floatCast(f128, std.math.floatMax(f64)) * 2,
+    };
     const OptionalIntSet = struct {
         number: ?i64 = 0x00000FFFF,
     };
@@ -82,6 +92,7 @@ const Structs = struct {
 };
 
 pub fn main() !void {
+    std.debug.print("{d}\n", .{std.math.floatMax(f16)});
     var args = std.process.args();
     _ = args.next() orelse return;
     const arg1 = args.next() orelse {
@@ -99,7 +110,7 @@ pub fn main() !void {
     inline for (@typeInfo(Structs).Struct.decls) |decl| {
         if (std.mem.eql(u8, arg1, decl.name)) {
             const T = @field(Structs, decl.name);
-            try stdout.print("{s} ({d}/{d}/{d}): \n\n", .{ @typeName(T), @bitSizeOf(T), @sizeOf(T), @alignOf(T) });
+            try stdout.print("{s} ({d} bytes): \n\n", .{ @typeName(T), @sizeOf(T) });
             var s: T = switch (T) {
                 Structs.BasicUnion => .{ .dog = 17 },
                 else => .{},

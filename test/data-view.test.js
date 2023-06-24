@@ -197,6 +197,28 @@ describe('DataView functions', function() {
       const res6 = f.call(dv, 80, true);
       expect(Object.is(res6, NaN)).to.be.true;
     })
+    it('should handle floating point overflow correctly (80-bit)', function() {
+      const dv = new DataView(new ArrayBuffer(64));
+      // from struct-bytes: OverflowFloat80
+      const bytes = [ 0, 248, 255, 255, 255, 255, 255, 255, 254, 67, 0, 0, 0, 0, 0, 0, 0, 248, 255, 255, 255, 255, 255, 255, 255, 67, 0, 0, 0, 0, 0, 0, 0, 248, 255, 255, 255, 255, 255, 255, 255, 195, 0, 0, 0, 0, 0, 0, ];
+      for (const [ i, b ] of bytes.entries()) {
+        dv.setUint8(i, b);
+      }
+      const member = {
+        type: MemberType.Float,
+        isSigned: true,
+        bitSize: 80,
+        bitOffset: 0,
+        byteSize: 16,
+      };
+      const f = obtainDataViewGetter(member);
+      const value1 = f.call(dv, 0, true);
+      expect(value1).to.equal(Number.MAX_VALUE);
+      const value2 = f.call(dv, 16, true);
+      expect(value2).to.equal(Infinity);
+      const value3 = f.call(dv, 32, true);
+      expect(value3).to.equal(-Infinity);
+    })
     it('should return functions for getting non-standard float types (128-bit)', function() {
       const dv = new DataView(new ArrayBuffer(96));
       // from struct-bytes: Float16
@@ -224,6 +246,28 @@ describe('DataView functions', function() {
       expect(Object.is(res5, -Infinity)).to.be.true;
       const res6 = f.call(dv, 80, true);
       expect(Object.is(res6, NaN)).to.be.true;
+    })
+    it('should handle floating point overflow correctly (128-bit)', function() {
+      const dv = new DataView(new ArrayBuffer(64));
+      // from struct-bytes: OverflowFloat80
+      const bytes = [ 0, 0, 0, 0, 0, 0, 0, 240, 255, 255, 255, 255, 255, 255, 254, 67, 0, 0, 0, 0, 0, 0, 0, 240, 255, 255, 255, 255, 255, 255, 255, 67, 0, 0, 0, 0, 0, 0, 0, 240, 255, 255, 255, 255, 255, 255, 255, 195, ];
+      for (const [ i, b ] of bytes.entries()) {
+        dv.setUint8(i, b);
+      }
+      const member = {
+        type: MemberType.Float,
+        isSigned: true,
+        bitSize: 128,
+        bitOffset: 0,
+        byteSize: 16,
+      };
+      const f = obtainDataViewGetter(member);
+      const value1 = f.call(dv, 0, true);
+      expect(value1).to.equal(Number.MAX_VALUE);
+      const value2 = f.call(dv, 16, true);
+      expect(value2).to.equal(Infinity);
+      const value3 = f.call(dv, 32, true);
+      expect(value3).to.equal(-Infinity);
     })
   })
   describe('obtainDataViewSetter', function() {
@@ -414,6 +458,25 @@ describe('DataView functions', function() {
       for (const [ i, b ] of bytes.slice(10, 12).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
+    })
+    it('should handle floating point overflow correctly (16-bit)', function() {
+      const dv = new DataView(new ArrayBuffer(2));
+      const member = {
+        type: MemberType.Float,
+        isSigned: true,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+      };
+      const f = obtainDataViewSetter(member);
+      const get = obtainDataViewGetter(member);
+      f.call(dv, 0, 65504, true);
+      const value1 = get.call(dv, 0, true);
+      expect(value1).to.equal(65504);
+      f.call(dv, 0, 65504 * 2, true);
+      const value2 = get.call(dv, 0, true);
+      expect(value2).to.equal(Infinity);
+
     })
     it('should return functions for setting non-standard float types (80-bit)', function() {
       const dv = new DataView(new ArrayBuffer(16));
@@ -607,7 +670,7 @@ describe('DataView functions', function() {
           for (let i = 0; i < 1000; i++) {
             const nom = generator.random_int();
             const denom = generator.random_int();
-            const value = nom / denom;
+            const value = nom / denom * (generator.random() > 0.5 ? 1 : -1);
             // clear guard bits and set the value
             setG1.call(dv, offsetG1, 0);
             setG2.call(dv, offsetG2, 0);

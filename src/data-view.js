@@ -109,8 +109,12 @@ export function obtainDataViewGetter({ type, isSigned, bitOffset, bitSize, byteS
             } else {
               return NaN;
             }
+          } 
+          const exp64 = exp - 16383n + 1023n;
+          if (exp64 >= 2047n) {
+            return (sign) ? -Infinity : Infinity;
           }
-          const n64 = (sign << 63n) | ((exp - 16383n + 1023n) << 52n) | (frac >> 11n);
+          const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 11n);
           dest.setBigUint64(0, n64, littleEndian);
           return dest.getFloat64(0, littleEndian);
         }
@@ -136,7 +140,11 @@ export function obtainDataViewGetter({ type, isSigned, bitOffset, bitSize, byteS
               return NaN;
             }
           }
-          const n64 = (sign << 63n) | ((exp - 16383n + 1023n) << 52n) | (frac >> 60n);
+          const exp64 = exp - 16383n + 1023n;
+          if (exp64 >= 2047n) {
+            return (sign) ? -Infinity : Infinity;
+          }
+          const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 60n);
           dest.setBigUint64(0, n64, littleEndian);
           return dest.getFloat64(0, littleEndian);
         }
@@ -272,13 +280,16 @@ export function obtainDataViewSetter({ type, bitSize, isSigned, byteSize, bitOff
           const sign = n >>> 31;
           const exp = (n & 0x7F800000) >> 23;
           const frac = n & 0x007FFFFF;
+          const exp16 = (exp - 127 + 15);
           let n16;
           if (exp === 0) {
             n16 = sign << 15;
           } else if (exp === 0xFF) {
             n16 = sign << 15 | 0x1F << 10 | (frac ? 1 : 0);
+          } else if (exp16 >= 31) {
+            n16 = sign << 15 | 0x1F << 10;
           } else {
-            n16 = sign << 15 | (exp - 127 + 15) << 10 | (frac >> 13);
+            n16 = sign << 15 | exp16 << 10 | (frac >> 13);
           }
           set.call(this, offset, n16, littleEndian);
         }
