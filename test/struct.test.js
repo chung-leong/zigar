@@ -144,7 +144,7 @@ describe('Struct functions', function() {
       const object = {
         [MEMORY]: dv,
         [SLOTS]: {
-          1: DummyValue,
+          1: { '*': DummyValue },
         },
       };
       const member = {
@@ -155,7 +155,20 @@ describe('Struct functions', function() {
         byteSize: 8,
         slot: 1,
         mutable: true,
-        structure: { type: StructureType.Singleton, constructor: DummyStruct },
+        structure: {
+          type: StructureType.Pointer,
+          instance: {
+            members: [
+              {
+                type: MemberType.Object,
+                structure: { 
+                  type: StructureType.Singleton, 
+                  constructor: DummyStruct,
+                },
+              },
+            ],  
+          } 
+        }
       };
       const f = obtainGetter(member, {});
       const res = f.call(object);
@@ -254,29 +267,6 @@ describe('Struct functions', function() {
       f.call(object, DummyEnum(1));
       expect(dv.getUint32(4, true)).to.equal(1);
     })
-    it('should return a function for setting a pointer', function() {
-      const DummyStruct = class {};
-      const DummyValue = new DummyStruct;
-      const dv = new DataView(new ArrayBuffer(8));
-      const object = {
-        [MEMORY]: dv,
-        [SLOTS]: {
-        },
-      };
-      const member = {
-        type: MemberType.Object,
-        signed: false,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 1,
-        mutable: true,
-        structure: { type: StructureType.Struct, constructor: DummyStruct },
-      };
-      const f = obtainSetter(member, {});
-      f.call(object, DummyValue);
-      expect(object[SLOTS][1]).to.equal(DummyValue);
-    })
     it('should return a function that set a primitive referenced by a pointer', function() {
       let value = 1234;
       const DummyStruct = class {
@@ -289,7 +279,7 @@ describe('Struct functions', function() {
       const object = {
         [MEMORY]: dv,
         [SLOTS]: {
-          1: DummyValue,
+          1: { '*': DummyValue },
         },
       };
       const member = {
@@ -300,7 +290,19 @@ describe('Struct functions', function() {
         byteSize: 8,
         slot: 1,
         mutable: true,
-        structure: { type: StructureType.Singleton, constructor: DummyStruct },
+        structure: {
+          type: StructureType.Pointer,
+          instance: {
+            members: [
+              {
+                structure: { 
+                  type: StructureType.Singleton, 
+                  constructor: DummyStruct 
+                },
+              }
+            ]
+          }
+        }
       };
       const f = obtainSetter(member, {});
       const res = f.call(object, 4567);
