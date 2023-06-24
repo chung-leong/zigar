@@ -17,12 +17,12 @@ import { obtainTypedArrayGetter } from './typed-array.js';
 import { obtainCopyFunction } from './memory.js';
 import { obtainDataView, getDataView } from './data-view.js';
 import { throwNoNewEnum } from './error.js';
-import { MEMORY, SLOTS, SYNC, SOURCE, ENUM_INDEX, ENUM_ITEMS } from './symbol.js';
+import { MEMORY, SLOTS, ZIG, SOURCE, ENUM_INDEX, ENUM_ITEMS } from './symbol.js';
 
 export const globalSlots = {};
 
 function invokeThunk(thunk, args) {
-  thunk.call(args, globalSlots, SLOTS, MEMORY, SYNC);
+  thunk.call(args, globalSlots, SLOTS, MEMORY, ZIG);
 }
 
 export function log(...args) {
@@ -31,7 +31,7 @@ export function log(...args) {
 
 export function invokeFactory(thunk) {
   const args = { [SLOTS]: {} };
-  thunk.call(args, globalSlots, SLOTS, MEMORY, SYNC);
+  thunk.call(args, globalSlots, SLOTS, MEMORY, ZIG);
   return args[SLOTS][0].constructor;
 }
 
@@ -199,7 +199,9 @@ function finalizeArray(s) {
   const copier = s.copier = function(dest, src) {
     copy(dest[MEMORY], src[MEMORY]);   
   };
+  console.log(`Finalizing ${name}`);
   const constructor = s.constructor = function(arg) {
+    console.log(`Constructing ${name}`);
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
@@ -208,14 +210,14 @@ function finalizeArray(s) {
     } else {
       self = Object.create(constructor.prototype);
       dv = obtainDataView(arg, size);
+      console.log({ dv });
     }
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },
     });
     if (creating) {
       // expect an array
-      // TODO: validate
-
+      // TODO: validate and set memory
     } else {
       return self;
     }
@@ -469,7 +471,10 @@ export function finalizePointer(s) {
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },
       [SLOTS]: { value: slots },
-      [SYNC]: { value: false, writable: true },
+      // a boolean value indicating whether Zig currently owns the pointer 
+      // set to undefined here, such that it isn't possible to create a 
+      // pointer on the JavaScript side (only C++ code can set it to true/false) 
+      [ZIG]: { value: undefined, writable: true },
     });
     if (creating) {
       slots[0] = arg;

@@ -207,7 +207,7 @@ struct Host {
   Local<Object> global_slots;  
   Local<Symbol> symbol_slots;
   Local<Symbol> symbol_memory;
-  Local<Symbol> symbol_sync;
+  Local<Symbol> symbol_zig;
   FunctionData* function_data;
   bool remove_function_data;
 
@@ -226,7 +226,7 @@ struct Host {
     global_slots(info[0].As<Object>()),
     symbol_slots(info[1].As<Symbol>()),
     symbol_memory(info[2].As<Symbol>()),
-    symbol_sync(info[3].As<Symbol>()),
+    symbol_zig(info[3].As<Symbol>()),
     function_data(reinterpret_cast<FunctionData*>(info.Data().As<External>()->Value())),
     remove_function_data(false) {
   }
@@ -237,3 +237,8 @@ struct Host {
     }
   }
 };
+
+static Result GetArgumentBuffers(Host* call);
+static Result Log(Host* call, 
+                  int argc, 
+                  Local<Value>* argv);

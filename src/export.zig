@@ -36,19 +36,19 @@ const allocator = struct {
 const structure_slot = allocator.get(.{});
 const test_slot = allocator.get(.{ .Type = u32 });
 
-fn getStructureSlot(comptime T: anytype) u32 {
-    return structure_slot.get(.{ .Type = T });
+fn getStructureSlot(comptime T: anytype, comptime size: std.builtin.Type.Pointer.Size) u32 {
+    return structure_slot.get(.{ .Type = T, .Size = size });
 }
 
 test "getStructureSlot" {
     const A = struct {};
-    const slotA = getStructureSlot(A);
+    const slotA = getStructureSlot(A, .One);
     assert(slotA == 0);
     const B = struct {};
-    const slotB = getStructureSlot(B);
+    const slotB = getStructureSlot(B, .One);
     assert(slotB == 1);
-    assert(getStructureSlot(A) == 0);
-    assert(getStructureSlot(B) == 1);
+    assert(getStructureSlot(A, .One) == 0);
+    assert(getStructureSlot(B, .One) == 1);
 }
 
 fn getObjectSlot(comptime T: anytype, comptime index: comptime_int) u32 {
@@ -270,6 +270,18 @@ test "isPacked" {
     assert(isPacked(B) == true);
 }
 
+fn isPointer(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Pointer => true,
+        else => false,
+    };
+}
+
+test "isPointer" {
+    assert(isPointer(*u8) == true);
+    assert(isPointer(u8) == false);
+}
+
 fn getMemberType(comptime T: type) MemberType {
     return switch (@typeInfo(T)) {
         .Bool => .Bool,
@@ -296,7 +308,7 @@ fn getStructureType(comptime T: type) StructureType {
         .Enum => .Enumeration,
         .Array => .Array,
         .Opaque => .Opaque,
-        .Pointer => |pt| if (pt.size == .One) .Pointer else .Slice,
+        .Pointer => .Pointer,
         else => .Singleton,
     };
 }
@@ -332,23 +344,71 @@ const Callbacks = extern struct {
 };
 var callbacks: Callbacks = undefined;
 
+fn PointerType(comptime CT: type, comptime size: std.builtin.Type.Pointer.Size) type {
+    return switch (size) {
+        .One => *CT,
+        .Slice => []CT,
+        .Many => [*]CT,
+        .C => [*c]CT,
+    };
+}
+
+fn castMemory(memory: Memory, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) PointerType(T, size) {
+    const aligned_ptr = @alignCast(@max(@alignOf(T), 1), memory.bytes);
+    return switch (size) {
+        .One => @ptrCast(*T, aligned_ptr),
+        .Slice => slice: {
+            const many_ptr = @ptrCast([*]T, aligned_ptr);
+            const count = memory.len / @sizeOf(T);
+            break :slice many_ptr[0..count];
+        },
+        .Many => @ptrCast([*]T, aligned_ptr),
+        .C => @ptrCast([*c]T, aligned_ptr),
+    };
+}
+
+test "castMemory" {
+    var array: [5]u8 = .{ 'H', 'e', 'l', 'l', 'o' };
+    const memory: Memory = .{
+        .bytes = &array,
+        .len = array.len,
+    };
+    const p1 = castMemory(memory, u8, .One);
+    assert(p1.* == 'H');
+    assert(@typeInfo(@TypeOf(p1)).Pointer.size == .One);
+    const p2 = castMemory(memory, u8, .Slice);
+    assert(p2[0] == 'H');
+    assert(p2.len == 5);
+    assert(@typeInfo(@TypeOf(p2)).Pointer.size == .Slice);
+    const p3 = castMemory(memory, u8, .Many);
+    assert(p3[0] == 'H');
+    assert(@typeInfo(@TypeOf(p3)).Pointer.size == .Many);
+    const p4 = castMemory(memory, u8, .C);
+    assert(p4[0] == 'H');
+    assert(@typeInfo(@TypeOf(p4)).Pointer.size == .C);
+}
+
 // host interface
 const Host = *opaque {
-    fn getMemory(self: Host, container: Value, comptime T: type) Error!*T {
+    fn getMemory(self: Host, container: Value, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) Error!PointerType(T, size) {
         var memory: Memory = undefined;
         if (callbacks.get_memory(self, container, &memory) != .OK) {
             return Error.Unknown;
         }
-        const aligned_ptr = @alignCast(@max(@alignOf(T), 1), memory.bytes);
-        return @ptrCast(*T, aligned_ptr);
+        return castMemory(memory, T, size);
     }
 
-    fn wrapMemory(self: Host, memory: Memory, comptime T: type) Error!Value {
-        const slot = getStructureSlot(T);
+    fn wrapMemory(self: Host, memory: Memory, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) Error!Value {
+        const slot = getStructureSlot(T, size);
         const structure = try self.readGlobalSlot(slot);
         var value: Value = undefined;
         if (callbacks.wrap_memory(self, structure, &memory, &value) != .OK) {
             return Error.Unknown;
+        }
+        if (isPointer(T)) {
+            // mark pointer as valid by setting its ZIG private prop to a boolean (undefined initially)
+            // true means that Zig owns the pointer as this moment
+            try self.setPointerStatus(value, true);
         }
         return value;
     }
@@ -442,10 +502,10 @@ const Host = *opaque {
 
 // export functions
 fn getStructure(host: Host, comptime T: type) Error!Value {
-    const s_slot = getStructureSlot(T);
+    const s_slot = getStructureSlot(T, .One);
     return host.readGlobalSlot(s_slot) catch undefined: {
         const def: Structure = .{
-            .name = @ptrCast([*:0]const u8, @typeName(T)),
+            .name = getStructureName(T),
             .structure_type = getStructureType(T),
             .total_size = @sizeOf(T),
         };
@@ -460,6 +520,21 @@ fn getStructure(host: Host, comptime T: type) Error!Value {
         try host.finalizeStructure(structure);
         break :undefined structure;
     };
+}
+
+fn getStructureName(comptime T: type) [*:0]const u8 {
+    const name = switch (@typeInfo(T)) {
+        .Pointer => |pt| switch (pt.size) {
+            .One => @typeName(T),
+            // since there're no pointers in JavaScript, we need to use a pair
+            // of objects to represent a slice, one holding the pointer with
+            // the other holding the data it points to
+            // we'll give the name "*[]T" to the former and "[]T" to the latter
+            else => @typeName(*T),
+        },
+        else => @typeName(T),
+    };
+    return @ptrCast([*:0]const u8, name);
 }
 
 fn addMembers(host: Host, structure: Value, comptime T: type) Error!void {
@@ -484,13 +559,36 @@ fn addMembers(host: Host, structure: Value, comptime T: type) Error!void {
             });
         },
         .Pointer => |pt| {
+            const child_structure = try getStructure(host, pt.child);
+            const target_structure = switch (pt.size) {
+                .One => child_structure,
+                else => slice: {
+                    const slice_slot = getStructureSlot(T, pt.size);
+                    const slice_def: Structure = .{
+                        // see comment in getStructureName()
+                        .name = @ptrCast([*:0]const u8, @typeName(T)),
+                        .structure_type = .Slice,
+                        .total_size = @sizeOf(pt.child),
+                    };
+                    const slice_structure = try host.beginStructure(slice_def);
+                    try host.writeGlobalSlot(slice_slot, slice_structure);
+                    try host.attachMember(slice_structure, .{
+                        .member_type = getMemberType(pt.child),
+                        .is_signed = isSigned(pt.child),
+                        .is_const = pt.is_const,
+                        .bit_size = @bitSizeOf(pt.child),
+                        .bit_offset = 0,
+                        .byte_size = @sizeOf(pt.child),
+                        .structure = child_structure,
+                    });
+                    try host.finalizeStructure(slice_structure);
+                    break :slice slice_structure;
+                },
+            };
             try host.attachMember(structure, .{
                 .member_type = getMemberType(T),
                 .is_const = pt.is_const,
-                .bit_size = @bitSizeOf(T),
-                .bit_offset = 0,
-                .byte_size = @sizeOf(T),
-                .structure = try getStructure(host, pt.child),
+                .structure = target_structure,
             });
         },
         .Struct, .Union => {
@@ -539,7 +637,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) Error!void {
             };
             if (has_data) {
                 const template = try host.createTemplate(&data);
-                try desyncStructure(host, template, T);
+                try dezigStructure(host, template, ptr);
                 return host.attachTemplate(structure, .{
                     .is_static = false,
                     .object = template,
@@ -634,10 +732,9 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) Error!void {
                 .bytes = @ptrCast([*]u8, &typed_ptr),
                 .len = @sizeOf(PT),
             };
-            const ptr_obj = try host.wrapMemory(memory, PT);
-            // resync/desync it, creating SharedArrayBuffer or ArrayBuffer
-            _ = try resyncPointer(host, ptr_obj, PT);
-            try desyncPointer(host, ptr_obj, PT);
+            const ptr_obj = try host.wrapMemory(memory, PT, .One);
+            // dezig it, creating SharedArrayBuffer or ArrayBuffer
+            try dezigStructure(host, ptr_obj, &typed_ptr);
             const template = template_maybe orelse create: {
                 const obj = try host.createTemplate(&.{});
                 template_maybe = obj;
@@ -767,85 +864,181 @@ test "ArgumentStruct" {
 
 const invalid_address = if (@bitSizeOf(*u8) == 64) 0xaaaa_aaaa_aaaa_aaaa else 0xaaaa_aaaa;
 
-fn invalidPointer(PT: type) PT {
-    return @intToPtr(PT, invalid_address);
-}
-
-fn resyncPointer(host: Host, ptr_obj: Value, comptime T: type) Error!void {
-    if (try host.getPointerStatus(ptr_obj)) {
-        return;
-    }
-    var ptr_ptr = try host.getMemory(ptr_obj, T);
-    if (host.readObjectSlot(ptr_obj, 0)) |child_obj| {
-        const CT = @typeInfo(T).Pointer.child;
-        const ptr = try resyncStructure(host, child_obj, CT);
-        if (!@typeInfo(T).Pointer.is_const) {
-            ptr_ptr.* = ptr;
-        }
-    } else |_| {}
-    try host.setPointerStatus(ptr_obj, true);
-}
-
-fn desyncPointer(host: Host, ptr_obj: Value, comptime T: type) Error!void {
-    if (!try host.getPointerStatus(ptr_obj)) {
-        return;
-    }
-    var ptr_ptr = try host.getMemory(ptr_obj, T);
-    const CT = @typeInfo(T).Pointer.child;
-    if (host.readObjectSlot(ptr_obj, 0)) |child_obj| {
-        var ptr = try host.getMemory(child_obj, CT);
-        // see if pointer is still pointing to what it was before
-        if (ptr == ptr_ptr.*) {
-            try desyncStructure(host, child_obj, CT);
-            return;
-        }
-    } else |_| {}
-    // ask the host to create a new object
-    const memory: Memory = .{
-        .bytes = @intToPtr([*]u8, @ptrToInt(ptr_ptr.*)),
-        .len = @sizeOf(CT),
+fn hasPointer(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Pointer => true,
+        .Array => |ar| hasPointer(ar.child),
+        .Struct => |st| any: {
+            inline for (st.fields) |field| {
+                if (hasPointer(field.type)) {
+                    break :any true;
+                }
+            }
+            break :any false;
+        },
+        .Union => |un| any: {
+            inline for (un.fields) |field| {
+                if (hasPointer(field.type)) {
+                    break :any true;
+                }
+            }
+            break :any false;
+        },
+        else => false,
     };
-    const new_obj = try host.wrapMemory(memory, CT);
-    try desyncStructure(host, new_obj, CT);
-    try host.writeObjectSlot(ptr_obj, 0, new_obj);
-    try host.setPointerStatus(ptr_obj, false);
 }
 
-fn resyncStructure(host: Host, obj: Value, comptime T: type) Error!*T {
-    var ptr = try host.getMemory(obj, T);
+test "hasPointer" {
+    const A = struct {
+        number: i32,
+    };
+    const B = struct {
+        number: i32,
+        a: A,
+    };
+    const C = struct {
+        number: i32,
+        a: A,
+        pointer: [*]i32,
+    };
+    const D = union {
+        a: A,
+        c: C,
+    };
+    assert(hasPointer(u8) == false);
+    assert(hasPointer(*u8) == true);
+    assert(hasPointer([]u8) == true);
+    assert(hasPointer(A) == false);
+    assert(hasPointer(B) == false);
+    assert(hasPointer(C) == true);
+    assert(hasPointer(D) == true);
+    assert(hasPointer([5]*u8) == true);
+    assert(hasPointer([][]u8) == true);
+}
+
+fn rezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
+    const T = @TypeOf(ptr.*);
     switch (@typeInfo(T)) {
-        .Struct => |st| {
-            inline for (st.fields, 0..) |field, index| {
-                switch (@typeInfo(field.type)) {
-                    .Pointer => {
-                        const slot = getObjectSlot(T, index);
-                        const ptr_obj = try host.readObjectSlot(obj, slot);
-                        try resyncPointer(host, ptr_obj, field.type);
-                    },
-                    else => {},
+        .Pointer => |pt| {
+            if (try host.getPointerStatus(obj)) {
+                return;
+            }
+            if (host.readObjectSlot(obj, 0)) |child_obj| {
+                // ptr is a pointer to a pointer
+                const current_ptr = try host.getMemory(child_obj, pt.child, pt.size);
+                if (ptr.* != current_ptr) {
+                    // update the pointer
+                    ptr.* = current_ptr;
+                }
+                if (hasPointer(pt.child)) {
+                    // rezig the target(s)
+                    if (pt.size == .One) {
+                        try rezigStructure(host, child_obj, ptr.*);
+                    } else if (pt.size == .Many) {
+                        for (ptr.*, 0..) |_, index| {
+                            if (host.readObjectSlot(child_obj, index)) |element_obj| {
+                                try rezigStructure(host, element_obj, &(ptr.*[index]));
+                            } else |_| {
+                                // shouldn't happen
+                            }
+                        }
+                    }
+                }
+            } else |_| {
+                // shouldn't happen
+                ptr.* = @intToPtr(T, invalid_address);
+            }
+            try host.setPointerStatus(obj, true);
+        },
+        .Array => |ar| {
+            if (hasPointer(ar.child)) {
+                for (ptr.*, 0..) |_, index| {
+                    if (host.readObjectSlot(obj, index)) |element_obj| {
+                        try rezigStructure(host, element_obj, &(ptr.*[index]));
+                    } else |_| {
+                        // shouldn't happen
+                    }
                 }
             }
         },
-        else => {},
+        .Struct => |st| {
+            inline for (st.fields, 0..) |field, index| {
+                if (hasPointer(field.type)) {
+                    const slot = getObjectSlot(T, index);
+                    const child_obj = try host.readObjectSlot(obj, slot);
+                    try rezigStructure(host, child_obj, &@field(ptr.*, field.name));
+                }
+            }
+        },
+        else => {
+            std.debug.print("Ignoring {s}\n", .{@typeName(T)});
+        },
     }
-    return ptr;
 }
 
-fn desyncStructure(host: Host, obj: Value, comptime T: type) Error!void {
+fn dezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
+    const T = @TypeOf(ptr.*);
     switch (@typeInfo(T)) {
-        .Struct => |st| {
-            inline for (st.fields, 0..) |field, index| {
-                switch (@typeInfo(field.type)) {
-                    .Pointer => {
-                        const slot = getObjectSlot(T, index);
-                        const ptr_obj = try host.readObjectSlot(obj, slot);
-                        try desyncPointer(host, ptr_obj, field.type);
+        .Pointer => |pt| {
+            if (!try host.getPointerStatus(obj)) {
+                return;
+            }
+            // ptr is a pointer to a pointer
+            var existing_obj: ?Value = host.readObjectSlot(obj, 0) catch null;
+            if (existing_obj) |child_obj| {
+                // see if pointer is still pointing to what it was before
+                var current_ptr = try host.getMemory(child_obj, pt.child, pt.size);
+                if (ptr.* != current_ptr) {
+                    existing_obj = null;
+                }
+            }
+            const child_obj = existing_obj orelse create: {
+                const new_obj = try host.wrapMemory(.{
+                    .bytes = @intToPtr([*]u8, @ptrToInt(ptr.*)),
+                    .len = @sizeOf(pt.child) * switch (pt.size) {
+                        .One => 1,
+                        .Slice => ptr.*.len,
+                        .Many, .C => 0,
                     },
-                    else => {},
+                }, pt.child, pt.size);
+                break :create new_obj;
+            };
+            if (hasPointer(pt.child)) {
+                if (pt.size == .One) {
+                    try dezigStructure(host, child_obj, ptr.*);
+                } else if (pt.size == .Slice) {
+                    for (ptr.*, 0..) |_, index| {
+                        if (host.readObjectSlot(child_obj, index)) |element_obj| {
+                            try dezigStructure(host, element_obj, &(ptr.*[index]));
+                        }
+                    }
+                }
+            }
+            try host.setPointerStatus(obj, false);
+        },
+        .Array => |ar| {
+            if (hasPointer(ar.child)) {
+                for (ptr.*, 0..) |_, index| {
+                    if (host.readObjectSlot(obj, @intCast(u32, index))) |element_obj| {
+                        try dezigStructure(host, element_obj, &(ptr.*[index]));
+                    } else |_| {
+                        // shouldn't happen
+                    }
                 }
             }
         },
-        else => {},
+        .Struct => |st| {
+            inline for (st.fields, 0..) |field, index| {
+                if (hasPointer(field.type)) {
+                    const slot = getObjectSlot(T, index);
+                    const child_obj = try host.readObjectSlot(obj, slot);
+                    try dezigStructure(host, child_obj, &@field(ptr.*, field.name));
+                }
+            }
+        },
+        else => {
+            std.debug.print("Ignoring {s}\n", .{@typeName(T)});
+        },
     }
 }
 
@@ -853,7 +1046,11 @@ fn createThunk(comptime function: anytype, comptime ArgT: type) Thunk {
     const Args = std.meta.ArgsTuple(@TypeOf(function));
     const S = struct {
         fn tryFunction(host: Host, arg_obj: Value) !void {
-            var arg_struct = try resyncStructure(host, arg_obj, ArgT);
+            var arg_ptr = try host.getMemory(arg_obj, ArgT, .One);
+            if (hasPointer(ArgT)) {
+                // make sure pointers have up-to-date values
+                try rezigStructure(host, arg_obj, arg_ptr);
+            }
             // extract arguments from argument struct
             var args: Args = undefined;
             const fields = @typeInfo(Args).Struct.fields;
@@ -863,12 +1060,14 @@ fn createThunk(comptime function: anytype, comptime ArgT: type) Thunk {
                     // TODO: add allocator
                 } else {
                     const name = std.fmt.comptimePrint("{d}", .{index});
-                    args[i] = @field(arg_struct, name);
+                    args[i] = @field(arg_ptr.*, name);
                     index += 1;
                 }
             }
-            arg_struct.retval = @call(std.builtin.CallModifier.auto, function, args);
-            try desyncStructure(host, arg_obj, ArgT);
+            arg_ptr.*.retval = @call(std.builtin.CallModifier.auto, function, args);
+            if (hasPointer(ArgT)) {
+                try dezigStructure(host, arg_obj, arg_ptr);
+            }
         }
 
         fn invokeFunction(host: Host, arg_obj: Value) callconv(.C) void {

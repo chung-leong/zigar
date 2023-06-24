@@ -47,14 +47,23 @@ describe('Integration tests', function() {
     it('should import primitive arrays', async function() {
       this.timeout(10000);
       const { default: module } = await import(resolve('./integration/primitive-arrays.zig'));
-      expect(module.int32Array4).to.be.an('object');
-      expect(module.int32Array4.get(0)).to.equal(1);
-      expect([ ...module.int32Array4 ]).to.eql([ 1, 2, 3, 4 ]);
-      module.int32Array4.set(1, 123);
-      expect([ ...module.int32Array4 ]).to.eql([ 1, 123, 3, 4 ]);
-      expect(module.float64Array4x4).to.be.an('object');
-      const row1 = module.float64Array4x4.get(1);
+      expect(module.int32_array4).to.be.an('object');
+      expect(module.int32_array4.get(0)).to.equal(1);
+      expect([ ...module.int32_array4 ]).to.eql([ 1, 2, 3, 4 ]);
+      module.int32_array4.set(1, 123);
+      expect([ ...module.int32_array4 ]).to.eql([ 1, 123, 3, 4 ]);
+      expect(module.float64_array4x4).to.be.an('object');
+      const row1 = module.float64_array4x4.get(1);
       expect(row1).to.be.an('object');
+    })
+    it('should import primitive slices', async function() {
+      this.timeout(10000);
+      const { default: module } = await import(resolve('./integration/primitive-slices.zig'));
+      debugger;
+      const slice = module.int32_slice;
+      expect(module.int32_slice).to.be.an('object');
+      expect(module.int32_slice.get(0)).to.equal(123);
+      expect([ ...module.int32_slice ]).to.eql([ 123, 456, 789 ]);
     })
   })
   describe('Methods', function() {

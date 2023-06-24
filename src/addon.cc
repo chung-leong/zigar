@@ -91,8 +91,6 @@ static Result FindBuffer(Host* call,
   return Result::Failure;
 }
 
-static Result GetArgumentBuffers(Host* call);
-
 static Result ObtainDataView(Host* call,
                              const Memory& memory,
                              Local<DataView>* dest) {
@@ -150,6 +148,8 @@ static Result WrapMemory(Host* call,
   if (!f->Call(call->context, Null(call->isolate), 1, args).ToLocal(&value) || !value->IsObject()) {
     return Result::Failure;
   }
+  Local<Value> log_args[1] = { f };
+  Log(call, 1, log_args);
   *dest = value.As<Object>();
   return Result::OK;
 }
@@ -175,7 +175,7 @@ static Result GetPointerStatus(Host* call,
                                Local<Object> object,
                                bool* dest) {
   Local<Value> value;  
-  if (!object->Get(call->context, call->symbol_sync).ToLocal(&value) || !value->IsBoolean()) {
+  if (!object->Get(call->context, call->symbol_zig).ToLocal(&value) || !value->IsBoolean()) {
     return Result::Failure;
   }
   *dest = value.As<Boolean>()->IsTrue();
@@ -184,8 +184,8 @@ static Result GetPointerStatus(Host* call,
 
 static Result SetPointerStatus(Host* call,
                                Local<Object> object,
-                               bool sync) {
-  object->Set(call->context, call->symbol_sync, Boolean::New(call->isolate, sync)).Check();
+                               bool zig_owned) {
+  object->Set(call->context, call->symbol_zig, Boolean::New(call->isolate, zig_owned)).Check();
   return Result::OK;
 }
 
@@ -415,7 +415,7 @@ static Result CallFunction(Host* call,
     *dest = value;
   }
   return Result::OK;
-}  
+}
 
 static Result BeginStructure(Host* call,
                              const Structure& structure,
@@ -483,6 +483,14 @@ static Result GetArgumentBuffers(Host* call) {
   }
   call->arg_buffers = result.As<Array>();
   return Result::OK;
+}
+
+static Result Log(Host* call, 
+                  int argc, 
+                  Local<Value>* argv) {
+  auto isolate = call->isolate;
+  auto name = String::NewFromUtf8Literal(isolate, "log");
+  return CallFunction(call, name, argc, argv);
 }
 
 static void Load(const FunctionCallbackInfo<Value>& info) {
