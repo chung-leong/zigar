@@ -148,8 +148,6 @@ static Result WrapMemory(Host* call,
   if (!f->Call(call->context, Null(call->isolate), 1, args).ToLocal(&value) || !value->IsObject()) {
     return Result::Failure;
   }
-  Local<Value> log_args[1] = { f };
-  Log(call, 1, log_args);
   *dest = value.As<Object>();
   return Result::OK;
 }

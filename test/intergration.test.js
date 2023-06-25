@@ -59,7 +59,6 @@ describe('Integration tests', function() {
     it('should import primitive slices', async function() {
       this.timeout(10000);
       const { default: module } = await import(resolve('./integration/primitive-slices.zig'));
-      debugger;
       const slice = module.int32_slice;
       expect(module.int32_slice).to.be.an('object');
       expect(module.int32_slice.get(0)).to.equal(123);

@@ -6,7 +6,6 @@ const assert = std.debug.assert;
 const Error = error{
     TODO,
     Unknown,
-    Recursion,
 };
 
 // slot allocators
@@ -319,6 +318,118 @@ test "getStructureType" {
     assert(getStructureType(extern union {}) == .ExternUnion);
 }
 
+fn PointerType(comptime CT: type, comptime size: std.builtin.Type.Pointer.Size) type {
+    return switch (size) {
+        .One => *CT,
+        .Slice => []CT,
+        .Many => [*]CT,
+        .C => [*c]CT,
+    };
+}
+
+fn fromMemory(memory: Memory, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) PointerType(T, size) {
+    const aligned_ptr = @alignCast(@max(@alignOf(T), 1), memory.bytes);
+    return switch (size) {
+        .One => @ptrCast(*T, aligned_ptr),
+        .Slice => slice: {
+            const many_ptr = @ptrCast([*]T, aligned_ptr);
+            const count = memory.len / @sizeOf(T);
+            break :slice many_ptr[0..count];
+        },
+        .Many => @ptrCast([*]T, aligned_ptr),
+        .C => @ptrCast([*c]T, aligned_ptr),
+    };
+}
+
+test "fromMemory" {
+    var array: [5]u8 = .{ 'H', 'e', 'l', 'l', 'o' };
+    const memory: Memory = .{
+        .bytes = &array,
+        .len = array.len,
+    };
+    const p1 = fromMemory(memory, u8, .One);
+    assert(p1.* == 'H');
+    assert(@typeInfo(@TypeOf(p1)).Pointer.size == .One);
+    const p2 = fromMemory(memory, u8, .Slice);
+    assert(p2[0] == 'H');
+    assert(p2.len == 5);
+    assert(@typeInfo(@TypeOf(p2)).Pointer.size == .Slice);
+    const p3 = fromMemory(memory, u8, .Many);
+    assert(p3[0] == 'H');
+    assert(@typeInfo(@TypeOf(p3)).Pointer.size == .Many);
+    const p4 = fromMemory(memory, u8, .C);
+    assert(p4[0] == 'H');
+    assert(@typeInfo(@TypeOf(p4)).Pointer.size == .C);
+}
+
+fn toMemory(pointer: anytype) Memory {
+    const T = @TypeOf(pointer);
+    const CT = @typeInfo(T).Pointer.child;
+    const size = @typeInfo(T).Pointer.size;
+    const address = switch (size) {
+        .Slice => @ptrToInt(pointer.ptr),
+        else => @ptrToInt(pointer),
+    };
+    const len = switch (size) {
+        .One => @sizeOf(CT),
+        .Slice => @sizeOf(CT) * pointer.len,
+        .Many, .C => 0,
+    };
+    return .{
+        .bytes = @intToPtr([*]u8, address),
+        .len = len,
+    };
+}
+
+test "toMemory" {
+    const a: i32 = 1234;
+    const memA = toMemory(&a);
+    const b: []const u8 = "Hello";
+    const memB = toMemory(b);
+    const c: [*]const u8 = b.ptr;
+    const memC = toMemory(c);
+    const d: [*c]const u8 = b.ptr;
+    const memD = toMemory(d);
+    const e = &b;
+    const memE = toMemory(e);
+    assert(memA.len == 4);
+    assert(memB.len == 5);
+    assert(memC.len == 0);
+    assert(memD.len == 0);
+    assert(memE.len == @sizeOf(@TypeOf(b)));
+}
+
+fn comparePointers(p1: anytype, p2: anytype) bool {
+    const T = @TypeOf(p1);
+    return switch (@typeInfo(T).Pointer.size) {
+        .Slice => p1.ptr == p2.ptr and p1.len == p2.len,
+        else => p1 == p2,
+    };
+}
+
+test "comparePointers" {
+    const a: []const u8 = "Hello world";
+    const b: []const u8 = a[0..a.len];
+    const c: []const u8 = a[2..a.len];
+    const d: []const u8 = a[0..5];
+    assert(comparePointers(a, b) == true);
+    assert(comparePointers(a, c) == false);
+    assert(comparePointers(a, d) == false);
+    var number1: i32 = 1234;
+    var number2: i32 = 1234;
+    const e = &number1;
+    const f = &number1;
+    const g = &number2;
+    assert(comparePointers(e, f) == true);
+    assert(comparePointers(e, g) == false);
+    const h: [*]i32 = @ptrCast([*]i32, e);
+    const i: [*]i32 = @ptrCast([*]i32, g);
+    assert(comparePointers(h, i) == false);
+    const j: [*c]i32 = @ptrCast([*c]i32, e);
+    const k: [*c]i32 = @ptrCast([*c]i32, g);
+    assert(comparePointers(j, k) == false);
+}
+
 // pointer table that's filled on the C++ side
 const Callbacks = extern struct {
     allocate_memory: *const fn (host: Host, size: usize, dest: *[*]u8) callconv(.C) Result,
@@ -344,50 +455,6 @@ const Callbacks = extern struct {
 };
 var callbacks: Callbacks = undefined;
 
-fn PointerType(comptime CT: type, comptime size: std.builtin.Type.Pointer.Size) type {
-    return switch (size) {
-        .One => *CT,
-        .Slice => []CT,
-        .Many => [*]CT,
-        .C => [*c]CT,
-    };
-}
-
-fn castMemory(memory: Memory, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) PointerType(T, size) {
-    const aligned_ptr = @alignCast(@max(@alignOf(T), 1), memory.bytes);
-    return switch (size) {
-        .One => @ptrCast(*T, aligned_ptr),
-        .Slice => slice: {
-            const many_ptr = @ptrCast([*]T, aligned_ptr);
-            const count = memory.len / @sizeOf(T);
-            break :slice many_ptr[0..count];
-        },
-        .Many => @ptrCast([*]T, aligned_ptr),
-        .C => @ptrCast([*c]T, aligned_ptr),
-    };
-}
-
-test "castMemory" {
-    var array: [5]u8 = .{ 'H', 'e', 'l', 'l', 'o' };
-    const memory: Memory = .{
-        .bytes = &array,
-        .len = array.len,
-    };
-    const p1 = castMemory(memory, u8, .One);
-    assert(p1.* == 'H');
-    assert(@typeInfo(@TypeOf(p1)).Pointer.size == .One);
-    const p2 = castMemory(memory, u8, .Slice);
-    assert(p2[0] == 'H');
-    assert(p2.len == 5);
-    assert(@typeInfo(@TypeOf(p2)).Pointer.size == .Slice);
-    const p3 = castMemory(memory, u8, .Many);
-    assert(p3[0] == 'H');
-    assert(@typeInfo(@TypeOf(p3)).Pointer.size == .Many);
-    const p4 = castMemory(memory, u8, .C);
-    assert(p4[0] == 'H');
-    assert(@typeInfo(@TypeOf(p4)).Pointer.size == .C);
-}
-
 // host interface
 const Host = *opaque {
     fn getMemory(self: Host, container: Value, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) Error!PointerType(T, size) {
@@ -395,7 +462,7 @@ const Host = *opaque {
         if (callbacks.get_memory(self, container, &memory) != .OK) {
             return Error.Unknown;
         }
-        return castMemory(memory, T, size);
+        return fromMemory(memory, T, size);
     }
 
     fn wrapMemory(self: Host, memory: Memory, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) Error!Value {
@@ -563,7 +630,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) Error!void {
             const target_structure = switch (pt.size) {
                 .One => child_structure,
                 else => slice: {
-                    const slice_slot = getStructureSlot(T, pt.size);
+                    const slice_slot = getStructureSlot(pt.child, pt.size);
                     const slice_def: Structure = .{
                         // see comment in getStructureName()
                         .name = @ptrCast([*:0]const u8, @typeName(T)),
@@ -983,24 +1050,19 @@ fn dezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
             if (!try host.getPointerStatus(obj)) {
                 return;
             }
-            // ptr is a pointer to a pointer
-            var existing_obj: ?Value = host.readObjectSlot(obj, 0) catch null;
-            if (existing_obj) |child_obj| {
+            // note: ptr is a pointer to a pointer
+            const existing_obj: ?Value = if (host.readObjectSlot(obj, 0)) |child_obj| check: {
                 // see if pointer is still pointing to what it was before
-                var current_ptr = try host.getMemory(child_obj, pt.child, pt.size);
-                if (ptr.* != current_ptr) {
-                    existing_obj = null;
+                const current_ptr = try host.getMemory(child_obj, pt.child, pt.size);
+                if (comparePointers(ptr.*, current_ptr)) {
+                    break :check child_obj;
                 }
-            }
+                break :check null;
+            } else |_| null;
             const child_obj = existing_obj orelse create: {
-                const new_obj = try host.wrapMemory(.{
-                    .bytes = @intToPtr([*]u8, @ptrToInt(ptr.*)),
-                    .len = @sizeOf(pt.child) * switch (pt.size) {
-                        .One => 1,
-                        .Slice => ptr.*.len,
-                        .Many, .C => 0,
-                    },
-                }, pt.child, pt.size);
+                const memory = toMemory(ptr.*);
+                const new_obj = try host.wrapMemory(memory, pt.child, pt.size);
+                try host.writeObjectSlot(obj, 0, new_obj);
                 break :create new_obj;
             };
             if (hasPointer(pt.child)) {
@@ -1008,9 +1070,9 @@ fn dezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
                     try dezigStructure(host, child_obj, ptr.*);
                 } else if (pt.size == .Slice) {
                     for (ptr.*, 0..) |_, index| {
-                        if (host.readObjectSlot(child_obj, index)) |element_obj| {
+                        if (host.readObjectSlot(child_obj, @intCast(u32, index))) |element_obj| {
                             try dezigStructure(host, element_obj, &(ptr.*[index]));
-                        }
+                        } else |_| {}
                     }
                 }
             }
@@ -1106,14 +1168,8 @@ test "createThunk" {
 fn createRootFactory(comptime S: type) Thunk {
     const RootFactory = struct {
         fn exportStructure(host: Host, args: Value) callconv(.C) void {
-            if (getStructure(host, S)) |result| {
-                host.writeObjectSlot(args, 0, result) catch {};
-            } else |err| {
-                std.debug.print("Error: {s}\n", .{@errorName(err)});
-                if (@errorReturnTrace()) |trace| {
-                    std.debug.dumpStackTrace(trace.*);
-                }
-            }
+            const result = getStructure(host, S) catch null;
+            host.writeObjectSlot(args, 0, result) catch {};
         }
     };
     return RootFactory.exportStructure;

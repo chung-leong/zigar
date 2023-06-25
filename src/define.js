@@ -182,6 +182,7 @@ function finalizeSingleton(s) {
 
 function finalizeArray(s) {
   const {
+    type,
     size,
     name,
     instance: {
@@ -196,12 +197,11 @@ function finalizeArray(s) {
   const getPointer = obtainPointerArrayGetter(member, options);
   const setPointer = obtainPointerArraySetter(member, options);
   const getPointerLength = obtainPointerArrayLengthGetter(member, options);
+  const isSlice = type == StructureType.Slice;
   const copier = s.copier = function(dest, src) {
     copy(dest[MEMORY], src[MEMORY]);   
   };
-  console.log(`Finalizing ${name}`);
   const constructor = s.constructor = function(arg) {
-    console.log(`Constructing ${name}`);
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
@@ -209,8 +209,7 @@ function finalizeArray(s) {
       dv = new DataView(new ArrayBuffer(size));
     } else {
       self = Object.create(constructor.prototype);
-      dv = obtainDataView(arg, size);
-      console.log({ dv });
+      dv = obtainDataView(arg, size, isSlice);
     }
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },
