@@ -1264,7 +1264,6 @@ R"=====(
           const childDV = new DataView(dv.buffer, offset, byteSize);
           slots[slot] = constructor(childDV);
         }
-        console.log({ slots });
         Object.defineProperties(self, {
           [SLOTS]: { value: slots },
         });

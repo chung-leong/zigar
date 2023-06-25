@@ -63,6 +63,13 @@ describe('Integration tests', function() {
       expect(module.int32_slice).to.be.an('object');
       expect(module.int32_slice.get(0)).to.equal(123);
       expect([ ...module.int32_slice ]).to.eql([ 123, 456, 789 ]);
+      expect(module.u8_slice).to.have.lengthOf(11);
+      expect(module.u8_slice.get(0)).to.equal('H'.charCodeAt(0));
+      expect([ ...module.uint32_array4 ]).to.eql([ 1, 2, 3, 4 ]);
+      expect([ ...module.uint32_slice ]).to.eql([ 2, 3, 4 ]);
+      module.uint32_slice.set(1, 777);
+      expect([ ...module.uint32_slice ]).to.eql([ 2, 777, 4 ]);
+      expect([ ...module.uint32_array4 ]).to.eql([ 1, 2, 777, 4 ]);
     })
   })
   describe('Methods', function() {
