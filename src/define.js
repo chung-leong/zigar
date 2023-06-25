@@ -197,9 +197,13 @@ function finalizeArray(s) {
   const getPointer = obtainPointerArrayGetter(member, options);
   const setPointer = obtainPointerArraySetter(member, options);
   const getPointerLength = obtainPointerArrayLengthGetter(member, options);
+  const objectMember = (member.type === MemberType.Object) ? member : null;
   const isSlice = type == StructureType.Slice;
   const copier = s.copier = function(dest, src) {
     copy(dest[MEMORY], src[MEMORY]);   
+    if (objectMember) {
+      Object.assign(dest[SLOTS], src[SLOTS]);
+    }
   };
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
@@ -214,6 +218,17 @@ function finalizeArray(s) {
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },
     });
+    if (objectMember) {
+      const slots = {};
+      const { structure: { constructor }, byteSize } = objectMember;
+      for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+        const childDV = new DataView(dv.buffer, offset, byteSize);
+        slots[slot] = constructor(childDV);
+      }
+      Object.defineProperties(self, {
+        [SLOTS]: { value: slots },
+      });
+    }
     if (creating) {
       // expect an array
       // TODO: validate and set memory

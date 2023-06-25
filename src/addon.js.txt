@@ -861,9 +861,10 @@ R"=====(
         return function(index) { 
           const child = this[SLOTS][index];
           if (!child) {
+            const dv = this[MEMORY];
             throwOutOfBound(dv.byteLength, byteSize, index);
           }
-          return slots[index]; 
+          return child;
         };
       }
     }
@@ -915,8 +916,9 @@ R"=====(
           if (!(v instanceof constructor)) {
             v = new constructor(v);
           }
-          this[SLOTS][index];
+          const child = this[SLOTS][index];
           if (!child) {
+            const dv = this[MEMORY];
             throwOutOfBound(dv.byteLength, byteSize, index);
           }
           copier(child, v);
@@ -1234,9 +1236,13 @@ R"=====(
     const getPointer = obtainPointerArrayGetter(member);
     const setPointer = obtainPointerArraySetter(member);
     const getPointerLength = obtainPointerArrayLengthGetter();
+    const objectMember = (member.type === MemberType.Object) ? member : null;
     const isSlice = type == StructureType.Slice;
     s.copier = function(dest, src) {
       copy(dest[MEMORY], src[MEMORY]);   
+      if (objectMember) {
+        Object.assign(dest[SLOTS], src[SLOTS]);
+      }
     };
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
@@ -1251,6 +1257,18 @@ R"=====(
       Object.defineProperties(self, {
         [MEMORY]: { value: dv },
       });
+      if (objectMember) {
+        const slots = {};
+        const { structure: { constructor }, byteSize } = objectMember;
+        for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+          const childDV = new DataView(dv.buffer, offset, byteSize);
+          slots[slot] = constructor(childDV);
+        }
+        console.log({ slots });
+        Object.defineProperties(self, {
+          [SLOTS]: { value: slots },
+        });
+      }
       if (creating) ; else {
         return self;
       }

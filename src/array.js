@@ -36,9 +36,10 @@ export function obtainArrayGetter(member, options) {
       return function(index) { 
         const child = this[SLOTS][index];
         if (!child) {
+          const dv = this[MEMORY];
           throwOutOfBound(dv.byteLength, byteSize, index);
         }
-        return slots[index]; 
+        return child;
       };
     }
   }
@@ -90,8 +91,9 @@ export function obtainArraySetter(member, options) {
         if (!(v instanceof constructor)) {
           v = new constructor(v);
         }
-        const slots = this[SLOTS][index];
+        const child = this[SLOTS][index];
         if (!child) {
+          const dv = this[MEMORY];
           throwOutOfBound(dv.byteLength, byteSize, index);
         }
         copier(child, v);
