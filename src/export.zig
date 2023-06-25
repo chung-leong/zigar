@@ -89,6 +89,7 @@ const StructureType = enum(u32) {
     Pointer,
     Slice,
     Opaque,
+    ArgStruct,
 };
 
 const MemberType = enum(u32) {
@@ -302,7 +303,7 @@ test "getMemberType" {
 fn getStructureType(comptime T: type) StructureType {
     return switch (@typeInfo(T)) {
         .Bool, .Int, .Float, .Void, .Type => .Singleton,
-        .Struct => .Struct,
+        .Struct => if (isArgumentStruct(T)) .ArgStruct else .Struct,
         .Union => |un| if (un.layout == .Extern) .ExternUnion else .TaggedUnion,
         .Enum => .Enumeration,
         .Array => .Array,
@@ -927,6 +928,30 @@ test "ArgumentStruct" {
     const ArgC = ArgumentStruct(Test.C);
     const fieldsC = std.meta.fields(ArgC);
     assert(fieldsC.len == 3);
+}
+
+fn isArgumentStruct(comptime T: type) bool {
+    const name = @typeName(T);
+    const prefix = "export.ArgumentStruct(";
+    if (name.len < prefix.len) {
+        return false;
+    }
+    for (prefix, 0..) |c, index| {
+        if (name[index] != c) {
+            return false;
+        }
+    }
+    return true;
+}
+
+test "isArgumentStruct" {
+    const Test = struct {
+        fn A(a: i32, b: bool) bool {
+            return if (a > 10 and b) true else false;
+        }
+    };
+    const ArgA = ArgumentStruct(Test.A);
+    assert(isArgumentStruct(ArgA) == true);
 }
 
 const invalid_address = if (@bitSizeOf(*u8) == 64) 0xaaaa_aaaa_aaaa_aaaa else 0xaaaa_aaaa;

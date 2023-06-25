@@ -20,6 +20,7 @@ enum class StructureType : uint32_t {
   Pointer,
   Slice,
   Opaque,
+  ArgStruct,
 };
 
 enum class MemberType : uint32_t {

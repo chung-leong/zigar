@@ -20,6 +20,7 @@ export const StructureType = {
   Pointer: 8,
   Slice: 9,
   Opaque: 10,
+  ArgStruct: 11,
 };
 
 export function getTypeName(type, isSigned, bitSize) {

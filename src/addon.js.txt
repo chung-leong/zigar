@@ -24,6 +24,7 @@ R"=====(
     Pointer: 8,
     Slice: 9,
     Opaque: 10,
+    ArgStruct: 11,
   };
 
   function getTypeName(type, isSigned, bitSize) {
@@ -1148,6 +1149,7 @@ R"=====(
         case StructureType.Array:
         case StructureType.Slice:
           return finalizeArray(s);
+        case StructureType.ArgStruct:
         case StructureType.Struct:
         case StructureType.ExternUnion:
           return finalizeStruct(s);
@@ -1304,7 +1306,8 @@ R"=====(
   }
 
   function finalizeStruct(s) {
-    const { 
+    const {
+      type,
       size,
       name,
       instance: {
@@ -1326,8 +1329,13 @@ R"=====(
       const get = obtainPointerGetter(member);
       const set = obtainPointerSetter(member);
       if (get) {
-        ptrDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
-      }
+        if (type === StructureType.ArgStruct) {
+          // no auto-dereferencing
+          descriptors[member.name] = { get, set, configurable: true, enumerable: true };
+        } else { 
+          ptrDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
+        }
+      } 
     }
     const objectMembers = members.filter(m => m.type === MemberType.Object);
     const copier = s.copier = function(dest, src) {

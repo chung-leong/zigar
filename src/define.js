@@ -109,6 +109,7 @@ export function finalizeStructure(s) {
       case StructureType.Array:
       case StructureType.Slice:
         return finalizeArray(s);
+      case StructureType.ArgStruct:
       case StructureType.Struct:
       case StructureType.ExternUnion:
         return finalizeStruct(s);
@@ -268,7 +269,8 @@ function finalizeArray(s) {
 }
 
 function finalizeStruct(s) {
-  const { 
+  const {
+    type,
     size,
     name,
     instance: {
@@ -290,8 +292,13 @@ function finalizeStruct(s) {
     const get = obtainPointerGetter(member, options);
     const set = obtainPointerSetter(member, options);
     if (get) {
-      ptrDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
-    }
+      if (type === StructureType.ArgStruct) {
+        // no auto-dereferencing
+        descriptors[member.name] = { get, set, configurable: true, enumerable: true };
+      } else { 
+        ptrDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
+      }
+    } 
   }
   const objectMembers = members.filter(m => m.type === MemberType.Object);
   const copier = s.copier = function(dest, src) {
