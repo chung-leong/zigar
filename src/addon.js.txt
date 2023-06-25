@@ -731,6 +731,13 @@ R"=====(
           }; 
         }
       }
+      case MemberType.Type: {
+        const { structure } = member;
+        return function() {
+          const { constructor } = structure;
+          return constructor;
+        };
+      }
     }
   }
 
@@ -786,10 +793,10 @@ R"=====(
       }
       case MemberType.Object: {
         const { slot, structure, isConst } = member;
+        if (isConst) {
+          return;
+        }
         if (structure.type === StructureType.Pointer) {
-          if (isConst) {
-            break;
-          }
           const { instance: { members: [ target ] } } = structure;
           if (target.structure.type === StructureType.Singleton) {
             return function(v) { 
@@ -813,6 +820,10 @@ R"=====(
             copier(object, v);
           };  
         }
+      }
+      case MemberType.Type: {
+        // not setter for types
+        return;
       }
     }
   }
@@ -1522,12 +1533,9 @@ R"=====(
       },
       options,
     } = s;
-    if (!template) {
-      return;
-    }
     const descriptors = {
-      [SLOTS]: { value: template[SLOTS] },
-    };
+      [SLOTS]: { value: template?.[SLOTS] },
+    };  
     for (const member of members) {
       const get = obtainGetter(member, options);
       const set = obtainSetter(member, options);

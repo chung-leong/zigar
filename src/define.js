@@ -501,12 +501,9 @@ export function attachStaticMembers(s) {
     },
     options,
   } = s;
-  if (!template) {
-    return;
-  }
   const descriptors = {
-    [SLOTS]: { value: template[SLOTS] },
-  };
+    [SLOTS]: { value: template?.[SLOTS] },
+  };  
   for (const member of members) {
     const get = obtainGetter(member, options);
     const set = obtainSetter(member, options);

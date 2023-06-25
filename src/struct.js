@@ -72,6 +72,13 @@ export function obtainGetter(member, options) {
         }; 
       }
     }
+    case MemberType.Type: {
+      const { structure } = member;
+      return function() {
+        const { constructor } = structure;
+        return constructor;
+      };
+    }
   }
 }
 
@@ -128,10 +135,10 @@ export function obtainSetter(member, options) {
     }
     case MemberType.Object: {
       const { slot, structure, isConst } = member;
+      if (isConst) {
+        return;
+      }
       if (structure.type === StructureType.Pointer) {
-        if (isConst) {
-          break;
-        }
         const { instance: { members: [ target ] } } = structure;
         if (target.structure.type === StructureType.Singleton) {
           return function(v) { 
@@ -155,6 +162,10 @@ export function obtainSetter(member, options) {
           copier(object, v);
         };  
       }
+    }
+    case MemberType.Type: {
+      // not setter for types
+      return;
     }
   }
 }
