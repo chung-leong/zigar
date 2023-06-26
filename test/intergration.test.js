@@ -79,6 +79,18 @@ describe('Integration tests', function() {
       const res = module.add(5, 17);
       expect(res).to.equal(22);
     })
+    it('should import function that accepts a slice', async function() {
+      this.timeout(10000);
+      const { default: { Slice, fifth } } = await import(resolve('./integration/slice-function.zig'));
+      const dv = new DataView(new ArrayBuffer(32));
+      dv.setInt32(4, 123);
+      dv.setInt32(20, 456);
+      dv.setInt32(10, 79);
+      const slice1 = Slice(dv);
+      const res = fifth(slice1);
+      expect(res).to.equal(123);
+    })
+
   })
 })
 

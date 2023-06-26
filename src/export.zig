@@ -931,17 +931,7 @@ test "ArgumentStruct" {
 }
 
 fn isArgumentStruct(comptime T: type) bool {
-    const name = @typeName(T);
-    const prefix = "export.ArgumentStruct(";
-    if (name.len < prefix.len) {
-        return false;
-    }
-    for (prefix, 0..) |c, index| {
-        if (name[index] != c) {
-            return false;
-        }
-    }
-    return true;
+    return if (getFunctionName(T)) |_| true else false;
 }
 
 test "isArgumentStruct" {
@@ -954,7 +944,32 @@ test "isArgumentStruct" {
     assert(isArgumentStruct(ArgA) == true);
 }
 
-const invalid_address = if (@bitSizeOf(*u8) == 64) 0xaaaa_aaaa_aaaa_aaaa else 0xaaaa_aaaa;
+fn getFunctionName(comptime ArgT: type) ?[]const u8 {
+    const name = @typeName(ArgT);
+    const prefix = "export.ArgumentStruct((function '";
+    if (name.len < prefix.len) {
+        return null;
+    }
+    return name[prefix.len .. name.len - 3];
+}
+
+test "getFunctionName" {
+    const Test = struct {
+        fn A(a: i32, b: bool) bool {
+            return if (a > 10 and b) true else false;
+        }
+
+        fn @"weird name  "() void {}
+    };
+    const ArgA = ArgumentStruct(Test.A);
+    const name_a = getFunctionName(ArgA) orelse "function";
+    assert(name_a[0] == 'A');
+    assert(name_a.len == 1);
+    const ArgWeird = ArgumentStruct(Test.@"weird name  ");
+    const name_weird = getFunctionName(ArgWeird) orelse "function";
+    assert(name_weird[0] == 'w');
+    assert(name_weird.len == 12);
+}
 
 fn hasPointer(comptime T: type) bool {
     return switch (@typeInfo(T)) {
@@ -1010,46 +1025,37 @@ test "hasPointer" {
 
 fn rezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
     const T = @TypeOf(ptr.*);
+    std.debug.print("Rezigging {s}\n", .{@typeName(T)});
     switch (@typeInfo(T)) {
         .Pointer => |pt| {
+            // note: ptr is a pointer to a pointer
             if (try host.getPointerStatus(obj)) {
                 return;
             }
-            if (host.readObjectSlot(obj, 0)) |child_obj| {
-                // ptr is a pointer to a pointer
-                const current_ptr = try host.getMemory(child_obj, pt.child, pt.size);
-                if (ptr.* != current_ptr) {
-                    // update the pointer
-                    ptr.* = current_ptr;
-                }
-                if (hasPointer(pt.child)) {
-                    // rezig the target(s)
-                    if (pt.size == .One) {
-                        try rezigStructure(host, child_obj, ptr.*);
-                    } else if (pt.size == .Many) {
-                        for (ptr.*, 0..) |_, index| {
-                            if (host.readObjectSlot(child_obj, index)) |element_obj| {
-                                try rezigStructure(host, element_obj, &(ptr.*[index]));
-                            } else |_| {
-                                // shouldn't happen
-                            }
-                        }
+            const child_obj = try host.readObjectSlot(obj, 0);
+            const current_ptr = try host.getMemory(child_obj, pt.child, pt.size);
+            if (!comparePointers(ptr.*, current_ptr)) {
+                // update the pointer
+                ptr.* = current_ptr;
+            }
+            if (hasPointer(pt.child)) {
+                // rezig the target(s)
+                if (pt.size == .One) {
+                    try rezigStructure(host, child_obj, ptr.*);
+                } else if (pt.size == .Many) {
+                    for (ptr.*, 0..) |_, index| {
+                        const element_obj = try host.readObjectSlot(child_obj, index);
+                        try rezigStructure(host, element_obj, &(ptr.*[index]));
                     }
                 }
-            } else |_| {
-                // shouldn't happen
-                ptr.* = @intToPtr(T, invalid_address);
             }
             try host.setPointerStatus(obj, true);
         },
         .Array => |ar| {
             if (hasPointer(ar.child)) {
                 for (ptr.*, 0..) |_, index| {
-                    if (host.readObjectSlot(obj, index)) |element_obj| {
-                        try rezigStructure(host, element_obj, &(ptr.*[index]));
-                    } else |_| {
-                        // shouldn't happen
-                    }
+                    const element_obj = try host.readObjectSlot(obj, index);
+                    try rezigStructure(host, element_obj, &(ptr.*[index]));
                 }
             }
         },
@@ -1070,34 +1076,24 @@ fn rezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
 
 fn dezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
     const T = @TypeOf(ptr.*);
+    std.debug.print("Dezigging {s}\n", .{@typeName(T)});
     switch (@typeInfo(T)) {
         .Pointer => |pt| {
             if (!try host.getPointerStatus(obj)) {
                 return;
             }
-            // note: ptr is a pointer to a pointer
-            const existing_obj: ?Value = if (host.readObjectSlot(obj, 0)) |child_obj| check: {
-                // see if pointer is still pointing to what it was before
-                const current_ptr = try host.getMemory(child_obj, pt.child, pt.size);
-                if (comparePointers(ptr.*, current_ptr)) {
-                    break :check child_obj;
-                }
-                break :check null;
-            } else |_| null;
-            const child_obj = existing_obj orelse create: {
-                const memory = toMemory(ptr.*);
-                const new_obj = try host.wrapMemory(memory, pt.child, pt.size);
-                try host.writeObjectSlot(obj, 0, new_obj);
-                break :create new_obj;
-            };
+            // ptr is a pointer to a pointer
+            const child_ptr = ptr.*;
+            // pointer objects store their target in slot 0
+            const child_obj = try obtainChildObject(host, obj, 0, child_ptr, true);
             if (hasPointer(pt.child)) {
                 if (pt.size == .One) {
-                    try dezigStructure(host, child_obj, ptr.*);
+                    try dezigStructure(host, child_obj, child_ptr);
                 } else if (pt.size == .Slice) {
                     for (ptr.*, 0..) |_, index| {
-                        if (host.readObjectSlot(child_obj, @intCast(u32, index))) |element_obj| {
-                            try dezigStructure(host, element_obj, &(ptr.*[index]));
-                        } else |_| {}
+                        const element_ptr = &(ptr.*[index]);
+                        const element_obj = try obtainChildObject(host, obj, @intCast(u32, index), element_ptr, false);
+                        try dezigStructure(host, element_obj, element_ptr);
                     }
                 }
             }
@@ -1106,11 +1102,9 @@ fn dezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
         .Array => |ar| {
             if (hasPointer(ar.child)) {
                 for (ptr.*, 0..) |_, index| {
-                    if (host.readObjectSlot(obj, @intCast(u32, index))) |element_obj| {
-                        try dezigStructure(host, element_obj, &(ptr.*[index]));
-                    } else |_| {
-                        // shouldn't happen
-                    }
+                    const element_ptr = &(ptr.*[index]);
+                    const element_obj = try obtainChildObject(host, obj, @intCast(u32, index), element_ptr, false);
+                    try dezigStructure(host, element_obj, &(ptr.*[index]));
                 }
             }
         },
@@ -1118,8 +1112,9 @@ fn dezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
             inline for (st.fields, 0..) |field, index| {
                 if (hasPointer(field.type)) {
                     const slot = getObjectSlot(T, index);
-                    const child_obj = try host.readObjectSlot(obj, slot);
-                    try dezigStructure(host, child_obj, &@field(ptr.*, field.name));
+                    const child_ptr = &@field(ptr.*, field.name);
+                    const child_obj = try obtainChildObject(host, obj, slot, child_ptr, false);
+                    try dezigStructure(host, child_obj, child_ptr);
                 }
             }
         },
@@ -1127,6 +1122,31 @@ fn dezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
             std.debug.print("Ignoring {s}\n", .{@typeName(T)});
         },
     }
+}
+
+fn obtainChildObject(host: Host, container: Value, slot: u32, ptr: anytype, comptime check: bool) Error!Value {
+    if (host.readObjectSlot(container, slot)) |child_obj| {
+        if (check) {
+            // see if pointer is still pointing to what it was before
+            const pt = @typeInfo(@TypeOf(ptr)).Pointer;
+            const current_ptr = try host.getMemory(child_obj, pt.child, pt.size);
+            if (!comparePointers(ptr, current_ptr)) {
+                // need to create JS wrapper object for new memory
+                return createChildObject(host, container, slot, ptr);
+            }
+        }
+        return child_obj;
+    } else |_| {
+        return createChildObject(host, container, slot, ptr);
+    }
+}
+
+fn createChildObject(host: Host, container: Value, slot: u32, ptr: anytype) Error!Value {
+    const pt = @typeInfo(@TypeOf(ptr)).Pointer;
+    const memory = toMemory(ptr);
+    const child_obj = try host.wrapMemory(memory, pt.child, pt.size);
+    try host.writeObjectSlot(container, slot, child_obj);
+    return child_obj;
 }
 
 fn createThunk(comptime function: anytype, comptime ArgT: type) Thunk {
