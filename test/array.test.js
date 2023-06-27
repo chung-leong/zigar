@@ -2,7 +2,7 @@ import { expect } from 'chai';
 
 import { MemberType } from '../src/type.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
-import { 
+import {
   obtainArrayGetter,
   obtainArraySetter,
   obtainArrayLengthGetter,
@@ -102,7 +102,7 @@ describe('Array functions', function() {
       const fn = obtainArrayLengthGetter(member, {});
       const res = fn.call(object);
       expect(res).to.equal(3);
-    })   
+    })
   })
   describe('obtainArraySetter', function() {
     it('should return a function for setting an array item', function() {

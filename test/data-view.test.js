@@ -19,14 +19,14 @@ describe('DataView functions', function() {
             bitOffset: 64,
             byteSize: bitSize / 8
           }
-          const f = obtainDataViewGetter(member);    
+          const f = obtainDataViewGetter(member);
           const res = f.call(dv, 8, true);
           if (isSigned) {
             expect(Number(res)).to.equal(-1);
           } else {
             expect(res).to.equal(max);
           }
-        }      
+        }
       }
     })
     it('should return functions for getting standard float types', function() {
@@ -41,10 +41,10 @@ describe('DataView functions', function() {
           bitOffset: (bitSize === 32) ? 0 : 64,
           byteSize: bitSize / 8
         };
-        const f = obtainDataViewGetter(member);    
+        const f = obtainDataViewGetter(member);
         const res = f.call(dv, (bitSize === 32) ? 0 : 8, true);
         expect(res.toFixed(2)).to.equal('3.14');
-      }      
+      }
     })
     it('should return functions for getting non-standard int types (aligned, < 64-bit)', function() {
       const dv = new DataView(new ArrayBuffer(16));
@@ -70,7 +70,7 @@ describe('DataView functions', function() {
           } else {
             expect(res).to.equal(max);
           }
-        }      
+        }
       }
     })
     it('should return functions for getting non-standard int types (128-bit)', function() {
@@ -87,7 +87,7 @@ describe('DataView functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = obtainDataViewGetter(member);     
+      const f = obtainDataViewGetter(member);
       const res1 = f.call(dv, 0, true);
       expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
       // from struct-bytes: BigInt2
@@ -112,7 +112,7 @@ describe('DataView functions', function() {
         byteSize: 16,
         isSigned: false,
       };
-      const f = obtainDataViewGetter(member);     
+      const f = obtainDataViewGetter(member);
       const res1 = f.call(dv, 0, true);
       expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
       // from struct-bytes: BigInt4
@@ -137,7 +137,7 @@ describe('DataView functions', function() {
         isSigned: true,
         byteSize: 16,
       };
-      const f = obtainDataViewGetter(member);     
+      const f = obtainDataViewGetter(member);
       const res = f.call(dv, 0, true);
       expect(res).to.equal(-0xFFFFFFFFFFFFFFFFn);
     })
@@ -155,7 +155,7 @@ describe('DataView functions', function() {
         bitOffset: 0,
         byteSize: 2,
       };
-      const f = obtainDataViewGetter(member);     
+      const f = obtainDataViewGetter(member);
       const res1 = f.call(dv, 0, true);
       expect(res1.toFixed(2)).to.equal('3.14');
       const res2 = f.call(dv, 2, true);
@@ -183,7 +183,7 @@ describe('DataView functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = obtainDataViewGetter(member);     
+      const f = obtainDataViewGetter(member);
       const res1 = f.call(dv, 0, true);
       expect(res1.toFixed(2)).to.equal('3.14');
       const res2 = f.call(dv, 16, true);
@@ -233,7 +233,7 @@ describe('DataView functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = obtainDataViewGetter(member);     
+      const f = obtainDataViewGetter(member);
       const res1 = f.call(dv, 0, true);
       expect(res1.toFixed(15)).to.equal('3.141592653589793');
       const res2 = f.call(dv, 16, true);
@@ -292,7 +292,7 @@ describe('DataView functions', function() {
           }
           expect(dv.getBigUint64(8, true)).equal(0xFFFFFFFFFFFFFFFFn);
           expect(dv.getBigUint64(0, true)).equal(0n);
-        }      
+        }
       }
     })
     it('should return functions for setting standard float types', function() {
@@ -305,9 +305,9 @@ describe('DataView functions', function() {
           bitOffset: (bitSize === 32) ? 0 : 64,
           byteSize: bitSize / 8
         };
-        const f = obtainDataViewSetter(member);    
+        const f = obtainDataViewSetter(member);
         f.call(dv, (bitSize === 32) ? 0 : 8, 3.14, true);
-      }      
+      }
       expect(dv.getFloat32(0, true).toFixed(2)).to.equal('3.14');
       expect(dv.getFloat64(8, true).toFixed(2)).to.equal('3.14');
     })
@@ -334,7 +334,7 @@ describe('DataView functions', function() {
           const get = obtainDataViewGetter(member);
           expect(get.call(dv, 0, true)).to.equal(min);
           expect(get.call(dv, 8, true)).to.equal(max);
-        }      
+        }
       }
     })
     it('should return functions for setting non-standard int types (128-bit)', function() {
@@ -348,7 +348,7 @@ describe('DataView functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = obtainDataViewSetter(member);     
+      const f = obtainDataViewSetter(member);
       f.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, true);
       for (const [ i, b ] of bytes.entries()) {
         expect(dv.getUint8(i)).to.equal(b);
@@ -371,7 +371,7 @@ describe('DataView functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = obtainDataViewSetter(member);     
+      const f = obtainDataViewSetter(member);
       f.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, true);
       for (const [ i, b ] of bytes.entries()) {
         expect(dv.getUint8(i)).to.equal(b);
@@ -394,7 +394,7 @@ describe('DataView functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = obtainDataViewSetter(member);     
+      const f = obtainDataViewSetter(member);
       f.call(dv, 0, -0xFFFFFFFFFFFFFFFFn, true);
       for (const [ i, b ] of bytes.entries()) {
         expect(dv.getUint8(i)).to.equal(b);
@@ -419,7 +419,7 @@ describe('DataView functions', function() {
           const get = obtainDataViewGetter(member);
           expect(get.call(dv, 0, true)).to.equal(min);
           expect(get.call(dv, 128, true)).to.equal(max);
-        }      
+        }
       }
     })
     it('should return functions for setting non-standard float types (16-bit)', function() {
@@ -562,7 +562,7 @@ describe('DataView functions', function() {
           for (let bitOffset = 1; bitOffset <= 7; bitOffset++) {
             const guard1 = {
               type: MemberType.Int,
-              isSigned: false, 
+              isSigned: false,
               bitSize : bitOffset,
               bitOffset: 0,
               byteSize: 0,
@@ -602,14 +602,14 @@ describe('DataView functions', function() {
             } else if (bitSize <= 32) {
               step = 2 ** (bitSize - 6) + 1;
             } else {
-              step = (2n ** BigInt(bitSize - 3)) + 1n; 
+              step = (2n ** BigInt(bitSize - 3)) + 1n;
             }
             for (let i = min; i <= max; i += step) {
               // clear guard bits and set the value
               setG1.call(dv, offsetG1, 0);
               setG2.call(dv, offsetG2, 0);
               set.call(dv, offset, i, true);
-              // check if setter set the correct value 
+              // check if setter set the correct value
               const value1 = get.call(dv, offset, true);
               expect(value1).to.equal(i);
               // ensure setter doesn't write outside of the bit range
@@ -623,8 +623,8 @@ describe('DataView functions', function() {
               const value2 = get.call(dv, offset, true);
               expect(value2).to.equal(i);
             }
-          }           
-        }  
+          }
+        }
       }
     })
     it('should return functions for setting non-aligned floats', function() {
@@ -637,7 +637,7 @@ describe('DataView functions', function() {
         for (let bitOffset = 0; bitOffset <= 7; bitOffset++) {
           const guard1 = {
             type: MemberType.Int,
-            isSigned: false, 
+            isSigned: false,
             bitSize : bitOffset,
             bitOffset: 0,
             byteSize: 0,
@@ -677,7 +677,7 @@ describe('DataView functions', function() {
             setG1.call(dv, offsetG1, 0);
             setG2.call(dv, offsetG2, 0);
             set.call(dv, offset, value, true);
-            // check if setter set the correct value 
+            // check if setter set the correct value
             const value1 = get.call(dv, offset, true);
             if (bitSize < 64) {
               expect(error(value1, value)).to.be.lessThan(0.001);
@@ -699,7 +699,7 @@ describe('DataView functions', function() {
               expect(value2).to.equal(value);
             }
           }
-        }           
+        }
       }
     })
   })

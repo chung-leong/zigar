@@ -3,8 +3,8 @@ import { expect } from 'chai';
 import { StructureType, MemberType } from '../src/type.js';
 import { MEMORY, SLOTS,  SOURCE } from '../src/symbol.js';
 import { obtainCopyFunction } from '../src/memory.js';
-import { 
-  obtainPointerGetter, 
+import {
+  obtainPointerGetter,
   obtainPointerSetter,
   obtainPointerArrayGetter,
   obtainPointerArraySetter,
@@ -41,7 +41,7 @@ describe('Pointer acquisition functions', function() {
   describe('obtainPointerSetter', function() {
     it('should return a function for setting a pointer', function() {
       function FakePointer(object, address) {
-        this[MEMORY] = new DataView(new ArrayBuffer(8));        
+        this[MEMORY] = new DataView(new ArrayBuffer(8));
         this[MEMORY].setBigUint64(0, address);
         this[SLOTS] = { 0: object };
       }
@@ -105,7 +105,7 @@ describe('Pointer acquisition functions', function() {
   describe('obtainPointerArraySetter', function() {
     it('should return a function for setting a pointer in an array', function() {
       function FakePointer(object, address) {
-        this[MEMORY] = new DataView(new ArrayBuffer(8));        
+        this[MEMORY] = new DataView(new ArrayBuffer(8));
         this[MEMORY].setBigUint64(0, address);
         this[SLOTS] = { 0: object };
       }
@@ -150,7 +150,7 @@ describe('Pointer acquisition functions', function() {
       };
       const getLength = obtainPointerArrayLengthGetter({}, {});
       const result = getLength.call(ptrObject);
-      expect(result).to.equal(16); 
+      expect(result).to.equal(16);
     })
   })
 })

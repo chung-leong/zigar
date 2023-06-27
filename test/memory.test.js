@@ -28,7 +28,7 @@ describe('Memory copying functions', function() {
       f(dest, src);
       const td = new TextDecoder();
       const s = td.decode(dest);
-      expect(s).to.equal('123456789'.repeat(8));      
+      expect(s).to.equal('123456789'.repeat(8));
     })
   })
   describe('obtainBitAlignFunction', function() {
@@ -91,7 +91,7 @@ describe('Memory copying functions', function() {
     it ('should return functions for copying to and from a bit offset (crossing multiple byte boundaries)', function() {
       const misaligned = new DataView(new ArrayBuffer(5));
       const aligned = new DataView(new ArrayBuffer(3));
-      misaligned.setUint8(0, 0xFF); //                                     11111111  
+      misaligned.setUint8(0, 0xFF); //                                     11111111
       misaligned.setUint8(1, 0x1F); //                            00011111
       misaligned.setUint8(2, 0x10); //                   00010000   ^- bit 5
       misaligned.setUint8(3, 0xE0); //          11100000

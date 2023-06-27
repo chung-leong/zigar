@@ -1,21 +1,21 @@
 import { expect } from 'chai';
 
 import { MemberType, StructureType } from '../src/type.js';
-import { MEMORY, SLOTS } from '../src/symbol.js';
-import { 
-  beginStructure, 
+import { MEMORY, SLOTS, ZIG } from '../src/symbol.js';
+import {
+  beginStructure,
   attachMember,
   attachMethod,
   attachTemplate,
   finalizeStructure,
 } from '../src/define.js';
 
-describe('Structure definition', function() { 
+describe('Structure definition', function() {
   describe('Singleton', function() {
     it('should define a structure for holding a primitive', function() {
-      const structure = beginStructure({ 
-        type: StructureType.Singleton, 
-        name: 'Hello', 
+      const structure = beginStructure({
+        type: StructureType.Singleton,
+        name: 'Hello',
         size: 8,
       });
       attachMember(structure, {
@@ -38,8 +38,8 @@ describe('Structure definition', function() {
   describe('Basic array', function() {
     it('should define structure for holding an int array', function() {
       const structure = beginStructure({
-        type: StructureType.Array, 
-        name: 'Hello', 
+        type: StructureType.Array,
+        name: 'Hello',
         size: 4 * 8,
       });
       attachMember(structure, {
@@ -60,8 +60,8 @@ describe('Structure definition', function() {
     })
     it('should define array that is iterable', function() {
       const structure = beginStructure({
-        type: StructureType.Array, 
-        name: 'Hello', 
+        type: StructureType.Array,
+        name: 'Hello',
         size: 4 * 8,
       });
       attachMember(structure, {
@@ -87,8 +87,8 @@ describe('Structure definition', function() {
   describe('Basic slice', function() {
     it('should define structure for holding an int slice', function() {
       const structure = beginStructure({
-        type: StructureType.Slice, 
-        name: 'Hello', 
+        type: StructureType.Slice,
+        name: 'Hello',
         size: 4 * 8,
       });
       attachMember(structure, {
@@ -109,7 +109,7 @@ describe('Structure definition', function() {
   describe('Simple struct', function() {
     it('should define a simple struct', function() {
       const structure = beginStructure({
-        type: StructureType.Struct, 
+        type: StructureType.Struct,
         name: 'Hello',
         size: 4 * 2,
       });
@@ -154,7 +154,7 @@ describe('Structure definition', function() {
     })
     it('should work correctly with big-endian data', function() {
       const structure = beginStructure({
-        type: StructureType.Struct, 
+        type: StructureType.Struct,
         name: 'Hello',
         size: 4 * 2,
       }, { littleEndian: false });
@@ -184,7 +184,7 @@ describe('Structure definition', function() {
             dv.setInt32(0, 1234, false);
             dv.setInt32(4, 4567, false);
             return dv;
-          })(), 
+          })(),
           [SLOTS]: {},
         },
       });
@@ -199,7 +199,7 @@ describe('Structure definition', function() {
     })
     it('should create functional setters', function() {
       const structure = beginStructure({
-        type: StructureType.Struct, 
+        type: StructureType.Struct,
         name: 'Hello',
         size: 4 * 2,
       });
@@ -244,7 +244,7 @@ describe('Structure definition', function() {
     })
     it('should have dataView property', function() {
       const structure = beginStructure({
-        type: StructureType.Struct, 
+        type: StructureType.Struct,
         name: 'Hello',
         size: 4 * 2,
       });
@@ -284,7 +284,7 @@ describe('Structure definition', function() {
     })
     it('should have typedArray property when all struct members are of the same supported type', function() {
       const structure = beginStructure({
-        type: StructureType.Struct, 
+        type: StructureType.Struct,
         name: 'Hello',
         size: 4 * 2,
       });
@@ -326,7 +326,7 @@ describe('Structure definition', function() {
     })
     it('should not have typedArray property when struct members are different', function() {
       const structure = beginStructure({
-        type: StructureType.Struct, 
+        type: StructureType.Struct,
         name: 'Hello',
         size: 4 * 2,
       });
@@ -366,7 +366,7 @@ describe('Structure definition', function() {
     })
     it('should throw when a value exceed the maximum capability of the type', function () {
       const structure = beginStructure({
-        type: StructureType.Struct, 
+        type: StructureType.Struct,
         name: 'Hello',
         size: 4 * 2,
       });
@@ -406,7 +406,7 @@ describe('Structure definition', function() {
     })
     it('should permit overflow when runtime safety is off', function () {
       const structure = beginStructure({
-        type: StructureType.Struct, 
+        type: StructureType.Struct,
         name: 'Hello',
         size: 4 * 2,
       }, { runtimeSafety: false });
@@ -444,10 +444,10 @@ describe('Structure definition', function() {
       const object = new Hello();
       expect(() => object.dog = 0x1FFFFFFFF).to.not.throw();
     })
-  
+
     it('should be able to handle bitfields', function() {
       const structure = beginStructure({
-        type: StructureType.Struct, 
+        type: StructureType.Struct,
         name: 'Hello',
         size: 1,
       });
@@ -490,7 +490,7 @@ describe('Structure definition', function() {
     })
     it('should be able to handle small int type', function() {
       const structure = beginStructure({
-        type: StructureType.Struct, 
+        type: StructureType.Struct,
         name: 'Hello',
         size: 1,
       });
@@ -521,7 +521,7 @@ describe('Structure definition', function() {
             return dv;
           })(),
           [SLOTS]: {},
-        },       
+        },
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello();
@@ -534,10 +534,10 @@ describe('Structure definition', function() {
       object.cat = 1;
       expect(object.cat).to.equal(1);
       expect(object.dog).to.equal(3);
-    }) 
+    })
     it('should be able to handle bit-misalignment', function() {
       const structure = beginStructure({
-        type: StructureType.Struct, 
+        type: StructureType.Struct,
         name: 'Hello',
         size: 5,
       });
@@ -574,12 +574,12 @@ describe('Structure definition', function() {
       const object = new Hello();
       expect(object.dog).to.equal(0);
       expect(object.cat).to.equal(2);
-    }) 
+    })
   })
   describe('Pointer', function() {
     it('should define a pointer for pointing to integers', function() {
       const intStructure = beginStructure({
-        type: StructureType.Singleton, 
+        type: StructureType.Singleton,
         name: 'Int32',
         size: 4,
       });
@@ -593,7 +593,7 @@ describe('Structure definition', function() {
       });
       const Int32 = finalizeStructure(intStructure);
       const structure = beginStructure({
-        type: StructureType.Pointer, 
+        type: StructureType.Pointer,
         name: '*Int32',
         size: 8,
       });
@@ -613,9 +613,9 @@ describe('Structure definition', function() {
     })
   })
   describe('Complex struct', function() {
-    it('should define a struct that contains pointers', function() { 
+    it('should define a struct that contains pointers', function() {
       const intStructure = beginStructure({
-        type: StructureType.Singleton, 
+        type: StructureType.Singleton,
         name: 'Int32',
         size: 4,
       });
@@ -629,7 +629,7 @@ describe('Structure definition', function() {
       });
       const Int32 = finalizeStructure(intStructure);
       const ptrStructure = beginStructure({
-        type: StructureType.Pointer, 
+        type: StructureType.Pointer,
         name: '*Int32',
         size: 8,
       });
@@ -644,7 +644,7 @@ describe('Structure definition', function() {
       });
       const PInt32 = finalizeStructure(ptrStructure);
       const structure = beginStructure({
-        type: StructureType.Struct, 
+        type: StructureType.Struct,
         name: 'Hello',
         size: 8 * 2,
       });
@@ -680,19 +680,19 @@ describe('Structure definition', function() {
             return dv;
           })(),
           [SLOTS]: {
-            0: new PInt32(int1), 
+            0: new PInt32(int1),
             1: new PInt32(int2),
           }
         },
       });
-      const Hello = finalizeStructure(structure);      
+      const Hello = finalizeStructure(structure);
       const object = new Hello();
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(4567);
     })
-    it('should expose pointers through special & property', function() { 
+    it('should expose pointers through special & property', function() {
       const intStructure = beginStructure({
-        type: StructureType.Singleton, 
+        type: StructureType.Singleton,
         name: 'Int32',
         size: 4,
       });
@@ -706,7 +706,7 @@ describe('Structure definition', function() {
       });
       const Int32 = finalizeStructure(intStructure);
       const ptrStructure = beginStructure({
-        type: StructureType.Pointer, 
+        type: StructureType.Pointer,
         name: '*Int32',
         size: 8,
       });
@@ -721,7 +721,7 @@ describe('Structure definition', function() {
       });
       const PInt32 = finalizeStructure(ptrStructure);
       const structure = beginStructure({
-        type: StructureType.Struct, 
+        type: StructureType.Struct,
         name: 'Hello',
         size: 8 * 2,
       });
@@ -757,12 +757,12 @@ describe('Structure definition', function() {
             return dv;
           })(),
           [SLOTS]: {
-            0: new PInt32(int1), 
+            0: new PInt32(int1),
             1: new PInt32(int2),
           }
         },
       });
-      const Hello = finalizeStructure(structure);      
+      const Hello = finalizeStructure(structure);
       const object = new Hello();
       const ptr1 = object['&'].dog;
       const ptr2 = object['&'].cat;
@@ -773,7 +773,7 @@ describe('Structure definition', function() {
   describe('Simple extern union', function() {
     it('should define a simple extern union', function() {
       const structure = beginStructure({
-        type: StructureType.ExternUnion, 
+        type: StructureType.ExternUnion,
         name: 'Hello',
         size: 4,
       });
@@ -822,7 +822,7 @@ describe('Structure definition', function() {
   describe('Enumeration', function() {
     it('should define an enum class', function() {
       const structure = beginStructure({
-        type: StructureType.Enumeration, 
+        type: StructureType.Enumeration,
         name: 'Hello',
       });
       attachMember(structure, {
@@ -863,13 +863,13 @@ describe('Structure definition', function() {
     })
     it('should look up the correct enum object', function() {
       const structure = beginStructure({
-        type: StructureType.Enumeration, 
+        type: StructureType.Enumeration,
         name: 'Hello',
       });
       attachMember(structure, {
         name: 'Dog',
         type: MemberType.Int,
-        isStatic: false,        
+        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -902,7 +902,7 @@ describe('Structure definition', function() {
     })
     it('should look up the correct enum object when values are not sequential', function() {
       const structure = beginStructure({
-        type: StructureType.Enumeration, 
+        type: StructureType.Enumeration,
         name: 'Hello'
       });
       attachMember(structure, {
@@ -924,7 +924,7 @@ describe('Structure definition', function() {
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false, 
+        isStatic: false,
         template: {
           [MEMORY]: (() => {
             const dv = new DataView(new ArrayBuffer(4 * 2));
@@ -943,7 +943,7 @@ describe('Structure definition', function() {
     })
     it('should look up the correct enum object when they represent bigInts', function() {
       const structure = beginStructure({
-        type: StructureType.Enumeration, 
+        type: StructureType.Enumeration,
         name: 'Hello'
       });
       attachMember(structure, {
@@ -983,7 +983,7 @@ describe('Structure definition', function() {
     })
     it('should produce the expect output when JSON.stringify() is used', function() {
       const structure = beginStructure({
-        type: StructureType.Enumeration, 
+        type: StructureType.Enumeration,
         name: 'Hello'
       });
       attachMember(structure, {
@@ -1022,7 +1022,7 @@ describe('Structure definition', function() {
     })
     it('should throw when the new operator is used on the constructor', function() {
       const structure = beginStructure({
-        type: StructureType.Enumeration, 
+        type: StructureType.Enumeration,
         name: 'Hello'
       });
       attachMember(structure, {
@@ -1044,7 +1044,7 @@ describe('Structure definition', function() {
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false, 
+        isStatic: false,
         template: {
           [MEMORY]: (() => {
             const dv = new DataView(new ArrayBuffer(4 * 2));
@@ -1097,7 +1097,7 @@ describe('Structure definition', function() {
       expect(Hello(1)).to.be.an('object');
       expect(Hello(5)).to.be.undefined;
     })
-  }) 
+  })
   describe('Static variables', function() {
     it('should attach variables to a struct', function() {
       // define structure for integer variables
@@ -1113,10 +1113,10 @@ describe('Structure definition', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
-      });     
+      });
       const Int32 = finalizeStructure(intStructure);
       const intPtrStructure = beginStructure({
-        type: StructureType.Pointer, 
+        type: StructureType.Pointer,
         name: '*Int32',
         size: 8,
       });
@@ -1213,10 +1213,10 @@ describe('Structure definition', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
-      });     
+      });
       const Int32 = finalizeStructure(intStructure);
       const intPtrStructure = beginStructure({
-        type: StructureType.Pointer, 
+        type: StructureType.Pointer,
         name: '*Int32',
         size: 8,
       });
@@ -1231,7 +1231,7 @@ describe('Structure definition', function() {
       });
       const PInt32 = finalizeStructure(intPtrStructure);
       const structure = beginStructure({
-        type: StructureType.Enumeration, 
+        type: StructureType.Enumeration,
         name: 'Hello'
       });
       attachMember(structure, {
@@ -1294,7 +1294,7 @@ describe('Structure definition', function() {
         template: {
           [SLOTS]: {
             0: new PInt32(int1),
-            1: new PInt32(int2),  
+            1: new PInt32(int2),
           },
         },
       });
@@ -1311,7 +1311,7 @@ describe('Structure definition', function() {
   describe('Methods', function() {
     it('should attach methods to a struct', function() {
       const structure = beginStructure({
-        type: StructureType.Struct, 
+        type: StructureType.Struct,
         name: 'Hello',
         size: 8,
       });
@@ -1364,7 +1364,7 @@ describe('Structure definition', function() {
         name: 'merge',
         argStruct,
         isStaticOnly: false,
-        thunk, 
+        thunk,
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello();
@@ -1381,7 +1381,7 @@ describe('Structure definition', function() {
     })
     it('should attach methods to enum items', function() {
       const structure = beginStructure({
-        type: StructureType.Enumeration, 
+        type: StructureType.Enumeration,
         name: 'Hello',
         size: 4,
       });
@@ -1416,14 +1416,14 @@ describe('Structure definition', function() {
         }
       });
       const argStruct = beginStructure({
-        type: StructureType.Struct, 
+        type: StructureType.Struct,
         name: 'Arguments',
         size: 12,
       });
       attachMember(argStruct, {
         name: '0',
         type: MemberType.EnumerationItem,
-        isStatic: false, 
+        isStatic: false,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -1432,7 +1432,7 @@ describe('Structure definition', function() {
       attachMember(argStruct, {
         name: '1',
         type: MemberType.Int,
-        isStatic: false, 
+        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 32,
@@ -1441,7 +1441,7 @@ describe('Structure definition', function() {
       attachMember(argStruct, {
         name: 'retval',
         type: MemberType.Bool,
-        isStatic: false, 
+        isStatic: false,
         bitSize: 1,
         bitOffset: 64,
         byteSize: 1,
@@ -1461,7 +1461,7 @@ describe('Structure definition', function() {
         name: 'foo',
         argStruct,
         isStaticOnly: false,
-        thunk, 
+        thunk,
       });
       const Hello = finalizeStructure(structure);
       expect(Hello.foo).to.be.a('function');
@@ -1481,6 +1481,6 @@ describe('Structure definition', function() {
       expect(slots).to.be.an('object');
       expect(argDV).to.be.an.instanceOf(DataView);
       expect(argDV).to.have.property('byteLength', 12);
-    }) 
+    })
   })
 })

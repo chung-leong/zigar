@@ -161,13 +161,13 @@ describe('Struct functions', function() {
             members: [
               {
                 type: MemberType.Object,
-                structure: { 
-                  type: StructureType.Singleton, 
+                structure: {
+                  type: StructureType.Singleton,
                   constructor: DummyStruct,
                 },
               },
-            ],  
-          } 
+            ],
+          }
         }
       };
       const f = obtainGetter(member, {});
@@ -240,7 +240,7 @@ describe('Struct functions', function() {
       f.call(object, null);
       expect(dv.getUint32(4, true)).to.equal(0);
       expect(() => f.call(object, 44)).to.throw();
-    })   
+    })
     it('should return a function for setting enum', function() {
       const DummyValue = {
         valueOf() { return 1 }
@@ -295,9 +295,9 @@ describe('Struct functions', function() {
           instance: {
             members: [
               {
-                structure: { 
-                  type: StructureType.Singleton, 
-                  constructor: DummyStruct 
+                structure: {
+                  type: StructureType.Singleton,
+                  constructor: DummyStruct
                 },
               }
             ]

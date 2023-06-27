@@ -5,12 +5,18 @@ export function throwOverflow(isSigned, bitSize, value) {
   throw new TypeError(`${typeName} cannot represent value '${value}'`);
 }
 
-export function throwSizeMismatch(actual, expected) {
-  throw new TypeError(`Struct size mismatch: ${actual} != ${expected}`);
+export function throwSizeMismatch(name, expected, actual, multiple) {
+  const s = (actual > 0) ? 's' : '';
+  if (multiple) {
+    const extra = actual % expected;
+    throw new TypeError(`${name} has elements that are ${expected} byte${s} in length, received ${actual} (${extra} bytes extra)`);
+  } else {
+    throw new TypeError(`${name} has ${expected} byte${s}, received ${actual}`);
+  }
 }
 
 export function throwBufferExpected(size) {
-  throw new TypeError(`Expect an ArrayBuffer or DataView with a byte length of ${size}`);
+  throw new TypeError(`Expect an ArrayBuffer or DataView with a ${size} byte in length of `);
 }
 
 export function throwOutOfBound(length, align, index) {
@@ -27,6 +33,10 @@ export function rethrowRangeError(err, length, align, index) {
   } else {
     throw err;
   }
+}
+
+export function throwNoArbitraryPointer() {
+  throw new TypeError(`Cannot create pointer to arbitrary address`);
 }
 
 export function throwNoNewEnum() {

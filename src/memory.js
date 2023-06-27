@@ -23,17 +23,17 @@ export function obtainBitAlignFunction(bitPos, bitSize, toAligned) {
     const leadMask = (2 ** leadBits) - 1;
     if (toAligned) {
       const trailBits = bitSize % 8;
-      const trailMask = (2 ** trailBits) - 1;  
+      const trailMask = (2 ** trailBits) - 1;
       return function(dest, src, offset) {
         let i = offset, j = 0;
         let n = src.getUint8(i++), b;
-        let bitBuf = (n >> bitPos) & leadMask; 
+        let bitBuf = (n >> bitPos) & leadMask;
         let bitCount = leadBits;
         let remaining = bitSize;
         do {
           if (remaining > bitCount) {
             n = src.getUint8(i++);
-            bitBuf = bitBuf | (n << bitCount);  
+            bitBuf = bitBuf | (n << bitCount);
             //bitCount += 8;
           }
           b = (remaining >= 8) ? bitBuf & 0xFF : bitBuf & trailMask;
@@ -45,7 +45,7 @@ export function obtainBitAlignFunction(bitPos, bitSize, toAligned) {
       }
     } else {
       const trailBits = (bitSize - leadBits) % 8;
-      const trailMask = (2 ** trailBits) - 1;  
+      const trailMask = (2 ** trailBits) - 1;
       const destMask1 = 0xFF ^ (leadMask << bitPos);
       const destMask2 = 0xFF ^ trailMask;
       return function(dest, src, offset) {
@@ -64,7 +64,7 @@ export function obtainBitAlignFunction(bitPos, bitSize, toAligned) {
           if (remaining >= 8) {
             b = bitBuf & 0xFF;
           } else {
-            // preserve bits at the destination sitting behind the trailing bits 
+            // preserve bits at the destination sitting behind the trailing bits
             d = dest.getUint8(j);
             b = (d & destMask2) | (bitBuf & trailMask);
           }

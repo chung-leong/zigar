@@ -473,11 +473,6 @@ const Host = *opaque {
         if (callbacks.wrap_memory(self, structure, &memory, &value) != .OK) {
             return Error.Unknown;
         }
-        if (isPointer(T)) {
-            // mark pointer as valid by setting its ZIG private prop to a boolean (undefined initially)
-            // true means that Zig owns the pointer as this moment
-            try self.setPointerStatus(value, true);
-        }
         return value;
     }
 
@@ -600,7 +595,7 @@ fn getStructureName(comptime T: type) [*:0]const u8 {
             // we'll give the name "*[]T" to the former and "[]T" to the latter
             else => @typeName(*T),
         },
-        else => @typeName(T),
+        else => getFunctionName(T) orelse @typeName(T),
     };
     return @ptrCast([*:0]const u8, name);
 }
@@ -656,6 +651,8 @@ fn addMembers(host: Host, structure: Value, comptime T: type) Error!void {
             try host.attachMember(structure, .{
                 .member_type = getMemberType(T),
                 .is_const = pt.is_const,
+                .bit_size = @bitSizeOf(T),
+                .byte_size = @sizeOf(T),
                 .structure = target_structure,
             });
         },
@@ -668,12 +665,6 @@ fn addMembers(host: Host, structure: Value, comptime T: type) Error!void {
                     else => {},
                 }
             }
-            // default data
-            var data: [@sizeOf(T)]u8 = undefined;
-            const ptr = @intToPtr(*T, @ptrToInt(&data));
-            for (data, 0..) |_, index| {
-                data[index] = 0xAA;
-            }
             inline for (fields, 0..) |field, index| {
                 const member: Member = .{
                     .name = @ptrCast([*:0]const u8, field.name),
@@ -683,33 +674,43 @@ fn addMembers(host: Host, structure: Value, comptime T: type) Error!void {
                     .is_required = field.default_value == null,
                     .bit_offset = @bitOffsetOf(T, field.name),
                     .bit_size = @bitSizeOf(field.type),
-                    .byte_size = if (isPacked(T)) @sizeOf(field.type) else 0,
+                    .byte_size = if (isPacked(T)) 0 else @sizeOf(field.type),
                     .slot = getObjectSlot(T, index),
                     .structure = try getStructure(host, field.type),
                 };
                 try host.attachMember(structure, member);
-                if (field.default_value) |opaque_ptr| {
-                    // set default value
-                    const aligned_ptr = @alignCast(@alignOf(field.type), opaque_ptr);
-                    const typed_ptr = @ptrCast(*const field.type, aligned_ptr);
-                    @field(ptr.*, field.name) = typed_ptr.*;
-                }
             }
-            const has_data = check_data: {
-                for (data) |byte| {
-                    if (byte != 0) {
-                        break :check_data true;
+            if (!isArgumentStruct(T)) {
+                // default data
+                var data: [@sizeOf(T)]u8 = undefined;
+                const ptr = @intToPtr(*T, @ptrToInt(&data));
+                for (data, 0..) |_, index| {
+                    data[index] = 0xAA;
+                }
+                inline for (fields) |field| {
+                    if (field.default_value) |opaque_ptr| {
+                        // set default value
+                        const aligned_ptr = @alignCast(@alignOf(field.type), opaque_ptr);
+                        const typed_ptr = @ptrCast(*const field.type, aligned_ptr);
+                        @field(ptr.*, field.name) = typed_ptr.*;
                     }
                 }
-                break :check_data false;
-            };
-            if (has_data) {
-                const template = try host.createTemplate(&data);
-                try dezigStructure(host, template, ptr);
-                return host.attachTemplate(structure, .{
-                    .is_static = false,
-                    .object = template,
-                });
+                const has_data = check_data: {
+                    for (data) |byte| {
+                        if (byte != 0) {
+                            break :check_data true;
+                        }
+                    }
+                    break :check_data false;
+                };
+                if (has_data) {
+                    const template = try host.createTemplate(&data);
+                    try dezigStructure(host, template, ptr);
+                    return host.attachTemplate(structure, .{
+                        .is_static = false,
+                        .object = template,
+                    });
+                }
             }
         },
         .Enum => |en| {
@@ -1025,7 +1026,6 @@ test "hasPointer" {
 
 fn rezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
     const T = @TypeOf(ptr.*);
-    std.debug.print("Rezigging {s}\n", .{@typeName(T)});
     switch (@typeInfo(T)) {
         .Pointer => |pt| {
             // note: ptr is a pointer to a pointer
@@ -1035,7 +1035,6 @@ fn rezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
             const child_obj = try host.readObjectSlot(obj, 0);
             const current_ptr = try host.getMemory(child_obj, pt.child, pt.size);
             if (!comparePointers(ptr.*, current_ptr)) {
-                // update the pointer
                 ptr.* = current_ptr;
             }
             if (hasPointer(pt.child)) {
@@ -1076,7 +1075,6 @@ fn rezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
 
 fn dezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
     const T = @TypeOf(ptr.*);
-    std.debug.print("Dezigging {s}\n", .{@typeName(T)});
     switch (@typeInfo(T)) {
         .Pointer => |pt| {
             if (!try host.getPointerStatus(obj)) {

@@ -67,7 +67,7 @@ struct Host;
 typedef void (*Thunk)(Host*, Local<Value>);
 
 struct Method {
-  const char* name;  
+  const char* name;
   bool is_static_only;
   Thunk thunk;
   Local<Value> structure;
@@ -118,7 +118,7 @@ struct ExternalData {
 
   ExternalData(Isolate* isolate) :
     external(isolate, External::New(isolate, this)) {
-    external.template SetWeak<ExternalData>(this, 
+    external.template SetWeak<ExternalData>(this,
       [](const v8::WeakCallbackInfo<ExternalData>& data) {
         auto self = data.GetParameter();
         delete self;
@@ -145,11 +145,11 @@ struct ModuleData : public ExternalData {
   Global<Object> js_options;
   Global<External> addon_data;
 
-  ModuleData(Isolate* isolate, 
+  ModuleData(Isolate* isolate,
              void* so_handle,
              Local<Object> js_options,
-             Local<External> addon_data) : 
-    ExternalData(isolate), 
+             Local<External> addon_data) :
+    ExternalData(isolate),
     so_handle(so_handle),
     js_options(isolate, js_options),
     addon_data(isolate, addon_data) {
@@ -162,7 +162,7 @@ struct ModuleData : public ExternalData {
   }
 };
 
-struct FunctionData : public ExternalData {  
+struct FunctionData : public ExternalData {
   static int count;
   Thunk thunk;
   Global<External> module_data;
@@ -185,8 +185,8 @@ struct ExternalMemoryData {
   static int count;
   Global<External> module_data;
 
-  ExternalMemoryData(Isolate* isolate, 
-                     Local<External> module_data) : 
+  ExternalMemoryData(Isolate* isolate,
+                     Local<External> module_data) :
     module_data(isolate, module_data) {
     count++;
   }
@@ -199,13 +199,13 @@ struct ExternalMemoryData {
 struct JSBridge;
 
 struct Host {
-  Isolate* isolate;  
+  Isolate* isolate;
   Local<Context> context;
   Local<Array> mem_pool;
   Local<Array> arg_buffers;
   Local<Object> js_module;
   Local<Object> argument;
-  Local<Object> global_slots;  
+  Local<Object> global_slots;
   Local<Symbol> symbol_slots;
   Local<Symbol> symbol_memory;
   Local<Symbol> symbol_zig;
@@ -215,7 +215,7 @@ struct Host {
   Host(Isolate* isolate,
        Local<External> module_data) :
     isolate(isolate),
-    context(isolate->GetCurrentContext()),    
+    context(isolate->GetCurrentContext()),
     function_data(new FunctionData(isolate, nullptr, module_data)),
     remove_function_data(true) {
   }
@@ -240,6 +240,6 @@ struct Host {
 };
 
 static Result GetArgumentBuffers(Host* call);
-static Result Log(Host* call, 
-                  int argc, 
-                  Local<Value>* argv);
+static Result Log(Host* call,
+                  int argc,
+                  Local<Value>* argv) __attribute__((unused));

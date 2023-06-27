@@ -4,7 +4,7 @@ import { MemberType } from '../src/type.js';
 import { MEMORY } from '../src/symbol.js';
 import { obtainTypedArrayGetter } from '../src/typed-array.js';
 
-describe('Typed array functions', function() { 
+describe('Typed array functions', function() {
   describe('obtainTypedArrayGetter', function() {
     it('should return a function that yield a typed array when all members are of the same type', function() {
       const members = [

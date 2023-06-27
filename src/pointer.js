@@ -7,7 +7,7 @@ export function obtainPointerGetter(member, options) {
     const { structure, slot } = member;
     if (structure.type === StructureType.Pointer) {
       // get pointer from slot
-      return function() { 
+      return function() {
         const pointer = this[SOURCE][SLOTS][slot];
         return pointer;
       };
@@ -20,10 +20,10 @@ export function obtainPointerSetter(member, options) {
     const { structure, slot } = member;
     if (structure.type === StructureType.Pointer) {
       // set pointer itself
-      return function(v) { 
+      return function(v) {
         const { constructor, copier } = structure;
         if (!(v instanceof constructor)) {
-          throwInvalidType(constructor);
+          v = new constructor(v);
         }
         copier(this[SOURCE][SLOTS][slot], v);
       };
@@ -35,7 +35,7 @@ export function obtainPointerArrayGetter(member, options) {
   if (member.type === MemberType.Object) {
     const { structure } = member;
     if (structure.type === StructureType.Pointer) {
-      return function(index) { 
+      return function(index) {
         const pointer = this[SOURCE][SLOTS][index];
         return pointer;
       };
@@ -47,8 +47,9 @@ export function obtainPointerArraySetter(member, options) {
   if (member.type === MemberType.Object) {
     const { structure } = member;
     if (structure.type === StructureType.Pointer) {
-      return function(index, v) { 
+      return function(index, v) {
         const { constructor, copier } = structure;
+        console.log('setter');
         if (!(v instanceof constructor)) {
           throwInvalidType(constructor);
         }

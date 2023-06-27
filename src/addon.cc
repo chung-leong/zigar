@@ -1,14 +1,16 @@
 #include "addon.h"
 
-static Result AllocateMemory(Host* call, 
-                             size_t size, 
+static Result AllocateMemory(Host* call,
+                             size_t size,
                              Memory* dest) {
+  auto isolate = call->isolate;
+  auto context = call->context;
   if (call->mem_pool.IsEmpty()) {
-    call->mem_pool = Array::New(call->isolate);
+    call->mem_pool = Array::New(isolate);
   }
-  auto buffer = ArrayBuffer::New(call->isolate, size);
+  auto buffer = ArrayBuffer::New(isolate, size);
   uint32_t index = call->mem_pool->Length();
-  call->mem_pool->Set(call->context, index, buffer).Check();
+  call->mem_pool->Set(context, index, buffer).Check();
   std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
   dest->bytes = reinterpret_cast<uint8_t*>(store->Data());
   dest->len = store->ByteLength();
@@ -18,8 +20,9 @@ static Result AllocateMemory(Host* call,
 static Result GetMemory(Host* call,
                         Local<Object> object,
                         Memory* dest) {
-  Local<Value> value;  
-  if (!object->Get(call->context, call->symbol_memory).ToLocal(&value) || !value->IsDataView()) {
+  auto context = call->context;
+  Local<Value> value;
+  if (!object->Get(context, call->symbol_memory).ToLocal(&value) || !value->IsDataView()) {
     return Result::Failure;
   }
   auto buffer = value.As<DataView>()->Buffer();
@@ -32,25 +35,27 @@ static Result GetMemory(Host* call,
 static Result CreateSharedBuffer(Host* call,
                                  const Memory& memory,
                                  Local<SharedArrayBuffer>* dest) {
+  auto isolate = call->isolate;
   // create a reference to the module so that the shared library doesn't get unloaded
   // while the shared buffer is still around pointing to it
-  auto mde = Local<External>::New(call->isolate, call->function_data->module_data);
-  auto emd = new ExternalMemoryData(call->isolate, mde);
-  std::shared_ptr<BackingStore> store = SharedArrayBuffer::NewBackingStore(memory.bytes, memory.len, 
+  auto mde = Local<External>::New(isolate, call->function_data->module_data);
+  auto emd = new ExternalMemoryData(isolate, mde);
+  std::shared_ptr<BackingStore> store = SharedArrayBuffer::NewBackingStore(memory.bytes, memory.len,
     [](void*, size_t, void* deleter_data) {
       // get rid of the reference
       auto emd = reinterpret_cast<ExternalMemoryData*>(deleter_data);
       delete emd;
-    }, emd); 
-  *dest = SharedArrayBuffer::New(call->isolate, store);
+    }, emd);
+  *dest = SharedArrayBuffer::New(isolate, store);
   return Result::OK;
 }
 
 static Result CreateStackBuffer(Host* call,
                                 const Memory& memory,
                                 Local<ArrayBuffer>* dest) {
+  auto isolate = call->isolate;
   // see if the memory is on the stack
-  // since the Host struct is allocated on the stack, its address is the 
+  // since the Host struct is allocated on the stack, its address is the
   // starting point of stack space used by Zig code
   size_t stack_top = reinterpret_cast<size_t>(call) + sizeof(Host);
   size_t stack_bottom = reinterpret_cast<size_t>(&stack_top);
@@ -58,7 +63,7 @@ static Result CreateStackBuffer(Host* call,
   if (!(stack_bottom <= address && address + memory.len <= stack_top)) {
     return Result::Failure;
   }
-  Local<ArrayBuffer> buffer = ArrayBuffer::New(call->isolate, memory.len);
+  Local<ArrayBuffer> buffer = ArrayBuffer::New(isolate, memory.len);
   std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
   uint8_t* bytes = reinterpret_cast<uint8_t*>(store->Data());
   memcpy(bytes, memory.bytes, memory.len);
@@ -71,10 +76,11 @@ static Result FindBuffer(Host* call,
                          Local<Array> array,
                          Local<ArrayBuffer>* dest,
                          size_t* offset_dest) {
+  auto context = call->context;
   int buf_count = array->Length();
   size_t address = reinterpret_cast<size_t>(memory.bytes);
   for (int i = 0; i < buf_count; i++) {
-    MaybeLocal<Value> item = array->Get(call->context, i);
+    MaybeLocal<Value> item = array->Get(context, i);
     if (!item.IsEmpty()) {
       Local<ArrayBuffer> buffer = item.ToLocalChecked().As<ArrayBuffer>();
       if (buffer->ByteLength() >= memory.len) {
@@ -84,7 +90,7 @@ static Result FindBuffer(Host* call,
         if (buf_start <= address && address + memory.len <= buf_end) {
           *offset_dest = address - buf_start;
           return Result::OK;
-        }        
+        }
       }
     }
   }
@@ -127,25 +133,28 @@ static Result ObtainDataView(Host* call,
   return Result::Failure;
 }
 
-static Result WrapMemory(Host* call, 
-                         Local<Object> structure, 
-                         const Memory& memory, 
+static Result WrapMemory(Host* call,
+                         Local<Object> structure,
+                         const Memory& memory,
                          Local<Object>* dest) {
-  // find or create array buffer and create data view 
+  auto isolate = call->isolate;
+  auto context = call->context;
+  // find or create array buffer and create data view
   Local<DataView> dv;
   if (ObtainDataView(call, memory, &dv) != Result::OK) {
     return Result::Failure;
   }
   // find constructor
   Local<Value> value;
-  auto name = String::NewFromUtf8Literal(call->isolate, "constructor", NewStringType::kInternalized);
-  if (!structure->Get(call->context, name).ToLocal(&value) || !value->IsFunction()) {
+  auto name = String::NewFromUtf8Literal(isolate, "constructor", NewStringType::kInternalized);
+  if (!structure->Get(context, name).ToLocal(&value) || !value->IsFunction()) {
     return Result::Failure;
   }
-  // and call it
   auto f = value.As<Function>();
-  Local<Value> args[1] = { dv };  
-  if (!f->Call(call->context, Null(call->isolate), 1, args).ToLocal(&value) || !value->IsObject()) {
+  // indicate we're calling from zig by setting this to ZIG
+  auto recv = call->symbol_zig;
+  Local<Value> args[1] = { dv };
+  if (!f->Call(context, recv, 1, args).ToLocal(&value) || !value->IsObject()) {
     return Result::Failure;
   }
   *dest = value.As<Object>();
@@ -155,16 +164,18 @@ static Result WrapMemory(Host* call,
 static Result CreateTemplate(Host* call,
                              const Memory& memory,
                              Local<Object>* dest) {
-  Local<Object> templ = Object::New(call->isolate);
+  auto isolate = call->isolate;
+  auto context = call->context;
+  auto templ = Object::New(isolate);
   if (memory.bytes) {
     Local<DataView> dv;
     if (ObtainDataView(call, memory, &dv) != Result::OK) {
       return Result::Failure;
     }
-    templ->Set(call->context, call->symbol_memory, dv).Check();
+    templ->Set(context, call->symbol_memory, dv).Check();
   }
-  Local<Object> slots = Object::New(call->isolate);
-  templ->Set(call->context, call->symbol_slots, slots).Check();
+  auto slots = Object::New(isolate);
+  templ->Set(context, call->symbol_slots, slots).Check();
   *dest = templ;
   return Result::OK;
 }
@@ -172,8 +183,9 @@ static Result CreateTemplate(Host* call,
 static Result GetPointerStatus(Host* call,
                                Local<Object> object,
                                bool* dest) {
-  Local<Value> value;  
-  if (!object->Get(call->context, call->symbol_zig).ToLocal(&value) || !value->IsBoolean()) {
+  auto context = call->context;
+  Local<Value> value;
+  if (!object->Get(context, call->symbol_zig).ToLocal(&value) || !value->IsBoolean()) {
     return Result::Failure;
   }
   *dest = value.As<Boolean>()->IsTrue();
@@ -183,44 +195,50 @@ static Result GetPointerStatus(Host* call,
 static Result SetPointerStatus(Host* call,
                                Local<Object> object,
                                bool zig_owned) {
-  object->Set(call->context, call->symbol_zig, Boolean::New(call->isolate, zig_owned)).Check();
+  auto isolate = call->isolate;
+  auto context = call->context;
+  object->Set(context, call->symbol_zig, Boolean::New(isolate, zig_owned)).Check();
   return Result::OK;
 }
 
-static Result ReadGlobalSlot(Host* call, 
-                             uint32_t slot_id, 
+static Result ReadGlobalSlot(Host* call,
+                             uint32_t slot_id,
                              Local<Value>* dest) {
+  auto context = call->context;
   Local<Value> value;
-  if (call->global_slots->Get(call->context, slot_id).ToLocal(&value)) {
+  if (call->global_slots->Get(context, slot_id).ToLocal(&value)) {
     if (!value->IsNullOrUndefined()) {
       *dest = value;
       return Result::OK;
     }
-  }  
+  }
   return Result::Failure;
 }
 
-static Result WriteGlobalSlot(Host* call, 
-                              uint32_t slot_id, 
+static Result WriteGlobalSlot(Host* call,
+                              uint32_t slot_id,
                               Local<Value> object) {
+  auto isolate = call->isolate;
+  auto context = call->context;
   if (!object.IsEmpty()) {
-    call->global_slots->Set(call->context, slot_id, object).Check();
+    call->global_slots->Set(context, slot_id, object).Check();
   } else {
-    call->global_slots->Set(call->context, slot_id, Null(call->isolate)).Check();
+    call->global_slots->Set(context, slot_id, Null(isolate)).Check();
   }
-  return Result::OK;  
+  return Result::OK;
 }
 
 static Result ReadObjectSlot(Host* call,
                              Local<Object> object,
                              uint32_t slot,
                              Local<Object>* dest) {
-  Local<Value> value;  
-  if (!object->Get(call->context, call->symbol_slots).ToLocal(&value) || !value->IsObject()) {
+  auto context = call->context;
+  Local<Value> value;
+  if (!object->Get(context, call->symbol_slots).ToLocal(&value) || !value->IsObject()) {
     return Result::Failure;
   }
   auto relocs = value.As<Object>();
-  if (!relocs->Get(call->context, slot).ToLocal(&value) || !value->IsObject()) {
+  if (!relocs->Get(context, slot).ToLocal(&value) || !value->IsObject()) {
     return Result::Failure;
   }
   *dest = value.As<Object>();
@@ -231,20 +249,22 @@ static Result WriteObjectSlot(Host* call,
                               Local<Object> object,
                               uint32_t slot,
                               Local<Object> child) {
-  Local<Value> value;  
-  if (!object->Get(call->context, call->symbol_slots).ToLocal(&value) || !value->IsObject()) {
+  auto isolate = call->isolate;
+  auto context = call->context;
+  Local<Value> value;
+  if (!object->Get(context, call->symbol_slots).ToLocal(&value) || !value->IsObject()) {
     return Result::Failure;
   }
   auto slots = value.As<Object>();
   if (!child.IsEmpty()) {
-    slots->Set(call->context, slot, child).Check();
+    slots->Set(context, slot, child).Check();
   } else {
-    slots->Set(call->context, slot, Null(call->isolate)).Check();
+    slots->Set(context, slot, Null(isolate)).Check();
   }
   return Result::OK;
 }
 
-static Local<Object> NewStructure(Host* call, 
+static Local<Object> NewStructure(Host* call,
                                   const Structure& s) {
   auto isolate = call->isolate;
   auto context = call->context;
@@ -277,8 +297,8 @@ static Local<Object> NewMember(Host* call,
   def->Set(context, String::NewFromUtf8Literal(isolate, "bitSize"), bit_size).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "bitOffset"), bit_offset).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "byteSize"), byte_size).Check();
-  if (m.type == MemberType::Int) { 
-    auto is_signed = Boolean::New(isolate, m.is_signed);     
+  if (m.type == MemberType::Int) {
+    auto is_signed = Boolean::New(isolate, m.is_signed);
     def->Set(context, String::NewFromUtf8Literal(isolate, "isSigned"), is_signed).Check();
   } else if (m.type == MemberType::Object) {
     auto is_const = Boolean::New(isolate, m.is_const);
@@ -296,7 +316,7 @@ static Local<Object> NewMember(Host* call,
   return def;
 }
 
-static Local<Function> NewThunk(Host* call, 
+static Local<Function> NewThunk(Host* call,
                                 Thunk thunk) {
   auto isolate = call->isolate;
   auto context = call->context;
@@ -305,7 +325,7 @@ static Local<Function> NewThunk(Host* call,
   auto fde = Local<External>::New(isolate, fd->external);
   return Function::New(context, [](const FunctionCallbackInfo<Value>& info) {
     // Host will extract the FunctionData object created above from the External object
-    // which we get from FunctionCallbackInfo::Data()      
+    // which we get from FunctionCallbackInfo::Data()
     Host ctx(info);
     ctx.function_data->thunk(&ctx, ctx.argument);
   }, fde, 3).ToLocalChecked();
@@ -325,7 +345,7 @@ static Local<Object> NewMethod(Host* call,
     auto name = String::NewFromUtf8(isolate, m.name).ToLocalChecked();
     def->Set(context, String::NewFromUtf8Literal(isolate, "name"), name).Check();
   }
-  return def;   
+  return def;
 }
 
 static Local<Object> NewTemplate(Host* call,
@@ -341,9 +361,9 @@ static Local<Object> NewTemplate(Host* call,
 
 static Result GetJavaScript(Host* call,
                             Local<Object>* dest) {
+  auto isolate = call->isolate;
+  auto context = call->context;
   if (call->js_module.IsEmpty()) {
-    auto isolate = call->isolate;
-    auto context = call->context;
     auto mde = Local<External>::New(isolate, call->function_data->module_data);
     auto md = reinterpret_cast<ModuleData*>(mde->Value());
     if (md->js_module.IsEmpty()) {
@@ -352,7 +372,7 @@ static Result GetJavaScript(Host* call,
       Local<Script> script;
       if (ad->js_script.IsEmpty()) {
         // compile the code
-        auto source = String::NewFromUtf8Literal(isolate, 
+        auto source = String::NewFromUtf8Literal(isolate,
           #include "addon.js.txt"
         );
         if (!Script::Compile(context, source).ToLocal(&script)) {
@@ -361,7 +381,7 @@ static Result GetJavaScript(Host* call,
         // save the script but allow it to be gc'ed
         ad->script_count++;
         ad->js_script.Reset(isolate, script);
-        ad->js_script.template SetWeak<AddonData>(ad, 
+        ad->js_script.template SetWeak<AddonData>(ad,
           [](const v8::WeakCallbackInfo<AddonData>& data) {
             auto ad = data.GetParameter();
             ad->js_script.Reset();
@@ -377,7 +397,7 @@ static Result GetJavaScript(Host* call,
       call->js_module = result.As<Object>();
       // save the module but allow it to be gc'ed
       md->js_module.Reset(isolate, call->js_module);
-      md->js_module.template SetWeak<ModuleData>(md, 
+      md->js_module.template SetWeak<ModuleData>(md,
         [](const v8::WeakCallbackInfo<ModuleData>& data) {
           auto md = data.GetParameter();
           md->js_module.Reset();
@@ -395,7 +415,7 @@ static Result CallFunction(Host* call,
                            int argc,
                            Local<Value>* argv,
                            Local<Value>* dest = nullptr) {
-  auto isolate = call->isolate;                            
+  auto isolate = call->isolate;
   auto context = call->context;
   Local<Object> module;
   if (GetJavaScript(call, &module) != Result::OK) {
@@ -406,7 +426,8 @@ static Result CallFunction(Host* call,
     return Result::Failure;
   }
   auto f = value.As<Function>();
-  if (!f->Call(context, Null(isolate), argc, argv).ToLocal<Value>(&value)) {
+  auto recv = Null(isolate);
+  if (!f->Call(context, recv, argc, argv).ToLocal<Value>(&value)) {
     return Result::Failure;
   }
   if (dest) {
@@ -483,8 +504,8 @@ static Result GetArgumentBuffers(Host* call) {
   return Result::OK;
 }
 
-static Result Log(Host* call, 
-                  int argc, 
+static Result Log(Host* call,
+                  int argc,
                   Local<Value>* argv) {
   auto isolate = call->isolate;
   auto name = String::NewFromUtf8Literal(isolate, "log");
@@ -550,8 +571,8 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   options->Set(context, String::NewFromUtf8Literal(isolate, "realTimeSafety"), runtime_safety).Check();
   auto md = new ModuleData(isolate, handle, options, info.Data().As<External>());
 
-  // invoke the factory thunk through JavaScript, which will give us the 
-  // needed symbols and slots 
+  // invoke the factory thunk through JavaScript, which will give us the
+  // needed symbols and slots
   Host ctx(isolate, Local<External>::New(isolate, md->external));
   Local<Function> factory = NewThunk(&ctx, module->factory);
   Local<String> name = String::NewFromUtf8Literal(isolate, "invokeFactory");
@@ -567,7 +588,7 @@ static void GetGCStatistics(const FunctionCallbackInfo<Value>& info) {
   auto isolate = info.GetIsolate();
   auto context = isolate->GetCurrentContext();
   auto stats = Object::New(isolate);
-  auto set = [&](Local<String> name, int count) {    
+  auto set = [&](Local<String> name, int count) {
     stats->Set(context, name, Int32::NewFromUnsigned(isolate, count)).Check();
   };
   set(String::NewFromUtf8Literal(isolate, "scripts"), AddonData::script_count);
@@ -580,7 +601,7 @@ static void GetGCStatistics(const FunctionCallbackInfo<Value>& info) {
 NODE_MODULE_INIT(/* exports, module, context */) {
   auto isolate = context->GetIsolate();
   auto ad = new AddonData(isolate);
-  auto add = [&](Local<String> name, void (*f)(const FunctionCallbackInfo<Value>& info), int length) {    
+  auto add = [&](Local<String> name, void (*f)(const FunctionCallbackInfo<Value>& info), int length) {
     auto data = Local<External>::New(isolate, ad->external);
     auto tmpl = FunctionTemplate::New(isolate, f, data, Local<Signature>(), length);
     auto function = tmpl->GetFunction(isolate->GetCurrentContext()).ToLocalChecked();
@@ -588,7 +609,7 @@ NODE_MODULE_INIT(/* exports, module, context */) {
   };
   add(String::NewFromUtf8Literal(isolate, "load"), Load, 1);
   add(String::NewFromUtf8Literal(isolate, "getGCStatistics"), GetGCStatistics, 0);
-} 
+}
 
 int AddonData::script_count = 0;
 int ModuleData::count = 0;

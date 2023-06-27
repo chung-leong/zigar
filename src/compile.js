@@ -57,7 +57,7 @@ export async function compile(path, options = {}) {
     await walk(pathname, /\.zig$/i, (dir, name, { mtime }) => {
       if (!(soMTime > mtime)) {
         changed = true;
-      } 
+      }
     });
   }
   // build in a unique temp dir
@@ -132,7 +132,7 @@ export async function compile(path, options = {}) {
         // remove the stale folder
         await rimraf(soBuildDir);
       }
-    }  
+    }
   }
   if (errorLog) {
     throw new Error(`Zig compilation failed\n\n${errorLog}`);
@@ -170,7 +170,7 @@ async function walk(dir, re, cb) {
       }
     } catch (err) {
     }
-  };  
+  };
   await scan(dir);
 }
 
@@ -227,7 +227,7 @@ async function move(srcPath, dstPath) {
     } else {
       throw err;
     }
-  }  
+  }
 }
 
 async function load(path, def) {
@@ -242,7 +242,7 @@ async function touch(path) {
   try {
     const now = new Date();
     await utimes(path, now, now);
-  } catch (err) {    
+  } catch (err) {
   }
 }
 
@@ -275,8 +275,8 @@ async function rimraf(dir) {
       }
     }
     await rmdir(dir);
-  };  
-  await remove(dir); 
+  };
+  await remove(dir);
 }
 
 async function delay(ms) {

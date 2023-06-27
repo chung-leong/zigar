@@ -7,6 +7,7 @@ export function obtainGetter(member, options) {
   const {
     littleEndian = true,
     runtimeSafety = true,
+    autoDeref = true,
   } = options;
   switch (member.type) {
     case MemberType.Bool:
@@ -16,14 +17,14 @@ export function obtainGetter(member, options) {
       const { bitOffset } = member;
       const offset = bitOffset >> 3;
       const get = obtainDataViewGetter(member);
-      return function() { 
+      return function() {
         return get.call(this[MEMORY], offset, littleEndian);
       };
     }
     case MemberType.Void: {
-      return function() { 
+      return function() {
         return null;
-      }; 
+      };
     }
     case MemberType.EnumerationItem: {
       const { bitOffset, structure } = member;
@@ -39,37 +40,37 @@ export function obtainGetter(member, options) {
             throwInvalidEnum(value)
           }
           return object;
-        }; 
+        };
       } else {
         return function() {
           const value = get.call(this[MEMORY], offset, littleEndian);
           return constructor(value);
-        }; 
+        };
       }
     }
     case MemberType.Object: {
       // automatically dereference pointer
       const { structure, slot } = member;
-      if (structure.type === StructureType.Pointer) {
+      if (structure.type === StructureType.Pointer && autoDeref) {
         const { instance: { members: [ target ] } } = structure;
         if (target.structure.type === StructureType.Singleton) {
-          return function() { 
+          return function() {
             const pointer = this[SLOTS][slot];
             const object = pointer['*'];
-            return object.get() 
-          };  
+            return object.get()
+          };
         } else {
-          return function() { 
+          return function() {
             const pointer = this[SLOTS][slot];
             const object = pointer['*'];
             return object;
-          };  
+          };
         }
       } else {
-        return function() { 
+        return function() {
           const object = this[SLOTS][slot];
           return object;
-        }; 
+        };
       }
     }
     case MemberType.Type: {
@@ -86,6 +87,7 @@ export function obtainSetter(member, options) {
   const {
     littleEndian = true,
     runtimeSafety = true,
+    autoDeref = true,
   } = options;
   switch (member.type) {
     case MemberType.Bool:
@@ -98,21 +100,21 @@ export function obtainSetter(member, options) {
       if (runtimeSafety && type === MemberType.Int) {
         const { isSigned, bitSize } = member;
         const { min, max } = getIntRange(isSigned, bitSize);
-        return function(v) { 
+        return function(v) {
           if (v < min || v > max) {
             throwOverflow(isSigned, bitSize, v);
           }
           set.call(this[MEMORY], offset, v, littleEndian);
         };
       } else {
-        return function(v) { 
+        return function(v) {
           set.call(this[MEMORY], offset, v, littleEndian);
         };
       }
     } break;
     case MemberType.Void: {
       if (runtimeSafety) {
-        return function(v) { 
+        return function(v) {
           if (v != null) {
             throwNotNull();
           }
@@ -131,24 +133,24 @@ export function obtainSetter(member, options) {
           throwEnumExpected(constructor);
         }
         set.call(this[MEMORY], offset, v.valueOf(), littleEndian);
-      }; 
+      };
     }
     case MemberType.Object: {
       const { slot, structure, isConst } = member;
       if (isConst) {
         return;
       }
-      if (structure.type === StructureType.Pointer) {
+      if (structure.type === StructureType.Pointer && autoDeref) {
         const { instance: { members: [ target ] } } = structure;
         if (target.structure.type === StructureType.Singleton) {
-          return function(v) { 
+          return function(v) {
             const pointer = this[SLOTS][slot];
             const object = pointer['*'];
-            object.set(v); 
+            object.set(v);
           };
         } else {
-          return function(v) { 
-            const pointer = this[SLOTS][slot];            
+          return function(v) {
+            const pointer = this[SLOTS][slot];
             pointer['*'] = v;
           };
         }
@@ -160,7 +162,7 @@ export function obtainSetter(member, options) {
           }
           const object = this[SLOTS][slot];
           copier(object, v);
-        };  
+        };
       }
     }
     case MemberType.Type: {

@@ -33,7 +33,7 @@ export function obtainArrayGetter(member, options) {
     }
     case MemberType.Object: {
       const { byteSize } = member;
-      return function(index) { 
+      return function(index) {
         const child = this[SLOTS][index];
         if (!child) {
           const dv = this[MEMORY];
@@ -60,7 +60,7 @@ export function obtainArraySetter(member, options) {
       if (runtimeSafety && type === MemberType.Int) {
         const { isSigned, bitSize, byteSize } = member;
         const { min, max } = getIntRange(isSigned, bitSize);
-        return function(index, v) { 
+        return function(index, v) {
           if (v < min || v > max) {
             throwOverflow(isSigned, bitSize, v);
           }
@@ -73,7 +73,7 @@ export function obtainArraySetter(member, options) {
           }
         };
       } else {
-        return function(index, v) { 
+        return function(index, v) {
           const offset = index * byteSize;
           const dv = this[MEMORY];
           try {
@@ -97,7 +97,7 @@ export function obtainArraySetter(member, options) {
           throwOutOfBound(dv.byteLength, byteSize, index);
         }
         copier(child, v);
-      };  
+      };
     }
   }
 }

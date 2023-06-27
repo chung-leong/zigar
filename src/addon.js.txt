@@ -178,12 +178,18 @@ R"=====(
     throw new TypeError(`${typeName} cannot represent value '${value}'`);
   }
 
-  function throwSizeMismatch(actual, expected) {
-    throw new TypeError(`Struct size mismatch: ${actual} != ${expected}`);
+  function throwSizeMismatch(name, expected, actual, multiple) {
+    const s = (actual > 0) ? 's' : '';
+    if (multiple) {
+      const extra = actual % expected;
+      throw new TypeError(`${name} has elements that are ${expected} byte${s} in length, received ${actual} (${extra} bytes extra)`);
+    } else {
+      throw new TypeError(`${name} has ${expected} byte${s}, received ${actual}`);
+    }
   }
 
   function throwBufferExpected(size) {
-    throw new TypeError(`Expect an ArrayBuffer or DataView with a byte length of ${size}`);
+    throw new TypeError(`Expect an ArrayBuffer or DataView with a ${size} byte in length of `);
   }
 
   function throwOutOfBound(length, align, index) {
@@ -626,26 +632,31 @@ R"=====(
     return fn;
   }
 
-  function obtainDataView(arg, size, multiple = false) {
+  function obtainDataView(arg, name, size, multiple = false) {
     let dv;
     if (arg instanceof DataView) {
       dv = arg;
     } else if (arg instanceof ArrayBuffer || arg instanceof SharedArrayBuffer) {
       dv = new DataView(arg);
     } else {
-      throwBufferExpected(size);
+      throwBufferExpected(name);
     }
     if (multiple) {
       if (dv.byteLength % size !== 0) {
-        throwSizeMismatch(dv.byteLength, size);
+        throwSizeMismatch(name, size, dv.byteLength, true);
       }
     } else {
       if (dv.byteLength !== size) {
-        throwSizeMismatch(dv.byteLength, size);
+        throwSizeMismatch(name, size, dv.byteLength, false);
       } 
     }
     return dv;
   }
+
+  function isBuffer(arg) {
+    return (arg instanceof DataView || arg instanceof ArrayBuffer || arg instanceof SharedArrayBuffer);
+  }
+
 
   function getDataView() {
     return this[MEMORY];
@@ -667,6 +678,7 @@ R"=====(
     const {
       littleEndian = true,
       runtimeSafety = true,
+      autoDeref = true,
     } = options;
     switch (member.type) {
       case MemberType.Bool:
@@ -676,14 +688,14 @@ R"=====(
         const { bitOffset } = member;
         const offset = bitOffset >> 3;
         const get = obtainDataViewGetter(member);
-        return function() { 
+        return function() {
           return get.call(this[MEMORY], offset, littleEndian);
         };
       }
       case MemberType.Void: {
-        return function() { 
+        return function() {
           return null;
-        }; 
+        };
       }
       case MemberType.EnumerationItem: {
         const { bitOffset, structure } = member;
@@ -699,37 +711,37 @@ R"=====(
               throwInvalidEnum(value);
             }
             return object;
-          }; 
+          };
         } else {
           return function() {
             const value = get.call(this[MEMORY], offset, littleEndian);
             return constructor(value);
-          }; 
+          };
         }
       }
       case MemberType.Object: {
         // automatically dereference pointer
         const { structure, slot } = member;
-        if (structure.type === StructureType.Pointer) {
+        if (structure.type === StructureType.Pointer && autoDeref) {
           const { instance: { members: [ target ] } } = structure;
           if (target.structure.type === StructureType.Singleton) {
-            return function() { 
+            return function() {
               const pointer = this[SLOTS][slot];
               const object = pointer['*'];
-              return object.get() 
-            };  
+              return object.get()
+            };
           } else {
-            return function() { 
+            return function() {
               const pointer = this[SLOTS][slot];
               const object = pointer['*'];
               return object;
-            };  
+            };
           }
         } else {
-          return function() { 
+          return function() {
             const object = this[SLOTS][slot];
             return object;
-          }; 
+          };
         }
       }
       case MemberType.Type: {
@@ -746,6 +758,7 @@ R"=====(
     const {
       littleEndian = true,
       runtimeSafety = true,
+      autoDeref = true,
     } = options;
     switch (member.type) {
       case MemberType.Bool:
@@ -758,20 +771,20 @@ R"=====(
         if (runtimeSafety && type === MemberType.Int) {
           const { isSigned, bitSize } = member;
           const { min, max } = getIntRange(isSigned, bitSize);
-          return function(v) { 
+          return function(v) {
             if (v < min || v > max) {
               throwOverflow(isSigned, bitSize, v);
             }
             set.call(this[MEMORY], offset, v, littleEndian);
           };
         } else {
-          return function(v) { 
+          return function(v) {
             set.call(this[MEMORY], offset, v, littleEndian);
           };
         }
       }    case MemberType.Void: {
         if (runtimeSafety) {
-          return function(v) { 
+          return function(v) {
             if (v != null) {
               throwNotNull();
             }
@@ -790,24 +803,24 @@ R"=====(
             throwEnumExpected(constructor);
           }
           set.call(this[MEMORY], offset, v.valueOf(), littleEndian);
-        }; 
+        };
       }
       case MemberType.Object: {
         const { slot, structure, isConst } = member;
         if (isConst) {
           return;
         }
-        if (structure.type === StructureType.Pointer) {
+        if (structure.type === StructureType.Pointer && autoDeref) {
           const { instance: { members: [ target ] } } = structure;
           if (target.structure.type === StructureType.Singleton) {
-            return function(v) { 
+            return function(v) {
               const pointer = this[SLOTS][slot];
               const object = pointer['*'];
-              object.set(v); 
+              object.set(v);
             };
           } else {
-            return function(v) { 
-              const pointer = this[SLOTS][slot];            
+            return function(v) {
+              const pointer = this[SLOTS][slot];
               pointer['*'] = v;
             };
           }
@@ -819,7 +832,7 @@ R"=====(
             }
             const object = this[SLOTS][slot];
             copier(object, v);
-          };  
+          };
         }
       }
       case MemberType.Type: {
@@ -952,7 +965,7 @@ R"=====(
       const { structure, slot } = member;
       if (structure.type === StructureType.Pointer) {
         // get pointer from slot
-        return function() { 
+        return function() {
           const pointer = this[SOURCE][SLOTS][slot];
           return pointer;
         };
@@ -965,10 +978,10 @@ R"=====(
       const { structure, slot } = member;
       if (structure.type === StructureType.Pointer) {
         // set pointer itself
-        return function(v) { 
+        return function(v) {
           const { constructor, copier } = structure;
           if (!(v instanceof constructor)) {
-            throwInvalidType(constructor);
+            v = new constructor(v);
           }
           copier(this[SOURCE][SLOTS][slot], v);
         };
@@ -980,7 +993,7 @@ R"=====(
     if (member.type === MemberType.Object) {
       const { structure } = member;
       if (structure.type === StructureType.Pointer) {
-        return function(index) { 
+        return function(index) {
           const pointer = this[SOURCE][SLOTS][index];
           return pointer;
         };
@@ -992,8 +1005,9 @@ R"=====(
     if (member.type === MemberType.Object) {
       const { structure } = member;
       if (structure.type === StructureType.Pointer) {
-        return function(index, v) { 
+        return function(index, v) {
           const { constructor, copier } = structure;
+          console.log('setter');
           if (!(v instanceof constructor)) {
             throwInvalidType(constructor);
           }
@@ -1098,7 +1112,7 @@ R"=====(
         }
       }
     };
-    scan(args); 
+    scan(args);
     return buffers;
   }
 
@@ -1108,12 +1122,12 @@ R"=====(
       name,
       size,
     } = def;
-    return { 
-      constructor: null, 
+    return {
+      constructor: null,
       copier: null,
-      type, 
+      type,
       name,
-      size, 
+      size,
       instance: {
         members: [],
         template: null,
@@ -1138,13 +1152,13 @@ R"=====(
 
   function attachTemplate(s, def) {
     const target = (def.isStatic) ? s.static : s.instance;
-    target.template = def.template;  
+    target.template = def.template;
   }
 
   function finalizeStructure(s) {
     try {
       switch (s.type) {
-        case StructureType.Singleton: 
+        case StructureType.Singleton:
           return finalizeSingleton(s);
         case StructureType.Array:
         case StructureType.Slice:
@@ -1162,8 +1176,8 @@ R"=====(
           return finalizePointer(s);
         case StructureType.Slice:
           // TODO
-          return null; 
-      } 
+          return null;
+      }
     } catch (err) {
       console.error(err);
       throw err;
@@ -1171,7 +1185,7 @@ R"=====(
   }
 
   function finalizeSingleton(s) {
-    const { 
+    const {
       size,
       name,
       instance: {
@@ -1195,7 +1209,7 @@ R"=====(
         dv = new DataView(new ArrayBuffer(size));
       } else {
         self = Object.create(constructor.prototype);
-        dv = obtainDataView(arg, size);
+        dv = obtainDataView(arg, name, size);
       }
       Object.defineProperties(self, {
         [MEMORY]: { value: dv },
@@ -1204,7 +1218,7 @@ R"=====(
         if (primitive !== undefined) {
           if (arg !== undefined) {
             this.set(primitive(arg));
-          } 
+          }
         }
       } else {
         return self;
@@ -1230,8 +1244,8 @@ R"=====(
         members: [ member ],
       },
       options,
-    } = s; 
-    const copy = obtainCopyFunction(size); 
+    } = s;
+    const copy = obtainCopyFunction(size);
     const get = obtainArrayGetter(member, options);
     const set = obtainArraySetter(member, options);
     const getLength = obtainArrayLengthGetter(member);
@@ -1241,7 +1255,7 @@ R"=====(
     const objectMember = (member.type === MemberType.Object) ? member : null;
     const isSlice = type == StructureType.Slice;
     s.copier = function(dest, src) {
-      copy(dest[MEMORY], src[MEMORY]);   
+      copy(dest[MEMORY], src[MEMORY]);
       if (objectMember) {
         Object.assign(dest[SLOTS], src[SLOTS]);
       }
@@ -1254,7 +1268,7 @@ R"=====(
         dv = new DataView(new ArrayBuffer(size));
       } else {
         self = Object.create(constructor.prototype);
-        dv = obtainDataView(arg, size, isSlice);
+        dv = obtainDataView(arg, name, size, isSlice);
       }
       Object.defineProperties(self, {
         [MEMORY]: { value: dv },
@@ -1262,9 +1276,10 @@ R"=====(
       if (objectMember) {
         const slots = {};
         const { structure: { constructor }, byteSize } = objectMember;
+        const recv = (this === ZIG) ? this : null;
         for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
           const childDV = new DataView(dv.buffer, offset, byteSize);
-          slots[slot] = constructor(childDV);
+          slots[slot] = constructor.call(recv, childDV);
         }
         Object.defineProperties(self, {
           [SLOTS]: { value: slots },
@@ -1316,26 +1331,24 @@ R"=====(
       },
       options,
     } = s;
+    const isArgStruct = (type === StructureType.ArgStruct);
     const copy = obtainCopyFunction(size);
     const descriptors = {};
     for (const member of members) {
-      const get = obtainGetter(member, options);
-      const set = obtainSetter(member, options);
+      const get = obtainGetter(member, { autoDeref: !isArgStruct, ...options });
+      const set = obtainSetter(member, { autoDeref: !isArgStruct, ...options });
       descriptors[member.name] = { get, set, configurable: true, enumerable: true };
     }
     // pointer
     const ptrDescriptors = {};
-    for (const member of members) {
-      const get = obtainPointerGetter(member);
-      const set = obtainPointerSetter(member);
-      if (get) {
-        if (type === StructureType.ArgStruct) {
-          // no auto-dereferencing
-          descriptors[member.name] = { get, set, configurable: true, enumerable: true };
-        } else { 
+    if (!isArgStruct) {
+      for (const member of members) {
+        const get = obtainPointerGetter(member);
+        const set = obtainPointerSetter(member);
+        if (get) {
           ptrDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
         }
-      } 
+      }
     }
     const objectMembers = members.filter(m => m.type === MemberType.Object);
     const copier = s.copier = function(dest, src) {
@@ -1354,7 +1367,7 @@ R"=====(
         dv = new DataView(new ArrayBuffer(size));
       } else {
         self = Object.create(constructor.prototype);
-        dv = obtainDataView(arg, size);
+        dv = obtainDataView(arg, name, size);
       }
       Object.defineProperties(self, {
         [MEMORY]: { value: dv },
@@ -1362,16 +1375,17 @@ R"=====(
       Object.defineProperties(self, descriptors);
       if (objectMembers.length > 0) {
         // create child objects
+        const recv = (this === ZIG) ? this : null;
         const slots = {};
         for (const { structure: { constructor }, bitOffset, byteSize, slot } of objectMembers) {
           const offset = bitOffset >> 3;
           const childDV = new DataView(dv.buffer, offset, byteSize);
-          slots[slot] = constructor(childDV);
+          slots[slot] = constructor.call(recv, childDV);
         }
         Object.defineProperties(self, {
           [SLOTS]: { value: slots },
         });
-      } 
+      }
       if (creating) {
         if (template) {
           copier(this, template);
@@ -1407,7 +1421,7 @@ R"=====(
     return constructor;
   }
   function finalizeEnumeration(s) {
-    const { 
+    const {
       name,
       instance: {
         members,
@@ -1424,11 +1438,11 @@ R"=====(
       if (creating) {
         // the "constructor" is only used to convert a number into an enum object
         // new enum items cannot be created
-        throwNoNewEnum();    
+        throwNoNewEnum();
       }
       let index = -1;
       if (isSequential) {
-        // normal enums start at 0 and go up, so the value is the index 
+        // normal enums start at 0 and go up, so the value is the index
         index = Number(arg);
       } else {
         // it's not sequential, so we need to compare values
@@ -1456,19 +1470,19 @@ R"=====(
       [MEMORY]: { value: template[MEMORY] },
       [ENUM_ITEMS]: { value: items },
     });
-    const valueOf = function() { 
+    const valueOf = function() {
       const index = this[ENUM_INDEX] ;
       return getValue.call(constructor, index);
     };
     Object.defineProperties(constructor.prototype, {
-      [Symbol.toPrimitive]: { value: valueOf, configurable: true, writable: true },    
+      [Symbol.toPrimitive]: { value: valueOf, configurable: true, writable: true },
       // so we don't get an empty object when JSON.stringify() is used
       toJSON: { value: valueOf, configurable: true, writable: true },
     });
-    // now that the class has the right hidden properties, getValue() will work 
+    // now that the class has the right hidden properties, getValue() will work
     // scan the array to see if the enum's numeric representation is sequential
     const isSequential = (() => {
-      // try-block in the event that the enum has bigInt items 
+      // try-block in the event that the enum has bigInt items
       try {
         for (let i = 0; i < count; i++) {
           if (get.call(constructor, i) !== i) {
@@ -1476,7 +1490,7 @@ R"=====(
           }
         }
         return true;
-      } catch (err) {      
+      } catch (err) {
         return false;
       }
     })();
@@ -1497,7 +1511,7 @@ R"=====(
     return constructor;
   }
   function finalizePointer(s) {
-    const { 
+    const {
       size,
       name,
       instance: {
@@ -1512,6 +1526,8 @@ R"=====(
       copy(dest[MEMORY], src[MEMORY]);
       Object.assign(dest[SLOTS], src[SLOTS]);
     };
+    const { structure: target } = member;
+    target.type === StructureType.Slice;
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
       let self, dv;
@@ -1519,20 +1535,22 @@ R"=====(
       if (creating) {
         self = this;
         dv = new DataView(new ArrayBuffer(size));
-        // TODO: validate arg
       } else {
         self = Object.create(constructor.prototype);
-        dv = obtainDataView(arg, size);
+        dv = obtainDataView(arg, name, size);
       }
       Object.defineProperties(self, {
         [MEMORY]: { value: dv },
         [SLOTS]: { value: slots },
-        // a boolean value indicating whether Zig currently owns the pointer 
-        // set to undefined here, such that it isn't possible to create a 
-        // pointer on the JavaScript side (only C++ code can set it to true/false) 
-        [ZIG]: { value: undefined, writable: true },
+        // a boolean value indicating whether Zig currently owns the pointer
+        [ZIG]: { value: this === ZIG, writable: true },
       });
       if (creating) {
+        const { constructor } = target;
+        if (!(arg instanceof constructor)) {
+          const recv = (this === ZIG) ? this : null;
+          arg = isBuffer(arg) ? constructor.call(recv, arg) : new constructor(arg);
+        }
         slots[0] = arg;
       } else {
         return self;
@@ -1560,7 +1578,7 @@ R"=====(
     } = s;
     const descriptors = {
       [SLOTS]: { value: template?.[SLOTS] },
-    };  
+    };
     for (const member of members) {
       const get = obtainGetter(member, options);
       const set = obtainSetter(member, options);
@@ -1569,14 +1587,14 @@ R"=====(
   }
 
   function attachMethods(s) {
-    const { 
+    const {
       constructor,
       methods,
     } = s;
     for (const method of methods) {
       const {
         name,
-        argStruct,   
+        argStruct,
         thunk,
         isStaticOnly,
       } = method;
@@ -1594,7 +1612,7 @@ R"=====(
       Object.defineProperties(f, {
         name: { value: name, writable: false },
       });
-      Object.defineProperties(constructor, { 
+      Object.defineProperties(constructor, {
         [name]: { value: f, configurable: true, enumerable: true, writable: true },
       });
       if (!isStaticOnly) {
@@ -1611,12 +1629,12 @@ R"=====(
           return a.retval;
         };
         Object.defineProperties(m, {
-          name: { value: name, writable: false }, 
+          name: { value: name, writable: false },
         });
         Object.defineProperties(constructor.prototype, {
           [name]: { value: m, configurable: true, writable: true },
         });
-      } 
+      }
     }
   }
 
@@ -1630,7 +1648,7 @@ R"=====(
       },
     } = s;
     if (!Object.getOwnPropertyDescriptor(prototype, 'dataView')) {
-      Object.defineProperties(prototype, { 
+      Object.defineProperties(prototype, {
         dataView: { get: getDataView, configurable: true, enumerable: true },
       });
     }

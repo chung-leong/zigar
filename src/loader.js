@@ -31,7 +31,7 @@ export async function load(url, context, nextLoad) {
     // load the zig module and see which of its properties can be exported
     const module = load(soPath);
     const descriptors = Object.getOwnPropertyDescriptors(module);
-    const names = []; 
+    const names = [];
     for (const [ name, { get, set } ] of Object.entries(descriptors)) {
       // any prop with a setter needs to be involved through the object
       if (!get && !set) {

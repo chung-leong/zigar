@@ -34,7 +34,7 @@ export function getTypeName(type, isSigned, bitSize) {
     return `Null`;
   }
 }
-  
+
 export function getIntRange(isSigned, bitSize) {
   if (bitSize <= 32) {
     const max = 2 ** (isSigned ? bitSize - 1 : bitSize) - 1;

@@ -402,26 +402,31 @@ export function obtainDataViewSetter({ type, bitSize, isSigned, byteSize, bitOff
   return fn;
 }
 
-export function obtainDataView(arg, size, multiple = false) {
+export function obtainDataView(arg, name, size, multiple = false) {
   let dv;
   if (arg instanceof DataView) {
     dv = arg;
   } else if (arg instanceof ArrayBuffer || arg instanceof SharedArrayBuffer) {
     dv = new DataView(arg);
   } else {
-    throwBufferExpected(size);
+    throwBufferExpected(name, size);
   }
   if (multiple) {
     if (dv.byteLength % size !== 0) {
-      throwSizeMismatch(dv.byteLength, size, true);
+      throwSizeMismatch(name, size, dv.byteLength, true);
     }
   } else {
     if (dv.byteLength !== size) {
-      throwSizeMismatch(dv.byteLength, size);
+      throwSizeMismatch(name, size, dv.byteLength, false);
     } 
   }
   return dv;
 }
+
+export function isBuffer(arg) {
+  return (arg instanceof DataView || arg instanceof ArrayBuffer || arg instanceof SharedArrayBuffer);
+}
+
 
 export function getDataView() {
   return this[MEMORY];
