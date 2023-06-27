@@ -6,6 +6,20 @@ const assert = std.debug.assert;
 const Error = error{
     TODO,
     Unknown,
+    UnableToRetrieveMemoryLocation,
+    UnableToCreateObject,
+    UnableToFindObjectType,
+    UnableToSetObjectType,
+    UnableToRetrieveObject,
+    UnableToInsertObject,
+    UnableToStartStructureDefinition,
+    UnableToAddStructureMember,
+    UnableToAddStaticMember,
+    UnableToAddMethod,
+    UnableToCreateStructureTemplate,
+    UnableToAddStructureTemplate,
+    UnableToDefineStructure,
+    PointerIsInvalid,
 };
 
 // slot allocators
@@ -458,113 +472,117 @@ var callbacks: Callbacks = undefined;
 
 // host interface
 const Host = *opaque {
-    fn getMemory(self: Host, container: Value, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) Error!PointerType(T, size) {
+    fn getMemory(self: Host, container: Value, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) !PointerType(T, size) {
         var memory: Memory = undefined;
         if (callbacks.get_memory(self, container, &memory) != .OK) {
-            return Error.Unknown;
+            return Error.UnableToRetrieveMemoryLocation;
         }
         return fromMemory(memory, T, size);
     }
 
-    fn wrapMemory(self: Host, memory: Memory, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) Error!Value {
+    fn wrapMemory(self: Host, memory: Memory, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) !Value {
         const slot = getStructureSlot(T, size);
         const structure = try self.readGlobalSlot(slot);
         var value: Value = undefined;
         if (callbacks.wrap_memory(self, structure, &memory, &value) != .OK) {
-            return Error.Unknown;
+            return Error.UnableToCreateObject;
         }
         return value;
     }
 
-    fn getPointerStatus(self: Host, pointer: Value) Error!bool {
+    fn getPointerStatus(self: Host, pointer: Value) !bool {
         var sync: bool = undefined;
         if (callbacks.get_pointer_status(self, pointer, &sync) != .OK) {
-            return Error.Unknown;
+            return Error.PointerIsInvalid;
         }
         return sync;
     }
 
-    fn setPointerStatus(self: Host, pointer: Value, sync: bool) Error!void {
+    fn setPointerStatus(self: Host, pointer: Value, sync: bool) !void {
         if (callbacks.set_pointer_status(self, pointer, sync) != .OK) {
-            return Error.Unknown;
+            return Error.PointerIsInvalid;
         }
     }
 
-    fn readGlobalSlot(self: Host, slot: u32) Error!Value {
+    fn readGlobalSlot(self: Host, slot: u32) !Value {
         var value: Value = undefined;
         if (callbacks.read_global_slot(self, slot, &value) != .OK) {
-            return Error.Unknown;
+            return Error.UnableToFindObjectType;
         }
         return value;
     }
 
-    fn writeGlobalSlot(self: Host, slot: u32, value: Value) Error!void {
+    fn writeGlobalSlot(self: Host, slot: u32, value: Value) !void {
         if (callbacks.write_global_slot(self, slot, value) != .OK) {
-            return Error.Unknown;
+            return Error.UnableToSetObjectType;
         }
     }
 
-    fn readObjectSlot(self: Host, container: Value, id: u32) Error!Value {
+    fn readObjectSlot(self: Host, container: Value, id: u32) !Value {
         var result: Value = undefined;
         if (callbacks.read_object_slot(self, container, id, &result) != .OK) {
-            return Error.Unknown;
+            return Error.UnableToRetrieveObject;
         }
         return result;
     }
 
-    fn writeObjectSlot(self: Host, container: Value, id: u32, value: ?Value) Error!void {
+    fn writeObjectSlot(self: Host, container: Value, id: u32, value: ?Value) !void {
         if (callbacks.write_object_slot(self, container, id, value) != .OK) {
-            return Error.Unknown;
+            return Error.UnableToInsertObject;
         }
     }
 
-    fn beginStructure(self: Host, def: Structure) Error!Value {
+    fn beginStructure(self: Host, def: Structure) !Value {
         var structure: Value = undefined;
         if (callbacks.begin_structure(self, &def, &structure) != .OK) {
-            return Error.Unknown;
+            return Error.UnableToStartStructureDefinition;
         }
         return structure;
     }
 
-    fn attachMember(self: Host, structure: Value, member: Member) Error!void {
+    fn attachMember(self: Host, structure: Value, member: Member) !void {
         if (callbacks.attach_member(self, structure, &member) != .OK) {
-            return Error.Unknown;
+            if (member.is_static) {
+                return Error.UnableToAddStaticMember;
+            } else {
+                return Error.UnableToAddStructureMember;
+            }
         }
     }
 
-    fn attachMethod(self: Host, structure: Value, method: Method) Error!void {
+    fn attachMethod(self: Host, structure: Value, method: Method) !void {
         if (callbacks.attach_method(self, structure, &method) != .OK) {
-            return Error.Unknown;
+            return Error.UnableToAddMethod;
         }
     }
 
-    fn attachTemplate(self: Host, structure: Value, template: Template) Error!void {
+    fn attachTemplate(self: Host, structure: Value, template: Template) !void {
         if (callbacks.attach_template(self, structure, &template) != .OK) {
-            return Error.Unknown;
+            return Error.UnableToAddStructureTemplate;
         }
     }
 
-    fn finalizeStructure(self: Host, structure: Value) Error!void {
+    fn finalizeStructure(self: Host, structure: Value) !void {
         if (callbacks.finalize_structure(self, structure) != .OK) {
-            return Error.Unknown;
+            return Error.UnableToDefineStructure;
         }
     }
 
-    fn createTemplate(self: Host, bytes: []u8) Error!Value {
+    fn createTemplate(self: Host, bytes: []u8) !Value {
         const memory: Memory = .{
             .bytes = if (bytes.len > 0) bytes.ptr else null,
             .len = bytes.len,
         };
         var value: Value = undefined;
         if (callbacks.create_template(self, &memory, &value) != .OK) {
-            return Error.Unknown;
+            return Error.UnableToCreateStructureTemplate;
         }
         return value;
     }
 };
 
 // export functions
-fn getStructure(host: Host, comptime T: type) Error!Value {
+fn getStructure(host: Host, comptime T: type) !Value {
     const s_slot = getStructureSlot(T, .One);
     return host.readGlobalSlot(s_slot) catch undefined: {
         const def: Structure = .{
@@ -600,7 +618,7 @@ fn getStructureName(comptime T: type) [*:0]const u8 {
     return @ptrCast([*:0]const u8, name);
 }
 
-fn addMembers(host: Host, structure: Value, comptime T: type) Error!void {
+fn addMembers(host: Host, structure: Value, comptime T: type) !void {
     switch (@typeInfo(T)) {
         .Bool, .Int, .Float, .Void => {
             try host.attachMember(structure, .{
@@ -733,7 +751,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) Error!void {
     }
 }
 
-fn addStaticMembers(host: Host, structure: Value, comptime T: type) Error!void {
+fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
     const decls = switch (@typeInfo(T)) {
         .Struct => |st| st.decls,
         .Union => |un| un.decls,
@@ -820,7 +838,7 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) Error!void {
     }
 }
 
-fn addMethods(host: Host, structure: Value, comptime T: type) Error!void {
+fn addMethods(host: Host, structure: Value, comptime T: type) !void {
     const decls = switch (@typeInfo(T)) {
         .Struct => |st| st.decls,
         .Union => |un| un.decls,
@@ -1024,7 +1042,7 @@ test "hasPointer" {
     assert(hasPointer([][]u8) == true);
 }
 
-fn rezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
+fn rezigStructure(host: Host, obj: Value, ptr: anytype) !void {
     const T = @TypeOf(ptr.*);
     switch (@typeInfo(T)) {
         .Pointer => |pt| {
@@ -1073,7 +1091,7 @@ fn rezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
     }
 }
 
-fn dezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
+fn dezigStructure(host: Host, obj: Value, ptr: anytype) !void {
     const T = @TypeOf(ptr.*);
     switch (@typeInfo(T)) {
         .Pointer => |pt| {
@@ -1122,7 +1140,7 @@ fn dezigStructure(host: Host, obj: Value, ptr: anytype) Error!void {
     }
 }
 
-fn obtainChildObject(host: Host, container: Value, slot: u32, ptr: anytype, comptime check: bool) Error!Value {
+fn obtainChildObject(host: Host, container: Value, slot: u32, ptr: anytype, comptime check: bool) !Value {
     if (host.readObjectSlot(container, slot)) |child_obj| {
         if (check) {
             // see if pointer is still pointing to what it was before
@@ -1139,7 +1157,7 @@ fn obtainChildObject(host: Host, container: Value, slot: u32, ptr: anytype, comp
     }
 }
 
-fn createChildObject(host: Host, container: Value, slot: u32, ptr: anytype) Error!Value {
+fn createChildObject(host: Host, container: Value, slot: u32, ptr: anytype) !Value {
     const pt = @typeInfo(@TypeOf(ptr)).Pointer;
     const memory = toMemory(ptr);
     const child_obj = try host.wrapMemory(memory, pt.child, pt.size);
@@ -1211,8 +1229,12 @@ test "createThunk" {
 fn createRootFactory(comptime S: type) Thunk {
     const RootFactory = struct {
         fn exportStructure(host: Host, args: Value) callconv(.C) void {
-            const result = getStructure(host, S) catch null;
-            host.writeObjectSlot(args, 0, result) catch {};
+            // TODO: use error union to return error to caller once that's implemented
+            if (getStructure(host, S)) |result| {
+                host.writeObjectSlot(args, 0, result) catch {};
+            } else |err| {
+                std.debug.print("Error: {s}\n", .{@errorName(err)});
+            }
         }
     };
     return RootFactory.exportStructure;
