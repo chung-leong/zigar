@@ -16,8 +16,8 @@ import {
 import { obtainTypedArrayGetter } from './typed-array.js';
 import { obtainCopyFunction } from './memory.js';
 import { obtainDataView, getDataView, isBuffer } from './data-view.js';
-import { throwNoNewEnum, throwNoArbitraryPointer } from './error.js';
-import { MEMORY, SLOTS, ZIG, SOURCE, ENUM_INDEX, ENUM_ITEMS } from './symbol.js';
+import { throwNoNewEnum, throwNoNewError, decamelizeErrorName } from './error.js';
+import { MEMORY, SLOTS, ZIG, SOURCE, ENUM_INDEX, ENUM_ITEMS, ERROR_INDEX } from './symbol.js';
 
 export const globalSlots = {};
 
@@ -116,6 +116,10 @@ export function finalizeStructure(s) {
       case StructureType.TaggedUnion:
         // TODO
         return null;
+      case StructureType.ErrorUnion:
+        return finalizeErrorUnion(s);
+      case StructureType.ErrorSet:
+        return finalizeErrorSet(s);
       case StructureType.Enumeration:
         return finalizeEnumeration(s);
       case StructureType.Pointer:
@@ -370,6 +374,60 @@ function finalizeStruct(s) {
   return constructor;
 };
 
+function finalizeErrorUnion(s) {
+
+}
+
+function finalizeErrorSet(s) {
+  const {
+    name,
+    instance: {
+      members,
+    },
+    options,
+  } = s;
+  const count = members.length;
+  const errors = {};
+  const constructor = s.constructor = function(arg) {
+    const creating = this instanceof constructor;
+    if (creating) {
+      throwNoNewError();
+    }
+    const index = Number(arg);
+    return errors[index];
+  };
+  if (name) {
+    Object.defineProperties(constructor, {
+      name: { value: name, writable: false }
+    });
+  }
+  Object.setPrototypeOf(constructor.prototype, Error.prototype);
+  const valueOf = function() { return this[ERROR_INDEX] };
+  const toStringTag = function() { return 'Error' };
+  Object.defineProperties(constructor.prototype, {
+    // provide a way to retrieve the error index
+    [Symbol.toPrimitive]: { value: valueOf, configurable: true, writable: true },
+    // ensure that libraries that rely on the string tag for type detection will
+    // correctly identify the object as an error
+    [Symbol.toStringTag]: { get: toStringTag, configurable: true },
+  });
+  // attach the errors to the constructor and the
+  for (const [ index, { name } ] of members.entries()) {
+    // can't use the constructor since it would throw
+    const error = Object.create(constructor.prototype);
+    const message = decamelizeErrorName(name);
+    Object.defineProperties(error, {
+      message: { value: message, configurable: true, enumerable: true, writable: false },
+      [ERROR_INDEX]: { value: index },
+    });
+    Object.defineProperties(constructor, {
+      [name]: { value: error, configurable: true, enumerable: true, writable: true },
+    });
+    errors[index] = error;
+  }
+  return constructor;
+};
+
 function finalizeEnumeration(s) {
   const {
     name,
@@ -444,7 +502,7 @@ function finalizeEnumeration(s) {
       return false;
     }
   })();
-  // attach the enum items to the constructor and the reloc object
+  // attach the enum items to the constructor
   for (const [ index, { name } ] of members.entries()) {
     // can't use the constructor since it would throw
     const item = Object.create(constructor.prototype);

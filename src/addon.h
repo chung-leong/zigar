@@ -15,6 +15,7 @@ enum class StructureType : uint32_t {
   ExternUnion,
   TaggedUnion,
   ErrorUnion,
+  ErrorSet,
   Enumeration,
   Optional,
   Pointer,

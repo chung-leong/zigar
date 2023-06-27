@@ -6,6 +6,7 @@ import {
   throwNoNewEnum,
   throwOutOfBound,
   rethrowRangeError,
+  decamelizeErrorName,
 } from '../src/error.js';
 
 describe('Error functions', function() {
@@ -38,6 +39,24 @@ describe('Error functions', function() {
     it('should throw range error when given a range error', function() {
       expect(() => rethrowRangeError(new RangeError, 8, 4, 16)).to.throw(RangeError);
       expect(() => rethrowRangeError(new TypeError, 8, 4, 16)).to.throw(TypeError);
+    })
+  })
+  describe('decamelizeErrorName', function() {
+    it('should turn error name into readable sentence', function() {
+      const name = 'UnableToRetrieveMemoryLocation';
+      const result = decamelizeErrorName(name);
+      expect(result).to.equal('Unable to retrieve memory location');
+    })
+    it('should keep acronyms in uppercase', function() {
+      const name1 = 'InvalidHTMLEncountered';
+      const result1 = decamelizeErrorName(name1);
+      expect(result1).to.equal('Invalid HTML encountered');
+      const name2 = 'InvalidHTML';
+      const result2 = decamelizeErrorName(name2);
+      expect(result2).to.equal('Invalid HTML');
+      const name3 = 'HTMLIsInvalid';
+      const result3 = decamelizeErrorName(name3);
+      expect(result3).to.equal('HTML is invalid');
     })
   })
 })

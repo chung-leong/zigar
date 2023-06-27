@@ -1,7 +1,8 @@
 import { expect } from 'chai';
+import type from 'type-detect';
 
 import { MemberType, StructureType } from '../src/type.js';
-import { MEMORY, SLOTS, ZIG } from '../src/symbol.js';
+import { MEMORY, SLOTS } from '../src/symbol.js';
 import {
   beginStructure,
   attachMember,
@@ -817,6 +818,37 @@ describe('Structure definition', function() {
       object.dog = 777;
       expect(object.dog).to.equal(777);
       expect(object.cat).to.equal(777);
+    })
+  })
+  describe('Error set', function() {
+    it('should define an error set', function() {
+      const structure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Hello',
+      });
+      attachMember(structure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Object,
+      });
+      attachMember(structure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Object,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(Hello).to.be.a('function');
+      expect(Hello.UnableToRetrieveMemoryLocation).to.be.an.instanceOf(Error);
+      expect(Hello.UnableToRetrieveMemoryLocation).to.be.an('error');
+      expect(Hello.UnableToRetrieveMemoryLocation.message).to.equal('Unable to retrieve memory location');
+      expect(Hello.UnableToCreateObject.message).to.equal('Unable to create object');
+      expect(Number(Hello.UnableToRetrieveMemoryLocation)).to.equal(0);
+      expect(Number(Hello.UnableToCreateObject)).to.equal(1);
+      expect(Hello(0)).to.equal(Hello.UnableToRetrieveMemoryLocation);
+      expect(Hello(1)).to.equal(Hello.UnableToCreateObject);
+      try {
+        throw Hello.UnableToCreateObject;
+      } catch (err) {
+        expect(err).to.equal(Hello.UnableToCreateObject);
+      }
     })
   })
   describe('Enumeration', function() {

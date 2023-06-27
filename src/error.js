@@ -35,12 +35,12 @@ export function rethrowRangeError(err, length, align, index) {
   }
 }
 
-export function throwNoArbitraryPointer() {
-  throw new TypeError(`Cannot create pointer to arbitrary address`);
-}
-
 export function throwNoNewEnum() {
   throw new TypeError(`Cannot create new enum item\nCall function without the use of "new" to obtain an enum object`);
+}
+
+export function throwNoNewError() {
+  throw new TypeError(`Cannot create new error\nCall function without the use of "new" to obtain an error object`);
 }
 
 export function throwInvalidEnum(value) {
@@ -53,4 +53,21 @@ export function throwEnumExpected(constructor) {
 
 export function throwInvalidType(constructor) {
   throw new TypeError(`Object of specific type expected: ${constructor.name}`);
+}
+
+export function decamelizeErrorName(name) {
+  const lc = name.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
+    if (m1.length === 1) {
+      return ` ${m1.toLocaleLowerCase()}${m2}`;
+    } else {
+      if (m2) {
+        const acronym = m1.substring(0, m1.length - 1);
+        const letter = m1.charAt(m1.length - 1).toLocaleLowerCase();
+        return ` ${acronym} ${letter}${m2}`;
+      } else {
+        return ` ${m1}`;
+      }
+    }
+  }).trimStart();
+  return lc.charAt(0).toLocaleUpperCase() + lc.substring(1);
 }

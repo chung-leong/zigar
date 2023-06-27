@@ -15,12 +15,13 @@ export const StructureType = {
   ExternUnion: 3,
   TaggedUnion: 4,
   ErrorUnion: 5,
-  Enumeration: 6,
-  Optional: 7,
-  Pointer: 8,
-  Slice: 9,
-  Opaque: 10,
-  ArgStruct: 11,
+  ErrorSet: 6,
+  Enumeration: 7,
+  Optional: 8,
+  Pointer: 9,
+  Slice: 10,
+  Opaque: 11,
+  ArgStruct: 12,
 };
 
 export function getTypeName(type, isSigned, bitSize) {

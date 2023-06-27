@@ -98,6 +98,7 @@ const StructureType = enum(u32) {
     ExternUnion,
     TaggedUnion,
     ErrorUnion,
+    ErrorSet,
     Enumeration,
     Optional,
     Pointer,
@@ -319,6 +320,8 @@ fn getStructureType(comptime T: type) StructureType {
         .Bool, .Int, .Float, .Void, .Type => .Primitive,
         .Struct => if (isArgumentStruct(T)) .ArgStruct else .Struct,
         .Union => |un| if (un.layout == .Extern) .ExternUnion else .TaggedUnion,
+        .ErrorUnion => .ErrorUnion,
+        .ErrorSet => .ErrorSet,
         .Enum => .Enumeration,
         .Array => .Array,
         .Opaque => .Opaque,
@@ -743,6 +746,38 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                     .bit_size = @bitSizeOf(IT),
                     .byte_size = @sizeOf(IT),
                 });
+            }
+        },
+        .ErrorUnion => |eu| {
+            try host.attachMember(structure, .{
+                .name = "error",
+                .member_type = .Int,
+                .is_signed = false,
+                .bit_offset = 0,
+                .bit_size = @bitSizeOf(anyerror),
+                .byte_size = @sizeOf(anyerror),
+                .slot = 0,
+                .structure = try getStructure(host, eu.error_set),
+            });
+            try host.attachMember(structure, .{
+                .name = "value",
+                .member_type = getMemberType(eu.payload),
+                .is_signed = isSigned(eu.payload),
+                .bit_offset = @sizeOf(anyerror) * 8,
+                .bit_size = @bitSizeOf(eu.payload),
+                .byte_size = @sizeOf(eu.payload),
+                .slot = 1,
+                .structure = try getStructure(host, eu.payload),
+            });
+        },
+        .ErrorSet => |es| {
+            if (es) |errors| {
+                for (errors) |err| {
+                    try host.attachMember(structure, .{
+                        .name = @ptrCast([*:0]const u8, err.name),
+                        .member_type = .Object,
+                    });
+                }
             }
         },
         else => {

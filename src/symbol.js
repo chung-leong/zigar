@@ -6,3 +6,4 @@ export const SOURCE = Symbol('SOURCE');
 export const TYPED_ARRAY = Symbol('typedArray');
 export const ENUM_INDEX = Symbol('enumIndex');
 export const ENUM_ITEMS = Symbol('enumItems');
+export const ERROR_INDEX = Symbol('errorIndex');
