@@ -8,12 +8,13 @@
     "test": "test"
   },
   "scripts": {
-    "test": "NODE_ENV=development node --experimental-loader ./src/loader.js --no-warnings ./node_modules/mocha/bin/mocha.js -- test/*.test.js",
+    "test": "NODE_ENV=development node --experimental-loader ./src/loader.js --no-warnings ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.js",
     "test:gc": "NODE_ENV=development node --expose-gc ./node_modules/mocha/bin/mocha.js -- test/gc/*.test.js",
     "debug": "NODE_ENV=development node --inspect-brk --experimental-loader ./src/loader.js --no-warnings ./node_modules/mocha/bin/mocha.js -- test/*.test.js",
     "build": "npm run rollup && node-gyp build",
     "install": "node-gyp rebuild",
-    "rollup": "rollup -c rollup.config.js"
+    "rollup": "rollup -c rollup.config.js",
+    "coverage": "NODE_ENV=development NODE_OPTIONS='--experimental-loader ./src/loader.js --no-warnings' node ./node_modules/c8/bin/c8.js ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.js"
   },
   "repository": {
     "type": "git",
@@ -32,6 +33,7 @@
   "devDependencies": {
     "@rollup/plugin-replace": "^5.0.2",
     "@rollup/plugin-terser": "^0.4.3",
+    "c8": "^8.0.0",
     "chai": "^4.3.7",
     "mersenne-twister": "^1.1.0",
     "mocha": "^10.2.0",
