@@ -38,7 +38,7 @@ R"=====(
       return `Null`;
     }
   }
-    
+
   function getIntRange(isSigned, bitSize) {
     if (bitSize <= 32) {
       const max = 2 ** (isSigned ? bitSize - 1 : bitSize) - 1;
@@ -91,17 +91,17 @@ R"=====(
       const leadMask = (2 ** leadBits) - 1;
       if (toAligned) {
         const trailBits = bitSize % 8;
-        const trailMask = (2 ** trailBits) - 1;  
+        const trailMask = (2 ** trailBits) - 1;
         return function(dest, src, offset) {
           let i = offset, j = 0;
           let n = src.getUint8(i++), b;
-          let bitBuf = (n >> bitPos) & leadMask; 
+          let bitBuf = (n >> bitPos) & leadMask;
           let bitCount = leadBits;
           let remaining = bitSize;
           do {
             if (remaining > bitCount) {
               n = src.getUint8(i++);
-              bitBuf = bitBuf | (n << bitCount);  
+              bitBuf = bitBuf | (n << bitCount);
               //bitCount += 8;
             }
             b = (remaining >= 8) ? bitBuf & 0xFF : bitBuf & trailMask;
@@ -113,7 +113,7 @@ R"=====(
         }
       } else {
         const trailBits = (bitSize - leadBits) % 8;
-        const trailMask = (2 ** trailBits) - 1;  
+        const trailMask = (2 ** trailBits) - 1;
         const destMask1 = 0xFF ^ (leadMask << bitPos);
         const destMask2 = 0xFF ^ trailMask;
         return function(dest, src, offset) {
@@ -132,7 +132,7 @@ R"=====(
             if (remaining >= 8) {
               b = bitBuf & 0xFF;
             } else {
-              // preserve bits at the destination sitting behind the trailing bits 
+              // preserve bits at the destination sitting behind the trailing bits
               d = dest.getUint8(j);
               b = (d & destMask2) | (bitBuf & trailMask);
             }
@@ -872,7 +872,7 @@ R"=====(
       }
       case MemberType.Object: {
         const { byteSize } = member;
-        return function(index) { 
+        return function(index) {
           const child = this[SLOTS][index];
           if (!child) {
             const dv = this[MEMORY];
@@ -899,7 +899,7 @@ R"=====(
         if (runtimeSafety && type === MemberType.Int) {
           const { isSigned, bitSize, byteSize } = member;
           const { min, max } = getIntRange(isSigned, bitSize);
-          return function(index, v) { 
+          return function(index, v) {
             if (v < min || v > max) {
               throwOverflow(isSigned, bitSize, v);
             }
@@ -912,7 +912,7 @@ R"=====(
             }
           };
         } else {
-          return function(index, v) { 
+          return function(index, v) {
             const offset = index * byteSize;
             const dv = this[MEMORY];
             try {
@@ -936,7 +936,7 @@ R"=====(
             throwOutOfBound(dv.byteLength, byteSize, index);
           }
           copier(child, v);
-        };  
+        };
       }
     }
   }

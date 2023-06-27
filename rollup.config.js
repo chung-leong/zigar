@@ -4,9 +4,9 @@ import Replace from '@rollup/plugin-replace';
 const production = false;
 
 export default {
-  input: 'src/define.js',
+  input: 'src/addon.js',
   plugins: [
-    production && Replace({ 
+    production && Replace({
       preventAssignment: true,
       'process.env.NODE_ENV': '"production"',
     }),
@@ -15,11 +15,11 @@ export default {
 		file: 'src/addon.js.txt',
 		format: 'iife',
     name: 'variable',
-    plugins: [ 
+    plugins: [
       production && Terser(),
       {
-        // place JS code into a C++ raw string 
-        // we can't rely on banner/footer here since those are seen by Terser, 
+        // place JS code into a C++ raw string
+        // we can't rely on banner/footer here since those are seen by Terser,
         // which would promptly throw a syntax error
         name: 'C++ string',
         renderChunk (code) {
