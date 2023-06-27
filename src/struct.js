@@ -34,7 +34,7 @@ export function obtainGetter(member, options) {
         return function() {
           const { constructor } = structure;
           const value = get.call(this[MEMORY], offset, littleEndian);
-          // the enumeration constructor returns the singleton object for the value
+          // the enumeration constructor returns the primitive object for the value
           const object = constructor(value);
           if (!object) {
             throwInvalidEnum(value)
@@ -53,7 +53,7 @@ export function obtainGetter(member, options) {
       const { structure, slot } = member;
       if (structure.type === StructureType.Pointer && autoDeref) {
         const { instance: { members: [ target ] } } = structure;
-        if (target.structure.type === StructureType.Singleton) {
+        if (target.structure.type === StructureType.Primitive) {
           return function() {
             const pointer = this[SLOTS][slot];
             const object = pointer['*'];
@@ -142,7 +142,7 @@ export function obtainSetter(member, options) {
       }
       if (structure.type === StructureType.Pointer && autoDeref) {
         const { instance: { members: [ target ] } } = structure;
-        if (target.structure.type === StructureType.Singleton) {
+        if (target.structure.type === StructureType.Primitive) {
           return function(v) {
             const pointer = this[SLOTS][slot];
             const object = pointer['*'];

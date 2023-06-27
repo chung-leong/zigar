@@ -11,10 +11,10 @@ import {
 } from '../src/define.js';
 
 describe('Structure definition', function() {
-  describe('Singleton', function() {
+  describe('Primitive', function() {
     it('should define a structure for holding a primitive', function() {
       const structure = beginStructure({
-        type: StructureType.Singleton,
+        type: StructureType.Primitive,
         name: 'Hello',
         size: 8,
       });
@@ -579,7 +579,7 @@ describe('Structure definition', function() {
   describe('Pointer', function() {
     it('should define a pointer for pointing to integers', function() {
       const intStructure = beginStructure({
-        type: StructureType.Singleton,
+        type: StructureType.Primitive,
         name: 'Int32',
         size: 4,
       });
@@ -615,7 +615,7 @@ describe('Structure definition', function() {
   describe('Complex struct', function() {
     it('should define a struct that contains pointers', function() {
       const intStructure = beginStructure({
-        type: StructureType.Singleton,
+        type: StructureType.Primitive,
         name: 'Int32',
         size: 4,
       });
@@ -692,7 +692,7 @@ describe('Structure definition', function() {
     })
     it('should expose pointers through special & property', function() {
       const intStructure = beginStructure({
-        type: StructureType.Singleton,
+        type: StructureType.Primitive,
         name: 'Int32',
         size: 4,
       });
@@ -1102,7 +1102,7 @@ describe('Structure definition', function() {
     it('should attach variables to a struct', function() {
       // define structure for integer variables
       const intStructure = beginStructure({
-        type: StructureType.Singleton,
+        type: StructureType.Primitive,
         name: 'Int32',
         size: 4,
       });
@@ -1202,7 +1202,7 @@ describe('Structure definition', function() {
     })
     it('should attach variables to an enumeration', function() {
       const intStructure = beginStructure({
-        type: StructureType.Singleton,
+        type: StructureType.Primitive,
         name: 'Int32',
         size: 4,
       });

@@ -162,7 +162,7 @@ describe('Struct functions', function() {
               {
                 type: MemberType.Object,
                 structure: {
-                  type: StructureType.Singleton,
+                  type: StructureType.Primitive,
                   constructor: DummyStruct,
                 },
               },
@@ -296,7 +296,7 @@ describe('Struct functions', function() {
             members: [
               {
                 structure: {
-                  type: StructureType.Singleton,
+                  type: StructureType.Primitive,
                   constructor: DummyStruct
                 },
               }

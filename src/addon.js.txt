@@ -13,7 +13,7 @@ R"=====(
   };
 
   const StructureType = {
-    Singleton: 0,
+    Primitive: 0,
     Array: 1,
     Struct: 2,
     ExternUnion: 3,
@@ -705,7 +705,7 @@ R"=====(
           return function() {
             const { constructor } = structure;
             const value = get.call(this[MEMORY], offset, littleEndian);
-            // the enumeration constructor returns the singleton object for the value
+            // the enumeration constructor returns the primitive object for the value
             const object = constructor(value);
             if (!object) {
               throwInvalidEnum(value);
@@ -724,7 +724,7 @@ R"=====(
         const { structure, slot } = member;
         if (structure.type === StructureType.Pointer && autoDeref) {
           const { instance: { members: [ target ] } } = structure;
-          if (target.structure.type === StructureType.Singleton) {
+          if (target.structure.type === StructureType.Primitive) {
             return function() {
               const pointer = this[SLOTS][slot];
               const object = pointer['*'];
@@ -812,7 +812,7 @@ R"=====(
         }
         if (structure.type === StructureType.Pointer && autoDeref) {
           const { instance: { members: [ target ] } } = structure;
-          if (target.structure.type === StructureType.Singleton) {
+          if (target.structure.type === StructureType.Primitive) {
             return function(v) {
               const pointer = this[SLOTS][slot];
               const object = pointer['*'];
@@ -1158,8 +1158,8 @@ R"=====(
   function finalizeStructure(s) {
     try {
       switch (s.type) {
-        case StructureType.Singleton:
-          return finalizeSingleton(s);
+        case StructureType.Primitive:
+          return finalizePrimitive(s);
         case StructureType.Array:
         case StructureType.Slice:
           return finalizeArray(s);
@@ -1184,7 +1184,7 @@ R"=====(
     }
   }
 
-  function finalizeSingleton(s) {
+  function finalizePrimitive(s) {
     const {
       size,
       name,

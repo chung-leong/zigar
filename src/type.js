@@ -9,7 +9,7 @@ export const MemberType = {
 };
 
 export const StructureType = {
-  Singleton: 0,
+  Primitive: 0,
   Array: 1,
   Struct: 2,
   ExternUnion: 3,

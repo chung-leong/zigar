@@ -104,8 +104,8 @@ export function attachTemplate(s, def) {
 export function finalizeStructure(s) {
   try {
     switch (s.type) {
-      case StructureType.Singleton:
-        return finalizeSingleton(s);
+      case StructureType.Primitive:
+        return finalizePrimitive(s);
       case StructureType.Array:
       case StructureType.Slice:
         return finalizeArray(s);
@@ -130,7 +130,7 @@ export function finalizeStructure(s) {
   }
 }
 
-function finalizeSingleton(s) {
+function finalizePrimitive(s) {
   const {
     size,
     name,
