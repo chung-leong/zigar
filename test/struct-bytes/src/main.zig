@@ -136,17 +136,35 @@ const Structs = struct {
     const Int64WithError = struct {
         number: anyerror!i64 = Error.UnknownError,
     };
+    const OptionalBool = struct {
+        value: ?bool = true,
+    };
+    const OptionalBoolNull = struct {
+        value: ?bool = null,
+    };
+    const OptionalInt8 = struct {
+        number: ?i8 = 123,
+    };
+    const OptionalInt8Null = struct {
+        number: ?i8 = null,
+    };
+    const OptionalInt32 = struct {
+        number: ?i32 = 1234,
+    };
+    const OptionalInt32Null = struct {
+        number: ?i32 = null,
+    };
     const OptionalBoolNoError = struct {
         value: anyerror!?bool = true,
     };
     const OptionalBoolWithError = struct {
         value: anyerror!?bool = Error.UnknownError,
     };
-    const OptionalInt64NoError = struct {
-        number: anyerror!?i64 = 0x00000FFFF,
+    const OptionalInt32NoError = struct {
+        number: anyerror!?i32 = 1234,
     };
-    const OptionalInt64WithError = struct {
-        number: anyerror!?i64 = Error.UnknownError,
+    const OptionalInt32WithError = struct {
+        number: anyerror!?i32 = Error.UnknownError,
     };
 };
 

@@ -1,8 +1,8 @@
 import { StructureType, MemberType, getPrimitive } from './type.js';
 import { obtainGetter, obtainSetter } from './struct.js';
 import { obtainArrayGetter, obtainArraySetter, obtainArrayLengthGetter, getArrayIterator } from './array.js';
-import { obtainPointerGetter, obtainPointerSetter, obtainPointerArrayGetter, obtainPointerArraySetter,
-  obtainPointerArrayLengthGetter } from './pointer.js';
+import { obtainPointerGetter, obtainPointerSetter, obtainPointerArrayGetter, obtainPointerArraySetter, obtainPointerArrayLengthGetter } from './pointer.js';
+import { obtainOptionalGetter, obtainOptionalSetter } from './optional.js';
 import { obtainErrorUnionGetter, obtainErrorUnionSetter } from './error-union.js';
 import { obtainTypedArrayGetter } from './typed-array.js';
 import { obtainCopyFunction } from './memory.js';
@@ -115,6 +115,8 @@ export function finalizeStructure(s) {
       case StructureType.TaggedUnion:
         // TODO
         return null;
+      case StructureType.Optional:
+        return finalizeOptional(s);
       case StructureType.ErrorUnion:
         return finalizeErrorUnion(s);
       case StructureType.ErrorSet:
@@ -173,16 +175,12 @@ function finalizePrimitive(s) {
       return self;
     }
   };
-  if (name) {
-    Object.defineProperties(constructor, {
-      name: { value: name, writable: false },
-    });
-  }
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
   });
+  attachName(s);
   return constructor;
 }
 
@@ -243,11 +241,6 @@ function finalizeArray(s) {
       return self;
     }
   };
-  if (name) {
-    Object.defineProperties(constructor, {
-      name: { value: name, writable: false }
-    });
-  }
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
@@ -271,6 +264,7 @@ function finalizeArray(s) {
     });
   }
   attachDataViewAccessors(s);
+  attachName(s);
   return constructor;
 }
 
@@ -354,11 +348,6 @@ function finalizeStruct(s) {
       return self;
     }
   };
-  if (name) {
-    Object.defineProperties(constructor, {
-      name: { value: name, writable: false }
-    });
-  }
   if (Object.keys(ptrDescriptors).length > 0) {
     const ptrSourceProto = Object.defineProperties({}, ptrDescriptors);
     const get = function() {
@@ -373,8 +362,56 @@ function finalizeStruct(s) {
   attachDataViewAccessors(s);
   attachStaticMembers(s);
   attachMethods(s);
+  attachName(s);
   return constructor;
 };
+
+function finalizeOptional(s) {
+  const {
+    name,
+    size,
+    instance: {
+      members,
+    },
+    options,
+  } = s;
+  const get = obtainOptionalGetter(members, options);
+  const set = obtainOptionalSetter(members, options);
+  const copy = obtainCopyFunction(size);
+  const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const copier = s.copier = function (dest, src) {
+    copy(dest[MEMORY], src[MEMORY]);
+    if (hasObject) {
+      dest[SLOTS] = { ...src[SLOTS] };
+    }
+  };
+  const constructor = s.constructor = function(arg) {
+    const creating = this instanceof constructor;
+    let self, dv;
+    if (creating) {
+      // new operation
+      self = this;
+      dv = new DataView(new ArrayBuffer(size));
+    } else {
+      self = Object.create(constructor.prototype);
+      dv = obtainDataView(arg, name, size);
+    }
+    Object.defineProperties(self, {
+      [MEMORY]: { value: dv },
+    });
+    if (creating) {
+      this.set(arg);
+    } else {
+      return self;
+    }
+  };
+  Object.defineProperties(constructor.prototype, {
+    get: { value: get, configurable: true, writable: true },
+    set: { value: set, configurable: true, writable: true },
+  });
+  attachName(s);
+  return constructor;
+}
 
 function finalizeErrorUnion(s) {
   const {
@@ -415,15 +452,11 @@ function finalizeErrorUnion(s) {
       return self;
     }
   };
-  if (name) {
-    Object.defineProperties(constructor, {
-      name: { value: name, writable: false },
-    });
-  }
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
   });
+  attachName(s);
   return constructor;
 }
 
@@ -443,13 +476,6 @@ function finalizeErrorSet(s) {
     const index = Number(arg);
     return errors[index];
   };
-  if (name) {
-  // attach the numeric values to the class as its binary data
-  // this allows us to reuse the array getter
-    Object.defineProperties(constructor, {
-      name: { value: name, writable: false }
-    });
-  }
   Object.setPrototypeOf(constructor.prototype, Error.prototype);
   const valueOf = function() { return this[ERROR_INDEX] };
   const toStringTag = function() { return 'Error' };
@@ -474,6 +500,7 @@ function finalizeErrorSet(s) {
     });
     errors[slot] = error;
   }
+  attachName(s);
   return constructor;
 };
 
@@ -516,11 +543,6 @@ function finalizeEnumeration(s) {
     // return the enum object (created down below)
     return items[index];
   };
-  if (name) {
-    Object.defineProperties(constructor, {
-      name: { value: name, writable: false }
-    });
-  }
   // attach the numeric values to the class as its binary data
   // this allows us to reuse the array getter
   Object.defineProperties(constructor, {
@@ -565,6 +587,7 @@ function finalizeEnumeration(s) {
   }
   attachStaticMembers(s);
   attachMethods(s);
+  attachName(s);
   return constructor;
 };
 
@@ -614,14 +637,10 @@ export function finalizePointer(s) {
       return self;
     }
   };
-  if (name) {
-    Object.defineProperties(constructor, {
-      name: { value: name, writable: false }
-    });
-  }
   Object.defineProperties(constructor.prototype, {
     '*': { get, set, configurable: true, enumerable: true },
   });
+  attachName(s);
   return constructor;
 }
 
@@ -694,6 +713,18 @@ export function attachMethods(s) {
         [name]: { value: m, configurable: true, writable: true },
       });
     }
+  }
+}
+
+function attachName(s) {
+  const {
+    name,
+    constructor,
+  } = s;
+  if (name) {
+    Object.defineProperties(constructor, {
+      name: { value: name, writable: false },
+    });
   }
 }
 

@@ -323,6 +323,7 @@ fn getStructureType(comptime T: type) StructureType {
         .Union => |un| if (un.layout == .Extern) .ExternUnion else .TaggedUnion,
         .ErrorUnion => .ErrorUnion,
         .ErrorSet => .ErrorSet,
+        .Optional => .Optional,
         .Enum => .Enumeration,
         .Array => .Array,
         .Opaque => .Opaque,
@@ -779,18 +780,26 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                 });
             }
         },
-        .ErrorUnion => |eu| {
-            // the error number comes after the value when it's larger than 1 byte
+        .Optional => |op| {
             try host.attachMember(structure, .{
-                .name = "error",
-                .member_type = .Int,
-                .is_signed = false,
-                .bit_offset = if (@sizeOf(eu.payload) <= 1) 0 else @sizeOf(eu.payload) * 8,
-                .bit_size = @bitSizeOf(anyerror),
-                .byte_size = @sizeOf(anyerror),
+                .name = "value",
+                .member_type = getMemberType(op.child),
+                .is_signed = isSigned(op.child),
+                .bit_offset = 0,
+                .bit_size = @bitSizeOf(op.child),
+                .byte_size = @sizeOf(op.child),
                 .slot = 0,
-                .structure = try getStructure(host, eu.error_set),
+                .structure = try getStructure(host, op.child),
             });
+            try host.attachMember(structure, .{
+                .name = "present",
+                .member_type = .Bool,
+                .bit_offset = @sizeOf(op.child) * 8,
+                .bit_size = @bitSizeOf(bool),
+                .byte_size = @sizeOf(bool),
+            });
+        },
+        .ErrorUnion => |eu| {
             try host.attachMember(structure, .{
                 .name = "value",
                 .member_type = getMemberType(eu.payload),
@@ -798,8 +807,18 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                 .bit_offset = if (@sizeOf(eu.payload) <= 1) @sizeOf(anyerror) * 8 else 0,
                 .bit_size = @bitSizeOf(eu.payload),
                 .byte_size = @sizeOf(eu.payload),
-                .slot = 1,
+                .slot = 0,
                 .structure = try getStructure(host, eu.payload),
+            });
+            // the error number comes before the value when it's a single byte
+            try host.attachMember(structure, .{
+                .name = "error",
+                .member_type = .Int,
+                .is_signed = false,
+                .bit_offset = if (@sizeOf(eu.payload) <= 1) 0 else @sizeOf(eu.payload) * 8,
+                .bit_size = @bitSizeOf(anyerror),
+                .byte_size = @sizeOf(anyerror),
+                .structure = try getStructure(host, eu.error_set),
             });
         },
         .ErrorSet => |es| {

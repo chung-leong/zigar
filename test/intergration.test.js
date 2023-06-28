@@ -74,6 +74,14 @@ describe('Integration tests', function() {
       expect([ ...module.uint32_slice ]).to.eql([ 2, 777, 4 ]);
       expect([ ...module.uint32_array4 ]).to.eql([ 1, 2, 777, 4 ]);
     })
+    it('should import optional values', async function() {
+      this.timeout(10000);
+      const { default: module } = await import(resolve('./integration/optionals.zig'));
+      expect(module.i32_empty).to.be.null;
+      expect(module.i32_value).to.be.equal(1234);
+      expect(module.bool_empty).to.be.null;
+      expect(module.bool_value).to.be.equal(true);
+    })
     it('should import error unions', async function() {
       this.timeout(10000);
       const { default: module } = await import(resolve('./integration/error-unions.zig'));

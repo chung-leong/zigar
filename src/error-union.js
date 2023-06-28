@@ -4,7 +4,7 @@ import { throwNotInErrorSet, throwUnknownErrorNumber } from './error.js';
 import { MEMORY } from '../src/symbol.js';
 
 export function obtainErrorUnionGetter(members, options) {
-  const [ errorMember, valueMember ] = members;
+  const [ valueMember, errorMember ] = members;
   const getError = obtainGetter(errorMember, options);
   const getValue = obtainGetter(valueMember, options);
   const { structure } = errorMember;
@@ -24,7 +24,7 @@ export function obtainErrorUnionGetter(members, options) {
 }
 
 export function obtainErrorUnionSetter(members, options) {
-  const [ errorMember, valueMember ] = members;
+  const [ valueMember, errorMember ] = members;
   const setErrorNumber = obtainSetter(errorMember, options);
   const setValue = obtainSetter(valueMember, options);
   // TODO: rework logic for clearing

@@ -9,7 +9,7 @@ import {
 
 describe('Error union functions', function() {
   describe('obtainErrorUnionGetter', function() {
-    it('should return a function for getting int with potential error', function() {
+    it('should return a function for getting float with potential error', function() {
       let errorNumber;
       const DummyErrorSet = function(arg) {
         errorNumber = arg;
@@ -18,30 +18,30 @@ describe('Error union functions', function() {
       const dummyError = new Error('I am Groot');
       const members = [
         {
+          type: MemberType.Float,
+          bitOffset: 0,
+          bitSize: 64,
+          byteSize: 8,
+        },
+        {
           type: MemberType.Int,
           isSigned: false,
-          bitOffset: 0,
+          bitOffset: 64,
           bitSize: 16,
           byteSize: 2,
           structure: { constructor: DummyErrorSet }
         },
-        {
-          type: MemberType.Float,
-          bitOffset: 16,
-          bitSize: 64,
-          byteSize: 8,
-        },
       ];
       const dv = new DataView(new ArrayBuffer(10));
-      dv.setUint16(0, 18, true);
+      dv.setUint16(8, 18, true);
       const object = {
         [MEMORY]: dv,
       };
       const f = obtainErrorUnionGetter(members, {});
       expect(() => f.call(object)).to.throw().equal(dummyError);
       expect(errorNumber).to.equal(18);
-      dv.setUint16(0, 0, true);
-      dv.setFloat64(2, 3.14, true);
+      dv.setUint16(8, 0, true);
+      dv.setFloat64(0, 3.14, true);
       const result = f.call(object);
       expect(result).to.equal(3.14);
     })
@@ -55,17 +55,9 @@ describe('Error union functions', function() {
       const DummyClass = function() {};
       const members = [
         {
-          type: MemberType.Int,
-          isSigned: false,
-          bitOffset: 0,
-          bitSize: 16,
-          byteSize: 2,
-          structure: { constructor: DummyErrorSet }
-        },
-        {
           type: MemberType.Object,
           bitOffset: 16,
-          bitSize: 64,
+          bitSize: 0,
           byteSize: 8,
           slot: 0,
           structure: {
@@ -73,9 +65,17 @@ describe('Error union functions', function() {
             constructor: DummyClass,
           }
         },
+        {
+          type: MemberType.Int,
+          isSigned: false,
+          bitOffset: 64,
+          bitSize: 16,
+          byteSize: 2,
+          structure: { constructor: DummyErrorSet }
+        },
       ];
       const dv = new DataView(new ArrayBuffer(10));
-      dv.setUint16(0, 18, true);
+      dv.setUint16(8, 18, true);
       const object = {
         [MEMORY]: dv,
         [SLOTS]: { 0: null },
@@ -84,7 +84,7 @@ describe('Error union functions', function() {
       const f = obtainErrorUnionGetter(members, {});
       expect(() => f.call(object)).to.throw().equal(dummyError);
       expect(errorNumber).to.equal(18);
-      dv.setUint16(0, 0, true);
+      dv.setUint16(8, 0, true);
       object[SLOTS][0] = dummyObject;
       const result = f.call(object);
       expect(result).to.equal(dummyObject);
@@ -101,6 +101,12 @@ describe('Error union functions', function() {
       dummyError[Symbol.toPrimitive] = () => 18;
       const members = [
         {
+          type: MemberType.Float,
+          bitOffset: 0,
+          bitSize: 64,
+          byteSize: 8,
+        },
+        {
           type: MemberType.Int,
           isSigned: false,
           bitOffset: 64,
@@ -108,15 +114,9 @@ describe('Error union functions', function() {
           byteSize: 2,
           structure: { constructor: DummyErrorSet }
         },
-        {
-          type: MemberType.Float,
-          bitOffset: 0,
-          bitSize: 64,
-          byteSize: 8,
-        },
       ];
       const dv = new DataView(new ArrayBuffer(10));
-      dv.setFloat64(2, 3.14, true);
+      dv.setFloat64(0, 3.14, true);
       const object = {
         [MEMORY]: dv,
       };
@@ -142,14 +142,6 @@ describe('Error union functions', function() {
       };
       const members = [
         {
-          type: MemberType.Int,
-          isSigned: false,
-          bitOffset: 64,
-          bitSize: 16,
-          byteSize: 2,
-          structure: { constructor: DummyErrorSet }
-        },
-        {
           type: MemberType.Object,
           bitOffset: 0,
           bitSize: 64,
@@ -165,6 +157,14 @@ describe('Error union functions', function() {
               dest.value = 0;
             },
           }
+        },
+        {
+          type: MemberType.Int,
+          isSigned: false,
+          bitOffset: 64,
+          bitSize: 16,
+          byteSize: 2,
+          structure: { constructor: DummyErrorSet }
         },
       ];
       const dummyObject = new DummyClass(123);
