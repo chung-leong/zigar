@@ -749,11 +749,12 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
             }
         },
         .ErrorUnion => |eu| {
+            // the error number comes after the value when it's larger than 1 byte
             try host.attachMember(structure, .{
                 .name = "error",
                 .member_type = .Int,
                 .is_signed = false,
-                .bit_offset = 0,
+                .bit_offset = if (@sizeOf(eu.payload) <= 1) 0 else @sizeOf(eu.payload) * 8,
                 .bit_size = @bitSizeOf(anyerror),
                 .byte_size = @sizeOf(anyerror),
                 .slot = 0,
@@ -763,7 +764,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                 .name = "value",
                 .member_type = getMemberType(eu.payload),
                 .is_signed = isSigned(eu.payload),
-                .bit_offset = @sizeOf(anyerror) * 8,
+                .bit_offset = if (@sizeOf(eu.payload) <= 1) @sizeOf(anyerror) * 8 else 0,
                 .bit_size = @bitSizeOf(eu.payload),
                 .byte_size = @sizeOf(eu.payload),
                 .slot = 1,
@@ -772,11 +773,12 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
         },
         .ErrorSet => |es| {
             if (es) |errors| {
-                for (errors) |err| {
+                inline for (errors) |err| {
+                    const err_obj: T = @field(T, err.name);
                     try host.attachMember(structure, .{
                         .name = @ptrCast([*:0]const u8, err.name),
                         .member_type = .Object,
-                        .slot = @errorToInt(err),
+                        .slot = @errorToInt(err_obj),
                     });
                 }
             }

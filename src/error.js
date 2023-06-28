@@ -59,9 +59,8 @@ export function throwNotInErrorSet(name) {
   throw new TypeError(`Error given is not a part of error set "${name}"`);
 }
 
-export function throwUnknownErrorNumber() {
-  throw new TypeError(`Unknown error: #${errorNumber}`);
-
+export function throwUnknownErrorNumber(number) {
+  throw new TypeError(`Unknown error: #${number}`);
 }
 
 export function decamelizeErrorName(name) {

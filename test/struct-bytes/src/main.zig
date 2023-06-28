@@ -6,7 +6,24 @@ const UnionTag = enum {
     monkey,
 };
 
-const Error = error{UnknownError};
+const Error = error{
+    Error1,
+    Error2,
+    Error3,
+    Error4,
+    Error5,
+    Error6,
+    Error7,
+    Error8,
+    Error9,
+    Error10,
+    Error11,
+    Error12,
+    Error13,
+    Error14,
+    Error15,
+    UnknownError,
+};
 
 const Structs = struct {
     const SingleInt32 = struct {
@@ -77,16 +94,58 @@ const Structs = struct {
     const OptionalIntEmpty = struct {
         number: ?i64 = null,
     };
-    const IntNoError = struct {
+    const VoidNoError = struct {
+        value: anyerror!void = {},
+    };
+    const VoidWithError = struct {
+        value: anyerror!void = Error.UnknownError,
+    };
+    const BoolNoError = struct {
+        value: anyerror!bool = true,
+    };
+    const BoolWithError = struct {
+        value: anyerror!bool = Error.UnknownError,
+    };
+    const Int8NoError = struct {
         number: anyerror!i8 = 0x1F,
     };
-    const IntWithError = struct {
+    const Int8WithError = struct {
         number: anyerror!i8 = Error.UnknownError,
     };
-    const OptionalIntSetNoError = struct {
+    const Int9NoError = struct {
+        number: anyerror!i9 = 0x1F,
+    };
+    const Int9WithError = struct {
+        number: anyerror!i9 = Error.UnknownError,
+    };
+    const Int16NoError = struct {
+        number: anyerror!i16 = 0x1F,
+    };
+    const Int16WithError = struct {
+        number: anyerror!i16 = Error.UnknownError,
+    };
+    const Int32NoError = struct {
+        number: anyerror!i32 = 0x1F,
+    };
+    const Int32WithError = struct {
+        number: anyerror!i32 = Error.UnknownError,
+    };
+    const Int64NoError = struct {
+        number: anyerror!i64 = 0x1F,
+    };
+    const Int64WithError = struct {
+        number: anyerror!i64 = Error.UnknownError,
+    };
+    const OptionalBoolNoError = struct {
+        value: anyerror!?bool = true,
+    };
+    const OptionalBoolWithError = struct {
+        value: anyerror!?bool = Error.UnknownError,
+    };
+    const OptionalInt64NoError = struct {
         number: anyerror!?i64 = 0x00000FFFF,
     };
-    const OptionalIntWithError = struct {
+    const OptionalInt64WithError = struct {
         number: anyerror!?i64 = Error.UnknownError,
     };
 };

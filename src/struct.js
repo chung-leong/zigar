@@ -60,7 +60,7 @@ export function obtainGetter(member, options) {
           };
         }
         case StructureType.Pointer: {
-          if (autoDefref) {
+          if (autoDeref) {
             const { instance: { members: [ target ] } } = structure;
             if (target.structure.type === StructureType.Primitive) {
               return function() {

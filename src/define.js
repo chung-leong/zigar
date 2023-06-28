@@ -281,8 +281,9 @@ function finalizeStruct(s) {
   const copy = obtainCopyFunction(size);
   const descriptors = {};
   for (const member of members) {
-    const get = obtainGetter(member, { autoDeref: !isArgStruct, ...options });
-    const set = obtainSetter(member, { autoDeref: !isArgStruct, ...options });
+    const isArgument = isArgStruct && !isNaN(parseInt(member.name));
+    const get = obtainGetter(member, { autoDeref: !isArgument, ...options });
+    const set = obtainSetter(member, { autoDeref: !isArgument, ...options });
     descriptors[member.name] = { get, set, configurable: true, enumerable: true };
   }
   // pointer

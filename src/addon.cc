@@ -288,11 +288,13 @@ static Local<Object> NewMember(Host* call,
   auto type = Int32::New(isolate, static_cast<int32_t>(m.type));
   auto is_static = Boolean::New(isolate, m.is_static);
   auto is_required = Boolean::New(isolate, m.is_required);
+  auto is_const = Boolean::New(isolate, m.is_const);
   auto bit_size = Uint32::NewFromUnsigned(isolate, m.bit_size);
   auto bit_offset = Uint32::NewFromUnsigned(isolate, m.bit_offset);
   auto byte_size = Uint32::NewFromUnsigned(isolate, m.byte_size);
   def->Set(context, String::NewFromUtf8Literal(isolate, "type"), type).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "isStatic"), is_static).Check();
+  def->Set(context, String::NewFromUtf8Literal(isolate, "isConst"), is_const).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "isRequired"), is_required).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "bitSize"), bit_size).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "bitOffset"), bit_offset).Check();
@@ -300,13 +302,12 @@ static Local<Object> NewMember(Host* call,
   if (m.type == MemberType::Int) {
     auto is_signed = Boolean::New(isolate, m.is_signed);
     def->Set(context, String::NewFromUtf8Literal(isolate, "isSigned"), is_signed).Check();
-  } else if (m.type == MemberType::Object) {
-    auto is_const = Boolean::New(isolate, m.is_const);
-    def->Set(context, String::NewFromUtf8Literal(isolate, "isConst"), is_const).Check();
   }
   if (!m.structure.IsEmpty()) {
-    auto slot = Uint32::NewFromUnsigned(isolate, m.slot);
     def->Set(context, String::NewFromUtf8Literal(isolate, "structure"), m.structure).Check();
+  }
+  if (m.type == MemberType::Object) {
+    auto slot = Uint32::NewFromUnsigned(isolate, m.slot);
     def->Set(context, String::NewFromUtf8Literal(isolate, "slot"), slot).Check();
   }
   if (m.name) {

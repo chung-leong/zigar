@@ -74,6 +74,36 @@ describe('Integration tests', function() {
       expect([ ...module.uint32_slice ]).to.eql([ 2, 777, 4 ]);
       expect([ ...module.uint32_array4 ]).to.eql([ 1, 2, 777, 4 ]);
     })
+    it('should import error unions', async function() {
+      this.timeout(10000);
+      const { default: module } = await import(resolve('./integration/error-unions.zig'));
+      expect(module.Error).to.be.a('function');
+      expect(module.positive_outcome).to.equal(123);
+      expect(() => module.negative_outcome).to.throw()
+        .with.property('message', 'Condom broke you pregnant');
+      // should set error/value correctly
+      module.positive_outcome = 456;
+      expect(module.positive_outcome).to.equal(456);
+      module.negative_outcome = module.Error.DogAteAllMemory;
+      expect(() => module.negative_outcome).to.throw()
+        .with.property('message', 'Dog ate all memory');
+      expect(module.encounterBadLuck).to.be.a('function');
+      expect(() => module.encounterBadLuck(true)).to.throw()
+        .with.property('message', 'Dog ate all memory');
+      expect(module.encounterBadLuck(false)).to.equal(456);
+      // below 16-bit types
+      expect(() => module.bool_error).to.throw()
+        .with.property('message', 'Alien invasion');
+      expect(() => module.i8_error).to.throw()
+        .with.property('message', 'System is on fire');
+      expect(() => module.u16_error).to.throw()
+        .with.property('message', 'No more beer');
+      expect(() => module.void_error).to.throw()
+        .with.property('message', 'Dog ate all memory');
+      // check void setter
+      module.void_error = null;
+      expect(module.void_error).to.be.null;
+    })
   })
   describe('Methods', function() {
     it('should import simple function', async function() {
@@ -91,6 +121,14 @@ describe('Integration tests', function() {
       dv.setInt32(16, 456, littleEndian);
       const res = fifth(dv);
       expect(res).to.equal(456);
+    })
+    it('should throw when function returns an error', async function() {
+      this.timeout(10000);
+      const { default: { return_number } } = await import(resolve('./integration/error-returning-function.zig'));
+      const result = return_number(1234);
+      expect(result).to.equal(1234);
+      expect(() => return_number(0)).to.throw()
+        .with.property('message', 'System is on fire');
     })
   })
 })

@@ -19,12 +19,13 @@ R"=====(
     ExternUnion: 3,
     TaggedUnion: 4,
     ErrorUnion: 5,
-    Enumeration: 6,
-    Optional: 7,
-    Pointer: 8,
-    Slice: 9,
-    Opaque: 10,
-    ArgStruct: 11,
+    ErrorSet: 6,
+    Enumeration: 7,
+    Optional: 8,
+    Pointer: 9,
+    Slice: 10,
+    Opaque: 11,
+    ArgStruct: 12,
   };
 
   function getTypeName(type, isSigned, bitSize) {
@@ -162,6 +163,22 @@ R"=====(
     }
   }
 
+  function obtainClearFunction(size) {
+    return (size & 0x03) ? clear1 : clear4;
+  }
+
+  function clear1(dest, src) {
+    for (let i = 0, len = dest.byteLength; i < len; i++) {
+      dest.setInt8(i, 0);
+    }
+  }
+
+  function clear4(dest, src) {
+    for (let i = 0, len = dest.byteLength; i < len; i += 4) {
+      dest.setInt32(i, 0);
+    }
+  }
+
   /*
   function showBits(object) {
     const bitObj = {};
@@ -212,6 +229,10 @@ R"=====(
     throw new TypeError(`Cannot create new enum item\nCall function without the use of "new" to obtain an enum object`);
   }
 
+  function throwNoNewError() {
+    throw new TypeError(`Cannot create new error\nCall function without the use of "new" to obtain an error object`);
+  }
+
   function throwInvalidEnum(value) {
     throw new TypeError(`Value given does not correspond to an enum item: ${value}`);
   }
@@ -224,6 +245,31 @@ R"=====(
     throw new TypeError(`Object of specific type expected: ${constructor.name}`);
   }
 
+  function throwNotInErrorSet(name) {
+    throw new TypeError(`Error given is not a part of error set "${name}"`);
+  }
+
+  function throwUnknownErrorNumber(number) {
+    throw new TypeError(`Unknown error: #${number}`);
+  }
+
+  function decamelizeErrorName(name) {
+    const lc = name.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
+      if (m1.length === 1) {
+        return ` ${m1.toLocaleLowerCase()}${m2}`;
+      } else {
+        if (m2) {
+          const acronym = m1.substring(0, m1.length - 1);
+          const letter = m1.charAt(m1.length - 1).toLocaleLowerCase();
+          return ` ${acronym} ${letter}${m2}`;
+        } else {
+          return ` ${m1}`;
+        }
+      }
+    }).trimStart();
+    return lc.charAt(0).toLocaleUpperCase() + lc.substring(1);
+  }
+
   const MEMORY = Symbol('memory');
   const SLOTS = Symbol('slots');
   const ZIG = Symbol('ZIG');
@@ -232,6 +278,7 @@ R"=====(
   const TYPED_ARRAY = Symbol('typedArray');
   const ENUM_INDEX = Symbol('enumIndex');
   const ENUM_ITEMS = Symbol('enumItems');
+  const ERROR_INDEX = Symbol('errorIndex');
 
   function obtainDataViewGetter({ type, isSigned, bitOffset, bitSize, byteSize }) {
     const bitPos = bitOffset & 0x07;
@@ -722,26 +769,37 @@ R"=====(
       case MemberType.Object: {
         // automatically dereference pointer
         const { structure, slot } = member;
-        if (structure.type === StructureType.Pointer && autoDeref) {
-          const { instance: { members: [ target ] } } = structure;
-          if (target.structure.type === StructureType.Primitive) {
+        switch (structure.type) {
+          case StructureType.ErrorUnion:
+          case StructureType.Optional: {
             return function() {
-              const pointer = this[SLOTS][slot];
-              const object = pointer['*'];
-              return object.get()
-            };
-          } else {
-            return function() {
-              const pointer = this[SLOTS][slot];
-              const object = pointer['*'];
-              return object;
+              const object = this[SLOTS][slot];
+              return object.get();
             };
           }
-        } else {
-          return function() {
-            const object = this[SLOTS][slot];
-            return object;
-          };
+          case StructureType.Pointer: {
+            if (autoDeref) {
+              const { instance: { members: [ target ] } } = structure;
+              if (target.structure.type === StructureType.Primitive) {
+                return function() {
+                  const pointer = this[SLOTS][slot];
+                  const object = pointer['*'];
+                  return object.get()
+                };
+              } else {
+                return function() {
+                  const pointer = this[SLOTS][slot];
+                  const object = pointer['*'];
+                  return object;
+                };
+              }
+            }
+          }
+          default:
+            return function() {
+              const object = this[SLOTS][slot];
+              return object;
+            };
         }
       }
       case MemberType.Type: {
@@ -810,29 +868,41 @@ R"=====(
         if (isConst) {
           return;
         }
-        if (structure.type === StructureType.Pointer && autoDeref) {
-          const { instance: { members: [ target ] } } = structure;
-          if (target.structure.type === StructureType.Primitive) {
+        switch (structure.type) {
+          case StructureType.ErrorUnion:
+          case StructureType.Optional: {
             return function(v) {
-              const pointer = this[SLOTS][slot];
-              const object = pointer['*'];
-              object.set(v);
-            };
-          } else {
-            return function(v) {
-              const pointer = this[SLOTS][slot];
-              pointer['*'] = v;
+              const object = this[SLOTS][slot];
+              return object.set(v);
             };
           }
-        } else {
-          return function(v) {
-            const { constructor, copier } = structure;
-            if (!(v instanceof constructor)) {
-              v = new constructor(v);
+          case StructureType.Pointer: {
+            if (autoDeref) {
+              const { instance: { members: [ target ] } } = structure;
+              if (target.structure.type === StructureType.Primitive) {
+                return function(v) {
+                  const pointer = this[SLOTS][slot];
+                  const object = pointer['*'];
+                  object.set(v);
+                };
+              } else {
+                return function(v) {
+                  const pointer = this[SLOTS][slot];
+                  pointer['*'] = v;
+                };
+              }
             }
-            const object = this[SLOTS][slot];
-            copier(object, v);
-          };
+          }
+          default: {
+            return function(v) {
+              const { constructor, copier } = structure;
+              if (!(v instanceof constructor)) {
+                v = new constructor(v);
+              }
+              const object = this[SLOTS][slot];
+              copier(object, v);
+            };
+          }
         }
       }
       case MemberType.Type: {
@@ -1024,6 +1094,51 @@ R"=====(
     };
   }
 
+  function obtainErrorUnionGetter(members, options) {
+    const [ errorMember, valueMember ] = members;
+    const getError = obtainGetter(errorMember, options);
+    const getValue = obtainGetter(valueMember, options);
+    const { structure } = errorMember;
+    return function() {
+      const errorNumber = getError.call(this);
+      if (errorNumber !== 0) {
+        const { constructor } = structure;
+        const error = constructor(errorNumber);
+        if (!error) {
+          throwUnknownErrorNumber(errorNumber);
+        }
+        throw error;
+      } else {
+        return getValue.call(this);
+      }
+    };
+  }
+
+  function obtainErrorUnionSetter(members, options) {
+    const [ errorMember, valueMember ] = members;
+    const setErrorNumber = obtainSetter(errorMember, options);
+    const setValue = obtainSetter(valueMember, options);
+    // TODO: rework logic for clearing
+    const clear = obtainClearFunction(1);
+    const { structure } = errorMember;
+    return function(v) {
+      if (v instanceof Error) {
+        const { constructor, name } = structure;
+        const errorNumber = Number(v);
+        const error = constructor(errorNumber);
+        if (!error) {
+          throwNotInErrorSet(name);
+        } else {
+          clear(this[MEMORY]);
+          setErrorNumber.call(this, errorNumber);
+        }
+      } else {
+        clear(this[MEMORY]);
+        setValue.call(this, v);
+      }
+    }
+  }
+
   function obtainTypedArrayGetter(members) {
     const hash = {};
     for (const { type, isSigned, bitSize, byteSize } of members) {
@@ -1170,6 +1285,10 @@ R"=====(
         case StructureType.TaggedUnion:
           // TODO
           return null;
+        case StructureType.ErrorUnion:
+          return finalizeErrorUnion(s);
+        case StructureType.ErrorSet:
+          return finalizeErrorSet(s);
         case StructureType.Enumeration:
           return finalizeEnumeration(s);
         case StructureType.Pointer:
@@ -1225,7 +1344,9 @@ R"=====(
       }
     };
     if (name) {
-      Object.defineProperty(constructor, 'name', { value: name, writable: false });
+      Object.defineProperties(constructor, {
+        name: { value: name, writable: false },
+      });
     }
     Object.defineProperties(constructor.prototype, {
       get: { value: get, configurable: true, writable: true },
@@ -1335,8 +1456,9 @@ R"=====(
     const copy = obtainCopyFunction(size);
     const descriptors = {};
     for (const member of members) {
-      const get = obtainGetter(member, { autoDeref: !isArgStruct, ...options });
-      const set = obtainSetter(member, { autoDeref: !isArgStruct, ...options });
+      const isArgument = isArgStruct && !isNaN(parseInt(member.name));
+      const get = obtainGetter(member, { autoDeref: !isArgument, ...options });
+      const set = obtainSetter(member, { autoDeref: !isArgument, ...options });
       descriptors[member.name] = { get, set, configurable: true, enumerable: true };
     }
     // pointer
@@ -1420,6 +1542,106 @@ R"=====(
     attachMethods(s);
     return constructor;
   }
+  function finalizeErrorUnion(s) {
+    const {
+      name,
+      size,
+      instance: {
+        members,
+      },
+      options,
+    } = s;
+    const get = obtainErrorUnionGetter(members, options);
+    const set = obtainErrorUnionSetter(members, options);
+    const copy = obtainCopyFunction(size);
+    const hasObject = !!members.find(m => m.type === MemberType.Object);
+    s.copier = function (dest, src) {
+      copy(dest[MEMORY], src[MEMORY]);
+      if (hasObject) {
+        dest[SLOTS] = { ...src[SLOTS] };
+      }
+    };
+    const constructor = s.constructor = function(arg) {
+      const creating = this instanceof constructor;
+      let self, dv;
+      if (creating) {
+        // new operation
+        self = this;
+        dv = new DataView(new ArrayBuffer(size));
+      } else {
+        self = Object.create(constructor.prototype);
+        dv = obtainDataView(arg, name, size);
+      }
+      Object.defineProperties(self, {
+        [MEMORY]: { value: dv },
+      });
+      if (creating) {
+        this.set(arg);
+      } else {
+        return self;
+      }
+    };
+    if (name) {
+      Object.defineProperties(constructor, {
+        name: { value: name, writable: false },
+      });
+    }
+    Object.defineProperties(constructor.prototype, {
+      get: { value: get, configurable: true, writable: true },
+      set: { value: set, configurable: true, writable: true },
+    });
+    return constructor;
+  }
+
+  function finalizeErrorSet(s) {
+    const {
+      name,
+      instance: {
+        members,
+      },
+    } = s;
+    const errors = {};
+    const constructor = s.constructor = function(arg) {
+      const creating = this instanceof constructor;
+      if (creating) {
+        throwNoNewError();
+      }
+      const index = Number(arg);
+      return errors[index];
+    };
+    if (name) {
+    // attach the numeric values to the class as its binary data
+    // this allows us to reuse the array getter
+      Object.defineProperties(constructor, {
+        name: { value: name, writable: false }
+      });
+    }
+    Object.setPrototypeOf(constructor.prototype, Error.prototype);
+    const valueOf = function() { return this[ERROR_INDEX] };
+    const toStringTag = function() { return 'Error' };
+    Object.defineProperties(constructor.prototype, {
+      // provide a way to retrieve the error index
+      [Symbol.toPrimitive]: { value: valueOf, configurable: true, writable: true },
+      // ensure that libraries that rely on the string tag for type detection will
+      // correctly identify the object as an error
+      [Symbol.toStringTag]: { get: toStringTag, configurable: true },
+    });
+    // attach the errors to the constructor and the
+    for (const [ index, { name, slot } ] of members.entries()) {
+      // can't use the constructor since it would throw
+      const error = Object.create(constructor.prototype);
+      const message = decamelizeErrorName(name);
+      Object.defineProperties(error, {
+        message: { value: message, configurable: true, enumerable: true, writable: false },
+        [ERROR_INDEX]: { value: slot },
+      });
+      Object.defineProperties(constructor, {
+        [name]: { value: error, configurable: true, enumerable: true, writable: true },
+      });
+      errors[slot] = error;
+    }
+    return constructor;
+  }
   function finalizeEnumeration(s) {
     const {
       name,
@@ -1494,7 +1716,7 @@ R"=====(
         return false;
       }
     })();
-    // attach the enum items to the constructor and the reloc object
+    // attach the enum items to the constructor
     for (const [ index, { name } ] of members.entries()) {
       // can't use the constructor since it would throw
       const item = Object.create(constructor.prototype);

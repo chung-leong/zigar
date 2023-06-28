@@ -103,14 +103,14 @@ describe('Error union functions', function() {
         {
           type: MemberType.Int,
           isSigned: false,
-          bitOffset: 0,
+          bitOffset: 64,
           bitSize: 16,
           byteSize: 2,
           structure: { constructor: DummyErrorSet }
         },
         {
           type: MemberType.Float,
-          bitOffset: 16,
+          bitOffset: 0,
           bitSize: 64,
           byteSize: 8,
         },
@@ -122,12 +122,12 @@ describe('Error union functions', function() {
       };
       const f = obtainErrorUnionSetter(members, {});
       f.call(object, dummyError);
-      expect(dv.getUint16(0, true)).to.equal(18);
-      expect(dv.getFloat64(2, true)).to.equal(0);
+      expect(dv.getUint16(8, true)).to.equal(18);
+      expect(dv.getFloat64(0, true)).to.equal(0);
       expect(errorNumber).to.equal(18);
       f.call(object, 1234.5678);
-      expect(dv.getUint16(0, true)).to.equal(0);
-      expect(dv.getFloat64(2, true)).to.equal(1234.5678);
+      expect(dv.getUint16(8, true)).to.equal(0);
+      expect(dv.getFloat64(0, true)).to.equal(1234.5678);
     })
     it('should return a function for setting object or error', function() {
       let errorNumber;
@@ -144,14 +144,14 @@ describe('Error union functions', function() {
         {
           type: MemberType.Int,
           isSigned: false,
-          bitOffset: 0,
+          bitOffset: 64,
           bitSize: 16,
           byteSize: 2,
           structure: { constructor: DummyErrorSet }
         },
         {
           type: MemberType.Object,
-          bitOffset: 16,
+          bitOffset: 0,
           bitSize: 64,
           byteSize: 8,
           slot: 0,
@@ -175,12 +175,12 @@ describe('Error union functions', function() {
       };
       const f = obtainErrorUnionSetter(members, {});
       f.call(object, dummyError);
-      expect(dv.getUint16(0, true)).to.equal(18);
+      expect(dv.getUint16(8, true)).to.equal(18);
       // TODO: implement resetter
       //expect(object[SLOTS][0].value).to.equal(0);
       expect(errorNumber).to.equal(18);
       f.call(object, 456);
-      expect(dv.getUint16(0, true)).to.equal(0);
+      expect(dv.getUint16(8, true)).to.equal(0);
       expect(object[SLOTS][0].value).to.equal(456);
     })
   })
