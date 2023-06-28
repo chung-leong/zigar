@@ -21,9 +21,17 @@ export function log(...args) {
 }
 
 export function invokeFactory(thunk) {
+  // the factory thunk returns a structure object in slot 1
+  // or an error string in slot 0
   const args = { [SLOTS]: {} };
   thunk.call(args, globalSlots, SLOTS, MEMORY, ZIG);
-  return args[SLOTS][0].constructor;
+  if (args[SLOTS][1]) {
+    return args[SLOTS][1].constructor;
+  } else if (args[SLOTS][0]) {
+    return decamelizeErrorName(args[SLOTS][0]);
+  } else {
+    return `Factory function returned nothing`;
+  }
 }
 
 export function getArgumentBuffers(args) {

@@ -103,8 +103,8 @@ struct Callbacks {
 
   Result (*read_global_slot)(Host*, uint32_t, Local<Value>*);
   Result (*write_global_slot)(Host*, uint32_t, Local<Value>);
-  Result (*read_object_slot)(Host*, Local<Object>, uint32_t, Local<Object>*);
-  Result (*write_object_slot)(Host*, Local<Object>, uint32_t, Local<Object>);
+  Result (*read_object_slot)(Host*, Local<Object>, uint32_t, Local<Value>*);
+  Result (*write_object_slot)(Host*, Local<Object>, uint32_t, Local<Value>);
 
   Result (*begin_structure)(Host*, const Structure&, Local<Object>*);
   Result (*attach_member)(Host*, Local<Object>, const Member&);
@@ -112,6 +112,9 @@ struct Callbacks {
   Result (*attach_template)(Host*, Local<Object>, const ::Template&);
   Result (*finalize_structure)(Host*, Local<Object>);
   Result (*create_template)(Host*, const Memory&, Local<Object>*);
+
+  Result (*create_string)(Host*, const Memory&, Local<Value>*);
+  Result (*log_values)(Host*, size_t, Local<Value>*);
 };
 
 struct ExternalData {
@@ -242,5 +245,5 @@ struct Host {
 
 static Result GetArgumentBuffers(Host* call);
 static Result Log(Host* call,
-                  int argc,
+                  size_t argc,
                   Local<Value>* argv) __attribute__((unused));

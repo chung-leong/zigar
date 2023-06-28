@@ -17,6 +17,7 @@ const Error = error{
     UnableToAddStaticMember,
     UnableToAddMethod,
     UnableToCreateStructureTemplate,
+    UnableToCreateString,
     UnableToAddStructureTemplate,
     UnableToDefineStructure,
     PointerIsInvalid,
@@ -470,6 +471,9 @@ const Callbacks = extern struct {
     attach_template: *const fn (host: Host, structure: Value, template: *const Template) callconv(.C) Result,
     finalize_structure: *const fn (host: Host, structure: Value) callconv(.C) Result,
     create_template: *const fn (host: Host, memory: *const Memory, dest: *Value) callconv(.C) Result,
+
+    create_string: *const fn (host: Host, memory: *const Memory, dest: *Value) callconv(.C) Result,
+    log_values: *const fn (host: Host, argc: usize, values: [*]Value) callconv(.C) Result,
 };
 var callbacks: Callbacks = undefined;
 
@@ -581,6 +585,33 @@ const Host = *opaque {
             return Error.UnableToCreateStructureTemplate;
         }
         return value;
+    }
+
+    fn createString(self: Host, message: []const u8) !Value {
+        const memory: Memory = .{
+            .bytes = @ptrCast([*]u8, @constCast(message)),
+            .len = message.len,
+        };
+        var value: Value = undefined;
+        if (callbacks.create_string(self, &memory, &value) != .OK) {
+            return Error.UnableToCreateString;
+        }
+        return value;
+    }
+
+    fn logValues(self: Host, args: anytype) !void {
+        const fields = std.meta.fields(@TypeOf(args));
+        var values: [fields.len]Value = undefined;
+        inline for (fields, 0..) |field, index| {
+            const v = @field(args, field.name);
+            values[index] = switch (field.type) {
+                Value => v,
+                else => try self.createString(v),
+            };
+        }
+        if (callbacks.log_values(self, values.len, @ptrCast([*]Value, &values)) != .OK) {
+            return Error.Unknown;
+        }
     }
 };
 
@@ -1267,11 +1298,12 @@ test "createThunk" {
 fn createRootFactory(comptime S: type) Thunk {
     const RootFactory = struct {
         fn exportStructure(host: Host, args: Value) callconv(.C) void {
-            // TODO: use error union to return error to caller once that's implemented
             if (getStructure(host, S)) |result| {
-                host.writeObjectSlot(args, 0, result) catch {};
+                host.writeObjectSlot(args, 1, result) catch {};
             } else |err| {
-                std.debug.print("Error: {s}\n", .{@errorName(err)});
+                if (host.createString(@errorName(err))) |s| {
+                    host.writeObjectSlot(args, 0, s) catch {};
+                } else |_| {}
             }
         }
     };

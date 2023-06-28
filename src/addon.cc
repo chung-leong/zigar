@@ -180,6 +180,18 @@ static Result CreateTemplate(Host* call,
   return Result::OK;
 }
 
+static Result CreateString(Host* call,
+                           const Memory& memory,
+                           Local<Value>* dest) {
+  auto isolate = call->isolate;
+  auto s = reinterpret_cast<char *>(memory.bytes);
+  auto len = memory.len;
+  if (!String::NewFromUtf8(isolate, s, NewStringType::kNormal, len).ToLocal(dest)) {
+    return Result::Failure;
+  }
+  return Result::OK;
+}
+
 static Result GetPointerStatus(Host* call,
                                Local<Object> object,
                                bool* dest) {
@@ -231,24 +243,24 @@ static Result WriteGlobalSlot(Host* call,
 static Result ReadObjectSlot(Host* call,
                              Local<Object> object,
                              uint32_t slot,
-                             Local<Object>* dest) {
+                             Local<Value>* dest) {
   auto context = call->context;
   Local<Value> value;
   if (!object->Get(context, call->symbol_slots).ToLocal(&value) || !value->IsObject()) {
     return Result::Failure;
   }
   auto relocs = value.As<Object>();
-  if (!relocs->Get(context, slot).ToLocal(&value) || !value->IsObject()) {
+  if (!relocs->Get(context, slot).ToLocal(&value) || value->IsNullOrUndefined()) {
     return Result::Failure;
   }
-  *dest = value.As<Object>();
+  *dest = value;
   return Result::OK;
 }
 
 static Result WriteObjectSlot(Host* call,
                               Local<Object> object,
                               uint32_t slot,
-                              Local<Object> child) {
+                              Local<Value> child) {
   auto isolate = call->isolate;
   auto context = call->context;
   Local<Value> value;
@@ -506,7 +518,7 @@ static Result GetArgumentBuffers(Host* call) {
 }
 
 static Result Log(Host* call,
-                  int argc,
+                  size_t argc,
                   Local<Value>* argv) {
   auto isolate = call->isolate;
   auto name = String::NewFromUtf8Literal(isolate, "log");
@@ -519,8 +531,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   auto Throw = [&](const char* message) {
     Local<String> string;
     if (String::NewFromUtf8(isolate, message).ToLocal<String>(&string)) {
-      Local<Value> error = Exception::Error(string);
-      isolate->ThrowException(error);
+      isolate->ThrowError(string);
     }
   };
 
@@ -563,6 +574,8 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->attach_template = AttachTemplate;
   callbacks->finalize_structure = FinalizeStructure;
   callbacks->create_template = CreateTemplate;
+  callbacks->create_string = CreateString;
+  callbacks->log_values = Log;
 
   // save handle to external object, along with options and AddonData
   auto options = Object::New(isolate);
@@ -579,10 +592,14 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   Local<String> name = String::NewFromUtf8Literal(isolate, "invokeFactory");
   Local<Value> args[1] = { factory };
   Local<Value> result;
-  if (CallFunction(&ctx, name, 1, args, &result) != Result::OK || !result->IsObject()) {
-    Throw("Unable to import zig module");
+  if (CallFunction(&ctx, name, 1, args, &result) != Result::OK) {
+    Throw("Factory function failed");
   }
-  info.GetReturnValue().Set(result);
+  if (result->IsObject()) {
+    info.GetReturnValue().Set(result);
+  } else if (result->IsString()) {
+    isolate->ThrowError(result.As<String>());
+  }
 }
 
 static void GetGCStatistics(const FunctionCallbackInfo<Value>& info) {
