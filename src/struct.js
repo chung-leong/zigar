@@ -51,26 +51,37 @@ export function obtainGetter(member, options) {
     case MemberType.Object: {
       // automatically dereference pointer
       const { structure, slot } = member;
-      if (structure.type === StructureType.Pointer && autoDeref) {
-        const { instance: { members: [ target ] } } = structure;
-        if (target.structure.type === StructureType.Primitive) {
+      switch (structure.type) {
+        case StructureType.ErrorUnion:
+        case StructureType.Optional: {
           return function() {
-            const pointer = this[SLOTS][slot];
-            const object = pointer['*'];
-            return object.get()
-          };
-        } else {
-          return function() {
-            const pointer = this[SLOTS][slot];
-            const object = pointer['*'];
-            return object;
+            const object = this[SLOTS][slot];
+            return object.get();
           };
         }
-      } else {
-        return function() {
-          const object = this[SLOTS][slot];
-          return object;
-        };
+        case StructureType.Pointer: {
+          if (autoDefref) {
+            const { instance: { members: [ target ] } } = structure;
+            if (target.structure.type === StructureType.Primitive) {
+              return function() {
+                const pointer = this[SLOTS][slot];
+                const object = pointer['*'];
+                return object.get()
+              };
+            } else {
+              return function() {
+                const pointer = this[SLOTS][slot];
+                const object = pointer['*'];
+                return object;
+              };
+            }
+          }
+        }
+        default:
+          return function() {
+            const object = this[SLOTS][slot];
+            return object;
+          };
       }
     }
     case MemberType.Type: {
@@ -140,29 +151,41 @@ export function obtainSetter(member, options) {
       if (isConst) {
         return;
       }
-      if (structure.type === StructureType.Pointer && autoDeref) {
-        const { instance: { members: [ target ] } } = structure;
-        if (target.structure.type === StructureType.Primitive) {
+      switch (structure.type) {
+        case StructureType.ErrorUnion:
+        case StructureType.Optional: {
           return function(v) {
-            const pointer = this[SLOTS][slot];
-            const object = pointer['*'];
-            object.set(v);
-          };
-        } else {
-          return function(v) {
-            const pointer = this[SLOTS][slot];
-            pointer['*'] = v;
+            const object = this[SLOTS][slot];
+            return object.set(v);
           };
         }
-      } else {
-        return function(v) {
-          const { constructor, copier } = structure;
-          if (!(v instanceof constructor)) {
-            v = new constructor(v);
+        case StructureType.Pointer: {
+          if (autoDeref) {
+            const { instance: { members: [ target ] } } = structure;
+            if (target.structure.type === StructureType.Primitive) {
+              return function(v) {
+                const pointer = this[SLOTS][slot];
+                const object = pointer['*'];
+                object.set(v);
+              };
+            } else {
+              return function(v) {
+                const pointer = this[SLOTS][slot];
+                pointer['*'] = v;
+              };
+            }
           }
-          const object = this[SLOTS][slot];
-          copier(object, v);
-        };
+        }
+        default: {
+          return function(v) {
+            const { constructor, copier } = structure;
+            if (!(v instanceof constructor)) {
+              v = new constructor(v);
+            }
+            const object = this[SLOTS][slot];
+            copier(object, v);
+          };
+        }
       }
     }
     case MemberType.Type: {

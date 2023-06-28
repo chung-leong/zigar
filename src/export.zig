@@ -776,6 +776,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                     try host.attachMember(structure, .{
                         .name = @ptrCast([*:0]const u8, err.name),
                         .member_type = .Object,
+                        .slot = @errorToInt(err),
                     });
                 }
             }

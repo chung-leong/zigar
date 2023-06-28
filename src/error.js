@@ -55,6 +55,15 @@ export function throwInvalidType(constructor) {
   throw new TypeError(`Object of specific type expected: ${constructor.name}`);
 }
 
+export function throwNotInErrorSet(name) {
+  throw new TypeError(`Error given is not a part of error set "${name}"`);
+}
+
+export function throwUnknownErrorNumber() {
+  throw new TypeError(`Unknown error: #${errorNumber}`);
+
+}
+
 export function decamelizeErrorName(name) {
   const lc = name.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
     if (m1.length === 1) {

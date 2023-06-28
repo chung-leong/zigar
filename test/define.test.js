@@ -1,5 +1,4 @@
 import { expect } from 'chai';
-import type from 'type-detect';
 
 import { MemberType, StructureType } from '../src/type.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
@@ -829,10 +828,12 @@ describe('Structure definition', function() {
       attachMember(structure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
+        slot: 5,
       });
       attachMember(structure, {
         name: 'UnableToCreateObject',
         type: MemberType.Object,
+        slot: 8,
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
@@ -840,16 +841,32 @@ describe('Structure definition', function() {
       expect(Hello.UnableToRetrieveMemoryLocation).to.be.an('error');
       expect(Hello.UnableToRetrieveMemoryLocation.message).to.equal('Unable to retrieve memory location');
       expect(Hello.UnableToCreateObject.message).to.equal('Unable to create object');
-      expect(Number(Hello.UnableToRetrieveMemoryLocation)).to.equal(0);
-      expect(Number(Hello.UnableToCreateObject)).to.equal(1);
-      expect(Hello(0)).to.equal(Hello.UnableToRetrieveMemoryLocation);
-      expect(Hello(1)).to.equal(Hello.UnableToCreateObject);
+      expect(Number(Hello.UnableToRetrieveMemoryLocation)).to.equal(5);
+      expect(Number(Hello.UnableToCreateObject)).to.equal(8);
+      expect(Hello(5)).to.equal(Hello.UnableToRetrieveMemoryLocation);
+      expect(Hello(8)).to.equal(Hello.UnableToCreateObject);
       try {
         throw Hello.UnableToCreateObject;
       } catch (err) {
         expect(err).to.equal(Hello.UnableToCreateObject);
       }
     })
+  })
+  describe('Error union', function() {
+    const setStructure = beginStructure({
+      type: StructureType.ErrorSet,
+      name: 'Hello',
+    });
+    attachMember(setStructure, {
+      name: 'UnableToRetrieveMemoryLocation',
+      type: MemberType.Object,
+    });
+    attachMember(setStructure, {
+      name: 'UnableToCreateObject',
+      type: MemberType.Object,
+    });
+    const Hello = finalizeStructure(setStructure);
+
   })
   describe('Enumeration', function() {
     it('should define an enum class', function() {

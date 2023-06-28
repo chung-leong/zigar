@@ -1,18 +1,9 @@
 import { StructureType, MemberType, getPrimitive } from './type.js';
 import { obtainGetter, obtainSetter } from './struct.js';
-import {
-  obtainArrayGetter,
-  obtainArraySetter,
-  obtainArrayLengthGetter,
-  getArrayIterator,
-} from './array.js';
-import {
-  obtainPointerGetter,
-  obtainPointerSetter,
-  obtainPointerArrayGetter,
-  obtainPointerArraySetter,
-  obtainPointerArrayLengthGetter,
-} from './pointer.js';
+import { obtainArrayGetter, obtainArraySetter, obtainArrayLengthGetter, getArrayIterator } from './array.js';
+import { obtainPointerGetter, obtainPointerSetter, obtainPointerArrayGetter, obtainPointerArraySetter,
+  obtainPointerArrayLengthGetter } from './pointer.js';
+import { obtainErrorUnionGetter, obtainErrorUnionSetter } from './error-union.js';
 import { obtainTypedArrayGetter } from './typed-array.js';
 import { obtainCopyFunction } from './memory.js';
 import { obtainDataView, getDataView, isBuffer } from './data-view.js';
@@ -175,7 +166,9 @@ function finalizePrimitive(s) {
     }
   };
   if (name) {
-    Object.defineProperty(constructor, 'name', { value: name, writable: false });
+    Object.defineProperties(constructor, {
+      name: { value: name, writable: false },
+    });
   }
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
@@ -375,7 +368,54 @@ function finalizeStruct(s) {
 };
 
 function finalizeErrorUnion(s) {
-
+  const {
+    name,
+    size,
+    instance: {
+      members,
+    },
+    options,
+  } = s;
+  const get = obtainErrorUnionGetter(members, options);
+  const set = obtainErrorUnionSetter(members, options);
+  const copy = obtainCopyFunction(size);
+  const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const copier = s.copier = function (dest, src) {
+    copy(dest[MEMORY], src[MEMORY]);
+    if (hasObject) {
+      dest[SLOTS] = { ...src[SLOTS] };
+    }
+  };
+  const constructor = s.constructor = function(arg) {
+    const creating = this instanceof constructor;
+    let self, dv;
+    if (creating) {
+      // new operation
+      self = this;
+      dv = new DataView(new ArrayBuffer(size));
+    } else {
+      self = Object.create(constructor.prototype);
+      dv = obtainDataView(arg, name, size);
+    }
+    Object.defineProperties(self, {
+      [MEMORY]: { value: dv },
+    });
+    if (creating) {
+      this.set(arg);
+    } else {
+      return self;
+    }
+  };
+  if (name) {
+    Object.defineProperties(constructor, {
+      name: { value: name, writable: false },
+    });
+  }
+  Object.defineProperties(constructor.prototype, {
+    get: { value: get, configurable: true, writable: true },
+    set: { value: set, configurable: true, writable: true },
+  });
+  return constructor;
 }
 
 function finalizeErrorSet(s) {
@@ -384,9 +424,7 @@ function finalizeErrorSet(s) {
     instance: {
       members,
     },
-    options,
   } = s;
-  const count = members.length;
   const errors = {};
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
@@ -397,6 +435,8 @@ function finalizeErrorSet(s) {
     return errors[index];
   };
   if (name) {
+  // attach the numeric values to the class as its binary data
+  // this allows us to reuse the array getter
     Object.defineProperties(constructor, {
       name: { value: name, writable: false }
     });
@@ -412,18 +452,18 @@ function finalizeErrorSet(s) {
     [Symbol.toStringTag]: { get: toStringTag, configurable: true },
   });
   // attach the errors to the constructor and the
-  for (const [ index, { name } ] of members.entries()) {
+  for (const [ index, { name, slot } ] of members.entries()) {
     // can't use the constructor since it would throw
     const error = Object.create(constructor.prototype);
     const message = decamelizeErrorName(name);
     Object.defineProperties(error, {
       message: { value: message, configurable: true, enumerable: true, writable: false },
-      [ERROR_INDEX]: { value: index },
+      [ERROR_INDEX]: { value: slot },
     });
     Object.defineProperties(constructor, {
       [name]: { value: error, configurable: true, enumerable: true, writable: true },
     });
-    errors[index] = error;
+    errors[slot] = error;
   }
   return constructor;
 };

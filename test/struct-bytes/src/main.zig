@@ -92,7 +92,6 @@ const Structs = struct {
 };
 
 pub fn main() !void {
-    std.debug.print("{d}\n", .{std.math.floatMax(f16)});
     var args = std.process.args();
     _ = args.next() orelse return;
     const arg1 = args.next() orelse {
