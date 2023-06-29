@@ -43,7 +43,7 @@ export function getArgumentBuffers(args) {
   const included = new WeakMap();
   const scanned = new WeakMap();
   const scan = (object) => {
-    if (scanned.get(object)) {
+    if (!object || scanned.get(object)) {
       return;
     }
     const memory = object[MEMORY];
@@ -266,6 +266,27 @@ function finalizeArray(s) {
     Object.defineProperties(constructor.prototype, {
       '&': { get, configurable: true, enumerable: true, writable: false }
     });
+  }
+  if (member.type === MemberType.Int && !member.isSigned) {
+    const TypedArrays = {
+      8: Int8Array,
+      16: Int16Array,
+      32: Int32Array,
+    };
+    const TypedArray = TypedArrays[member.bitSize];
+    if (TypedArray) {
+      const { byteSize } = member;
+      const getString = function() {
+        const dv = this[MEMORY];
+        const ta = new TypedArray(dv.buffer, dv.byteOffset, dv.byteLength / byteSize);
+        const decoder = new TextDecoder();
+        return decoder.decode(ta);
+      };
+      Object.defineProperties(constructor.prototype, {
+        toString: { value: getString, configurable: true, writable: true },
+        string: { get: getString, configurable: true, enumerable: true },
+      });
+    }
   }
   attachDataViewAccessors(s);
   attachName(s);

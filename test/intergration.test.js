@@ -49,7 +49,7 @@ describe('Integration tests', function() {
     })
     it('should import primitive arrays', async function() {
       this.timeout(10000);
-      const { default: module } = await import(resolve('./integration/primitive-arrays.zig'));
+      const { default: module } = await import(resolve('./integration/arrays-with-primitives.zig'));
       expect(module.int32_array4).to.be.an('object');
       expect(module.int32_array4.get(0)).to.equal(1);
       expect([ ...module.int32_array4 ]).to.eql([ 1, 2, 3, 4 ]);
@@ -61,7 +61,7 @@ describe('Integration tests', function() {
     })
     it('should import primitive slices', async function() {
       this.timeout(10000);
-      const { default: module } = await import(resolve('./integration/primitive-slices.zig'));
+      const { default: module } = await import(resolve('./integration/slices-with-primitive.zig'));
       const slice = module.int32_slice;
       expect(module.int32_slice).to.be.an('object');
       expect(module.int32_slice.get(0)).to.equal(123);
@@ -116,13 +116,13 @@ describe('Integration tests', function() {
   describe('Methods', function() {
     it('should import simple function', async function() {
       this.timeout(10000);
-      const { default: module } = await import(resolve('./integration/simple-function.zig'));
+      const { default: module } = await import(resolve('./integration/function-simple.zig'));
       const res = module.add(5, 17);
       expect(res).to.equal(22);
     })
     it('should import function that accepts a slice', async function() {
       this.timeout(10000);
-      const { default: { fifth } } = await import(resolve('./integration/slice-function.zig'));
+      const { default: { fifth } } = await import(resolve('./integration/function-accepting-slice.zig'));
       const dv = new DataView(new ArrayBuffer(32));
       dv.setInt32(4, 123, littleEndian);
       dv.setInt32(12, 79, littleEndian);
@@ -132,17 +132,29 @@ describe('Integration tests', function() {
     })
     it('should throw when function returns an error', async function() {
       this.timeout(10000);
-      const { default: { returnNumber } } = await import(resolve('./integration/error-returning-function.zig'));
+      const { default: { returnNumber } } = await import(resolve('./integration/function-returning-error.zig'));
       const result = returnNumber(1234);
       expect(result).to.equal(1234);
       expect(() => returnNumber(0)).to.throw()
         .with.property('message', 'System is on fire');
     })
-    it('should return a u8 slice', async function() {
+    it('should return a string', async function() {
       this.timeout(10000);
-      const { default: { getMessage } } = await import(resolve('./integration/slice-returning-function.zig'));
-      const result = getMessage(123, 456n, 3.14);
-      console.log(result);
+      const { default: { getMessage } } = await import(resolve('./integration/function-returning-string.zig'));
+      const { string } = getMessage(123, 456n, 3.14);
+      expect(string).to.equal('Numbers: 123, 456, 3.14');
+    })
+    it('should return a slice of the argument', async function() {
+      this.timeout(10000);
+      const { default: { getSlice } } = await import(resolve('./integration/function-returning-slice.zig'));
+      const dv = new DataView(new ArrayBuffer(4 * 12));
+      for (let i = 0, j = 1; j <= 12; i += 4, j++) {
+        dv.setInt32(i, j, littleEndian);
+      }
+      const slice = getSlice(dv, 2n, 5n);
+      expect([...slice]).to.eql([ 3, 4, 5 ]);
+      expect(slice.dataView.byteOffset).to.equal(8);
+      expect(slice.dataView.buffer).to.equal(dv.buffer);
     })
   })
 })

@@ -87,15 +87,15 @@ static Result CreateStackBuffer(Host* call,
   // see if the memory is on the stack
   // since the Host struct is allocated on the stack, its address is the
   // starting point of stack space used by Zig code
-  size_t stack_top = reinterpret_cast<size_t>(call) + sizeof(Host);
-  size_t stack_bottom = reinterpret_cast<size_t>(&stack_top);
-  size_t address = reinterpret_cast<size_t>(memory.bytes);
+  auto stack_top = reinterpret_cast<size_t>(call) + sizeof(Host);
+  auto stack_bottom = reinterpret_cast<size_t>(&stack_top);
+  auto address = reinterpret_cast<size_t>(memory.bytes);
   if (!(stack_bottom <= address && address + memory.len <= stack_top)) {
     return Result::Failure;
   }
-  Local<ArrayBuffer> buffer = ArrayBuffer::New(isolate, memory.len);
+  auto buffer = ArrayBuffer::New(isolate, memory.len);
   std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
-  uint8_t* bytes = reinterpret_cast<uint8_t*>(store->Data());
+  auto bytes = reinterpret_cast<uint8_t*>(store->Data());
   memcpy(bytes, memory.bytes, memory.len);
   *dest = buffer;
   return Result::OK;
@@ -107,17 +107,18 @@ static Result FindBuffer(Host* call,
                          Local<ArrayBuffer>* dest,
                          size_t* offset_dest) {
   auto context = call->context;
+  auto address = reinterpret_cast<size_t>(memory.bytes);
   int buf_count = array->Length();
-  size_t address = reinterpret_cast<size_t>(memory.bytes);
   for (int i = 0; i < buf_count; i++) {
-    MaybeLocal<Value> item = array->Get(context, i);
+    auto item = array->Get(context, i);
     if (!item.IsEmpty()) {
-      Local<ArrayBuffer> buffer = item.ToLocalChecked().As<ArrayBuffer>();
+      auto buffer = item.ToLocalChecked().As<ArrayBuffer>();
       if (buffer->ByteLength() >= memory.len) {
         std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
-        size_t buf_start = reinterpret_cast<size_t>(store->Data());
-        size_t buf_end = buf_start + store->ByteLength();
+        auto buf_start = reinterpret_cast<size_t>(store->Data());
+        auto buf_end = buf_start + store->ByteLength();
         if (buf_start <= address && address + memory.len <= buf_end) {
+          *dest = buffer;
           *offset_dest = address - buf_start;
           return Result::OK;
         }
