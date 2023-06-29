@@ -65,7 +65,7 @@ struct Template {
 };
 
 struct Host;
-typedef void (*Thunk)(Host*, Local<Value>);
+typedef const char* (*Thunk)(Host*, Local<Value>);
 
 struct Method {
   const char* name;
@@ -93,8 +93,7 @@ struct Module {
 
 struct Callbacks {
   Result (*allocate_memory)(Host*, size_t, Memory*);
-  Result (*reallocate_memory)(Host*, size_t, Memory*);
-  Result (*free_memory)(Host*, Memory*);
+  Result (*free_memory)(Host*, const Memory&);
   Result (*get_memory)(Host*, Local<Object>, Memory*);
   Result (*wrap_memory)(Host*, Local<Object>, const Memory&, Local<Object>*);
 

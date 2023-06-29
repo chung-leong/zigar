@@ -6,6 +6,8 @@ const assert = std.debug.assert;
 const Error = error{
     TODO,
     Unknown,
+    UnableToAllocateMemory,
+    UnableToFreeMemory,
     UnableToRetrieveMemoryLocation,
     UnableToCreateObject,
     UnableToFindObjectType,
@@ -24,7 +26,7 @@ const Error = error{
 };
 
 // slot allocators
-const allocator = struct {
+const slot_allocator = struct {
     fn get(comptime S1: anytype) type {
         _ = S1;
         // results of comptime functions are memoized
@@ -47,8 +49,8 @@ const allocator = struct {
 };
 
 // allocate slots for classe, function, and other language constructs on the host side
-const structure_slot = allocator.get(.{});
-const test_slot = allocator.get(.{ .Type = u32 });
+const structure_slot = slot_allocator.get(.{});
+const test_slot = slot_allocator.get(.{ .Type = u32 });
 
 fn getStructureSlot(comptime T: anytype, comptime size: std.builtin.Type.Pointer.Size) u32 {
     return structure_slot.get(.{ .Type = T, .Size = size });
@@ -67,7 +69,7 @@ test "getStructureSlot" {
 
 fn getObjectSlot(comptime T: anytype, comptime index: comptime_int) u32 {
     // per-struct slot allocator
-    const relocatable_slot = allocator.get(.{ .Type = T });
+    const relocatable_slot = slot_allocator.get(.{ .Type = T });
     return relocatable_slot.get(.{ .Index = index });
 }
 
@@ -119,7 +121,7 @@ const MemberType = enum(u32) {
 };
 
 const Value = *opaque {};
-const Thunk = *const fn (host: Host, args: Value) callconv(.C) void;
+const Thunk = *const fn (host: Host, args: Value) callconv(.C) ?[*:0]const u8;
 
 const Structure = extern struct {
     name: ?[*:0]const u8 = null,
@@ -452,34 +454,47 @@ test "comparePointers" {
 
 // pointer table that's filled on the C++ side
 const Callbacks = extern struct {
-    allocate_memory: *const fn (host: Host, size: usize, dest: *[*]u8) callconv(.C) Result,
-    reallocate_memory: *const fn (host: Host, size: usize, dest: *[*]u8) callconv(.C) Result,
-    free_memory: *const fn (host: Host, dest: *[*]u8) callconv(.C) Result,
-    get_memory: *const fn (host: Host, container: Value, dest: *Memory) callconv(.C) Result,
-    wrap_memory: *const fn (host: Host, structure: Value, memory: *const Memory, dest: *Value) callconv(.C) Result,
+    allocate_memory: *const fn (Host, usize, *Memory) callconv(.C) Result,
+    free_memory: *const fn (Host, *const Memory) callconv(.C) Result,
+    get_memory: *const fn (Host, Value, *Memory) callconv(.C) Result,
+    wrap_memory: *const fn (Host, Value, *const Memory, *Value) callconv(.C) Result,
 
-    get_pointer_status: *const fn (host: Host, pointer: Value, dest: *bool) callconv(.C) Result,
-    set_pointer_status: *const fn (host: Host, pointer: Value, sync: bool) callconv(.C) Result,
+    get_pointer_status: *const fn (Host, Value, *bool) callconv(.C) Result,
+    set_pointer_status: *const fn (Host, Value, bool) callconv(.C) Result,
 
-    read_global_slot: *const fn (host: Host, id: u32, dest: *Value) callconv(.C) Result,
-    write_global_slot: *const fn (host: Host, id: u32, value: ?Value) callconv(.C) Result,
-    read_object_slot: *const fn (host: Host, container: Value, id: u32, dest: *Value) callconv(.C) Result,
-    write_object_slot: *const fn (host: Host, container: Value, id: u32, value: ?Value) callconv(.C) Result,
+    read_global_slot: *const fn (Host, u32, *Value) callconv(.C) Result,
+    write_global_slot: *const fn (Host, u32, ?Value) callconv(.C) Result,
+    read_object_slot: *const fn (Host, Value, u32, *Value) callconv(.C) Result,
+    write_object_slot: *const fn (Host, Value, u32, ?Value) callconv(.C) Result,
 
-    begin_structure: *const fn (host: Host, def: *const Structure, dest: *Value) callconv(.C) Result,
-    attach_member: *const fn (host: Host, structure: Value, member: *const Member) callconv(.C) Result,
-    attach_method: *const fn (host: Host, structure: Value, method: *const Method) callconv(.C) Result,
-    attach_template: *const fn (host: Host, structure: Value, template: *const Template) callconv(.C) Result,
-    finalize_structure: *const fn (host: Host, structure: Value) callconv(.C) Result,
-    create_template: *const fn (host: Host, memory: *const Memory, dest: *Value) callconv(.C) Result,
+    begin_structure: *const fn (Host, *const Structure, *Value) callconv(.C) Result,
+    attach_member: *const fn (Host, Value, *const Member) callconv(.C) Result,
+    attach_method: *const fn (Host, Value, *const Method) callconv(.C) Result,
+    attach_template: *const fn (Host, Value, *const Template) callconv(.C) Result,
+    finalize_structure: *const fn (Host, Value) callconv(.C) Result,
+    create_template: *const fn (Host, *const Memory, *Value) callconv(.C) Result,
 
-    create_string: *const fn (host: Host, memory: *const Memory, dest: *Value) callconv(.C) Result,
-    log_values: *const fn (host: Host, argc: usize, values: [*]Value) callconv(.C) Result,
+    create_string: *const fn (Host, *const Memory, *Value) callconv(.C) Result,
+    log_values: *const fn (Host, usize, [*]Value) callconv(.C) Result,
 };
 var callbacks: Callbacks = undefined;
 
 // host interface
 const Host = *opaque {
+    fn allocateMemory(self: Host, size: usize) !Memory {
+        var memory: Memory = undefined;
+        if (callbacks.allocate_memory(self, size, &memory) != .OK) {
+            return Error.UnableToAllocateMemory;
+        }
+        return memory;
+    }
+
+    fn freeMemory(self: Host, memory: Memory) !void {
+        if (callbacks.free_memory(self, &memory) != .OK) {
+            return Error.UnableToFreeMemory;
+        }
+    }
+
     fn getMemory(self: Host, container: Value, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) !PointerType(T, size) {
         var memory: Memory = undefined;
         if (callbacks.get_memory(self, container, &memory) != .OK) {
@@ -975,9 +990,9 @@ fn ArgumentStruct(comptime function: anytype) type {
     const info = @typeInfo(@TypeOf(function)).Fn;
     var fields: [info.params.len + 1]std.builtin.Type.StructField = undefined;
     var count = 0;
-    for (info.params, 0..) |param, index| {
+    for (info.params) |param| {
         if (param.type != std.mem.Allocator) {
-            const name = std.fmt.comptimePrint("{d}", .{index});
+            const name = std.fmt.comptimePrint("{d}", .{count});
             fields[count] = .{
                 .name = name,
                 .type = param.type orelse void,
@@ -1169,7 +1184,12 @@ fn rezigStructure(host: Host, obj: Value, ptr: anytype) !void {
                 if (hasPointer(field.type)) {
                     const slot = getObjectSlot(T, index);
                     const child_obj = try host.readObjectSlot(obj, slot);
-                    try rezigStructure(host, child_obj, &@field(ptr.*, field.name));
+                    if (isArgumentStruct(T) and index == st.fields.len - 1) {
+                        // retval is not going to be pointing to anything--just set ownership
+                        try host.setPointerStatus(child_obj, true);
+                    } else {
+                        try rezigStructure(host, child_obj, &@field(ptr.*, field.name));
+                    }
                 }
             }
         },
@@ -1186,13 +1206,11 @@ fn dezigStructure(host: Host, obj: Value, ptr: anytype) !void {
             if (!try host.getPointerStatus(obj)) {
                 return;
             }
-            // ptr is a pointer to a pointer
-            const child_ptr = ptr.*;
             // pointer objects store their target in slot 0
-            const child_obj = try obtainChildObject(host, obj, 0, child_ptr, true);
+            const child_obj = try obtainChildObject(host, obj, 0, ptr.*, true);
             if (hasPointer(pt.child)) {
                 if (pt.size == .One) {
-                    try dezigStructure(host, child_obj, child_ptr);
+                    try dezigStructure(host, child_obj, ptr.*);
                 } else if (pt.size == .Slice) {
                     for (ptr.*, 0..) |_, index| {
                         const element_ptr = &(ptr.*[index]);
@@ -1253,6 +1271,41 @@ fn createChildObject(host: Host, container: Value, slot: u32, ptr: anytype) !Val
     return child_obj;
 }
 
+fn createAllocator(host: Host) std.mem.Allocator {
+    const VTable = struct {
+        fn alloc(p: *anyopaque, size: usize, _: u8, _: usize) ?[*]u8 {
+            const h = @ptrCast(Host, p);
+            return if (h.allocateMemory(size)) |m| m.bytes else |_| null;
+        }
+
+        fn resize(_: *anyopaque, _: []u8, _: u8, _: usize, _: usize) bool {
+            return false;
+        }
+
+        fn free(p: *anyopaque, bytes: []u8, _: u8, _: usize) void {
+            const h = @ptrCast(Host, p);
+            h.freeMemory(.{
+                .bytes = @ptrCast([*]u8, bytes.ptr),
+                .len = bytes.len,
+            }) catch {};
+        }
+
+        const instance: std.mem.Allocator.VTable = .{
+            .alloc = alloc,
+            .resize = resize,
+            .free = free,
+        };
+    };
+    return .{
+        .ptr = @ptrCast(*anyopaque, host),
+        .vtable = &VTable.instance,
+    };
+}
+
+fn getErrorMessage(err: anyerror) [*:0]const u8 {
+    return @ptrCast([*:0]const u8, @errorName(err));
+}
+
 fn createThunk(comptime function: anytype, comptime ArgT: type) Thunk {
     const Args = std.meta.ArgsTuple(@TypeOf(function));
     const S = struct {
@@ -1268,7 +1321,7 @@ fn createThunk(comptime function: anytype, comptime ArgT: type) Thunk {
             comptime var index = 0;
             inline for (fields, 0..) |field, i| {
                 if (field.type == std.mem.Allocator) {
-                    // TODO: add allocator
+                    args[i] = createAllocator(host);
                 } else {
                     const name = std.fmt.comptimePrint("{d}", .{index});
                     args[i] = @field(arg_ptr.*, name);
@@ -1281,8 +1334,11 @@ fn createThunk(comptime function: anytype, comptime ArgT: type) Thunk {
             }
         }
 
-        fn invokeFunction(host: Host, arg_obj: Value) callconv(.C) void {
-            tryFunction(host, arg_obj) catch {};
+        fn invokeFunction(host: Host, arg_obj: Value) callconv(.C) ?[*:0]const u8 {
+            tryFunction(host, arg_obj) catch |err| {
+                return getErrorMessage(err);
+            };
+            return null;
         }
     };
     return S.invokeFunction;
@@ -1316,14 +1372,14 @@ test "createThunk" {
 
 fn createRootFactory(comptime S: type) Thunk {
     const RootFactory = struct {
-        fn exportStructure(host: Host, args: Value) callconv(.C) void {
-            if (getStructure(host, S)) |result| {
-                host.writeObjectSlot(args, 1, result) catch {};
-            } else |err| {
-                if (host.createString(@errorName(err))) |s| {
-                    host.writeObjectSlot(args, 0, s) catch {};
-                } else |_| {}
-            }
+        fn exportStructure(host: Host, args: Value) callconv(.C) ?[*:0]const u8 {
+            var result = getStructure(host, S) catch |err| {
+                return getErrorMessage(err);
+            };
+            host.writeObjectSlot(args, 0, result) catch |err| {
+                return getErrorMessage(err);
+            };
+            return null;
         }
     };
     return RootFactory.exportStructure;

@@ -1220,26 +1220,30 @@ R"=====(
 
   const globalSlots = {};
 
-  function invokeThunk(thunk, args) {
-    thunk.call(args, globalSlots, SLOTS, MEMORY, ZIG);
-  }
-
   function log(...args) {
     console.log(...args);
   }
 
-  function invokeFactory(thunk) {
-    // the factory thunk returns a structure object in slot 1
-    // or an error string in slot 0
-    const args = { [SLOTS]: {} };
-    thunk.call(args, globalSlots, SLOTS, MEMORY, ZIG);
-    if (args[SLOTS][1]) {
-      return args[SLOTS][1].constructor;
-    } else if (args[SLOTS][0]) {
-      return decamelizeErrorName(args[SLOTS][0]);
-    } else {
-      return `Factory function returned nothing`;
+  function invokeThunk(thunk, args) {
+    // pass the argument object as the this/recv variable
+    // while the slots and symbols are passed as arguments
+    const err = thunk.call(args, globalSlots, SLOTS, MEMORY, ZIG);
+    // errors returned by exported Zig functions are normally written into the
+    // argument object and get thrown when we access its retval property (a zig error union)
+    // error strings returned by the thunk are due to problems in the thunking process
+    // (i.e. bugs in export.zig)
+    if (err) {
+      console.log(`Throwing "${decamelizeErrorName(err)}"`);
+      throw new Error(decamelizeErrorName(err));
     }
+  }
+
+  function invokeFactory(thunk) {
+    // our C++ code cannot call invokeThunk() directly since it doesn't have the symbol SLOTS
+    // yet and therefore cannot create (or read from) the argument object
+    const args = { [SLOTS]: {} };
+    invokeThunk(thunk, args);
+    return args[SLOTS][0].constructor;
   }
 
   function getArgumentBuffers(args) {

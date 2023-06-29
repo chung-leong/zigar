@@ -132,11 +132,17 @@ describe('Integration tests', function() {
     })
     it('should throw when function returns an error', async function() {
       this.timeout(10000);
-      const { default: { return_number } } = await import(resolve('./integration/error-returning-function.zig'));
-      const result = return_number(1234);
+      const { default: { returnNumber } } = await import(resolve('./integration/error-returning-function.zig'));
+      const result = returnNumber(1234);
       expect(result).to.equal(1234);
-      expect(() => return_number(0)).to.throw()
+      expect(() => returnNumber(0)).to.throw()
         .with.property('message', 'System is on fire');
+    })
+    it('should return a u8 slice', async function() {
+      this.timeout(10000);
+      const { default: { getMessage } } = await import(resolve('./integration/slice-returning-function.zig'));
+      const result = getMessage(123, 456n, 3.14);
+      console.log(result);
     })
   })
 })

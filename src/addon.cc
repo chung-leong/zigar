@@ -17,6 +17,36 @@ static Result AllocateMemory(Host* call,
   return Result::OK;
 }
 
+static Result FreeMemory(Host* call,
+                         const Memory& memory) {
+  if (call->mem_pool.IsEmpty()) {
+    return Result::Failure;
+  }
+  auto context = call->context;
+  int buf_count = call->mem_pool->Length();
+  int index = -1;
+  size_t address = reinterpret_cast<size_t>(memory.bytes);
+  for (int i = 0; i < buf_count; i++) {
+    MaybeLocal<Value> item = call->mem_pool->Get(context, i);
+    if (!item.IsEmpty()) {
+      Local<ArrayBuffer> buffer = item.ToLocalChecked().As<ArrayBuffer>();
+      if (buffer->ByteLength() == memory.len) {
+        std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
+        size_t buf_start = reinterpret_cast<size_t>(store->Data());
+        if (buf_start == address) {
+          index = i;
+          break;
+        }
+      }
+    }
+  }
+  if (index == -1) {
+    return Result::Failure;
+  }
+  call->mem_pool->Delete(context, index).Check();
+  return Result::OK;
+}
+
 static Result GetMemory(Host* call,
                         Local<Object> object,
                         Memory* dest) {
@@ -340,7 +370,11 @@ static Local<Function> NewThunk(Host* call,
     // Host will extract the FunctionData object created above from the External object
     // which we get from FunctionCallbackInfo::Data()
     Host ctx(info);
-    ctx.function_data->thunk(&ctx, ctx.argument);
+    const char* err = ctx.function_data->thunk(&ctx, ctx.argument);
+    if (err) {
+      auto message = String::NewFromUtf8(ctx.isolate, err).ToLocalChecked();
+      info.GetReturnValue().Set(message);
+    }
   }, fde, 3).ToLocalChecked();
 }
 
@@ -560,6 +594,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   auto module = reinterpret_cast<::Module*>(symbol);
   auto callbacks = module->callbacks;
   callbacks->allocate_memory = AllocateMemory;
+  callbacks->free_memory = FreeMemory;
   callbacks->get_memory = GetMemory;
   callbacks->wrap_memory = WrapMemory;
   callbacks->get_pointer_status = GetPointerStatus;
@@ -588,18 +623,15 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   // invoke the factory thunk through JavaScript, which will give us the
   // needed symbols and slots
   Host ctx(isolate, Local<External>::New(isolate, md->external));
-  Local<Function> factory = NewThunk(&ctx, module->factory);
-  Local<String> name = String::NewFromUtf8Literal(isolate, "invokeFactory");
+  auto factory = NewThunk(&ctx, module->factory);
+  auto name = String::NewFromUtf8Literal(isolate, "invokeFactory");
   Local<Value> args[1] = { factory };
   Local<Value> result;
   if (CallFunction(&ctx, name, 1, args, &result) != Result::OK) {
-    Throw("Factory function failed");
+    // an error will have been thrown already
+    return;
   }
-  if (result->IsObject()) {
-    info.GetReturnValue().Set(result);
-  } else if (result->IsString()) {
-    isolate->ThrowError(result.As<String>());
-  }
+  info.GetReturnValue().Set(result);
 }
 
 static void GetGCStatistics(const FunctionCallbackInfo<Value>& info) {
