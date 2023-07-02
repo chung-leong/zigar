@@ -98,13 +98,13 @@ export function getClearFunction(size) {
   return (size & 0x03) ? clear1 : clear4;
 }
 
-function clear1(dest, src) {
+function clear1(dest) {
   for (let i = 0, len = dest.byteLength; i < len; i++) {
     dest.setInt8(i, 0);
   }
 }
 
-function clear4(dest, src) {
+function clear4(dest) {
   for (let i = 0, len = dest.byteLength; i < len; i += 4) {
     dest.setInt32(i, 0);
   }

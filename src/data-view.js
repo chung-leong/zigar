@@ -5,6 +5,9 @@ import { throwSizeMismatch, throwBufferExpected } from './error.js';
 export function getDataViewBoolAccessor(access, member) {
   return cacheMethod(access, member, () => {
     const { byteSize } = member;
+    if (byteSize === 0) {
+      return undefined;
+    }
     const typeName = getTypeName({ type: MemberType.Int, isSigned: true, bitSize: byteSize * 8 });
     const f = DataView.prototype[typeName];
     if (access === 'get') {
@@ -25,12 +28,12 @@ export function getDataViewBoolAccessorEx(access, member) {
   return cacheMethod(access, member, () => {
     const { byteSize, bitOffset } = member;
     if (byteSize !== 0) {
-      return getAlignedBoolAccessor(access, member, options);
+      return getDataViewBoolAccessor(access, member);
     }
     const bitPos = bitOffset & 0x07;
     const mask = 1 << bitPos;
+    const get = DataView.prototype.getInt8;
     if (access === 'get') {
-      const get = DataView.prototype.getInt8;
       return function(offset) {
         const n = get.call(this, offset);
         return !!(n & mask);

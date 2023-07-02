@@ -4,7 +4,9 @@ import MersenneTwister from 'mersenne-twister';
 import { MemberType } from '../src/member.js';
 import { getIntRange } from '../src/primitive.js';
 import {
+  isBuffer,
   getTypeName,
+  getDataView,
   getDataViewBoolAccessor,
   getDataViewBoolAccessorEx,
   getDataViewIntAccessor,
@@ -14,6 +16,52 @@ import {
 } from '../src/data-view.js';
 
 describe('DataView functions', function() {
+  describe('isBuffer', function() {
+    it('should return true when argument is an ArrayBuffer', function() {
+      expect(isBuffer(new ArrayBuffer(8))).to.be.true;
+    })
+    it('should return true when argument is an SharedArrayBuffer', function() {
+      expect(isBuffer(new SharedArrayBuffer(8))).to.be.true;
+    })
+    it('should return true when argument is a DataView', function() {
+      expect(isBuffer(new DataView(new ArrayBuffer(8)))).to.be.true;
+    })
+    it('should return false when argument does not contain a buffer', function() {
+      expect(isBuffer({})).to.be.false;
+    })
+  })
+  describe('getDataView', function() {
+    it('should return a DataView when given an ArrayBuffer', function() {
+      const arg = new ArrayBuffer(8);
+      const dv = getDataView(arg, 'Test', 8, false);
+      expect(dv).to.be.instanceOf(DataView);
+    })
+    it('should return a DataView when given an SharedArrayBuffer', function() {
+      const arg = new SharedArrayBuffer(8);
+      const dv = getDataView(arg, 'Test', 8, false);
+      expect(dv).to.be.instanceOf(DataView);
+    })
+    it('should return a DataView when given an DataView', function() {
+      const arg = new DataView(new ArrayBuffer(8));
+      const dv = getDataView(arg, 'Test', 8, false);
+      expect(dv).to.be.instanceOf(DataView);
+    })
+    it('should return a DataView when given an DataView with length that is multiple of given size', function() {
+      const arg = new DataView(new ArrayBuffer(64));
+      const dv = getDataView(arg, 'Test', 8, true);
+      expect(dv).to.be.instanceOf(DataView);
+    })
+    it('should return a DataView when given an empty DataView', function() {
+      const arg = new DataView(new ArrayBuffer(0));
+      const dv = getDataView(arg, 'Test', 8, true);
+      expect(dv).to.be.instanceOf(DataView);
+    })
+    it('should throw when there is a size mismatch', function() {
+      const arg = new DataView(new ArrayBuffer(8));
+      expect(() => getDataView(arg, 'Test', 7, false)).to.throw();
+      expect(() => getDataView(arg, 'Test', 3, true)).to.throw();
+    })
+  })
   describe('getTypeName', function() {
     it('should return the name for a integer type', function() {
       const members = [
@@ -58,6 +106,86 @@ describe('DataView functions', function() {
         { type: MemberType.Void, bitSize: 0 },
       ];
       expect(getTypeName(members[0])).to.equal('Null');
+    })
+  })
+  describe('getDataViewBoolAccessor', function() {
+    it('should return function for getting standard bool types', function() {
+      const dv = new DataView(new ArrayBuffer(1));
+      dv.setInt8(0, 1);
+      const member = {
+        type: MemberType.Boolean,
+        bitSize: 1,
+        bitOffset: 0,
+        byteSize: 1,
+      };
+      const f = getDataViewBoolAccessor('get', member);
+      const res = f.call(dv, 0, true);
+      expect(res).to.equal(true);
+    })
+    it('should return function for setting standard bool types', function() {
+      const dv = new DataView(new ArrayBuffer(1));
+      dv.setUint8(0, 1);
+      const member = {
+        type: MemberType.Boolean,
+        bitSize: 1,
+        bitOffset: 0,
+        byteSize: 1,
+      };
+      const f = getDataViewBoolAccessor('set', member);
+      f.call(dv, 0, false);
+      expect(dv.getUint8(0)).to.equal(0);
+    })
+    it('should return undefined when type is non-standard', function() {
+      const member = {
+        type: MemberType.Boolean,
+        bitSize: 1,
+        bitOffset: 1,
+        byteSize: 0,
+      };
+      const f = getDataViewBoolAccessor('get', member);
+      expect(f).to.be.undefined;
+    })
+  })
+  describe('getDataViewBoolAccessorEx', function() {
+    it('should return the same function as getDataViewBoolAccessor when bool is standard', function() {
+      const member = {
+        type: MemberType.Int,
+        bitSize: 1,
+        bitOffset: 0,
+        byteSize: 1
+      }
+      const f = getDataViewBoolAccessorEx('set', member);
+      const g = getDataViewBoolAccessor('set', member);
+      expect(f).equal(g);
+    })
+    it('should return function for getting bitfields', function() {
+      const dv = new DataView(new ArrayBuffer(1));
+      dv.setInt8(0, 0xAA);
+      for (let bitOffset = 0; bitOffset < 8; bitOffset++) {
+        const member = {
+          type: MemberType.Boolean,
+          bitSize: 1,
+          bitOffset,
+          byteSize: 0,
+        };
+        const f = getDataViewBoolAccessorEx('get', member);
+        const res = f.call(dv, 0);
+        expect(res).to.equal(!!(bitOffset & 0x01));
+      }
+    })
+    it('should return function for setting bitfields', function() {
+      const dv = new DataView(new ArrayBuffer(1));
+      for (let bitOffset = 0; bitOffset < 8; bitOffset++) {
+        const member = {
+          type: MemberType.Boolean,
+          bitSize: 1,
+          bitOffset,
+          byteSize: 0,
+        };
+        const f = getDataViewBoolAccessorEx('set', member);
+        f.call(dv, 0, !!(bitOffset & 0x01));
+      }
+      expect(dv.getUint8(0)).to.equal(0xAA);
     })
   })
   describe('getDataViewIntAccessor', function() {
@@ -118,41 +246,6 @@ describe('DataView functions', function() {
       };
       const f = getDataViewIntAccessor('get', member);
       expect(f).to.be.undefined;
-    })
-  })
-  describe('getDataViewFloatAccessor', function() {
-    it('should return functions for getting standard float types', function() {
-      const dv = new DataView(new ArrayBuffer(16));
-      dv.setFloat32(0, 3.14, true);
-      dv.setFloat64(8, 3.14, true);
-      for (const bitSize of [ 32, 64 ]) {
-        const member = {
-          type: MemberType.Float,
-          isSigned: true,
-          bitSize,
-          bitOffset: (bitSize === 32) ? 0 : 64,
-          byteSize: bitSize / 8
-        };
-        const f = getDataViewFloatAccessor('get', member);
-        const res = f.call(dv, (bitSize === 32) ? 0 : 8, true);
-        expect(res.toFixed(2)).to.equal('3.14');
-      }
-    })
-    it('should return functions for setting standard float types', function() {
-      const dv = new DataView(new ArrayBuffer(16));
-      for (const bitSize of [ 32, 64 ]) {
-        const member = {
-          type: MemberType.Float,
-          isSigned: true,
-          bitSize,
-          bitOffset: (bitSize === 32) ? 0 : 64,
-          byteSize: bitSize / 8
-        };
-        const f = getDataViewFloatAccessorEx('set', member);
-        f.call(dv, (bitSize === 32) ? 0 : 8, 3.14, true);
-      }
-      expect(dv.getFloat32(0, true).toFixed(2)).to.equal('3.14');
-      expect(dv.getFloat64(8, true).toFixed(2)).to.equal('3.14');
     })
   })
   describe('getDataViewIntAccessorEx', function() {
@@ -450,6 +543,41 @@ describe('DataView functions', function() {
           }
         }
       }
+    })
+  })
+  describe('getDataViewFloatAccessor', function() {
+    it('should return functions for getting standard float types', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      dv.setFloat32(0, 3.14, true);
+      dv.setFloat64(8, 3.14, true);
+      for (const bitSize of [ 32, 64 ]) {
+        const member = {
+          type: MemberType.Float,
+          isSigned: true,
+          bitSize,
+          bitOffset: (bitSize === 32) ? 0 : 64,
+          byteSize: bitSize / 8
+        };
+        const f = getDataViewFloatAccessor('get', member);
+        const res = f.call(dv, (bitSize === 32) ? 0 : 8, true);
+        expect(res.toFixed(2)).to.equal('3.14');
+      }
+    })
+    it('should return functions for setting standard float types', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      for (const bitSize of [ 32, 64 ]) {
+        const member = {
+          type: MemberType.Float,
+          isSigned: true,
+          bitSize,
+          bitOffset: (bitSize === 32) ? 0 : 64,
+          byteSize: bitSize / 8
+        };
+        const f = getDataViewFloatAccessorEx('set', member);
+        f.call(dv, (bitSize === 32) ? 0 : 8, 3.14, true);
+      }
+      expect(dv.getFloat32(0, true).toFixed(2)).to.equal('3.14');
+      expect(dv.getFloat64(8, true).toFixed(2)).to.equal('3.14');
     })
   })
   describe('getDataViewFloatAccessorEx', function() {
@@ -763,8 +891,8 @@ describe('DataView functions', function() {
           const setG1 = getDataViewIntAccessorEx('set', guard1);
           const getG2 = getDataViewIntAccessorEx('get', guard2);
           const setG2 = getDataViewIntAccessorEx('set', guard2);
-          const get = getDataViewIntAccessorEx('get', member);
-          const set = getDataViewIntAccessorEx('set', member);
+          const get = getDataViewFloatAccessorEx('get', member);
+          const set = getDataViewFloatAccessorEx('set', member);
           const { max: maxG1 } = getIntRange({ isSigned: false, bitSize: guard1.bitSize });
           const { max: maxG2 } = getIntRange({ isSigned: false, bitSize: guard2.bitSize });
           const generator = new MersenneTwister(bitSize + bitOffset);

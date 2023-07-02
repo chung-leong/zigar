@@ -2,6 +2,7 @@ import { expect } from 'chai';
 
 import {
   getCopyFunction,
+  getClearFunction,
   getBitAlignFunction,
 } from '../src/memory.js';
 
@@ -32,6 +33,30 @@ describe('Memory copying functions', function() {
       const td = new TextDecoder();
       const s = td.decode(dest);
       expect(s).to.equal('123456789'.repeat(8));
+    })
+  })
+  describe('getClearFunction', function() {
+    it ('should return a function for clearing unaligned data', function() {
+      const dest = new DataView(new ArrayBuffer(45));
+      for (let i = 0; i < dest.byteLength; i++) {
+        dest.setUint8(i, 0xAA);
+      }
+      const f = getClearFunction(dest.byteLength);
+      f(dest);
+      for (let i = 0; i < dest.byteLength; i++) {
+        expect(dest.getUint8(i)).to.equal(0);
+      }
+    })
+    it ('should return a function for copying aligned data', function() {
+      const dest = new DataView(new ArrayBuffer(64));
+      for (let i = 0; i < dest.byteLength; i++) {
+        dest.setUint8(i, 0xAA);
+      }
+      const f = getClearFunction(dest.byteLength);
+      f(dest);
+      for (let i = 0; i < dest.byteLength; i++) {
+        expect(dest.getUint8(i)).to.equal(0);
+      }
     })
   })
   describe('getBitAlignFunction', function() {
