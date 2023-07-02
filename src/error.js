@@ -1,8 +1,8 @@
 import { MemberType } from './member.js';
 import { getTypeName } from './data-view.js';
 
-export function throwOverflow(isSigned, bitSize, value) {
-  const typeName = getTypeName(MemberType.Int, isSigned, bitSize);
+export function throwOverflow(member, value) {
+  const typeName = getTypeName(member);
   throw new TypeError(`${typeName} cannot represent value '${value}'`);
 }
 
