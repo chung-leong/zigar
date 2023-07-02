@@ -1,58 +1,32 @@
 import { expect } from 'chai';
 
-import { MemberType } from '../src/type.js';
-import { MEMORY } from '../src/symbol.js';
-import { obtainTypedArrayGetter } from '../src/typed-array.js';
+import { MemberType } from '../src/member.js';
+import { getTypedArrayClass } from '../src/typed-array.js';
 
 describe('Typed array functions', function() {
-  describe('obtainTypedArrayGetter', function() {
-    it('should return a function that yield a typed array when all members are of the same type', function() {
-      const members = [
+  describe('getTypedArrayGetter', function() {
+    it('should a typed array class when element type is standard', function() {
+      const member = [
         {
-          name: 'dog',
           type: MemberType.Int,
           isSigned: true,
           bitSize: 32,
-          bitOffset: 0,
           byteSize: 4,
         },
-        {
-          name: 'cat',
-          type: MemberType.Int,
-          isSigned: true,
-          bitSize: 32,
-          bitOffset: 32,
-          byteSize: 4,
-        }
       ];
-      const f = obtainTypedArrayGetter(members);
+      const f = getTypedArrayClass(member);
       expect(f).to.be.a('function');
-      const object = {
-        [MEMORY]: new DataView(new ArrayBuffer(8)),
-      };
-      const array = f.call(object);
-      expect(array).to.be.an.instanceOf(Int32Array);
     })
-    it('should return nothing when members are different', function() {
-      const members = [
+    it('should return nothing when element type is non-standard', function() {
+      const member = [
         {
-          name: 'dog',
           type: MemberType.Int,
           isSigned: true,
-          bitSize: 32,
-          bitOffset: 0,
+          bitSize: 36,
           byteSize: 4,
         },
-        {
-          name: 'cat',
-          type: MemberType.Int,
-          isSigned: false,
-          bitSize: 32,
-          bitOffset: 32,
-          byteSize: 4,
-        }
       ];
-      const f = obtainTypedArrayGetter(members);
+      const f = getTypedArrayClass(member);
       expect(f).to.be.undefined;
     })
   })

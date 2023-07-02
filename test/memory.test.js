@@ -1,16 +1,19 @@
 import { expect } from 'chai';
 
-import { obtainCopyFunction, obtainBitAlignFunction } from '../src/memory.js';
+import {
+  getCopyFunction,
+  getBitAlignFunction,
+} from '../src/memory.js';
 
 describe('Memory copying functions', function() {
-  describe('obtainCopyFunction', function() {
+  describe('getCopyFunction', function() {
     it ('should return a function for copying unaligned data', function() {
       const te = new TextEncoder();
       const ta = te.encode('123456789'.repeat(5));
       expect(ta.byteLength).to.equal(45);
       const src = new DataView(ta.buffer);
       const dest = new DataView(new ArrayBuffer(src.byteLength));
-      const f = obtainCopyFunction(src.byteLength);
+      const f = getCopyFunction(src.byteLength);
       f(dest, src);
       const td = new TextDecoder();
       const s = td.decode(dest);
@@ -22,8 +25,8 @@ describe('Memory copying functions', function() {
       expect(ta.byteLength).to.equal(72);
       const src = new DataView(ta.buffer);
       const dest = new DataView(new ArrayBuffer(src.byteLength));
-      const f = obtainCopyFunction(src.byteLength);
-      const f2 = obtainCopyFunction(45);
+      const f = getCopyFunction(src.byteLength);
+      const f2 = getCopyFunction(45);
       expect(f).to.not.equal(f2);
       f(dest, src);
       const td = new TextDecoder();
@@ -31,16 +34,16 @@ describe('Memory copying functions', function() {
       expect(s).to.equal('123456789'.repeat(8));
     })
   })
-  describe('obtainBitAlignFunction', function() {
+  describe('getBitAlignFunction', function() {
     it ('should return functions for copying to and from a bit offset (not crossing byte boundary)', function() {
       const misaligned = new DataView(new ArrayBuffer(4));
       const aligned = new DataView(new ArrayBuffer(1));
       misaligned.setUint8(2, 0xE0); // 11100000
                                     //    ^ bit 4
-      const toAligned = obtainBitAlignFunction(4, 3, true);
+      const toAligned = getBitAlignFunction(4, 3, true);
       toAligned(aligned, misaligned, 2);
       expect(aligned.getUint8(0)).to.equal(0x06);
-      const fromAligned = obtainBitAlignFunction(4, 3, false);
+      const fromAligned = getBitAlignFunction(4, 3, false);
       misaligned.setUint8(2, 0);
       fromAligned(misaligned, aligned, 2);
       expect(misaligned.getUint8(2)).to.equal(0x60);
@@ -53,10 +56,10 @@ describe('Memory copying functions', function() {
       const aligned = new DataView(new ArrayBuffer(1));
       misaligned.setUint8(2, 0xE0); //          11100000
       misaligned.setUint8(3, 0x03); // 00000011    ^ bit 4
-      const toAligned = obtainBitAlignFunction(4, 7, true);
+      const toAligned = getBitAlignFunction(4, 7, true);
       toAligned(aligned, misaligned, 2);
       expect(aligned.getUint8(0)).to.equal(0x3E);
-      const fromAligned = obtainBitAlignFunction(4, 7, false);
+      const fromAligned = getBitAlignFunction(4, 7, false);
       misaligned.setUint8(2, 0);
       misaligned.setUint8(3, 0xFF);
       fromAligned(misaligned, aligned, 2);
@@ -68,11 +71,11 @@ describe('Memory copying functions', function() {
       const aligned = new DataView(new ArrayBuffer(2));
       misaligned.setUint8(2, 0xE0); //          11100000
       misaligned.setUint8(3, 0x1B); // 00011011       ^ bit 1
-      const toAligned = obtainBitAlignFunction(1, 10, true);
+      const toAligned = getBitAlignFunction(1, 10, true);
       toAligned(aligned, misaligned, 2);
       expect(aligned.getUint8(0)).to.equal(0xF0);
       expect(aligned.getUint8(1)).to.equal(0x01);
-      const fromAligned = obtainBitAlignFunction(1, 10, false);
+      const fromAligned = getBitAlignFunction(1, 10, false);
       misaligned.setUint8(2, 0);
       misaligned.setUint8(3, 0xFF);
       fromAligned(misaligned, aligned, 2);
@@ -96,12 +99,12 @@ describe('Memory copying functions', function() {
       misaligned.setUint8(2, 0x10); //                   00010000   ^- bit 5
       misaligned.setUint8(3, 0xE0); //          11100000
       misaligned.setUint8(4, 0xFF); // 11111111
-      const toAligned = obtainBitAlignFunction(5, 20, true);
+      const toAligned = getBitAlignFunction(5, 20, true);
       toAligned(aligned, misaligned, 1);
       expect(aligned.getUint8(0)).to.equal(0x80);
       expect(aligned.getUint8(1)).to.equal(0x00);
       expect(aligned.getUint8(2)).to.equal(0x0F);
-      const fromAligned = obtainBitAlignFunction(5, 20, false);
+      const fromAligned = getBitAlignFunction(5, 20, false);
       fromAligned(misaligned, aligned, 1);
       expect(misaligned.getUint8(1)).to.equal(0x1F);
       expect(misaligned.getUint8(2)).to.equal(0x10);

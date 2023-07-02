@@ -1,196 +1,81 @@
-import { MemberType, StructureType, getIntRange } from './type.js';
-import { obtainDataViewGetter, obtainDataViewSetter } from './data-view.js';
-import { throwNotNull, throwOverflow, throwInvalidEnum, throwEnumExpected } from './error.js';
+import { StructureType } from './structure.js';
+import { MemberType, getAccessors } from './member.js';
 import { MEMORY, SLOTS } from './symbol.js';
 
-export function obtainGetter(member, options) {
+export function finalizeStruct(s) {
   const {
-    littleEndian = true,
-    runtimeSafety = true,
-    autoDeref = true,
-  } = options;
-  switch (member.type) {
-    case MemberType.Bool:
-    case MemberType.Int:
-    case MemberType.Float: {
-      // get value from buffer through DataView
-      const { bitOffset } = member;
-      const offset = bitOffset >> 3;
-      const get = obtainDataViewGetter(member);
-      return function() {
-        return get.call(this[MEMORY], offset, littleEndian);
-      };
-    }
-    case MemberType.Void: {
-      return function() {
-        return null;
-      };
-    }
-    case MemberType.EnumerationItem: {
-      const { bitOffset, structure } = member;
-      const offset = bitOffset >> 3;
-      const get = obtainDataViewGetter({ ...member, type: MemberType.Int });
-      if (runtimeSafety) {
-        return function() {
-          const { constructor } = structure;
-          const value = get.call(this[MEMORY], offset, littleEndian);
-          // the enumeration constructor returns the primitive object for the value
-          const object = constructor(value);
-          if (!object) {
-            throwInvalidEnum(value)
-          }
-          return object;
-        };
-      } else {
-        return function() {
-          const value = get.call(this[MEMORY], offset, littleEndian);
-          return constructor(value);
-        };
-      }
-    }
-    case MemberType.Object: {
-      // automatically dereference pointer
-      const { structure, slot } = member;
-      switch (structure.type) {
-        case StructureType.ErrorUnion:
-        case StructureType.Optional: {
-          return function() {
-            const object = this[SLOTS][slot];
-            return object.get();
-          };
-        }
-        case StructureType.Pointer: {
-          if (autoDeref) {
-            const { instance: { members: [ target ] } } = structure;
-            if (target.structure.type === StructureType.Primitive) {
-              return function() {
-                const pointer = this[SLOTS][slot];
-                const object = pointer['*'];
-                return object.get()
-              };
-            } else {
-              return function() {
-                const pointer = this[SLOTS][slot];
-                const object = pointer['*'];
-                return object;
-              };
-            }
-          }
-        }
-        default:
-          return function() {
-            const object = this[SLOTS][slot];
-            return object;
-          };
-      }
-    }
-    case MemberType.Type: {
-      const { structure } = member;
-      return function() {
-        const { constructor } = structure;
-        return constructor;
-      };
-    }
+    type,
+    size,
+    name,
+    instance: {
+      members,
+      template,
+    },
+    options,
+  } = s;
+  const isArgStruct = (type === StructureType.ArgStruct);
+  const copy = getCopyFunction(size);
+  const descriptors = {};
+  for (const member of members) {
+    const isArgument = isArgStruct && !isNaN(parseInt(member.name));
+    const { get, set } = getAccessors(member, { autoDeref: !isArgument, ...options });
+    descriptors[member.name] = { get, set, configurable: true, enumerable: true };
   }
-}
-
-export function obtainSetter(member, options) {
-  const {
-    littleEndian = true,
-    runtimeSafety = true,
-    autoDeref = true,
-  } = options;
-  switch (member.type) {
-    case MemberType.Bool:
-    case MemberType.Int:
-    case MemberType.Float: {
-      // change buffer through DataView
-      const set = obtainDataViewSetter(member);
-      const { type, bitOffset } = member;
-      const offset = bitOffset >> 3;
-      if (runtimeSafety && type === MemberType.Int) {
-        const { isSigned, bitSize } = member;
-        const { min, max } = getIntRange(isSigned, bitSize);
-        return function(v) {
-          if (v < min || v > max) {
-            throwOverflow(isSigned, bitSize, v);
-          }
-          set.call(this[MEMORY], offset, v, littleEndian);
-        };
-      } else {
-        return function(v) {
-          set.call(this[MEMORY], offset, v, littleEndian);
-        };
-      }
-    } break;
-    case MemberType.Void: {
-      if (runtimeSafety) {
-        return function(v) {
-          if (v != null) {
-            throwNotNull();
-          }
-        };
-      } else {
-        return function() {};
-      }
+  const objectMembers = members.filter(m => m.type === MemberType.Object);
+  const copier = s.copier = function(dest, src) {
+    copy(dest[MEMORY], src[MEMORY]);
+    if (objectMembers.length > 0) {
+      Object.assign(dest[SLOTS], src[SLOTS]);
     }
-    case MemberType.EnumerationItem: {
-      const { bitOffset, structure } = member;
-      const offset = bitOffset >> 3;
-      const set = obtainDataViewSetter({ ...member, type: MemberType.Int });
-      return function(v) {
-        const { constructor } = structure;
-        if (!(v instanceof constructor)) {
-          throwEnumExpected(constructor);
-        }
-        set.call(this[MEMORY], offset, v.valueOf(), littleEndian);
-      };
+  };
+  const constructor = s.constructor = function(arg) {
+    const creating = this instanceof constructor;
+    let self, dv;
+    if (creating) {
+      // new operation--expect an object
+      // TODO: validate argument
+      self = this;
+      dv = new DataView(new ArrayBuffer(size));
+    } else {
+      self = Object.create(constructor.prototype);
+      dv = getDataView(arg, name, size);
     }
-    case MemberType.Object: {
-      const { slot, structure, isConst } = member;
-      if (isConst) {
-        return;
+    Object.defineProperties(self, {
+      [MEMORY]: { value: dv },
+    });
+    Object.defineProperties(self, descriptors);
+    if (objectMembers.length > 0) {
+      // create child objects
+      const recv = (this === ZIG) ? this : null;
+      const slots = {};
+      for (const { structure: { constructor }, bitOffset, byteSize, slot } of objectMembers) {
+        const offset = bitOffset >> 3;
+        const childDV = new DataView(dv.buffer, offset, byteSize);
+        slots[slot] = constructor.call(recv, childDV);
       }
-      switch (structure.type) {
-        case StructureType.ErrorUnion:
-        case StructureType.Optional: {
-          return function(v) {
-            const object = this[SLOTS][slot];
-            return object.set(v);
-          };
-        }
-        case StructureType.Pointer: {
-          if (autoDeref) {
-            const { instance: { members: [ target ] } } = structure;
-            if (target.structure.type === StructureType.Primitive) {
-              return function(v) {
-                const pointer = this[SLOTS][slot];
-                const object = pointer['*'];
-                object.set(v);
-              };
-            } else {
-              return function(v) {
-                const pointer = this[SLOTS][slot];
-                pointer['*'] = v;
-              };
-            }
-          }
-        }
-        default: {
-          return function(v) {
-            const { constructor, copier } = structure;
-            if (!(v instanceof constructor)) {
-              v = new constructor(v);
-            }
-            const object = this[SLOTS][slot];
-            copier(object, v);
-          };
+      Object.defineProperties(self, {
+        [SLOTS]: { value: slots },
+      });
+    }
+    if (creating) {
+      if (template) {
+        copier(this, template);
+      }
+      if (arg) {
+        for (const [ key, value ] of Object.entries(arg)) {
+          this[key] = value;
         }
       }
+    } else {
+      return self;
     }
-    case MemberType.Type: {
-      // not setter for types
-      return;
-    }
+  };
+  if (!isArgStruct) {
+    attachPointerAccessors(s);
+    attachDataViewAccessors(s);
+    attachStaticMembers(s);
+    attachMethods(s);
   }
-}
+  attachName(s);
+  return constructor;
+};

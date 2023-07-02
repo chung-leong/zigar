@@ -1,14 +1,14 @@
 import { expect } from 'chai';
 
-import { StructureType, MemberType } from '../src/type.js';
+import { StructureType } from '../src/structure.js';
+import { MemberType } from '../src/member.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
 import {
-  obtainErrorUnionGetter,
-  obtainErrorUnionSetter,
+  getErrorUnionAccessors,
 } from '../src/error-union.js';
 
 describe('Error union functions', function() {
-  describe('obtainErrorUnionGetter', function() {
+  describe('getErrorUnionAccessors', function() {
     it('should return a function for getting float with potential error', function() {
       let errorNumber;
       const DummyErrorSet = function(arg) {
@@ -37,12 +37,12 @@ describe('Error union functions', function() {
       const object = {
         [MEMORY]: dv,
       };
-      const f = obtainErrorUnionGetter(members, {});
-      expect(() => f.call(object)).to.throw().equal(dummyError);
+      const { get } = getErrorUnionAccessors(members, {});
+      expect(() => get.call(object)).to.throw().equal(dummyError);
       expect(errorNumber).to.equal(18);
       dv.setUint16(8, 0, true);
       dv.setFloat64(0, 3.14, true);
-      const result = f.call(object);
+      const result = get.call(object);
       expect(result).to.equal(3.14);
     })
     it('should return a function for getting object value with potential error', function() {
@@ -81,16 +81,14 @@ describe('Error union functions', function() {
         [SLOTS]: { 0: null },
       };
       const dummyObject = new DummyClass();
-      const f = obtainErrorUnionGetter(members, {});
-      expect(() => f.call(object)).to.throw().equal(dummyError);
+      const { get } = getErrorUnionAccessors(members, {});
+      expect(() => get.call(object)).to.throw().equal(dummyError);
       expect(errorNumber).to.equal(18);
       dv.setUint16(8, 0, true);
       object[SLOTS][0] = dummyObject;
-      const result = f.call(object);
+      const result = get.call(object);
       expect(result).to.equal(dummyObject);
     })
-  })
-  describe('obtainErrorUnionSetter', function() {
     it('should return a function for setting int or error', function() {
       let errorNumber;
       const DummyErrorSet = function(arg) {
@@ -120,12 +118,12 @@ describe('Error union functions', function() {
       const object = {
         [MEMORY]: dv,
       };
-      const f = obtainErrorUnionSetter(members, {});
-      f.call(object, dummyError);
+      const { set } = getErrorUnionAccessors(members, {});
+      set.call(object, dummyError);
       expect(dv.getUint16(8, true)).to.equal(18);
       expect(dv.getFloat64(0, true)).to.equal(0);
       expect(errorNumber).to.equal(18);
-      f.call(object, 1234.5678);
+      set.call(object, 1234.5678);
       expect(dv.getUint16(8, true)).to.equal(0);
       expect(dv.getFloat64(0, true)).to.equal(1234.5678);
     })
@@ -173,13 +171,13 @@ describe('Error union functions', function() {
         [MEMORY]: dv,
         [SLOTS]: { 0: dummyObject },
       };
-      const f = obtainErrorUnionSetter(members, {});
-      f.call(object, dummyError);
+      const { set } = getErrorUnionAccessors(members, {});
+      set.call(object, dummyError);
       expect(dv.getUint16(8, true)).to.equal(18);
       // TODO: implement resetter
       //expect(object[SLOTS][0].value).to.equal(0);
       expect(errorNumber).to.equal(18);
-      f.call(object, 456);
+      set.call(object, 456);
       expect(dv.getUint16(8, true)).to.equal(0);
       expect(object[SLOTS][0].value).to.equal(456);
     })

@@ -1,105 +1,87 @@
-import { MemberType, getIntRange } from './type.js';
-import { obtainDataViewGetter, obtainDataViewSetter } from './data-view.js';
-import { throwOutOfBound, throwOverflow, rethrowRangeError } from './error.js';
+import { MemberType, getAccessors } from './member.js';
+import { getCopyFunction } from './memory.js';
 import { MEMORY, SLOTS } from './symbol.js';
 
-export function obtainArrayLengthGetter(member, options) {
-  const { byteSize } = member;
-  return function() {
-    const dv = this[MEMORY];
-    return dv.byteLength / byteSize;
+export function finalizeArray(s) {
+  const {
+    type,
+    size,
+    name,
+    instance: {
+      members: [ member ],
+    },
+    options,
+  } = s;
+  if (process.env.NODE_DEV !== 'production') {
+    if (member.bitOffset) {
+      throw new Error(`bitOffset must be undefined for array member`);
+    }
+  }
+  const copy = getCopyFunction(size);
+  const objectMember = (member.type === MemberType.Object) ? member : null;
+  const isSlice = type == StructureType.Slice;
+  const copier = s.copier = function(dest, src) {
+    copy(dest[MEMORY], src[MEMORY]);
+    if (objectMember) {
+      dest[SLOTS] = { ...src[SLOTS] };
+    }
   };
-}
-
-export function obtainArrayGetter(member, options) {
-  const {
-    littleEndian = true,
-  } = options;
-  switch (member.type) {
-    case MemberType.Bool:
-    case MemberType.Int:
-    case MemberType.Float: {
-      const { byteSize } = member;
-      const get = obtainDataViewGetter(member);
-      return function(index) {
-        const dv = this[MEMORY];
-        const offset = index * byteSize;
-        try {
-          return get.call(dv, offset, littleEndian) ;
-        } catch {
-          throwOutOfBound(dv.byteLength, byteSize, index);
-        }
-      };
+  const constructor = s.constructor = function(arg) {
+    const creating = this instanceof constructor;
+    let self, dv;
+    if (creating) {
+      self = this;
+      dv = new DataView(new ArrayBuffer(size));
+    } else {
+      self = Object.create(constructor.prototype);
+      dv = getDataView(arg, name, size, isSlice);
     }
-    case MemberType.Object: {
-      const { byteSize } = member;
-      return function(index) {
-        const child = this[SLOTS][index];
-        if (!child) {
-          const dv = this[MEMORY];
-          throwOutOfBound(dv.byteLength, byteSize, index);
-        }
-        return child;
-      };
-    }
-  }
-}
-
-export function obtainArraySetter(member, options) {
-  const {
-    littleEndian = true,
-    runtimeSafety = true,
-  } = options;
-  switch (member.type) {
-    case MemberType.Bool:
-    case MemberType.Int:
-    case MemberType.Float: {
-      // change buffer through DataView
-      const set = obtainDataViewSetter(member);
-      const { type } = member;
-      if (runtimeSafety && type === MemberType.Int) {
-        const { isSigned, bitSize, byteSize } = member;
-        const { min, max } = getIntRange(isSigned, bitSize);
-        return function(index, v) {
-          if (v < min || v > max) {
-            throwOverflow(isSigned, bitSize, v);
-          }
-          const offset = index * byteSize;
-          const dv = this[MEMORY];
-          try {
-            set.call(dv, offset, v, littleEndian);
-          } catch (err) {
-            rethrowRangeError(err, dv.byteLength, byteSize, index);
-          }
-        };
-      } else {
-        return function(index, v) {
-          const offset = index * byteSize;
-          const dv = this[MEMORY];
-          try {
-            set.call(dv, offset, v, littleEndian);
-          } catch (err) {
-            rethrowRangeError(err, dv.byteLength, byteSize, index);
-          }
-        };
+    Object.defineProperties(self, {
+      [MEMORY]: { value: dv },
+    });
+    if (hasObjects) {
+      const slots = {};
+      const { structure: { constructor }, byteSize } = objectMember;
+      const recv = (this === ZIG) ? this : null;
+      for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+        const childDV = new DataView(dv.buffer, offset, byteSize);
+        slots[slot] = constructor.call(recv, childDV);
       }
+      Object.defineProperties(self, {
+        [SLOTS]: { value: slots },
+      });
     }
-    case MemberType.Object: {
-      const { structure, byteSize } = member;
-      const { constructor, copier } = structure;
-      return function(index, v) {
-        if (!(v instanceof constructor)) {
-          v = new constructor(v);
-        }
-        const child = this[SLOTS][index];
-        if (!child) {
-          const dv = this[MEMORY];
-          throwOutOfBound(dv.byteLength, byteSize, index);
-        }
-        copier(child, v);
-      };
+    if (creating) {
+      // expect an array
+      // TODO: validate and set memory
+    } else {
+      return self;
     }
+  };
+  const { get, set } = getAccessors(member, options);
+  Object.defineProperties(constructor.prototype, {
+    get: { value: get, configurable: true, writable: true },
+    set: { value: set, configurable: true, writable: true },
+    length: { get: getLength, configurable: true },
+    [Symbol.iterator]: { value: getArrayIterator, configurable: true },
+  });
+  if (getPointer) {
+    const ptrSourceProto = Object.defineProperties({}, {
+      get: { value: getPointer, configurable: true, writable: true },
+      set: { value: setPointer, configurable: true, writable: true },
+      length: { get: getPointerLength, configurable: true },
+      [Symbol.iterator]: { value: getArrayIterator, configurable: true },
+    });
+    const get = function() {
+      const ptrSource = Object.create(ptrSourceProto);
+      ptrSource[SOURCE] = this;
+      return ptrSource;
+    };
+    Object.defineProperties(constructor.prototype, {
+      '&': { get, configurable: true, enumerable: true, writable: false }
+    });
   }
+  return constructor;
 }
 
 export function getArrayIterator() {
@@ -120,3 +102,4 @@ export function getArrayIterator() {
     },
   };
 }
+

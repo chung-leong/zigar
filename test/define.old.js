@@ -853,20 +853,21 @@ describe('Structure definition', function() {
     })
   })
   describe('Error union', function() {
-    const setStructure = beginStructure({
-      type: StructureType.ErrorSet,
-      name: 'Hello',
-    });
-    attachMember(setStructure, {
-      name: 'UnableToRetrieveMemoryLocation',
-      type: MemberType.Object,
-    });
-    attachMember(setStructure, {
-      name: 'UnableToCreateObject',
-      type: MemberType.Object,
-    });
-    const Hello = finalizeStructure(setStructure);
-
+    it ('should define an error union', function() {
+      const setStructure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Hello',
+      });
+      attachMember(setStructure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Object,
+      });
+      attachMember(setStructure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Object,
+      });
+      const Hello = finalizeStructure(setStructure);
+    })
   })
   describe('Enumeration', function() {
     it('should define an enum class', function() {

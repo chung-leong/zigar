@@ -1,14 +1,14 @@
 import { expect } from 'chai';
 
-import { StructureType, MemberType } from '../src/type.js';
+import { StructureType } from '../src/structure.js';
+import { MemberType } from '../src/member.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
 import {
-  obtainOptionalGetter,
-  obtainOptionalSetter,
+  getOptionalAccessors,
 } from '../src/optional.js';
 
 describe('Optional functions', function() {
-  describe('obtainOptionalGetter', function() {
+  describe('getOptionalAccessors', function() {
     it('should return a function for getting optional float', function() {
       const members = [
         {
@@ -31,11 +31,11 @@ describe('Optional functions', function() {
       const object = {
         [MEMORY]: dv,
       };
-      const f = obtainOptionalGetter(members, {});
-      const result1 = f.call(object);
+      const { get } = getOptionalAccessors(members, {});
+      const result1 = get.call(object);
       expect(result1).to.equal(3.14);
       dv.setUint8(8, 0, true);
-      const result2 = f.call(object);
+      const result2 = get.call(object);
       expect(result2).to.be.null;
     })
     it('should return a function for getting optional object value', function() {
@@ -65,17 +65,15 @@ describe('Optional functions', function() {
         [SLOTS]: { 0: null },
       };
       const dummyObject = new DummyClass();
-      const f = obtainOptionalGetter(members, {});
-      const result1 = f.call(object);
+      const { get } = getOptionalAccessors(members, {});
+      const result1 = get.call(object);
       expect(result1).to.equal(null);
       dv.setUint8(8, 1, true);
       object[SLOTS][0] = dummyObject;
-      const result2 = f.call(object);
+      const result2 = get.call(object);
       expect(result2).to.equal(dummyObject);
     })
-  })
-  describe('obtainOptionalSetter', function() {
-    it('should return a function for setting int or error', function() {
+    it('should return a function for setting int or null', function() {
       const members = [
         {
           type: MemberType.Float,
@@ -96,11 +94,11 @@ describe('Optional functions', function() {
       const object = {
         [MEMORY]: dv,
       };
-      const f = obtainOptionalSetter(members, {});
-      f.call(object, null);
+      const { get } = getOptionalAccessors(members, {});
+      get.call(object, null);
       expect(dv.getUint8(8, true)).to.equal(0);
       expect(dv.getFloat64(0, true)).to.equal(0);
-      f.call(object, 1234.5678);
+      get.call(object, 1234.5678);
       expect(dv.getUint8(8, true)).to.equal(1);
       expect(dv.getFloat64(0, true)).to.equal(1234.5678);
     })
@@ -139,12 +137,12 @@ describe('Optional functions', function() {
         [MEMORY]: dv,
         [SLOTS]: { 0: dummyObject },
       };
-      const f = obtainOptionalSetter(members, {});
-      f.call(object, null);
+      const { get } = getOptionalAccessors(members, {});
+      get.call(object, null);
       expect(dv.getUint8(8, true)).to.equal(0);
       // TODO: implement resetter
       //expect(object[SLOTS][0].value).to.equal(0);
-      f.call(object, 456);
+      get.call(object, 456);
       expect(dv.getUint8(8, true)).to.equal(1);
       expect(object[SLOTS][0].value).to.equal(456);
     })

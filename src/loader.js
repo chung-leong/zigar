@@ -1,6 +1,6 @@
 import { cwd } from 'process';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { compile } from './compile.js'
+import { compile } from './compiler.js'
 
 const baseURL = pathToFileURL(`${cwd()}/`).href;
 const extensionsRegex = /\.zig$/;

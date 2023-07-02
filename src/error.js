@@ -1,4 +1,5 @@
-import { MemberType, getTypeName } from './type.js';
+import { MemberType } from './member.js';
+import { getTypeName } from './data-view.js';
 
 export function throwOverflow(isSigned, bitSize, value) {
   const typeName = getTypeName(MemberType.Int, isSigned, bitSize);

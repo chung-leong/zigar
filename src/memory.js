@@ -1,4 +1,4 @@
-export function obtainBitAlignFunction(bitPos, bitSize, toAligned) {
+export function getBitAlignFunction(bitPos, bitSize, toAligned) {
   if (bitPos + bitSize <= 8) {
     const mask = (2 ** bitSize) - 1;
     if (toAligned) {
@@ -78,7 +78,7 @@ export function obtainBitAlignFunction(bitPos, bitSize, toAligned) {
   }
 }
 
-export function obtainCopyFunction(size) {
+export function getCopyFunction(size) {
   return (size & 0x03) ? copy1 : copy4;
 }
 
@@ -94,7 +94,7 @@ function copy4(dest, src) {
   }
 }
 
-export function obtainClearFunction(size) {
+export function getClearFunction(size) {
   return (size & 0x03) ? clear1 : clear4;
 }
 

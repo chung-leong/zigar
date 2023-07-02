@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { compile } from '../src/compile.js';
+import { compile } from '../src/compiler.js';
 
 describe('Zig file compilation', function() {
   describe('compile', function() {
