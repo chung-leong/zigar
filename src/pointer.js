@@ -1,6 +1,6 @@
-import { getAccessors } from './member.js';
+import { MemberType, getAccessors } from './member.js';
 import { StructureType } from './structure.js';
-import { MEMORY, SLOTS } from './symbol.js';
+import { MEMORY, SLOTS, SOURCE } from './symbol.js';
 
 export function finalizePointer(s) {
   const {

@@ -1,3 +1,14 @@
+import { StructureType } from './structure.js';
+import {
+  getDataViewBoolAccessor,
+  getDataViewBoolAccessorEx,
+  getDataViewIntAccessor,
+  getDataViewIntAccessorEx,
+  getDataViewFloatAccessor,
+  getDataViewFloatAccessorEx,
+} from './data-view.js';
+import { MEMORY, SLOTS } from './symbol.js';
+
 export const MemberType = {
   Void: 0,
   Bool: 1,
@@ -54,7 +65,7 @@ export function useType() {
   factories[MemberType.Type] = getTypeAccessor;
 }
 
-export function getAccessors(member, options) {
+export function getAccessors(member, options = {}) {
   const f = factories[member.type];
   return {
     get: f('get', member, options),
@@ -81,27 +92,27 @@ export function getVoidAccessor(type, member, options) {
   }
 }
 
-export function getBoolAccessor(type, member, options) {
-  return getBoolAccessorUsing(access, member, options, getDataViewBoolAccessor)
+export function getBoolAccessor(access, member, options) {
+  return getAccessorUsing(access, member, options, getDataViewBoolAccessor)
 }
 
-export function getBoolAccessorEx(type, member, options) {
-  return getBoolAccessorUsing(access, member, options, getDataViewBoolAccessorEx)
+export function getBoolAccessorEx(access, member, options) {
+  return getAccessorUsing(access, member, options, getDataViewBoolAccessorEx)
 }
 
-export function getIntAccessor(type, member, options) {
+export function getIntAccessor(access, member, options) {
   return getAccessorUsing(access, member, options, getDataViewIntAccessor)
 }
 
-export function getIntAccessorEx(type, member, options) {
-  return getBoolAccessorUsing(access, member, options, getDataViewIntAccessorEx)
+export function getIntAccessorEx(access, member, options) {
+  return getAccessorUsing(access, member, options, getDataViewIntAccessorEx)
 }
 
-export function getFloatAccessor(type, member, options) {
+export function getFloatAccessor(access, member, options) {
   return getAccessorUsing(access, member, options, getDataViewFloatAccessor)
 }
 
-export function getFloatAccessorEx(type, member, options) {
+export function getFloatAccessorEx(access, member, options) {
   return getBoolAccessorUsing(access, member, options, getDataViewFloatAccessorEx)
 }
 
@@ -115,7 +126,10 @@ export function getEnumerationItemAccessorEx(access, member, options) {
 
 export function getObjectAccessor(access, member, options) {
   // automatically dereference pointer
-  const { structure, slot, bitOffset, autoDeref } = member;
+  const {
+    autoDeref = true,
+  } = options;
+  const { structure, slot, bitOffset } = member;
   switch (structure.type) {
     case StructureType.ErrorUnion:
     case StructureType.Optional: {
@@ -126,9 +140,9 @@ export function getObjectAccessor(access, member, options) {
             return object.get();
           };
         } else {
-          return function(v) {
+          return function(value) {
             const object = this[SLOTS][slot];
-            return object.set(v);
+            return object.set(value);
           };
         }
       } else {
@@ -187,9 +201,9 @@ export function getObjectAccessor(access, member, options) {
                 return object;
               };
             } else {
-              return function(v) {
+              return function(value) {
                 const pointer = this[SLOTS][slot];
-                pointer['*'] = v;
+                pointer['*'] = value;
               };
             }
           }
@@ -207,10 +221,10 @@ export function getObjectAccessor(access, member, options) {
           return function(value) {
             const { constructor, copier } = structure;
             if (!(value instanceof constructor)) {
-              value = new constructor(v);
+              value = new constructor(value);
             }
             const object = this[SLOTS][slot];
-            copier(object, v);
+            copier(object, value);
           };
         }
       } else {
@@ -223,7 +237,7 @@ export function getObjectAccessor(access, member, options) {
           return function(index, value) {
             const { constructor, copier } = structure;
             if (!(value instanceof constructor)) {
-              value = new constructor(v);
+              value = new constructor(value);
             }
             const object = this[SLOTS][index];
             copier(object, value);
@@ -247,8 +261,11 @@ export function getTypeAccessor(type, member, options) {
 }
 
 function getAccessorUsing(access, member, options, getDataViewAccessor) {
-  const { littleEndian } = options;
-  const { bitOffset, byteSize } = member;
+  const {
+    runtimeSafety = true,
+    littleEndian = true,
+  } = options;
+  const { type, bitOffset, byteSize } = member;
   const accessor = getDataViewAccessor(access, member);
   if (bitOffset !== undefined) {
     const offset = bitOffset >> 3;
@@ -277,14 +294,14 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
 function getEnumerationItemAccessorUsing(access, member, options, getDataViewIntAccessor) {
   const { runtimeSafety, littleEndian } = options;
   const { bitOffset, structure } = member;
-  const accesor = getDataViewIntAccessor(access, member);
+  const accessor = getDataViewIntAccessor(access, { ...member, type: MemberType.Int });
   if (bitOffset !== undefined) {
     const offset = bitOffset >> 3;
     if (access === 'get') {
       if (runtimeSafety) {
         return function() {
           const { constructor } = structure;
-          const value = accesor.call(this[MEMORY], offset, littleEndian);
+          const value = accessor.call(this[MEMORY], offset, littleEndian);
           // the enumeration constructor returns the primitive object for the value
           const object = constructor(value);
           if (!object) {
@@ -294,7 +311,8 @@ function getEnumerationItemAccessorUsing(access, member, options, getDataViewInt
         };
       } else {
         return function() {
-          const value = accesor.call(this[MEMORY], offset, littleEndian);
+          const { constructor } = structure;
+          const value = accessor.call(this[MEMORY], offset, littleEndian);
           return constructor(value);
         };
       }
@@ -304,7 +322,7 @@ function getEnumerationItemAccessorUsing(access, member, options, getDataViewInt
         if (!(value instanceof constructor)) {
           throwEnumExpected(constructor);
         }
-        accesor.call(this[MEMORY], offset, value.valueOf(), littleEndian);
+        accessor.call(this[MEMORY], offset, value.valueOf(), littleEndian);
       };
     }
   } else {
@@ -312,7 +330,7 @@ function getEnumerationItemAccessorUsing(access, member, options, getDataViewInt
       if (runtimeSafety) {
         return function(index) {
           const { constructor } = structure;
-          const value = accesor.call(this[MEMORY], index * byteSize, littleEndian);
+          const value = accessor.call(this[MEMORY], index * byteSize, littleEndian);
           // the enumeration constructor returns the primitive object for the value
           const object = constructor(value);
           if (!object) {
@@ -322,7 +340,7 @@ function getEnumerationItemAccessorUsing(access, member, options, getDataViewInt
         };
       } else {
         return function(index) {
-          const value = accesor.call(this[MEMORY], index * byteSize, littleEndian);
+          const value = accessor.call(this[MEMORY], index * byteSize, littleEndian);
           return constructor(value);
         };
       }
@@ -332,7 +350,7 @@ function getEnumerationItemAccessorUsing(access, member, options, getDataViewInt
         if (!(value instanceof constructor)) {
           throwEnumExpected(constructor);
         }
-        accesor.call(this[MEMORY], index * byteSize, value.valueOf(), littleEndian);
+        accessor.call(this[MEMORY], index * byteSize, value.valueOf(), littleEndian);
       };
     }
   }

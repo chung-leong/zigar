@@ -47,9 +47,9 @@ export function finalizeErrorUnion(s) {
 }
 
 export function getErrorUnionAccessors(members, options) {
-  const { get: getValue, set: setValue } = getAccessors(valueMember, options);
-  const { get: getError, set: setError } = getAccessors(errorMember, options);
-  const { structure } = errorMember;
+  const { get: getValue, set: setValue } = getAccessors(members[0], options);
+  const { get: getError, set: setError } = getAccessors(members[1], options);
+  const { structure } = members[1];
   return {
     get: function() {
       const error = getError.call(this);
