@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import MersenneTwister from 'mersenne-twister';
 
+import { StructureType } from '../src/structure.js';
 import { MemberType } from '../src/member.js';
 import { getIntRange } from '../src/primitive.js';
 import {
@@ -15,7 +16,7 @@ import {
   getDataViewFloatAccessorEx,
 } from '../src/data-view.js';
 
-describe('DataView functions', function() {
+describe('Data view functions', function() {
   describe('isBuffer', function() {
     it('should return true when argument is an ArrayBuffer', function() {
       expect(isBuffer(new ArrayBuffer(8))).to.be.true;
@@ -32,35 +33,71 @@ describe('DataView functions', function() {
   })
   describe('getDataView', function() {
     it('should return a DataView when given an ArrayBuffer', function() {
+      const structure = {
+        type: StructureType.Array,
+        name: 'Test',
+        size: 8
+      };
       const arg = new ArrayBuffer(8);
-      const structure = { name: 'Test', size: 8 };
       const dv = getDataView(structure, arg);
       expect(dv).to.be.instanceOf(DataView);
     })
     it('should return a DataView when given an SharedArrayBuffer', function() {
+      const structure = {
+        type: StructureType.Array,
+        name: 'Test',
+        size: 8
+      };
       const arg = new SharedArrayBuffer(8);
-      const dv = getDataView(arg, 'Test', 8, false);
+      const dv = getDataView(structure, arg);
       expect(dv).to.be.instanceOf(DataView);
     })
     it('should return a DataView when given an DataView', function() {
+      const structure = {
+        type: StructureType.Array,
+        name: 'Test',
+        size: 8
+      };
       const arg = new DataView(new ArrayBuffer(8));
-      const dv = getDataView(arg, 'Test', 8, false);
+      const dv = getDataView(structure, arg);
       expect(dv).to.be.instanceOf(DataView);
     })
     it('should return a DataView when given an DataView with length that is multiple of given size', function() {
+      const structure = {
+        type: StructureType.Slice,
+        name: 'Test',
+        size: 8
+      };
       const arg = new DataView(new ArrayBuffer(64));
-      const dv = getDataView(arg, 'Test', 8, true);
+      const dv = getDataView(structure, arg);
       expect(dv).to.be.instanceOf(DataView);
     })
     it('should return a DataView when given an empty DataView', function() {
+      const structure = {
+        type: StructureType.Slice,
+        name: 'Test',
+        size: 8
+      };
       const arg = new DataView(new ArrayBuffer(0));
-      const dv = getDataView(arg, 'Test', 8, true);
+      const dv = getDataView(structure, arg);
       expect(dv).to.be.instanceOf(DataView);
     })
     it('should throw when there is a size mismatch', function() {
+      const structure1 = {
+        type: StructureType.Array,
+        name: 'Test',
+        size: 17
+      };
+      const structure2 = {
+        type: StructureType.Array,
+        name: 'Test',
+        size: 3
+      };
       const arg = new DataView(new ArrayBuffer(8));
-      expect(() => getDataView(arg, 'Test', 7, false)).to.throw();
-      expect(() => getDataView(arg, 'Test', 3, true)).to.throw();
+      expect(() => getDataView(structure1, arg)).to.throw(TypeError)
+        .with.property('message').that.contains('17');
+      expect(() => getDataView(structure2, arg)).to.throw(TypeError)
+        .with.property('message').that.contains('3');
     })
   })
   describe('getTypeName', function() {

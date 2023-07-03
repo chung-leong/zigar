@@ -3,7 +3,7 @@ import { MemberType, getAccessors } from './member.js';
 import { getCopyFunction } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addTypedArrayAccessor } from './typed-array.js';
-import { MEMORY, SLOTS } from './symbol.js';
+import { MEMORY, SLOTS, ZIG } from './symbol.js';
 
 export function finalizeArray(s) {
   const {

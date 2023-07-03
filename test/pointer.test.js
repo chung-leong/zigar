@@ -1,14 +1,67 @@
 import { expect } from 'chai';
 
-import { StructureType } from '../src/structure.js';
-import { MemberType } from '../src/member.js';
-import { MEMORY, SLOTS,  SOURCE } from '../src/symbol.js';
+import {
+  MemberType,
+  useIntEx,
+  useObject,
+} from '../src/member.js';
+import {
+  StructureType,
+  usePrimitive,
+  usePointer,
+  beginStructure,
+  attachMember,
+  finalizeStructure,
+} from '../src/structure.js';
 import { getCopyFunction } from '../src/memory.js';
+import { MEMORY, SLOTS, SOURCE } from '../src/symbol.js';
 import {
   getPointerAccessors,
 } from '../src/pointer.js';
 
-describe('Pointer acquisition functions', function() {
+describe('Pointer functions', function() {
+  describe('finalizePointer', function() {
+    beforeEach(function() {
+      useIntEx();
+      useObject();
+      usePrimitive();
+      usePointer();
+    })
+    it('should define a pointer for pointing to integers', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const PInt32 = finalizeStructure(structure);
+      const int32 = new Int32(1234);
+      const intPointer = new PInt32(int32);
+      expect(intPointer['*']).to.equal(int32);
+    })
+  })
   describe('getPointerAccessors', function() {
     it('should return a function for retrieving a pointer from an object', function() {
       function FakePointer() {}
@@ -77,13 +130,12 @@ describe('Pointer acquisition functions', function() {
         type: MemberType.Object,
         bitSize: 64,
         byteSize: 8,
-        slot: 4,
         structure: {
           type: StructureType.Pointer,
           constructor: FakePointer,
         },
       };
-      const get = getPointerAccessors(member, {});
+      const { get } = getPointerAccessors(member, {});
       const array = {
         [SLOTS]: { 4: fakePointer },
       };
@@ -96,7 +148,9 @@ describe('Pointer acquisition functions', function() {
     it('should return a function for setting a pointer in an array', function() {
       function FakePointer(object, address) {
         this[MEMORY] = new DataView(new ArrayBuffer(8));
-        this[MEMORY].setBigUint64(0, address);
+        if (address !== undefined) {
+          this[MEMORY].setBigUint64(0, address);
+        }
         this[SLOTS] = { 0: object };
       }
       const target = {};
@@ -106,13 +160,12 @@ describe('Pointer acquisition functions', function() {
         type: MemberType.Object,
         bitSize: 64,
         byteSize: 8,
-        slot: 4,
         structure: {
           type: StructureType.Pointer,
           constructor: FakePointer,
           copier: function(dest, src) {
             copy(dest[MEMORY], src[MEMORY]);
-            Object.assign(dest[SLOTS], src[SLOTS]);
+            dest[SLOTS] = { ...src[SLOTS] };
           },
         },
       };

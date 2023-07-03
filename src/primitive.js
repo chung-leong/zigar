@@ -5,13 +5,14 @@ import { MEMORY } from './symbol.js';
 
 export function finalizePrimitive(s) {
   const {
+    size,
     instance: {
       members: [ member ],
     },
     options,
   } = s;
   const primitive = getPrimitiveClass(member);
-  const copy = getCopyFunction(s.size);
+  const copy = getCopyFunction(size);
   const copier = s.copier = function (dest, src) {
     copy(dest[MEMORY], src[MEMORY]);
   };

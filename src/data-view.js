@@ -2,6 +2,7 @@ import { StructureType } from './structure.js';
 import { MemberType } from './member.js';
 import { getBitAlignFunction } from './memory.js';
 import { throwSizeMismatch, throwBufferExpected } from './error.js';
+import { MEMORY } from './symbol.js';
 
 export function getDataViewBoolAccessor(access, member) {
   return cacheMethod(access, member, () => {
@@ -124,7 +125,7 @@ export function getTypeName({ type, isSigned, bitSize }) {
   }
 }
 
-export function addDataViewAccessors(s) {
+export function addDataViewAccessor(s) {
   const {
     constructor: {
       prototype,
@@ -133,17 +134,12 @@ export function addDataViewAccessors(s) {
       members
     },
   } = s;
-  if (!Object.getOwnPropertyDescriptor(prototype, 'dataView')) {
-    Object.defineProperties(prototype, {
-      dataView: { get: getDataView, configurable: true, enumerable: true },
-    });
-  }
-  const getTypedArray = getTypedArrayGetter(members);
-  if (getTypedArray && !Object.getOwnPropertyDescriptor(prototype, 'typedArray')) {
-    Object.defineProperties(prototype, {
-      typedArray: { get: getTypedArray, configurable: true, enumerable: true },
-    });
-  }
+  const get = function() {
+    return this[MEMORY];
+  };
+  Object.defineProperties(prototype, {
+    dataView: { get, configurable: true, enumerable: true },
+  });
 }
 
 function defineAlignedIntAccessor(access, member) {

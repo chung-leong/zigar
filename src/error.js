@@ -4,7 +4,7 @@ import { getTypeName } from './data-view.js';
 
 export function throwSizeMismatch(structure, dv) {
   const { type, name, size } = structure;
-  const actual = dv.length;
+  const actual = dv.byteLength;
   const s = (size > 1) ? 's' : '';
   if (type === StructureType.Slice) {
     throw new TypeError(`${name} has elements that are ${size} byte${s} in length, received ${actual}`);

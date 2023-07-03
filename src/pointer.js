@@ -1,6 +1,8 @@
-import { MemberType, getAccessors } from './member.js';
 import { StructureType } from './structure.js';
-import { MEMORY, SLOTS, SOURCE } from './symbol.js';
+import { MemberType, getAccessors } from './member.js';
+import { getCopyFunction } from './memory.js';
+import { getDataView } from './data-view.js';
+import { MEMORY, SLOTS, SOURCE, ZIG } from './symbol.js';
 
 export function finalizePointer(s) {
   const {
@@ -49,7 +51,6 @@ export function finalizePointer(s) {
   Object.defineProperties(constructor.prototype, {
     '*': { get, set, configurable: true, enumerable: true },
   });
-  attachName(s);
   return constructor;
 }
 
@@ -86,9 +87,9 @@ export function attachPointerAccessors(s) {
 
 export function getPointerAccessors(member, options) {
   if (member.type === MemberType.Object) {
-    const { structure, slot, bitOffset } = member;
+    const { structure, slot } = member;
     if (structure.type === StructureType.Pointer) {
-      if (bitOffset !== undefined) {
+      if (slot !== undefined) {
         // get pointer from slot
         return {
           get: function() {
