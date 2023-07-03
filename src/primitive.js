@@ -77,7 +77,7 @@ export function getPrimitiveClass({ type, bitSize }) {
 }
 
 export function isExtendedType({ type, bitSize, byteSize }) {
-  if (type === MemberType.Int) {
+  if (type === MemberType.Int || type === MemberType.EnumerationItem) {
     if (byteSize === 0) {
       return true;
     } else {

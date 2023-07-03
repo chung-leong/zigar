@@ -155,6 +155,7 @@ describe('Primitive functions', function() {
         { type: MemberType.Int, bitSize: 4 },
         { type: MemberType.Float, bitSize: 16 },
         { type: MemberType.Float, bitSize: 80 },
+        { type: MemberType.EnumerationItem, bitSize: 4 },
       ];
       for (const member of members) {
         expect(isExtendedType(member)).to.be.true;
@@ -168,6 +169,7 @@ describe('Primitive functions', function() {
         { type: MemberType.Int, bitSize: 64 },
         { type: MemberType.Float, bitSize: 32 },
         { type: MemberType.Float, bitSize: 64 },
+        { type: MemberType.EnumerationItem, bitSize: 16 },
       ];
       for (const member of members) {
         expect(isExtendedType(member)).to.be.false;
@@ -181,9 +183,20 @@ describe('Primitive functions', function() {
         { type: MemberType.Int, bitSize: 64, byteSize: 0 },
         { type: MemberType.Float, bitSize: 32, byteSize: 0 },
         { type: MemberType.Float, bitSize: 64, byteSize: 0 },
+        { type: MemberType.EnumerationItem, bitSize: 16, byteSize: 0 },
       ];
       for (const member of members) {
         expect(isExtendedType(member)).to.be.true;
+      }
+    })
+    it('should return false with other types', function() {
+      const members = [
+        { type: MemberType.Object, bitSize: 8, byteSize: 0 },
+        { type: MemberType.Void, bitSize: 0, byteSize: 0 },
+        { type: MemberType.Type, bitSize: 0, byteSize: 0 },
+      ];
+      for (const member of members) {
+        expect(isExtendedType(member)).to.be.false;
       }
     })
   })

@@ -124,6 +124,7 @@ export function finalizeStructure(s) {
       Object.defineProperty(constructor, 'name', { value: s.name, writable: false });
     }
     return constructor;
+    /* c8 ignore next 4 */
   } catch (err) {
     console.error(err);
     throw err;

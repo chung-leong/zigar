@@ -2,11 +2,25 @@ import { expect } from 'chai';
 
 import { MEMORY, SLOTS, ZIG } from '../src/symbol.js';
 import {
+  log,
   invokeFactory,
   getArgumentBuffers,
 } from '../src/addon.js';
 
 describe('C++ addon functions', function() {
+  describe('log', function() {
+    it('should dump values to the debug console', function() {
+      const original = console.log;
+      let values;
+      console.log = function(...args) { values = args };
+      try {
+        log(1, 2, 3);
+      } finally {
+        console.log = original;
+      }
+      expect(values).to.eql([ 1, 2, 3 ]);
+    })
+  })
   describe('invokeFactory', function() {
     it('should run the given thunk function with the expected arguments and return a constructor', function() {
       let recv, slots, symbol1, symbol2, symbol3;
@@ -58,9 +72,11 @@ describe('C++ addon functions', function() {
           },
           1: {
             [MEMORY]: new DataView(buffer4),
-          }
+          },
+          2: null,
         }
       };
+      argStruct[SLOTS][0][SLOTS][2] = argStruct;
       const result = getArgumentBuffers(argStruct);
       expect(result).to.be.an('array');
       expect(result).to.be.eql([ buffer1, buffer2, buffer3 ]);

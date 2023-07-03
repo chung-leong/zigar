@@ -82,6 +82,16 @@ describe('Data view functions', function() {
       const dv = getDataView(structure, arg);
       expect(dv).to.be.instanceOf(DataView);
     })
+    it('should throw when argument is not a data view or buffer', function() {
+      const structure = {
+        type: StructureType.Slice,
+        name: 'Test',
+        size: 8
+      };
+      const arg = {};
+      expect(() => getDataView(structure, arg)).to.throw(TypeError)
+        .with.property('message').that.contains('8');
+    })
     it('should throw when there is a size mismatch', function() {
       const structure1 = {
         type: StructureType.Array,
@@ -89,7 +99,7 @@ describe('Data view functions', function() {
         size: 17
       };
       const structure2 = {
-        type: StructureType.Array,
+        type: StructureType.Slice,
         name: 'Test',
         size: 3
       };

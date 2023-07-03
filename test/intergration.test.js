@@ -1,8 +1,10 @@
 import { expect } from 'chai';
 import { endianness } from 'os';
+import 'mocha-skip-if';
 
 const littleEndian = (endianness() === 'LE');
 
+skip.if(process.env.npm_lifecycle_event === 'coverage').
 describe('Integration tests', function() {
   describe('Variables', function() {
     it('should import integer variables', async function() {

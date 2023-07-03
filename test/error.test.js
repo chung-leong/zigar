@@ -56,9 +56,19 @@ describe('Error functions', function() {
         type: StructureType.Struct,
         size: 88,
       };
-      expect(() => throwBufferExpected(structure, 16)).to.throw(TypeError)
+      expect(() => throwBufferExpected(structure)).to.throw(TypeError)
         .with.property('message').that.contains('88');
     })
+    it('should use singular wording when size is 1', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.Struct,
+        size: 1,
+      };
+      expect(() => throwBufferExpected(structure)).to.throw(TypeError)
+        .with.property('message').that.does.not.contains('bytes');
+    })
+
   })
   describe('throwInvalidEnum', function() {
     it('should throw a type error', function() {
