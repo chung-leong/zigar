@@ -1,4 +1,6 @@
 import { MemberType, getAccessors } from './member.js';
+import { getCopyFunction } from './memory.js';
+import { getDataView }  from './data-view.js';
 import { MEMORY, SLOTS } from './symbol.js';
 
 export function finalizeOptional(s) {
@@ -8,10 +10,10 @@ export function finalizeOptional(s) {
     options,
   } = s;
   const copy = getCopyFunction(size);
-  const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const objectMember = members.find(m => m.type === MemberType.Object);
   const copier = s.copier = function (dest, src) {
     copy(dest[MEMORY], src[MEMORY]);
-    if (hasObject) {
+    if (objectMember) {
       dest[SLOTS] = { ...src[SLOTS] };
     }
   };

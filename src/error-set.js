@@ -1,4 +1,5 @@
 import { ERROR_INDEX } from './symbol.js';
+import { throwNoNewError, decamelizeErrorName } from './error.js';
 
 export function finalizeErrorSet(s) {
   const {
@@ -40,6 +41,5 @@ export function finalizeErrorSet(s) {
     });
     errors[slot] = error;
   }
-  attachName(s);
   return constructor;
 };

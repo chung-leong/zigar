@@ -1,5 +1,5 @@
-import { MEMORY, SLOTS, ZIG } from './symbol.js';
 import { throwZigError } from './error.js';
+import { MEMORY, SLOTS, ZIG } from './symbol.js';
 
 export function addMethods(s) {
   const {

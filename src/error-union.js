@@ -1,6 +1,8 @@
 import { MemberType, getAccessors } from './member.js';
-import { MEMORY, SLOTS } from './symbol.js';
+import { getCopyFunction } from './memory.js';
+import { getDataView } from './data-view.js';
 import { throwNotInErrorSet, throwUnknownErrorNumber } from './error.js';
+import { MEMORY, SLOTS } from './symbol.js';
 
 export function finalizeErrorUnion(s) {
   const {
@@ -42,7 +44,6 @@ export function finalizeErrorUnion(s) {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
   });
-  attachName(s);
   return constructor;
 }
 
@@ -75,7 +76,7 @@ export function getErrorUnionAccessors(members, options) {
         value = null;
       }
       setValue.call(this, value);
-      setError.call(this, error);
+      setError.call(this, errorNumber);
     },
   };
 }

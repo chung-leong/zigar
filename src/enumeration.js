@@ -1,5 +1,7 @@
 import { getAccessors } from './member.js';
 import { getPrimitiveClass } from './primitive.js';
+import { addStaticMembers } from './static.js';
+import { addMethods } from './method.js';
 import { throwNoNewEnum } from './error.js';
 import { MEMORY, ENUM_INDEX, ENUM_ITEMS } from './symbol.js';
 
@@ -13,7 +15,7 @@ export function finalizeEnumeration(s) {
   } = s;
   if (process.env.NODE_DEV !== 'production') {
     for (const member of members) {
-      if (member.bitOffset) {
+      if (member.bitOffset !== undefined) {
         throw new Error(`bitOffset must be undefined for enumeration member`);
       }
     }

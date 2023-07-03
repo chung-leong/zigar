@@ -4,7 +4,7 @@ import { getCopyFunction } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
-import { MEMORY, SLOTS } from './symbol.js';
+import { MEMORY, SLOTS, ZIG } from './symbol.js';
 
 export function finalizeStruct(s) {
   const {
@@ -27,7 +27,7 @@ export function finalizeStruct(s) {
   const copier = s.copier = function(dest, src) {
     copy(dest[MEMORY], src[MEMORY]);
     if (objectMembers.length > 0) {
-      Object.assign(dest[SLOTS], src[SLOTS]);
+      dest[SLOTS] = { ...src[SLOTS] };
     }
   };
   const constructor = s.constructor = function(arg) {

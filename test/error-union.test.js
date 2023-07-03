@@ -1,21 +1,93 @@
 import { expect } from 'chai';
 
-import { StructureType } from '../src/structure.js';
-import { MemberType } from '../src/member.js';
+import {
+  MemberType,
+  useIntEx,
+  useFloatEx,
+  useObject,
+} from '../src/member.js';
+import {
+  StructureType,
+  useErrorSet,
+  useErrorUnion,
+  useStruct,
+  beginStructure,
+  attachMember,
+  finalizeStructure,
+} from '../src/structure.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
 import {
   getErrorUnionAccessors,
 } from '../src/error-union.js';
 
 describe('Error union functions', function() {
+  describe('finalizeErrorUnion', function() {
+    beforeEach(function() {
+      useIntEx();
+      useErrorSet();
+      useErrorUnion();
+    })
+    it('should define an error union', function() {
+      const setStructure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Error',
+      });
+      attachMember(setStructure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Object,
+      });
+      attachMember(setStructure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Object,
+      });
+      finalizeStructure(setStructure);
+      const structure = beginStructure({
+        type: StructureType.ErrorUnion,
+        name: 'Hello',
+        size: 10,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Int,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+      });
+      attachMember(structure, {
+        name: 'error',
+        type: MemberType.Int,
+        bitOffset: 64,
+        bitSize: 16,
+        byteSize: 2,
+        structure: setStructure
+      });
+      const Hello = finalizeStructure(structure);
+      const object = Hello(new ArrayBuffer(10));
+      expect(object.get(object)).to.equal(0n);
+      object.set(1234n);
+      expect(object.get(object)).to.equal(1234n);
+    })
+  })
   describe('getErrorUnionAccessors', function() {
+    beforeEach(function() {
+      useStruct();
+      useErrorUnion();
+      useIntEx();
+      useFloatEx();
+      useObject();
+    })
     it('should return a function for getting float with potential error', function() {
       let errorNumber;
       const DummyErrorSet = function(arg) {
-        errorNumber = arg;
-        return dummyError;
+        if (this instanceof DummyErrorSet) {
+          this[Symbol.toPrimitive] = () => arg;
+        } else {
+          errorNumber = arg;
+          return dummyError;
+        }
       };
-      const dummyError = new Error('I am Groot');
+      Object.setPrototypeOf(DummyErrorSet.prototype, Error.prototype);
+      const dummyError = new DummyErrorSet(18);
       const members = [
         {
           type: MemberType.Float,
@@ -48,10 +120,15 @@ describe('Error union functions', function() {
     it('should return a function for getting object value with potential error', function() {
       let errorNumber;
       const DummyErrorSet = function(arg) {
-        errorNumber = arg;
-        return dummyError;
+        if (this instanceof DummyErrorSet) {
+          this[Symbol.toPrimitive] = () => arg;
+        } else {
+          errorNumber = arg;
+          return dummyError;
+        }
       };
-      const dummyError = new Error('I am Groot');
+      Object.setPrototypeOf(DummyErrorSet.prototype, Error.prototype);
+      const dummyError = new DummyErrorSet(18);
       const DummyClass = function() {};
       const members = [
         {
@@ -90,13 +167,15 @@ describe('Error union functions', function() {
       expect(result).to.equal(dummyObject);
     })
     it('should return a function for setting int or error', function() {
-      let errorNumber;
       const DummyErrorSet = function(arg) {
-        errorNumber = arg;
-        return dummyError;
+        if (this instanceof DummyErrorSet) {
+          this[Symbol.toPrimitive] = () => arg;
+        } else {
+          return dummyError;
+        }
       };
-      const dummyError = new Error('I am Groot');
-      dummyError[Symbol.toPrimitive] = () => 18;
+      Object.setPrototypeOf(DummyErrorSet.prototype, Error.prototype);
+      const dummyError = new DummyErrorSet(18);
       const members = [
         {
           type: MemberType.Float,
@@ -122,18 +201,20 @@ describe('Error union functions', function() {
       set.call(object, dummyError);
       expect(dv.getUint16(8, true)).to.equal(18);
       expect(dv.getFloat64(0, true)).to.equal(0);
-      expect(errorNumber).to.equal(18);
       set.call(object, 1234.5678);
       expect(dv.getUint16(8, true)).to.equal(0);
       expect(dv.getFloat64(0, true)).to.equal(1234.5678);
     })
     it('should return a function for setting object or error', function() {
-      let errorNumber;
       const DummyErrorSet = function(arg) {
-        errorNumber = arg;
-        return dummyError;
+        if (this instanceof DummyErrorSet) {
+          this[Symbol.toPrimitive] = () => arg;
+        } else {
+          return dummyError;
+        }
       };
-      const dummyError = new Error('I am Groot');
+      Object.setPrototypeOf(DummyErrorSet.prototype, Error.prototype);
+      const dummyError = new DummyErrorSet(18);
       dummyError[Symbol.toPrimitive] = () => 18;
       const DummyClass = function(value) {
         this.value = value;
@@ -176,7 +257,6 @@ describe('Error union functions', function() {
       expect(dv.getUint16(8, true)).to.equal(18);
       // TODO: implement resetter
       //expect(object[SLOTS][0].value).to.equal(0);
-      expect(errorNumber).to.equal(18);
       set.call(object, 456);
       expect(dv.getUint16(8, true)).to.equal(0);
       expect(object[SLOTS][0].value).to.equal(456);

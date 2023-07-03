@@ -46,7 +46,7 @@ describe('Error functions', function() {
         size: 1,
       };
       expect(() => throwSizeMismatch(structure, 16)).to.throw(TypeError)
-        .with.property('message').that.does.not.contains('Hello');
+        .with.property('message').that.does.not.contains('bytes');
     })
   })
   describe('throwBufferExpected', function() {
