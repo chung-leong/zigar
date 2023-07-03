@@ -1,3 +1,4 @@
+import { StructureType } from './structure.js';
 import { MemberType } from './member.js';
 import { getBitAlignFunction } from './memory.js';
 import { throwSizeMismatch, throwBufferExpected } from './error.js';
@@ -94,7 +95,8 @@ export function getDataView(structure, arg) {
   } else {
     throwBufferExpected(structure);
   }
-  if (multiple) {
+  const { type, size } = structure;
+  if (type === StructureType.Slice) {
     if (dv.byteLength % size !== 0) {
       throwSizeMismatch(structure, dv);
     }
@@ -122,7 +124,7 @@ export function getTypeName({ type, isSigned, bitSize }) {
   }
 }
 
-function attachDataViewAccessors(s) {
+export function addDataViewAccessors(s) {
   const {
     constructor: {
       prototype,

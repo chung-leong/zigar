@@ -1,6 +1,7 @@
-import { getAccessors } from "./member";
+import { getAccessors } from './member.js';
+import { SLOTS } from './symbol.js';
 
-export function attachStaticMembers(s) {
+export function addStaticMembers(s) {
   const {
     constructor,
     static: {

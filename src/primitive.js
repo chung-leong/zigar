@@ -1,16 +1,17 @@
-import { MemberType } from "./member.js";
-import { getAccessors } from "./member.js";
+import { MemberType, getAccessors } from './member.js';
+import { getCopyFunction } from './memory.js';
+import { getDataView } from './data-view.js';
+import { MEMORY } from './symbol.js';
 
 export function finalizePrimitive(s) {
   const {
-    size,
     instance: {
       members: [ member ],
     },
     options,
   } = s;
-  const primitive = getPrimitive(member.type, member.bitSize);
-  const copy = getCopyFunction(size);
+  const primitive = getPrimitiveClass(member);
+  const copy = getCopyFunction(s.size);
   const copier = s.copier = function (dest, src) {
     copy(dest[MEMORY], src[MEMORY]);
   };
@@ -44,7 +45,6 @@ export function finalizePrimitive(s) {
     set: { value: set, configurable: true, writable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
   });
-  attachName(s);
   return constructor;
 }
 

@@ -1,7 +1,7 @@
 import { MEMORY, SLOTS, ZIG } from './symbol.js';
 import { throwZigError } from './error.js';
 
-export function attachMethods(s) {
+export function addMethods(s) {
   const {
     constructor,
     methods,

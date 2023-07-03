@@ -1,4 +1,5 @@
 import { finalizePrimitive } from './primitive.js';
+import { finalizeArray } from './array.js';
 import { finalizeStruct } from './struct.js';
 //import { finalizeTaggedUnion } from './tagged-union.js';
 import { finalizeErrorUnion } from './error-union.js'
@@ -119,7 +120,9 @@ export function finalizeStructure(s) {
   try {
     const f = factories[s.type];
     const constructor = f(s);
-    Object.defineProperties(constructor, 'name', { value: s.name, writable: false });
+    if (constructor) {
+      Object.defineProperty(constructor, 'name', { value: s.name, writable: false });
+    }
     return constructor;
   } catch (err) {
     console.error(err);

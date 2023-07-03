@@ -1,5 +1,9 @@
 import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
+import { getCopyFunction } from './memory.js';
+import { getDataView } from './data-view.js';
+import { addStaticMembers } from './static.js';
+import { addMethods } from './method.js';
 import { MEMORY, SLOTS } from './symbol.js';
 
 export function finalizeStruct(s) {
@@ -69,11 +73,10 @@ export function finalizeStruct(s) {
     }
   };
   if (!isArgStruct) {
-    attachPointerAccessors(s);
-    attachDataViewAccessors(s);
-    attachStaticMembers(s);
-    attachMethods(s);
+    // TODO: addPointerAccessors(s);
+    // TODO: addDataViewAccessors(s);
+    addStaticMembers(s);
+    addMethods(s);
   }
-  attachName(s);
   return constructor;
 };

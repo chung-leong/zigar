@@ -1,6 +1,16 @@
 import { expect } from 'chai';
 
-import { MemberType } from '../src/member.js';
+import {
+  MemberType,
+  useIntEx,
+} from '../src/member.js';
+import {
+  StructureType,
+  usePrimitive,
+  beginStructure,
+  attachMember,
+  finalizeStructure,
+} from '../src/structure.js';
 import {
   getIntRange,
   getPrimitiveClass,
@@ -8,6 +18,34 @@ import {
 } from '../src/primitive.js';
 
 describe('Primitive functions', function() {
+  describe('finalizePrimitive', function() {
+    beforeEach(function() {
+      usePrimitive();
+      useIntEx();
+    })
+    it('should define a structure for holding a primitive', function() {
+      const structure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isSigned: false,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(Hello).to.be.a('function');
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setBigUint64(0, 0x7FFFFFFFFFFFFFFFn, true);
+      const object = Hello(dv);
+      expect(object.get()).to.equal(0x7FFFFFFFFFFFFFFFn);
+      expect(BigInt(object)).to.equal(0x7FFFFFFFFFFFFFFFn);
+    })
+  })
   describe('getIntRange', function() {
     it('should return expected range for a 8-bit signed integer', function() {
       const { min, max } = getIntRange({ isSigned: true, bitSize: 8 });

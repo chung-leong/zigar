@@ -1,25 +1,30 @@
+import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
 import { getCopyFunction } from './memory.js';
+import { getDataView } from './data-view.js';
+import { addTypedArrayAccessor } from './typed-array.js';
 import { MEMORY, SLOTS } from './symbol.js';
 
 export function finalizeArray(s) {
   const {
     type,
     size,
-    name,
     instance: {
       members: [ member ],
     },
     options,
   } = s;
   if (process.env.NODE_DEV !== 'production') {
-    if (member.bitOffset) {
+    /* c8 ignore next 6 */
+    if (member.bitOffset !== undefined) {
       throw new Error(`bitOffset must be undefined for array member`);
+    }
+    if (member.slot !== undefined) {
+      throw new Error(`slot must be undefined for array member`);
     }
   }
   const copy = getCopyFunction(size);
   const objectMember = (member.type === MemberType.Object) ? member : null;
-  const isSlice = type == StructureType.Slice;
   const copier = s.copier = function(dest, src) {
     copy(dest[MEMORY], src[MEMORY]);
     if (objectMember) {
@@ -39,7 +44,7 @@ export function finalizeArray(s) {
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },
     });
-    if (hasObjects) {
+    if (objectMember) {
       const slots = {};
       const { structure: { constructor }, byteSize } = objectMember;
       const recv = (this === ZIG) ? this : null;
@@ -59,29 +64,44 @@ export function finalizeArray(s) {
     }
   };
   const { get, set } = getAccessors(member, options);
+  let lengthDescriptor;
+  if (type == StructureType.Slice) {
+    const get = getArrayLengthGetter(size);
+    lengthDescriptor = { get, configurable: true };
+  } else {
+    const length = size / member.byteSize;
+    lengthDescriptor = { value: length, configurable: true };
+  }
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
-    length: { get: getLength, configurable: true },
+    length: lengthDescriptor,
     [Symbol.iterator]: { value: getArrayIterator, configurable: true },
   });
-  if (getPointer) {
-    const ptrSourceProto = Object.defineProperties({}, {
-      get: { value: getPointer, configurable: true, writable: true },
-      set: { value: setPointer, configurable: true, writable: true },
-      length: { get: getPointerLength, configurable: true },
-      [Symbol.iterator]: { value: getArrayIterator, configurable: true },
-    });
-    const get = function() {
-      const ptrSource = Object.create(ptrSourceProto);
-      ptrSource[SOURCE] = this;
-      return ptrSource;
-    };
-    Object.defineProperties(constructor.prototype, {
-      '&': { get, configurable: true, enumerable: true, writable: false }
-    });
-  }
+  addTypedArrayAccessor(s);
   return constructor;
+}
+
+export function getArrayLengthGetter(size) {
+  const shift = getShift(size);
+  if (shift !== undefined) {
+    // use shift where possible
+    return function() {
+      return this[MEMORY].byteLength >> shift;
+    };
+  } else {
+    return function() {
+      return this[MEMORY].byteLength / size;
+    };
+  }
+}
+
+function getShift(size) {
+  for (let i = 0, j = 2 ** i; j <= size; i++, j = 2 ** i) {
+    if (j === size) {
+      return i;
+    }
+  }
 }
 
 export function getArrayIterator() {

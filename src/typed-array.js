@@ -2,27 +2,29 @@ import { StructureType } from './structure.js';
 import { getTypeName } from './data-view.js';
 import { MEMORY, TYPED_ARRAY } from './symbol.js';
 
-export function attachTypedArrayAccessor(s) {
+export function addTypedArrayAccessor(s) {
   const {
     constructor,
-    members,
+    instance: {
+      members: [ member ],
+    }
   } = s;
   if (process.env.NODE_ENV !== 'production') {
-    if (s.type !== StructureType.Array) {
+    if (s.type !== StructureType.Array && s.type !== StructureType.Slice) {
       throw new Error('Only arrays can have typed array accessor');
     }
   }
-  const TypedArray = getTypedArray(member[0]);
+  const TypedArray = getTypedArrayClass(member);
   if (TypedArray) {
     const get = function() {
       if (!this[TYPED_ARRAY]) {
         const dv = this[MEMORY];
-        this[TYPED_ARRAY] = new TypedArray(dv.buffer, dv.byteOffset, dv.byteLength / byteSize);
+        this[TYPED_ARRAY] = new TypedArray(dv.buffer, dv.byteOffset, this.length);
       }
       return this[TYPED_ARRAY];
     };
     Object.defineProperties(constructor.prototype, {
-      typedArray: { value: get, configurable: true, writable: true },
+      typedArray: { get, configurable: true },
     });
   }
 }

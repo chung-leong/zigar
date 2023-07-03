@@ -90,8 +90,8 @@ export function finalizeEnumeration(s) {
     });
     items[index] = item;
   }
-  attachStaticMembers(s);
-  attachMethods(s);
+  addStaticMembers(s);
+  addMethods(s);
   return constructor;
 };
 

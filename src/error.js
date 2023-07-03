@@ -56,7 +56,7 @@ export function throwInvalidType(structure) {
 
 export function throwOverflow(member, value) {
   const typeName = getTypeName(member);
-  throw new TypeError(`${typeName} cannot represent value given: ${value}`);
+  throw new TypeError(`${typeName} cannot represent the value given: ${value}`);
 }
 
 export function throwOutOfBound(member, index) {
