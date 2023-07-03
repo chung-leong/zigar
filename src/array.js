@@ -34,7 +34,7 @@ export function finalizeArray(s) {
       dv = new DataView(new ArrayBuffer(size));
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView(arg, name, size, isSlice);
+      dv = getDataView(s, arg);
     }
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },

@@ -4,7 +4,6 @@ import { getAccessors } from "./member.js";
 export function finalizePrimitive(s) {
   const {
     size,
-    name,
     instance: {
       members: [ member ],
     },
@@ -24,7 +23,7 @@ export function finalizePrimitive(s) {
       dv = new DataView(new ArrayBuffer(size));
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView(arg, name, size);
+      dv = getDataView(s, arg);
     }
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },

@@ -4,16 +4,14 @@ import { MEMORY, SLOTS } from './symbol.js';
 
 export function finalizeStruct(s) {
   const {
-    type,
     size,
-    name,
     instance: {
       members,
       template,
     },
     options,
   } = s;
-  const isArgStruct = (type === StructureType.ArgStruct);
+  const isArgStruct = (s.type === StructureType.ArgStruct);
   const copy = getCopyFunction(size);
   const descriptors = {};
   for (const member of members) {
@@ -38,7 +36,7 @@ export function finalizeStruct(s) {
       dv = new DataView(new ArrayBuffer(size));
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView(arg, name, size);
+      dv = getDataView(s, arg);
     }
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },

@@ -5,7 +5,6 @@ import { MEMORY, SLOTS, SOURCE } from './symbol.js';
 export function finalizePointer(s) {
   const {
     size,
-    name,
     instance: {
       members: [ member ],
     },
@@ -28,7 +27,7 @@ export function finalizePointer(s) {
       dv = new DataView(new ArrayBuffer(size));
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView(arg, name, size);
+      dv = getDataView(s, arg);
     }
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },
@@ -113,7 +112,7 @@ export function getPointerAccessors(member, options) {
           set: function(index, value) {
             const { constructor, copier } = structure;
             if (!(value instanceof constructor)) {
-              throwInvalidType(constructor);
+              throwInvalidType(structure);
             }
             const object = this[SOURCE][SLOTS][index];
             copier(object, value);

@@ -1,82 +1,105 @@
 import { MemberType } from './member.js';
+import { StructureType } from './structure.js';
 import { getTypeName } from './data-view.js';
 
-export function throwOverflow(member, value) {
-  const typeName = getTypeName(member);
-  throw new TypeError(`${typeName} cannot represent value '${value}'`);
-}
-
-export function throwSizeMismatch(name, expected, actual, multiple) {
-  const s = (actual > 0) ? 's' : '';
-  if (multiple) {
-    const extra = actual % expected;
-    throw new TypeError(`${name} has elements that are ${expected} byte${s} in length, received ${actual} (${extra} bytes extra)`);
+export function throwSizeMismatch(structure, dv) {
+  const { type, name, size } = structure;
+  const actual = dv.length;
+  const s = (size > 1) ? 's' : '';
+  if (type === StructureType.Slice) {
+    throw new TypeError(`${name} has elements that are ${size} byte${s} in length, received ${actual}`);
   } else {
-    throw new TypeError(`${name} has ${expected} byte${s}, received ${actual}`);
+    throw new TypeError(`${name} has ${size} byte${s}, received ${actual}`);
   }
 }
 
-export function throwBufferExpected(size) {
-  throw new TypeError(`Expect an ArrayBuffer or DataView with a ${size} byte in length of `);
+export function throwBufferExpected(structure) {
+  const { size } = structure;
+  const s = (size > 1) ? 's' : '';
+  throw new TypeError(`Expecting an ArrayBuffer or DataView ${size} byte(s) in length`);
 }
 
-export function throwOutOfBound(length, align, index) {
-  throw new RangeError(`Illegal array index: ${index}`);
+export function throwInvalidEnum(structure, value) {
+  const { name } = structure;
+  throw new TypeError(`Value given does not correspond to an item of enum ${name}: ${value}`);
 }
 
-export function throwNotNull() {
-  throw new RangeError(`Property can only be null`);
+export function throwEnumExpected(structure) {
+  const { name } = structure;
+  throw new TypeError(`Enum item expected: ${name}`);
 }
 
-export function rethrowRangeError(err, length, align, index) {
+export function throwNoNewEnum(structure) {
+  const { name } = structure;
+  throw new TypeError(`Cannot create new enum item\nCall ${name} without the use of "new" to obtain an enum object`);
+}
+
+export function throwNoNewError(structure) {
+  const { name } = structure;
+  throw new TypeError(`Cannot create new error\nCall ${name} without the use of "new" to obtain an error object`);
+}
+
+export function throwNotInErrorSet(structure) {
+  const { name } = structure;
+  throw new TypeError(`Error given is not a part of error set ${name}`);
+}
+
+export function throwUnknownErrorNumber(structure, number) {
+  const { name } = structure;
+  throw new TypeError(`Error number does not corresponds to any error in error set ${name}: #${number}`);
+}
+
+export function throwInvalidType(structure) {
+  const { name } = structure;
+  throw new TypeError(`Object of specific type expected: ${name}`);
+}
+
+export function throwOverflow(member, value) {
+  const typeName = getTypeName(member);
+  throw new TypeError(`${typeName} cannot represent value given: ${value}`);
+}
+
+export function throwOutOfBound(member, index) {
+  const { name } = member;
+  throw new RangeError(`Index exceeds the size of ${name}: ${index}`);
+}
+
+export function rethrowRangeError(member, index, err) {
   if (err instanceof RangeError) {
-    throwOutOfBound(length, align, index);
+    throwOutOfBound(member, index);
   } else {
     throw err;
   }
 }
 
-export function throwNoNewEnum() {
-  throw new TypeError(`Cannot create new enum item\nCall function without the use of "new" to obtain an enum object`);
+export function throwNotNull(member) {
+  const { name } = member;
+  throw new RangeError(`Property ${name} can only be null`);
 }
 
-export function throwNoNewError() {
-  throw new TypeError(`Cannot create new error\nCall function without the use of "new" to obtain an error object`);
-}
-
-export function throwInvalidEnum(value) {
-  throw new TypeError(`Value given does not correspond to an enum item: ${value}`);
-}
-
-export function throwEnumExpected(constructor) {
-  throw new TypeError(`Enum item expected: ${constructor.name}`);
-}
-
-export function throwInvalidType(constructor) {
-  throw new TypeError(`Object of specific type expected: ${constructor.name}`);
-}
-
-export function throwNotInErrorSet(name) {
-  throw new TypeError(`Error given is not a part of error set "${name}"`);
-}
-
-export function throwUnknownErrorNumber(number) {
-  throw new TypeError(`Unknown error: #${number}`);
+export function throwZigError(name) {
+  throw new Error(decamelizeErrorName(name));
 }
 
 export function decamelizeErrorName(name) {
-  const lc = name.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
-    if (m1.length === 1) {
-      return ` ${m1.toLocaleLowerCase()}${m2}`;
-    } else {
-      if (m2) {
-        const acronym = m1.substring(0, m1.length - 1);
-        const letter = m1.charAt(m1.length - 1).toLocaleLowerCase();
-        return ` ${acronym} ${letter}${m2}`;
+  // use a try block in case Unicode regex fails
+  try {
+    const lc = name.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
+      if (m1.length === 1) {
+        return ` ${m1.toLocaleLowerCase()}${m2}`;
       } else {
-        return ` ${m1}`;
+        if (m2) {
+          const acronym = m1.substring(0, m1.length - 1);
+          const letter = m1.charAt(m1.length - 1).toLocaleLowerCase();
+          return ` ${acronym} ${letter}${m2}`;
+        } else {
+          return ` ${m1}`;
+        }
       }
-    }
-  }).trimStart();
-  return lc.charAt(0).toLocaleUpperCase() + lc.substring(1);
+    }).trimStart();
+    return lc.charAt(0).toLocaleUpperCase() + lc.substring(1);
+    /* c8 ignore next 3 */
+  } catch (err) {
+    return name;
+  }
 }

@@ -5,7 +5,6 @@ import { MEMORY, ENUM_INDEX, ENUM_ITEMS } from './symbol.js';
 
 export function finalizeEnumeration(s) {
   const {
-    name,
     instance: {
       members,
       template,
@@ -28,7 +27,7 @@ export function finalizeEnumeration(s) {
     if (creating) {
       // the "constructor" is only used to convert a number into an enum object
       // new enum items cannot be created
-      throwNoNewEnum();
+      throwNoNewEnum(s);
     }
     let index = -1;
     if (isSequential) {

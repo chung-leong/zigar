@@ -11,7 +11,7 @@ export function finalizeErrorSet(s) {
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     if (creating) {
-      throwNoNewError();
+      throwNoNewError(s);
     }
     const index = Number(arg);
     return errors[index];

@@ -33,7 +33,8 @@ describe('DataView functions', function() {
   describe('getDataView', function() {
     it('should return a DataView when given an ArrayBuffer', function() {
       const arg = new ArrayBuffer(8);
-      const dv = getDataView(arg, 'Test', 8, false);
+      const structure = { name: 'Test', size: 8 };
+      const dv = getDataView(structure, arg);
       expect(dv).to.be.instanceOf(DataView);
     })
     it('should return a DataView when given an SharedArrayBuffer', function() {

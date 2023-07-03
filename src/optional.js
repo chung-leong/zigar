@@ -3,7 +3,6 @@ import { MEMORY, SLOTS } from './symbol.js';
 
 export function finalizeOptional(s) {
   const {
-    name,
     size,
     instance: { members },
     options,
@@ -25,7 +24,7 @@ export function finalizeOptional(s) {
       dv = new DataView(new ArrayBuffer(size));
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView(arg, name, size);
+      dv = getDataView(s, arg);
     }
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },

@@ -26,7 +26,7 @@ export function finalizeErrorUnion(s) {
       dv = new DataView(new ArrayBuffer(size));
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView(arg, name, size);
+      dv = getDataView(s, arg);
     }
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },
@@ -52,12 +52,12 @@ export function getErrorUnionAccessors(members, options) {
   const { structure } = members[1];
   return {
     get: function() {
-      const error = getError.call(this);
-      if (error !== 0) {
+      const errorNumber = getError.call(this);
+      if (errorNumber !== 0) {
         const { constructor } = structure;
-        const err = constructor(error);
+        const err = constructor(errorNumber);
         if (!err) {
-          throwUnknownErrorNumber(error);
+          throwUnknownErrorNumber(structure, errorNumber);
         }
         throw err;
       } else {
@@ -65,14 +65,14 @@ export function getErrorUnionAccessors(members, options) {
       }
     },
     set: function(value) {
-      let error;
+      let errorNumber;
       if (value instanceof Error) {
-        const { constructor, name } = structure;
-        error = Number(value);
-        value = null;
-        if (!constructor(error)) {
-          throwNotInErrorSet(name);
+        const { constructor } = structure;
+        if (!(value instanceof constructor)) {
+          throwNotInErrorSet(structure);
         }
+        errorNumber = Number(value);
+        value = null;
       }
       setValue.call(this, value);
       setError.call(this, error);

@@ -13,6 +13,7 @@ import {
   throwNotNull,
   throwInvalidEnum,
   throwEnumExpected,
+  rethrowRangeError,
 } from './error.js';
 import { MEMORY, SLOTS } from './symbol.js';
 
@@ -90,7 +91,7 @@ export function getVoidAccessor(type, member, options) {
     if (runtimeSafety) {
       return function(value) {
         if (value != null) {
-          throwNotNull();
+          throwNotNull(member);
         }
       };
       } else {
@@ -351,11 +352,19 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
   } else {
     if (access === 'get') {
       return function(index) {
-        return accessor.call(this[MEMORY], index * byteSize, littleEndian);
+        try {
+          return accessor.call(this[MEMORY], index * byteSize, littleEndian);
+        } catch (err) {
+          rethrowRangeError(member, index, err);
+        }
       };
     } else {
       return function(index, value) {
-        return accessor.call(this[MEMORY], index * byteSize, value, littleEndian);
+        try {
+          return accessor.call(this[MEMORY], index * byteSize, value, littleEndian);
+        } catch (err) {
+          rethrowRangeError(member, index, err);
+        }
       }
     }
   }

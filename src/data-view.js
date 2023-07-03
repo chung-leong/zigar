@@ -85,22 +85,22 @@ export function getDataViewFloatAccessorEx(access, member) {
   });
 }
 
-export function getDataView(arg, name, size, multiple = false) {
+export function getDataView(structure, arg) {
   let dv;
   if (arg instanceof DataView) {
     dv = arg;
   } else if (arg instanceof ArrayBuffer || arg instanceof SharedArrayBuffer) {
     dv = new DataView(arg);
   } else {
-    throwBufferExpected(name, size);
+    throwBufferExpected(structure);
   }
   if (multiple) {
     if (dv.byteLength % size !== 0) {
-      throwSizeMismatch(name, size, dv.byteLength, true);
+      throwSizeMismatch(structure, dv);
     }
   } else {
     if (dv.byteLength !== size) {
-      throwSizeMismatch(name, size, dv.byteLength, false);
+      throwSizeMismatch(structure, dv);
     }
   }
   return dv;

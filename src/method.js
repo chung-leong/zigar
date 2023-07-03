@@ -1,4 +1,5 @@
 import { MEMORY, SLOTS, ZIG } from './symbol.js';
+import { throwZigError } from './error.js';
 
 export function attachMethods(s) {
   const {
@@ -63,7 +64,6 @@ export function invokeThunk(thunk, args) {
   // error strings returned by the thunk are due to problems in the thunking process
   // (i.e. bugs in export.zig)
   if (err) {
-    console.log(`Throwing "${decamelizeErrorName(err)}"`);
-    throw new Error(decamelizeErrorName(err));
+    throwZigError(err);
   }
 }
