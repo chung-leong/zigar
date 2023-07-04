@@ -14,6 +14,7 @@ export function finalizeEnumeration(s) {
     options,
   } = s;
   if (process.env.NODE_DEV !== 'production') {
+    /* c8 ignore next 5 */
     for (const member of members) {
       if (member.bitOffset !== undefined) {
         throw new Error(`bitOffset must be undefined for enumeration member`);
@@ -76,6 +77,7 @@ export function finalizeEnumeration(s) {
         }
       }
       return true;
+      /* c8 ignore next 3 */
     } catch (err) {
       return false;
     }

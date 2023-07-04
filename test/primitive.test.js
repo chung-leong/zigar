@@ -150,12 +150,12 @@ describe('Primitive functions', function() {
   describe('isExtendedType', function() {
     it('should return true when int or float has non-standard number of bits', function() {
       const members = [
-        { type: MemberType.Int, bitSize: 15 },
-        { type: MemberType.Int, bitSize: 128 },
-        { type: MemberType.Int, bitSize: 4 },
-        { type: MemberType.Float, bitSize: 16 },
-        { type: MemberType.Float, bitSize: 80 },
-        { type: MemberType.EnumerationItem, bitSize: 4 },
+        { type: MemberType.Int, bitSize: 15, bitOffset: 0 },
+        { type: MemberType.Int, bitSize: 128, bitOffset: 0 },
+        { type: MemberType.Int, bitSize: 4, bitOffset: 0 },
+        { type: MemberType.Float, bitSize: 16, bitOffset: 0 },
+        { type: MemberType.Float, bitSize: 80, bitOffset: 0 },
+        { type: MemberType.EnumerationItem, bitSize: 4, bitOffset: 0 },
       ];
       for (const member of members) {
         expect(isExtendedType(member)).to.be.true;
@@ -163,13 +163,13 @@ describe('Primitive functions', function() {
     })
     it('should return false when int or float is standard size', function() {
       const members = [
-        { type: MemberType.Int, bitSize: 8 },
-        { type: MemberType.Int, bitSize: 16 },
-        { type: MemberType.Int, bitSize: 32 },
-        { type: MemberType.Int, bitSize: 64 },
-        { type: MemberType.Float, bitSize: 32 },
-        { type: MemberType.Float, bitSize: 64 },
-        { type: MemberType.EnumerationItem, bitSize: 16 },
+        { type: MemberType.Int, bitSize: 8, bitOffset: 0 },
+        { type: MemberType.Int, bitSize: 16, bitOffset: 0 },
+        { type: MemberType.Int, bitSize: 32, bitOffset: 0 },
+        { type: MemberType.Int, bitSize: 64, bitOffset: 0 },
+        { type: MemberType.Float, bitSize: 32, bitOffset: 0 },
+        { type: MemberType.Float, bitSize: 64, bitOffset: 0 },
+        { type: MemberType.EnumerationItem, bitSize: 16, bitOffset: 0 },
       ];
       for (const member of members) {
         expect(isExtendedType(member)).to.be.false;
@@ -177,13 +177,13 @@ describe('Primitive functions', function() {
     })
     it('should return true when int or float is unaligned', function() {
       const members = [
-        { type: MemberType.Int, bitSize: 8, byteSize: 0 },
-        { type: MemberType.Int, bitSize: 16, byteSize: 0 },
-        { type: MemberType.Int, bitSize: 32, byteSize: 0 },
-        { type: MemberType.Int, bitSize: 64, byteSize: 0 },
-        { type: MemberType.Float, bitSize: 32, byteSize: 0 },
-        { type: MemberType.Float, bitSize: 64, byteSize: 0 },
-        { type: MemberType.EnumerationItem, bitSize: 16, byteSize: 0 },
+        { type: MemberType.Int, bitSize: 8, bitOffset: 1 },
+        { type: MemberType.Int, bitSize: 16, bitOffset: 1 },
+        { type: MemberType.Int, bitSize: 32, bitOffset: 1 },
+        { type: MemberType.Int, bitSize: 64, bitOffset: 1 },
+        { type: MemberType.Float, bitSize: 32, bitOffset: 1 },
+        { type: MemberType.Float, bitSize: 64, bitOffset: 1 },
+        { type: MemberType.EnumerationItem, bitSize: 16, bitOffset: 1 },
       ];
       for (const member of members) {
         expect(isExtendedType(member)).to.be.true;
@@ -191,9 +191,9 @@ describe('Primitive functions', function() {
     })
     it('should return false with other types', function() {
       const members = [
-        { type: MemberType.Object, bitSize: 8, byteSize: 0 },
-        { type: MemberType.Void, bitSize: 0, byteSize: 0 },
-        { type: MemberType.Type, bitSize: 0, byteSize: 0 },
+        { type: MemberType.Object, bitSize: 8 },
+        { type: MemberType.Void, bitSize: 0 },
+        { type: MemberType.Type, bitSize: 0 },
       ];
       for (const member of members) {
         expect(isExtendedType(member)).to.be.false;

@@ -56,7 +56,7 @@ export function finalizeStruct(s) {
         slots[slot] = constructor.call(recv, childDV);
       }
       Object.defineProperties(self, {
-        [SLOTS]: { value: slots },
+        [SLOTS]: { value: slots, writable: true },
       });
     }
     if (creating) {

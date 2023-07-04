@@ -119,6 +119,19 @@ export function attachTemplate(s, def) {
 export function finalizeStructure(s) {
   try {
     const f = factories[s.type];
+    if (process.env.NODE_ENV !== 'production') {
+      /* c8 ignore next 10 */
+      if (typeof(f) !== 'function') {
+        let typeName;
+        for (const [ name, value ] of Object.entries(StructureType)) {
+          if (value === s.type) {
+            typeName = name;
+            break;
+          }
+        }
+        throw new Error(`No factory for ${typeName}: ${f}`);
+      }
+    }
     const constructor = f(s);
     if (constructor) {
       Object.defineProperty(constructor, 'name', { value: s.name, writable: false });

@@ -121,7 +121,7 @@ R"=====(
   function getDataViewBoolAccessor(access, member) {
     return cacheMethod(access, member, () => {
       const { byteSize } = member;
-      if (byteSize === 0) {
+      if (byteSize === undefined) {
         return undefined;
       }
       const typeName = getTypeName({ type: MemberType.Int, isSigned: true, bitSize: byteSize * 8 });
@@ -141,10 +141,10 @@ R"=====(
 
   function getDataViewBoolAccessorEx(access, member) {
     return cacheMethod(access, member, () => {
-      const { byteSize, bitOffset } = member;
-      if (byteSize !== 0) {
+      if (isByteAligned(member)) {
         return getDataViewBoolAccessor(access, member);
       }
+      const { bitOffset } = member;
       const bitPos = bitOffset & 0x07;
       const mask = 1 << bitPos;
       const get = DataView.prototype.getInt8;
@@ -169,7 +169,7 @@ R"=====(
       if (DataView.prototype[name]) {
         return DataView.prototype[name];
       }
-      if (member.byteSize !== 0) {
+      if (isByteAligned(member)) {
         return defineAlignedIntAccessor(access, member)
       } else {
         return defineUnalignedIntAccessor(access, member);
@@ -182,7 +182,7 @@ R"=====(
       if (DataView.prototype[name]) {
         return DataView.prototype[name];
       }
-      if (member.byteSize !== 0) {
+      if (isByteAligned(member)) {
         return defineAlignedFloatAccessor(access, member)
       } else {
         return defineUnalignedFloatAccessor(access, member);
@@ -210,6 +210,10 @@ R"=====(
       }
     }
     return dv;
+  }
+
+  function isBuffer(arg) {
+    return (arg instanceof DataView || arg instanceof ArrayBuffer || arg instanceof SharedArrayBuffer);
   }
 
   function getTypeName({ type, isSigned, bitSize }) {
@@ -584,8 +588,9 @@ R"=====(
 
   function cacheMethod(access, member, cb) {
     const { bitOffset, byteSize } = member;
+    const bitPos = bitOffset & 0x07;
     const typeName = getTypeName(member);
-    const suffix = (byteSize === 0) ? `Bit${bitOffset & 0x07}` : ``;
+    const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
     const name = `${access}${typeName}${suffix}`;
     var fn = methodCache[name];
     if (!fn) {
@@ -680,6 +685,7 @@ R"=====(
       }
     } = s;
     if (process.env.NODE_ENV !== 'production') {
+      /* c8 ignore next 3 */
       if (s.type !== StructureType.Array && s.type !== StructureType.Slice) {
         throw new Error('Only arrays can have typed array accessor');
       }
@@ -765,7 +771,7 @@ R"=====(
           slots[slot] = constructor.call(recv, childDV);
         }
         Object.defineProperties(self, {
-          [SLOTS]: { value: slots },
+          [SLOTS]: { value: slots, writable: true },
         });
       }
       if (creating) ; else {
@@ -900,7 +906,7 @@ R"=====(
           slots[slot] = constructor.call(recv, childDV);
         }
         Object.defineProperties(self, {
-          [SLOTS]: { value: slots },
+          [SLOTS]: { value: slots, writable: true },
         });
       }
       if (creating) {
@@ -951,6 +957,7 @@ R"=====(
         self = Object.create(constructor.prototype);
         dv = getDataView(s, arg);
       }
+      /* TODO: handle struct */
       Object.defineProperties(self, {
         [MEMORY]: { value: dv },
       });
@@ -1054,6 +1061,7 @@ R"=====(
       options,
     } = s;
     if (process.env.NODE_DEV !== 'production') {
+      /* c8 ignore next 5 */
       for (const member of members) {
         if (member.bitOffset !== undefined) {
           throw new Error(`bitOffset must be undefined for enumeration member`);
@@ -1116,6 +1124,7 @@ R"=====(
           }
         }
         return true;
+        /* c8 ignore next 3 */
       } catch (err) {
         return false;
       }
@@ -1162,6 +1171,7 @@ R"=====(
         self = Object.create(constructor.prototype);
         dv = getDataView(s, arg);
       }
+      /* TODO: handle struct */
       Object.defineProperties(self, {
         [MEMORY]: { value: dv },
       });
@@ -1227,7 +1237,7 @@ R"=====(
       }
       Object.defineProperties(self, {
         [MEMORY]: { value: dv },
-        [SLOTS]: { value: slots },
+        [SLOTS]: { value: slots, writable: true },
         // a boolean value indicating whether Zig currently owns the pointer
         [ZIG]: { value: this === ZIG, writable: true },
       });
@@ -1355,11 +1365,25 @@ R"=====(
   function finalizeStructure(s) {
     try {
       const f = factories$1[s.type];
+      if (process.env.NODE_ENV !== 'production') {
+        /* c8 ignore next 10 */
+        if (typeof(f) !== 'function') {
+          let typeName;
+          for (const [ name, value ] of Object.entries(StructureType)) {
+            if (value === s.type) {
+              typeName = name;
+              break;
+            }
+          }
+          throw new Error(`No factory for ${typeName}: ${f}`);
+        }
+      }
       const constructor = f(s);
       if (constructor) {
         Object.defineProperty(constructor, 'name', { value: s.name, writable: false });
       }
       return constructor;
+      /* c8 ignore next 4 */
     } catch (err) {
       console.error(err);
       throw err;
@@ -1402,12 +1426,29 @@ R"=====(
     factories[MemberType.Object] = getObjectAccessor;
   }
 
+  function isByteAligned({ bitOffset, bitSize, byteSize }) {
+    return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
+  }
+
   function useType() {
     factories[MemberType.Type] = getTypeAccessor;
   }
 
   function getAccessors(member, options = {}) {
     const f = factories[member.type];
+    if (process.env.NODE_ENV !== 'production') {
+      /* c8 ignore next 10 */
+      if (typeof(f) !== 'function') {
+        let typeName;
+        for (const [ name, value ] of Object.entries(MemberType)) {
+          if (value === member.type) {
+            typeName = name;
+            break;
+          }
+        }
+        throw new Error(`No factory for ${typeName}: ${f}`);
+      }
+    }
     return {
       get: f('get', member, options),
       set: f('set', member, options)
@@ -1534,7 +1575,8 @@ R"=====(
       }
       case StructureType.Pointer: {
         if (autoDeref) {
-          const { isConst, instance: { members: [ target ] } } = structure;
+          const { instance: { members: [ target ] } } = structure;
+          const { isConst } = member;
           if (target.structure.type === StructureType.Primitive) {
             if (slot !== undefined) {
               if (access === 'get') {
@@ -1544,13 +1586,14 @@ R"=====(
                   return object.get()
                 };
               } else {
-                return function(value) {
+                return (isConst) ? undefined : function(value) {
                   const pointer = this[SLOTS][slot];
                   const object = pointer['*'];
                   object.set(value);
                 };
               }
             } else {
+              // array accessors
               if (access === 'get') {
                 return function(index) {
                   const pointer = this[SLOTS][index];
@@ -1558,7 +1601,7 @@ R"=====(
                   return object.get()
                 };
               } else {
-                return function(index, value) {
+                return (isConst) ? undefined : function(index, value) {
                   const pointer = this[SLOTS][index];
                   const object = pointer['*'];
                   object.set(value);
@@ -1574,12 +1617,13 @@ R"=====(
                   return object;
                 };
               } else {
-                return function(value) {
+                return (isConst) ? undefined : function(value) {
                   const pointer = this[SLOTS][slot];
                   pointer['*'] = value;
                 };
               }
             } else {
+              // array accessors
               if (access === 'get') {
                 return function(index) {
                   const pointer = this[SLOTS][index];
@@ -1587,7 +1631,7 @@ R"=====(
                   return object;
                 };
               } else {
-                return function(index, value) {
+                return (isConst) ? undefined : function(index, value) {
                   const pointer = this[SLOTS][index];
                   pointer['*'] = value;
                 };
@@ -1614,6 +1658,7 @@ R"=====(
             };
           }
         } else {
+          // array accessors
           if (access === 'get') {
             return function(index) {
               const object = this[SLOTS][index];

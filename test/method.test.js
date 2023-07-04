@@ -69,6 +69,7 @@ describe('Method functions', function() {
   describe('addMethods', function() {
     beforeEach(function() {
       useStruct();
+      useEnumeration();
       useBool();
       useIntEx();
       useFloatEx();
@@ -112,6 +113,7 @@ describe('Method functions', function() {
         bitOffset: 0,
         byteSize: structure.size,
         structure,
+        slot: 0,
       });
       attachMember(argStruct, {
         name: 'retval',
@@ -122,7 +124,7 @@ describe('Method functions', function() {
         bitOffset: 64,
         byteSize: 4,
       });
-      finalizeStructure(argStruct);
+      const c = finalizeStructure(argStruct);
       const thunk = function() {
         this.retval = this[0].dog + this[0].cat;
       };

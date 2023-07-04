@@ -340,7 +340,6 @@ describe('Struct functions', function() {
         isStatic: false,
         bitSize: 1,
         bitOffset: 0,
-        byteSize: 0,
       });
       attachMember(structure, {
         name: 'cat',
@@ -348,7 +347,6 @@ describe('Struct functions', function() {
         isStatic: false,
         bitSize: 1,
         bitOffset: 1,
-        byteSize: 0,
       });
       attachTemplate(structure, {
         isStatic: false,
@@ -384,7 +382,6 @@ describe('Struct functions', function() {
         isSigned: false,
         bitSize: 2,
         bitOffset: 0,
-        byteSize: 0,
       });
       attachMember(structure, {
         name: 'cat',
@@ -393,7 +390,6 @@ describe('Struct functions', function() {
         isSigned: true,
         bitSize: 3,
         bitOffset: 2,
-        byteSize: 0,
       });
       attachTemplate(structure, {
         isStatic: false,
@@ -431,7 +427,6 @@ describe('Struct functions', function() {
         isSigned: false,
         bitSize: 2,
         bitOffset: 0,
-        byteSize: 0,
       });
       attachMember(structure, {
         name: 'cat',
@@ -440,7 +435,6 @@ describe('Struct functions', function() {
         isSigned: false,
         bitSize: 32,
         bitOffset: 2,
-        byteSize: 0,
       });
       attachTemplate(structure, {
         isStatic: false,

@@ -50,9 +50,8 @@ const slot_allocator = struct {
 
 // allocate slots for classe, function, and other language constructs on the host side
 const structure_slot = slot_allocator.get(.{});
-const test_slot = slot_allocator.get(.{ .Type = u32 });
 
-fn getStructureSlot(comptime T: anytype, comptime size: std.builtin.Type.Pointer.Size) u32 {
+fn getStructureSlot(comptime T: anytype, comptime size: std.builtin.Type.Pointer.Size) usize {
     return structure_slot.get(.{ .Type = T, .Size = size });
 }
 
@@ -67,7 +66,7 @@ test "getStructureSlot" {
     assert(getStructureSlot(B, .One) == 1);
 }
 
-fn getObjectSlot(comptime T: anytype, comptime index: comptime_int) u32 {
+fn getObjectSlot(comptime T: anytype, comptime index: comptime_int) usize {
     // per-struct slot allocator
     const relocatable_slot = slot_allocator.get(.{ .Type = T });
     return relocatable_slot.get(.{ .Index = index });
@@ -129,6 +128,8 @@ const Structure = extern struct {
     total_size: usize = 0,
 };
 
+const missing = std.math.maxInt(usize);
+
 const Member = extern struct {
     name: ?[*:0]const u8 = null,
     member_type: MemberType,
@@ -136,10 +137,10 @@ const Member = extern struct {
     is_required: bool = false,
     is_signed: bool = false,
     is_const: bool = true,
-    bit_offset: u32 = 0,
-    bit_size: u32 = 0,
-    byte_size: u32 = 0,
-    slot: u32 = 0,
+    bit_offset: usize = missing,
+    bit_size: usize = missing,
+    byte_size: usize = missing,
+    slot: usize = missing,
     structure: ?Value = null,
 };
 
@@ -462,10 +463,10 @@ const Callbacks = extern struct {
     get_pointer_status: *const fn (Host, Value, *bool) callconv(.C) Result,
     set_pointer_status: *const fn (Host, Value, bool) callconv(.C) Result,
 
-    read_global_slot: *const fn (Host, u32, *Value) callconv(.C) Result,
-    write_global_slot: *const fn (Host, u32, ?Value) callconv(.C) Result,
-    read_object_slot: *const fn (Host, Value, u32, *Value) callconv(.C) Result,
-    write_object_slot: *const fn (Host, Value, u32, ?Value) callconv(.C) Result,
+    read_global_slot: *const fn (Host, usize, *Value) callconv(.C) Result,
+    write_global_slot: *const fn (Host, usize, ?Value) callconv(.C) Result,
+    read_object_slot: *const fn (Host, Value, usize, *Value) callconv(.C) Result,
+    write_object_slot: *const fn (Host, Value, usize, ?Value) callconv(.C) Result,
 
     begin_structure: *const fn (Host, *const Structure, *Value) callconv(.C) Result,
     attach_member: *const fn (Host, Value, *const Member) callconv(.C) Result,
@@ -527,7 +528,7 @@ const Host = *opaque {
         }
     }
 
-    fn readGlobalSlot(self: Host, slot: u32) !Value {
+    fn readGlobalSlot(self: Host, slot: usize) !Value {
         var value: Value = undefined;
         if (callbacks.read_global_slot(self, slot, &value) != .OK) {
             return Error.UnableToFindObjectType;
@@ -535,13 +536,13 @@ const Host = *opaque {
         return value;
     }
 
-    fn writeGlobalSlot(self: Host, slot: u32, value: Value) !void {
+    fn writeGlobalSlot(self: Host, slot: usize, value: Value) !void {
         if (callbacks.write_global_slot(self, slot, value) != .OK) {
             return Error.UnableToSetObjectType;
         }
     }
 
-    fn readObjectSlot(self: Host, container: Value, id: u32) !Value {
+    fn readObjectSlot(self: Host, container: Value, id: usize) !Value {
         var result: Value = undefined;
         if (callbacks.read_object_slot(self, container, id, &result) != .OK) {
             return Error.UnableToRetrieveObject;
@@ -549,7 +550,7 @@ const Host = *opaque {
         return result;
     }
 
-    fn writeObjectSlot(self: Host, container: Value, id: u32, value: ?Value) !void {
+    fn writeObjectSlot(self: Host, container: Value, id: usize, value: ?Value) !void {
         if (callbacks.write_object_slot(self, container, id, value) != .OK) {
             return Error.UnableToInsertObject;
         }
@@ -684,7 +685,6 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                 .member_type = getMemberType(ar.child),
                 .is_signed = isSigned(ar.child),
                 .bit_size = @bitSizeOf(ar.child),
-                .bit_offset = 0,
                 .byte_size = @sizeOf(ar.child),
                 .structure = try getStructure(host, ar.child),
             });
@@ -708,7 +708,6 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                         .is_signed = isSigned(pt.child),
                         .is_const = pt.is_const,
                         .bit_size = @bitSizeOf(pt.child),
-                        .bit_offset = 0,
                         .byte_size = @sizeOf(pt.child),
                         .structure = child_structure,
                     });
@@ -722,6 +721,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                 .bit_size = @bitSizeOf(T),
                 .byte_size = @sizeOf(T),
                 .structure = target_structure,
+                .slot = 0,
             });
         },
         .Struct, .Union => {
@@ -742,7 +742,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                     .is_required = field.default_value == null,
                     .bit_offset = @bitOffsetOf(T, field.name),
                     .bit_size = @bitSizeOf(field.type),
-                    .byte_size = if (isPacked(T)) 0 else @sizeOf(field.type),
+                    .byte_size = if (isPacked(T)) missing else @sizeOf(field.type),
                     .slot = getObjectSlot(T, index),
                     .structure = try getStructure(host, field.type),
                 };
@@ -789,7 +789,6 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                     .name = @ptrCast([*:0]const u8, field.name),
                     .member_type = getMemberType(IT),
                     .is_signed = isSigned(IT),
-                    .bit_offset = 0,
                     .bit_size = @bitSizeOf(IT),
                     .byte_size = @sizeOf(IT),
                 });
@@ -1214,7 +1213,7 @@ fn dezigStructure(host: Host, obj: Value, ptr: anytype) !void {
                 } else if (pt.size == .Slice) {
                     for (ptr.*, 0..) |_, index| {
                         const element_ptr = &(ptr.*[index]);
-                        const element_obj = try obtainChildObject(host, obj, @intCast(u32, index), element_ptr, false);
+                        const element_obj = try obtainChildObject(host, obj, index, element_ptr, false);
                         try dezigStructure(host, element_obj, element_ptr);
                     }
                 }
@@ -1225,7 +1224,7 @@ fn dezigStructure(host: Host, obj: Value, ptr: anytype) !void {
             if (hasPointer(ar.child)) {
                 for (ptr.*, 0..) |_, index| {
                     const element_ptr = &(ptr.*[index]);
-                    const element_obj = try obtainChildObject(host, obj, @intCast(u32, index), element_ptr, false);
+                    const element_obj = try obtainChildObject(host, obj, index, element_ptr, false);
                     try dezigStructure(host, element_obj, &(ptr.*[index]));
                 }
             }
@@ -1246,7 +1245,7 @@ fn dezigStructure(host: Host, obj: Value, ptr: anytype) !void {
     }
 }
 
-fn obtainChildObject(host: Host, container: Value, slot: u32, ptr: anytype, comptime check: bool) !Value {
+fn obtainChildObject(host: Host, container: Value, slot: usize, ptr: anytype, comptime check: bool) !Value {
     if (host.readObjectSlot(container, slot)) |child_obj| {
         if (check) {
             // see if pointer is still pointing to what it was before
@@ -1263,7 +1262,7 @@ fn obtainChildObject(host: Host, container: Value, slot: u32, ptr: anytype, comp
     }
 }
 
-fn createChildObject(host: Host, container: Value, slot: u32, ptr: anytype) !Value {
+fn createChildObject(host: Host, container: Value, slot: usize, ptr: anytype) !Value {
     const pt = @typeInfo(@TypeOf(ptr)).Pointer;
     const memory = toMemory(ptr);
     const child_obj = try host.wrapMemory(memory, pt.child, pt.size);

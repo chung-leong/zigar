@@ -9,7 +9,7 @@ static Result AllocateMemory(Host* call,
     call->mem_pool = Array::New(isolate);
   }
   auto buffer = ArrayBuffer::New(isolate, size);
-  uint32_t index = call->mem_pool->Length();
+  auto index = call->mem_pool->Length();
   call->mem_pool->Set(context, index, buffer).Check();
   std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
   dest->bytes = reinterpret_cast<uint8_t*>(store->Data());
@@ -245,7 +245,7 @@ static Result SetPointerStatus(Host* call,
 }
 
 static Result ReadGlobalSlot(Host* call,
-                             uint32_t slot_id,
+                             size_t slot_id,
                              Local<Value>* dest) {
   auto context = call->context;
   Local<Value> value;
@@ -259,7 +259,7 @@ static Result ReadGlobalSlot(Host* call,
 }
 
 static Result WriteGlobalSlot(Host* call,
-                              uint32_t slot_id,
+                              size_t slot_id,
                               Local<Value> object) {
   auto isolate = call->isolate;
   auto context = call->context;
@@ -273,7 +273,7 @@ static Result WriteGlobalSlot(Host* call,
 
 static Result ReadObjectSlot(Host* call,
                              Local<Object> object,
-                             uint32_t slot,
+                             size_t slot,
                              Local<Value>* dest) {
   auto context = call->context;
   Local<Value> value;
@@ -290,7 +290,7 @@ static Result ReadObjectSlot(Host* call,
 
 static Result WriteObjectSlot(Host* call,
                               Local<Object> object,
-                              uint32_t slot,
+                              size_t slot,
                               Local<Value> child) {
   auto isolate = call->isolate;
   auto context = call->context;
@@ -332,26 +332,32 @@ static Local<Object> NewMember(Host* call,
   auto is_static = Boolean::New(isolate, m.is_static);
   auto is_required = Boolean::New(isolate, m.is_required);
   auto is_const = Boolean::New(isolate, m.is_const);
-  auto bit_size = Uint32::NewFromUnsigned(isolate, m.bit_size);
-  auto bit_offset = Uint32::NewFromUnsigned(isolate, m.bit_offset);
-  auto byte_size = Uint32::NewFromUnsigned(isolate, m.byte_size);
   def->Set(context, String::NewFromUtf8Literal(isolate, "type"), type).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "isStatic"), is_static).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "isConst"), is_const).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "isRequired"), is_required).Check();
-  def->Set(context, String::NewFromUtf8Literal(isolate, "bitSize"), bit_size).Check();
-  def->Set(context, String::NewFromUtf8Literal(isolate, "bitOffset"), bit_offset).Check();
-  def->Set(context, String::NewFromUtf8Literal(isolate, "byteSize"), byte_size).Check();
   if (m.type == MemberType::Int) {
     auto is_signed = Boolean::New(isolate, m.is_signed);
     def->Set(context, String::NewFromUtf8Literal(isolate, "isSigned"), is_signed).Check();
   }
-  if (!m.structure.IsEmpty()) {
-    def->Set(context, String::NewFromUtf8Literal(isolate, "structure"), m.structure).Check();
+  if (m.bit_size != missing) {
+    auto bit_size = Uint32::NewFromUnsigned(isolate, m.bit_size);
+    def->Set(context, String::NewFromUtf8Literal(isolate, "bitSize"), bit_size).Check();
   }
-  if (m.type == MemberType::Object) {
+  if (m.bit_offset != missing) {
+    auto bit_offset = Uint32::NewFromUnsigned(isolate, m.bit_offset);
+    def->Set(context, String::NewFromUtf8Literal(isolate, "bitOffset"), bit_offset).Check();
+  }
+  if (m.byte_size != missing) {
+    auto byte_size = Uint32::NewFromUnsigned(isolate, m.byte_size);
+    def->Set(context, String::NewFromUtf8Literal(isolate, "byteSize"), byte_size).Check();
+  }
+  if (m.slot != missing) {
     auto slot = Uint32::NewFromUnsigned(isolate, m.slot);
     def->Set(context, String::NewFromUtf8Literal(isolate, "slot"), slot).Check();
+  }
+  if (!m.structure.IsEmpty()) {
+    def->Set(context, String::NewFromUtf8Literal(isolate, "structure"), m.structure).Check();
   }
   if (m.name) {
     auto name = String::NewFromUtf8(isolate, m.name).ToLocalChecked();

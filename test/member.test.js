@@ -4,6 +4,7 @@ import { StructureType } from '../src/structure.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
 import {
   MemberType,
+  isByteAligned,
   getAccessors,
   useVoid,
   useBool,
@@ -19,6 +20,27 @@ import {
 } from '../src/member.js';
 
 describe('Member functions', function() {
+  describe('isByteAligned', function() {
+    it('should return true when member is byte-aligned', function() {
+      const members = [
+        { type: MemberType.Void, bitSize: 0, byteSize: 0, bitOffset: 0 },
+        { type: MemberType.Bool, bitSize: 1, bitOffset: 32, byteSize: 1 },
+        { type: MemberType.Int, bitSize: 8, bitOffset: 8 },
+      ];
+      for (const member of members) {
+        expect(isByteAligned(member)).to.be.true;
+      }
+    })
+    it('should return false when member is not byte-aligned', function() {
+      const members = [
+        { type: MemberType.Bool, bitSize: 1, bitOffset: 32 },
+        { type: MemberType.Int, bitSize: 8, bitOffset: 9 },
+      ];
+      for (const member of members) {
+        expect(isByteAligned(member)).to.be.false;
+      }
+    })
+  })
   describe('getAccessors', function() {
     it('should return void accessors', function() {
       useVoid();
@@ -67,7 +89,6 @@ describe('Member functions', function() {
         signed: false,
         bitSize: 1,
         bitOffset: 33,
-        byteSize: 0,
       };
       const { get, set } = getAccessors(member, {});
       expect(get.call(object)).to.equal(true);
@@ -106,7 +127,6 @@ describe('Member functions', function() {
         signed: false,
         bitSize: 4,
         bitOffset: 33,
-        byteSize: 0,
       };
       const { get, set } = getAccessors(member, { runtimeSafety: true });
       expect(get.call(object)).to.equal(3);
@@ -221,7 +241,6 @@ describe('Member functions', function() {
         signed: false,
         bitSize: 4,
         bitOffset: 32,
-        byteSize: 0,
         structure: { type: StructureType.Enumeration, constructor: DummyEnum },
       };
       const { get, set } = getAccessors(member, {});

@@ -47,10 +47,10 @@ struct Member {
   bool is_required;
   bool is_signed;
   bool is_const;
-  uint32_t bit_offset;
-  uint32_t bit_size;
-  uint32_t byte_size;
-  uint32_t slot;
+  size_t bit_offset;
+  size_t bit_size;
+  size_t byte_size;
+  size_t slot;
   Local<Value> structure;
 };
 
@@ -100,10 +100,10 @@ struct Callbacks {
   Result (*get_pointer_status)(Host*, Local<Object>, bool*);
   Result (*set_pointer_status)(Host*, Local<Object>, bool);
 
-  Result (*read_global_slot)(Host*, uint32_t, Local<Value>*);
-  Result (*write_global_slot)(Host*, uint32_t, Local<Value>);
-  Result (*read_object_slot)(Host*, Local<Object>, uint32_t, Local<Value>*);
-  Result (*write_object_slot)(Host*, Local<Object>, uint32_t, Local<Value>);
+  Result (*read_global_slot)(Host*, size_t, Local<Value>*);
+  Result (*write_global_slot)(Host*, size_t, Local<Value>);
+  Result (*read_object_slot)(Host*, Local<Object>, size_t, Local<Value>*);
+  Result (*write_object_slot)(Host*, Local<Object>, size_t, Local<Value>);
 
   Result (*begin_structure)(Host*, const Structure&, Local<Object>*);
   Result (*attach_member)(Host*, Local<Object>, const Member&);
@@ -246,3 +246,5 @@ static Result GetArgumentBuffers(Host* call);
 static Result Log(Host* call,
                   size_t argc,
                   Local<Value>* argv) __attribute__((unused));
+
+const size_t missing = SIZE_MAX;

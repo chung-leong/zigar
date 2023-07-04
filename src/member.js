@@ -69,12 +69,29 @@ export function useObject() {
   factories[MemberType.Object] = getObjectAccessor;
 }
 
+export function isByteAligned({ bitOffset, bitSize, byteSize }) {
+  return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
+}
+
 export function useType() {
   factories[MemberType.Type] = getTypeAccessor;
 }
 
 export function getAccessors(member, options = {}) {
   const f = factories[member.type];
+  if (process.env.NODE_ENV !== 'production') {
+    /* c8 ignore next 10 */
+    if (typeof(f) !== 'function') {
+      let typeName;
+      for (const [ name, value ] of Object.entries(MemberType)) {
+        if (value === member.type) {
+          typeName = name;
+          break;
+        }
+      }
+      throw new Error(`No factory for ${typeName}: ${f}`);
+    }
+  }
   return {
     get: f('get', member, options),
     set: f('set', member, options)
@@ -219,7 +236,8 @@ export function getObjectAccessor(access, member, options) {
     }
     case StructureType.Pointer: {
       if (autoDeref) {
-        const { isConst, instance: { members: [ target ] } } = structure;
+        const { instance: { members: [ target ] } } = structure;
+        const { isConst } = member
         if (target.structure.type === StructureType.Primitive) {
           if (slot !== undefined) {
             if (access === 'get') {
@@ -229,13 +247,14 @@ export function getObjectAccessor(access, member, options) {
                 return object.get()
               };
             } else {
-              return function(value) {
+              return (isConst) ? undefined : function(value) {
                 const pointer = this[SLOTS][slot];
                 const object = pointer['*'];
                 object.set(value);
               };
             }
           } else {
+            // array accessors
             if (access === 'get') {
               return function(index) {
                 const pointer = this[SLOTS][index];
@@ -243,7 +262,7 @@ export function getObjectAccessor(access, member, options) {
                 return object.get()
               };
             } else {
-              return function(index, value) {
+              return (isConst) ? undefined : function(index, value) {
                 const pointer = this[SLOTS][index];
                 const object = pointer['*'];
                 object.set(value);
@@ -259,12 +278,13 @@ export function getObjectAccessor(access, member, options) {
                 return object;
               };
             } else {
-              return function(value) {
+              return (isConst) ? undefined : function(value) {
                 const pointer = this[SLOTS][slot];
                 pointer['*'] = value;
               };
             }
           } else {
+            // array accessors
             if (access === 'get') {
               return function(index) {
                 const pointer = this[SLOTS][index];
@@ -272,7 +292,7 @@ export function getObjectAccessor(access, member, options) {
                 return object;
               };
             } else {
-              return function(index, value) {
+              return (isConst) ? undefined : function(index, value) {
                 const pointer = this[SLOTS][index];
                 pointer['*'] = value;
               };
@@ -299,6 +319,7 @@ export function getObjectAccessor(access, member, options) {
           };
         }
       } else {
+        // array accessors
         if (access === 'get') {
           return function(index) {
             const object = this[SLOTS][index];

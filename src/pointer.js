@@ -1,7 +1,7 @@
 import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
 import { getCopyFunction } from './memory.js';
-import { getDataView } from './data-view.js';
+import { getDataView, isBuffer } from './data-view.js';
 import { MEMORY, SLOTS, SOURCE, ZIG } from './symbol.js';
 
 export function finalizePointer(s) {
@@ -33,7 +33,7 @@ export function finalizePointer(s) {
     }
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },
-      [SLOTS]: { value: slots },
+      [SLOTS]: { value: slots, writable: true },
       // a boolean value indicating whether Zig currently owns the pointer
       [ZIG]: { value: this === ZIG, writable: true },
     });

@@ -28,6 +28,7 @@ export function finalizeOptional(s) {
       self = Object.create(constructor.prototype);
       dv = getDataView(s, arg);
     }
+    /* TODO: handle struct */
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },
     });

@@ -1,5 +1,5 @@
 import { StructureType } from './structure.js';
-import { MemberType } from './member.js';
+import { MemberType, isByteAligned } from './member.js';
 import { getBitAlignFunction } from './memory.js';
 import { throwSizeMismatch, throwBufferExpected } from './error.js';
 import { MEMORY } from './symbol.js';
@@ -7,7 +7,7 @@ import { MEMORY } from './symbol.js';
 export function getDataViewBoolAccessor(access, member) {
   return cacheMethod(access, member, () => {
     const { byteSize } = member;
-    if (byteSize === 0) {
+    if (byteSize === undefined) {
       return undefined;
     }
     const typeName = getTypeName({ type: MemberType.Int, isSigned: true, bitSize: byteSize * 8 });
@@ -28,10 +28,10 @@ export function getDataViewBoolAccessor(access, member) {
 
 export function getDataViewBoolAccessorEx(access, member) {
   return cacheMethod(access, member, () => {
-    const { byteSize, bitOffset } = member;
-    if (byteSize !== 0) {
+    if (isByteAligned(member)) {
       return getDataViewBoolAccessor(access, member);
     }
+    const { bitOffset } = member;
     const bitPos = bitOffset & 0x07;
     const mask = 1 << bitPos;
     const get = DataView.prototype.getInt8;
@@ -61,7 +61,7 @@ export function getDataViewIntAccessorEx(access, member) {
     if (DataView.prototype[name]) {
       return DataView.prototype[name];
     }
-    if (member.byteSize !== 0) {
+    if (isByteAligned(member)) {
       return defineAlignedIntAccessor(access, member)
     } else {
       return defineUnalignedIntAccessor(access, member);
@@ -79,7 +79,7 @@ export function getDataViewFloatAccessorEx(access, member) {
     if (DataView.prototype[name]) {
       return DataView.prototype[name];
     }
-    if (member.byteSize !== 0) {
+    if (isByteAligned(member)) {
       return defineAlignedFloatAccessor(access, member)
     } else {
       return defineUnalignedFloatAccessor(access, member);
@@ -485,8 +485,9 @@ function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
 
 function cacheMethod(access, member, cb) {
   const { bitOffset, byteSize } = member;
+  const bitPos = bitOffset & 0x07;
   const typeName = getTypeName(member);
-  const suffix = (byteSize === 0) ? `Bit${bitOffset & 0x07}` : ``;
+  const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
   const name = `${access}${typeName}${suffix}`;
   var fn = methodCache[name];
   if (!fn) {

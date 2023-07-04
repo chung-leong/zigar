@@ -1,4 +1,4 @@
-import { MemberType, getAccessors } from './member.js';
+import { MemberType, isByteAligned, getAccessors } from './member.js';
 import { getCopyFunction } from './memory.js';
 import { getDataView } from './data-view.js';
 import { MEMORY } from './symbol.js';
@@ -76,19 +76,18 @@ export function getPrimitiveClass({ type, bitSize }) {
   }
 }
 
-export function isExtendedType({ type, bitSize, byteSize }) {
-  if (type === MemberType.Int || type === MemberType.EnumerationItem) {
-    if (byteSize === 0) {
-      return true;
-    } else {
-      return !(bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64);
-    }
-  } else if (type === MemberType.Float) {
-    if (byteSize === 0) {
-      return true;
-    } else {
-      return !(bitSize === 32 || bitSize === 64);
-    }
+
+
+export function isExtendedType(member) {
+  if (!isByteAligned(member)) {
+    return true;
   }
-  return false;
+  const { type, bitSize } = member;
+  if (type === MemberType.Int || type === MemberType.EnumerationItem) {
+    return !(bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64);
+  } else if (type === MemberType.Float) {
+    return !(bitSize === 32 || bitSize === 64);
+  } else {
+    return false;
+  }
 }

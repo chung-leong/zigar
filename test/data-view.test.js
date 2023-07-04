@@ -188,7 +188,7 @@ describe('Data view functions', function() {
         type: MemberType.Boolean,
         bitSize: 1,
         bitOffset: 1,
-        byteSize: 0,
+        byteSize: undefined,
       };
       const f = getDataViewBoolAccessor('get', member);
       expect(f).to.be.undefined;
@@ -197,7 +197,7 @@ describe('Data view functions', function() {
   describe('getDataViewBoolAccessorEx', function() {
     it('should return the same function as getDataViewBoolAccessor when bool is standard', function() {
       const member = {
-        type: MemberType.Int,
+        type: MemberType.Boolean,
         bitSize: 1,
         bitOffset: 0,
         byteSize: 1
@@ -214,7 +214,6 @@ describe('Data view functions', function() {
           type: MemberType.Boolean,
           bitSize: 1,
           bitOffset,
-          byteSize: 0,
         };
         const f = getDataViewBoolAccessorEx('get', member);
         const res = f.call(dv, 0);
@@ -228,7 +227,6 @@ describe('Data view functions', function() {
           type: MemberType.Boolean,
           bitSize: 1,
           bitOffset,
-          byteSize: 0,
         };
         const f = getDataViewBoolAccessorEx('set', member);
         f.call(dv, 0, !!(bitOffset & 0x01));
@@ -530,21 +528,18 @@ describe('Data view functions', function() {
               isSigned: false,
               bitSize : bitOffset,
               bitOffset: 0,
-              byteSize: 0,
             };
             const member = {
               type: MemberType.Int,
               isSigned,
               bitSize,
               bitOffset,
-              byteSize: 0,
             };
             const guard2 = {
               type: MemberType.Int,
               isSigned: false,
               bitSize: 3,
               bitOffset: bitOffset + bitSize,
-              byteSize: 0,
             };
             const offsetG1 = Math.floor(guard1.bitOffset / 8);
             const offsetG2 = Math.floor(guard2.bitOffset / 8);
@@ -915,21 +910,18 @@ describe('Data view functions', function() {
             isSigned: false,
             bitSize : bitOffset,
             bitOffset: 0,
-            byteSize: 0,
           };
           const member = {
             type: MemberType.Float,
             isSigned: false,
             bitSize,
             bitOffset,
-            byteSize: 0,
           };
           const guard2 = {
             type: MemberType.Int,
             isSigned: false,
             bitSize: 3,
             bitOffset: bitOffset + bitSize,
-            byteSize: 0,
           };
           const offsetG1 = Math.floor(guard1.bitOffset / 8);
           const offsetG2 = Math.floor(guard2.bitOffset / 8);
