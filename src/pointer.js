@@ -54,34 +54,36 @@ export function finalizePointer(s) {
   return constructor;
 }
 
-export function attachPointerAccessors(s) {
+export function addPointerAccessors(s) {
   const {
     constructor,
-    instance: {
-      members,
-    },
+    instance: { members: instanceMembers },
+    static: { members: staticMembers },
     options,
   } = s;
-  const ptrDescriptors = {};
-  let hasPointers = false;
-  if (!isArgStruct) {
+  const list = [
+    [ constructor.prototype, instanceMembers ],
+    [ constructor, staticMembers ],
+  ];
+  for (const [ target, members ] of list) {
+    const descriptors = {};
     for (const member of members) {
       const accessors = getPointerAccessors(member, options);
       if (accessors) {
-        ptrDescriptors[member.name] = { ...accessors, configurable: true, enumerable: true };
+        descriptors[member.name] = { ...accessors, configurable: true, enumerable: true };
       }
     }
-  }
-  if (Object.keys(ptrDescriptors).length > 0) {
-    const ptrSourceProto = Object.defineProperties({}, ptrDescriptors);
-    const get = function() {
-      const ptrSource = Object.create(ptrSourceProto);
-      ptrSource[SOURCE] = this;
-      return ptrSource;
-    };
-    Object.defineProperties(constructor.prototype, {
-      '&': { get, configurable: true, enumerable: true },
-    });
+    if (Object.keys(descriptors).length > 0) {
+      const prototype = Object.defineProperties({}, descriptors);
+      const get = function() {
+        const source = Object.create(prototype);
+        source[SOURCE] = this;
+        return source;
+      };
+      Object.defineProperties(target, {
+        '&': { get, configurable: true, enumerable: true },
+      });
+    }
   }
 }
 

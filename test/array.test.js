@@ -35,7 +35,7 @@ describe('Array functions', function() {
       attachMember(structure, {
         type: MemberType.Int,
         isStatic: false,
-        signed: false,
+        isSigned: false,
         bitSize: 32,
         byteSize: 4,
       });
@@ -56,7 +56,7 @@ describe('Array functions', function() {
       attachMember(structure, {
         type: MemberType.Int,
         isStatic: false,
-        signed: false,
+        isSigned: false,
         bitSize: 32,
         byteSize: 4,
       });
@@ -80,7 +80,7 @@ describe('Array functions', function() {
       attachMember(structure, {
         type: MemberType.Int,
         isStatic: false,
-        signed: false,
+        isSigned: false,
         bitSize: 32,
         byteSize: 4,
       });
@@ -90,6 +90,52 @@ describe('Array functions', function() {
       object.set(1, 321);
       expect(object.get(1)).to.equal(321);
       expect(object.length).to.equal(8);
+    })
+    it('should have string property when slice contains Uint8', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: 'Hello',
+        size: 4,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      const Hello = finalizeStructure(structure);
+      const dv = new DataView(new ArrayBuffer(4));
+      dv.setUint8(0, 'A'.charCodeAt(0));
+      dv.setUint8(1, 'B'.charCodeAt(0));
+      dv.setUint8(2, 'C'.charCodeAt(0));
+      dv.setUint8(3, 'D'.charCodeAt(0));
+      const object = Hello(dv);
+      const { string } = object;
+      expect(string).to.equal('ABCD');
+    })
+    it('should have string property when slice contains Uint16', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        byteSize: 2,
+      });
+      const Hello = finalizeStructure(structure);
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setUint16(0, 'A'.charCodeAt(0), true);
+      dv.setUint16(2, 'B'.charCodeAt(0), true);
+      dv.setUint16(4, 'C'.charCodeAt(0), true);
+      dv.setUint16(6, 'D'.charCodeAt(0), true);
+      const object = Hello(dv);
+      const { string } = object;
+      expect(string).to.equal('ABCD');
     })
   })
   describe('getArrayLengthGetter', function() {
@@ -109,6 +155,9 @@ describe('Array functions', function() {
     })
   })
   describe('getArrayIterator', function() {
+    beforeEach(function() {
+      useIntEx();
+    })
     it('should return a iterator', function() {
       const member = {
         type: MemberType.Int,

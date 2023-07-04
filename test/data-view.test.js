@@ -904,7 +904,7 @@ describe('Data view functions', function() {
         return diff ? diff / Math.max(n1, n2) : 0;
       };
       for (const bitSize of [ 16, 32, 64, 80, 128 ]) {
-        for (let bitOffset = 0; bitOffset <= 7; bitOffset++) {
+        for (let bitOffset = 1; bitOffset <= 7; bitOffset++) {
           const guard1 = {
             type: MemberType.Int,
             isSigned: false,

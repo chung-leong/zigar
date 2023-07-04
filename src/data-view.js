@@ -138,7 +138,7 @@ export function addDataViewAccessor(s) {
     return this[MEMORY];
   };
   Object.defineProperties(prototype, {
-    dataView: { get, configurable: true, enumerable: true },
+    dataView: { get, configurable: true },
   });
 }
 

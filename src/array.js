@@ -1,8 +1,9 @@
 import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
 import { getCopyFunction } from './memory.js';
-import { getDataView } from './data-view.js';
+import { getDataView, addDataViewAccessor } from './data-view.js';
 import { addTypedArrayAccessor } from './typed-array.js';
+import { addStringAccessors } from './string.js';
 import { MEMORY, SLOTS, ZIG } from './symbol.js';
 
 export function finalizeArray(s) {
@@ -78,7 +79,9 @@ export function finalizeArray(s) {
     length: lengthDescriptor,
     [Symbol.iterator]: { value: getArrayIterator, configurable: true },
   });
+  addDataViewAccessor(s);
   addTypedArrayAccessor(s);
+  addStringAccessors(s);
   return constructor;
 }
 

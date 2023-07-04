@@ -2,6 +2,7 @@ import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
 import { getCopyFunction } from './memory.js';
 import { getDataView, addDataViewAccessor } from './data-view.js';
+import { addPointerAccessors } from './pointer.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { MEMORY, SLOTS, ZIG } from './symbol.js';
@@ -73,7 +74,7 @@ export function finalizeStruct(s) {
     }
   };
   if (!isArgStruct) {
-    // TODO: addPointerAccessors(s);
+    addPointerAccessors(s);
     addDataViewAccessor(s);
     addStaticMembers(s);
     addMethods(s);

@@ -4,10 +4,12 @@ import {
   MemberType,
   useBoolEx,
   useIntEx,
+  useObject,
 } from '../src/member.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
 import {
   StructureType,
+  usePrimitive,
   useStruct,
   usePointer,
   useExternUnion,
@@ -20,11 +22,13 @@ import {
 describe('Struct functions', function() {
   describe('finalizeStruct', function() {
     beforeEach(function() {
+      usePrimitive();
       useStruct();
       useExternUnion();
       usePointer();
       useBoolEx();
       useIntEx();
+      useObject();
     })
     it('should define a simple struct', function() {
       const structure = beginStructure({
