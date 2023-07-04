@@ -752,8 +752,8 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                 // default data
                 var data: [@sizeOf(T)]u8 = undefined;
                 const ptr = @intToPtr(*T, @ptrToInt(&data));
-                for (data, 0..) |_, index| {
-                    data[index] = 0xAA;
+                for (&data) |*byte_ptr| {
+                    byte_ptr.* = 0xAA;
                 }
                 inline for (fields) |field| {
                     if (field.default_value) |opaque_ptr| {
@@ -1162,9 +1162,9 @@ fn rezigStructure(host: Host, obj: Value, ptr: anytype) !void {
                 if (pt.size == .One) {
                     try rezigStructure(host, child_obj, ptr.*);
                 } else if (pt.size == .Many) {
-                    for (ptr.*, 0..) |_, index| {
+                    for (ptr.*, 0..) |*element_ptr, index| {
                         const element_obj = try host.readObjectSlot(child_obj, index);
-                        try rezigStructure(host, element_obj, &(ptr.*[index]));
+                        try rezigStructure(host, element_obj, element_ptr);
                     }
                 }
             }
@@ -1172,9 +1172,9 @@ fn rezigStructure(host: Host, obj: Value, ptr: anytype) !void {
         },
         .Array => |ar| {
             if (hasPointer(ar.child)) {
-                for (ptr.*, 0..) |_, index| {
+                for (ptr, 0..) |*element_ptr, index| {
                     const element_obj = try host.readObjectSlot(obj, index);
-                    try rezigStructure(host, element_obj, &(ptr.*[index]));
+                    try rezigStructure(host, element_obj, element_ptr);
                 }
             }
         },
@@ -1211,8 +1211,7 @@ fn dezigStructure(host: Host, obj: Value, ptr: anytype) !void {
                 if (pt.size == .One) {
                     try dezigStructure(host, child_obj, ptr.*);
                 } else if (pt.size == .Slice) {
-                    for (ptr.*, 0..) |_, index| {
-                        const element_ptr = &(ptr.*[index]);
+                    for (ptr.*, 0..) |*element_ptr, index| {
                         const element_obj = try obtainChildObject(host, obj, index, element_ptr, false);
                         try dezigStructure(host, element_obj, element_ptr);
                     }
@@ -1222,10 +1221,9 @@ fn dezigStructure(host: Host, obj: Value, ptr: anytype) !void {
         },
         .Array => |ar| {
             if (hasPointer(ar.child)) {
-                for (ptr.*, 0..) |_, index| {
-                    const element_ptr = &(ptr.*[index]);
+                for (ptr, 0..) |*element_ptr, index| {
                     const element_obj = try obtainChildObject(host, obj, index, element_ptr, false);
-                    try dezigStructure(host, element_obj, &(ptr.*[index]));
+                    try dezigStructure(host, element_obj, element_ptr);
                 }
             }
         },

@@ -5,6 +5,7 @@ R"=====(
   const MEMORY = Symbol('memory');
   const SLOTS = Symbol('slots');
   const ZIG = Symbol('ZIG');
+  const SOURCE = Symbol('SOURCE');
 
   const TYPED_ARRAY = Symbol('typedArray');
   const ENUM_INDEX = Symbol('enumIndex');
@@ -241,7 +242,7 @@ R"=====(
       return this[MEMORY];
     };
     Object.defineProperties(prototype, {
-      dataView: { get, configurable: true, enumerable: true },
+      dataView: { get, configurable: true },
     });
   }
 
@@ -732,7 +733,7 @@ R"=====(
     const get = getStringGetter(member);
     if (get) {
       Object.defineProperties(constructor.prototype, {
-        string: { get, configurable: true, enumerable: true },
+        string: { get, configurable: true },
       });
     }
   }
@@ -869,6 +870,128 @@ R"=====(
     };
   }
 
+  function finalizePointer(s) {
+    const {
+      size,
+      instance: {
+        members: [ member ],
+      },
+      options,
+    } = s;
+    const { get, set } = getAccessors(member, options);
+    const copy = getCopyFunction(size);
+    s.copier = function (dest, src) {
+      copy(dest[MEMORY], src[MEMORY]);
+      dest[SLOTS] = { ...src[SLOTS] };
+    };
+    const { structure: target } = member;
+    target.type === StructureType.Slice;
+    const constructor = s.constructor = function(arg) {
+      const creating = this instanceof constructor;
+      let self, dv;
+      const slots = { 0: null };
+      if (creating) {
+        self = this;
+        dv = new DataView(new ArrayBuffer(size));
+      } else {
+        self = Object.create(constructor.prototype);
+        dv = getDataView(s, arg);
+      }
+      Object.defineProperties(self, {
+        [MEMORY]: { value: dv },
+        [SLOTS]: { value: slots, writable: true },
+        // a boolean value indicating whether Zig currently owns the pointer
+        [ZIG]: { value: this === ZIG, writable: true },
+      });
+      if (creating) {
+        const { constructor } = target;
+        if (!(arg instanceof constructor)) {
+          const recv = (this === ZIG) ? this : null;
+          arg = isBuffer(arg) ? constructor.call(recv, arg) : new constructor(arg);
+        }
+        slots[0] = arg;
+      } else {
+        return self;
+      }
+    };
+    Object.defineProperties(constructor.prototype, {
+      '*': { get, set, configurable: true, enumerable: true },
+    });
+    return constructor;
+  }
+
+  function addPointerAccessors(s) {
+    const {
+      constructor,
+      instance: { members: instanceMembers },
+      static: { members: staticMembers },
+      options,
+    } = s;
+    const list = [
+      [ constructor.prototype, instanceMembers ],
+      [ constructor, staticMembers ],
+    ];
+    for (const [ target, members ] of list) {
+      const descriptors = {};
+      for (const member of members) {
+        const accessors = getPointerAccessors(member);
+        if (accessors) {
+          descriptors[member.name] = { ...accessors, configurable: true, enumerable: true };
+        }
+      }
+      if (Object.keys(descriptors).length > 0) {
+        const prototype = Object.defineProperties({}, descriptors);
+        const get = function() {
+          const source = Object.create(prototype);
+          source[SOURCE] = this;
+          return source;
+        };
+        Object.defineProperties(target, {
+          '&': { get, configurable: true, enumerable: true },
+        });
+      }
+    }
+  }
+
+  function getPointerAccessors(member, options) {
+    if (member.type === MemberType.Object) {
+      const { structure, slot } = member;
+      if (structure.type === StructureType.Pointer) {
+        if (slot !== undefined) {
+          // get pointer from slot
+          return {
+            get: function() {
+              const pointer = this[SOURCE][SLOTS][slot];
+              return pointer;
+            },
+            set: function(value) {
+              const { constructor, copier } = structure;
+              if (!(value instanceof constructor)) {
+                value = new constructor(value);
+              }
+              copier(this[SOURCE][SLOTS][slot], value);
+            },
+          };
+        } else {
+          return {
+            get: function(index) {
+              const pointer = this[SOURCE][SLOTS][index];
+              return pointer;
+            },
+            set: function(index, value) {
+              const { constructor, copier } = structure;
+              if (!(value instanceof constructor)) {
+                throwInvalidType(structure);
+              }
+              const object = this[SOURCE][SLOTS][index];
+              copier(object, value);
+            },
+          };
+        }
+      }
+    }
+  }
+
   function addStaticMembers(s) {
     const {
       constructor,
@@ -954,7 +1077,7 @@ R"=====(
       }
     };
     if (!isArgStruct) {
-      // TODO: addPointerAccessors(s);
+      addPointerAccessors(s);
       addDataViewAccessor(s);
       addStaticMembers(s);
       addMethods(s);
@@ -1237,56 +1360,6 @@ R"=====(
         setValue.call(this, value);
       },
     };
-  }
-
-  function finalizePointer(s) {
-    const {
-      size,
-      instance: {
-        members: [ member ],
-      },
-      options,
-    } = s;
-    const { get, set } = getAccessors(member, options);
-    const copy = getCopyFunction(size);
-    s.copier = function (dest, src) {
-      copy(dest[MEMORY], src[MEMORY]);
-      dest[SLOTS] = { ...src[SLOTS] };
-    };
-    const { structure: target } = member;
-    target.type === StructureType.Slice;
-    const constructor = s.constructor = function(arg) {
-      const creating = this instanceof constructor;
-      let self, dv;
-      const slots = { 0: null };
-      if (creating) {
-        self = this;
-        dv = new DataView(new ArrayBuffer(size));
-      } else {
-        self = Object.create(constructor.prototype);
-        dv = getDataView(s, arg);
-      }
-      Object.defineProperties(self, {
-        [MEMORY]: { value: dv },
-        [SLOTS]: { value: slots, writable: true },
-        // a boolean value indicating whether Zig currently owns the pointer
-        [ZIG]: { value: this === ZIG, writable: true },
-      });
-      if (creating) {
-        const { constructor } = target;
-        if (!(arg instanceof constructor)) {
-          const recv = (this === ZIG) ? this : null;
-          arg = isBuffer(arg) ? constructor.call(recv, arg) : new constructor(arg);
-        }
-        slots[0] = arg;
-      } else {
-        return self;
-      }
-    };
-    Object.defineProperties(constructor.prototype, {
-      '*': { get, set, configurable: true, enumerable: true },
-    });
-    return constructor;
   }
 
   const StructureType = {
