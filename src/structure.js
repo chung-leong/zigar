@@ -1,7 +1,7 @@
 import { finalizePrimitive } from './primitive.js';
 import { finalizeArray } from './array.js';
 import { finalizeStruct } from './struct.js';
-//import { finalizeTaggedUnion } from './tagged-union.js';
+import { finalizeUnion } from './union.js';
 import { finalizeErrorUnion } from './error-union.js'
 import { finalizeErrorSet } from './error-set.js';
 import { finalizeEnumeration } from './enumeration.js';
@@ -13,15 +13,16 @@ export const StructureType = {
   Array: 1,
   Struct: 2,
   ExternUnion: 3,
-  TaggedUnion: 4,
-  ErrorUnion: 5,
-  ErrorSet: 6,
-  Enumeration: 7,
-  Optional: 8,
-  Pointer: 9,
-  Slice: 10,
-  Opaque: 11,
-  ArgStruct: 12,
+  BareUnion: 4,
+  TaggedUnion: 5,
+  ErrorUnion: 6,
+  ErrorSet: 7,
+  Enumeration: 8,
+  Optional: 9,
+  Pointer: 10,
+  Slice: 11,
+  Opaque: 12,
+  ArgStruct: 13,
 };
 
 const factories = Array(Object.values(StructureType).length);
@@ -39,11 +40,15 @@ export function useStruct() {
 }
 
 export function useExternUnion() {
-  factories[StructureType.ExternUnion] = finalizeStruct;
+  factories[StructureType.ExternUnion] = finalizeUnion;
+}
+
+export function useBareUnion() {
+  factories[StructureType.BareUnion] = finalizeUnion;
 }
 
 export function useTaggedUnion() {
-  //factories[StructureType.Struct] = finalizeTaggedUnion;
+  factories[StructureType.TaggedUnion] = finalizeUnion;
 }
 
 export function useErrorUnion() {

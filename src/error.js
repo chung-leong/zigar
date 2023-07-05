@@ -54,6 +54,11 @@ export function throwInvalidType(structure) {
   throw new TypeError(`Object of specific type expected: ${name}`);
 }
 
+export function throwMultipleUnionInitializer(structure) {
+  const { name } = structure;
+  throw new TypeError(`Only one property of ${name} can be given a value`);
+}
+
 export function throwOverflow(member, value) {
   const typeName = getTypeName(member);
   throw new TypeError(`${typeName} cannot represent the value given: ${value}`);

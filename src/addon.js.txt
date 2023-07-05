@@ -11,6 +11,7 @@ R"=====(
   const ENUM_INDEX = Symbol('enumIndex');
   const ENUM_ITEMS = Symbol('enumItems');
   const ERROR_INDEX = Symbol('errorIndex');
+  const ENUM_ITEM = Symbol('enumItem');
 
   function getBitAlignFunction(bitPos, bitSize, toAligned) {
     if (bitPos + bitSize <= 8) {
@@ -1051,17 +1052,7 @@ R"=====(
       });
       Object.defineProperties(self, descriptors);
       if (objectMembers.length > 0) {
-        // create child objects
-        const recv = (this === ZIG) ? this : null;
-        const slots = {};
-        for (const { structure: { constructor }, bitOffset, byteSize, slot } of objectMembers) {
-          const offset = bitOffset >> 3;
-          const childDV = new DataView(dv.buffer, offset, byteSize);
-          slots[slot] = constructor.call(recv, childDV);
-        }
-        Object.defineProperties(self, {
-          [SLOTS]: { value: slots, writable: true },
-        });
+        createChildObjects.call(self, objectMembers, dv);
       }
       if (creating) {
         if (template) {
@@ -1082,6 +1073,128 @@ R"=====(
       addStaticMembers(s);
       addMethods(s);
     }
+    return constructor;
+  }
+  function createChildObjects(members, dv) {
+    const recv = (this === ZIG) ? this : null;
+    const slots = {};
+    for (const { structure: { constructor }, bitOffset, byteSize, slot } of members) {
+      const offset = bitOffset >> 3;
+      const childDV = new DataView(dv.buffer, offset, byteSize);
+      slots[slot] = constructor.call(recv, childDV);
+    }
+    Object.defineProperties(this, {
+      [SLOTS]: { value: slots, writable: true },
+    });
+  }
+
+  function finalizeUnion(s) {
+    const {
+      type,
+      size,
+      instance: {
+        members,
+        template,
+      },
+      options,
+    } = s;
+    const copy = getCopyFunction(size);
+    const descriptors = {};
+    let getEnumItem, setEnumItem;
+    const exclusion = (type === StructureType.BareUnion || type === StructureType.TaggedUnion);
+    if (exclusion) {
+      const selectorMember = members[members.length - 1];
+      let { get: getIndex, set: setIndex } = getAccessors(selectorMember, options);
+      if (type === StructureType.TaggedUnion) {
+        // rely on the enumeration constructor to translate the enum values into indices
+        const { structure: { constructor } } = selectorMember;
+        getEnumItem = getIndex;
+        setEnumItem = setIndex;
+        getIndex = function() {
+          const item = getEnumItem.call(this);
+          return item[ENUM_INDEX];
+        };
+        setIndex = function(index) {
+          const item = constructor[ENUM_ITEMS][index];
+          setEnumItem.call(this, item);
+        };
+      }
+      for (const [ index, member ] of members.slice(0, -1).entries()) {
+        const { get: getValue, set: setValue } = getAccessors(member, options);
+        const get = function() {
+          if (index !== getIndex.call(this)) {
+            return null;
+          }
+          return getValue.call(this);
+        };
+        const set = function(value) {
+          setValue.call(this, value);
+          setIndex.call(this, index);
+        };
+        descriptors[member.name] = { get, set, configurable: true, enumerable: true };
+      }
+    } else {
+      // extern union
+      for (const member of members) {
+        const { get, set } = getAccessors(member, options);
+        descriptors[member.name] = { get, set, configurable: true, enumerable: true };
+      }
+    }
+    const objectMembers = members.filter(m => m.type === MemberType.Object);
+    const copier = s.copier = function(dest, src) {
+      copy(dest[MEMORY], src[MEMORY]);
+      // FIXME
+      if (objectMembers.length > 0) {
+        dest[SLOTS] = { ...src[SLOTS] };
+      }
+    };
+    const constructor = s.constructor = function(arg) {
+      const creating = this instanceof constructor;
+      let self, dv;
+      if (creating) {
+        // new operation--expect an object
+        // TODO: validate argument
+        self = this;
+        dv = new DataView(new ArrayBuffer(size));
+      } else {
+        self = Object.create(constructor.prototype);
+        dv = getDataView(s, arg);
+      }
+      Object.defineProperties(self, {
+        [MEMORY]: { value: dv },
+      });
+      Object.defineProperties(self, descriptors);
+      if (objectMembers.length > 0) {
+        createChildObjects.call(self, objectMembers, dv);
+      }
+      if (creating) {
+        if (template) {
+          copier(this, template);
+        }
+        if (arg) {
+          const entries = Object.entries(arg);
+          if (entries.length > 0) {
+            throwMultipleUnionInitializer(structre);
+          }
+          for (const [ key, value ] of entries) {
+            this[key] = value;
+          }
+        }
+      } else {
+        return self;
+      }
+    };
+    if (type === StructureType.TaggedUnion) {
+      Object.defineProperties(constructor.prototype, {
+        [ENUM_ITEM]: { get: getEnumItem, configurable: true },
+      });
+    }
+    if (exclusion) {
+      addPointerAccessors(s);
+    }
+    addDataViewAccessor(s);
+    addStaticMembers(s);
+    addMethods(s);
     return constructor;
   }
 
@@ -1233,6 +1346,12 @@ R"=====(
         // new enum items cannot be created
         throwNoNewEnum(s);
       }
+      if (arg && typeof(arg) === 'object') {
+        // if it's a tagged union, return the active tag
+        if (arg[ENUM_ITEM]) {
+          return arg[ENUM_ITEM];
+        }
+      }
       let index = -1;
       if (isSequential) {
         // normal enums start at 0 and go up, so the value is the index
@@ -1367,15 +1486,16 @@ R"=====(
     Array: 1,
     Struct: 2,
     ExternUnion: 3,
-    TaggedUnion: 4,
-    ErrorUnion: 5,
-    ErrorSet: 6,
-    Enumeration: 7,
-    Optional: 8,
-    Pointer: 9,
-    Slice: 10,
-    Opaque: 11,
-    ArgStruct: 12,
+    BareUnion: 4,
+    TaggedUnion: 5,
+    ErrorUnion: 6,
+    ErrorSet: 7,
+    Enumeration: 8,
+    Optional: 9,
+    Pointer: 10,
+    Slice: 11,
+    Opaque: 12,
+    ArgStruct: 13,
   };
 
   const factories$1 = Array(Object.values(StructureType).length);
@@ -1393,7 +1513,11 @@ R"=====(
   }
 
   function useExternUnion() {
-    factories$1[StructureType.ExternUnion] = finalizeStruct;
+    factories$1[StructureType.ExternUnion] = finalizeUnion;
+  }
+
+  function useTaggedUnion() {
+    factories$1[StructureType.TaggedUnion] = finalizeUnion;
   }
 
   function useErrorUnion() {
@@ -2009,6 +2133,7 @@ R"=====(
   useArray();
   useStruct();
   useExternUnion();
+  useTaggedUnion();
   useErrorUnion();
   useErrorSet();
   useEnumeration();

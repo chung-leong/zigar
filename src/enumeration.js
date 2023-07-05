@@ -3,7 +3,7 @@ import { getPrimitiveClass } from './primitive.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { throwNoNewEnum } from './error.js';
-import { MEMORY, ENUM_INDEX, ENUM_ITEMS } from './symbol.js';
+import { MEMORY, ENUM_INDEX, ENUM_ITEMS, ENUM_ITEM } from './symbol.js';
 
 export function finalizeEnumeration(s) {
   const {
@@ -31,6 +31,12 @@ export function finalizeEnumeration(s) {
       // the "constructor" is only used to convert a number into an enum object
       // new enum items cannot be created
       throwNoNewEnum(s);
+    }
+    if (arg && typeof(arg) === 'object') {
+      // if it's a tagged union, return the active tag
+      if (arg[ENUM_ITEM]) {
+        return arg[ENUM_ITEM];
+      }
     }
     let index = -1;
     if (isSequential) {

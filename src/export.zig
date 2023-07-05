@@ -98,6 +98,7 @@ const StructureType = enum(u32) {
     Array,
     Struct,
     ExternUnion,
+    BareUnion,
     TaggedUnion,
     ErrorUnion,
     ErrorSet,
@@ -323,7 +324,10 @@ fn getStructureType(comptime T: type) StructureType {
     return switch (@typeInfo(T)) {
         .Bool, .Int, .Float, .Void, .Type => .Primitive,
         .Struct => if (isArgumentStruct(T)) .ArgStruct else .Struct,
-        .Union => |un| if (un.layout == .Extern) .ExternUnion else .TaggedUnion,
+        .Union => |un| switch (un.layout) {
+            .Extern => .ExternUnion,
+            else => if (un.tag_type) |_| .TaggedUnion else .BareUnion,
+        },
         .ErrorUnion => .ErrorUnion,
         .ErrorSet => .ErrorSet,
         .Optional => .Optional,
@@ -724,17 +728,16 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                 .slot = 0,
             });
         },
-        .Struct, .Union => {
+        .Struct => |st| {
             // pre-allocate relocatable slots for fields that always need them
-            const fields = std.meta.fields(T);
-            inline for (fields, 0..) |field, index| {
+            inline for (st.fields, 0..) |field, index| {
                 switch (getMemberType(field.type)) {
                     .Object => _ = getObjectSlot(T, index),
                     else => {},
                 }
             }
-            inline for (fields, 0..) |field, index| {
-                const member: Member = .{
+            inline for (st.fields, 0..) |field, index| {
+                try host.attachMember(structure, .{
                     .name = @ptrCast([*:0]const u8, field.name),
                     .member_type = getMemberType(field.type),
                     .is_signed = isSigned(field.type),
@@ -745,8 +748,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                     .byte_size = if (isPacked(T)) missing else @sizeOf(field.type),
                     .slot = getObjectSlot(T, index),
                     .structure = try getStructure(host, field.type),
-                };
-                try host.attachMember(structure, member);
+                });
             }
             if (!isArgumentStruct(T)) {
                 // default data
@@ -755,7 +757,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                 for (&data) |*byte_ptr| {
                     byte_ptr.* = 0xAA;
                 }
-                inline for (fields) |field| {
+                inline for (st.fields) |field| {
                     if (field.default_value) |opaque_ptr| {
                         // set default value
                         const aligned_ptr = @alignCast(@alignOf(field.type), opaque_ptr);
@@ -779,6 +781,33 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                         .object = template,
                     });
                 }
+            }
+        },
+        .Union => |un| {
+            inline for (un.fields, 0..) |field, index| {
+                switch (getMemberType(field.type)) {
+                    .Object => _ = getObjectSlot(T, index),
+                    else => {},
+                }
+            }
+            inline for (un.fields, 0..) |field, index| {
+                try host.attachMember(structure, .{
+                    .name = @ptrCast([*:0]const u8, field.name),
+                    .member_type = getMemberType(field.type),
+                    .is_signed = isSigned(field.type),
+                    .is_const = isConst(field.type),
+                    .is_required = field.default_value == null,
+                    .bit_offset = @bitOffsetOf(T, field.name),
+                    .bit_size = @bitSizeOf(field.type),
+                    .byte_size = if (isPacked(T)) missing else @sizeOf(field.type),
+                    .slot = getObjectSlot(T, index),
+                    .structure = try getStructure(host, field.type),
+                });
+            }
+            if (un.layout != .Extern) {
+                if (un.tag_type) |EnumT| {
+                    _ = EnumT;
+                } else {}
             }
         },
         .Enum => |en| {
@@ -851,6 +880,24 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
             std.debug.print("Missing: {s}\n", .{@typeName(T)});
         },
     }
+}
+
+fn getMinBitOffset(comptime T: type) usize {
+    comptime var min: ?comptime_int = null;
+    inline for (std.meta.fields(T)) |field| {
+        const offset = @bitOffsetOf(T, field.name);
+        min = if (min) |current| @min(current, offset) else offset;
+    }
+    return min orelse missing;
+}
+
+fn getMaxBitOffset(comptime T: type) usize {
+    comptime var max: ?comptime_int = null;
+    inline for (std.meta.fields(T)) |field| {
+        const offset = @bitOffsetOf(T, field.name) + @sizeOf(@TypeOf(@field(T, field.name)));
+        max = if (max) |current| @max(current, offset) else offset;
+    }
+    return max orelse missing;
 }
 
 fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {

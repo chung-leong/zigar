@@ -1,9 +1,9 @@
 const std = @import("std");
 
-const UnionTag = enum {
-    cat,
-    dog,
-    monkey,
+const UnionTag = enum(u16) {
+    cat = 123,
+    dog = 777,
+    monkey = 3433,
 };
 
 const Error = error{
@@ -34,7 +34,12 @@ const Structs = struct {
         flag2: bool = false,
         number: i64 = 1234567890,
     };
-    const BasicUnion = union(UnionTag) {
+    const BasicUnion = union {
+        cat: i32,
+        dog: i32,
+        monkey: i64,
+    };
+    const TaggedUnion = union(UnionTag) {
         cat: i32,
         dog: i32,
         monkey: i64,
@@ -179,6 +184,7 @@ pub fn main() !void {
         std.debug.print("\n", .{});
         return;
     };
+    const arg2 = args.next();
     const stdout_file = std.io.getStdOut().writer();
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
@@ -186,11 +192,34 @@ pub fn main() !void {
     inline for (@typeInfo(Structs).Struct.decls) |decl| {
         if (std.mem.eql(u8, arg1, decl.name)) {
             const T = @field(Structs, decl.name);
+            var s: T = undefined;
+            switch (@typeInfo(T)) {
+                .Union => |un| {
+                    if (arg2) |tag_name| {
+                        var found_tag = false;
+                        inline for (un.fields) |field| {
+                            if (std.mem.eql(u8, tag_name, field.name)) {
+                                s = @unionInit(T, field.name, 1234);
+                                found_tag = true;
+                            }
+                        }
+                        if (!found_tag) {
+                            std.debug.print("Unknown tag: {s}\n", .{tag_name});
+                        }
+                    } else {
+                        std.debug.print("Available tags:\n\n", .{});
+                        inline for (un.fields) |field| {
+                            std.debug.print("{s}\n", .{field.name});
+                        }
+                        std.debug.print("\n", .{});
+                        return;
+                    }
+                },
+                else => {
+                    s = .{};
+                },
+            }
             try stdout.print("{s} ({d} bytes): \n\n", .{ @typeName(T), @sizeOf(T) });
-            var s: T = switch (T) {
-                Structs.BasicUnion => .{ .dog = 17 },
-                else => .{},
-            };
             const ptr = @ptrCast([*]u8, &s);
             const len = @sizeOf(T);
             var i: usize = 0;

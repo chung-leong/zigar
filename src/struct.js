@@ -48,17 +48,7 @@ export function finalizeStruct(s) {
     });
     Object.defineProperties(self, descriptors);
     if (objectMembers.length > 0) {
-      // create child objects
-      const recv = (this === ZIG) ? this : null;
-      const slots = {};
-      for (const { structure: { constructor }, bitOffset, byteSize, slot } of objectMembers) {
-        const offset = bitOffset >> 3;
-        const childDV = new DataView(dv.buffer, offset, byteSize);
-        slots[slot] = constructor.call(recv, childDV);
-      }
-      Object.defineProperties(self, {
-        [SLOTS]: { value: slots, writable: true },
-      });
+      createChildObjects.call(self, objectMembers, dv);
     }
     if (creating) {
       if (template) {
@@ -81,3 +71,16 @@ export function finalizeStruct(s) {
   }
   return constructor;
 };
+
+export function createChildObjects(members, dv) {
+  const recv = (this === ZIG) ? this : null;
+  const slots = {};
+  for (const { structure: { constructor }, bitOffset, byteSize, slot } of members) {
+    const offset = bitOffset >> 3;
+    const childDV = new DataView(dv.buffer, offset, byteSize);
+    slots[slot] = constructor.call(recv, childDV);
+  }
+  Object.defineProperties(this, {
+    [SLOTS]: { value: slots, writable: true },
+  });
+}

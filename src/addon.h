@@ -13,6 +13,7 @@ enum class StructureType : uint32_t {
   Array,
   Struct,
   ExternUnion,
+  BareUnion,
   TaggedUnion,
   ErrorUnion,
   ErrorSet,
