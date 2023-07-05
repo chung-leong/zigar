@@ -19,8 +19,10 @@ export function getDataViewBoolAccessor(access, member) {
       };
     } else {
       const set = DataView.prototype[`set${typeName}`];
+      const T = (byteSize > 4) ? 1n : 1;
+      const F = (byteSize > 4) ? 0n : 0;
       return function(offset, value, littleEndian) {
-        set.call(this, offset, value ? 1 : 0, littleEndian);
+        set.call(this, offset, value ? T : F, littleEndian);
       };
     }
   });
@@ -113,13 +115,14 @@ export function isBuffer(arg) {
   return (arg instanceof DataView || arg instanceof ArrayBuffer || arg instanceof SharedArrayBuffer);
 }
 
-export function getTypeName({ type, isSigned, bitSize }) {
+export function getTypeName({ type, isSigned, bitSize, byteSize }) {
   if (type === MemberType.Int) {
     return `${bitSize <= 32 ? '' : 'Big' }${isSigned ? 'Int' : 'Uint'}${bitSize}`;
   } else if (type === MemberType.Float) {
     return `Float${bitSize}`;
   } else if (type === MemberType.Bool) {
-    return `Bool`;
+    const boolSize = (byteSize !== undefined) ? byteSize * 8 : 1;
+    return `Bool${boolSize}`;
   } else if (type === MemberType.Void) {
     return `Null`;
   }
@@ -484,7 +487,7 @@ function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
 }
 
 function cacheMethod(access, member, cb) {
-  const { bitOffset, byteSize } = member;
+  const { bitOffset } = member;
   const bitPos = bitOffset & 0x07;
   const typeName = getTypeName(member);
   const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;

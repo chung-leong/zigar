@@ -89,7 +89,7 @@ export function getAccessors(member, options = {}) {
           break;
         }
       }
-      throw new Error(`No factory for ${typeName}: ${f}`);
+      throw new Error(`No factory for ${typeName}: ${member.type}`);
     }
   }
   return {

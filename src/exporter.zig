@@ -954,12 +954,22 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                 .slot = 0,
                 .structure = try getStructure(host, op.child),
             });
+            const present_offset = switch (@typeInfo(op.child)) {
+                // present overlaps value (i.e. null pointer means false)
+                .Pointer => 0,
+                else => @sizeOf(op.child) * 8,
+            };
+            const present_byte_size = switch (@typeInfo(op.child)) {
+                // use pointer value as boolean
+                .Pointer => @sizeOf(op.child),
+                else => @sizeOf(bool),
+            };
             try host.attachMember(structure, .{
                 .name = "present",
                 .member_type = .Bool,
-                .bit_offset = @sizeOf(op.child) * 8,
+                .bit_offset = present_offset,
                 .bit_size = @bitSizeOf(bool),
-                .byte_size = @sizeOf(bool),
+                .byte_size = present_byte_size,
             });
         },
         .ErrorUnion => |eu| {

@@ -9,8 +9,10 @@ import {
 } from '../src/member.js';
 import {
   StructureType,
+  usePrimitive,
   useStruct,
   useOptional,
+  usePointer,
   beginStructure,
   attachMember,
   finalizeStructure,
@@ -23,11 +25,14 @@ import {
 describe('Optional functions', function() {
   describe('finalizeOptional', function() {
     beforeEach(function() {
+      usePrimitive();
       useOptional();
+      usePointer();
       useStruct();
       useBool();
       useIntEx();
       useFloatEx();
+      useObject();
     })
     it('should define a structure for storing an optional value', function() {
       const structure = beginStructure({
@@ -110,6 +115,65 @@ describe('Optional functions', function() {
       expect(object.get()).to.be.an('object');
       object.set(null);
       expect(object.get()).to.equal(null);
+    })
+    it('should define a structure for storing an optional pointer', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const PInt32 = finalizeStructure(ptrStructure);
+      const structure = beginStructure({
+        type: StructureType.Optional,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      attachMember(structure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: 0,
+        bitSize: 1,
+        byteSize: 8,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = Hello(new ArrayBuffer(8));
+      const pointer = object[SLOTS][0];
+      pointer[SLOTS][0] = new Int32(0);
+      expect(object.get()).to.equal(null);
+      object.set(5);
+      expect(object.get()).to.equal(5);
     })
   })
   describe('getOptionalAccessors', function() {

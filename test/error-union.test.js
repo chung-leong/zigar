@@ -8,9 +8,11 @@ import {
 } from '../src/member.js';
 import {
   StructureType,
+  usePrimitive,
   useErrorSet,
   useErrorUnion,
   useStruct,
+  usePointer,
   beginStructure,
   attachMember,
   finalizeStructure,
@@ -23,9 +25,11 @@ import {
 describe('Error union functions', function() {
   describe('finalizeErrorUnion', function() {
     beforeEach(function() {
+      usePrimitive();
       useErrorUnion();
       useErrorSet();
       useStruct();
+      usePointer();
       useIntEx();
       useObject();
     })
@@ -135,6 +139,82 @@ describe('Error union functions', function() {
       expect({ ...object.get() }).to.be.eql({ dog: 0, cat: 0 });
       object.set({ dog: 17, cat: 234 });
       expect({ ...object.get() }).to.be.eql({ dog: 17, cat: 234 });
+    })
+
+    it('should define an error union with a pointer', function() {
+      const setStructure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Error',
+      });
+      attachMember(setStructure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Object,
+        slot: 16,
+      });
+      attachMember(setStructure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Object,
+        slot: 17,
+      });
+      finalizeStructure(setStructure);
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const PInt32 = finalizeStructure(ptrStructure);
+      const structure = beginStructure({
+        type: StructureType.ErrorUnion,
+        name: 'Hello',
+        size: 16,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      attachMember(structure, {
+        name: 'error',
+        type: MemberType.Int,
+        bitOffset: 64,
+        bitSize: 16,
+        byteSize: 2,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = Hello(new ArrayBuffer(16));
+      object[MEMORY].setInt16(8, 16, true)
+      expect(() => object.get()).to.throw();
+      const pointer = object[SLOTS][0];
+      pointer[SLOTS][0] = new Int32(0);
+      object.set(5);
+      expect(object.get()).to.equal(5);
     })
   })
   describe('getErrorUnionAccessors', function() {

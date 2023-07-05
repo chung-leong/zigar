@@ -145,9 +145,13 @@ describe('Data view functions', function() {
     })
     it('should return the correct names for boolean', function() {
       const members = [
+        { type: MemberType.Bool, bitSize: 1, byteSize: 1 },
+        { type: MemberType.Bool, bitSize: 1, byteSize: 8 },
         { type: MemberType.Bool, bitSize: 1 },
       ];
-      expect(getTypeName(members[0])).to.equal('Bool');
+      expect(getTypeName(members[0])).to.equal('Bool8');
+      expect(getTypeName(members[1])).to.equal('Bool64');
+      expect(getTypeName(members[2])).to.equal('Bool1');
     })
     it('should return "Null" for Void', function() {
       const members = [
@@ -161,31 +165,31 @@ describe('Data view functions', function() {
       const dv = new DataView(new ArrayBuffer(1));
       dv.setInt8(0, 1);
       const member = {
-        type: MemberType.Boolean,
+        type: MemberType.Bool,
         bitSize: 1,
         bitOffset: 0,
         byteSize: 1,
       };
       const f = getDataViewBoolAccessor('get', member);
-      const res = f.call(dv, 0, true);
+      const res = f.call(dv, 0);
       expect(res).to.equal(true);
     })
     it('should return function for setting standard bool types', function() {
       const dv = new DataView(new ArrayBuffer(1));
       dv.setUint8(0, 1);
       const member = {
-        type: MemberType.Boolean,
+        type: MemberType.Bool,
         bitSize: 1,
         bitOffset: 0,
         byteSize: 1,
       };
       const f = getDataViewBoolAccessor('set', member);
-      f.call(dv, 0, false);
+      f.call(dv, 0);
       expect(dv.getUint8(0)).to.equal(0);
     })
     it('should return undefined when type is non-standard', function() {
       const member = {
-        type: MemberType.Boolean,
+        type: MemberType.Bool,
         bitSize: 1,
         bitOffset: 1,
         byteSize: undefined,
@@ -193,11 +197,25 @@ describe('Data view functions', function() {
       const f = getDataViewBoolAccessor('get', member);
       expect(f).to.be.undefined;
     })
+    it('should work when underlying type is a 64-bit integer', function() {
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setBigInt64(0, 1n);
+      const member = {
+        type: MemberType.Bool,
+        bitSize: 1,
+        bitOffset: 0,
+        byteSize: 8,
+      };
+      const f = getDataViewBoolAccessor('get', member);
+      expect(f.call(dv, 0, true)).to.be.true;
+      expect(dv.getUint8(0)).to.equal(0);
+      dv.setBigInt64(0, 1n);
+    })
   })
   describe('getDataViewBoolAccessorEx', function() {
     it('should return the same function as getDataViewBoolAccessor when bool is standard', function() {
       const member = {
-        type: MemberType.Boolean,
+        type: MemberType.Bool,
         bitSize: 1,
         bitOffset: 0,
         byteSize: 1
@@ -211,7 +229,7 @@ describe('Data view functions', function() {
       dv.setInt8(0, 0xAA);
       for (let bitOffset = 0; bitOffset < 8; bitOffset++) {
         const member = {
-          type: MemberType.Boolean,
+          type: MemberType.Bool,
           bitSize: 1,
           bitOffset,
         };
@@ -224,7 +242,7 @@ describe('Data view functions', function() {
       const dv = new DataView(new ArrayBuffer(1));
       for (let bitOffset = 0; bitOffset < 8; bitOffset++) {
         const member = {
-          type: MemberType.Boolean,
+          type: MemberType.Bool,
           bitSize: 1,
           bitOffset,
         };
