@@ -14,6 +14,7 @@ import {
   useArray,
   useStruct,
   useExternUnion,
+  useBareUnion,
   useTaggedUnion,
   useErrorUnion,
   useErrorSet,
@@ -39,6 +40,7 @@ usePrimitive();
 useArray();
 useStruct();
 useExternUnion();
+useBareUnion();
 useTaggedUnion();
 useErrorUnion();
 useErrorSet();

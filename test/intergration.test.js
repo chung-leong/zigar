@@ -114,6 +114,16 @@ describe('Integration tests', function() {
       module.void_error = null;
       expect(module.void_error).to.be.null;
     })
+    it('should import simple bare union', async function() {
+      this.timeout(10000);
+      const { default: module } = await import(resolve('./integration/bare-union-simple.zig'));
+      expect(module.animal.dog).to.equal(123);
+      module.useCat();
+      expect(module.animal.dog).to.equal(null);
+      expect(module.animal.cat).to.equal(777);
+      module.useMonkey();
+      expect(module.animal.monkey).to.equal(777n);
+    })
   })
   describe('Methods', function() {
     it('should import simple function', async function() {

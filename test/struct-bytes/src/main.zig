@@ -1,6 +1,18 @@
 const std = @import("std");
 
-const UnionTag = enum(u16) {
+const UnionTag1 = enum(u16) {
+    cat = 123,
+    dog = 777,
+    monkey = 3433,
+};
+
+const UnionTag2 = enum(u64) {
+    cat = 123,
+    dog = 777,
+    monkey = 3433,
+};
+
+const UnionTag3 = enum(u32) {
     cat = 123,
     dog = 777,
     monkey = 3433,
@@ -34,15 +46,51 @@ const Structs = struct {
         flag2: bool = false,
         number: i64 = 1234567890,
     };
-    const BasicUnion = union {
+    const BareUnion1 = union {
         cat: i32,
         dog: i32,
         monkey: i64,
     };
-    const TaggedUnion = union(UnionTag) {
+    const BareUnion2 = union {
+        cat: [7]u8,
+        dog: [7]i8,
+    };
+    const BareUnion3 = union {
+        cat: [8]u8,
+        dog: [8]i8,
+    };
+    const BareUnion4 = union {
+        cat: bool,
+        dog: bool,
+    };
+    const BareUnion5 = union {
+        cat: bool,
+        dog: i32,
+    };
+    const TaggedUnion1 = union(UnionTag1) {
         cat: i32,
         dog: i32,
         monkey: i64,
+    };
+    const TaggedUnion2 = union(UnionTag2) {
+        cat: i32,
+        dog: i32,
+        monkey: i64,
+    };
+    const TaggedUnion3 = union(UnionTag2) {
+        cat: i32,
+        dog: i32,
+        monkey: i128,
+    };
+    const TaggedUnion4 = union(UnionTag1) {
+        cat: bool,
+        dog: bool,
+        monkey: i8,
+    };
+    const TaggedUnion5 = union(UnionTag3) {
+        cat: i32,
+        dog: i32,
+        monkey: i32,
     };
     const BigInt1 = struct {
         number: u128 = 0x0_1FFF_FFFF_FFFF_FFFF,
@@ -141,11 +189,17 @@ const Structs = struct {
     const Int64WithError = struct {
         number: anyerror!i64 = Error.UnknownError,
     };
+    const Int8ArrayWithError = struct {
+        numbers: anyerror![4]i8 = Error.UnknownError,
+    };
     const OptionalBool = struct {
         value: ?bool = true,
     };
     const OptionalBoolNull = struct {
         value: ?bool = null,
+    };
+    const OptionalInt4 = struct {
+        number: ?i8 = 15,
     };
     const OptionalInt8 = struct {
         number: ?i8 = 123,
@@ -199,7 +253,15 @@ pub fn main() !void {
                         var found_tag = false;
                         inline for (un.fields) |field| {
                             if (std.mem.eql(u8, tag_name, field.name)) {
-                                s = @unionInit(T, field.name, 1234);
+                                const value = switch (field.type) {
+                                    i8, u8 => 77,
+                                    i32, i64, i128 => 1234,
+                                    [7]u8, [7]i8 => .{ 1, 2, 3, 4, 5, 6, 7 },
+                                    [8]u8, [8]i8 => .{ 1, 2, 3, 4, 5, 6, 7, 8 },
+                                    bool => true,
+                                    else => field.type{},
+                                };
+                                s = @unionInit(T, field.name, value);
                                 found_tag = true;
                             }
                         }

@@ -196,8 +196,8 @@ test "NextIntType" {
     assert(NextIntType(u64) == i128);
 }
 
-fn IntType(comptime n: comptime_int) type {
-    var IT = i32;
+fn IntType(comptime StartT: type, comptime n: comptime_int) type {
+    var IT = StartT;
     while (!isInRangeOf(n, IT)) {
         IT = NextIntType(IT);
     }
@@ -205,9 +205,10 @@ fn IntType(comptime n: comptime_int) type {
 }
 
 test "IntType" {
-    assert(IntType(0) == i32);
-    assert(IntType(0xFFFFFFFF) == u32);
-    assert(IntType(-0xFFFFFFFF) == i64);
+    assert(IntType(i32, 0) == i32);
+    assert(IntType(i32, 0xFFFFFFFF) == u32);
+    assert(IntType(i32, -0xFFFFFFFF) == i64);
+    assert(IntType(u8, 123) == u8);
 }
 
 fn EnumType(comptime T: type) type {
@@ -302,6 +303,58 @@ test "isPointer" {
     assert(isPointer(u8) == false);
 }
 
+fn hasPointer(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Pointer => true,
+        .Array => |ar| hasPointer(ar.child),
+        .Struct => |st| any: {
+            inline for (st.fields) |field| {
+                if (hasPointer(field.type)) {
+                    break :any true;
+                }
+            }
+            break :any false;
+        },
+        .Union => |un| any: {
+            inline for (un.fields) |field| {
+                if (hasPointer(field.type)) {
+                    break :any true;
+                }
+            }
+            break :any false;
+        },
+        else => false,
+    };
+}
+
+test "hasPointer" {
+    const A = struct {
+        number: i32,
+    };
+    const B = struct {
+        number: i32,
+        a: A,
+    };
+    const C = struct {
+        number: i32,
+        a: A,
+        pointer: [*]i32,
+    };
+    const D = union {
+        a: A,
+        c: C,
+    };
+    assert(hasPointer(u8) == false);
+    assert(hasPointer(*u8) == true);
+    assert(hasPointer([]u8) == true);
+    assert(hasPointer([5]*u8) == true);
+    assert(hasPointer([][]u8) == true);
+    assert(hasPointer(A) == false);
+    assert(hasPointer(B) == false);
+    assert(hasPointer(C) == true);
+    assert(hasPointer(D) == true);
+}
+
 fn getMemberType(comptime T: type) MemberType {
     return switch (@typeInfo(T)) {
         .Bool => .Bool,
@@ -340,8 +393,15 @@ fn getStructureType(comptime T: type) StructureType {
 }
 
 test "getStructureType" {
+    const Enum = enum { apple, banana };
+    const TaggedUnion = union(Enum) {
+        apple: i32,
+        banana: i32,
+    };
     assert(getStructureType(i32) == .Primitive);
-    assert(getStructureType(union {}) == .TaggedUnion);
+    assert(getStructureType(Enum) == .Enumeration);
+    assert(getStructureType(union {}) == .BareUnion);
+    assert(getStructureType(TaggedUnion) == .TaggedUnion);
     assert(getStructureType(extern union {}) == .ExternUnion);
 }
 
@@ -673,6 +733,34 @@ fn getStructureName(comptime T: type) [*:0]const u8 {
     return @ptrCast([*:0]const u8, name);
 }
 
+test "getStructureName" {
+    const name = getStructureName([]u8);
+    assert(name[0] == '*');
+}
+
+fn getUnionSelectorOffset(comptime SelectorT: type, comptime fields: []const std.builtin.Type.UnionField) comptime_int {
+    // selector comes first unless content needs larger align
+    comptime var offset = 0;
+    inline for (fields) |field| {
+        if (@alignOf(field.type) > @alignOf(SelectorT)) {
+            const new_offset = @sizeOf(field.type) * 8;
+            if (new_offset > offset) {
+                offset = new_offset;
+            }
+        }
+    }
+    return offset;
+}
+
+test "getUnionSelectorOffset" {
+    const Union = union {
+        cat: i32,
+        dog: i32,
+    };
+    assert(getUnionSelectorOffset(i16, @typeInfo(Union).Union.fields) == 32);
+    assert(getUnionSelectorOffset(i64, @typeInfo(Union).Union.fields) == 0);
+}
+
 fn addMembers(host: Host, structure: Value, comptime T: type) !void {
     switch (@typeInfo(T)) {
         .Bool, .Int, .Float, .Void => {
@@ -731,56 +819,31 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
         .Struct => |st| {
             // pre-allocate relocatable slots for fields that always need them
             inline for (st.fields, 0..) |field, index| {
-                switch (getMemberType(field.type)) {
-                    .Object => _ = getObjectSlot(T, index),
-                    else => {},
+                if (!field.is_comptime) {
+                    switch (getMemberType(field.type)) {
+                        .Object => _ = getObjectSlot(T, index),
+                        else => {},
+                    }
                 }
             }
             inline for (st.fields, 0..) |field, index| {
-                try host.attachMember(structure, .{
-                    .name = @ptrCast([*:0]const u8, field.name),
-                    .member_type = getMemberType(field.type),
-                    .is_signed = isSigned(field.type),
-                    .is_const = isConst(field.type),
-                    .is_required = field.default_value == null,
-                    .bit_offset = @bitOffsetOf(T, field.name),
-                    .bit_size = @bitSizeOf(field.type),
-                    .byte_size = if (isPacked(T)) missing else @sizeOf(field.type),
-                    .slot = getObjectSlot(T, index),
-                    .structure = try getStructure(host, field.type),
-                });
-            }
-            if (!isArgumentStruct(T)) {
-                // default data
-                var data: [@sizeOf(T)]u8 = undefined;
-                const ptr = @intToPtr(*T, @ptrToInt(&data));
-                for (&data) |*byte_ptr| {
-                    byte_ptr.* = 0xAA;
-                }
-                inline for (st.fields) |field| {
-                    if (field.default_value) |opaque_ptr| {
-                        // set default value
-                        const aligned_ptr = @alignCast(@alignOf(field.type), opaque_ptr);
-                        const typed_ptr = @ptrCast(*const field.type, aligned_ptr);
-                        @field(ptr.*, field.name) = typed_ptr.*;
-                    }
-                }
-                const has_data = check_data: {
-                    for (data) |byte| {
-                        if (byte != 0) {
-                            break :check_data true;
-                        }
-                    }
-                    break :check_data false;
-                };
-                if (has_data) {
-                    const template = try host.createTemplate(&data);
-                    try dezigStructure(host, template, ptr);
-                    return host.attachTemplate(structure, .{
-                        .is_static = false,
-                        .object = template,
+                if (!field.is_comptime) {
+                    try host.attachMember(structure, .{
+                        .name = @ptrCast([*:0]const u8, field.name),
+                        .member_type = getMemberType(field.type),
+                        .is_signed = isSigned(field.type),
+                        .is_const = isConst(field.type),
+                        .is_required = field.default_value == null,
+                        .bit_offset = @bitOffsetOf(T, field.name),
+                        .bit_size = @bitSizeOf(field.type),
+                        .byte_size = if (isPacked(T)) missing else @sizeOf(field.type),
+                        .slot = getObjectSlot(T, index),
+                        .structure = try getStructure(host, field.type),
                     });
                 }
+            }
+            if (!isArgumentStruct(T)) {
+                try addDefaultValues(host, structure, T);
             }
         },
         .Union => |un| {
@@ -790,24 +853,32 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                     else => {},
                 }
             }
+            const TT = un.tag_type orelse IntType(u8, un.fields.len);
+            const tag_offset = if (un.layout != .Extern) getUnionSelectorOffset(TT, un.fields) else missing;
+            const value_offset = if (tag_offset == 0) @sizeOf(TT) * 8 else 0;
             inline for (un.fields, 0..) |field, index| {
                 try host.attachMember(structure, .{
                     .name = @ptrCast([*:0]const u8, field.name),
                     .member_type = getMemberType(field.type),
                     .is_signed = isSigned(field.type),
                     .is_const = isConst(field.type),
-                    .is_required = field.default_value == null,
-                    .bit_offset = @bitOffsetOf(T, field.name),
+                    .bit_offset = value_offset,
                     .bit_size = @bitSizeOf(field.type),
                     .byte_size = if (isPacked(T)) missing else @sizeOf(field.type),
                     .slot = getObjectSlot(T, index),
                     .structure = try getStructure(host, field.type),
                 });
             }
-            if (un.layout != .Extern) {
-                if (un.tag_type) |EnumT| {
-                    _ = EnumT;
-                } else {}
+            if (tag_offset != missing) {
+                try host.attachMember(structure, .{
+                    .name = "selector",
+                    .member_type = getMemberType(TT),
+                    .is_signed = isSigned(TT),
+                    .bit_offset = tag_offset,
+                    .bit_size = @bitSizeOf(TT),
+                    .byte_size = if (isPacked(T)) missing else @sizeOf(TT),
+                    .structure = if (un.tag_type) |_| try getStructure(host, TT) else null,
+                });
             }
         },
         .Enum => |en| {
@@ -824,6 +895,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
             }
         },
         .Optional => |op| {
+            // value always comes first
             try host.attachMember(structure, .{
                 .name = "value",
                 .member_type = getMemberType(op.child),
@@ -843,22 +915,24 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
             });
         },
         .ErrorUnion => |eu| {
+            // value is placed after the error number if its alignment is smaller than that of anyerror
+            const error_offset = if (@alignOf(anyerror) > @alignOf(eu.payload)) 0 else @sizeOf(eu.payload) * 8;
+            const value_offset = if (error_offset == 0) @sizeOf(anyerror) * 8 else 0;
             try host.attachMember(structure, .{
                 .name = "value",
                 .member_type = getMemberType(eu.payload),
                 .is_signed = isSigned(eu.payload),
-                .bit_offset = if (@sizeOf(eu.payload) <= 1) @sizeOf(anyerror) * 8 else 0,
+                .bit_offset = value_offset,
                 .bit_size = @bitSizeOf(eu.payload),
                 .byte_size = @sizeOf(eu.payload),
                 .slot = 0,
                 .structure = try getStructure(host, eu.payload),
             });
-            // the error number comes before the value when it's a single byte
             try host.attachMember(structure, .{
                 .name = "error",
                 .member_type = .Int,
                 .is_signed = false,
-                .bit_offset = if (@sizeOf(eu.payload) <= 1) 0 else @sizeOf(eu.payload) * 8,
+                .bit_offset = error_offset,
                 .bit_size = @bitSizeOf(anyerror),
                 .byte_size = @sizeOf(anyerror),
                 .structure = try getStructure(host, eu.error_set),
@@ -882,22 +956,38 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
     }
 }
 
-fn getMinBitOffset(comptime T: type) usize {
-    comptime var min: ?comptime_int = null;
-    inline for (std.meta.fields(T)) |field| {
-        const offset = @bitOffsetOf(T, field.name);
-        min = if (min) |current| @min(current, offset) else offset;
+fn addDefaultValues(host: Host, structure: Value, comptime T: type) !void {
+    // default data
+    const fields = std.meta.fields(T);
+    var data: [@sizeOf(T)]u8 = undefined;
+    const ptr = @intToPtr(*T, @ptrToInt(&data));
+    for (&data) |*byte_ptr| {
+        byte_ptr.* = 0xAA;
     }
-    return min orelse missing;
-}
-
-fn getMaxBitOffset(comptime T: type) usize {
-    comptime var max: ?comptime_int = null;
-    inline for (std.meta.fields(T)) |field| {
-        const offset = @bitOffsetOf(T, field.name) + @sizeOf(@TypeOf(@field(T, field.name)));
-        max = if (max) |current| @max(current, offset) else offset;
+    inline for (fields) |field| {
+        if (field.default_value) |opaque_ptr| {
+            // set default value
+            const aligned_ptr = @alignCast(@alignOf(field.type), opaque_ptr);
+            const typed_ptr = @ptrCast(*const field.type, aligned_ptr);
+            @field(ptr.*, field.name) = typed_ptr.*;
+        }
     }
-    return max orelse missing;
+    const has_data = check_data: {
+        for (data) |byte| {
+            if (byte != 0) {
+                break :check_data true;
+            }
+        }
+        break :check_data false;
+    };
+    if (has_data) {
+        const template = try host.createTemplate(&data);
+        try dezigStructure(host, template, ptr);
+        return host.attachTemplate(structure, .{
+            .is_static = false,
+            .object = template,
+        });
+    }
 }
 
 fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
@@ -920,7 +1010,7 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
         const PT = switch (decl_info) {
             .Fn, .Frame, .AnyFrame, .NoReturn => void,
             .Type => type,
-            .ComptimeInt => *const IntType(@field(T, decl.name)),
+            .ComptimeInt => *const IntType(i32, @field(T, decl.name)),
             .ComptimeFloat => *const f64,
             else => @TypeOf(&@field(T, decl.name)),
         };
@@ -1137,58 +1227,6 @@ test "getFunctionName" {
     const name_weird = getFunctionName(ArgWeird) orelse "function";
     assert(name_weird[0] == 'w');
     assert(name_weird.len == 12);
-}
-
-fn hasPointer(comptime T: type) bool {
-    return switch (@typeInfo(T)) {
-        .Pointer => true,
-        .Array => |ar| hasPointer(ar.child),
-        .Struct => |st| any: {
-            inline for (st.fields) |field| {
-                if (hasPointer(field.type)) {
-                    break :any true;
-                }
-            }
-            break :any false;
-        },
-        .Union => |un| any: {
-            inline for (un.fields) |field| {
-                if (hasPointer(field.type)) {
-                    break :any true;
-                }
-            }
-            break :any false;
-        },
-        else => false,
-    };
-}
-
-test "hasPointer" {
-    const A = struct {
-        number: i32,
-    };
-    const B = struct {
-        number: i32,
-        a: A,
-    };
-    const C = struct {
-        number: i32,
-        a: A,
-        pointer: [*]i32,
-    };
-    const D = union {
-        a: A,
-        c: C,
-    };
-    assert(hasPointer(u8) == false);
-    assert(hasPointer(*u8) == true);
-    assert(hasPointer([]u8) == true);
-    assert(hasPointer(A) == false);
-    assert(hasPointer(B) == false);
-    assert(hasPointer(C) == true);
-    assert(hasPointer(D) == true);
-    assert(hasPointer([5]*u8) == true);
-    assert(hasPointer([][]u8) == true);
 }
 
 fn rezigStructure(host: Host, obj: Value, ptr: anytype) !void {

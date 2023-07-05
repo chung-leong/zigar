@@ -1516,6 +1516,10 @@ R"=====(
     factories$1[StructureType.ExternUnion] = finalizeUnion;
   }
 
+  function useBareUnion() {
+    factories$1[StructureType.BareUnion] = finalizeUnion;
+  }
+
   function useTaggedUnion() {
     factories$1[StructureType.TaggedUnion] = finalizeUnion;
   }
@@ -2133,6 +2137,7 @@ R"=====(
   useArray();
   useStruct();
   useExternUnion();
+  useBareUnion();
   useTaggedUnion();
   useErrorUnion();
   useErrorSet();
