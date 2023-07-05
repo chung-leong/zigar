@@ -1,6 +1,7 @@
 import { MemberType, getAccessors } from './member.js';
 import { getCopyFunction } from './memory.js';
 import { getDataView } from './data-view.js';
+import { createChildObjects } from './struct.js';
 import { throwNotInErrorSet, throwUnknownErrorNumber } from './error.js';
 import { MEMORY, SLOTS } from './symbol.js';
 
@@ -12,10 +13,11 @@ export function finalizeErrorUnion(s) {
     options,
   } = s;
   const copy = getCopyFunction(size);
-  const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const objectMembers = members.filter(m => m.type === MemberType.Object);
   const copier = s.copier = function (dest, src) {
     copy(dest[MEMORY], src[MEMORY]);
-    if (hasObject) {
+    // FIXME
+    if (objectMembers.length !== 0) {
       dest[SLOTS] = { ...src[SLOTS] };
     }
   };
@@ -30,10 +32,10 @@ export function finalizeErrorUnion(s) {
       self = Object.create(constructor.prototype);
       dv = getDataView(s, arg);
     }
-    /* TODO: handle struct */
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },
     });
+    createChildObjects.call(self, objectMembers, dv);
     if (creating) {
       this.set(arg);
     } else {

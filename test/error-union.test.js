@@ -23,9 +23,11 @@ import {
 describe('Error union functions', function() {
   describe('finalizeErrorUnion', function() {
     beforeEach(function() {
-      useIntEx();
-      useErrorSet();
       useErrorUnion();
+      useErrorSet();
+      useStruct();
+      useIntEx();
+      useObject();
     })
     it('should define an error union', function() {
       const setStructure = beginStructure({
@@ -63,9 +65,76 @@ describe('Error union functions', function() {
       });
       const Hello = finalizeStructure(structure);
       const object = Hello(new ArrayBuffer(10));
-      expect(object.get(object)).to.equal(0n);
+      expect(object.get()).to.equal(0n);
       object.set(1234n);
-      expect(object.get(object)).to.equal(1234n);
+      expect(object.get()).to.equal(1234n);
+    })
+    it('should define an error union with internal struct', function() {
+      const setStructure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Error',
+      });
+      attachMember(setStructure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Object,
+      });
+      attachMember(setStructure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Object,
+      });
+      finalizeStructure(setStructure);
+      const structStructure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Aniaml',
+        size: 8,
+      });
+      attachMember(structStructure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structStructure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      const Aniaml = finalizeStructure(structStructure);
+      const structure = beginStructure({
+        type: StructureType.ErrorUnion,
+        name: 'Hello',
+        size: 10,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: structStructure,
+      });
+      attachMember(structure, {
+        name: 'error',
+        type: MemberType.Int,
+        bitOffset: 64,
+        bitSize: 16,
+        byteSize: 2,
+        structure: setStructure
+      });
+      const Hello = finalizeStructure(structure);
+      const object = Hello(new ArrayBuffer(10));
+      expect(object.get()).to.be.an('object');
+      expect({ ...object.get() }).to.be.eql({ dog: 0, cat: 0 });
+      object.set({ dog: 17, cat: 234 });
+      expect({ ...object.get() }).to.be.eql({ dog: 17, cat: 234 });
     })
   })
   describe('getErrorUnionAccessors', function() {

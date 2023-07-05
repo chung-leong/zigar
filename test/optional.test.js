@@ -9,6 +9,7 @@ import {
 } from '../src/member.js';
 import {
   StructureType,
+  useStruct,
   useOptional,
   beginStructure,
   attachMember,
@@ -23,7 +24,9 @@ describe('Optional functions', function() {
   describe('finalizeOptional', function() {
     beforeEach(function() {
       useOptional();
+      useStruct();
       useBool();
+      useIntEx();
       useFloatEx();
     })
     it('should define a structure for storing an optional value', function() {
@@ -51,6 +54,60 @@ describe('Optional functions', function() {
       expect(object.get()).to.equal(null);
       object.set(3.14);
       expect(object.get()).to.equal(3.14);
+      object.set(null);
+      expect(object.get()).to.equal(null);
+    })
+    it('should define a structure for storing an optional struct', function() {
+      const structStructure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Aniaml',
+        size: 8,
+      });
+      attachMember(structStructure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structStructure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      const Aniaml = finalizeStructure(structStructure);
+      const structure = beginStructure({
+        type: StructureType.Optional,
+        name: 'Hello',
+        size: 18,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: structStructure,
+      });
+      attachMember(structure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: 128,
+        bitSize: 1,
+        byteSize: 1,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = Hello(new ArrayBuffer(18));
+      expect(object.get()).to.equal(null);
+      object.set({ dog: 1, cat: 2 });
+      expect(object.get()).to.be.an('object');
       object.set(null);
       expect(object.get()).to.equal(null);
     })

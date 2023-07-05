@@ -1100,23 +1100,16 @@ R"=====(
     } = s;
     const copy = getCopyFunction(size);
     const descriptors = {};
-    let getEnumItem, setEnumItem;
+    let getEnumItem;
     const exclusion = (type === StructureType.BareUnion || type === StructureType.TaggedUnion);
     if (exclusion) {
       const selectorMember = members[members.length - 1];
-      let { get: getIndex, set: setIndex } = getAccessors(selectorMember, options);
+      let { get: getIndex } = getAccessors(selectorMember, options);
       if (type === StructureType.TaggedUnion) {
-        // rely on the enumeration constructor to translate the enum values into indices
-        const { structure: { constructor } } = selectorMember;
         getEnumItem = getIndex;
-        setEnumItem = setIndex;
         getIndex = function() {
           const item = getEnumItem.call(this);
           return item[ENUM_INDEX];
-        };
-        setIndex = function(index) {
-          const item = constructor[ENUM_ITEMS][index];
-          setEnumItem.call(this, item);
         };
       }
       for (const [ index, member ] of members.slice(0, -1).entries()) {
@@ -1128,8 +1121,11 @@ R"=====(
           return getValue.call(this);
         };
         const set = function(value) {
+          const currentIndex = getIndex.call(this);
+          if (index !== currentIndex) {
+            throwInactiveUnionProperty(s, index, currentIndex);
+          }
           setValue.call(this, value);
-          setIndex.call(this, index);
         };
         descriptors[member.name] = { get, set, configurable: true, enumerable: true };
       }
@@ -1206,10 +1202,11 @@ R"=====(
       options,
     } = s;
     const copy = getCopyFunction(size);
-    const hasObject = !!members.find(m => m.type === MemberType.Object);
+    const objectMembers = members.filter(m => m.type === MemberType.Object);
     s.copier = function (dest, src) {
       copy(dest[MEMORY], src[MEMORY]);
-      if (hasObject) {
+      // FIXME
+      if (objectMembers.length !== 0) {
         dest[SLOTS] = { ...src[SLOTS] };
       }
     };
@@ -1224,10 +1221,10 @@ R"=====(
         self = Object.create(constructor.prototype);
         dv = getDataView(s, arg);
       }
-      /* TODO: handle struct */
       Object.defineProperties(self, {
         [MEMORY]: { value: dv },
       });
+      createChildObjects.call(self, objectMembers, dv);
       if (creating) {
         this.set(arg);
       } else {
@@ -1426,10 +1423,11 @@ R"=====(
       options,
     } = s;
     const copy = getCopyFunction(size);
-    const objectMember = members.find(m => m.type === MemberType.Object);
+    const objectMembers = members.filter(m => m.type === MemberType.Object);
     s.copier = function (dest, src) {
       copy(dest[MEMORY], src[MEMORY]);
-      if (objectMember) {
+      // FIXME
+      if (objectMembers.length !== 0) {
         dest[SLOTS] = { ...src[SLOTS] };
       }
     };
@@ -1444,10 +1442,12 @@ R"=====(
         self = Object.create(constructor.prototype);
         dv = getDataView(s, arg);
       }
-      /* TODO: handle struct */
       Object.defineProperties(self, {
         [MEMORY]: { value: dv },
       });
+      if (objectMembers.length > 0) {
+        createChildObjects.call(self, objectMembers, dv);
+      }
       if (creating) {
         this.set(arg);
       } else {
@@ -2004,6 +2004,13 @@ R"=====(
   function throwUnknownErrorNumber(structure, number) {
     const { name } = structure;
     throw new TypeError(`Error number does not corresponds to any error in error set ${name}: #${number}`);
+  }
+
+  function throwInactiveUnionProperty(structure, index, currentIndex) {
+    const { instance: { members } } = structure;
+    const { name: newName } = members[index];
+    const { name: oldName } = members[currentIndex];
+    throw new TypeError(`Modifying property ${newName} when ${oldName} is active`);
   }
 
   function throwOverflow(member, value) {
