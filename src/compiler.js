@@ -84,7 +84,7 @@ export async function compile(path, options = {}) {
         'stub.zig': `./stub.zig`,
         'build.zig': `./build${dependent ? '-clib' : ''}.zig`,
       }, {
-        EXPORTER_PATH: absolute('./export.zig'),
+        EXPORTER_PATH: absolute('./exporter.zig'),
         PACKAGE_PATH: fullPath,
         PACKAGE_NAME: rootFile.name,
       }, soBuildDir);
