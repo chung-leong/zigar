@@ -135,7 +135,9 @@ describe('Union functions', function() {
       expect(Object.keys(object)).to.have.lengthOf(2);
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.be.null;
-      object.cat = 567;
+      expect(() => object.cat = 567).to.throw(TypeError);
+      object[MEMORY].setInt16(4, 1, true);
+      object[MEMORY].setInt32(0, 567, true);
       expect(object.dog).to.be.null;
       expect(object.cat).to.equal(567);
     })
@@ -226,7 +228,9 @@ describe('Union functions', function() {
       expect(Object.keys(object)).to.have.lengthOf(2);
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.be.null;
-      object.cat = 567;
+      expect(() => object.cat = 567).to.throw(TypeError);
+      object[MEMORY].setInt32(4, 200, true);
+      object[MEMORY].setInt32(0, 567, true);
       expect(object.dog).to.be.null;
       expect(object.cat).to.equal(567);
       expect(HelloType(object)).to.equal(HelloType.cat);

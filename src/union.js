@@ -6,7 +6,8 @@ import { addPointerAccessors } from './pointer.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { createChildObjects } from './struct.js';
-import { MEMORY, SLOTS, ENUM_INDEX, ENUM_ITEMS, ENUM_ITEM } from './symbol.js';
+import { throwInactiveUnionProperty } from './error.js';
+import { MEMORY, SLOTS, ENUM_INDEX, ENUM_ITEM } from './symbol.js';
 
 export function finalizeUnion(s) {
   const {
@@ -20,23 +21,18 @@ export function finalizeUnion(s) {
   } = s;
   const copy = getCopyFunction(size);
   const descriptors = {};
-  let getEnumItem, setEnumItem;
+  let getEnumItem;
   const exclusion = (type === StructureType.BareUnion || type === StructureType.TaggedUnion);
   if (exclusion) {
     const selectorMember = members[members.length - 1];
-    let { get: getIndex, set: setIndex } = getAccessors(selectorMember, options);
+    let { get: getIndex } = getAccessors(selectorMember, options);
     if (type === StructureType.TaggedUnion) {
       // rely on the enumeration constructor to translate the enum values into indices
       const { structure: { constructor } } = selectorMember;
       getEnumItem = getIndex;
-      setEnumItem = setIndex;
       getIndex = function() {
         const item = getEnumItem.call(this);
         return item[ENUM_INDEX];
-      };
-      setIndex = function(index) {
-        const item = constructor[ENUM_ITEMS][index];
-        setEnumItem.call(this, item);
       };
     }
     for (const [ index, member ] of members.slice(0, -1).entries()) {
@@ -48,8 +44,11 @@ export function finalizeUnion(s) {
         return getValue.call(this);
       };
       const set = function(value) {
+        const currentIndex = getIndex.call(this);
+        if (index !== currentIndex) {
+          throwInactiveUnionProperty(s, index, currentIndex);
+        }
         setValue.call(this, value);
-        setIndex.call(this, index);
       };
       descriptors[member.name] = { get, set, configurable: true, enumerable: true };
     }

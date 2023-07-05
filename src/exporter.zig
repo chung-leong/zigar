@@ -738,11 +738,11 @@ test "getStructureName" {
     assert(name[0] == '*');
 }
 
-fn getUnionSelectorOffset(comptime SelectorT: type, comptime fields: []const std.builtin.Type.UnionField) comptime_int {
+fn getUnionSelectorOffset(comptime TT: type, comptime fields: []const std.builtin.Type.UnionField) comptime_int {
     // selector comes first unless content needs larger align
     comptime var offset = 0;
     inline for (fields) |field| {
-        if (@alignOf(field.type) > @alignOf(SelectorT)) {
+        if (@alignOf(field.type) > @alignOf(TT)) {
             const new_offset = @sizeOf(field.type) * 8;
             if (new_offset > offset) {
                 offset = new_offset;
@@ -759,6 +759,54 @@ test "getUnionSelectorOffset" {
     };
     assert(getUnionSelectorOffset(i16, @typeInfo(Union).Union.fields) == 32);
     assert(getUnionSelectorOffset(i64, @typeInfo(Union).Union.fields) == 0);
+}
+
+fn getUnionCurrentIndex(ptr: anytype) usize {
+    const T = @TypeOf(ptr.*);
+    const un = @typeInfo(T).Union;
+    if (un.tag_type) |TT| {
+        const value = @enumToInt(ptr.*);
+        inline for (@typeInfo(TT).Enum.fields, 0..) |field, index| {
+            if (value == field.value) {
+                return index;
+            }
+        }
+    } else {
+        const TT = IntType(u8, un.fields.len);
+        const offset = getUnionSelectorOffset(TT, un.fields);
+        const address = @ptrToInt(ptr) + offset / 8;
+        const offset_ptr = @intToPtr(*TT, address);
+        return offset_ptr.*;
+    }
+    return missing;
+}
+
+test "getUnionCurrentIndex" {
+    const Union1 = union {
+        cat: i32,
+        dog: i32,
+    };
+    var union1: Union1 = .{ .dog = 1234 };
+    assert(getUnionCurrentIndex(&union1) == 1);
+    union1 = .{ .cat = 4567 };
+    assert(getUnionCurrentIndex(&union1) == 0);
+    const Enum = enum { cat, dog };
+    const Union2 = union(Enum) {
+        cat: i32,
+        dog: i32,
+    };
+    var union2: Union2 = .{ .dog = 1234 };
+    assert(getUnionCurrentIndex(&union2) == 1);
+    union2 = .{ .cat = 4567 };
+    assert(getUnionCurrentIndex(&union2) == 0);
+    const Union3 = union {
+        cat: bool,
+        dog: bool,
+    };
+    var union3: Union3 = .{ .dog = true };
+    assert(getUnionCurrentIndex(&union3) == 1);
+    union3 = .{ .cat = true };
+    assert(getUnionCurrentIndex(&union3) == 0);
 }
 
 fn addMembers(host: Host, structure: Value, comptime T: type) !void {
@@ -1204,9 +1252,14 @@ test "isArgumentStruct" {
 
 fn getFunctionName(comptime ArgT: type) ?[]const u8 {
     const name = @typeName(ArgT);
-    const prefix = "export.ArgumentStruct((function '";
+    const prefix = "exporter.ArgumentStruct((function '";
     if (name.len < prefix.len) {
         return null;
+    }
+    inline for (prefix, 0..) |c, index| {
+        if (name[index] != c) {
+            return null;
+        }
     }
     return name[prefix.len .. name.len - 3];
 }
@@ -1268,6 +1321,8 @@ fn rezigStructure(host: Host, obj: Value, ptr: anytype) !void {
                 if (hasPointer(field.type)) {
                     const slot = getObjectSlot(T, index);
                     const child_obj = try host.readObjectSlot(obj, slot);
+                    // FIXME: this is broken, since there can be pointers inside the structure
+                    // should initialize the pointer as being owned by Zig already on JS side
                     if (isArgumentStruct(T) and index == st.fields.len - 1) {
                         // retval is not going to be pointing to anything--just set ownership
                         try host.setPointerStatus(child_obj, true);
@@ -1276,6 +1331,33 @@ fn rezigStructure(host: Host, obj: Value, ptr: anytype) !void {
                     }
                 }
             }
+        },
+        .Union => |un| {
+            if (un.layout == .Extern) {
+                return;
+            }
+            inline for (un.fields, 0..) |field, index| {
+                if (hasPointer(field.type)) {
+                    const current_index = getUnionCurrentIndex(ptr);
+                    if (index == current_index) {
+                        const slot = getObjectSlot(T, index);
+                        const child_obj = try host.readObjectSlot(obj, slot);
+                        try rezigStructure(host, child_obj, &@field(ptr.*, field.name));
+                    }
+                }
+            }
+        },
+        .Optional => {
+            if (ptr.*) |*child_ptr| {
+                const child_obj = try host.readObjectSlot(obj, 0);
+                try rezigStructure(host, child_obj, child_ptr);
+            }
+        },
+        .ErrorUnion => {
+            if (ptr.*) |*child_ptr| {
+                const child_obj = try host.readObjectSlot(obj, 0);
+                try rezigStructure(host, child_obj, child_ptr);
+            } else |_| {}
         },
         else => {
             std.debug.print("Ignoring {s}\n", .{@typeName(T)});
@@ -1321,6 +1403,34 @@ fn dezigStructure(host: Host, obj: Value, ptr: anytype) !void {
                     try dezigStructure(host, child_obj, child_ptr);
                 }
             }
+        },
+        .Union => |un| {
+            if (un.layout == .Extern) {
+                return;
+            }
+            inline for (un.fields, 0..) |field, index| {
+                if (hasPointer(field.type)) {
+                    const current_index = getUnionCurrentIndex(ptr);
+                    if (index == current_index) {
+                        const slot = getObjectSlot(T, index);
+                        const child_ptr = &@field(ptr.*, field.name);
+                        const child_obj = try obtainChildObject(host, obj, slot, child_ptr, false);
+                        try dezigStructure(host, child_obj, child_ptr);
+                    }
+                }
+            }
+        },
+        .Optional => {
+            if (ptr.*) |*child_ptr| {
+                const child_obj = try host.readObjectSlot(obj, 0);
+                try dezigStructure(host, child_obj, child_ptr);
+            }
+        },
+        .ErrorUnion => {
+            if (ptr.*) |*child_ptr| {
+                const child_obj = try host.readObjectSlot(obj, 0);
+                try dezigStructure(host, child_obj, child_ptr);
+            } else |_| {}
         },
         else => {
             std.debug.print("Ignoring {s}\n", .{@typeName(T)});

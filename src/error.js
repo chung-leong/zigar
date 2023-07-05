@@ -59,6 +59,13 @@ export function throwMultipleUnionInitializer(structure) {
   throw new TypeError(`Only one property of ${name} can be given a value`);
 }
 
+export function throwInactiveUnionProperty(structure, index, currentIndex) {
+  const { instance: { members } } = structure;
+  const { name: newName } = members[index];
+  const { name: oldName } = members[currentIndex];
+  throw new TypeError(`Modifying property ${newName} when ${oldName} is active`);
+}
+
 export function throwOverflow(member, value) {
   const typeName = getTypeName(member);
   throw new TypeError(`${typeName} cannot represent the value given: ${value}`);
