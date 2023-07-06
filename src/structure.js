@@ -7,6 +7,7 @@ import { finalizeErrorSet } from './error-set.js';
 import { finalizeEnumeration } from './enumeration.js';
 import { finalizeOptional } from './optional.js';
 import { finalizePointer } from './pointer.js';
+import { finalizeArgStruct } from './arg-struct.js';
 
 export const StructureType = {
   Primitive: 0,
@@ -79,7 +80,7 @@ export function useOpaque() {
 }
 
 export function useArgStruct() {
-  factories[StructureType.ArgStruct] = finalizeStruct;
+  factories[StructureType.ArgStruct] = finalizeArgStruct;
 }
 
 export function beginStructure(def, options = {}) {

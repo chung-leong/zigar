@@ -1193,11 +1193,9 @@ R"=====(
       },
       options,
     } = s;
-    const isArgStruct = (s.type === StructureType.ArgStruct);
     const descriptors = {};
     for (const member of members) {
-      const isArgument = isArgStruct && !isNaN(parseInt(member.name));
-      const { get, set } = getAccessors(member, { autoDeref: !isArgument, ...options });
+      const { get, set } = getAccessors(member, options);
       descriptors[member.name] = { get, set, configurable: true, enumerable: true };
     }
     const objectMembers = members.filter(m => m.type === MemberType.Object);
@@ -1230,6 +1228,7 @@ R"=====(
       }
     };
     const copy = getMemoryCopier(size);
+    const requiredNames = members.filter(m => m.isRequired).map(m => m.name);
     const initializer = s.initializer = function(arg) {
       if (arg instanceof constructor) {
         copy(this[MEMORY], arg[MEMORY]);
@@ -1237,27 +1236,39 @@ R"=====(
           pointerCopier.call(this, arg);
         }
       } else {
-        if (template) {
+        if (arg && typeof(arg) !== 'object') {
+          throwInvalidInitializer();
+        } else if (!arg && requiredNames.length > 0) {
+          throwMissingInitializers();
+        }
+        for (const { name } of requiredNames) {
+          if (arg[name] === undefined) {
+            throwMissingInitializers();
+          }
+        }
+        const keys = (arg) ? Object.entries(arg) : [];
+        for (const key of keys) {
+          if (!descriptors.hasOwnProperty(key)) {
+            throwNoProperty();
+          }
+        }
+        // apply default values unless all properties are initialized
+        if (template && keys.length < members.length) {
           copy(this[MEMORY], template[MEMORY]);
           if (pointerCopier) {
             pointerCopier.call(this, template);
           }
         }
-        // TODO: validation
-        if (arg) {
-          for (const [ key, value ] of Object.entries(arg)) {
-            this[key] = value;
-          }
+        for (const key of keys) {
+          this[key] = arg[key];
         }
       }
     };
     const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
-    if (!isArgStruct) {
-      addPointerAccessors(s);
-      addDataViewAccessor(s);
-      addStaticMembers(s);
-      addMethods(s);
-    }
+    addPointerAccessors(s);
+    addDataViewAccessor(s);
+    addStaticMembers(s);
+    addMethods(s);
     return constructor;
   }
   function createChildObjects(members, recv, dv) {
@@ -1284,7 +1295,9 @@ R"=====(
       const destSlots = this[SLOTS];
       const srcSlots = src[SLOTS];
       for (const { slot, structure: { pointerCopier } } of pointerMembers) {
-        pointerCopier.call(destSlots[slot], srcSlots[slot]);
+        if (srcSlots[slot]) {
+          pointerCopier.call(destSlots[slot], srcSlots[slot]);
+        }
       }
     };
   }
@@ -1742,6 +1755,33 @@ R"=====(
     };
   }
 
+  function finalizeArgStruct(s) {
+    const {
+      size,
+      instance: {
+        members,
+      },
+      options,
+    } = s;
+    const descriptors = {};
+    for (const member of members) {
+      const isArgument = member.name !== 'retval';
+      descriptors[member.name] = getAccessors(member, { autoDeref: !isArgument, ...options });
+    }
+    const objectMembers = members.filter(m => m.type === MemberType.Object);
+    const constructor = s.constructor = function(arg) {
+      const dv = new DataView(new ArrayBuffer(size));
+      Object.defineProperties(this, {
+        [MEMORY]: { value: dv },
+      });
+      if (objectMembers.length > 0) {
+        createChildObjects.call(this, objectMembers, this, dv);
+      }
+    };
+    Object.defineProperties(constructor.prototype, descriptors);
+    return constructor;
+  }
+
   const StructureType = {
     Primitive: 0,
     Array: 1,
@@ -1813,7 +1853,7 @@ R"=====(
   }
 
   function useArgStruct() {
-    factories$1[StructureType.ArgStruct] = finalizeStruct;
+    factories$1[StructureType.ArgStruct] = finalizeArgStruct;
   }
 
   function beginStructure(def, options = {}) {
@@ -2270,6 +2310,18 @@ R"=====(
     const { name: newName } = members[index];
     const { name: oldName } = members[currentIndex];
     throw new TypeError(`Modifying property ${newName} when ${oldName} is active`);
+  }
+
+  function throwInvalidInitializer(structure, expected, arg) {
+    throw new TypeError('TODO');
+  }
+
+  function throwMissingInitializers(structure, arg) {
+    throw new TypeError('TODO');
+  }
+
+  function throwNoProperty(structure, propName) {
+    throw new TypeError('TODO');
   }
 
   function throwOverflow(member, value) {
