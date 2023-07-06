@@ -12,9 +12,15 @@ import {
   throwNotInErrorSet,
   throwUnknownErrorNumber,
   throwInvalidType,
+  throwMultipleUnionInitializer,
+  throwInactiveUnionProperty,
+  throwInvalidInitializer,
+  throwMissingInitializers,
+  throwNoProperty,
   throwOverflow,
   throwOutOfBound,
   rethrowRangeError,
+  throwNotNull,
   decamelizeErrorName,
   throwZigError,
 } from '../src/error.js';
@@ -147,6 +153,73 @@ describe('Error functions', function() {
         .with.property('message').that.contains('Hello');
     })
   })
+  describe('throwMultipleUnionInitializer', function() {
+    it('should throw a type error', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.BareUnion,
+        size: 8,
+      };
+      expect(() => throwMultipleUnionInitializer(structure, 16)).to.throw(TypeError)
+        .with.property('message').that.contains('Hello');
+    })
+  })
+  describe('throwInactiveUnionProperty', function() {
+    it('should throw a type error', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.BareUnion,
+        size: 8,
+        instance: {
+          members: [
+            { name: 'cat' },
+            { name: 'dog' },
+          ]
+        }
+      };
+      expect(() => throwInactiveUnionProperty(structure, 0, 1)).to.throw(TypeError)
+        .with.property('message').that.contains('cat');
+    })
+  })
+  describe('throwInvalidInitializer', function() {
+    it('should throw a type error', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.BareUnion,
+        size: 8,
+      };
+      expect(() => throwInvalidInitializer(structure, 'an object', 16)).to.throw(TypeError)
+        .with.property('message').that.contains('Hello');
+    })
+  })
+  describe('throwMissingInitializers', function() {
+    it('should throw a type error', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.BareUnion,
+        size: 8,
+        instance: {
+          members: [
+            { name: 'dog', isRequired: true },
+            { name: 'cat', isRequired: false },
+          ],
+        }
+      };
+      expect(() => throwMissingInitializers(structure, {})).to.throw(TypeError)
+        .with.property('message').that.contains('Hello');
+    })
+  })
+  describe('throwNoProperty', function() {
+    it('should throw a type error', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.BareUnion,
+        size: 8,
+      };
+      expect(() => throwNoProperty(structure, 'cow')).to.throw(TypeError)
+        .with.property('message').that.contains('Hello');
+    })
+  })
   describe('throwOverflow', function() {
     it('should throw a type error', function() {
       const member = {
@@ -181,6 +254,18 @@ describe('Error functions', function() {
       };
       expect(() => rethrowRangeError(member, 5, new RangeError)).to.throw(RangeError);
       expect(() => rethrowRangeError(member, 5, new TypeError)).to.throw(TypeError);
+    })
+  })
+  describe('throwNotNull', function() {
+    it('should throw a type error', function() {
+      const member = {
+        name: 'hello',
+        type: MemberType.Int,
+        isSigned: true,
+        bitSize: 8,
+      };
+      expect(() => throwNotNull(member)).to.throw(RangeError)
+        .with.property('message').that.contains('hello');
     })
   })
   describe('decamelizeErrorName', function() {

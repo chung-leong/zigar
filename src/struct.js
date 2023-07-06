@@ -1,10 +1,10 @@
-import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getDataView, addDataViewAccessor } from './data-view.js';
 import { addPointerAccessors } from './pointer.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
+import { throwInvalidInitializer, throwMissingInitializers, throwNoProperty } from './error.js';
 import { MEMORY, SLOTS, ZIG } from './symbol.js';
 
 export function finalizeStruct(s) {
@@ -16,11 +16,9 @@ export function finalizeStruct(s) {
     },
     options,
   } = s;
-  const isArgStruct = (s.type === StructureType.ArgStruct);
   const descriptors = {};
   for (const member of members) {
-    const isArgument = isArgStruct && !isNaN(parseInt(member.name));
-    const { get, set } = getAccessors(member, { autoDeref: !isArgument, ...options });
+    const { get, set } = getAccessors(member, options);
     descriptors[member.name] = { get, set, configurable: true, enumerable: true };
   }
   const objectMembers = members.filter(m => m.type === MemberType.Object);
@@ -53,6 +51,7 @@ export function finalizeStruct(s) {
     }
   };
   const copy = getMemoryCopier(size);
+  const requiredNames = members.filter(m => m.isRequired).map(m => m.name);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
       copy(this[MEMORY], arg[MEMORY]);
@@ -60,27 +59,39 @@ export function finalizeStruct(s) {
         pointerCopier.call(this, arg);
       }
     } else {
-      if (template) {
+      if (arg && typeof(arg) !== 'object') {
+        throwInvalidInitializer(s, 'an object', arg);
+      } else if (!arg && requiredNames.length > 0) {
+        throwMissingInitializers(s, {});
+      }
+      for (const { name } of requiredNames) {
+        if (arg[name] === undefined) {
+          throwMissingInitializers(s, arg);
+        }
+      }
+      const keys = (arg) ? Object.keys(arg) : [];
+      for (const key of keys) {
+        if (!descriptors.hasOwnProperty(key)) {
+          throwNoProperty(s, key);
+        }
+      }
+      // apply default values unless all properties are initialized
+      if (template && keys.length < members.length) {
         copy(this[MEMORY], template[MEMORY]);
         if (pointerCopier) {
           pointerCopier.call(this, template);
         }
       }
-      // TODO: validation
-      if (arg) {
-        for (const [ key, value ] of Object.entries(arg)) {
-          this[key] = value;
-        }
+      for (const key of keys) {
+        this[key] = arg[key];
       }
     }
   };
   const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
-  if (!isArgStruct) {
-    addPointerAccessors(s);
-    addDataViewAccessor(s);
-    addStaticMembers(s);
-    addMethods(s);
-  }
+  addPointerAccessors(s);
+  addDataViewAccessor(s);
+  addStaticMembers(s);
+  addMethods(s);
   return constructor;
 };
 
@@ -108,7 +119,9 @@ export function getPointerCopier(members) {
     const destSlots = this[SLOTS];
     const srcSlots = src[SLOTS];
     for (const { slot, structure: { pointerCopier } } of pointerMembers) {
-      pointerCopier.call(destSlots[slot], srcSlots[slot]);
+      if (srcSlots[slot]) {
+        pointerCopier.call(destSlots[slot], srcSlots[slot]);
+      }
     }
   };
 }

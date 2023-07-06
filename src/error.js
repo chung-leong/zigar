@@ -66,6 +66,29 @@ export function throwInactiveUnionProperty(structure, index, currentIndex) {
   throw new TypeError(`Modifying property ${newName} when ${oldName} is active`);
 }
 
+export function throwInvalidInitializer(structure, expected, arg) {
+  const { name } = structure;
+  throw new TypeError(`The constructor of ${name} expects ${expected} as an argument, received ${arg}`);
+}
+
+export function throwMissingInitializers(structure, arg) {
+  const { name, instance: { members } } = structure;
+  const missing = [];
+  for (const { name, isRequired } of members) {
+    if (isRequired) {
+      if (arg[name] === undefined) {
+        missing.push(name);
+      }
+    }
+  }
+  throw new TypeError(`Missing initializers for ${name}: ${missing.join(', ')}`);
+}
+
+export function throwNoProperty(structure, propName) {
+  const { name } = structure;
+  throw new TypeError(`${name} does not have a property with that name: ${propName}`);
+}
+
 export function throwOverflow(member, value) {
   const typeName = getTypeName(member);
   throw new TypeError(`${typeName} cannot represent the value given: ${value}`);
