@@ -2,61 +2,29 @@ import { expect } from 'chai';
 
 import {
   getCopyFunction,
-  getClearFunction,
   getBitAlignFunction,
 } from '../src/memory.js';
 
 describe('Memory copying functions', function() {
   describe('getCopyFunction', function() {
-    it ('should return a function for copying unaligned data', function() {
-      const te = new TextEncoder();
-      const ta = te.encode('123456789'.repeat(5));
-      expect(ta.byteLength).to.equal(45);
-      const src = new DataView(ta.buffer);
-      const dest = new DataView(new ArrayBuffer(src.byteLength));
-      const f = getCopyFunction(src.byteLength);
-      f(dest, src);
-      const td = new TextDecoder();
-      const s = td.decode(dest);
-      expect(s).to.equal('123456789'.repeat(5));
-    })
-    it ('should return a function for copying aligned data', function() {
-      const te = new TextEncoder();
-      const ta = te.encode('123456789'.repeat(8));
-      expect(ta.byteLength).to.equal(72);
-      const src = new DataView(ta.buffer);
-      const dest = new DataView(new ArrayBuffer(src.byteLength));
-      const f = getCopyFunction(src.byteLength);
-      const f2 = getCopyFunction(45);
-      expect(f).to.not.equal(f2);
-      f(dest, src);
-      const td = new TextDecoder();
-      const s = td.decode(dest);
-      expect(s).to.equal('123456789'.repeat(8));
-    })
-  })
-  describe('getClearFunction', function() {
-    it ('should return a function for clearing unaligned data', function() {
-      const dest = new DataView(new ArrayBuffer(45));
-      for (let i = 0; i < dest.byteLength; i++) {
-        dest.setUint8(i, 0xAA);
+    it('should return optimal function for copying buffers of various sizes', function() {
+      const functions = [];
+      for (let size = 1; size <= 64; size++) {
+        const src = new DataView(new ArrayBuffer(size));
+        for (let i = 0; i < size; i++) {
+          src.setInt8(i, i);
+        }
+        const dest = new DataView(new ArrayBuffer(size));
+        const f = getCopyFunction(size);
+        if (!functions.includes(f)) {
+          functions.push(f);
+        }
+        f(dest, src);
+        for (let i = 0; i < size; i++) {
+          expect(dest.getInt8(i)).to.equal(i);
+        }
       }
-      const f = getClearFunction(dest.byteLength);
-      f(dest);
-      for (let i = 0; i < dest.byteLength; i++) {
-        expect(dest.getUint8(i)).to.equal(0);
-      }
-    })
-    it ('should return a function for copying aligned data', function() {
-      const dest = new DataView(new ArrayBuffer(64));
-      for (let i = 0; i < dest.byteLength; i++) {
-        dest.setUint8(i, 0xAA);
-      }
-      const f = getClearFunction(dest.byteLength);
-      f(dest);
-      for (let i = 0; i < dest.byteLength; i++) {
-        expect(dest.getUint8(i)).to.equal(0);
-      }
+      expect(functions).to.have.lengthOf(10);
     })
   })
   describe('getBitAlignFunction', function() {

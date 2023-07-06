@@ -79,39 +79,83 @@ export function getBitAlignFunction(bitPos, bitSize, toAligned) {
 }
 
 export function getCopyFunction(size) {
-  return (size & 0x03) ? copy1 : copy4;
+  switch (size) {
+    case 1: return copy1;
+    case 2: return copy2;
+    case 4: return copy4;
+    case 8: return copy8;
+    case 16: return copy16;
+    case 32: return copy32;
+    default:
+      if (!(size & 0x07)) return copy8x;
+      if (!(size & 0x03)) return copy4x;
+      if (!(size & 0x01)) return copy2x;
+      return copy1x;
+  }
 }
 
-function copy1(dest, src) {
+function copy1x(dest, src) {
   for (let i = 0, len = dest.byteLength; i < len; i++) {
     dest.setInt8(i, src.getInt8(i));
   }
 }
 
+function copy2x(dest, src) {
+  for (let i = 0, len = dest.byteLength; i < len; i += 2) {
+    dest.setInt16(i, src.getInt16(i, true), true);
+  }
+}
+
+function copy4x(dest, src) {
+  for (let i = 0, len = dest.byteLength; i < len; i += 4) {
+    dest.setInt32(i, src.getInt32(i, true), true);
+  }
+}
+
+function copy8x(dest, src) {
+  for (let i = 0, len = dest.byteLength; i < len; i += 8) {
+    dest.setInt32(i, src.getInt32(i, true), true);
+    dest.setInt32(i + 4, src.getInt32(i + 4, true), true);
+  }
+}
+
+function copy1(dest, src) {
+  dest.setInt8(0, src.getInt8(0));
+}
+
+function copy2(dest, src) {
+  dest.setInt16(0, src.getInt16(0, true), true);
+}
+
 function copy4(dest, src) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 4) {
-    dest.setInt32(i, src.getInt32(i));
-  }
+  dest.setInt32(0, src.getInt32(0, true), true);
 }
 
-export function getClearFunction(size) {
-  return (size & 0x03) ? clear1 : clear4;
+function copy8(dest, src) {
+  dest.setInt32(0, src.getInt32(0, true), true);
+  dest.setInt32(4, src.getInt32(4, true), true);
 }
 
-function clear1(dest) {
-  for (let i = 0, len = dest.byteLength; i < len; i++) {
-    dest.setInt8(i, 0);
-  }
+function copy16(dest, src) {
+  dest.setInt32(0, src.getInt32(0, true), true);
+  dest.setInt32(4, src.getInt32(4, true), true);
+  dest.setInt32(8, src.getInt32(8, true), true);
+  dest.setInt32(12, src.getInt32(12, true), true);
 }
 
-function clear4(dest) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 4) {
-    dest.setInt32(i, 0);
-  }
+function copy32(dest, src) {
+  dest.setInt32(0, src.getInt32(0, true), true);
+  dest.setInt32(4, src.getInt32(4, true), true);
+  dest.setInt32(8, src.getInt32(8, true), true);
+  dest.setInt32(12, src.getInt32(12, true), true);
+  dest.setInt32(16, src.getInt32(16, true), true);
+  dest.setInt32(20, src.getInt32(20, true), true);
+  dest.setInt32(24, src.getInt32(24, true), true);
+  dest.setInt32(28, src.getInt32(28, true), true);
 }
 
-/*
-function showBits(object) {
+/* c8 ignore start */
+export function showBits(object) {
   const bitObj = {};
   for (const [ name, value ] of Object.entries(object)) {
     const s = value.toString(2);
@@ -119,4 +163,4 @@ function showBits(object) {
   }
   console.log(bitObj);
 }
-*/
+/* c8 ignore end */
