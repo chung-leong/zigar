@@ -13,7 +13,7 @@ import {
   attachMember,
   finalizeStructure,
 } from '../src/structure.js';
-import { getCopyFunction } from '../src/memory.js';
+import { getMemoryCopier } from '../src/memory.js';
 import { MEMORY, SLOTS, SOURCE } from '../src/symbol.js';
 import {
   getPointerAccessors,
@@ -46,6 +46,7 @@ describe('Pointer functions', function() {
         type: StructureType.Pointer,
         name: '*Int32',
         size: 8,
+        hasPointer: true,
       });
       attachMember(structure, {
         type: MemberType.Object,
@@ -95,7 +96,7 @@ describe('Pointer functions', function() {
       }
       const target = {};
       const fakePointer = new FakePointer(target, 1234n);
-      const copy = getCopyFunction(8);
+      const copy = getMemoryCopier(8);
       const member = {
         type: MemberType.Object,
         bitOffset: 8,
@@ -105,9 +106,9 @@ describe('Pointer functions', function() {
         structure: {
           type: StructureType.Pointer,
           constructor: FakePointer,
-          copier: function(dest, src) {
-            copy(dest[MEMORY], src[MEMORY]);
-            Object.assign(dest[SLOTS], src[SLOTS]);
+          initializer: function(arg) {
+            copy(this[MEMORY], arg[MEMORY]);
+            this[SLOTS][0] = arg[SLOTS][0];
           },
         },
       };
@@ -155,7 +156,7 @@ describe('Pointer functions', function() {
       }
       const target = {};
       const fakePointer = new FakePointer(target, 1234n);
-      const copy = getCopyFunction(8);
+      const copy = getMemoryCopier(8);
       const member = {
         type: MemberType.Object,
         bitSize: 64,
@@ -163,9 +164,9 @@ describe('Pointer functions', function() {
         structure: {
           type: StructureType.Pointer,
           constructor: FakePointer,
-          copier: function(dest, src) {
-            copy(dest[MEMORY], src[MEMORY]);
-            dest[SLOTS] = { ...src[SLOTS] };
+          initializer: function(arg) {
+            copy(this[MEMORY], arg[MEMORY]);
+            this[SLOTS][0] = arg[SLOTS][0];
           },
         },
       };

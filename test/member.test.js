@@ -264,8 +264,12 @@ describe('Member functions', function() {
         structure: {
           type: StructureType.Struct,
           constructor: DummyClass,
-          copier: (dest, src) => {
-            dest.value = src.value
+          initializer: function(arg) {
+            if (arg instanceof DummyClass) {
+              this.value = arg.value
+            } else {
+              this.value = arg;
+            }
           },
         },
       };
@@ -485,7 +489,7 @@ describe('Member functions', function() {
       expect(dv.getBigInt64(8, true)).to.equal(5n);
       expect(dv.getBigInt64(16, true)).to.equal(5n);
     })
-    it('should return object accessors (Struct)', function() {
+    it('should return object array accessors (Struct)', function() {
       useObject();
       const DummyClass = function(arg) {
         this.value = arg
@@ -500,8 +504,12 @@ describe('Member functions', function() {
         structure: {
           type: StructureType.Struct,
           constructor: DummyClass,
-          copier: (dest, src) => {
-            dest.value = src.value
+          initializer: function(arg) {
+            if (arg instanceof DummyClass) {
+              this.value = arg.value
+            } else {
+              this.value = arg;
+            }
           },
         },
       };

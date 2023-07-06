@@ -1,13 +1,13 @@
 import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
-import { getCopyFunction } from './memory.js';
+import { getMemoryCopier } from './memory.js';
 import { getDataView, addDataViewAccessor } from './data-view.js';
 import { addPointerAccessors } from './pointer.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
-import { createChildObjects } from './struct.js';
+import { createChildObjects, getPointerCopier, getPointerResetter } from './struct.js';
 import { throwInactiveUnionProperty } from './error.js';
-import { MEMORY, SLOTS, ENUM_INDEX, ENUM_ITEM } from './symbol.js';
+import { MEMORY, ENUM_INDEX, ENUM_ITEM } from './symbol.js';
 
 export function finalizeUnion(s) {
   const {
@@ -19,7 +19,6 @@ export function finalizeUnion(s) {
     },
     options,
   } = s;
-  const copy = getCopyFunction(size);
   const descriptors = {};
   let getEnumItem;
   const exclusion = (type === StructureType.BareUnion || type === StructureType.TaggedUnion);
@@ -60,13 +59,6 @@ export function finalizeUnion(s) {
     }
   }
   const objectMembers = members.filter(m => m.type === MemberType.Object);
-  const copier = s.copier = function(dest, src) {
-    copy(dest[MEMORY], src[MEMORY]);
-    // FIXME
-    if (objectMembers.length > 0) {
-      dest[SLOTS] = { ...src[SLOTS] };
-    }
-  };
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -84,12 +76,29 @@ export function finalizeUnion(s) {
     });
     Object.defineProperties(self, descriptors);
     if (objectMembers.length > 0) {
-      createChildObjects.call(self, objectMembers, dv);
+      createChildObjects.call(self, objectMembers, this, dv);
     }
     if (creating) {
-      if (template) {
-        copier(this, template);
+      initializer.call(self, arg);
+    } else {
+      return self;
+    }
+  };
+  const copy = getMemoryCopier(size);
+  const initializer = s.initializer = function(arg) {
+    if (arg instanceof constructor) {
+      copy(this[MEMORY], arg[MEMORY]);
+      if (pointerCopier) {
+        pointerCopier.call(this, arg);
       }
+    } else {
+      if (template) {
+        copy(this[MEMORY], template[MEMORY]);
+        if (pointerCopier) {
+          pointerCopier.call(this, template);
+        }
+      }
+      // TODO: validation
       if (arg) {
         const entries = Object.entries(arg);
         if (entries.length > 0) {
@@ -99,11 +108,12 @@ export function finalizeUnion(s) {
           this[key] = value;
         }
       }
-    } else {
-      return self;
     }
   };
+  const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
+  const pointerResetter = s.pointerResetter = getPointerResetter(objectMembers);
   if (type === StructureType.TaggedUnion) {
+    // enable casting to enum
     Object.defineProperties(constructor.prototype, {
       [ENUM_ITEM]: { get: getEnumItem, configurable: true },
     });

@@ -93,32 +93,158 @@ R"=====(
     }
   }
 
-  function getCopyFunction(size) {
-    return (size & 0x03) ? copy1 : copy4;
+  function getMemoryCopier(size) {
+    switch (size) {
+      case 1: return copy1;
+      case 2: return copy2;
+      case 4: return copy4;
+      case 8: return copy8;
+      case 16: return copy16;
+      case 32: return copy32;
+      default:
+        if (!(size & 0x07)) return copy8x;
+        if (!(size & 0x03)) return copy4x;
+        if (!(size & 0x01)) return copy2x;
+        return copy1x;
+    }
   }
 
-  function copy1(dest, src) {
+  function copy1x(dest, src) {
     for (let i = 0, len = dest.byteLength; i < len; i++) {
       dest.setInt8(i, src.getInt8(i));
     }
   }
 
-  function copy4(dest, src) {
-    for (let i = 0, len = dest.byteLength; i < len; i += 4) {
-      dest.setInt32(i, src.getInt32(i));
+  function copy2x(dest, src) {
+    for (let i = 0, len = dest.byteLength; i < len; i += 2) {
+      dest.setInt16(i, src.getInt16(i, true), true);
     }
   }
 
-  /*
-  function showBits(object) {
-    const bitObj = {};
-    for (const [ name, value ] of Object.entries(object)) {
-      const s = value.toString(2);
-      bitObj[name] = s.padStart(Math.ceil(s.length / 8) * 8, '0');
+  function copy4x(dest, src) {
+    for (let i = 0, len = dest.byteLength; i < len; i += 4) {
+      dest.setInt32(i, src.getInt32(i, true), true);
     }
-    console.log(bitObj);
   }
-  */
+
+  function copy8x(dest, src) {
+    for (let i = 0, len = dest.byteLength; i < len; i += 8) {
+      dest.setInt32(i, src.getInt32(i, true), true);
+      dest.setInt32(i + 4, src.getInt32(i + 4, true), true);
+    }
+  }
+
+  function copy1(dest, src) {
+    dest.setInt8(0, src.getInt8(0));
+  }
+
+  function copy2(dest, src) {
+    dest.setInt16(0, src.getInt16(0, true), true);
+  }
+
+  function copy4(dest, src) {
+    dest.setInt32(0, src.getInt32(0, true), true);
+  }
+
+  function copy8(dest, src) {
+    dest.setInt32(0, src.getInt32(0, true), true);
+    dest.setInt32(4, src.getInt32(4, true), true);
+  }
+
+  function copy16(dest, src) {
+    dest.setInt32(0, src.getInt32(0, true), true);
+    dest.setInt32(4, src.getInt32(4, true), true);
+    dest.setInt32(8, src.getInt32(8, true), true);
+    dest.setInt32(12, src.getInt32(12, true), true);
+  }
+
+  function copy32(dest, src) {
+    dest.setInt32(0, src.getInt32(0, true), true);
+    dest.setInt32(4, src.getInt32(4, true), true);
+    dest.setInt32(8, src.getInt32(8, true), true);
+    dest.setInt32(12, src.getInt32(12, true), true);
+    dest.setInt32(16, src.getInt32(16, true), true);
+    dest.setInt32(20, src.getInt32(20, true), true);
+    dest.setInt32(24, src.getInt32(24, true), true);
+    dest.setInt32(28, src.getInt32(28, true), true);
+  }
+
+  function getMemoryResetter(size) {
+    switch (size) {
+      case 1: return reset1;
+      case 2: return reset2;
+      case 4: return reset4;
+      case 8: return reset8;
+      case 16: return reset16;
+      case 32: return reset32;
+      default:
+        if (!(size & 0x07)) return reset8x;
+        if (!(size & 0x03)) return reset4x;
+        if (!(size & 0x01)) return reset2x;
+        return reset1x;
+    }
+  }
+
+  function reset1x(dest) {
+    for (let i = 0, len = dest.byteLength; i < len; i++) {
+      dest.setInt8(i, 0);
+    }
+  }
+
+  function reset2x(dest) {
+    for (let i = 0, len = dest.byteLength; i < len; i += 2) {
+      dest.setInt16(i, 0, true);
+    }
+  }
+
+  function reset4x(dest) {
+    for (let i = 0, len = dest.byteLength; i < len; i += 4) {
+      dest.setInt32(i, 0, true);
+    }
+  }
+
+  function reset8x(dest) {
+    for (let i = 0, len = dest.byteLength; i < len; i += 8) {
+      dest.setInt32(i, 0, true);
+      dest.setInt32(i + 4, 0, true);
+    }
+  }
+
+  function reset1(dest) {
+    dest.setInt8(0, 0);
+  }
+
+  function reset2(dest) {
+    dest.setInt16(0, 0, true);
+  }
+
+  function reset4(dest) {
+    dest.setInt32(0, 0, true);
+  }
+
+  function reset8(dest) {
+    dest.setInt32(0, 0, true);
+    dest.setInt32(4, 0, true);
+  }
+
+  function reset16(dest) {
+    dest.setInt32(0, 0, true);
+    dest.setInt32(4, 0, true);
+    dest.setInt32(8, 0, true);
+    dest.setInt32(12, 0, true);
+  }
+
+  function reset32(dest) {
+    dest.setInt32(0, 0, true);
+    dest.setInt32(4, 0, true);
+    dest.setInt32(8, 0, true);
+    dest.setInt32(12, 0, true);
+    dest.setInt32(16, 0, true);
+    dest.setInt32(20, 0, true);
+    dest.setInt32(24, 0, true);
+    dest.setInt32(28, 0, true);
+  }
+  /* c8 ignore end */
 
   function getDataViewBoolAccessor(access, member) {
     return cacheMethod(access, member, () => {
@@ -618,10 +744,6 @@ R"=====(
       options,
     } = s;
     const primitive = getPrimitiveClass(member);
-    const copy = getCopyFunction(size);
-    s.copier = function (dest, src) {
-      copy(dest[MEMORY], src[MEMORY]);
-    };
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
       let self, dv;
@@ -637,13 +759,19 @@ R"=====(
         [MEMORY]: { value: dv },
       });
       if (creating) {
-        if (primitive !== undefined) {
-          if (arg !== undefined) {
-            this.set(primitive(arg));
-          }
-        }
+        initializer.call(self, arg);
       } else {
         return self;
+      }
+    };
+    const copy = getMemoryCopier(size);
+    const initializer = s.initializer = function(arg) {
+      if (arg instanceof constructor) {
+        copy(this[MEMORY], arg[MEMORY]);
+      } else {
+        if (primitive !== undefined) {
+          this.set(primitive(arg ?? 0));
+        }
       }
     };
     const { get, set } = getAccessors(member, options);
@@ -654,7 +782,6 @@ R"=====(
     });
     return constructor;
   }
-
   function getIntRange({ isSigned, bitSize }) {
     if (bitSize <= 32) {
       const max = 2 ** (isSigned ? bitSize - 1 : bitSize) - 1;
@@ -764,6 +891,7 @@ R"=====(
       instance: {
         members: [ member ],
       },
+      hasPointer,
       options,
     } = s;
     if (process.env.NODE_DEV !== 'production') {
@@ -775,14 +903,7 @@ R"=====(
         throw new Error(`slot must be undefined for array member`);
       }
     }
-    const copy = getCopyFunction(size);
     const objectMember = (member.type === MemberType.Object) ? member : null;
-    s.copier = function(dest, src) {
-      copy(dest[MEMORY], src[MEMORY]);
-      if (objectMember) {
-        dest[SLOTS] = { ...src[SLOTS] };
-      }
-    };
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
       let self, dv;
@@ -797,21 +918,25 @@ R"=====(
         [MEMORY]: { value: dv },
       });
       if (objectMember) {
-        const slots = {};
-        const { structure: { constructor }, byteSize } = objectMember;
-        const recv = (this === ZIG) ? this : null;
-        for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
-          const childDV = new DataView(dv.buffer, offset, byteSize);
-          slots[slot] = constructor.call(recv, childDV);
-        }
-        Object.defineProperties(self, {
-          [SLOTS]: { value: slots, writable: true },
-        });
+        createChildObjects$1.call(self, objectMember, this, dv);
       }
-      if (creating) ; else {
+      if (creating) {
+        initializer.call(this, arg);
+      } else {
         return self;
       }
     };
+    const copy = getMemoryCopier(size);
+    const initializer = s.initializer = function(arg) {
+      if (arg instanceof constructor) {
+        copy(this[MEMORY], arg[MEMORY]);
+        if (pointerCopier) {
+          pointerCopier.call(this, arg);
+        }
+      }
+    };
+    const pointerCopier = s.pointerCopier = getPointerCopier$1(objectMember);
+    s.pointerResetter = getPointerResetter$1(objectMember);
     const { get, set } = getAccessors(member, options);
     let lengthDescriptor;
     if (type == StructureType.Slice) {
@@ -831,6 +956,50 @@ R"=====(
     addTypedArrayAccessor(s);
     addStringAccessors(s);
     return constructor;
+  }
+
+  function createChildObjects$1(member, recv, dv) {
+    const slots = {};
+    const { structure: { constructor }, byteSize } = member;
+    if (recv !== ZIG) {
+      recv = null;
+    }
+    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+      const childDV = new DataView(dv.buffer, offset, byteSize);
+      slots[slot] = constructor.call(recv, childDV);
+    }
+    Object.defineProperties(this, {
+      [SLOTS]: { value: slots },
+    });
+  }
+
+  function getPointerCopier$1(member) {
+    if (!member?.structure.hasPointer) {
+      return null;
+    }
+    return function(src) {
+      const { structure: { pointerCopier }, byteSize } = member;
+      const dv = this[MEMORY];
+      const destSlots = dest[SLOTS];
+      const srcSlots = src[SLOTS];
+      for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+        pointerCopier.call(destSlots[slot], srcSlots[slot]);
+      }
+    };
+  }
+
+  function getPointerResetter$1(member) {
+    if (!member?.structure.hasPointer) {
+      return null;
+    }
+    return function(src) {
+      const { structure: { pointerResetter }, byteSize } = member;
+      const dv = this[MEMORY];
+      const destSlots = dest[SLOTS];
+      for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+        pointerResetter.call(destSlots[slot]);
+      }
+    };
   }
 
   function getArrayLengthGetter(size) {
@@ -882,18 +1051,11 @@ R"=====(
       },
       options,
     } = s;
-    const { get, set } = getAccessors(member, options);
-    const copy = getCopyFunction(size);
-    s.copier = function (dest, src) {
-      copy(dest[MEMORY], src[MEMORY]);
-      dest[SLOTS] = { ...src[SLOTS] };
-    };
     const { structure: target } = member;
     target.type === StructureType.Slice;
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
       let self, dv;
-      const slots = { 0: null };
       if (creating) {
         self = this;
         dv = new DataView(new ArrayBuffer(size));
@@ -903,21 +1065,34 @@ R"=====(
       }
       Object.defineProperties(self, {
         [MEMORY]: { value: dv },
-        [SLOTS]: { value: slots, writable: true },
+        [SLOTS]: { value: { 0: null } },
         // a boolean value indicating whether Zig currently owns the pointer
         [ZIG]: { value: this === ZIG, writable: true },
       });
       if (creating) {
-        const { constructor } = target;
-        if (!(arg instanceof constructor)) {
-          const recv = (this === ZIG) ? this : null;
-          arg = isBuffer(arg) ? constructor.call(recv, arg) : new constructor(arg);
-        }
-        slots[0] = arg;
+        initializer.call(this, arg);
       } else {
         return self;
       }
     };
+    const initializer = s.initializer = function(arg) {
+      if (arg instanceof constructor) {
+        // not doing memory copying since values stored there might not be valid anyway
+        pointerCopier.call(this);
+      } else {
+        const Target = target.constructor;
+        if (!(arg instanceof Target)) {
+          // automatically cast or create target
+          const recv = (this === ZIG) ? this : null;
+          arg = isBuffer(arg) ? Target.call(recv, arg) : new Target(arg);
+        }
+        this[SLOTS][0] = arg;
+      }
+    };
+    const pointerCopier = s.pointerCopier = function(arg) {
+      this[SLOTS][0] = arg[SLOTS][0];
+    };
+    const { get, set } = getAccessors(member, options);
     Object.defineProperties(constructor.prototype, {
       '*': { get, set, configurable: true, enumerable: true },
     });
@@ -969,11 +1144,9 @@ R"=====(
               return pointer;
             },
             set: function(value) {
-              const { constructor, copier } = structure;
-              if (!(value instanceof constructor)) {
-                value = new constructor(value);
-              }
-              copier(this[SOURCE][SLOTS][slot], value);
+              const { initializer } = structure;
+              const object = this[SOURCE][SLOTS][slot];
+              initializer.call(object, value);
             },
           };
         } else {
@@ -983,12 +1156,9 @@ R"=====(
               return pointer;
             },
             set: function(index, value) {
-              const { constructor, copier } = structure;
-              if (!(value instanceof constructor)) {
-                throwInvalidType(structure);
-              }
+              const { initializer } = structure;
               const object = this[SOURCE][SLOTS][index];
-              copier(object, value);
+              initializer.call(object, value);
             },
           };
         }
@@ -1024,7 +1194,6 @@ R"=====(
       options,
     } = s;
     const isArgStruct = (s.type === StructureType.ArgStruct);
-    const copy = getCopyFunction(size);
     const descriptors = {};
     for (const member of members) {
       const isArgument = isArgStruct && !isNaN(parseInt(member.name));
@@ -1032,18 +1201,10 @@ R"=====(
       descriptors[member.name] = { get, set, configurable: true, enumerable: true };
     }
     const objectMembers = members.filter(m => m.type === MemberType.Object);
-    const copier = s.copier = function(dest, src) {
-      copy(dest[MEMORY], src[MEMORY]);
-      if (objectMembers.length > 0) {
-        dest[SLOTS] = { ...src[SLOTS] };
-      }
-    };
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
       let self, dv;
       if (creating) {
-        // new operation--expect an object
-        // TODO: validate argument
         self = this;
         dv = new DataView(new ArrayBuffer(size));
       } else {
@@ -1055,12 +1216,10 @@ R"=====(
       });
       Object.defineProperties(self, descriptors);
       if (objectMembers.length > 0) {
-        createChildObjects.call(self, objectMembers, dv);
+        createChildObjects.call(self, objectMembers, this, dv);
       }
       if (creating) {
-        if (template) {
-          copier(this, template);
-        }
+        initializer.call(this);
         if (arg) {
           for (const [ key, value ] of Object.entries(arg)) {
             this[key] = value;
@@ -1070,6 +1229,29 @@ R"=====(
         return self;
       }
     };
+    const copy = getMemoryCopier(size);
+    const initializer = s.initializer = function(arg) {
+      if (arg instanceof constructor) {
+        copy(this[MEMORY], arg[MEMORY]);
+        if (pointerCopier) {
+          pointerCopier.call(this, arg);
+        }
+      } else {
+        if (template) {
+          copy(this[MEMORY], template[MEMORY]);
+          if (pointerCopier) {
+            pointerCopier.call(this, template);
+          }
+        }
+        // TODO: validation
+        if (arg) {
+          for (const [ key, value ] of Object.entries(arg)) {
+            this[key] = value;
+          }
+        }
+      }
+    };
+    const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
     if (!isArgStruct) {
       addPointerAccessors(s);
       addDataViewAccessor(s);
@@ -1078,17 +1260,46 @@ R"=====(
     }
     return constructor;
   }
-  function createChildObjects(members, dv) {
-    const recv = (this === ZIG) ? this : null;
+  function createChildObjects(members, recv, dv) {
     const slots = {};
+    if (recv !== ZIG)  {
+      recv = null;
+    }
     for (const { structure: { constructor }, bitOffset, byteSize, slot } of members) {
       const offset = bitOffset >> 3;
       const childDV = new DataView(dv.buffer, offset, byteSize);
       slots[slot] = constructor.call(recv, childDV);
     }
     Object.defineProperties(this, {
-      [SLOTS]: { value: slots, writable: true },
+      [SLOTS]: { value: slots },
     });
+  }
+
+  function getPointerCopier(members) {
+    const pointerMembers = members.filter(m => m.structure.hasPointer);
+    if (pointerMembers.length === 0) {
+      return null;
+    }
+    return function(src) {
+      const destSlots = this[SLOTS];
+      const srcSlots = src[SLOTS];
+      for (const { slot, structure: { pointerCopier } } of pointerMembers) {
+        pointerCopier.call(destSlots[slot], srcSlots[slot]);
+      }
+    };
+  }
+
+  function getPointerResetter(members) {
+    const pointerMembers = members.filter(m => m.structure.hasPointer);
+    if (pointerMembers.length === 0) {
+      return null;
+    }
+    return function() {
+      const destSlots = this[SLOTS];
+      for (const { slot, structure: { pointerResetter } } of pointerMembers) {
+        pointerResetter.call(destSlots[slot]);
+      }
+    };
   }
 
   function finalizeUnion(s) {
@@ -1101,7 +1312,6 @@ R"=====(
       },
       options,
     } = s;
-    const copy = getCopyFunction(size);
     const descriptors = {};
     let getEnumItem;
     const exclusion = (type === StructureType.BareUnion || type === StructureType.TaggedUnion);
@@ -1140,13 +1350,6 @@ R"=====(
       }
     }
     const objectMembers = members.filter(m => m.type === MemberType.Object);
-    const copier = s.copier = function(dest, src) {
-      copy(dest[MEMORY], src[MEMORY]);
-      // FIXME
-      if (objectMembers.length > 0) {
-        dest[SLOTS] = { ...src[SLOTS] };
-      }
-    };
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
       let self, dv;
@@ -1164,12 +1367,29 @@ R"=====(
       });
       Object.defineProperties(self, descriptors);
       if (objectMembers.length > 0) {
-        createChildObjects.call(self, objectMembers, dv);
+        createChildObjects.call(self, objectMembers, this, dv);
       }
       if (creating) {
-        if (template) {
-          copier(this, template);
+        initializer.call(self, arg);
+      } else {
+        return self;
+      }
+    };
+    const copy = getMemoryCopier(size);
+    const initializer = s.initializer = function(arg) {
+      if (arg instanceof constructor) {
+        copy(this[MEMORY], arg[MEMORY]);
+        if (pointerCopier) {
+          pointerCopier.call(this, arg);
         }
+      } else {
+        if (template) {
+          copy(this[MEMORY], template[MEMORY]);
+          if (pointerCopier) {
+            pointerCopier.call(this, template);
+          }
+        }
+        // TODO: validation
         if (arg) {
           const entries = Object.entries(arg);
           if (entries.length > 0) {
@@ -1179,11 +1399,12 @@ R"=====(
             this[key] = value;
           }
         }
-      } else {
-        return self;
       }
     };
+    const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
+    s.pointerResetter = getPointerResetter(objectMembers);
     if (type === StructureType.TaggedUnion) {
+      // enable casting to enum
       Object.defineProperties(constructor.prototype, {
         [ENUM_ITEM]: { get: getEnumItem, configurable: true },
       });
@@ -1204,15 +1425,7 @@ R"=====(
       instance: { members },
       options,
     } = s;
-    const copy = getCopyFunction(size);
     const objectMembers = members.filter(m => m.type === MemberType.Object);
-    s.copier = function (dest, src) {
-      copy(dest[MEMORY], src[MEMORY]);
-      // FIXME
-      if (objectMembers.length !== 0) {
-        dest[SLOTS] = { ...src[SLOTS] };
-      }
-    };
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
       let self, dv;
@@ -1227,14 +1440,31 @@ R"=====(
       Object.defineProperties(self, {
         [MEMORY]: { value: dv },
       });
-      createChildObjects.call(self, objectMembers, dv);
+      if (objectMembers.length > 0) {
+        createChildObjects.call(self, objectMembers, this, dv);
+      }
       if (creating) {
-        this.set(arg);
+        initializer.call(this, arg);
       } else {
         return self;
       }
     };
-    const { get, set } = getErrorUnionAccessors(members, options);
+    const copy = getMemoryCopier(size);
+    const initializer = s.initializer = function(arg) {
+      if (arg instanceof constructor) {
+        copy(this[MEMORY], arg[MEMORY]);
+        if (pointerCopier) {
+          if (check.call(this)) {
+            pointerCopier.call(this, arg);
+          }
+        }
+      } else {
+        this.set(arg);
+      }
+    };
+    const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
+    s.pointerResetter = getPointerResetter(objectMembers);
+    const { get, set, check } = getErrorUnionAccessors(members, size, options);
     Object.defineProperties(constructor.prototype, {
       get: { value: get, configurable: true, writable: true },
       set: { value: set, configurable: true, writable: true },
@@ -1242,18 +1472,20 @@ R"=====(
     return constructor;
   }
 
-  function getErrorUnionAccessors(members, options) {
+  function getErrorUnionAccessors(members, size, options) {
     const { get: getValue, set: setValue } = getAccessors(members[0], options);
     const { get: getError, set: setError } = getAccessors(members[1], options);
-    const { structure } = members[1];
+    const { structure: valueStructure } = members[0];
+    const { structure: errorStructure } = members[1];
+    const reset = getMemoryResetter(size);
     return {
       get: function() {
         const errorNumber = getError.call(this);
         if (errorNumber !== 0) {
-          const { constructor } = structure;
+          const { constructor } = errorStructure;
           const err = constructor(errorNumber);
           if (!err) {
-            throwUnknownErrorNumber(structure, errorNumber);
+            throwUnknownErrorNumber(errorStructure, errorNumber);
           }
           throw err;
         } else {
@@ -1261,17 +1493,25 @@ R"=====(
         }
       },
       set: function(value) {
-        let errorNumber;
         if (value instanceof Error) {
-          const { constructor } = structure;
+          const { constructor } = errorStructure;
+          const { pointerResetter } = valueStructure;
           if (!(value instanceof constructor)) {
-            throwNotInErrorSet(structure);
+            throwNotInErrorSet(errorStructure);
           }
-          errorNumber = Number(value);
-          value = null;
+          reset(this[MEMORY]);
+          setError.call(this, Number(value));
+          if (pointerResetter) {
+            pointerResetter.call(this[SLOTS][0]);
+          }
+        } else {
+          setValue.call(this, value);
+          setError.call(this, 0);
         }
-        setValue.call(this, value);
-        setError.call(this, errorNumber);
+      },
+      check: function() {
+        const errorNumber = getError.call(this);
+        return (errorNumber === 0);
       },
     };
   }
@@ -1425,20 +1665,11 @@ R"=====(
       instance: { members },
       options,
     } = s;
-    const copy = getCopyFunction(size);
     const objectMembers = members.filter(m => m.type === MemberType.Object);
-    s.copier = function (dest, src) {
-      copy(dest[MEMORY], src[MEMORY]);
-      // FIXME
-      if (objectMembers.length !== 0) {
-        dest[SLOTS] = { ...src[SLOTS] };
-      }
-    };
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
       let self, dv;
       if (creating) {
-        // new operation
         self = this;
         dv = new DataView(new ArrayBuffer(size));
       } else {
@@ -1449,15 +1680,31 @@ R"=====(
         [MEMORY]: { value: dv },
       });
       if (objectMembers.length > 0) {
-        createChildObjects.call(self, objectMembers, dv);
+        createChildObjects.call(self, objectMembers, this, dv);
       }
       if (creating) {
-        this.set(arg);
+        initializer.call(this, arg);
       } else {
         return self;
       }
     };
-    const { get, set } = getOptionalAccessors(members, options);
+    const copy = getMemoryCopier(size);
+    const initializer = s.initializer = function(arg) {
+      if (arg instanceof constructor) {
+        copy(this[MEMORY], arg[MEMORY]);
+        if (pointerCopier) {
+          // don't bother copying pointers when it's empty
+          if (check.call(this)) {
+            pointerCopier.call(this, arg);
+          }
+        }
+      } else {
+        this.set(arg);
+      }
+    };
+    const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
+    s.pointerResetter = getPointerResetter(objectMembers);
+    const { get, set, check } = getOptionalAccessors(members, size, options);
     Object.defineProperties(constructor.prototype, {
       get: { value: get, configurable: true, writable: true },
       set: { value: set, configurable: true, writable: true },
@@ -1465,9 +1712,11 @@ R"=====(
     return constructor;
   }
 
-  function getOptionalAccessors(members, options) {
+  function getOptionalAccessors(members, size, options) {
     const { get: getValue, set: setValue } = getAccessors(members[0], options);
     const { get: getPresent, set: setPresent } = getAccessors(members[1], options);
+    const { structure: valueStructure } = members[0];
+    const reset = getMemoryResetter(size);
     return {
       get: function() {
         const present = getPresent.call(this);
@@ -1478,9 +1727,18 @@ R"=====(
         }
       },
       set: function(value) {
-        setPresent.call(this, value != null);
-        setValue.call(this, value);
+        if (value != null) {
+          setPresent.call(this, true);
+          setValue.call(this, value);
+        } else {
+          reset(this[MEMORY]);
+          const { pointerResetter } = valueStructure;
+          if (pointerResetter) {
+            pointerResetter.call(this[SLOTS][0]);
+          }
+        }
       },
+      check: getPresent
     };
   }
 
@@ -1563,13 +1821,17 @@ R"=====(
       type,
       name,
       size,
+      hasPointer,
     } = def;
     return {
       constructor: null,
-      copier: null,
+      initializer: null,
+      pointerCopier: null,
+      pointerResetter: null,
       type,
       name,
       size,
+      hasPointer,
       instance: {
         members: [],
         template: null,
@@ -1681,7 +1943,7 @@ R"=====(
             break;
           }
         }
-        throw new Error(`No factory for ${typeName}: ${f}`);
+        throw new Error(`No factory for ${typeName}: ${member.type}`);
       }
     }
     return {
@@ -1884,12 +2146,9 @@ R"=====(
             };
           } else {
             return function(value) {
-              const { constructor, copier } = structure;
-              if (!(value instanceof constructor)) {
-                value = new constructor(value);
-              }
+              const { initializer } = structure;
               const object = this[SLOTS][slot];
-              copier(object, value);
+              initializer.call(object, value);
             };
           }
         } else {
@@ -1901,12 +2160,9 @@ R"=====(
             };
           } else {
             return function(index, value) {
-              const { constructor, copier } = structure;
-              if (!(value instanceof constructor)) {
-                value = new constructor(value);
-              }
+              const { initializer } = structure;
               const object = this[SLOTS][index];
-              copier(object, value);
+              initializer.call(object, value);
             };
           }
         }

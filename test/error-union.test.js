@@ -258,7 +258,7 @@ describe('Error union functions', function() {
       const object = {
         [MEMORY]: dv,
       };
-      const { get } = getErrorUnionAccessors(members, {});
+      const { get } = getErrorUnionAccessors(members, dv.byteLength, {});
       expect(() => get.call(object)).to.throw().equal(dummyError);
       expect(errorNumber).to.equal(18);
       dv.setUint16(8, 0, true);
@@ -307,7 +307,7 @@ describe('Error union functions', function() {
         [SLOTS]: { 0: null },
       };
       const dummyObject = new DummyClass();
-      const { get } = getErrorUnionAccessors(members, {});
+      const { get } = getErrorUnionAccessors(members, dv.byteLength, {});
       expect(() => get.call(object)).to.throw().equal(dummyError);
       expect(errorNumber).to.equal(18);
       dv.setUint16(8, 0, true);
@@ -331,6 +331,9 @@ describe('Error union functions', function() {
           bitOffset: 0,
           bitSize: 64,
           byteSize: 8,
+          structure: {
+            type: StructureType.Primitive,
+          }
         },
         {
           type: MemberType.Int,
@@ -346,7 +349,7 @@ describe('Error union functions', function() {
       const object = {
         [MEMORY]: dv,
       };
-      const { set } = getErrorUnionAccessors(members, {});
+      const { set } = getErrorUnionAccessors(members, dv.byteLength, {});
       set.call(object, dummyError);
       expect(dv.getUint16(8, true)).to.equal(18);
       expect(dv.getFloat64(0, true)).to.equal(0);
@@ -377,12 +380,17 @@ describe('Error union functions', function() {
           slot: 0,
           structure: {
             type: StructureType.Struct,
+            hasPointer: true,
             constructor: DummyClass,
-            copier: (dest, src) => {
-              dest.value = src.value;
+            initializer: function(arg) {
+              if (arg instanceof DummyClass) {
+                this.value = arg.value;
+              } else {
+                this.value = arg;
+              }
             },
-            resetter: (dest) => {
-              dest.value = 0;
+            pointerResetter: function() {
+              this.value = null;
             },
           }
         },
@@ -401,11 +409,10 @@ describe('Error union functions', function() {
         [MEMORY]: dv,
         [SLOTS]: { 0: dummyObject },
       };
-      const { set } = getErrorUnionAccessors(members, {});
+      const { set } = getErrorUnionAccessors(members, dv.byteLength, {});
       set.call(object, dummyError);
       expect(dv.getUint16(8, true)).to.equal(18);
-      // TODO: implement resetter
-      //expect(object[SLOTS][0].value).to.equal(0);
+      expect(object[SLOTS][0].value).to.be.null;
       set.call(object, 456);
       expect(dv.getUint16(8, true)).to.equal(0);
       expect(object[SLOTS][0].value).to.equal(456);

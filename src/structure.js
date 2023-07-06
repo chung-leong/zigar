@@ -87,13 +87,17 @@ export function beginStructure(def, options = {}) {
     type,
     name,
     size,
+    hasPointer,
   } = def;
   return {
     constructor: null,
-    copier: null,
+    initializer: null,
+    pointerCopier: null,
+    pointerResetter: null,
     type,
     name,
     size,
+    hasPointer,
     instance: {
       members: [],
       template: null,

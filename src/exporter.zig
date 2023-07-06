@@ -127,6 +127,7 @@ const Structure = extern struct {
     name: ?[*:0]const u8 = null,
     structure_type: StructureType,
     total_size: usize = 0,
+    has_pointer: bool,
 };
 
 const missing = std.math.maxInt(usize);
@@ -704,6 +705,7 @@ fn getStructure(host: Host, comptime T: type) !Value {
             .name = getStructureName(T),
             .structure_type = getStructureType(T),
             .total_size = @sizeOf(T),
+            .has_pointer = hasPointer(T),
         };
         // create the structure and place it in the slot immediately
         // so that recursive definition works correctly
@@ -840,6 +842,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                         .name = @ptrCast([*:0]const u8, @typeName(T)),
                         .structure_type = .Slice,
                         .total_size = @sizeOf(pt.child),
+                        .has_pointer = hasPointer(pt.child),
                     };
                     const slice_structure = try host.beginStructure(slice_def);
                     try host.writeGlobalSlot(slice_slot, slice_structure);

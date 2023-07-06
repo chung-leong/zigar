@@ -426,6 +426,7 @@ describe('Struct functions', function() {
         type: StructureType.Pointer,
         name: '*Int32',
         size: 8,
+        hasPointer: true
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -441,6 +442,7 @@ describe('Struct functions', function() {
         type: StructureType.Struct,
         name: 'Hello',
         size: 8 * 2,
+        hasPointer: true
       });
       attachMember(structure, {
         name: 'dog',
@@ -503,6 +505,7 @@ describe('Struct functions', function() {
         type: StructureType.Pointer,
         name: '*Int32',
         size: 8,
+        hasPointer: true,
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,

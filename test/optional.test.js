@@ -46,6 +46,9 @@ describe('Optional functions', function() {
         bitOffset: 0,
         bitSize: 128,
         byteSize: 16,
+        structure: {
+          type: StructureType.Primitive,
+        }
       });
       attachMember(structure, {
         name: 'present',
@@ -189,6 +192,9 @@ describe('Optional functions', function() {
           bitOffset: 0,
           bitSize: 64,
           byteSize: 8,
+          structure: {
+            type: StructureType.Primitive,
+          }
         },
         {
           type: MemberType.Bool,
@@ -204,7 +210,7 @@ describe('Optional functions', function() {
       const object = {
         [MEMORY]: dv,
       };
-      const { get } = getOptionalAccessors(members, {});
+      const { get } = getOptionalAccessors(members, dv.byteLength, {});
       const result1 = get.call(object);
       expect(result1).to.equal(3.14);
       dv.setUint8(8, 0, true);
@@ -238,7 +244,7 @@ describe('Optional functions', function() {
         [SLOTS]: { 0: null },
       };
       const dummyObject = new DummyClass();
-      const { get } = getOptionalAccessors(members, {});
+      const { get } = getOptionalAccessors(members, dv.byteLength, {});
       const result1 = get.call(object);
       expect(result1).to.equal(null);
       dv.setUint8(8, 1, true);
@@ -253,6 +259,9 @@ describe('Optional functions', function() {
           bitOffset: 0,
           bitSize: 64,
           byteSize: 8,
+          structure: {
+            type: StructureType.Primitive,
+          }
         },
         {
           type: MemberType.Bool,
@@ -268,7 +277,7 @@ describe('Optional functions', function() {
       const object = {
         [MEMORY]: dv,
       };
-      const { get, set } = getOptionalAccessors(members, {});
+      const { get, set } = getOptionalAccessors(members, dv.byteLength, {});
       expect(get.call(object)).to.equal(3.14);
       set.call(object, null);
       expect(dv.getUint8(8, true)).to.equal(0);
@@ -291,12 +300,16 @@ describe('Optional functions', function() {
           structure: {
             type: StructureType.Struct,
             constructor: DummyClass,
-            copier: (dest, src) => {
-              dest.value = src.value;
+            initializer: function(arg) {
+              if (arg instanceof DummyClass) {
+                this.value = arg.value;
+              } else {
+                this.value = arg;
+              }
             },
-            resetter: (dest) => {
-              dest.value = 0;
-            },
+            pointerResetter: function() {
+              this.value = null;
+            }
           }
         },
         {
@@ -312,11 +325,10 @@ describe('Optional functions', function() {
         [MEMORY]: dv,
         [SLOTS]: { 0: dummyObject },
       };
-      const { get, set } = getOptionalAccessors(members, {});
+      const { get, set } = getOptionalAccessors(members, dv.byteLength, {});
       set.call(object, null);
       expect(dv.getUint8(8, true)).to.equal(0);
-      // TODO: implement resetter
-      //expect(object[SLOTS][0].value).to.equal(0);
+      expect(object[SLOTS][0].value).to.be.null;
       set.call(object, 456);
       expect(dv.getUint8(8, true)).to.equal(1);
       expect(object[SLOTS][0].value).to.equal(456);

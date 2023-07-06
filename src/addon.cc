@@ -314,8 +314,10 @@ static Local<Object> NewStructure(Host* call,
   auto def = Object::New(isolate);
   auto type = Int32::New(isolate, static_cast<int32_t>(s.type));
   auto size = Uint32::NewFromUnsigned(isolate, s.total_size);
+  auto has_pointer = Boolean::New(isolate, s.has_pointer);
   def->Set(context, String::NewFromUtf8Literal(isolate, "type"), type).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "size"), size).Check();
+  def->Set(context, String::NewFromUtf8Literal(isolate, "hasPointer"), has_pointer).Check();
   if (s.name) {
     auto name = String::NewFromUtf8(isolate, s.name).ToLocalChecked();
     def->Set(context, String::NewFromUtf8Literal(isolate, "name"), name).Check();

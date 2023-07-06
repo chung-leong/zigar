@@ -1,5 +1,5 @@
 import { MemberType, isByteAligned, getAccessors } from './member.js';
-import { getCopyFunction } from './memory.js';
+import { getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { MEMORY } from './symbol.js';
 
@@ -12,10 +12,6 @@ export function finalizePrimitive(s) {
     options,
   } = s;
   const primitive = getPrimitiveClass(member);
-  const copy = getCopyFunction(size);
-  const copier = s.copier = function (dest, src) {
-    copy(dest[MEMORY], src[MEMORY]);
-  };
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -31,13 +27,19 @@ export function finalizePrimitive(s) {
       [MEMORY]: { value: dv },
     });
     if (creating) {
-      if (primitive !== undefined) {
-        if (arg !== undefined) {
-          this.set(primitive(arg));
-        }
-      }
+      initializer.call(self, arg);
     } else {
       return self;
+    }
+  };
+  const copy = getMemoryCopier(size);
+  const initializer = s.initializer = function(arg) {
+    if (arg instanceof constructor) {
+      copy(this[MEMORY], arg[MEMORY]);
+    } else {
+      if (primitive !== undefined) {
+        this.set(primitive(arg ?? 0));
+      }
     }
   };
   const { get, set } = getAccessors(member, options);
@@ -47,7 +49,7 @@ export function finalizePrimitive(s) {
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
   });
   return constructor;
-}
+};
 
 export function getIntRange({ isSigned, bitSize }) {
   if (bitSize <= 32) {

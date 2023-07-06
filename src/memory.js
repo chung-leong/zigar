@@ -78,7 +78,7 @@ export function getBitAlignFunction(bitPos, bitSize, toAligned) {
   }
 }
 
-export function getCopyFunction(size) {
+export function getMemoryCopier(size) {
   switch (size) {
     case 1: return copy1;
     case 2: return copy2;
@@ -152,6 +152,82 @@ function copy32(dest, src) {
   dest.setInt32(20, src.getInt32(20, true), true);
   dest.setInt32(24, src.getInt32(24, true), true);
   dest.setInt32(28, src.getInt32(28, true), true);
+}
+
+export function getMemoryResetter(size) {
+  switch (size) {
+    case 1: return reset1;
+    case 2: return reset2;
+    case 4: return reset4;
+    case 8: return reset8;
+    case 16: return reset16;
+    case 32: return reset32;
+    default:
+      if (!(size & 0x07)) return reset8x;
+      if (!(size & 0x03)) return reset4x;
+      if (!(size & 0x01)) return reset2x;
+      return reset1x;
+  }
+}
+
+function reset1x(dest) {
+  for (let i = 0, len = dest.byteLength; i < len; i++) {
+    dest.setInt8(i, 0);
+  }
+}
+
+function reset2x(dest) {
+  for (let i = 0, len = dest.byteLength; i < len; i += 2) {
+    dest.setInt16(i, 0, true);
+  }
+}
+
+function reset4x(dest) {
+  for (let i = 0, len = dest.byteLength; i < len; i += 4) {
+    dest.setInt32(i, 0, true);
+  }
+}
+
+function reset8x(dest) {
+  for (let i = 0, len = dest.byteLength; i < len; i += 8) {
+    dest.setInt32(i, 0, true);
+    dest.setInt32(i + 4, 0, true);
+  }
+}
+
+function reset1(dest) {
+  dest.setInt8(0, 0);
+}
+
+function reset2(dest) {
+  dest.setInt16(0, 0, true);
+}
+
+function reset4(dest) {
+  dest.setInt32(0, 0, true);
+}
+
+function reset8(dest) {
+  dest.setInt32(0, 0, true);
+  dest.setInt32(4, 0, true);
+}
+
+function reset16(dest) {
+  dest.setInt32(0, 0, true);
+  dest.setInt32(4, 0, true);
+  dest.setInt32(8, 0, true);
+  dest.setInt32(12, 0, true);
+}
+
+function reset32(dest) {
+  dest.setInt32(0, 0, true);
+  dest.setInt32(4, 0, true);
+  dest.setInt32(8, 0, true);
+  dest.setInt32(12, 0, true);
+  dest.setInt32(16, 0, true);
+  dest.setInt32(20, 0, true);
+  dest.setInt32(24, 0, true);
+  dest.setInt32(28, 0, true);
 }
 
 /* c8 ignore start */

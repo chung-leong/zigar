@@ -310,12 +310,9 @@ export function getObjectAccessor(access, member, options) {
           };
         } else {
           return function(value) {
-            const { constructor, copier } = structure;
-            if (!(value instanceof constructor)) {
-              value = new constructor(value);
-            }
+            const { initializer } = structure;
             const object = this[SLOTS][slot];
-            copier(object, value);
+            initializer.call(object, value);
           };
         }
       } else {
@@ -327,12 +324,9 @@ export function getObjectAccessor(access, member, options) {
           };
         } else {
           return function(index, value) {
-            const { constructor, copier } = structure;
-            if (!(value instanceof constructor)) {
-              value = new constructor(value);
-            }
+            const { initializer } = structure;
             const object = this[SLOTS][index];
-            copier(object, value);
+            initializer.call(object, value);
           };
         }
       }

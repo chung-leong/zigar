@@ -1,12 +1,13 @@
 import { expect } from 'chai';
 
 import {
-  getCopyFunction,
+  getMemoryCopier,
+  getMemoryResetter,
   getBitAlignFunction,
 } from '../src/memory.js';
 
-describe('Memory copying functions', function() {
-  describe('getCopyFunction', function() {
+describe('Memory functions', function() {
+  describe('getMemoryCopier', function() {
     it('should return optimal function for copying buffers of various sizes', function() {
       const functions = [];
       for (let size = 1; size <= 64; size++) {
@@ -15,13 +16,33 @@ describe('Memory copying functions', function() {
           src.setInt8(i, i);
         }
         const dest = new DataView(new ArrayBuffer(size));
-        const f = getCopyFunction(size);
+        const f = getMemoryCopier(size);
         if (!functions.includes(f)) {
           functions.push(f);
         }
         f(dest, src);
         for (let i = 0; i < size; i++) {
           expect(dest.getInt8(i)).to.equal(i);
+        }
+      }
+      expect(functions).to.have.lengthOf(10);
+    })
+  })
+  describe('getMemoryResetter', function() {
+    it('should return optimal function for clearing buffers of various sizes', function() {
+      const functions = [];
+      for (let size = 1; size <= 64; size++) {
+        const dest = new DataView(new ArrayBuffer(size));
+        for (let i = 0; i < size; i++) {
+          dest.setInt8(i, i);
+        }
+        const f = getMemoryResetter(size);
+        if (!functions.includes(f)) {
+          functions.push(f);
+        }
+        f(dest);
+        for (let i = 0; i < size; i++) {
+          expect(dest.getInt8(i)).to.equal(0);
         }
       }
       expect(functions).to.have.lengthOf(10);

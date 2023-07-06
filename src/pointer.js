@@ -1,6 +1,6 @@
 import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
-import { getCopyFunction } from './memory.js';
+import { getMemoryCopier } from './memory.js';
 import { getDataView, isBuffer } from './data-view.js';
 import { MEMORY, SLOTS, SOURCE, ZIG } from './symbol.js';
 
@@ -12,18 +12,11 @@ export function finalizePointer(s) {
     },
     options,
   } = s;
-  const { get, set } = getAccessors(member, options);
-  const copy = getCopyFunction(size);
-  const copier = s.copier = function (dest, src) {
-    copy(dest[MEMORY], src[MEMORY]);
-    dest[SLOTS] = { ...src[SLOTS] };
-  };
   const { structure: target } = member;
   const isSlice = target.type === StructureType.Slice;
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
-    const slots = { 0: null };
     if (creating) {
       self = this;
       dv = new DataView(new ArrayBuffer(size));
@@ -33,21 +26,34 @@ export function finalizePointer(s) {
     }
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },
-      [SLOTS]: { value: slots, writable: true },
+      [SLOTS]: { value: { 0: null } },
       // a boolean value indicating whether Zig currently owns the pointer
       [ZIG]: { value: this === ZIG, writable: true },
     });
     if (creating) {
-      const { constructor } = target;
-      if (!(arg instanceof constructor)) {
-        const recv = (this === ZIG) ? this : null;
-        arg = isBuffer(arg) ? constructor.call(recv, arg) : new constructor(arg);
-      }
-      slots[0] = arg;
+      initializer.call(this, arg);
     } else {
       return self;
     }
   };
+  const initializer = s.initializer = function(arg) {
+    if (arg instanceof constructor) {
+      // not doing memory copying since values stored there might not be valid anyway
+      pointerCopier.call(this);
+    } else {
+      const Target = target.constructor;
+      if (!(arg instanceof Target)) {
+        // automatically cast or create target
+        const recv = (this === ZIG) ? this : null;
+        arg = isBuffer(arg) ? Target.call(recv, arg) : new Target(arg);
+      }
+      this[SLOTS][0] = arg;
+    }
+  };
+  const pointerCopier = s.pointerCopier = function(arg) {
+    this[SLOTS][0] = arg[SLOTS][0];
+  };
+  const { get, set } = getAccessors(member, options);
   Object.defineProperties(constructor.prototype, {
     '*': { get, set, configurable: true, enumerable: true },
   });
@@ -99,11 +105,9 @@ export function getPointerAccessors(member, options) {
             return pointer;
           },
           set: function(value) {
-            const { constructor, copier } = structure;
-            if (!(value instanceof constructor)) {
-              value = new constructor(value);
-            }
-            copier(this[SOURCE][SLOTS][slot], value);
+            const { initializer } = structure;
+            const object = this[SOURCE][SLOTS][slot];
+            initializer.call(object, value);
           },
         };
       } else {
@@ -113,12 +117,9 @@ export function getPointerAccessors(member, options) {
             return pointer;
           },
           set: function(index, value) {
-            const { constructor, copier } = structure;
-            if (!(value instanceof constructor)) {
-              throwInvalidType(structure);
-            }
+            const { initializer } = structure;
             const object = this[SOURCE][SLOTS][index];
-            copier(object, value);
+            initializer.call(object, value);
           },
         };
       }

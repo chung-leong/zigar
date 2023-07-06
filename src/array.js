@@ -1,6 +1,6 @@
 import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
-import { getCopyFunction } from './memory.js';
+import { getMemoryCopier } from './memory.js';
 import { getDataView, addDataViewAccessor } from './data-view.js';
 import { addTypedArrayAccessor } from './typed-array.js';
 import { addStringAccessors } from './string.js';
@@ -13,6 +13,7 @@ export function finalizeArray(s) {
     instance: {
       members: [ member ],
     },
+    hasPointer,
     options,
   } = s;
   if (process.env.NODE_DEV !== 'production') {
@@ -24,14 +25,7 @@ export function finalizeArray(s) {
       throw new Error(`slot must be undefined for array member`);
     }
   }
-  const copy = getCopyFunction(size);
   const objectMember = (member.type === MemberType.Object) ? member : null;
-  const copier = s.copier = function(dest, src) {
-    copy(dest[MEMORY], src[MEMORY]);
-    if (objectMember) {
-      dest[SLOTS] = { ...src[SLOTS] };
-    }
-  };
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -46,24 +40,27 @@ export function finalizeArray(s) {
       [MEMORY]: { value: dv },
     });
     if (objectMember) {
-      const slots = {};
-      const { structure: { constructor }, byteSize } = objectMember;
-      const recv = (this === ZIG) ? this : null;
-      for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
-        const childDV = new DataView(dv.buffer, offset, byteSize);
-        slots[slot] = constructor.call(recv, childDV);
-      }
-      Object.defineProperties(self, {
-        [SLOTS]: { value: slots, writable: true },
-      });
+      createChildObjects.call(self, objectMember, this, dv);
     }
     if (creating) {
-      // expect an array
-      // TODO: validate and set memory
+      initializer.call(this, arg);
     } else {
       return self;
     }
   };
+  const copy = getMemoryCopier(size);
+  const initializer = s.initializer = function(arg) {
+    if (arg instanceof constructor) {
+      copy(this[MEMORY], arg[MEMORY]);
+      if (pointerCopier) {
+        pointerCopier.call(this, arg);
+      }
+    } else {
+      // TODO: initialize from an array
+    }
+  };
+  const pointerCopier = s.pointerCopier = getPointerCopier(objectMember);
+  const pointerResetter = s.pointerResetter = getPointerResetter(objectMember);
   const { get, set } = getAccessors(member, options);
   let lengthDescriptor;
   if (type == StructureType.Slice) {
@@ -83,6 +80,50 @@ export function finalizeArray(s) {
   addTypedArrayAccessor(s);
   addStringAccessors(s);
   return constructor;
+}
+
+function createChildObjects(member, recv, dv) {
+  const slots = {};
+  const { structure: { constructor }, byteSize } = member;
+  if (recv !== ZIG) {
+    recv = null;
+  }
+  for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+    const childDV = new DataView(dv.buffer, offset, byteSize);
+    slots[slot] = constructor.call(recv, childDV);
+  }
+  Object.defineProperties(this, {
+    [SLOTS]: { value: slots },
+  });
+}
+
+function getPointerCopier(member) {
+  if (!member?.structure.hasPointer) {
+    return null;
+  }
+  return function(src) {
+    const { structure: { pointerCopier }, byteSize } = member;
+    const dv = this[MEMORY];
+    const destSlots = dest[SLOTS];
+    const srcSlots = src[SLOTS];
+    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+      pointerCopier.call(destSlots[slot], srcSlots[slot]);
+    }
+  };
+}
+
+function getPointerResetter(member) {
+  if (!member?.structure.hasPointer) {
+    return null;
+  }
+  return function(src) {
+    const { structure: { pointerResetter }, byteSize } = member;
+    const dv = this[MEMORY];
+    const destSlots = dest[SLOTS];
+    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+      pointerResetter.call(destSlots[slot]);
+    }
+  };
 }
 
 export function getArrayLengthGetter(size) {

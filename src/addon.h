@@ -39,6 +39,7 @@ struct Structure {
   const char* name;
   StructureType type;
   size_t total_size;
+  bool has_pointer;
 };
 
 struct Member {

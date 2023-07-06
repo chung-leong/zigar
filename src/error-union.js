@@ -1,7 +1,7 @@
 import { MemberType, getAccessors } from './member.js';
-import { getCopyFunction } from './memory.js';
+import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { getDataView } from './data-view.js';
-import { createChildObjects } from './struct.js';
+import { createChildObjects, getPointerCopier, getPointerResetter } from './struct.js';
 import { throwNotInErrorSet, throwUnknownErrorNumber } from './error.js';
 import { MEMORY, SLOTS } from './symbol.js';
 
@@ -12,15 +12,7 @@ export function finalizeErrorUnion(s) {
     instance: { members },
     options,
   } = s;
-  const copy = getCopyFunction(size);
   const objectMembers = members.filter(m => m.type === MemberType.Object);
-  const copier = s.copier = function (dest, src) {
-    copy(dest[MEMORY], src[MEMORY]);
-    // FIXME
-    if (objectMembers.length !== 0) {
-      dest[SLOTS] = { ...src[SLOTS] };
-    }
-  };
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -35,14 +27,31 @@ export function finalizeErrorUnion(s) {
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },
     });
-    createChildObjects.call(self, objectMembers, dv);
+    if (objectMembers.length > 0) {
+      createChildObjects.call(self, objectMembers, this, dv);
+    }
     if (creating) {
-      this.set(arg);
+      initializer.call(this, arg);
     } else {
       return self;
     }
   };
-  const { get, set } = getErrorUnionAccessors(members, options);
+  const copy = getMemoryCopier(size);
+  const initializer = s.initializer = function(arg) {
+    if (arg instanceof constructor) {
+      copy(this[MEMORY], arg[MEMORY]);
+      if (pointerCopier) {
+        if (check.call(this)) {
+          pointerCopier.call(this, arg);
+        }
+      }
+    } else {
+      this.set(arg);
+    }
+  };
+  const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
+  const pointerResetter = s.pointerResetter = getPointerResetter(objectMembers);
+  const { get, set, check } = getErrorUnionAccessors(members, size, options);
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
@@ -50,18 +59,20 @@ export function finalizeErrorUnion(s) {
   return constructor;
 }
 
-export function getErrorUnionAccessors(members, options) {
+export function getErrorUnionAccessors(members, size, options) {
   const { get: getValue, set: setValue } = getAccessors(members[0], options);
   const { get: getError, set: setError } = getAccessors(members[1], options);
-  const { structure } = members[1];
+  const { structure: valueStructure } = members[0];
+  const { structure: errorStructure } = members[1];
+  const reset = getMemoryResetter(size)
   return {
     get: function() {
       const errorNumber = getError.call(this);
       if (errorNumber !== 0) {
-        const { constructor } = structure;
+        const { constructor } = errorStructure;
         const err = constructor(errorNumber);
         if (!err) {
-          throwUnknownErrorNumber(structure, errorNumber);
+          throwUnknownErrorNumber(errorStructure, errorNumber);
         }
         throw err;
       } else {
@@ -69,17 +80,25 @@ export function getErrorUnionAccessors(members, options) {
       }
     },
     set: function(value) {
-      let errorNumber;
       if (value instanceof Error) {
-        const { constructor } = structure;
+        const { constructor } = errorStructure;
+        const { pointerResetter } = valueStructure;
         if (!(value instanceof constructor)) {
-          throwNotInErrorSet(structure);
+          throwNotInErrorSet(errorStructure);
         }
-        errorNumber = Number(value);
-        value = null;
+        reset(this[MEMORY]);
+        setError.call(this, Number(value));
+        if (pointerResetter) {
+          pointerResetter.call(this[SLOTS][0]);
+        }
+      } else {
+        setValue.call(this, value);
+        setError.call(this, 0);
       }
-      setValue.call(this, value);
-      setError.call(this, errorNumber);
+    },
+    check: function() {
+      const errorNumber = getError.call(this);
+      return (errorNumber === 0);
     },
   };
 }
