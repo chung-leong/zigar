@@ -34,13 +34,13 @@ export function finalizeStruct(s) {
     }
     Object.defineProperties(self, {
       [MEMORY]: { value: dv },
+      ...descriptors
     });
-    Object.defineProperties(self, descriptors);
     if (objectMembers.length > 0) {
       createChildObjects.call(self, objectMembers, this, dv);
     }
     if (creating) {
-      initializer.call(this);
+      initializer.call(this, arg);
       if (arg) {
         for (const [ key, value ] of Object.entries(arg)) {
           this[key] = value;
@@ -61,11 +61,9 @@ export function finalizeStruct(s) {
     } else {
       if (arg && typeof(arg) !== 'object') {
         throwInvalidInitializer(s, 'an object', arg);
-      } else if (!arg && requiredNames.length > 0) {
-        throwMissingInitializers(s, {});
       }
-      for (const { name } of requiredNames) {
-        if (arg[name] === undefined) {
+      for (const name of requiredNames) {
+        if (arg?.[name] === undefined) {
           throwMissingInitializers(s, arg);
         }
       }
@@ -88,6 +86,9 @@ export function finalizeStruct(s) {
     }
   };
   const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
+  Object.defineProperties(constructor.prototype, {
+    '$': { get: getSelf, set: initializer, configurable: true },
+  });
   addPointerAccessors(s);
   addDataViewAccessor(s);
   addStaticMembers(s);
@@ -137,4 +138,31 @@ export function getPointerResetter(members) {
       pointerResetter.call(destSlots[slot]);
     }
   };
+}
+
+export function getSelf() {
+  return extractValues(this);
+}
+
+export function extractValues(object) {
+  const map = new WeakMap();
+  function extract(object) {
+    if (Array.isArray(object)) {
+      return object.map(o => extract(o));
+    } else if (object && typeof(object) === 'object') {
+      let result = map.get(object);
+      if (!result) {
+        result = {};
+        map.set(object, result);
+        for (const [ name, child ] of Object.entries(object)) {
+          result[name] = extract(child);
+        }
+        return result;
+      }
+      return result;
+    } else {
+      return object;
+    }
+  };
+  return extract(object);
 }

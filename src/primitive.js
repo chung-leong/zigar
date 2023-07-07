@@ -46,6 +46,7 @@ export function finalizePrimitive(s) {
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
+    '$': { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
   });
   return constructor;

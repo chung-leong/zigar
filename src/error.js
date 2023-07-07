@@ -76,7 +76,7 @@ export function throwMissingInitializers(structure, arg) {
   const missing = [];
   for (const { name, isRequired } of members) {
     if (isRequired) {
-      if (arg[name] === undefined) {
+      if (arg?.[name] === undefined) {
         missing.push(name);
       }
     }

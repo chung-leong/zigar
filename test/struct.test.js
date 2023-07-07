@@ -17,6 +17,9 @@ import {
   attachTemplate,
   finalizeStructure,
 } from '../src/structure.js';
+import {
+  extractValues,
+} from '../src/struct.js';
 
 describe('Struct functions', function() {
   describe('finalizeStruct', function() {
@@ -407,6 +410,147 @@ describe('Struct functions', function() {
       expect(object.dog).to.equal(0);
       expect(object.cat).to.equal(2);
     })
+    it('should complain about missing required initializers', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 32,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello()).to.throw(TypeError)
+        .with.property('message').that.contains('dog, cat');
+      expect(() => new Hello({ dog: 1234 })).to.throw(TypeError)
+        .with.property('message').that.does.not.contain('dog');
+      const object = new Hello({ dog: 1234, cat: 4567 });
+      expect(object.dog).to.equal(1234);
+      expect(object.cat).to.equal(4567);
+    })
+    it('should complain about invalid initializers', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 32,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello(5)).to.throw(TypeError)
+        .with.property('message').that.does.not.contains('dog');
+    })
+    it('should apply default value when only some properties are provided', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 32,
+      });
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setUint32(0, 1234, true);
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: dv,
+        },
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello).to.throw();
+      const object = new Hello({ cat: 4567 });
+      expect(object.dog).to.equal(1234);
+      expect(object.cat).to.equal(4567);
+    })
+    it('should allow assignment through the dollar property', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: false,
+        bitSize: 32,
+        bitOffset: 0,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: false,
+        bitSize: 32,
+        bitOffset: 32,
+      });
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setUint32(0, 1234, true);
+      dv.setUint32(4, 4567, true);
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: dv,
+        },
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello();
+      expect(object).to.eql({ dog: 1234, cat: 4567 });
+      object.dog = 777;
+      expect(object).to.eql({ dog: 777, cat: 4567 });
+      object.$ = { cat: 999 };
+      expect(object).to.eql({ dog: 1234, cat: 999 });
+      object.$ = {};
+      expect(object.$).to.eql({ dog: 1234, cat: 4567 });
+    })
     it('should define a struct that contains pointers', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
@@ -565,6 +709,21 @@ describe('Struct functions', function() {
       const ptr2 = object['&'].cat;
       expect(ptr1['*'].get()).to.equal(1234);
       expect(ptr2['*'].get()).to.equal(4567);
+    })
+  })
+  describe('extractValues', function() {
+    it('should return a plain object', function() {
+      const object = Object.defineProperties({}, {
+        dog: { get() { return 1234; }, enumerable: true },
+        cat: { get() { return 4567; }, enumerable: true },
+        food: { get() { return [ 1, 2, 3, 4 ] }, enumerable: true },
+        self: { get() { return this }, enumerable: true },
+      });
+      const result = extractValues(object);
+      expect(result.dog).to.equal(1234);
+      expect(result.cat).to.equal(4567);
+      expect(result.food).to.eql([ 1, 2, 3, 4 ]);
+      expect(result.self).to.equal(result);
     })
   })
 })
