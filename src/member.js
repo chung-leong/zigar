@@ -82,14 +82,8 @@ export function getAccessors(member, options = {}) {
   if (process.env.NODE_ENV !== 'production') {
     /* c8 ignore next 10 */
     if (typeof(f) !== 'function') {
-      let typeName;
-      for (const [ name, value ] of Object.entries(MemberType)) {
-        if (value === member.type) {
-          typeName = name;
-          break;
-        }
-      }
-      throw new Error(`No factory for ${typeName}: ${member.type}`);
+      const [ name ] = Object.entries(MemberType).find(a => a[1] === member.type);
+      throw new Error(`No factory for ${name}: ${member.name}`);
     }
   }
   return {

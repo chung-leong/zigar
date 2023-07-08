@@ -42,8 +42,8 @@ const TypedArrays = {
   Uint16: Uint16Array,
   Int32: Int32Array,
   Uint32: Uint32Array,
-  Int64: BigInt64Array,
-  Uint64: BigUint64Array,
+  BigInt64: BigInt64Array,
+  BigUint64: BigUint64Array,
   Float32: Float32Array,
   Float64: Float64Array,
 };

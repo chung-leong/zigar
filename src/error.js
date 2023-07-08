@@ -1,8 +1,10 @@
 import { MemberType } from './member.js';
 import { StructureType } from './structure.js';
 import { getTypeName } from './data-view.js';
+import { getTypedArrayClass } from './typed-array.js';
+import { getPrimitiveType } from './primitive.js';
 
-export function throwSizeMismatch(structure, dv) {
+export function throwBufferSizeMismatch(structure, dv) {
   const { type, name, size } = structure;
   const actual = dv.byteLength;
   const s = (size > 1) ? 's' : '';
@@ -77,6 +79,32 @@ export function throwInvalidInitializer(structure, expected, arg) {
   throw new TypeError(`The constructor of ${name} expects ${expected} as an argument, received ${arg}`);
 }
 
+export function throwInvalidArrayInitializer(structure, arg) {
+  const { instance: { members: [ member ] } } = structure;
+  const acceptable = [];
+  const primitive = getPrimitiveType(member);
+  if (primitive) {
+    acceptable.push(`an array of ${primitive}s`);
+  } else if (member.type === MemberType.EnumerationItem) {
+    acceptable.push(`an array of enum items`);
+  } else {
+    acceptable.push(`an array of objects`);
+  }
+  const TypedArray = getTypedArrayClass(member);
+  if (TypedArray) {
+    acceptable.push(`an ${TypedArray.name}`);
+  }
+  throwInvalidInitializer(structure, acceptable.join(' or '), arg);
+}
+
+export function throwArraySizeMismatch(structure, count, arg) {
+  const { name } = structure;
+  const actual = arg.length;
+  const s1 = (count > 1) ? 's' : '';
+  const s2 = (actual > 1) ? 's' : '';
+  throw new TypeError(`${name} has ${count} element${s1}, received ${actual} intializer${s2}`);
+}
+
 export function throwMissingInitializers(structure, arg) {
   const { name, instance: { members } } = structure;
   const missing = [];
@@ -102,7 +130,7 @@ export function throwOverflow(member, value) {
 
 export function throwOutOfBound(member, index) {
   const { name } = member;
-  throw new RangeError(`Index exceeds the size of ${name}: ${index}`);
+  throw new RangeError(`Index exceeds the size of ${name ?? 'array'}: ${index}`);
 }
 
 export function rethrowRangeError(member, index, err) {

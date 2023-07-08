@@ -147,8 +147,13 @@ export function getSelf() {
 export function extractValues(object) {
   const map = new WeakMap();
   function extract(object) {
-    if (Array.isArray(object)) {
-      return object.map(o => extract(o));
+    if (object[Symbol.iterator]) {
+      const { length } = object;
+      const array = [];
+      for (const element of object) {
+        array.push(extractValues(element));
+      }
+      return array;
     } else if (object && typeof(object) === 'object') {
       let result = map.get(object);
       if (!result) {

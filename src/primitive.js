@@ -11,7 +11,6 @@ export function finalizePrimitive(s) {
     },
     options,
   } = s;
-  const primitive = getPrimitiveClass(member);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -79,7 +78,12 @@ export function getPrimitiveClass({ type, bitSize }) {
   }
 }
 
-
+export function getPrimitiveType(member) {
+  const Primitive = getPrimitiveClass(member);
+  if (Primitive) {
+    return typeof(Primitive(0));
+  }
+}
 
 export function isExtendedType(member) {
   if (!isByteAligned(member)) {

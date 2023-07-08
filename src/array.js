@@ -1,19 +1,18 @@
-import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getDataView, addDataViewAccessor } from './data-view.js';
-import { addTypedArrayAccessor } from './typed-array.js';
+import { getTypedArrayClass, addTypedArrayAccessor } from './typed-array.js';
+import { getSelf } from './struct.js';
 import { addStringAccessors } from './string.js';
+import { throwInvalidArrayInitializer, throwArraySizeMismatch } from './error.js';
 import { MEMORY, SLOTS, ZIG } from './symbol.js';
 
 export function finalizeArray(s) {
   const {
-    type,
     size,
     instance: {
       members: [ member ],
     },
-    hasPointer,
     options,
   } = s;
   if (process.env.NODE_DEV !== 'production') {
@@ -25,6 +24,7 @@ export function finalizeArray(s) {
       throw new Error(`slot must be undefined for array member`);
     }
   }
+  const TypedArray = getTypedArrayClass(member);
   const objectMember = (member.type === MemberType.Object) ? member : null;
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
@@ -40,7 +40,7 @@ export function finalizeArray(s) {
       [MEMORY]: { value: dv },
     });
     if (objectMember) {
-      createChildObjects.call(self, objectMember, this, dv);
+      createChildObjects.call(self, objectMember, 0, this, dv);
     }
     if (creating) {
       initializer.call(this, arg);
@@ -48,6 +48,8 @@ export function finalizeArray(s) {
       return self;
     }
   };
+  const { byteSize } = member;
+  const count = size / byteSize;
   const copy = getMemoryCopier(size);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -56,24 +58,29 @@ export function finalizeArray(s) {
         pointerCopier.call(this, arg);
       }
     } else {
-      // TODO: initialize from an array
+      if (Array.isArray(arg) || (TypedArray && arg instanceof TypedArray)) {
+        const len = arg.length;
+        if (len !== count) {
+          throwArraySizeMismatch(s, count, arg);
+        }
+        for (let i = 0; i < len; i++) {
+          set.call(this, i, arg[i]);
+        }
+      } else {
+        console.log({ arg })
+        throwInvalidArrayInitializer(s, arg);
+      }
     }
   };
   const pointerCopier = s.pointerCopier = getPointerCopier(objectMember);
   const pointerResetter = s.pointerResetter = getPointerResetter(objectMember);
   const { get, set } = getAccessors(member, options);
-  let lengthDescriptor;
-  if (type == StructureType.Slice) {
-    const get = getArrayLengthGetter(size);
-    lengthDescriptor = { get, configurable: true };
-  } else {
-    const length = size / member.byteSize;
-    lengthDescriptor = { value: length, configurable: true };
-  }
+  const length = size / member.byteSize;
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
-    length: lengthDescriptor,
+    length: { value: length, configurable: true },
+    '$': { get: getSelf, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true },
   });
   addDataViewAccessor(s);
@@ -82,22 +89,26 @@ export function finalizeArray(s) {
   return constructor;
 }
 
-function createChildObjects(member, recv, dv) {
-  const slots = {};
+export function createChildObjects(member, startOffset, recv, dv) {
+  let slots = this[SLOTS];
+  if (!slots) {
+    slots = {};
+    Object.defineProperties(this, {
+      [SLOTS]: { value: slots },
+    });
+  }
   const { structure: { constructor }, byteSize } = member;
   if (recv !== ZIG) {
     recv = null;
   }
-  for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+  const startSlot = (startOffset) ? startOffset / byteSize : 0;
+  for (let slot = startSlot, offset = startOffset, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
     const childDV = new DataView(dv.buffer, offset, byteSize);
     slots[slot] = constructor.call(recv, childDV);
   }
-  Object.defineProperties(this, {
-    [SLOTS]: { value: slots },
-  });
 }
 
-function getPointerCopier(member) {
+export function getPointerCopier(member) {
   if (!member?.structure.hasPointer) {
     return null;
   }
@@ -112,7 +123,7 @@ function getPointerCopier(member) {
   };
 }
 
-function getPointerResetter(member) {
+export function getPointerResetter(member) {
   if (!member?.structure.hasPointer) {
     return null;
   }

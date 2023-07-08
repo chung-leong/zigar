@@ -7,6 +7,7 @@ import { finalizeErrorSet } from './error-set.js';
 import { finalizeEnumeration } from './enumeration.js';
 import { finalizeOptional } from './optional.js';
 import { finalizePointer } from './pointer.js';
+import { finalizeSlice } from './slice.js';
 import { finalizeArgStruct } from './arg-struct.js';
 
 export const StructureType = {
@@ -73,7 +74,7 @@ export function usePointer() {
 
 }
 export function useSlice() {
-  factories[StructureType.Slice] = finalizeArray;
+  factories[StructureType.Slice] = finalizeSlice;
 }
 export function useOpaque() {
   factories[StructureType.Opaque] = finalizeStruct;
@@ -132,14 +133,8 @@ export function finalizeStructure(s) {
     if (process.env.NODE_ENV !== 'production') {
       /* c8 ignore next 10 */
       if (typeof(f) !== 'function') {
-        let typeName;
-        for (const [ name, value ] of Object.entries(StructureType)) {
-          if (value === s.type) {
-            typeName = name;
-            break;
-          }
-        }
-        throw new Error(`No factory for ${typeName}: ${f}`);
+        const [ name ] = Object.entries(StructureType).find(a => a[1] === s.type);
+        throw new Error(`No factory for ${name}: ${f}`);
       }
     }
     const constructor = f(s);

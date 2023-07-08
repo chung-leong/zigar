@@ -1,7 +1,7 @@
 import { StructureType } from './structure.js';
 import { MemberType, isByteAligned } from './member.js';
 import { getBitAlignFunction } from './memory.js';
-import { throwSizeMismatch, throwBufferExpected } from './error.js';
+import { throwBufferSizeMismatch, throwBufferExpected } from './error.js';
 import { MEMORY } from './symbol.js';
 
 export function getDataViewBoolAccessor(access, member) {
@@ -101,11 +101,11 @@ export function getDataView(structure, arg) {
   const { type, size } = structure;
   if (type === StructureType.Slice) {
     if (dv.byteLength % size !== 0) {
-      throwSizeMismatch(structure, dv);
+      throwBufferSizeMismatch(structure, dv);
     }
   } else {
     if (dv.byteLength !== size) {
-      throwSizeMismatch(structure, dv);
+      throwBufferSizeMismatch(structure, dv);
     }
   }
   return dv;

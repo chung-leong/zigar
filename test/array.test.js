@@ -3,13 +3,14 @@ import { expect } from 'chai';
 import {
   MemberType,
   useIntEx,
+  useObject,
   getAccessors,
 } from '../src/member.js';
 import { MEMORY } from '../src/symbol.js';
 import {
   StructureType,
   useArray,
-  useSlice,
+  useStruct,
   beginStructure,
   attachMember,
   finalizeStructure,
@@ -23,8 +24,9 @@ describe('Array functions', function() {
   describe('finalizeArray', function() {
     beforeEach(function() {
       useArray();
-      useSlice();
+      useStruct();
       useIntEx();
+      useObject();
     })
     it('should define structure for holding an int array', function() {
       const structure = beginStructure({
@@ -41,7 +43,7 @@ describe('Array functions', function() {
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
-      const object = new Hello();
+      const object = new Hello(new Uint32Array(8));
       object.set(0, 321);
       expect(object.get(0)).to.equal(321);
       expect(object.length).to.equal(8);
@@ -71,11 +73,11 @@ describe('Array functions', function() {
       }
       expect(list).to.eql([ 1234, 0, 0, 0, 4567, 0, 0, 0 ]);
     })
-    it('should define structure for holding an int slice', function() {
+    it('should accept an array as initializer', function() {
       const structure = beginStructure({
-        type: StructureType.Slice,
+        type: StructureType.Array,
         name: 'Hello',
-        size: 4,
+        size: 4 * 8,
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -85,57 +87,105 @@ describe('Array functions', function() {
         byteSize: 4,
       });
       const Hello = finalizeStructure(structure);
-      expect(Hello).to.be.a('function');
-      const object = Hello(new ArrayBuffer(32));
-      object.set(1, 321);
-      expect(object.get(1)).to.equal(321);
-      expect(object.length).to.equal(8);
+      const object = new Hello([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
+      for (let i = 0; i < 8; i++) {
+        expect(object.get(i)).to.equal(i + 1);
+      }
     })
-    it('should have string property when slice contains Uint8', function() {
+    it('should accept an array of bigints as initializer', function() {
       const structure = beginStructure({
-        type: StructureType.Slice,
+        type: StructureType.Array,
         name: 'Hello',
-        size: 4,
+        size: 8 * 4,
       });
       attachMember(structure, {
         type: MemberType.Int,
         isStatic: false,
         isSigned: false,
-        bitSize: 8,
-        byteSize: 1,
+        bitSize: 64,
+        byteSize: 8,
       });
       const Hello = finalizeStructure(structure);
-      const dv = new DataView(new ArrayBuffer(4));
-      dv.setUint8(0, 'A'.charCodeAt(0));
-      dv.setUint8(1, 'B'.charCodeAt(0));
-      dv.setUint8(2, 'C'.charCodeAt(0));
-      dv.setUint8(3, 'D'.charCodeAt(0));
-      const object = Hello(dv);
-      const { string } = object;
-      expect(string).to.equal('ABCD');
+      const object = new Hello([ 100n, 200n, 300n, 400n ]);
+      for (let i = 0; i < 4; i++) {
+        expect(object.get(i)).to.equal(BigInt(i + 1) * 100n);
+      }
     })
-    it('should have string property when slice contains Uint16', function() {
-      const structure = beginStructure({
-        type: StructureType.Slice,
+    it('should correctly initialize an array of structs', function() {
+      const structStructure = beginStructure({
+        type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        size: 4 * 2,
+      });
+      attachMember(structStructure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        byteSize: 4,
+        bitOffset: 0,
+        bitSize: 32,
+      });
+      attachMember(structStructure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        byteSize: 4,
+        bitOffset: 32,
+        bitSize: 32,
+      });
+      const Hello = finalizeStructure(structStructure);
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        size: 8 * 4,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        byteSize: 8,
+        structure: structStructure,
+      });
+      const HelloArray = finalizeStructure(structure);
+      const object = new HelloArray([
+        { dog: 1, cat: 2 },
+        { dog: 3, cat: 4 },
+        { dog: 5, cat: 6 },
+        { dog: 7, cat: 8 },
+      ]);
+      expect(object.$).to.eql([
+        { dog: 1, cat: 2 },
+        { dog: 3, cat: 4 },
+        { dog: 5, cat: 6 },
+        { dog: 7, cat: 8 },
+      ]);
+    })
+    it('should allow reinitialization through the dollar property', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        size: 8 * 4,
       });
       attachMember(structure, {
         type: MemberType.Int,
         isStatic: false,
         isSigned: false,
-        bitSize: 16,
-        byteSize: 2,
+        bitSize: 64,
+        byteSize: 8,
       });
       const Hello = finalizeStructure(structure);
-      const dv = new DataView(new ArrayBuffer(8));
-      dv.setUint16(0, 'A'.charCodeAt(0), true);
-      dv.setUint16(2, 'B'.charCodeAt(0), true);
-      dv.setUint16(4, 'C'.charCodeAt(0), true);
-      dv.setUint16(6, 'D'.charCodeAt(0), true);
-      const object = Hello(dv);
-      const { string } = object;
-      expect(string).to.equal('ABCD');
+      const object = new Hello([ 100n, 200n, 300n, 400n ]);
+      for (let i = 0; i < 4; i++) {
+        expect(object.get(i)).to.equal(BigInt(i + 1) * 100n);
+      }
+      object.$ = new BigUint64Array([ 1000n, 2000n, 3000n, 4000n ]);
+      for (let i = 0; i < 4; i++) {
+        expect(object.get(i)).to.equal(BigInt(i + 1) * 1000n);
+      }
     })
   })
   describe('getArrayLengthGetter', function() {

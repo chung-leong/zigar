@@ -21,7 +21,7 @@ export function finalizeEnumeration(s) {
       }
     }
   }
-  const primitive = getPrimitiveClass(members[0]);
+  const Primitive = getPrimitiveClass(members[0]);
   const { get: getValue } = getAccessors(members[0], options);
   const count = members.length;
   const items = {};
@@ -45,7 +45,7 @@ export function finalizeEnumeration(s) {
     } else {
       // values aren't sequential, so we need to compare values
       // casting just in case the enum is BigInt
-      const given = primitive(arg);
+      const given = Primitive(arg);
       for (let i = 0; i < count; i++) {
         const value = getValue.call(constructor, i);
         if (value === given) {

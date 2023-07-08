@@ -3,7 +3,7 @@ import { expect } from 'chai';
 import { StructureType } from '../src/structure.js';
 import { MemberType } from '../src/member.js';
 import {
-  throwSizeMismatch,
+  throwBufferSizeMismatch,
   throwBufferExpected,
   throwInvalidEnum,
   throwEnumExpected,
@@ -26,14 +26,14 @@ import {
 } from '../src/error.js';
 
 describe('Error functions', function() {
-  describe('throwSizeMismatch', function() {
+  describe('throwBufferSizeMismatch', function() {
     it('should throw a type error', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Struct,
         size: 8,
       };
-      expect(() => throwSizeMismatch(structure, 16)).to.throw(TypeError)
+      expect(() => throwBufferSizeMismatch(structure, 16)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
     })
     it('should use different message for slices', function() {
@@ -42,7 +42,7 @@ describe('Error functions', function() {
         type: StructureType.Slice,
         size: 8,
       };
-      expect(() => throwSizeMismatch(structure, 16)).to.throw(TypeError)
+      expect(() => throwBufferSizeMismatch(structure, 16)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
     })
     it('should use singular wording when size is 1', function() {
@@ -51,7 +51,7 @@ describe('Error functions', function() {
         type: StructureType.Slice,
         size: 1,
       };
-      expect(() => throwSizeMismatch(structure, 16)).to.throw(TypeError)
+      expect(() => throwBufferSizeMismatch(structure, 16)).to.throw(TypeError)
         .with.property('message').that.does.not.contains('bytes');
     })
   })
