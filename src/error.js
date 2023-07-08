@@ -54,7 +54,7 @@ export function throwInvalidType(structure) {
   throw new TypeError(`Object of specific type expected: ${name}`);
 }
 
-export function throwMultipleUnionInitializer(structure) {
+export function throwMultipleUnionInitializers(structure) {
   const { name } = structure;
   throw new TypeError(`Only one property of ${name} can be given a value`);
 }
@@ -64,6 +64,12 @@ export function throwInactiveUnionProperty(structure, index, currentIndex) {
   const { name: newName } = members[index];
   const { name: oldName } = members[currentIndex];
   throw new TypeError(`Modifying property ${newName} when ${oldName} is active`);
+}
+
+export function throwMissingUnionInitializer(structure, arg) {
+  const { name, instance: { members } } = structure;
+  const missing = members.slice(0, -1).map(m => m.name);
+  throw new TypeError(`${name} needs an initializer for one of its union properties: ${missing.join(', ')}`);
 }
 
 export function throwInvalidInitializer(structure, expected, arg) {

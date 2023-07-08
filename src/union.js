@@ -5,9 +5,15 @@ import { getDataView, addDataViewAccessor } from './data-view.js';
 import { addPointerAccessors } from './pointer.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
-import { createChildObjects, getPointerCopier, getPointerResetter } from './struct.js';
-import { throwInactiveUnionProperty } from './error.js';
-import { MEMORY, ENUM_INDEX, ENUM_ITEM } from './symbol.js';
+import { createChildObjects, getPointerCopier, getPointerResetter, getSelf } from './struct.js';
+import {
+  throwInvalidInitializer,
+  throwMissingUnionInitializer,
+  throwMultipleUnionInitializers,
+  throwNoProperty,
+  throwInactiveUnionProperty,
+} from './error.js';
+import { MEMORY, ENUM_INDEX, ENUM_ITEM, HIDE_PREVIOUS } from './symbol.js';
 
 export function finalizeUnion(s) {
   const {
@@ -21,10 +27,12 @@ export function finalizeUnion(s) {
   } = s;
   const descriptors = {};
   let getEnumItem;
+  let showDefault;
+  let valueMembers;
   const exclusion = (type === StructureType.BareUnion || type === StructureType.TaggedUnion);
   if (exclusion) {
     const selectorMember = members[members.length - 1];
-    let { get: getIndex } = getAccessors(selectorMember, options);
+    let { get: getIndex, set: setIndex } = getAccessors(selectorMember, options);
     if (type === StructureType.TaggedUnion) {
       // rely on the enumeration constructor to translate the enum values into indices
       const { structure: { constructor } } = selectorMember;
@@ -34,7 +42,13 @@ export function finalizeUnion(s) {
         return item[ENUM_INDEX];
       };
     }
-    for (const [ index, member ] of members.slice(0, -1).entries()) {
+    showDefault = function() {
+      const index = getIndex.call(this);
+      const { name } = members[index];
+      Object.defineProperty(this, name, { enumerable: true });
+    };
+    valueMembers = members.slice(0, -1);
+    for (const [ index, member ] of valueMembers.entries()) {
       const { get: getValue, set: setValue } = getAccessors(member, options);
       const get = function() {
         if (index !== getIndex.call(this)) {
@@ -49,13 +63,28 @@ export function finalizeUnion(s) {
         }
         setValue.call(this, value);
       };
-      descriptors[member.name] = { get, set, configurable: true, enumerable: true };
+      const show = function() {
+        const { name } = member;
+        const hide = () => Object.defineProperty(this, name, { enumerable: false });
+        Object.defineProperties(this, {
+          [name]: { enumerable: true },
+          [HIDE_PREVIOUS]: { value: hide, configurable: true },
+        });
+      };
+      const init = function(value) {
+        this[HIDE_PREVIOUS]?.call();
+        setIndex.call(this, index);
+        setValue.call(this, value);
+        show.call(this);
+      };
+      descriptors[member.name] = { get, set, init, configurable: true };
     }
   } else {
     // extern union
+    valueMembers = members;
     for (const member of members) {
       const { get, set } = getAccessors(member, options);
-      descriptors[member.name] = { get, set, configurable: true, enumerable: true };
+      descriptors[member.name] = { get, set, init: set, configurable: true, enumerable: true };
     }
   }
   const objectMembers = members.filter(m => m.type === MemberType.Object);
@@ -84,6 +113,7 @@ export function finalizeUnion(s) {
       return self;
     }
   };
+  const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
   const copy = getMemoryCopier(size);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -92,20 +122,38 @@ export function finalizeUnion(s) {
         pointerCopier.call(this, arg);
       }
     } else {
-      if (template) {
-        copy(this[MEMORY], template[MEMORY]);
-        if (pointerCopier) {
-          pointerCopier.call(this, template);
+      if (arg && typeof(arg) !== 'object') {
+        throwInvalidInitializer(s, 'an object with a single property', arg);
+      }
+      const keys = (arg) ? Object.keys(arg) : [];
+      for (const key of keys) {
+        if (!descriptors.hasOwnProperty(key)) {
+          throwNoProperty(s, key);
         }
       }
-      // TODO: validation
-      if (arg) {
-        const entries = Object.entries(arg);
-        if (entries.length > 0) {
-          throwMultipleUnionInitializer(structre);
+      if (keys.length !== 1) {
+        if (keys.length === 0) {
+          if (!hasDefaultMember) {
+            throwMissingUnionInitializer(s);
+          }
+        } else {
+          throwMultipleUnionInitializers(s);
         }
-        for (const [ key, value ] of entries) {
-          this[key] = value;
+      }
+      if (keys.length === 0) {
+        if (template) {
+          copy(this[MEMORY], template[MEMORY]);
+          if (pointerCopier) {
+            pointerCopier.call(this, template);
+          }
+        }
+        if (showDefault) {
+          showDefault.call(this);
+        }
+      } else {
+        for (const key of keys) {
+          const { init } = descriptors[key];
+          init.call(this, arg[keys]);
         }
       }
     }
@@ -118,6 +166,9 @@ export function finalizeUnion(s) {
       [ENUM_ITEM]: { get: getEnumItem, configurable: true },
     });
   }
+  Object.defineProperties(constructor.prototype, {
+    '$': { get: getSelf, set: initializer, configurable: true },
+  });
   if (exclusion) {
     addPointerAccessors(s);
   }

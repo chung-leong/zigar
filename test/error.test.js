@@ -12,7 +12,7 @@ import {
   throwNotInErrorSet,
   throwUnknownErrorNumber,
   throwInvalidType,
-  throwMultipleUnionInitializer,
+  throwMultipleUnionInitializers,
   throwInactiveUnionProperty,
   throwInvalidInitializer,
   throwMissingInitializers,
@@ -153,14 +153,14 @@ describe('Error functions', function() {
         .with.property('message').that.contains('Hello');
     })
   })
-  describe('throwMultipleUnionInitializer', function() {
+  describe('throwMultipleUnionInitializers', function() {
     it('should throw a type error', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.BareUnion,
         size: 8,
       };
-      expect(() => throwMultipleUnionInitializer(structure, 16)).to.throw(TypeError)
+      expect(() => throwMultipleUnionInitializers(structure, 16)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
     })
   })

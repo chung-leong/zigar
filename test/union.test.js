@@ -132,7 +132,7 @@ describe('Union functions', function() {
       const object = new Hello();
       expect(object).to.be.an.instanceOf(Object);
       expect(object).to.be.an.instanceOf(Hello);
-      expect(Object.keys(object)).to.have.lengthOf(2);
+      expect(Object.keys(object)).to.have.lengthOf(1);
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.be.null;
       expect(() => object.cat = 567).to.throw(TypeError);
@@ -225,7 +225,7 @@ describe('Union functions', function() {
       const object = new Hello();
       expect(object).to.be.an.instanceOf(Object);
       expect(object).to.be.an.instanceOf(Hello);
-      expect(Object.keys(object)).to.have.lengthOf(2);
+      expect(Object.keys(object)).to.have.lengthOf(1);
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.be.null;
       expect(() => object.cat = 567).to.throw(TypeError);
@@ -234,6 +234,209 @@ describe('Union functions', function() {
       expect(object.dog).to.be.null;
       expect(object.cat).to.equal(567);
       expect(HelloType(object)).to.equal(HelloType.cat);
+    })
+    it('should only have a single enumerable property', function() {
+      const structure = beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        bitOffset: 32,
+        byteSize: 2,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello({ dog: 1234 });
+      console.log({ ...object });
+      expect(object.dog).to.equal(1234);
+      expect({ ...object }).to.eql({ dog: 1234 });
+    })
+    it('should complain about missing union initializer', function() {
+      const structure = beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        bitOffset: 32,
+        byteSize: 2,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello()).to.throw(TypeError)
+        .with.property('message').that.contains('dog, cat')
+      const object = new Hello({ cat: 4567 });
+      expect(object.cat).to.equal(4567);
+    })
+    it('should throw when there is more than one initializer', function() {
+      const structure = beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        bitOffset: 32,
+        byteSize: 2,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello({ dog: 1234, cat: 4567 })).to.throw(TypeError);
+      const object = new Hello({ dog: 1234 });
+      expect(object.dog).to.equal(1234);
+      expect({ ...object }).to.eql({ dog: 1234 });
+    })
+    it('should throw when attempting to set an active property', function() {
+      const structure = beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        bitOffset: 32,
+        byteSize: 2,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello({ dog: 1234 });
+      expect(() => object.cat = 4567).to.throw(TypeError)
+        .with.property('message').that.contains('dog')
+    })
+    it('should allow switching of active property through dollar property', function() {
+      const structure = beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        bitOffset: 32,
+        byteSize: 2,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello({ dog: 1234 });
+      object.$ = { cat: 4567 };
+      expect({ ...object }).to.eql({ cat: 4567 });
     })
   })
 })
