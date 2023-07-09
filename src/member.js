@@ -206,24 +206,24 @@ export function getObjectAccessor(access, member, options) {
         if (access === 'get') {
           return function() {
             const object = this[SLOTS][slot];
-            return object.get();
+            return object.$;
           };
         } else {
           return function(value) {
             const object = this[SLOTS][slot];
-            return object.set(value);
+            return object.$ = value;
           };
         }
       } else {
         if (access === 'get') {
           return function(index) {
             const object = this[SLOTS][index];
-            return object.get();
+            return object.$;
           };
         } else {
           return function(index, value) {
             const object = this[SLOTS][index];
-            return object.set(value);
+            return object.$ = value;
           };
         }
       }
@@ -238,13 +238,13 @@ export function getObjectAccessor(access, member, options) {
               return function() {
                 const pointer = this[SLOTS][slot];
                 const object = pointer['*'];
-                return object.get()
+                return object.$;
               };
             } else {
               return (isConst) ? undefined : function(value) {
                 const pointer = this[SLOTS][slot];
                 const object = pointer['*'];
-                object.set(value);
+                object.$ = value;
               };
             }
           } else {
@@ -253,13 +253,13 @@ export function getObjectAccessor(access, member, options) {
               return function(index) {
                 const pointer = this[SLOTS][index];
                 const object = pointer['*'];
-                return object.get()
+                return object.$;
               };
             } else {
               return (isConst) ? undefined : function(index, value) {
                 const pointer = this[SLOTS][index];
                 const object = pointer['*'];
-                object.set(value);
+                object.$ = value;
               };
             }
           }
@@ -304,9 +304,8 @@ export function getObjectAccessor(access, member, options) {
           };
         } else {
           return function(value) {
-            const { initializer } = structure;
             const object = this[SLOTS][slot];
-            initializer.call(object, value);
+            object.$ = value;
           };
         }
       } else {
@@ -318,9 +317,8 @@ export function getObjectAccessor(access, member, options) {
           };
         } else {
           return function(index, value) {
-            const { initializer } = structure;
             const object = this[SLOTS][index];
-            initializer.call(object, value);
+            object.$ = value;
           };
         }
       }

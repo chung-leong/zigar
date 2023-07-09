@@ -12,6 +12,7 @@ R"=====(
   const ENUM_ITEMS = Symbol('enumItems');
   const ERROR_INDEX = Symbol('errorIndex');
   const ENUM_ITEM = Symbol('enumItem');
+  const HIDE_PREVIOUS = Symbol('hidePrevious');
 
   function getBitAlignFunction(bitPos, bitSize, toAligned) {
     if (bitPos + bitSize <= 8) {
@@ -332,11 +333,11 @@ R"=====(
     const { type, size } = structure;
     if (type === StructureType.Slice) {
       if (dv.byteLength % size !== 0) {
-        throwSizeMismatch(structure, dv);
+        throwBufferSizeMismatch(structure, dv);
       }
     } else {
       if (dv.byteLength !== size) {
-        throwSizeMismatch(structure, dv);
+        throwBufferSizeMismatch(structure, dv);
       }
     }
     return dv;
@@ -735,6 +736,42 @@ R"=====(
 
   const methodCache = {};
 
+  function addJSONHandlers(s) {
+    const {
+      constructor
+    } = s;
+    Object.defineProperties(constructor.prototype, {
+      toJSON: { value: getValueOf, configurable: true, writable: true },
+      valueOf: { value: getValueOf, configurable: true, writable: true },
+    });
+  }
+
+  function getValueOf() {
+    const map = new WeakMap();
+    function extract(object) {
+      if (object[Symbol.iterator]) {
+        const array = [];
+        for (const element of object) {
+          array.push(extract(element));
+        }
+        return array;
+      } else if (object && typeof(object) === 'object') {
+        let result = map.get(object);
+        if (!result) {
+          result = {};
+          map.set(object, result);
+          for (const [ name, child ] of Object.entries(object)) {
+            result[name] = extract(child);
+          }
+          return result;
+        }
+        return result;
+      } else {
+        return object;
+      }
+    }  return extract(this.$);
+  }
+
   function finalizePrimitive(s) {
     const {
       size,
@@ -743,7 +780,6 @@ R"=====(
       },
       options,
     } = s;
-    const primitive = getPrimitiveClass(member);
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
       let self, dv;
@@ -769,17 +805,15 @@ R"=====(
       if (arg instanceof constructor) {
         copy(this[MEMORY], arg[MEMORY]);
       } else {
-        if (primitive !== undefined) {
-          this.set(primitive(arg ?? 0));
-        }
+        this.$ = arg;
       }
     };
     const { get, set } = getAccessors(member, options);
     Object.defineProperties(constructor.prototype, {
-      get: { value: get, configurable: true, writable: true },
-      set: { value: set, configurable: true, writable: true },
+      $: { get, set, configurable: true },
       [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
     });
+    addJSONHandlers(s);
     return constructor;
   }
   function getIntRange({ isSigned, bitSize }) {
@@ -806,6 +840,13 @@ R"=====(
       return Number;
     } else if (type === MemberType.Bool) {
       return Boolean;
+    }
+  }
+
+  function getPrimitiveType(member) {
+    const Primitive = getPrimitiveClass(member);
+    if (Primitive) {
+      return typeof(Primitive(0));
     }
   }
 
@@ -849,8 +890,8 @@ R"=====(
     Uint16: Uint16Array,
     Int32: Int32Array,
     Uint32: Uint32Array,
-    Int64: BigInt64Array,
-    Uint64: BigUint64Array,
+    BigInt64: BigInt64Array,
+    BigUint64: BigUint64Array,
     Float32: Float32Array,
     Float64: Float64Array,
   };
@@ -886,12 +927,10 @@ R"=====(
 
   function finalizeArray(s) {
     const {
-      type,
       size,
       instance: {
         members: [ member ],
       },
-      hasPointer,
       options,
     } = s;
     if (process.env.NODE_DEV !== 'production') {
@@ -903,6 +942,7 @@ R"=====(
         throw new Error(`slot must be undefined for array member`);
       }
     }
+    const TypedArray = getTypedArrayClass(member);
     const objectMember = (member.type === MemberType.Object) ? member : null;
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
@@ -918,7 +958,7 @@ R"=====(
         [MEMORY]: { value: dv },
       });
       if (objectMember) {
-        createChildObjects$1.call(self, objectMember, this, dv);
+        createChildObjects$1.call(self, objectMember, 0, this, dv);
       }
       if (creating) {
         initializer.call(this, arg);
@@ -926,6 +966,8 @@ R"=====(
         return self;
       }
     };
+    const { byteSize } = member;
+    const count = size / byteSize;
     const copy = getMemoryCopier(size);
     const initializer = s.initializer = function(arg) {
       if (arg instanceof constructor) {
@@ -933,44 +975,57 @@ R"=====(
         if (pointerCopier) {
           pointerCopier.call(this, arg);
         }
+      } else {
+        if (Array.isArray(arg) || (TypedArray && arg instanceof TypedArray)) {
+          const len = arg.length;
+          if (len !== count) {
+            throwArraySizeMismatch(s, count, arg);
+          }
+          for (let i = 0; i < len; i++) {
+            set.call(this, i, arg[i]);
+          }
+        } else {
+          console.log({ arg });
+          throwInvalidArrayInitializer(s, arg);
+        }
       }
     };
+    const retriever = function() { return this };
     const pointerCopier = s.pointerCopier = getPointerCopier$1(objectMember);
     s.pointerResetter = getPointerResetter$1(objectMember);
     const { get, set } = getAccessors(member, options);
-    let lengthDescriptor;
-    if (type == StructureType.Slice) {
-      const get = getArrayLengthGetter(size);
-      lengthDescriptor = { get, configurable: true };
-    } else {
-      const length = size / member.byteSize;
-      lengthDescriptor = { value: length, configurable: true };
-    }
+    const length = size / member.byteSize;
     Object.defineProperties(constructor.prototype, {
       get: { value: get, configurable: true, writable: true },
       set: { value: set, configurable: true, writable: true },
-      length: lengthDescriptor,
+      length: { value: length, configurable: true },
+      $: { get: retriever, set: initializer, configurable: true },
       [Symbol.iterator]: { value: getArrayIterator, configurable: true },
     });
     addDataViewAccessor(s);
     addTypedArrayAccessor(s);
     addStringAccessors(s);
+    addJSONHandlers(s);
     return constructor;
   }
 
-  function createChildObjects$1(member, recv, dv) {
-    const slots = {};
+  function createChildObjects$1(member, startOffset, recv, dv) {
+    let slots = this[SLOTS];
+    if (!slots) {
+      slots = {};
+      Object.defineProperties(this, {
+        [SLOTS]: { value: slots },
+      });
+    }
     const { structure: { constructor }, byteSize } = member;
     if (recv !== ZIG) {
       recv = null;
     }
-    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+    const startSlot = (startOffset) ? startOffset / byteSize : 0;
+    for (let slot = startSlot, offset = startOffset, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
       const childDV = new DataView(dv.buffer, offset, byteSize);
       slots[slot] = constructor.call(recv, childDV);
     }
-    Object.defineProperties(this, {
-      [SLOTS]: { value: slots },
-    });
   }
 
   function getPointerCopier$1(member) {
@@ -1089,12 +1144,14 @@ R"=====(
         this[SLOTS][0] = arg;
       }
     };
+    const retrieve = function() { return this };
     const pointerCopier = s.pointerCopier = function(arg) {
       this[SLOTS][0] = arg[SLOTS][0];
     };
     const { get, set } = getAccessors(member, options);
     Object.defineProperties(constructor.prototype, {
-      '*': { get, set, configurable: true, enumerable: true },
+      '*': { get, set, configurable: true },
+      '$': { get: retrieve, set: initializer, configurable: true, },
     });
     return constructor;
   }
@@ -1211,13 +1268,13 @@ R"=====(
       }
       Object.defineProperties(self, {
         [MEMORY]: { value: dv },
+        ...descriptors
       });
-      Object.defineProperties(self, descriptors);
       if (objectMembers.length > 0) {
         createChildObjects.call(self, objectMembers, this, dv);
       }
       if (creating) {
-        initializer.call(this);
+        initializer.call(this, arg);
         if (arg) {
           for (const [ key, value ] of Object.entries(arg)) {
             this[key] = value;
@@ -1237,19 +1294,17 @@ R"=====(
         }
       } else {
         if (arg && typeof(arg) !== 'object') {
-          throwInvalidInitializer();
-        } else if (!arg && requiredNames.length > 0) {
-          throwMissingInitializers();
+          throwInvalidInitializer(s, 'an object', arg);
         }
-        for (const { name } of requiredNames) {
-          if (arg[name] === undefined) {
-            throwMissingInitializers();
+        for (const name of requiredNames) {
+          if (arg?.[name] === undefined) {
+            throwMissingInitializers(s, arg);
           }
         }
-        const keys = (arg) ? Object.entries(arg) : [];
+        const keys = (arg) ? Object.keys(arg) : [];
         for (const key of keys) {
           if (!descriptors.hasOwnProperty(key)) {
-            throwNoProperty();
+            throwNoProperty(s, key);
           }
         }
         // apply default values unless all properties are initialized
@@ -1264,11 +1319,16 @@ R"=====(
         }
       }
     };
+    const retriever = function() { return this };
     const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
+    Object.defineProperties(constructor.prototype, {
+      $: { get: retriever, set: initializer, configurable: true },
+    });
     addPointerAccessors(s);
     addDataViewAccessor(s);
     addStaticMembers(s);
     addMethods(s);
+    addJSONHandlers(s);
     return constructor;
   }
   function createChildObjects(members, recv, dv) {
@@ -1327,10 +1387,12 @@ R"=====(
     } = s;
     const descriptors = {};
     let getEnumItem;
+    let showDefault;
+    let valueMembers;
     const exclusion = (type === StructureType.BareUnion || type === StructureType.TaggedUnion);
     if (exclusion) {
       const selectorMember = members[members.length - 1];
-      let { get: getIndex } = getAccessors(selectorMember, options);
+      let { get: getIndex, set: setIndex } = getAccessors(selectorMember, options);
       if (type === StructureType.TaggedUnion) {
         getEnumItem = getIndex;
         getIndex = function() {
@@ -1338,7 +1400,13 @@ R"=====(
           return item[ENUM_INDEX];
         };
       }
-      for (const [ index, member ] of members.slice(0, -1).entries()) {
+      showDefault = function() {
+        const index = getIndex.call(this);
+        const { name } = members[index];
+        Object.defineProperty(this, name, { enumerable: true });
+      };
+      valueMembers = members.slice(0, -1);
+      for (const [ index, member ] of valueMembers.entries()) {
         const { get: getValue, set: setValue } = getAccessors(member, options);
         const get = function() {
           if (index !== getIndex.call(this)) {
@@ -1353,13 +1421,28 @@ R"=====(
           }
           setValue.call(this, value);
         };
-        descriptors[member.name] = { get, set, configurable: true, enumerable: true };
+        const show = function() {
+          const { name } = member;
+          const hide = () => Object.defineProperty(this, name, { enumerable: false });
+          Object.defineProperties(this, {
+            [name]: { enumerable: true },
+            [HIDE_PREVIOUS]: { value: hide, configurable: true },
+          });
+        };
+        const init = function(value) {
+          this[HIDE_PREVIOUS]?.call();
+          setIndex.call(this, index);
+          setValue.call(this, value);
+          show.call(this);
+        };
+        descriptors[member.name] = { get, set, init, configurable: true };
       }
     } else {
       // extern union
+      valueMembers = members;
       for (const member of members) {
         const { get, set } = getAccessors(member, options);
-        descriptors[member.name] = { get, set, configurable: true, enumerable: true };
+        descriptors[member.name] = { get, set, init: set, configurable: true, enumerable: true };
       }
     }
     const objectMembers = members.filter(m => m.type === MemberType.Object);
@@ -1388,6 +1471,7 @@ R"=====(
         return self;
       }
     };
+    const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
     const copy = getMemoryCopier(size);
     const initializer = s.initializer = function(arg) {
       if (arg instanceof constructor) {
@@ -1396,24 +1480,43 @@ R"=====(
           pointerCopier.call(this, arg);
         }
       } else {
-        if (template) {
-          copy(this[MEMORY], template[MEMORY]);
-          if (pointerCopier) {
-            pointerCopier.call(this, template);
+        if (arg && typeof(arg) !== 'object') {
+          throwInvalidInitializer(s, 'an object with a single property', arg);
+        }
+        const keys = (arg) ? Object.keys(arg) : [];
+        for (const key of keys) {
+          if (!descriptors.hasOwnProperty(key)) {
+            throwNoProperty(s, key);
           }
         }
-        // TODO: validation
-        if (arg) {
-          const entries = Object.entries(arg);
-          if (entries.length > 0) {
-            throwMultipleUnionInitializer(structre);
+        if (keys.length !== 1) {
+          if (keys.length === 0) {
+            if (!hasDefaultMember) {
+              throwMissingUnionInitializer(s);
+            }
+          } else {
+            throwMultipleUnionInitializers(s);
           }
-          for (const [ key, value ] of entries) {
-            this[key] = value;
+        }
+        if (keys.length === 0) {
+          if (template) {
+            copy(this[MEMORY], template[MEMORY]);
+            if (pointerCopier) {
+              pointerCopier.call(this, template);
+            }
+          }
+          if (showDefault) {
+            showDefault.call(this);
+          }
+        } else {
+          for (const key of keys) {
+            const { init } = descriptors[key];
+            init.call(this, arg[keys]);
           }
         }
       }
     };
+    const retriever = function() { return this };
     const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
     s.pointerResetter = getPointerResetter(objectMembers);
     if (type === StructureType.TaggedUnion) {
@@ -1422,12 +1525,16 @@ R"=====(
         [ENUM_ITEM]: { get: getEnumItem, configurable: true },
       });
     }
+    Object.defineProperties(constructor.prototype, {
+      $: { get: retriever, set: initializer, configurable: true },
+    });
     if (exclusion) {
       addPointerAccessors(s);
     }
     addDataViewAccessor(s);
     addStaticMembers(s);
     addMethods(s);
+    addJSONHandlers(s);
     return constructor;
   }
 
@@ -1479,9 +1586,9 @@ R"=====(
     s.pointerResetter = getPointerResetter(objectMembers);
     const { get, set, check } = getErrorUnionAccessors(members, size, options);
     Object.defineProperties(constructor.prototype, {
-      get: { value: get, configurable: true, writable: true },
-      set: { value: set, configurable: true, writable: true },
+      $: { get, set, configurable: true },
     });
+    addJSONHandlers(s);
     return constructor;
   }
 
@@ -1588,7 +1695,7 @@ R"=====(
         }
       }
     }
-    const primitive = getPrimitiveClass(members[0]);
+    const Primitive = getPrimitiveClass(members[0]);
     const { get: getValue } = getAccessors(members[0], options);
     const count = members.length;
     const items = {};
@@ -1612,7 +1719,7 @@ R"=====(
       } else {
         // values aren't sequential, so we need to compare values
         // casting just in case the enum is BigInt
-        const given = primitive(arg);
+        const given = Primitive(arg);
         for (let i = 0; i < count; i++) {
           const value = getValue.call(constructor, i);
           if (value === given) {
@@ -1636,8 +1743,7 @@ R"=====(
     };
     Object.defineProperties(constructor.prototype, {
       [Symbol.toPrimitive]: { value: valueOf, configurable: true, writable: true },
-      // so we don't get an empty object when JSON.stringify() is used
-      toJSON: { value: valueOf, configurable: true, writable: true },
+      $: { get: valueOf, configurable: true },
     });
     // now that the class has the right hidden properties, getValue() will work
     // scan the array to see if the enum's numeric representation is sequential
@@ -1669,6 +1775,7 @@ R"=====(
     }
     addStaticMembers(s);
     addMethods(s);
+    addJSONHandlers(s);
     return constructor;
   }
 
@@ -1719,9 +1826,9 @@ R"=====(
     s.pointerResetter = getPointerResetter(objectMembers);
     const { get, set, check } = getOptionalAccessors(members, size, options);
     Object.defineProperties(constructor.prototype, {
-      get: { value: get, configurable: true, writable: true },
-      set: { value: set, configurable: true, writable: true },
+      $: { get, set, configurable: true },
     });
+    addJSONHandlers(s);
     return constructor;
   }
 
@@ -1753,6 +1860,108 @@ R"=====(
       },
       check: getPresent
     };
+  }
+
+  function finalizeSlice(s) {
+    const {
+      size: elementSize,
+      instance: {
+        members: [ member ],
+      },
+      options,
+    } = s;
+    if (process.env.NODE_DEV !== 'production') {
+      /* c8 ignore next 6 */
+      if (member.bitOffset !== undefined) {
+        throw new Error(`bitOffset must be undefined for slice member`);
+      }
+      if (member.slot !== undefined) {
+        throw new Error(`slot must be undefined for slice member`);
+      }
+    }
+    const TypedArray = getTypedArrayClass(member);
+    const objectMember = (member.type === MemberType.Object) ? member : null;
+    const constructor = s.constructor = function(arg) {
+      const creating = this instanceof constructor;
+      let self, dv;
+      if (creating) {
+        self = this;
+        initializer.call(this, arg);
+      } else {
+        self = Object.create(constructor.prototype);
+        dv = getDataView(s, arg);
+        Object.defineProperties(self, {
+          [MEMORY]: { value: dv, configurable: true },
+        });
+        if (objectMember) {
+          createChildObjects$1.call(self, objectMember, 0, this, dv);
+        }
+        return self;
+      }
+    };
+    const copy = getMemoryCopier(elementSize);
+    const initializer = s.initializer = function(arg) {
+      let count;
+      if (Array.isArray(arg) || (TypedArray && arg instanceof TypedArray) || arg instanceof constructor) {
+        count = arg.length;
+      } else if (typeof(arg) === 'number') {
+        count = arg;
+      } else {
+        throwInvalidArrayInitializer(s, arg);
+      }
+      let dv = this[MEMORY];
+      const size = elementSize * count;
+      const currentSize = this?.byteLength ?? 0;
+      if (size !== currentSize) {
+        dv = new DataView(new ArrayBuffer(size));
+        Object.defineProperties(this, {
+          [MEMORY]: { value: dv, configurable: true },
+        });
+      }
+      if (objectMember) {
+        if (size > currentSize) {
+          createChildObjects$1.call(this, objectMember, currentSize, this, dv);
+        } else if (size < currentSize) {
+          clearChildObjects.call(this, currentSize, size);
+        }
+      }
+      if (arg instanceof constructor) {
+        copy(dv, arg[MEMORY]);
+        if (pointerCopier) {
+          pointerCopier.call(this, arg);
+        }
+      } else {
+        if (Array.isArray(arg) || (TypedArray && arg instanceof TypedArray)) {
+          for (let i = 0, len = arg.length; i < len; i++) {
+            set.call(this, i, arg[i]);
+          }
+        }
+      }
+    };
+    const retriever = function() { return this };
+    const pointerCopier = s.pointerCopier = getPointerCopier$1(objectMember);
+    s.pointerResetter = getPointerResetter$1(objectMember);
+    const { get, set } = getAccessors(member, options);
+    const getLength = getArrayLengthGetter(elementSize);
+    Object.defineProperties(constructor.prototype, {
+      get: { value: get, configurable: true, writable: true },
+      set: { value: set, configurable: true, writable: true },
+      length: { get: getLength, configurable: true },
+      $: { get: retriever, set: initializer, configurable: true },
+      [Symbol.iterator]: { value: getArrayIterator, configurable: true },
+    });
+    addDataViewAccessor(s);
+    addTypedArrayAccessor(s);
+    addStringAccessors(s);
+    addJSONHandlers(s);
+    return constructor;
+  }
+
+  function clearChildObjects(startSlot, endSlot) {
+    const destSlots = this[SLOTS];
+    for (let i = startSlot; i < endSlot; i++) {
+      destSlots[i] = null;
+    }
   }
 
   function finalizeArgStruct(s) {
@@ -1846,7 +2055,7 @@ R"=====(
 
   }
   function useSlice() {
-    factories$1[StructureType.Slice] = finalizeArray;
+    factories$1[StructureType.Slice] = finalizeSlice;
   }
   function useOpaque() {
     factories$1[StructureType.Opaque] = finalizeStruct;
@@ -1905,14 +2114,8 @@ R"=====(
       if (process.env.NODE_ENV !== 'production') {
         /* c8 ignore next 10 */
         if (typeof(f) !== 'function') {
-          let typeName;
-          for (const [ name, value ] of Object.entries(StructureType)) {
-            if (value === s.type) {
-              typeName = name;
-              break;
-            }
-          }
-          throw new Error(`No factory for ${typeName}: ${f}`);
+          const [ name ] = Object.entries(StructureType).find(a => a[1] === s.type);
+          throw new Error(`No factory for ${name}: ${f}`);
         }
       }
       const constructor = f(s);
@@ -1976,14 +2179,8 @@ R"=====(
     if (process.env.NODE_ENV !== 'production') {
       /* c8 ignore next 10 */
       if (typeof(f) !== 'function') {
-        let typeName;
-        for (const [ name, value ] of Object.entries(MemberType)) {
-          if (value === member.type) {
-            typeName = name;
-            break;
-          }
-        }
-        throw new Error(`No factory for ${typeName}: ${member.type}`);
+        const [ name ] = Object.entries(MemberType).find(a => a[1] === member.type);
+        throw new Error(`No factory for ${name}: ${member.name}`);
       }
     }
     return {
@@ -2088,24 +2285,24 @@ R"=====(
           if (access === 'get') {
             return function() {
               const object = this[SLOTS][slot];
-              return object.get();
+              return object.$;
             };
           } else {
             return function(value) {
               const object = this[SLOTS][slot];
-              return object.set(value);
+              return object.$ = value;
             };
           }
         } else {
           if (access === 'get') {
             return function(index) {
               const object = this[SLOTS][index];
-              return object.get();
+              return object.$;
             };
           } else {
             return function(index, value) {
               const object = this[SLOTS][index];
-              return object.set(value);
+              return object.$ = value;
             };
           }
         }
@@ -2120,13 +2317,13 @@ R"=====(
                 return function() {
                   const pointer = this[SLOTS][slot];
                   const object = pointer['*'];
-                  return object.get()
+                  return object.$;
                 };
               } else {
                 return (isConst) ? undefined : function(value) {
                   const pointer = this[SLOTS][slot];
                   const object = pointer['*'];
-                  object.set(value);
+                  object.$ = value;
                 };
               }
             } else {
@@ -2135,13 +2332,13 @@ R"=====(
                 return function(index) {
                   const pointer = this[SLOTS][index];
                   const object = pointer['*'];
-                  return object.get()
+                  return object.$;
                 };
               } else {
                 return (isConst) ? undefined : function(index, value) {
                   const pointer = this[SLOTS][index];
                   const object = pointer['*'];
-                  object.set(value);
+                  object.$ = value;
                 };
               }
             }
@@ -2186,9 +2383,8 @@ R"=====(
             };
           } else {
             return function(value) {
-              const { initializer } = structure;
               const object = this[SLOTS][slot];
-              initializer.call(object, value);
+              object.$ = value;
             };
           }
         } else {
@@ -2200,9 +2396,8 @@ R"=====(
             };
           } else {
             return function(index, value) {
-              const { initializer } = structure;
               const object = this[SLOTS][index];
-              initializer.call(object, value);
+              object.$ = value;
             };
           }
         }
@@ -2259,7 +2454,7 @@ R"=====(
     }
   }
 
-  function throwSizeMismatch(structure, dv) {
+  function throwBufferSizeMismatch(structure, dv) {
     const { type, name, size } = structure;
     const actual = dv.byteLength;
     const s = (size > 1) ? 's' : '';
@@ -2305,6 +2500,11 @@ R"=====(
     throw new TypeError(`Error number does not corresponds to any error in error set ${name}: #${number}`);
   }
 
+  function throwMultipleUnionInitializers(structure) {
+    const { name } = structure;
+    throw new TypeError(`Only one property of ${name} can be given a value`);
+  }
+
   function throwInactiveUnionProperty(structure, index, currentIndex) {
     const { instance: { members } } = structure;
     const { name: newName } = members[index];
@@ -2312,16 +2512,59 @@ R"=====(
     throw new TypeError(`Modifying property ${newName} when ${oldName} is active`);
   }
 
+  function throwMissingUnionInitializer(structure, arg) {
+    const { name, instance: { members } } = structure;
+    const missing = members.slice(0, -1).map(m => m.name);
+    throw new TypeError(`${name} needs an initializer for one of its union properties: ${missing.join(', ')}`);
+  }
+
   function throwInvalidInitializer(structure, expected, arg) {
-    throw new TypeError('TODO');
+    const { name } = structure;
+    throw new TypeError(`The constructor of ${name} expects ${expected} as an argument, received ${arg}`);
+  }
+
+  function throwInvalidArrayInitializer(structure, arg) {
+    const { instance: { members: [ member ] } } = structure;
+    const acceptable = [];
+    const primitive = getPrimitiveType(member);
+    if (primitive) {
+      acceptable.push(`an array of ${primitive}s`);
+    } else if (member.type === MemberType.EnumerationItem) {
+      acceptable.push(`an array of enum items`);
+    } else {
+      acceptable.push(`an array of objects`);
+    }
+    const TypedArray = getTypedArrayClass(member);
+    if (TypedArray) {
+      acceptable.push(`an ${TypedArray.name}`);
+    }
+    throwInvalidInitializer(structure, acceptable.join(' or '), arg);
+  }
+
+  function throwArraySizeMismatch(structure, count, arg) {
+    const { name } = structure;
+    const actual = arg.length;
+    const s1 = (count > 1) ? 's' : '';
+    const s2 = (actual > 1) ? 's' : '';
+    throw new TypeError(`${name} has ${count} element${s1}, received ${actual} intializer${s2}`);
   }
 
   function throwMissingInitializers(structure, arg) {
-    throw new TypeError('TODO');
+    const { name, instance: { members } } = structure;
+    const missing = [];
+    for (const { name, isRequired } of members) {
+      if (isRequired) {
+        if (arg?.[name] === undefined) {
+          missing.push(name);
+        }
+      }
+    }
+    throw new TypeError(`Missing initializers for ${name}: ${missing.join(', ')}`);
   }
 
   function throwNoProperty(structure, propName) {
-    throw new TypeError('TODO');
+    const { name } = structure;
+    throw new TypeError(`${name} does not have a property with that name: ${propName}`);
   }
 
   function throwOverflow(member, value) {
@@ -2331,7 +2574,7 @@ R"=====(
 
   function throwOutOfBound(member, index) {
     const { name } = member;
-    throw new RangeError(`Index exceeds the size of ${name}: ${index}`);
+    throw new RangeError(`Index exceeds the size of ${name ?? 'array'}: ${index}`);
   }
 
   function rethrowRangeError(member, index, err) {
@@ -2390,9 +2633,7 @@ R"=====(
         const { constructor } = argStruct;
         const a = new constructor();
         for (const [ index, arg ] of args.entries()) {
-          if (arg !== undefined) {
-            a[index] = arg;
-          }
+          a[index] = arg;
         }
         invokeThunk(thunk, a);
         return a.retval;
@@ -2409,9 +2650,7 @@ R"=====(
           const a = new constructor();
           a[0] = this;
           for (const [ index, arg ] of args.entries()) {
-            if (arg !== undefined) {
-              a[index + 1] = arg;
-            }
+            a[index + 1] = arg;
           }
           invokeThunk(thunk, a);
           return a.retval;

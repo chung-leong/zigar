@@ -69,9 +69,9 @@ describe('Error union functions', function() {
       });
       const Hello = finalizeStructure(structure);
       const object = Hello(new ArrayBuffer(10));
-      expect(object.get()).to.equal(0n);
-      object.set(1234n);
-      expect(object.get()).to.equal(1234n);
+      expect(object.$).to.equal(0n);
+      object.$ = 1234n;
+      expect(object.$).to.equal(1234n);
     })
     it('should define an error union with internal struct', function() {
       const setStructure = beginStructure({
@@ -135,10 +135,10 @@ describe('Error union functions', function() {
       });
       const Hello = finalizeStructure(structure);
       const object = Hello(new ArrayBuffer(10));
-      expect(object.get()).to.be.an('object');
-      expect({ ...object.get() }).to.be.eql({ dog: 0, cat: 0 });
-      object.set({ dog: 17, cat: 234 });
-      expect({ ...object.get() }).to.be.eql({ dog: 17, cat: 234 });
+      expect(object.$).to.be.an('object');
+      expect(object.$).to.be.eql({ dog: 0, cat: 0 });
+      object.$ = { dog: 17, cat: 234 };
+      expect(object.$).to.be.eql({ dog: 17, cat: 234 });
     })
 
     it('should define an error union with a pointer', function() {
@@ -210,11 +210,11 @@ describe('Error union functions', function() {
       const Hello = finalizeStructure(structure);
       const object = Hello(new ArrayBuffer(16));
       object[MEMORY].setInt16(8, 16, true)
-      expect(() => object.get()).to.throw();
+      expect(() => object.$).to.throw();
       const pointer = object[SLOTS][0];
       pointer[SLOTS][0] = new Int32(0);
-      object.set(5);
-      expect(object.get()).to.equal(5);
+      object.$ = 5;
+      expect(object.$).to.equal(5);
     })
   })
   describe('getErrorUnionAccessors', function() {
@@ -371,6 +371,16 @@ describe('Error union functions', function() {
       const DummyClass = function(value) {
         this.value = value;
       };
+      const initializer = function(arg) {
+        if (arg instanceof DummyClass) {
+          this.value = arg.value;
+        } else {
+          this.value = arg;
+        }
+      };
+      Object.defineProperties(DummyClass.prototype, {
+        $: { set: initializer },
+      });
       const members = [
         {
           type: MemberType.Object,
@@ -382,13 +392,7 @@ describe('Error union functions', function() {
             type: StructureType.Struct,
             hasPointer: true,
             constructor: DummyClass,
-            initializer: function(arg) {
-              if (arg instanceof DummyClass) {
-                this.value = arg.value;
-              } else {
-                this.value = arg;
-              }
-            },
+            initializer,
             pointerResetter: function() {
               this.value = null;
             },

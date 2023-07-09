@@ -50,12 +50,14 @@ export function finalizePointer(s) {
       this[SLOTS][0] = arg;
     }
   };
+  const retrieve = function() { return this };
   const pointerCopier = s.pointerCopier = function(arg) {
     this[SLOTS][0] = arg[SLOTS][0];
   };
   const { get, set } = getAccessors(member, options);
   Object.defineProperties(constructor.prototype, {
-    '*': { get, set, configurable: true, enumerable: true },
+    '*': { get, set, configurable: true },
+    '$': { get: retrieve, set: initializer, configurable: true, },
   });
   return constructor;
 }

@@ -2,7 +2,6 @@ import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getDataView, addDataViewAccessor } from './data-view.js';
 import { getTypedArrayClass, addTypedArrayAccessor } from './typed-array.js';
-import { getSelf } from './struct.js';
 import {
   createChildObjects,
   getPointerCopier,
@@ -11,6 +10,7 @@ import {
   getArrayIterator
 } from './array.js';
 import { addStringAccessors } from './string.js';
+import { addJSONHandlers } from './json.js';
 import { throwInvalidArrayInitializer } from './error.js';
 import { MEMORY, SLOTS } from './symbol.js';
 
@@ -90,6 +90,7 @@ export function finalizeSlice(s) {
       }
     }
   };
+  const retriever = function() { return this };
   const pointerCopier = s.pointerCopier = getPointerCopier(objectMember);
   const pointerResetter = s.pointerResetter = getPointerResetter(objectMember);
   const { get, set } = getAccessors(member, options);
@@ -98,12 +99,13 @@ export function finalizeSlice(s) {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { get: getLength, configurable: true },
-    '$': { get: getSelf, set: initializer, configurable: true },
+    $: { get: retriever, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true },
   });
   addDataViewAccessor(s);
   addTypedArrayAccessor(s);
   addStringAccessors(s);
+  addJSONHandlers(s);
   return constructor;
 }
 

@@ -39,12 +39,12 @@ describe('Integration tests', function() {
       const { Int32, Int128, Struct } = module;
       expect(Int32).to.be.a('function');
       const int32 = new Int32();
-      int32.set(1234);
-      expect(int32.get()).to.equal(1234);
+      int32.$ = 1234;
+      expect(int32.$).to.equal(1234);
       expect(Int128).to.be.a('function');
-      const int128 = new Int128();
-      int128.set(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn);
-      expect(int128.get()).to.equal(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn);
+      const int128 = new Int128(0n);
+      int128.$ = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn;
+      expect(int128.$).to.equal(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn);
       const object = new Struct();
       expect(object.number1).to.equal(123);
       expect(object.number2).to.equal(456);
@@ -139,6 +139,7 @@ describe('Integration tests', function() {
       dv.setInt32(4, 123, littleEndian);
       dv.setInt32(12, 79, littleEndian);
       dv.setInt32(16, 456, littleEndian);
+      debugger;
       const res = fifth(dv);
       expect(res).to.equal(456);
     })

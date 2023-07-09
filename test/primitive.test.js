@@ -42,7 +42,7 @@ describe('Primitive functions', function() {
       const dv = new DataView(new ArrayBuffer(8));
       dv.setBigUint64(0, 0x7FFFFFFFFFFFFFFFn, true);
       const object = Hello(dv);
-      expect(object.get()).to.equal(0x7FFFFFFFFFFFFFFFn);
+      expect(object.$).to.equal(0x7FFFFFFFFFFFFFFFn);
       expect(BigInt(object)).to.equal(0x7FFFFFFFFFFFFFFFn);
     })
   })

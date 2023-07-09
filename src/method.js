@@ -17,9 +17,7 @@ export function addMethods(s) {
       const { constructor } = argStruct;
       const a = new constructor();
       for (const [ index, arg ] of args.entries()) {
-        if (arg !== undefined) {
-          a[index] = arg;
-        }
+        a[index] = arg;
       }
       invokeThunk(thunk, a);
       return a.retval;
@@ -36,9 +34,7 @@ export function addMethods(s) {
         const a = new constructor();
         a[0] = this;
         for (const [ index, arg ] of args.entries()) {
-          if (arg !== undefined) {
-            a[index + 1] = arg;
-          }
+          a[index + 1] = arg;
         }
         invokeThunk(thunk, a);
         return a.retval;

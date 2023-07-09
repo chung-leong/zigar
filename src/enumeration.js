@@ -2,6 +2,7 @@ import { getAccessors } from './member.js';
 import { getPrimitiveClass } from './primitive.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
+import { addJSONHandlers } from './json.js';
 import { throwNoNewEnum } from './error.js';
 import { MEMORY, ENUM_INDEX, ENUM_ITEMS, ENUM_ITEM } from './symbol.js';
 
@@ -69,8 +70,7 @@ export function finalizeEnumeration(s) {
   };
   Object.defineProperties(constructor.prototype, {
     [Symbol.toPrimitive]: { value: valueOf, configurable: true, writable: true },
-    // so we don't get an empty object when JSON.stringify() is used
-    toJSON: { value: valueOf, configurable: true, writable: true },
+    $: { get: valueOf, configurable: true },
   });
   // now that the class has the right hidden properties, getValue() will work
   // scan the array to see if the enum's numeric representation is sequential
@@ -102,6 +102,7 @@ export function finalizeEnumeration(s) {
   }
   addStaticMembers(s);
   addMethods(s);
+  addJSONHandlers(s);
   return constructor;
 };
 

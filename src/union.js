@@ -5,7 +5,8 @@ import { getDataView, addDataViewAccessor } from './data-view.js';
 import { addPointerAccessors } from './pointer.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
-import { createChildObjects, getPointerCopier, getPointerResetter, getSelf } from './struct.js';
+import { addJSONHandlers } from './json.js';
+import { createChildObjects, getPointerCopier, getPointerResetter } from './struct.js';
 import {
   throwInvalidInitializer,
   throwMissingUnionInitializer,
@@ -158,6 +159,7 @@ export function finalizeUnion(s) {
       }
     }
   };
+  const retriever = function() { return this };
   const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
   const pointerResetter = s.pointerResetter = getPointerResetter(objectMembers);
   if (type === StructureType.TaggedUnion) {
@@ -167,7 +169,7 @@ export function finalizeUnion(s) {
     });
   }
   Object.defineProperties(constructor.prototype, {
-    '$': { get: getSelf, set: initializer, configurable: true },
+    $: { get: retriever, set: initializer, configurable: true },
   });
   if (exclusion) {
     addPointerAccessors(s);
@@ -175,5 +177,6 @@ export function finalizeUnion(s) {
   addDataViewAccessor(s);
   addStaticMembers(s);
   addMethods(s);
+  addJSONHandlers(s);
   return constructor;
 };

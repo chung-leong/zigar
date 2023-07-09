@@ -59,11 +59,11 @@ describe('Optional functions', function() {
       });
       const Hello = finalizeStructure(structure);
       const object = Hello(new ArrayBuffer(18));
-      expect(object.get()).to.equal(null);
-      object.set(3.14);
-      expect(object.get()).to.equal(3.14);
-      object.set(null);
-      expect(object.get()).to.equal(null);
+      expect(object.$).to.equal(null);
+      object.$ = 3.14;
+      expect(object.$).to.equal(3.14);
+      object.$ = null;
+      expect(object.$).to.equal(null);
     })
     it('should define a structure for storing an optional struct', function() {
       const structStructure = beginStructure({
@@ -113,11 +113,11 @@ describe('Optional functions', function() {
       });
       const Hello = finalizeStructure(structure);
       const object = Hello(new ArrayBuffer(18));
-      expect(object.get()).to.equal(null);
-      object.set({ dog: 1, cat: 2 });
-      expect(object.get()).to.be.an('object');
-      object.set(null);
-      expect(object.get()).to.equal(null);
+      expect(object.$).to.equal(null);
+      object.$ = { dog: 1, cat: 2 };
+      expect(object.$).to.be.an('object');
+      object.$ = null;
+      expect(object.$).to.equal(null);
     })
     it('should define a structure for storing an optional pointer', function() {
       const intStructure = beginStructure({
@@ -174,9 +174,9 @@ describe('Optional functions', function() {
       const object = Hello(new ArrayBuffer(8));
       const pointer = object[SLOTS][0];
       pointer[SLOTS][0] = new Int32(0);
-      expect(object.get()).to.equal(null);
-      object.set(5);
-      expect(object.get()).to.equal(5);
+      expect(object.$).to.equal(null);
+      object.$ = 5;
+      expect(object.$).to.equal(5);
     })
   })
   describe('getOptionalAccessors', function() {
@@ -290,6 +290,16 @@ describe('Optional functions', function() {
       const DummyClass = function(value) {
         this.value = value;
       };
+      const initializer = function(arg) {
+        if (arg instanceof DummyClass) {
+          this.value = arg.value;
+        } else {
+          this.value = arg;
+        }
+      };
+      Object.defineProperties(DummyClass.prototype, {
+        $: { set: initializer },
+      });
       const members = [
         {
           type: MemberType.Object,
@@ -300,13 +310,7 @@ describe('Optional functions', function() {
           structure: {
             type: StructureType.Struct,
             constructor: DummyClass,
-            initializer: function(arg) {
-              if (arg instanceof DummyClass) {
-                this.value = arg.value;
-              } else {
-                this.value = arg;
-              }
-            },
+            initializer,
             pointerResetter: function() {
               this.value = null;
             }

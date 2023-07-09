@@ -2,6 +2,7 @@ import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { getDataView } from './data-view.js';
 import { createChildObjects, getPointerCopier, getPointerResetter } from './struct.js';
+import { addJSONHandlers } from './json.js';
 import { throwNotInErrorSet, throwUnknownErrorNumber } from './error.js';
 import { MEMORY, SLOTS } from './symbol.js';
 
@@ -53,9 +54,9 @@ export function finalizeErrorUnion(s) {
   const pointerResetter = s.pointerResetter = getPointerResetter(objectMembers);
   const { get, set, check } = getErrorUnionAccessors(members, size, options);
   Object.defineProperties(constructor.prototype, {
-    get: { value: get, configurable: true, writable: true },
-    set: { value: set, configurable: true, writable: true },
+    $: { get, set, configurable: true },
   });
+  addJSONHandlers(s);
   return constructor;
 }
 

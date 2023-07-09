@@ -17,9 +17,6 @@ import {
   attachTemplate,
   finalizeStructure,
 } from '../src/structure.js';
-import {
-  extractValues,
-} from '../src/struct.js';
 
 describe('Struct functions', function() {
   describe('finalizeStruct', function() {
@@ -707,23 +704,8 @@ describe('Struct functions', function() {
       const object = new Hello();
       const ptr1 = object['&'].dog;
       const ptr2 = object['&'].cat;
-      expect(ptr1['*'].get()).to.equal(1234);
-      expect(ptr2['*'].get()).to.equal(4567);
-    })
-  })
-  describe('extractValues', function() {
-    it('should return a plain object', function() {
-      const object = Object.defineProperties({}, {
-        dog: { get() { return 1234; }, enumerable: true },
-        cat: { get() { return 4567; }, enumerable: true },
-        food: { get() { return [ 1, 2, 3, 4 ] }, enumerable: true },
-        self: { get() { return this }, enumerable: true },
-      });
-      const result = extractValues(object);
-      expect(result.dog).to.equal(1234);
-      expect(result.cat).to.equal(4567);
-      expect(result.food).to.eql([ 1, 2, 3, 4 ]);
-      expect(result.self).to.equal(result);
+      expect(ptr1['*'].$).to.equal(1234);
+      expect(ptr2['*'].$).to.equal(4567);
     })
   })
 })

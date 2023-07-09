@@ -156,7 +156,7 @@ describe('Slice functions', function() {
         { dog: 5, cat: 6 },
         { dog: 7, cat: 8 },
       ]);
-      expect(object.$).to.eql([
+      expect(object.valueOf()).to.eql([
         { dog: 1, cat: 2 },
         { dog: 3, cat: 4 },
         { dog: 5, cat: 6 },
@@ -247,7 +247,7 @@ describe('Slice functions', function() {
         { dog: 9, cat: 10 },
       ];
       expect(object.length).to.equal(5);
-      expect(object.$).to.eql([
+      expect(object.valueOf()).to.eql([
         { dog: 1, cat: 2 },
         { dog: 3, cat: 4 },
         { dog: 5, cat: 6 },
@@ -260,7 +260,7 @@ describe('Slice functions', function() {
         { dog: 5, cat: 6 },
       ];
       expect(object.length).to.equal(3);
-      expect(object.$).to.eql([
+      expect(object.valueOf()).to.eql([
         { dog: 1, cat: 2 },
         { dog: 3, cat: 4 },
         { dog: 5, cat: 6 },

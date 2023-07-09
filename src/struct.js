@@ -4,6 +4,7 @@ import { getDataView, addDataViewAccessor } from './data-view.js';
 import { addPointerAccessors } from './pointer.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
+import { addJSONHandlers } from './json.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoProperty } from './error.js';
 import { MEMORY, SLOTS, ZIG } from './symbol.js';
 
@@ -85,14 +86,16 @@ export function finalizeStruct(s) {
       }
     }
   };
+  const retriever = function() { return this };
   const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
   Object.defineProperties(constructor.prototype, {
-    '$': { get: getSelf, set: initializer, configurable: true },
+    $: { get: retriever, set: initializer, configurable: true },
   });
   addPointerAccessors(s);
   addDataViewAccessor(s);
   addStaticMembers(s);
   addMethods(s);
+  addJSONHandlers(s);
   return constructor;
 };
 
@@ -138,36 +141,4 @@ export function getPointerResetter(members) {
       pointerResetter.call(destSlots[slot]);
     }
   };
-}
-
-export function getSelf() {
-  return extractValues(this);
-}
-
-export function extractValues(object) {
-  const map = new WeakMap();
-  function extract(object) {
-    if (object[Symbol.iterator]) {
-      const { length } = object;
-      const array = [];
-      for (const element of object) {
-        array.push(extractValues(element));
-      }
-      return array;
-    } else if (object && typeof(object) === 'object') {
-      let result = map.get(object);
-      if (!result) {
-        result = {};
-        map.set(object, result);
-        for (const [ name, child ] of Object.entries(object)) {
-          result[name] = extract(child);
-        }
-        return result;
-      }
-      return result;
-    } else {
-      return object;
-    }
-  };
-  return extract(object);
 }

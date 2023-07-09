@@ -253,7 +253,17 @@ describe('Member functions', function() {
       useObject();
       const DummyClass = function(arg) {
         this.value = arg
-      } ;
+      };
+      const initializer = function(arg) {
+        if (arg instanceof DummyClass) {
+          this.value = arg.value
+        } else {
+          this.value = arg;
+        }
+      };
+      Object.defineProperties(DummyClass.prototype, {
+        $: { set: initializer },
+      });
       const dummyObject = new DummyClass(123);
       const member = {
         type: MemberType.Object,
@@ -264,13 +274,7 @@ describe('Member functions', function() {
         structure: {
           type: StructureType.Struct,
           constructor: DummyClass,
-          initializer: function(arg) {
-            if (arg instanceof DummyClass) {
-              this.value = arg.value
-            } else {
-              this.value = arg;
-            }
-          },
+          initializer,
         },
       };
       const slots = { 4: dummyObject };
@@ -286,9 +290,13 @@ describe('Member functions', function() {
     it('should return object accessors (Optional)', function() {
       const DummyClass = function(arg) {
         this.value = arg;
-        this.get = function() { return this.value };
-        this.set = function(value) { this.value = value };
       } ;
+      Object.defineProperties(DummyClass.prototype, {
+        $: {
+          get() { return this.value },
+          set(value) { this.value = value },
+        }
+      });
       const dummyObject = new DummyClass(123);
       const member = {
         type: MemberType.Object,
@@ -313,15 +321,19 @@ describe('Member functions', function() {
     it('should return object accessors (ErrorUnion)', function() {
       const DummyClass = function(arg) {
         this.value = arg;
-        this.get = function() {
-          if (this.value instanceof Error) {
-            throw this.value;
-          } else {
-            return this.value;
-          }
-        };
-        this.set = function(value) { this.value = value };
       } ;
+      Object.defineProperties(DummyClass.prototype, {
+        $: {
+          get() {
+            if (this.value instanceof Error) {
+              throw this.value;
+            } else {
+              return this.value;
+            }
+          },
+          set(value) { this.value = value },
+        }
+      });
       const dummyObject = new DummyClass(123);
       const member = {
         type: MemberType.Object,
@@ -346,9 +358,13 @@ describe('Member functions', function() {
     it('should return object accessors (Pointer, auto-deref to primitive)', function() {
       const DummyClass = function(value) {
         this.value = value;
-        this.get = function() { return this.value };
-        this.set = function(value) { this.value = value };
       };
+      Object.defineProperties(DummyClass.prototype, {
+        $: {
+          get() { return this.value },
+          set(value) { this.value = value },
+        }
+      });
       const dummyObject = new DummyClass(123);
       const object = {
         [SLOTS]: {
@@ -494,6 +510,16 @@ describe('Member functions', function() {
       const DummyClass = function(arg) {
         this.value = arg
       } ;
+      const initializer = function(arg) {
+        if (arg instanceof DummyClass) {
+          this.value = arg.value
+        } else {
+          this.value = arg;
+        }
+      };
+      Object.defineProperties(DummyClass.prototype, {
+        $: { set: initializer },
+      });
       const dummyObject1 = new DummyClass(123);
       const dummyObject2 = new DummyClass(456);
       const dummyObject3 = new DummyClass(789);
@@ -504,13 +530,7 @@ describe('Member functions', function() {
         structure: {
           type: StructureType.Struct,
           constructor: DummyClass,
-          initializer: function(arg) {
-            if (arg instanceof DummyClass) {
-              this.value = arg.value
-            } else {
-              this.value = arg;
-            }
-          },
+          initializer,
         },
       };
       const slots = {
@@ -539,9 +559,13 @@ describe('Member functions', function() {
       useObject();
       const DummyClass = function(arg) {
         this.value = arg;
-        this.get = function() { return this.value };
-        this.set = function(value) { this.value = value };
       } ;
+      Object.defineProperties(DummyClass.prototype, {
+        $: {
+          get() { return this.value },
+          set(value) { this.value = value },
+        },
+      });
       const dummyObject1 = new DummyClass(123);
       const dummyObject2 = new DummyClass(456);
       const dummyObject3 = new DummyClass(789);
@@ -576,9 +600,13 @@ describe('Member functions', function() {
     it('should return object array accessors (Pointer, auto-deref to primitive)', function() {
       const DummyClass = function(value) {
         this.value = value;
-        this.get = function() { return this.value };
-        this.set = function(value) { this.value = value };
       };
+      Object.defineProperties(DummyClass.prototype, {
+        $: {
+          get() { return this.value },
+          set(value) { this.value = value },
+        }
+      });
       const dummyObject1 = new DummyClass(123);
       const dummyObject2 = new DummyClass(456);
       const dummyObject3 = new DummyClass(789);

@@ -1,6 +1,7 @@
 import { MemberType, isByteAligned, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
+import { addJSONHandlers } from './json.js';
 import { MEMORY } from './symbol.js';
 
 export function finalizePrimitive(s) {
@@ -36,18 +37,15 @@ export function finalizePrimitive(s) {
     if (arg instanceof constructor) {
       copy(this[MEMORY], arg[MEMORY]);
     } else {
-      if (primitive !== undefined) {
-        this.set(primitive(arg ?? 0));
-      }
+      this.$ = arg;
     }
   };
   const { get, set } = getAccessors(member, options);
   Object.defineProperties(constructor.prototype, {
-    get: { value: get, configurable: true, writable: true },
-    set: { value: set, configurable: true, writable: true },
-    '$': { get, set, configurable: true },
+    $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
   });
+  addJSONHandlers(s);
   return constructor;
 };
 

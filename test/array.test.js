@@ -157,7 +157,7 @@ describe('Array functions', function() {
         { dog: 5, cat: 6 },
         { dog: 7, cat: 8 },
       ]);
-      expect(object.$).to.eql([
+      expect(object.valueOf()).to.eql([
         { dog: 1, cat: 2 },
         { dog: 3, cat: 4 },
         { dog: 5, cat: 6 },
