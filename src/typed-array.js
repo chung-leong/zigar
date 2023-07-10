@@ -1,5 +1,5 @@
 import { StructureType } from './structure.js';
-import { getTypeName } from './data-view.js';
+import { MemberType } from './member.js';
 import { MEMORY, TYPED_ARRAY } from './symbol.js';
 
 export function addTypedArrayAccessor(s) {
@@ -30,21 +30,32 @@ export function addTypedArrayAccessor(s) {
   }
 }
 
-export function getTypedArrayClass(member) {
-  const typeName = getTypeName(member);
-  return TypedArrays[typeName];
+export function getTypedArrayClass({ type, isSigned, byteSize }) {
+  if (type === MemberType.Int) {
+    if (isSigned) {
+      switch (byteSize) {
+        case 1: return Int8Array;
+        case 2: return Int16Array;
+        case 4: return Int32Array;
+        case 8: return BigInt64Array;
+      }
+    } else {
+      switch (byteSize) {
+        case 1: return Uint8Array;
+        case 2: return Uint16Array;
+        case 4: return Uint32Array;
+        case 8: return BigUint64Array;
+      }
+    }
+  } else if (type === MemberType.Float) {
+    switch (byteSize) {
+      case 4: return Float32Array;
+      case 8: return Float64Array;
+    }
+  }
 }
 
-const TypedArrays = {
-  Int8: Int8Array,
-  Uint8: Uint8Array,
-  Int16: Int16Array,
-  Uint16: Uint16Array,
-  Int32: Int32Array,
-  Uint32: Uint32Array,
-  BigInt64: BigInt64Array,
-  BigUint64: BigUint64Array,
-  Float32: Float32Array,
-  Float64: Float64Array,
-};
-
+export function isTypedArray(arg, TypedArray) {
+  const tag = arg?.[Symbol.toStringTag];
+  return (!!TypedArray && tag === TypedArray.name);
+}

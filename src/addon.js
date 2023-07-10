@@ -72,7 +72,7 @@ export function getArgumentBuffers(args) {
       return;
     }
     const memory = object[MEMORY];
-    if (memory && memory.buffer instanceof ArrayBuffer) {
+    if (memory && memory.buffer[Symbol.toStringTag] === 'ArrayBuffer') {
       if (!included.get(memory.buffer)) {
         buffers.push(memory.buffer);
         included.set(memory.buffer, true);

@@ -89,30 +89,36 @@ export function getDataViewFloatAccessorEx(access, member) {
   });
 }
 
-export function getDataView(structure, arg) {
-  let dv;
-  if (arg instanceof DataView) {
+export function getDataView(structure, arg, TypedArray = null) {
+  let dv = null;
+  // not using instanceof just in case we're getting objects created in other contexts
+  const tag = arg?.[Symbol.toStringTag];
+  if (tag === 'DataView') {
     dv = arg;
-  } else if (arg instanceof ArrayBuffer || arg instanceof SharedArrayBuffer) {
+  } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
     dv = new DataView(arg);
-  } else {
-    throwBufferExpected(structure);
+  } else if (TypedArray && tag === TypedArray.name) {
+    dv = new DataView(arg.buffer, arg.byteOffset, arg.byteLength);
+  }
+  if (!dv) {
+    throwBufferExpected(structure, TypedArray);
   }
   const { type, size } = structure;
-  if (type === StructureType.Slice) {
-    if (dv.byteLength % size !== 0) {
-      throwBufferSizeMismatch(structure, dv);
-    }
-  } else {
-    if (dv.byteLength !== size) {
-      throwBufferSizeMismatch(structure, dv);
-    }
+  if (type === StructureType.Slice ? dv.byteLength % size !== 0 : dv.byteLength !== size) {
+    throwBufferSizeMismatch(structure, dv);
   }
   return dv;
 }
 
-export function isBuffer(arg) {
-  return (arg instanceof DataView || arg instanceof ArrayBuffer || arg instanceof SharedArrayBuffer);
+export function isBuffer(arg, TypedArray) {
+  const tag = arg?.[Symbol.toStringTag];
+  if (tag === 'DataView' || tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
+    return true;
+  } else if (TypedArray && tag === TypedArray.name) {
+    return true;
+  } else {
+    return false;
+  }
 }
 
 export function getTypeName({ type, isSigned, bitSize, byteSize }) {

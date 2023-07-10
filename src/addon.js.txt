@@ -321,30 +321,36 @@ R"=====(
     });
   }
 
-  function getDataView(structure, arg) {
-    let dv;
-    if (arg instanceof DataView) {
+  function getDataView(structure, arg, TypedArray = null) {
+    let dv = null;
+    // not using instanceof just in case we're getting objects created in other contexts
+    const tag = arg?.[Symbol.toStringTag];
+    if (tag === 'DataView') {
       dv = arg;
-    } else if (arg instanceof ArrayBuffer || arg instanceof SharedArrayBuffer) {
+    } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
       dv = new DataView(arg);
-    } else {
+    } else if (TypedArray && tag === TypedArray.name) {
+      dv = new DataView(arg.buffer, arg.byteOffset, arg.byteLength);
+    }
+    if (!dv) {
       throwBufferExpected(structure);
     }
     const { type, size } = structure;
-    if (type === StructureType.Slice) {
-      if (dv.byteLength % size !== 0) {
-        throwBufferSizeMismatch(structure, dv);
-      }
-    } else {
-      if (dv.byteLength !== size) {
-        throwBufferSizeMismatch(structure, dv);
-      }
+    if (type === StructureType.Slice ? dv.byteLength % size !== 0 : dv.byteLength !== size) {
+      throwBufferSizeMismatch(structure, dv);
     }
     return dv;
   }
 
-  function isBuffer(arg) {
-    return (arg instanceof DataView || arg instanceof ArrayBuffer || arg instanceof SharedArrayBuffer);
+  function isBuffer(arg, TypedArray) {
+    const tag = arg?.[Symbol.toStringTag];
+    if (tag === 'DataView' || tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
+      return true;
+    } else if (TypedArray && tag === TypedArray.name) {
+      return true;
+    } else {
+      return false;
+    }
   }
 
   function getTypeName({ type, isSigned, bitSize, byteSize }) {
@@ -878,23 +884,35 @@ R"=====(
     }
   }
 
-  function getTypedArrayClass(member) {
-    const typeName = getTypeName(member);
-    return TypedArrays[typeName];
+  function getTypedArrayClass({ type, isSigned, byteSize }) {
+    if (type === MemberType.Int) {
+      if (isSigned) {
+        switch (byteSize) {
+          case 1: return Int8Array;
+          case 2: return Int16Array;
+          case 4: return Int32Array;
+          case 8: return BigInt64Array;
+        }
+      } else {
+        switch (byteSize) {
+          case 1: return Uint8Array;
+          case 2: return Uint16Array;
+          case 4: return Uint32Array;
+          case 8: return BigUint64Array;
+        }
+      }
+    } else if (type === MemberType.Float) {
+      switch (byteSize) {
+        case 4: return Float32Array;
+        case 8: return Float64Array;
+      }
+    }
   }
 
-  const TypedArrays = {
-    Int8: Int8Array,
-    Uint8: Uint8Array,
-    Int16: Int16Array,
-    Uint16: Uint16Array,
-    Int32: Int32Array,
-    Uint32: Uint32Array,
-    BigInt64: BigInt64Array,
-    BigUint64: BigUint64Array,
-    Float32: Float32Array,
-    Float64: Float64Array,
-  };
+  function isTypedArray(arg, TypedArray) {
+    const tag = arg?.[Symbol.toStringTag];
+    return (!!TypedArray && tag === TypedArray.name);
+  }
 
   function addStringAccessors(s) {
     const {
@@ -942,7 +960,7 @@ R"=====(
         throw new Error(`slot must be undefined for array member`);
       }
     }
-    const TypedArray = getTypedArrayClass(member);
+    const TypedArray = s.TypedArray = getTypedArrayClass(member);
     const objectMember = (member.type === MemberType.Object) ? member : null;
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
@@ -976,7 +994,7 @@ R"=====(
           pointerCopier.call(this, arg);
         }
       } else {
-        if (Array.isArray(arg) || (TypedArray && arg instanceof TypedArray)) {
+        if (Array.isArray(arg) || isTypedArray(arg, TypedArray)) {
           const len = arg.length;
           if (len !== count) {
             throwArraySizeMismatch(s, count, arg);
@@ -1130,6 +1148,7 @@ R"=====(
         return self;
       }
     };
+    const { TypedArray } = target;
     const initializer = s.initializer = function(arg) {
       if (arg instanceof constructor) {
         // not doing memory copying since values stored there might not be valid anyway
@@ -1139,7 +1158,7 @@ R"=====(
         if (!(arg instanceof Target)) {
           // automatically cast or create target
           const recv = (this === ZIG) ? this : null;
-          arg = isBuffer(arg) ? Target.call(recv, arg) : new Target(arg);
+          arg = isBuffer(arg, TypedArray) ? Target.call(recv, arg) : new Target(arg);
         }
         this[SLOTS][0] = arg;
       }
@@ -1879,7 +1898,7 @@ R"=====(
         throw new Error(`slot must be undefined for slice member`);
       }
     }
-    const TypedArray = getTypedArrayClass(member);
+    const TypedArray = s.TypedArray = getTypedArrayClass(member);
     const objectMember = (member.type === MemberType.Object) ? member : null;
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
@@ -1889,7 +1908,7 @@ R"=====(
         initializer.call(this, arg);
       } else {
         self = Object.create(constructor.prototype);
-        dv = getDataView(s, arg);
+        dv = getDataView(s, arg, TypedArray);
         Object.defineProperties(self, {
           [MEMORY]: { value: dv, configurable: true },
         });
@@ -1902,7 +1921,7 @@ R"=====(
     const copy = getMemoryCopier(elementSize);
     const initializer = s.initializer = function(arg) {
       let count;
-      if (Array.isArray(arg) || (TypedArray && arg instanceof TypedArray) || arg instanceof constructor) {
+      if (Array.isArray(arg) || isTypedArray(arg, TypedArray) || arg instanceof constructor) {
         count = arg.length;
       } else if (typeof(arg) === 'number') {
         count = arg;
@@ -1931,7 +1950,7 @@ R"=====(
           pointerCopier.call(this, arg);
         }
       } else {
-        if (Array.isArray(arg) || (TypedArray && arg instanceof TypedArray)) {
+        if (Array.isArray(arg) || isTypedArray(arg, TypedArray)) {
           for (let i = 0, len = arg.length; i < len; i++) {
             set.call(this, i, arg[i]);
           }
@@ -2726,7 +2745,7 @@ R"=====(
         return;
       }
       const memory = object[MEMORY];
-      if (memory && memory.buffer instanceof ArrayBuffer) {
+      if (memory && memory.buffer[Symbol.toStringTag] === 'ArrayBuffer') {
         if (!included.get(memory.buffer)) {
           buffers.push(memory.buffer);
           included.set(memory.buffer, true);

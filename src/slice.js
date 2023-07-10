@@ -1,7 +1,7 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getDataView, addDataViewAccessor } from './data-view.js';
-import { getTypedArrayClass, addTypedArrayAccessor } from './typed-array.js';
+import { getTypedArrayClass, addTypedArrayAccessor, isTypedArray } from './typed-array.js';
 import {
   createChildObjects,
   getPointerCopier,
@@ -31,7 +31,7 @@ export function finalizeSlice(s) {
       throw new Error(`slot must be undefined for slice member`);
     }
   }
-  const TypedArray = getTypedArrayClass(member);
+  const TypedArray = s.TypedArray = getTypedArrayClass(member);
   const objectMember = (member.type === MemberType.Object) ? member : null;
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
@@ -54,7 +54,7 @@ export function finalizeSlice(s) {
   const copy = getMemoryCopier(elementSize);
   const initializer = s.initializer = function(arg) {
     let count;
-    if (Array.isArray(arg) || (TypedArray && arg instanceof TypedArray) || arg instanceof constructor) {
+    if (Array.isArray(arg) || isTypedArray(arg, TypedArray) || arg instanceof constructor) {
       count = arg.length;
     } else if (typeof(arg) === 'number') {
       count = arg;
@@ -83,7 +83,7 @@ export function finalizeSlice(s) {
         pointerCopier.call(this, arg);
       }
     } else {
-      if (Array.isArray(arg) || (TypedArray && arg instanceof TypedArray)) {
+      if (Array.isArray(arg) || isTypedArray(arg, TypedArray)) {
         for (let i = 0, len = arg.length; i < len; i++) {
           set.call(this, i, arg[i]);
         }

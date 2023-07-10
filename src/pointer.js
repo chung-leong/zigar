@@ -36,6 +36,7 @@ export function finalizePointer(s) {
       return self;
     }
   };
+  const { TypedArray } = target;
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
       // not doing memory copying since values stored there might not be valid anyway
@@ -45,7 +46,7 @@ export function finalizePointer(s) {
       if (!(arg instanceof Target)) {
         // automatically cast or create target
         const recv = (this === ZIG) ? this : null;
-        arg = isBuffer(arg) ? Target.call(recv, arg) : new Target(arg);
+        arg = isBuffer(arg, TypedArray) ? Target.call(recv, arg) : new Target(arg);
       }
       this[SLOTS][0] = arg;
     }

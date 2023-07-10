@@ -139,7 +139,6 @@ describe('Integration tests', function() {
       dv.setInt32(4, 123, littleEndian);
       dv.setInt32(12, 79, littleEndian);
       dv.setInt32(16, 456, littleEndian);
-      debugger;
       const res = fifth(dv);
       expect(res).to.equal(456);
     })
@@ -165,9 +164,20 @@ describe('Integration tests', function() {
         dv.setInt32(i, j, littleEndian);
       }
       const slice = getSlice(dv, 2n, 5n);
-      expect([...slice]).to.eql([ 3, 4, 5 ]);
+      expect([ ...slice ]).to.eql([ 3, 4, 5 ]);
       expect(slice.dataView.byteOffset).to.equal(8);
       expect(slice.dataView.buffer).to.equal(dv.buffer);
+    })
+    it('should accept a compatible TypedArray', async function() {
+      const { default: { getSlice } } = await import(resolve('./integration/function-returning-slice.zig'));
+      const ta = new Int32Array(12);
+      for (let i = 0, len = ta.length; i < len; i++) {
+        ta[i] = i + 1;
+      }
+      const slice = getSlice(ta, 2n, 5n);
+      expect([ ...slice ]).to.eql([ 3, 4, 5 ]);
+      expect(slice.dataView.byteOffset).to.equal(8);
+      expect(slice.dataView.buffer).to.equal(ta.buffer);
     })
   })
 })
