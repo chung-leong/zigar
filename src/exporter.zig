@@ -88,12 +88,12 @@ test "getObjectSlot" {
 }
 
 // enums and external structs
-const Result = enum(u32) {
+pub const Result = enum(u32) {
     OK,
     Failure,
 };
 
-const StructureType = enum(u32) {
+pub const StructureType = enum(u32) {
     Primitive = 0,
     Array,
     Struct,
@@ -110,7 +110,7 @@ const StructureType = enum(u32) {
     ArgStruct,
 };
 
-const MemberType = enum(u32) {
+pub const MemberType = enum(u32) {
     Void = 0,
     Bool,
     Int,
@@ -120,10 +120,10 @@ const MemberType = enum(u32) {
     Type,
 };
 
-const Value = *opaque {};
-const Thunk = *const fn (host: Host, args: Value) callconv(.C) ?[*:0]const u8;
+pub const Value = *opaque {};
+pub const Thunk = *const fn (host: Host, args: Value) callconv(.C) ?[*:0]const u8;
 
-const Structure = extern struct {
+pub const Structure = extern struct {
     name: ?[*:0]const u8 = null,
     structure_type: StructureType,
     total_size: usize = 0,
@@ -132,7 +132,7 @@ const Structure = extern struct {
 
 const missing = std.math.maxInt(usize);
 
-const Member = extern struct {
+pub const Member = extern struct {
     name: ?[*:0]const u8 = null,
     member_type: MemberType,
     is_static: bool = false,
@@ -146,17 +146,17 @@ const Member = extern struct {
     structure: ?Value = null,
 };
 
-const Memory = extern struct {
+pub const Memory = extern struct {
     bytes: ?[*]u8 = null,
     len: usize = 0,
 };
 
-const Template = extern struct {
+pub const Template = extern struct {
     is_static: bool = false,
     object: Value,
 };
 
-const Method = extern struct {
+pub const Method = extern struct {
     name: ?[*:0]const u8 = null,
     is_static_only: bool,
     thunk: Thunk,
@@ -169,7 +169,7 @@ const ModuleFlags = packed struct(u32) {
     _: u30 = 0,
 };
 
-const Module = extern struct {
+pub const Module = extern struct {
     version: u32,
     flags: ModuleFlags,
     callbacks: *Callbacks,
@@ -546,7 +546,7 @@ const Callbacks = extern struct {
 var callbacks: Callbacks = undefined;
 
 // host interface
-const Host = *opaque {
+pub const Host = *opaque {
     fn allocateMemory(self: Host, size: usize) !Memory {
         var memory: Memory = undefined;
         if (callbacks.allocate_memory(self, size, &memory) != .OK) {
