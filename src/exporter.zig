@@ -87,6 +87,21 @@ test "getObjectSlot" {
     assert(getObjectSlot(A, 2) == 2);
 }
 
+fn getCString(comptime s: []const u8) [*:0]const u8 {
+    comptime var cs: [s.len + 1]u8 = undefined;
+    inline for (s, 0..) |c, index| {
+        cs[index] = c;
+    }
+    cs[s.len] = 0;
+    return @ptrCast(&cs);
+}
+
+test "getCString" {
+    const cs = getCString("hello");
+    assert(cs[0] == 'h');
+    assert(cs[5] == 0);
+}
+
 // enums and external structs
 pub const Result = enum(u32) {
     OK,
@@ -416,16 +431,15 @@ fn PointerType(comptime CT: type, comptime size: std.builtin.Type.Pointer.Size) 
 }
 
 fn fromMemory(memory: Memory, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) PointerType(T, size) {
-    const aligned_ptr = @alignCast(@max(@alignOf(T), 1), memory.bytes);
     return switch (size) {
-        .One => @ptrCast(*T, aligned_ptr),
+        .One => @ptrCast(@alignCast(memory.bytes)),
         .Slice => slice: {
-            const many_ptr = @ptrCast([*]T, aligned_ptr);
+            const many_ptr: [*]T = @ptrCast(@alignCast(memory.bytes));
             const count = memory.len / @sizeOf(T);
             break :slice many_ptr[0..count];
         },
-        .Many => @ptrCast([*]T, aligned_ptr),
-        .C => @ptrCast([*c]T, aligned_ptr),
+        .Many => @ptrCast(@alignCast(memory.bytes)),
+        .C => @ptrCast(@alignCast(memory.bytes)),
     };
 }
 
@@ -455,8 +469,8 @@ fn toMemory(pointer: anytype) Memory {
     const CT = @typeInfo(T).Pointer.child;
     const size = @typeInfo(T).Pointer.size;
     const address = switch (size) {
-        .Slice => @ptrToInt(pointer.ptr),
-        else => @ptrToInt(pointer),
+        .Slice => @intFromPtr(pointer.ptr),
+        else => @intFromPtr(pointer),
     };
     const len = switch (size) {
         .One => @sizeOf(CT),
@@ -464,7 +478,7 @@ fn toMemory(pointer: anytype) Memory {
         .Many, .C => 0,
     };
     return .{
-        .bytes = @intToPtr([*]u8, address),
+        .bytes = @ptrFromInt(address),
         .len = len,
     };
 }
@@ -510,11 +524,11 @@ test "comparePointers" {
     const g = &number2;
     assert(comparePointers(e, f) == true);
     assert(comparePointers(e, g) == false);
-    const h: [*]i32 = @ptrCast([*]i32, e);
-    const i: [*]i32 = @ptrCast([*]i32, g);
+    const h: [*]i32 = @ptrCast(e);
+    const i: [*]i32 = @ptrCast(g);
     assert(comparePointers(h, i) == false);
-    const j: [*c]i32 = @ptrCast([*c]i32, e);
-    const k: [*c]i32 = @ptrCast([*c]i32, g);
+    const j: [*c]i32 = @ptrCast(e);
+    const k: [*c]i32 = @ptrCast(g);
     assert(comparePointers(j, k) == false);
 }
 
@@ -671,7 +685,7 @@ pub const Host = *opaque {
 
     fn createString(self: Host, message: []const u8) !Value {
         const memory: Memory = .{
-            .bytes = @ptrCast([*]u8, @constCast(message)),
+            .bytes = @constCast(@ptrCast(message)),
             .len = message.len,
         };
         var value: Value = undefined;
@@ -691,7 +705,7 @@ pub const Host = *opaque {
                 else => try self.createString(v),
             };
         }
-        if (callbacks.log_values(self, values.len, @ptrCast([*]Value, &values)) != .OK) {
+        if (callbacks.log_values(self, values.len, @ptrCast(&values)) != .OK) {
             return Error.Unknown;
         }
     }
@@ -732,7 +746,7 @@ fn getStructureName(comptime T: type) [*:0]const u8 {
         },
         else => getFunctionName(T) orelse @typeName(T),
     };
-    return @ptrCast([*:0]const u8, name);
+    return @ptrCast(name);
 }
 
 test "getStructureName" {
@@ -767,7 +781,7 @@ fn getUnionCurrentIndex(ptr: anytype) usize {
     const T = @TypeOf(ptr.*);
     const un = @typeInfo(T).Union;
     if (un.tag_type) |TT| {
-        const value = @enumToInt(ptr.*);
+        const value = @intFromEnum(ptr.*);
         inline for (@typeInfo(TT).Enum.fields, 0..) |field, index| {
             if (value == field.value) {
                 return index;
@@ -776,8 +790,8 @@ fn getUnionCurrentIndex(ptr: anytype) usize {
     } else {
         const TT = IntType(u8, un.fields.len);
         const offset = getUnionSelectorOffset(TT, un.fields);
-        const address = @ptrToInt(ptr) + offset / 8;
-        const offset_ptr = @intToPtr(*TT, address);
+        const address = @intFromPtr(ptr) + offset / 8;
+        const offset_ptr: *TT = @ptrFromInt(address);
         return offset_ptr.*;
     }
     return missing;
@@ -839,7 +853,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
                     const slice_slot = getStructureSlot(pt.child, pt.size);
                     const slice_def: Structure = .{
                         // see comment in getStructureName()
-                        .name = @ptrCast([*:0]const u8, @typeName(T)),
+                        .name = @ptrCast(@typeName(T)),
                         .structure_type = .Slice,
                         .total_size = @sizeOf(pt.child),
                         .has_pointer = hasPointer(pt.child),
@@ -880,7 +894,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
             inline for (st.fields, 0..) |field, index| {
                 if (!field.is_comptime) {
                     try host.attachMember(structure, .{
-                        .name = @ptrCast([*:0]const u8, field.name),
+                        .name = getCString(field.name),
                         .member_type = getMemberType(field.type),
                         .is_signed = isSigned(field.type),
                         .is_const = isConst(field.type),
@@ -909,7 +923,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
             const value_offset = if (tag_offset == 0) @sizeOf(TT) * 8 else 0;
             inline for (un.fields, 0..) |field, index| {
                 try host.attachMember(structure, .{
-                    .name = @ptrCast([*:0]const u8, field.name),
+                    .name = getCString(field.name),
                     .member_type = getMemberType(field.type),
                     .is_signed = isSigned(field.type),
                     .is_const = isConst(field.type),
@@ -937,7 +951,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
             const IT = EnumType(T);
             inline for (en.fields) |field| {
                 try host.attachMember(structure, .{
-                    .name = @ptrCast([*:0]const u8, field.name),
+                    .name = getCString(field.name),
                     .member_type = getMemberType(IT),
                     .is_signed = isSigned(IT),
                     .bit_size = @bitSizeOf(IT),
@@ -1001,12 +1015,13 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
         },
         .ErrorSet => |es| {
             if (es) |errors| {
-                inline for (errors) |err| {
-                    const err_obj: T = @field(T, err.name);
+                inline for (errors) |err_rec| {
+                    // get error from global set
+                    const err = @field(anyerror, err_rec.name);
                     try host.attachMember(structure, .{
-                        .name = @ptrCast([*:0]const u8, err.name),
+                        .name = getCString(err_rec.name),
                         .member_type = .Object,
-                        .slot = @errorToInt(err_obj),
+                        .slot = @intFromError(err),
                     });
                 }
             }
@@ -1020,21 +1035,20 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
 fn addDefaultValues(host: Host, structure: Value, comptime T: type) !void {
     // default data
     const fields = std.meta.fields(T);
-    var data: [@sizeOf(T)]u8 = undefined;
-    const ptr = @intToPtr(*T, @ptrToInt(&data));
-    for (&data) |*byte_ptr| {
-        byte_ptr.* = 0xAA;
+    var values: T = undefined;
+    var bytes: []u8 = @as([*]u8, @alignCast(@ptrCast(&values)))[0..@sizeOf(T)];
+    for (bytes) |*byte_ptr| {
+        byte_ptr.* = 0;
     }
     inline for (fields) |field| {
         if (field.default_value) |opaque_ptr| {
             // set default value
-            const aligned_ptr = @alignCast(@alignOf(field.type), opaque_ptr);
-            const typed_ptr = @ptrCast(*const field.type, aligned_ptr);
-            @field(ptr.*, field.name) = typed_ptr.*;
+            const typed_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+            @field(values, field.name) = typed_ptr.*;
         }
     }
     const has_data = check_data: {
-        for (data) |byte| {
+        for (bytes) |byte| {
             if (byte != 0) {
                 break :check_data true;
             }
@@ -1042,8 +1056,8 @@ fn addDefaultValues(host: Host, structure: Value, comptime T: type) !void {
         break :check_data false;
     };
     if (has_data) {
-        const template = try host.createTemplate(&data);
-        try dezigStructure(host, template, ptr);
+        const template = try host.createTemplate(bytes);
+        try dezigStructure(host, template, &values);
         return host.attachTemplate(structure, .{
             .is_static = false,
             .object = template,
@@ -1065,7 +1079,6 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
         if (!decl.is_pub) {
             continue;
         }
-        const name = @ptrCast([*:0]const u8, decl.name);
         const decl_info = @typeInfo(@TypeOf(@field(T, decl.name)));
         // get the pointer type (where possible)
         const PT = switch (decl_info) {
@@ -1079,7 +1092,7 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
             continue;
         } else if (PT == type) {
             try host.attachMember(structure, .{
-                .name = name,
+                .name = getCString(decl.name),
                 .member_type = .Type,
                 .is_static = true,
                 .slot = getObjectSlot(S, index),
@@ -1088,7 +1101,7 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
         } else {
             const slot = getObjectSlot(S, index);
             try host.attachMember(structure, .{
-                .name = name,
+                .name = getCString(decl.name),
                 .member_type = .Object,
                 .is_static = true,
                 .is_const = isConst(PT),
@@ -1116,7 +1129,7 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
             };
             // create the pointer object
             const memory: Memory = .{
-                .bytes = @ptrCast([*]u8, &typed_ptr),
+                .bytes = @ptrCast(&typed_ptr),
                 .len = @sizeOf(PT),
             };
             const ptr_obj = try host.wrapMemory(memory, PT, .One);
@@ -1156,7 +1169,7 @@ fn addMethods(host: Host, structure: Value, comptime T: type) !void {
                 const ArgT = ArgumentStruct(function);
                 const arg_structure = try getStructure(host, ArgT);
                 try host.attachMethod(structure, .{
-                    .name = @ptrCast([*:0]const u8, decl.name),
+                    .name = getCString(decl.name),
                     .is_static_only = static: {
                         if (f.params.len > 0) {
                             if (f.params[0].type) |PT| {
@@ -1479,7 +1492,7 @@ fn createChildObject(host: Host, container: Value, slot: usize, ptr: anytype) !V
 fn createAllocator(host: Host) std.mem.Allocator {
     const VTable = struct {
         fn alloc(p: *anyopaque, size: usize, _: u8, _: usize) ?[*]u8 {
-            const h = @ptrCast(Host, p);
+            const h: Host = @ptrCast(p);
             return if (h.allocateMemory(size)) |m| m.bytes else |_| null;
         }
 
@@ -1488,9 +1501,9 @@ fn createAllocator(host: Host) std.mem.Allocator {
         }
 
         fn free(p: *anyopaque, bytes: []u8, _: u8, _: usize) void {
-            const h = @ptrCast(Host, p);
+            const h: Host = @ptrCast(p);
             h.freeMemory(.{
-                .bytes = @ptrCast([*]u8, bytes.ptr),
+                .bytes = @ptrCast(bytes.ptr),
                 .len = bytes.len,
             }) catch {};
         }
@@ -1502,13 +1515,13 @@ fn createAllocator(host: Host) std.mem.Allocator {
         };
     };
     return .{
-        .ptr = @ptrCast(*anyopaque, host),
+        .ptr = @ptrCast(host),
         .vtable = &VTable.instance,
     };
 }
 
 fn getErrorMessage(err: anyerror) [*:0]const u8 {
-    return @ptrCast([*:0]const u8, @errorName(err));
+    return @ptrCast(@errorName(err));
 }
 
 fn createThunk(comptime function: anytype, comptime ArgT: type) Thunk {
