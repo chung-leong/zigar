@@ -2,6 +2,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 const assert = std.debug.assert;
 
+const isFreeStanding = builtin.target.os.tag == .freestanding;
+
 // error type
 const Error = error{
     TODO,
@@ -145,7 +147,7 @@ pub const Structure = extern struct {
     has_pointer: bool,
 };
 
-const missing = std.math.maxInt(usize);
+pub const missing = std.math.maxInt(usize);
 
 pub const Member = extern struct {
     name: ?[*:0]const u8 = null,
@@ -1027,7 +1029,9 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
             }
         },
         else => {
-            std.debug.print("Missing: {s}\n", .{@typeName(T)});
+            if (!isFreeStanding) {
+                std.debug.print("Missing: {s}\n", .{@typeName(T)});
+            }
         },
     }
 }
@@ -1386,7 +1390,9 @@ fn rezigStructure(host: Host, obj: Value, ptr: anytype) !void {
             } else |_| {}
         },
         else => {
-            std.debug.print("Ignoring {s}\n", .{@typeName(T)});
+            if (!isFreeStanding) {
+                std.debug.print("Ignoring {s}\n", .{@typeName(T)});
+            }
         },
     }
 }
@@ -1459,7 +1465,9 @@ fn dezigStructure(host: Host, obj: Value, ptr: anytype) !void {
             } else |_| {}
         },
         else => {
-            std.debug.print("Ignoring {s}\n", .{@typeName(T)});
+            if (!isFreeStanding) {
+                std.debug.print("Ignoring {s}\n", .{@typeName(T)});
+            }
         },
     }
 }

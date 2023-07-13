@@ -12,17 +12,18 @@ const Memory = exporter.Memory;
 const Method = exporter.Method;
 const Template = exporter.Template;
 const Thunk = exporter.Thunk;
+const missing = exporter.missing;
 
 const HostStruct = struct {
     value: usize = 0,
 };
 
 fn ref(number: usize) Value {
-    return @intToPtr(Value, number);
+    return @ptrFromInt(number);
 }
 
 fn index(object: Value) usize {
-    return @ptrToInt(object);
+    return @intFromPtr(object);
 }
 
 fn strlen(s: [*:0]const u8) usize {
@@ -33,43 +34,47 @@ fn strlen(s: [*:0]const u8) usize {
     return len;
 }
 
-extern "app" fn _createObject() usize;
+extern fn _createObject() usize;
 
 fn createObject() Value {
     return ref(_createObject());
 }
 
-extern "app" fn _setObjectPropertyString(container: usize, address: usize, len: usize) void;
-extern "app" fn _setObjectPropertyInteger(container: usize, value: i32) void;
-extern "app" fn _setObjectPropertyBoolean(container: usize, value: i32) void;
-extern "app" fn _setObjectPropertyObject(container: usize, value: usize) void;
+extern fn _createString(address: usize, len: usize) usize;
 
-fn setObjectProperty(container: Value, value: anytype) void {
+extern fn _setObjectPropertyString(container: usize, key: usize, value: usize) void;
+extern fn _setObjectPropertyInteger(container: usize, key: usize, value: i32) void;
+extern fn _setObjectPropertyBoolean(container: usize, key: usize, value: i32) void;
+extern fn _setObjectPropertyObject(container: usize, key: usize, value: usize) void;
+
+fn setObjectProperty(container: Value, key: []const u8, value: anytype) void {
     const T = @TypeOf(value);
+    const key_index = _createString(@intFromPtr(key.ptr), key.len);
     switch (@typeInfo(T)) {
         .Pointer => {
             if (T == [*:0]const u8) {
-                _setObjectPropertyString(index(container), @ptrToInt(value), strlen(value));
+                const value_index = _createString(@intFromPtr(value), strlen(value));
+                _setObjectPropertyString(index(container), key_index, value_index);
             } else if (T == Value) {
-                _setObjectPropertyObject(index(container), index(value));
+                _setObjectPropertyObject(index(container), key_index, index(value));
             } else {
                 @compileError("No support for value type: " ++ @typeName(T));
             }
         },
         .Int => {
-            _setObjectPropertyInteger(index(container), @intCast(i32, value));
+            _setObjectPropertyInteger(index(container), key_index, @intCast(value));
         },
         .Enum => {
-            _setObjectPropertyInteger(index(container), @intCast(i32, @enumToInt(value)));
+            _setObjectPropertyInteger(index(container), key_index, @intCast(@intFromEnum(value)));
         },
         .Bool => {
-            _setObjectPropertyBoolean(index(container), if (value) 1 else 0);
+            _setObjectPropertyBoolean(index(container), key_index, if (value) 1 else 0);
         },
         .Optional => {
             if (value) |v| {
-                setObjectProperty(container, v);
+                setObjectProperty(container, key, v);
             } else {
-                _setObjectPropertyObject(index(container), 0);
+                _setObjectPropertyObject(index(container), key_index, 0);
             }
         },
         else => {
@@ -81,7 +86,7 @@ fn setObjectProperty(container: Value, value: anytype) void {
 fn allocateMemory(h: Host, size: usize, memory: *Memory) callconv(.C) Result {
     _ = memory;
     _ = size;
-    const host = @ptrCast(*HostStruct, @alignCast(@alignOf(HostStruct), @constCast(h)));
+    const host: *HostStruct = @ptrCast(@alignCast(@constCast(h)));
     _ = host;
     return Result.OK;
 }
@@ -107,127 +112,150 @@ fn wrapMemory(host: Host, structure: Value, memory: *const Memory, dest: *Value)
     return Result.OK;
 }
 
-extern "app" fn _getPointerStatus(object: usize) i32;
+extern fn _getPointerStatus(object: usize) i32;
 
 fn getPointerStatus(_: Host, object: Value, status: *bool) callconv(.C) Result {
-    status.* = _getPointerStatus(index(object)) != 0;
+    const value = _getPointerStatus(index(object));
+    if (value == -1) {
+        return Result.Failure;
+    }
+    status.* = (value != 0);
     return Result.OK;
 }
 
-extern "app" fn _setPointerStatus(object: usize, status: i32) void;
+extern fn _setPointerStatus(object: usize, status: i32) void;
 
 fn setPointerStatus(_: Host, object: Value, status: bool) callconv(.C) Result {
     _setPointerStatus(index(object), if (status) 1 else 0);
     return Result.OK;
 }
 
-extern "app" fn _readGlobalSlot(slot: usize) usize;
+extern fn _readGlobalSlot(slot: usize) usize;
 
 fn readGlobalSlot(_: Host, slot: usize, dest: *Value) callconv(.C) Result {
-    dest.* = ref(_readGlobalSlot(slot));
+    const obj_index = _readGlobalSlot(slot);
+    if (obj_index == 0) {
+        return Result.Failure;
+    }
+    dest.* = ref(obj_index);
     return Result.OK;
 }
 
-extern "app" fn _writeGlobalSlot(slot: usize, object: usize) void;
+extern fn _writeGlobalSlot(slot: usize, object: usize) void;
 
 fn writeGlobalSlot(_: Host, slot: usize, object: ?Value) callconv(.C) Result {
-    _writeGlobalSlot(@truncate(u32, slot), if (object) |obj| index(obj) else 0);
+    _writeGlobalSlot(@truncate(slot), if (object) |obj| index(obj) else 0);
     return Result.OK;
 }
 
-extern "app" fn _readObjectSlot(container: usize, slot: usize) usize;
+extern fn _readObjectSlot(container: usize, slot: usize) usize;
 
 fn readObjectSlot(_: Host, container: Value, slot: usize, dest: *Value) callconv(.C) Result {
     dest.* = ref(_readObjectSlot(index(container), slot));
     return Result.OK;
 }
 
-extern "app" fn _writeObjectSlot(container: usize, slot: usize, object: usize) void;
+extern fn _writeObjectSlot(container: usize, slot: usize, object: usize) void;
 
 fn writeObjectSlot(_: Host, container: Value, slot: usize, object: ?Value) callconv(.C) Result {
     _writeObjectSlot(index(container), slot, if (object) |obj| index(obj) else 0);
     return Result.OK;
 }
 
-extern "app" fn _beginStructure(def: u32) u32;
+extern fn _beginStructure(def: u32) u32;
 
 fn beginStructure(_: Host, structure: *const Structure, dest: *Value) callconv(.C) Result {
     const def = createObject();
-    setObjectProperty(def, structure.*.name);
-    setObjectProperty(def, structure.*.structure_type);
-    setObjectProperty(def, structure.*.total_size);
-    setObjectProperty(def, structure.*.has_pointer);
+    setObjectProperty(def, "name", structure.*.name);
+    setObjectProperty(def, "type", structure.*.structure_type);
+    setObjectProperty(def, "size", structure.*.total_size);
+    setObjectProperty(def, "hasPointer", structure.*.has_pointer);
     dest.* = ref(_beginStructure(index(def)));
     return Result.OK;
 }
 
-extern "app" fn _attachMember(structure: usize, def: usize) void;
+extern fn _attachMember(structure: usize, def: usize) void;
 
 fn attachMember(_: Host, structure: Value, member: *const Member) callconv(.C) Result {
     const def = createObject();
-    setObjectProperty(def, member.*.is_signed);
-    setObjectProperty(def, member.*.member_type);
-    setObjectProperty(def, member.*.bit_offset);
-    setObjectProperty(def, member.*.bit_size);
+    setObjectProperty(def, "type", member.*.member_type);
+    setObjectProperty(def, "isSigned", member.*.is_signed);
+    setObjectProperty(def, "isConst", member.*.is_const);
+    setObjectProperty(def, "isRequired", member.*.is_required);
+    if (member.*.bit_offset != missing) {
+        setObjectProperty(def, "bitOffset", member.*.bit_offset);
+    }
+    if (member.*.bit_size != missing) {
+        setObjectProperty(def, "bitSize", member.*.bit_size);
+    }
+    if (member.*.byte_size != missing) {
+        setObjectProperty(def, "byteSize", member.*.byte_size);
+    }
+    if (member.*.slot != missing) {
+        setObjectProperty(def, "slot", member.*.slot);
+    }
     if (member.*.name) |name| {
-        setObjectProperty(def, name);
+        setObjectProperty(def, "name", name);
     }
     _attachMember(index(structure), index(def));
     return Result.OK;
 }
 
-extern "app" fn _attachMethod(structure: usize, def: usize) void;
+extern fn _attachMethod(structure: usize, def: usize) void;
 
 fn attachMethod(_: Host, structure: Value, method: *const Method) callconv(.C) Result {
     const def = createObject();
-    setObjectProperty(def, method.*.is_static_only);
-    setObjectProperty(def, method.*.structure);
+    setObjectProperty(def, "isStatic", method.*.is_static_only);
+    setObjectProperty(def, "structure", method.*.structure);
     if (method.*.name) |name| {
-        setObjectProperty(def, name);
+        setObjectProperty(def, "name", name);
     }
     _attachMethod(index(structure), index(def));
     return Result.OK;
 }
 
-extern "app" fn _attachTemplate(structure: usize, def: usize) void;
+extern fn _attachTemplate(structure: usize, def: usize) void;
 
-fn attachTemplate(host: Host, structure: Value, template: *const Template) callconv(.C) Result {
-    _ = host;
+fn attachTemplate(_: Host, structure: Value, template: *const Template) callconv(.C) Result {
     const def = createObject();
-    setObjectProperty(def, template.*.is_static);
-    setObjectProperty(def, template.*.object);
+    setObjectProperty(def, "isStatic", template.*.is_static);
+    setObjectProperty(def, "template", template.*.object);
     _attachTemplate(index(structure), index(def));
     return Result.OK;
 }
 
-extern "app" fn _finalizeStructure(structure: usize) void;
+extern fn _finalizeStructure(structure: usize) void;
 
 fn finalizeStructure(_: Host, structure: Value) callconv(.C) Result {
     _finalizeStructure(index(structure));
     return Result.OK;
 }
 
-extern "app" fn _createTemplate(address: usize, len: usize) usize;
+extern fn _createDataView(address: usize, len: usize, copy: i32) usize;
 
-fn createTemplate(_: Host, memory: *const Memory, dest: *Value) callconv(.C) Result {
-    const address = @ptrToInt(memory.*.bytes);
+extern fn _createTemplate(buffer: usize) usize;
+
+fn createTemplate(host: Host, memory: *const Memory, dest: *Value) callconv(.C) Result {
+    const stack_top = @intFromPtr(host) + @sizeOf(HostStruct);
+    const stack_bottom = @intFromPtr(&stack_top);
+    const address = @intFromPtr(memory.bytes);
     const len = memory.*.len;
-    dest.* = ref(_createTemplate(address, len));
+    const copy = (stack_bottom <= address and address + len <= stack_top);
+    const dv_index = _createDataView(address, len, if (copy) 1 else 0);
+    dest.* = ref(_createTemplate(dv_index));
     return Result.OK;
 }
 
-extern "app" fn _createString(address: usize, len: usize) usize;
-
 fn createString(_: Host, memory: *const Memory, dest: *Value) callconv(.C) Result {
-    const address = @ptrToInt(memory.*.bytes);
+    const address = @intFromPtr(memory.*.bytes);
     const len = memory.*.len;
     dest.* = ref(_createString(address, len));
     return Result.OK;
 }
 
-extern "app" fn _createArray() usize;
-extern "app" fn _appendArray(array: usize, value: usize) void;
-extern "app" fn _logValues(values: usize) void;
+extern fn _createArray() usize;
+extern fn _appendArray(array: usize, value: usize) void;
+extern fn _logValues(values: usize) void;
 
 fn logValues(_: Host, argc: usize, argv: [*]Value) callconv(.C) Result {
     const array = _createArray();
@@ -239,7 +267,7 @@ fn logValues(_: Host, argc: usize, argv: [*]Value) callconv(.C) Result {
     return Result.OK;
 }
 
-extern "app" fn _createFactoryArgument() usize;
+extern fn _createFactoryArgument() usize;
 
 fn createFactoryArgument() Value {
     return ref(_createFactoryArgument());
@@ -270,10 +298,10 @@ fn setCallbacks(module: *const Module) void {
 fn runFactory(module: *const Module) usize {
     setCallbacks(module);
     var ctx: HostStruct = .{};
-    const host = @ptrCast(Host, &ctx);
+    const host: Host = @ptrCast(&ctx);
     const arg = createFactoryArgument();
     if (module.factory(host, arg)) |error_msg| {
-        return _createString(@ptrToInt(error_msg), strlen(error_msg));
+        return _createString(@intFromPtr(error_msg), strlen(error_msg));
     } else {
         return 0;
     }
