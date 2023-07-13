@@ -7,6 +7,21 @@ const LINKAGE = Symbol('linking');
 const DEPENDENCY = Symbol('dependency');
 
 export async function runExporter(wasmBinary) {
+  let nextValueIndex = 1;
+  const valueTable = { 0: null };
+  const valueIndices = new WeakMap();
+  let nextStringIndex = 1;
+  const stringTable = { 0: null };
+  const stringIndices = {};
+  const globalSlots = {};
+  const memoryTokens = {};
+  const memoryRegistry = new FinalizationRegistry((address) => {
+    memoryTokens[address] = undefined;
+    free(address);
+  });
+  const decoder = new TextDecoder();
+  let nextCallId = 1;
+  const callContexts = {};
   const imports = {
     _allocMemory,
     _freeMemory,
@@ -37,46 +52,34 @@ export async function runExporter(wasmBinary) {
     _appendArray,
     _logValues,
   };
-  const { module, instance } = await WebAssembly.instantiate(wasmBinary, { env: imports });
-  let nextValueIndex = 1;
-  const valueTable = { 0: null };
-  const valueIndices = new WeakMap();
-  let nextStringIndex = 1;
-  const stringTable = { 0: null };
-  const stringIndices = {};
-  const globalSlots = {};
+  const { instance } = await WebAssembly.instantiate(wasmBinary, { env: imports });
   const { memory, run, alloc, free } = instance.exports;
   const { buffer } = memory;
-  const memoryTokens = {};
-  const memoryRegistry = new FinalizationRegistry((address) => {
-    memoryTokens[address] = undefined;
-    free(address);
-  });
-  const decoder = new TextDecoder();
-  const callContexts = {};
-  let nextCallId = 1;
-  const callId = addCallContext();
-  const errorIndex = run(callId, argStructIndex);
-  removeCallContext(callId);
-  if (errorIndex !== 0) {
-    const errorName = stringTable[errorIndex];
-    const errorMsg = decamelizeErrorName(errorName);
-    throw new Error(errorMsg);
+  invokeFactory(run);
+
+  function invokeFactory(f) {
+    const callId = startCall();
+    const argStructIndex = addObject({ [SLOTS]: {} });
+    const errorIndex = f(callId, argStructIndex);
+    finalizeCall(callId);
+    if (errorIndex !== 0) {
+      const errorName = stringTable[errorIndex];
+      const errorMsg = decamelizeErrorName(errorName);
+      throw new Error(errorMsg);
+    }
   }
 
-  function invokeFunction(f, argStruct) {
+  function startCall() {
     const callId = nextCallId++;
     callContexts[callId] = { memoryPool: null, bufferMap: null };
+    return callId;
+  }
 
+  function finalizeCall() {
     delete callContext[callId];
     if (Object.keys(callContext) === 0) {
       nextCallId = 1;
     }
-  }
-
-  function invokeFactory() {
-    const argStructIndex = addObject({ [SLOTS]: {} });
-
   }
 
   function obtainDataView(ctx, address, size, onStack) {
