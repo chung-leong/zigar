@@ -1,3 +1,4 @@
+const std = @import("std");
 const exporter = @import("exporter.zig");
 
 const Result = exporter.Result;
@@ -14,8 +15,8 @@ const Template = exporter.Template;
 const Thunk = exporter.Thunk;
 const missing = exporter.missing;
 
-const HostStruct = struct {
-    value: usize = 0,
+const CallContext = struct {
+    call_id: usize,
 };
 
 fn ref(number: usize) Value {
@@ -83,32 +84,71 @@ fn setObjectProperty(container: Value, key: []const u8, value: anytype) void {
     }
 }
 
-fn allocateMemory(h: Host, size: usize, memory: *Memory) callconv(.C) Result {
-    _ = memory;
-    _ = size;
-    const host: *HostStruct = @ptrCast(@alignCast(@constCast(h)));
-    _ = host;
+const allocator = std.heap.WasmAllocator;
+
+export fn alloc(size: usize) usize {
+    const bytes = allocator.alloc(u8, size);
+    return @intFromPtr(bytes);
+}
+
+export fn free(address: usize) void {
+    const bytes: [*]u8 = @ptrFromInt(address);
+    allocator.free(bytes);
+}
+
+extern fn _allocMemory(call_id: usize, size: usize) usize;
+
+fn allocateMemory(host: Host, size: usize, memory: *Memory) callconv(.C) Result {
+    const ctx: *CallContext = @ptrCast(@alignCast(@constCast(host)));
+    const address = _allocMemory(ctx.*.call_id);
+    memory.* = .{
+        .bytes = @ptrFromInt(address),
+        .len = size,
+    };
     return Result.OK;
 }
+
+extern fn _freeMemory(call_id: usize, address: usize) void;
 
 fn freeMemory(host: Host, memory: *const Memory) callconv(.C) Result {
-    _ = memory;
-    _ = host;
+    const ctx: *CallContext = @ptrCast(@alignCast(@constCast(host)));
+    _freeMemory(ctx.*.call_id, @intFromPtr(memory.*.bytes));
     return Result.OK;
 }
+
+extern fn _getMemory(callId: usize, object: usize) usize;
+extern fn _getMemoryOffset(object: usize) usize;
+extern fn _getMemoryLength(object: usize) usize;
 
 fn getMemory(host: Host, object: Value, memory: *Memory) callconv(.C) Result {
-    _ = memory;
-    _ = object;
-    _ = host;
+    const ctx: *CallContext = @ptrCast(@alignCast(@constCast(host)));
+    const view_index = _getMemory(ctx.*.call_id, index(object));
+    if (view_index == 0) {
+        return Result.Failure;
+    }
+    const len = _getMemoryLength(view_index);
+    const offset = _getMemoryOffset(view_index);
+    memory.* = .{
+        .bytes = @ptrFromInt(offset),
+        .len = len,
+    };
     return Result.OK;
 }
 
+extern fn _wrapMemory(call_id: usize, structure: usize, address: usize, len: usize, on_stack: i32) usize;
+
 fn wrapMemory(host: Host, structure: Value, memory: *const Memory, dest: *Value) callconv(.C) Result {
-    _ = dest;
-    _ = memory;
-    _ = structure;
-    _ = host;
+    const stack_top = @intFromPtr(host) + @sizeOf(CallContext);
+    const stack_bottom = @intFromPtr(&stack_top);
+    const address = @intFromPtr(memory.bytes);
+    const len = memory.*.len;
+    const on_stack = if (stack_bottom <= address and address + len <= stack_top) 1 else 0;
+    const ctx: *CallContext = @ptrCast(@alignCast(@constCast(host)));
+    const obj_index = _wrapMemory(ctx.*.call_id, index(structure), @intFromPtr(memory.bytes), memory.len, on_stack);
+    if (obj_index == 0) {
+        return Result.Failure;
+    }
+    dest.* = ref(obj_index);
     return Result.OK;
 }
 
@@ -236,7 +276,7 @@ extern fn _createDataView(address: usize, len: usize, copy: i32) usize;
 extern fn _createTemplate(buffer: usize) usize;
 
 fn createTemplate(host: Host, memory: *const Memory, dest: *Value) callconv(.C) Result {
-    const stack_top = @intFromPtr(host) + @sizeOf(HostStruct);
+    const stack_top = @intFromPtr(host) + @sizeOf(CallContext);
     const stack_bottom = @intFromPtr(&stack_top);
     const address = @intFromPtr(memory.bytes);
     const len = memory.*.len;
@@ -267,12 +307,6 @@ fn logValues(_: Host, argc: usize, argv: [*]Value) callconv(.C) Result {
     return Result.OK;
 }
 
-extern fn _createFactoryArgument() usize;
-
-fn createFactoryArgument() Value {
-    return ref(_createFactoryArgument());
-}
-
 fn setCallbacks(module: *const Module) void {
     const ptr = module.*.callbacks;
     ptr.*.allocate_memory = allocateMemory;
@@ -295,19 +329,29 @@ fn setCallbacks(module: *const Module) void {
     ptr.*.log_values = logValues;
 }
 
-fn runFactory(module: *const Module) usize {
-    setCallbacks(module);
-    var ctx: HostStruct = .{};
+fn runThunk(call_id: usize, arg_index: usize, thunk: Thunk) usize {
+    var ctx: CallContext = .{ .call_id = call_id };
     const host: Host = @ptrCast(&ctx);
-    const arg = createFactoryArgument();
-    if (module.factory(host, arg)) |error_msg| {
+    const arg = ref(arg_index);
+    if (thunk(host, arg)) |error_msg| {
         return _createString(@intFromPtr(error_msg), strlen(error_msg));
     } else {
         return 0;
     }
 }
 
-pub fn exportModule(comptime S: type) usize {
+pub fn exportModule(call_id: usize, arg_index: usize, comptime S: type) usize {
     const module = exporter.createModule(S);
-    return runFactory(&module);
+    setCallbacks(module);
+    return runThunk(call_id, arg_index, module.thunk);
+}
+
+pub fn exportModuleFunctions(comptime S: type) *const fn (call_id: usize, arg_index: usize, thunk_index: usize) usize {
+    const thunks = comptime exporter.exportFunctionThunks(S);
+    const s = struct {
+        fn run(call_id: usize, arg_index: usize, thunk_index: usize) usize {
+            return runThunk(call_id, arg_index, thunks[thunk_index]);
+        }
+    };
+    return s.run;
 }

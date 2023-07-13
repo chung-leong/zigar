@@ -4,9 +4,16 @@ import { decamelizeErrorName } from './error.js';
 import { getMemoryCopier } from './memory.js';
 
 const LINKAGE = Symbol('linking');
+const DEPENDENCY = Symbol('dependency');
 
 export async function runExporter(wasmBinary) {
   const imports = {
+    _allocMemory,
+    _freeMemory,
+    _getMemory,
+    _getMemoryOffset,
+    _getMemoryLength,
+    _wrapMemory,
     _createString,
     _createObject,
     _setObjectPropertyString,
@@ -29,7 +36,6 @@ export async function runExporter(wasmBinary) {
     _createArray,
     _appendArray,
     _logValues,
-    _createFactoryArgument,
   };
   const { module, instance } = await WebAssembly.instantiate(wasmBinary, { env: imports });
   let nextValueIndex = 1;
@@ -39,14 +45,145 @@ export async function runExporter(wasmBinary) {
   const stringTable = { 0: null };
   const stringIndices = {};
   const globalSlots = {};
-  const { memory, run } = instance.exports;
+  const { memory, run, alloc, free } = instance.exports;
   const { buffer } = memory;
+  const memoryTokens = {};
+  const memoryRegistry = new FinalizationRegistry((address) => {
+    memoryTokens[address] = undefined;
+    free(address);
+  });
   const decoder = new TextDecoder();
-  const errorIndex = run();
+  const callContexts = {};
+  let nextCallId = 1;
+  const callId = addCallContext();
+  const errorIndex = run(callId, argStructIndex);
+  removeCallContext(callId);
   if (errorIndex !== 0) {
     const errorName = stringTable[errorIndex];
     const errorMsg = decamelizeErrorName(errorName);
     throw new Error(errorMsg);
+  }
+
+  function invokeFunction(f, argStruct) {
+    const callId = nextCallId++;
+    callContexts[callId] = { memoryPool: null, bufferMap: null };
+
+    delete callContext[callId];
+    if (Object.keys(callContext) === 0) {
+      nextCallId = 1;
+    }
+  }
+
+  function invokeFactory() {
+    const argStructIndex = addObject({ [SLOTS]: {} });
+
+  }
+
+  function obtainDataView(ctx, address, size, onStack) {
+    if (onStack) {
+      // move data from stack onto the heap
+      const src = new DataView(buffer, address, size);
+      const heapAddress = alloc(size);
+      const dv = new DataView(buffer, heapAddress, size);
+      const copy = getMemoryCopier(size);
+      copy(dv, src);
+      memoryRegistry.register(dv, address);
+      return dv;
+    }
+    if (ctx.memoryPool) {
+      let src = ctx.memoryPool[address];
+      if (!src) {
+        for (const [ viewAddr, view ] of Object.entries(ctx.memoryPool)) {
+          if (address >= viewAddr && address + size <= viewAddr + view.byteLength) {
+            src = view;
+            break;
+          }
+        }
+      }
+      if (src) {
+        if (src.byteLength === size) {
+          // just use the view found
+          return src;
+        } else {
+          // create a new view and add a ref to the source so it doesn't get free prematurely
+          const newDV = new DataView(buffer, address, size);
+          newDV[DEPENDENCY] = src;
+          return newDV;
+        }
+      }
+    }
+
+  }
+
+  function _allocMemory(callId, size) {
+    const address = alloc(size);
+    const dv = new DataView(buffer, address, size);
+    // free the memory when the dataview is gc'ed
+    const token = memoryRegistry.register(dv, address);
+    // same the token so we can unregister
+    memoryTokens[address] = token;
+    // place dataview into the current call's memory pool
+    const ctx = callContexts[callId];
+    if (!ctx.memoryPool) {
+      ctx.memoryPool = {};
+    }
+    ctx.memoryPool[address] = dv;
+    return address;
+  }
+
+  function _freeMemory(callId, address) {
+    free(address);
+    const token = memoryTokens[address];
+    if (token !== undefined) {
+      memoryRegistry.unregister(token);
+    }
+    const ctx = callContexts[callId];
+    if (ctx.memoryPool) {
+      delete ctx.memoryPool[address];
+    }
+  }
+
+  function _getMemory(callId, objectIndex) {
+    const object = valueTable[objectIndex];
+    let dv = object[MEMORY];
+    if (!dv) {
+      return 0;
+    }
+    const ctx = callContexts[callId];
+    if (dv.buffer != buffer) {
+      // not in WASM memory--need to copy
+      let buf = ctx.bufferMap?.get(dv.buffer);
+      if (!buf) {
+        const size = dv.buffer.byteLength;
+        const address = alloc(size);
+        buf = new DataView(buffer, address, size);
+        const src = (dv.byteLength === size) ? dv : new DataView(dv.buffer);
+        const copy = getMemoryCopier(size);
+        copy(buf, src);
+        if (!ctx.bufferMap) {
+          ctx.bufferMap = new Map();
+        }
+        ctx.bufferMap.set(dv.buffer, buf);
+      }
+    }
+    return addObject(dv);
+  }
+
+  function _getMemoryOffset(objectIndex) {
+    const object = valueTable[objectIndex];
+    return object.byteOffset;
+  }
+
+  function _getMemoryLength(objectIndex) {
+    const object = valueTable[objectIndex];
+    return object.byteLength;
+  }
+
+  function _wrapMemory(callId, structureIndex, address, len, onStack) {
+    const ctx = callContexts[callId];
+    const structure = valueTable[structureIndex];
+    const dv = obtainDataView(ctx, address, len, onStack);
+
   }
 
   function addString(address, len) {
@@ -195,12 +332,6 @@ export async function runExporter(wasmBinary) {
   function _logValues(arrayIndex) {
     const array = valueTable[arrayIndex];
     console.log(...array);
-  }
-
-  function _createFactoryArgument() {
-    return addObject({
-      [SLOTS]: {},
-    });
   }
 }
 

@@ -1069,6 +1069,17 @@ fn addDefaultValues(host: Host, structure: Value, comptime T: type) !void {
     }
 }
 
+fn getPointerType(comptime T: type, comptime name: []const u8) type {
+    // get the pointer type (where possible)
+    return switch (@typeInfo(@TypeOf(@field(T, name)))) {
+        .Fn, .Frame, .AnyFrame, .NoReturn => void,
+        .Type => type,
+        .ComptimeInt => *const IntType(i32, @field(T, name)),
+        .ComptimeFloat => *const f64,
+        else => @TypeOf(&@field(T, name)),
+    };
+}
+
 fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
     const decls = switch (@typeInfo(T)) {
         .Struct => |st| st.decls,
@@ -1083,15 +1094,8 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
         if (!decl.is_pub) {
             continue;
         }
-        const decl_info = @typeInfo(@TypeOf(@field(T, decl.name)));
         // get the pointer type (where possible)
-        const PT = switch (decl_info) {
-            .Fn, .Frame, .AnyFrame, .NoReturn => void,
-            .Type => type,
-            .ComptimeInt => *const IntType(i32, @field(T, decl.name)),
-            .ComptimeFloat => *const f64,
-            else => @TypeOf(&@field(T, decl.name)),
-        };
+        const PT = getPointerType(T, decl.name);
         if (PT == void) {
             continue;
         } else if (PT == type) {
@@ -1113,7 +1117,7 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
                 .structure = try getStructure(host, PT),
             });
             // get address to variable
-            var typed_ptr = switch (decl_info) {
+            var typed_ptr = switch (@typeInfo(@TypeOf(@field(T, decl.name)))) {
                 .ComptimeInt, .ComptimeFloat => ptr: {
                     // need to create variable in memory for comptime value
                     const CT = @typeInfo(PT).Pointer.child;
@@ -1660,4 +1664,128 @@ test "createModule" {
             assert(false);
         },
     }
+}
+
+fn getFunctionCount(comptime S: type) comptime_int {
+    const decls = switch (@typeInfo(S)) {
+        .Struct => |st| st.decls,
+        .Union => |un| un.decls,
+        .Enum => |en| en.decls,
+        .Opaque => |op| op.decls,
+        else => return 0,
+    };
+    comptime var count = 0;
+    inline for (decls) |decl| {
+        if (decl.is_pub) {
+            switch (@typeInfo(@TypeOf(@field(S, decl.name)))) {
+                .Type => count += getFunctionCount(@field(S, decl.name)),
+                .Fn => count += 1,
+                else => {},
+            }
+        }
+    }
+    return count;
+}
+
+test "getFunctionCount" {
+    const Test = struct {
+        pub fn functionA() void {}
+        pub fn functionB() void {}
+        fn functionC() void {}
+
+        pub const Test2 = struct {
+            pub fn functionD() void {}
+            pub fn functionE() void {}
+        };
+    };
+    const count = getFunctionCount(Test);
+    assert(count == 4);
+}
+
+fn getFunctionThunks(comptime S: type) [getFunctionCount(S)]Thunk {
+    const decls = switch (@typeInfo(S)) {
+        .Struct => |st| st.decls,
+        .Union => |un| un.decls,
+        .Enum => |en| en.decls,
+        .Opaque => |op| op.decls,
+        else => return .{},
+    };
+    comptime var thunks: [getFunctionCount(S)]Thunk = undefined;
+    comptime var index = 0;
+    inline for (decls) |decl| {
+        if (decl.is_pub) {
+            switch (@typeInfo(@TypeOf(@field(S, decl.name)))) {
+                .Type => {
+                    for (getFunctionThunks(@field(S, decl.name))) |thunk| {
+                        thunks[index] = thunk;
+                        index += 1;
+                    }
+                },
+                .Fn => {
+                    const function = @field(S, decl.name);
+                    const ArgT = ArgumentStruct(function);
+                    thunks[index] = createThunk(function, ArgT);
+                    index += 1;
+                },
+                else => {},
+            }
+        }
+    }
+    return thunks;
+}
+
+test "getFunctionThunks" {
+    const Test = struct {
+        pub fn functionA() void {}
+        pub fn functionB() void {}
+        fn functionC() void {}
+
+        pub const Test2 = struct {
+            pub fn functionD() void {}
+            pub fn functionE() void {}
+        };
+    };
+    const thunks = comptime getFunctionThunks(Test);
+    assert(thunks.len == 4);
+}
+
+fn getVariableCount(comptime S: type) comptime_int {
+    const decls = switch (@typeInfo(S)) {
+        .Struct => |st| st.decls,
+        .Union => |un| un.decls,
+        .Enum => |en| en.decls,
+        .Opaque => |op| op.decls,
+        else => return 0,
+    };
+    comptime var count = 0;
+    inline for (decls) |decl| {
+        if (decl.is_pub) {
+            const PT = getPointerType(S, decl.name);
+            if (PT == type) {
+                count += getVariableCount(@field(S, decl.name));
+            } else if (PT != void) {
+                if (!@typeInfo(PT).Pointer.is_const) {
+                    count += 1;
+                }
+            }
+        }
+    }
+    return count;
+}
+
+test "getVariableCount" {
+    const Test = struct {
+        pub var varA: i32 = 0;
+        pub var varB: i32 = 0;
+        var varC: i32 = 0;
+        pub const varD: i32 = 0;
+
+        pub const Test2 = struct {
+            pub var varE: i32 = 0;
+            pub const varF: i32 = 0;
+        };
+    };
+    const count = comptime getVariableCount(Test);
+    std.debug.print("\nCount: {d}\n", .{count});
+    assert(count == 3);
 }
