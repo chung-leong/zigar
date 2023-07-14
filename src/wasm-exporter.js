@@ -1,20 +1,28 @@
-import { MEMORY, SLOTS, ZIG } from './symbol.js';
-import { beginStructure, attachMember, attachMethod, attachTemplate, getStructureFeature, StructureType } from './structure.js';
+import { MEMORY, SLOTS, ZIG, SOURCE } from './symbol.js';
+import {
+  StructureType,
+  beginStructure,
+  attachMember,
+  attachMethod,
+  attachTemplate,
+  finalizeStructure,
+  getStructureFeature,
+} from './structure.js';
 import { MemberType, getMemberFeature } from './member.js';
 import { decamelizeErrorName } from './error.js';
 import { getMemoryCopier } from './memory.js';
 
 process.env.NODE_ZIG_TARGET = 'WASM-STAGE1';
 
-export function linkWASMBinary(binaryPromise, globalSlots) {
+export function linkWASMBinary(binaryPromise, globalSlots, linkages) {
   const initPromise = binaryPromise.then((wasmBinary) => {
-    return runWASMBinary(wasmBinary, globalSlots);
+    return runWASMBinary(wasmBinary, globalSlots, linkages);
   });
   // TODO: hook methods to promise
   return initPromise;
 }
 
-export async function runWASMBinary(wasmBinary, globalSlots) {
+export async function runWASMBinary(wasmBinary, globalSlots, linkages) {
   let nextValueIndex = 1;
   const valueTable = { 0: null };
   const valueIndices = new WeakMap();
@@ -25,6 +33,8 @@ export async function runWASMBinary(wasmBinary, globalSlots) {
   let nextCallId = 1;
   const callContexts = {};
   let methodCount = 0, structureCount = 0;
+  let nextLinkageIndex = 0;
+  let nextMethodIndex = 0;
   const imports = {
     _allocMemory,
     _freeMemory,
@@ -56,7 +66,7 @@ export async function runWASMBinary(wasmBinary, globalSlots) {
     _logValues,
   };
   const { instance } = await WebAssembly.instantiate(wasmBinary, { env: imports });
-  const { memory, init, run, get, alloc, free } = instance.exports;
+  const { memory: wasmMemory, init, run, get, alloc, free } = instance.exports;
   if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE1') {
     init();
     invokeFactory(run);
@@ -92,16 +102,33 @@ export async function runWASMBinary(wasmBinary, globalSlots) {
     }
   }
 
-  function obtainDataView(ctx, address, len) {
-    for (const [ buffer, memory ] of ctx.bufferMap) {
-      if (memory.address <= address && address + len <= memory.address + memory.len) {
-        const offset = address - memory.address;
-        return new DataView(buffer, offset, len);
+  function obtainDataView(ctx, address, len, onStack) {
+    if (!onStack) {
+      for (const [ buffer, memory ] of ctx.bufferMap) {
+        if (memory.address <= address && address + len <= memory.address + memory.len) {
+          const offset = address - memory.address;
+          return new DataView(buffer, offset, len);
+        }
       }
     }
-    const buffer = new ArrayBuffer(len);
-    ctx.bufferMap.set(buffer, { address, len });
-    return new DataView(buffer);
+    const src = new DataView(wasmMemory.buffer, address, len);
+    if (onStack || process.env.NODE_ZIG_TARGET === 'WASM-STAGE1') {
+      const buffer = new ArrayBuffer(len);
+      const dest = new DataView(buffer);
+      const copy = getMemoryCopier(len);
+      copy(dest, src);
+      if (!onStack) {
+        // flag the need for linkage
+        dest.linkage = nextLinkageIndex++;
+      }
+      return dest;
+    } else {
+      // mystery memory--link directly to it, providing the memory object
+      // so we can recreate the view in the event of buffer deattachment
+      // due to address space enlargement
+      src[SOURCE] = wasmMemory;
+      return src;
+    }
   }
 
   function _allocMemory(callId, len) {
@@ -161,13 +188,12 @@ export async function runWASMBinary(wasmBinary, globalSlots) {
     return object.len;
   }
 
-  function _wrapMemory(callId, structureIndex, address, len) {
-    const ctx = callContexts[callId];
+  function _wrapMemory(structureIndex, viewIndex) {
     const structure = valueTable[structureIndex];
-    const dv = obtainDataView(ctx, address, len);
+    const dv = valueTable[viewIndex];
     let object;
     if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE1') {
-      object = { structure, data: dv };
+      object = { structure, memory: dv };
     } else {
       const { constructor } = structure;
       object = constructor.call(ZIG, dv);
@@ -176,7 +202,7 @@ export async function runWASMBinary(wasmBinary, globalSlots) {
   }
 
   function addString(address, len) {
-    const ta = new Uint8Array(memory.buffer, address, len);
+    const ta = new Uint8Array(wasmMemory.buffer, address, len);
     const s = decoder.decode(ta);
     let index = stringIndices[s];
     if (index === undefined) {
@@ -299,12 +325,10 @@ export async function runWASMBinary(wasmBinary, globalSlots) {
     structureCount++;
   }
 
-  function _createDataView(address, len) {
-    const copy = getMemoryCopier(len);
-    const src = new DataView(memory.buffer, address, len);
-    const dest = new DataView(new ArrayBuffer(len));
-    copy(dest, src);
-    return addObject(dest);
+  function _createDataView(call_id, address, len, onStack) {
+    const ctx = callContexts[call_id];
+    const dv = obtainDataView(ctx, address, len, !!onStack);
+    return addObject(dv);
   }
 
   function _createTemplate(memoryIndex) {
@@ -347,6 +371,9 @@ export function serializeDefinitions(slots, wasmbinaryURL) {
   }
   if (memberFeatures.useIntEx) {
     delete memberFeatures.useInt;
+  }
+  if (memberFeatures.useEnumerationItemEx) {
+    delete memberFeatures.useEnumerationItem;
   }
   if (memberFeatures.useFloatEx) {
     delete memberFeatures.useFloat;
@@ -396,12 +423,13 @@ export function serializeDefinitions(slots, wasmbinaryURL) {
     }
     add(`];`);
   }
-  add(`const module = finalizeStructures(slots);`);
+  add(`const linkages = finalizeStructures(slots);`);
+  add(`const module = ${structureNames.get(slots[0])}.constructor;`);
 
   if (wasmbinaryURL) {
     add('\n// initialize loading and compilation of WASM bytecodes');
     // TODO: figure out how best to load the binary
-    add('const __init = linkWASMBinary(binaryPromise, slots);');
+    add('const __init = linkWASMBinary(binaryPromise, slots, linkages);');
   } else {
     add('\n// no need to initialize WASM binary');
     add('const __init = Promise.resolve(true);');
@@ -482,7 +510,94 @@ export function serializeDefinitions(slots, wasmbinaryURL) {
   }
 
   function addTemplateProperties(template) {
-    // TODO
+    const { [MEMORY]: dv, [SLOTS]: slots } = template;
+    if (dv) {
+      const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+      add(`      memory: [ ${ta.join(', ')} ],`);
+    }
+    if (slots) {
+      add(`      slots: {`);
+      for (const [ slot, object ] of Object.entries(slots)) {
+        // note: object is created by _wrapMemory()
+        const { memory, structure } = object;
+        add(`        ${slot}: {`);
+        add(`          structure: ${structureNames.get(structure)},`);
+        const ta = new Uint8Array(memory.buffer, memory.byteOffset, memory.byteLength);
+        add(`          memory: [ ${ta.join(', ')} ],`);
+        if (memory.hasOwnProperty('linkage')) {
+          add(`          linkage: ${memory.linkage},`);
+        }
+        add(`        },`);
+      }
+      add(`      },`);
+    }
   }
   return lines.join('\n');
 }
+
+export function finalizeStructures(structures) {
+  // first, fix up the structure templates
+  const linkages = [];
+  for (const s of structures) {
+    for (const target of [ s.static, s.instance ]) {
+      if (target.template) {
+        const { memory, slots } = target.template;
+        const template = {};
+        if (memory) {
+          template[MEMORY] = new DataView(new Uint8Array(memory).buffer);
+        }
+        if (slots) {
+          const objects = {};
+          for (const [ slot, { structure, memory, linkage } ] of slots) {
+            const constructor = structure.constructor ?? finalizeStructure(structure);
+            const dv = new DataView(new Uint8Array(memory).buffer);
+            const object = constructor.call(null, dv);
+            objects[slot] = object;
+            if (linkage !== undefined) {
+              // need to replace dataview with one pointing to WASM memory later,
+              // once the VM is up and running
+              linkages[linkage] = object;
+            }
+          }
+          template[SLOTS] = objects;
+        }
+        target.template = template;
+      }
+    }
+  }
+  for (const s of structures) {
+    if (!s.constructor) {
+      finalizeStructure(s);
+    }
+  }
+  return linkages;
+}
+
+export {
+  usePrimitive,
+  useArray,
+  useStruct,
+  useExternUnion,
+  useBareUnion,
+  useTaggedUnion,
+  useErrorUnion,
+  useErrorSet,
+  useEnumeration,
+  useOptional,
+  usePointer,
+  useSlice,
+  useOpaque,
+  useArgStruct,
+} from './structure.js';
+export {
+  useVoid,
+  useBool,
+  useBoolEx,
+  useInt,
+  useIntEx,
+  useFloat,
+  useFloatEx,
+  useEnumerationItem,
+  useEnumerationItemEx,
+  useObject,
+} from './member.js';

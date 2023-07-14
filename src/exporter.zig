@@ -1137,7 +1137,7 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
             };
             // create the pointer object
             const memory: Memory = .{
-                .bytes = @ptrCast(&typed_ptr),
+                .bytes = @ptrCast(typed_ptr),
                 .len = @sizeOf(PT),
             };
             const ptr_obj = try host.wrapMemory(memory, PT, .One);

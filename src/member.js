@@ -69,6 +69,42 @@ export function useObject() {
   factories[MemberType.Object] = getObjectAccessor;
 }
 
+export function getMemberFeature(member) {
+  const { type, bitSize } = member;
+  switch (type) {
+    case MemberType.Int:
+      if(isByteAligned(member) && (bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64)) {
+        return 'useInt';
+      } else {
+        return 'useIntEx';
+      }
+    case MemberType.EnumerationItem:
+      if(isByteAligned(member) && (bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64)) {
+        return 'useEnumerationItem';
+      } else {
+        return 'useEnumerationItemEx';
+      }
+    case MemberType.Float:
+      if (isByteAligned(member) && (bitSize === 32 || bitSize === 64)) {
+        return 'useFloat';
+      } else {
+        return 'useFloatEx';
+      }
+    case MemberType.Bool:
+      if (isByteAligned(member)) {
+        return 'useBool';
+      } else {
+        return 'useBoolEx';
+      }
+    case MemberType.Object:
+      return 'useObject';
+    case MemberType.Void:
+      return 'useVoid';
+    case MemberType.Type:
+      return 'useType';
+  }
+}
+
 export function isByteAligned({ bitOffset, bitSize, byteSize }) {
   return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
 }
@@ -335,37 +371,6 @@ export function getTypeAccessor(type, member, options) {
     };
   } else {
     // no setter
-  }
-}
-
-export function getMemberFeature(member) {
-  const { type, bitSize } = member;
-  switch (type) {
-    case MemberType.Int:
-    case MemberType.EnumerationItem:
-      if(isByteAligned(member) && (bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64)) {
-        return 'useInt';
-      } else {
-        return 'useIntEx';
-      }
-    case MemberType.Float:
-      if (isByteAligned(member) && (bitSize === 32 || bitSize === 64)) {
-        return 'useFloat';
-      } else {
-        return 'useFloatEx';
-      }
-    case MemberType.Bool:
-      if (isByteAligned(member)) {
-        return 'useBool';
-      } else {
-        return 'useBoolEx';
-      }
-    case MemberType.Object:
-      return 'useObject';
-    case MemberType.Void:
-      return 'useVoid';
-    case MemberType.Type:
-      return 'useType';
   }
 }
 

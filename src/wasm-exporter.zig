@@ -23,8 +23,8 @@ fn ref(number: usize) Value {
     return @ptrFromInt(number);
 }
 
-fn index(object: Value) usize {
-    return @intFromPtr(object);
+fn index(object: ?Value) usize {
+    return if (object) |ptr| @intFromPtr(ptr) else 0;
 }
 
 fn strlen(s: [*:0]const u8) usize {
@@ -141,11 +141,28 @@ fn getMemory(host: Host, object: Value, memory: *Memory) callconv(.C) Result {
     return Result.OK;
 }
 
-extern fn _wrapMemory(call_id: usize, structure: usize, address: usize, len: usize) usize;
+extern fn _createDataView(call_id: usize, address: usize, len: usize, on_stack: i32) usize;
+
+fn createDataView(host: Host, memory: *const Memory) ?Value {
+    const bytes = memory.bytes orelse return null;
+    const len = memory.*.len;
+    const stack_top = @intFromPtr(host);
+    const stack_bottom = @intFromPtr(&stack_top);
+    const address = @intFromPtr(bytes);
+    const on_stack = (stack_bottom <= address and address + len <= stack_top);
+    const ctx: *CallContext = @ptrCast(@alignCast(@constCast(host)));
+    const dv_index = _createDataView(ctx.*.call_id, address, len, if (on_stack) 1 else 0);
+    if (dv_index == 0) {
+        return null;
+    }
+    return ref(dv_index);
+}
+
+extern fn _wrapMemory(structure: usize, view: usize) usize;
 
 fn wrapMemory(host: Host, structure: Value, memory: *const Memory, dest: *Value) callconv(.C) Result {
-    const ctx: *CallContext = @ptrCast(@alignCast(@constCast(host)));
-    const obj_index = _wrapMemory(ctx.*.call_id, index(structure), @intFromPtr(memory.bytes), memory.len);
+    const dv = createDataView(host, memory) orelse return Result.Failure;
+    const obj_index = _wrapMemory(index(structure), index(dv));
     if (obj_index == 0) {
         return Result.Failure;
     }
@@ -276,13 +293,15 @@ fn finalizeStructure(_: Host, structure: Value) callconv(.C) Result {
     return Result.OK;
 }
 
-extern fn _createDataView(address: usize, len: usize) usize;
-
 extern fn _createTemplate(buffer: usize) usize;
 
-fn createTemplate(_: Host, memory: *const Memory, dest: *Value) callconv(.C) Result {
-    const dv_index = _createDataView(@intFromPtr(memory.bytes), memory.len);
-    dest.* = ref(_createTemplate(dv_index));
+fn createTemplate(host: Host, memory: *const Memory, dest: *Value) callconv(.C) Result {
+    const dv = createDataView(host, memory);
+    const templ_index = _createTemplate(index(dv));
+    if (templ_index == 0) {
+        return Result.Failure;
+    }
+    dest.* = ref(templ_index);
     return Result.OK;
 }
 
