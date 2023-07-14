@@ -148,3 +148,9 @@ export function finalizeStructure(s) {
     throw err;
   }
 }
+
+export function getStructureFeature(structure) {
+  const { type } = structure;
+  const [ name ] = Object.entries(StructureType).find(a => a[1] === type);
+  return `use${name}`;
+}

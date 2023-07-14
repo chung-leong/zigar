@@ -141,16 +141,11 @@ fn getMemory(host: Host, object: Value, memory: *Memory) callconv(.C) Result {
     return Result.OK;
 }
 
-extern fn _wrapMemory(call_id: usize, structure: usize, address: usize, len: usize, on_stack: i32) usize;
+extern fn _wrapMemory(call_id: usize, structure: usize, address: usize, len: usize) usize;
 
 fn wrapMemory(host: Host, structure: Value, memory: *const Memory, dest: *Value) callconv(.C) Result {
-    const stack_top = @intFromPtr(host) + @sizeOf(CallContext);
-    const stack_bottom = @intFromPtr(&stack_top);
-    const address = @intFromPtr(memory.bytes);
-    const len = memory.*.len;
-    const on_stack: i32 = if (stack_bottom <= address and address + len <= stack_top) 1 else 0;
     const ctx: *CallContext = @ptrCast(@alignCast(@constCast(host)));
-    const obj_index = _wrapMemory(ctx.*.call_id, index(structure), @intFromPtr(memory.bytes), memory.len, on_stack);
+    const obj_index = _wrapMemory(ctx.*.call_id, index(structure), @intFromPtr(memory.bytes), memory.len);
     if (obj_index == 0) {
         return Result.Failure;
     }
@@ -228,6 +223,7 @@ fn attachMember(_: Host, structure: Value, member: *const Member) callconv(.C) R
     setObjectProperty(def, "isSigned", member.*.is_signed);
     setObjectProperty(def, "isConst", member.*.is_const);
     setObjectProperty(def, "isRequired", member.*.is_required);
+    setObjectProperty(def, "isStatic", member.*.is_static);
     if (member.*.bit_offset != missing) {
         setObjectProperty(def, "bitOffset", member.*.bit_offset);
     }
@@ -242,6 +238,9 @@ fn attachMember(_: Host, structure: Value, member: *const Member) callconv(.C) R
     }
     if (member.*.name) |name| {
         setObjectProperty(def, "name", name);
+    }
+    if (member.*.structure) |s| {
+        setObjectProperty(def, "structure", s);
     }
     _attachMember(index(structure), index(def));
     return Result.OK;
@@ -277,17 +276,12 @@ fn finalizeStructure(_: Host, structure: Value) callconv(.C) Result {
     return Result.OK;
 }
 
-extern fn _createDataView(address: usize, len: usize, copy: i32) usize;
+extern fn _createDataView(address: usize, len: usize) usize;
 
 extern fn _createTemplate(buffer: usize) usize;
 
-fn createTemplate(host: Host, memory: *const Memory, dest: *Value) callconv(.C) Result {
-    const stack_top = @intFromPtr(host) + @sizeOf(CallContext);
-    const stack_bottom = @intFromPtr(&stack_top);
-    const address = @intFromPtr(memory.bytes);
-    const len = memory.*.len;
-    const copy = (stack_bottom <= address and address + len <= stack_top);
-    const dv_index = _createDataView(address, len, if (copy) 1 else 0);
+fn createTemplate(_: Host, memory: *const Memory, dest: *Value) callconv(.C) Result {
+    const dv_index = _createDataView(@intFromPtr(memory.bytes), memory.len);
     dest.* = ref(_createTemplate(dv_index));
     return Result.OK;
 }
@@ -313,7 +307,7 @@ fn logValues(_: Host, argc: usize, argv: [*]Value) callconv(.C) Result {
     return Result.OK;
 }
 
-fn setStage1Callbacks() void {
+pub fn setStage1Callbacks() void {
     const ptr = &exporter.callbacks;
     ptr.*.allocate_memory = allocateMemory;
     ptr.*.free_memory = freeMemory;
@@ -350,7 +344,6 @@ pub fn exportModule(comptime T: type) *const fn (call_id: usize, arg_index: usiz
     const factory = exporter.createRootFactory(T);
     const S = struct {
         fn runFactory(call_id: usize, arg_index: usize) usize {
-            setStage1Callbacks();
             return runThunk(call_id, arg_index, factory);
         }
     };

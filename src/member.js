@@ -338,6 +338,37 @@ export function getTypeAccessor(type, member, options) {
   }
 }
 
+export function getMemberFeature(member) {
+  const { type, bitSize } = member;
+  switch (type) {
+    case MemberType.Int:
+    case MemberType.EnumerationItem:
+      if(isByteAligned(member) && (bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64)) {
+        return 'useInt';
+      } else {
+        return 'useIntEx';
+      }
+    case MemberType.Float:
+      if (isByteAligned(member) && (bitSize === 32 || bitSize === 64)) {
+        return 'useFloat';
+      } else {
+        return 'useFloatEx';
+      }
+    case MemberType.Bool:
+      if (isByteAligned(member)) {
+        return 'useBool';
+      } else {
+        return 'useBoolEx';
+      }
+    case MemberType.Object:
+      return 'useObject';
+    case MemberType.Void:
+      return 'useVoid';
+    case MemberType.Type:
+      return 'useType';
+  }
+}
+
 function getAccessorUsing(access, member, options, getDataViewAccessor) {
   const {
     runtimeSafety = true,
