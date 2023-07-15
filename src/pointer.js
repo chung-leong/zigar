@@ -1,6 +1,5 @@
 import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier } from './memory.js';
 import { getDataView, isBuffer } from './data-view.js';
 import { MEMORY, SLOTS, SOURCE, ZIG } from './symbol.js';
 
@@ -90,7 +89,7 @@ export function addPointerAccessors(s) {
         return source;
       };
       Object.defineProperties(target, {
-        '&': { get, configurable: true, enumerable: true },
+        '&': { get, configurable: true },
       });
     }
   }

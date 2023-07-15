@@ -10,8 +10,11 @@ export function addStaticMembers(s) {
     },
     options,
   } = s;
+  if (members.length === 0) {
+    return;
+  }
   const descriptors = {
-    [SLOTS]: { value: template?.[SLOTS] },
+    [SLOTS]: { value: template[SLOTS] },
   };
   for (const member of members) {
     const { get, set } = getAccessors(member, options);

@@ -202,21 +202,25 @@ fn readGlobalSlot(_: Host, slot: usize, dest: *Value) callconv(.C) Result {
 extern fn _writeGlobalSlot(slot: usize, object: usize) void;
 
 fn writeGlobalSlot(_: Host, slot: usize, object: ?Value) callconv(.C) Result {
-    _writeGlobalSlot(@truncate(slot), if (object) |obj| index(obj) else 0);
+    _writeGlobalSlot(@truncate(slot), index(object));
     return Result.OK;
 }
 
 extern fn _readObjectSlot(container: usize, slot: usize) usize;
 
 fn readObjectSlot(_: Host, container: Value, slot: usize, dest: *Value) callconv(.C) Result {
-    dest.* = ref(_readObjectSlot(index(container), slot));
+    const obj_index = _readObjectSlot(index(container), slot);
+    if (obj_index == 0) {
+        return Result.Failure;
+    }
+    dest.* = ref(obj_index);
     return Result.OK;
 }
 
 extern fn _writeObjectSlot(container: usize, slot: usize, object: usize) void;
 
 fn writeObjectSlot(_: Host, container: Value, slot: usize, object: ?Value) callconv(.C) Result {
-    _writeObjectSlot(index(container), slot, if (object) |obj| index(obj) else 0);
+    _writeObjectSlot(index(container), slot, index(object));
     return Result.OK;
 }
 
