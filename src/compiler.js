@@ -23,7 +23,8 @@ export async function compile(path, options = {}) {
   } = { ...defaults, ...options };
   const fullPath = resolve(path);
   const rootFile = parse(fullPath);
-  const soName = `lib${rootFile.name}.so`;
+  const targetInfo = getTargetInfo(rootFile, options);
+  const soName = targetInfo.libraryName;
   const soPath = join(cacheDir, soName);
   const soMTime = (await find(soPath))?.mtime;
   if (!buildDir || !cacheDir) {
@@ -61,7 +62,7 @@ export async function compile(path, options = {}) {
     });
   }
   // build in a unique temp dir
-  const soBuildDir = join(buildDir, await md5(fullPath));
+  const soBuildDir = join(buildDir, await md5(fullPath), targetInfo.buildSubFolder);
   const logPath = join(soBuildDir, 'log');
   const cmdPath = join(soBuildDir, 'cmd');
   const pidPath = join(soBuildDir, 'pid');
@@ -81,12 +82,14 @@ export async function compile(path, options = {}) {
     await mkdirp(soBuildDir);
     if (await writePID(pidPath)) {
       await createProject({
-        'stub.zig': `./stub.zig`,
-        'build.zig': `./build${dependent ? '-clib' : ''}.zig`,
+        'stub.zig': `./${targetInfo.stubName}.zig`,
+        'build.zig': `./build.zig`,
       }, {
-        EXPORTER_PATH: absolute('./exporter.zig'),
+        EXPORTER_PATH: absolute(`./${targetInfo.exporterName}.zig`),
         PACKAGE_PATH: fullPath,
-        PACKAGE_NAME: rootFile.name,
+        PACKAGE_NAME: targetInfo.packageName,
+        FOR_WASM: targetInfo.forWASM ? 'yes' : 'no',
+        USE_CLIB: (dependent) ? 'yes' : 'no',
       }, soBuildDir);
       const { exec } = await import('child_process');
       const options = {
@@ -138,6 +141,17 @@ export async function compile(path, options = {}) {
     throw new Error(`Zig compilation failed\n\n${errorLog}`);
   }
   return soPath;
+}
+
+function getTargetInfo(rootFile, options) {
+  const { wasm } = options;
+  const packageName = `${rootFile.name}${wasm?.stage === 1 ? '-exporter' : ''}`;
+  const libraryName = (wasm) ? `${packageName}.wasm` : `lib${packageName}.so`;
+  const exporterName = `${wasm ? 'wasm-' : ''}exporter`;
+  const stubName = (wasm) ? `wasm-stub-stage${wasm.stage}` : `stub`;
+  const buildSubFolder = (wasm) ? `wasm-stage${wasm.stage}` : '';
+  const forWASM = !!(wasm);
+  return { packageName, libraryName, exporterName, stubName, forWASM, buildSubFolder };
 }
 
 async function find(path, follow = true) {

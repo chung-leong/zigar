@@ -1,4 +1,4 @@
-const exporter = @import("wasm-exporter");
+const exporter = @import("exporter");
 const package = @import("package");
 const initFn = exporter.setStage2Callbacks;
 const runFn = exporter.exportModuleFunctions(package);
