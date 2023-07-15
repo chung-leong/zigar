@@ -4,8 +4,8 @@ R"=====(
 
   const MEMORY = Symbol('memory');
   const SLOTS = Symbol('slots');
-  const ZIG = Symbol('ZIG');
-  const SOURCE = Symbol('SOURCE');
+  const ZIG = Symbol('Zig');
+  const SOURCE = Symbol('source');
 
   const TYPED_ARRAY = Symbol('typedArray');
   const ENUM_INDEX = Symbol('enumIndex');
@@ -798,7 +798,7 @@ R"=====(
         dv = getDataView(s, arg);
       }
       Object.defineProperties(self, {
-        [MEMORY]: { value: dv },
+        [MEMORY]: { value: dv, configurable: true },
       });
       if (creating) {
         initializer.call(self, arg);
@@ -973,7 +973,7 @@ R"=====(
         dv = getDataView(s, arg);
       }
       Object.defineProperties(self, {
-        [MEMORY]: { value: dv },
+        [MEMORY]: { value: dv, configurable: true },
       });
       if (objectMember) {
         createChildObjects$1.call(self, objectMember, 0, this, dv);
@@ -1137,7 +1137,7 @@ R"=====(
         dv = getDataView(s, arg);
       }
       Object.defineProperties(self, {
-        [MEMORY]: { value: dv },
+        [MEMORY]: { value: dv, configurable: true },
         [SLOTS]: { value: { 0: null } },
         // a boolean value indicating whether Zig currently owns the pointer
         [ZIG]: { value: this === ZIG, writable: true },
@@ -1202,7 +1202,7 @@ R"=====(
           return source;
         };
         Object.defineProperties(target, {
-          '&': { get, configurable: true, enumerable: true },
+          '&': { get, configurable: true },
         });
       }
     }
@@ -1251,9 +1251,10 @@ R"=====(
       },
       options,
     } = s;
-    const descriptors = {
-      [SLOTS]: { value: template?.[SLOTS] },
-    };
+    const descriptors = {};
+    if (template) {
+      descriptors[SLOTS] = { value: template[SLOTS] };
+    }
     for (const member of members) {
       const { get, set } = getAccessors(member, options);
       descriptors[member.name] = { get, set, configurable: true, enumerable: true };
@@ -1286,7 +1287,7 @@ R"=====(
         dv = getDataView(s, arg);
       }
       Object.defineProperties(self, {
-        [MEMORY]: { value: dv },
+        [MEMORY]: { value: dv, configurable: true },
         ...descriptors
       });
       if (objectMembers.length > 0) {
@@ -1478,7 +1479,7 @@ R"=====(
         dv = getDataView(s, arg);
       }
       Object.defineProperties(self, {
-        [MEMORY]: { value: dv },
+        [MEMORY]: { value: dv, configurable: true },
       });
       Object.defineProperties(self, descriptors);
       if (objectMembers.length > 0) {
@@ -1577,7 +1578,7 @@ R"=====(
         dv = getDataView(s, arg);
       }
       Object.defineProperties(self, {
-        [MEMORY]: { value: dv },
+        [MEMORY]: { value: dv, configurable: true },
       });
       if (objectMembers.length > 0) {
         createChildObjects.call(self, objectMembers, this, dv);
