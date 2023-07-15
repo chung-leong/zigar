@@ -24,7 +24,7 @@ export function finalizePointer(s) {
       dv = getDataView(s, arg);
     }
     Object.defineProperties(self, {
-      [MEMORY]: { value: dv },
+      [MEMORY]: { value: dv, configurable: true },
       [SLOTS]: { value: { 0: null } },
       // a boolean value indicating whether Zig currently owns the pointer
       [ZIG]: { value: this === ZIG, writable: true },

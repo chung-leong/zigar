@@ -37,7 +37,7 @@ export function finalizeArray(s) {
       dv = getDataView(s, arg);
     }
     Object.defineProperties(self, {
-      [MEMORY]: { value: dv },
+      [MEMORY]: { value: dv, configurable: true },
     });
     if (objectMember) {
       createChildObjects.call(self, objectMember, 0, this, dv);

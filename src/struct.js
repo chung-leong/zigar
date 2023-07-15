@@ -34,7 +34,7 @@ export function finalizeStruct(s) {
       dv = getDataView(s, arg);
     }
     Object.defineProperties(self, {
-      [MEMORY]: { value: dv },
+      [MEMORY]: { value: dv, configurable: true },
       ...descriptors
     });
     if (objectMembers.length > 0) {

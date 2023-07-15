@@ -12,8 +12,6 @@ import { MemberType, getMemberFeature } from './member.js';
 import { decamelizeErrorName } from './error.js';
 import { getMemoryCopier } from './memory.js';
 
-process.env.NODE_ZIG_TARGET = 'WASM-STAGE1';
-
 export function linkWASMBinary(binaryPromise, linkages) {
   const initPromise = binaryPromise.then((wasmBinary) => {
     return runWASMBinary(wasmBinary, linkages);
@@ -70,18 +68,19 @@ export async function runWASMBinary(wasmBinary, linkages) {
   const { memory: wasmMemory, init, run, get, alloc, free } = instance.exports;
   if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE1') {
     init();
-    invokeFactory(run);
+    invokeFactory();
     return structures;
   } else if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE2') {
     init();
+    linkVariables();
   } else {
     throw new Error(`The environment variable NODE_ZIG_TARGET must be "WASM-STAGE1" or "WASM-STAGE2"`);
   }
 
-  function invokeFactory(f) {
+  function invokeFactory() {
     const callId = startCall();
     const argStructIndex = addObject({ [SLOTS]: {} });
-    const errorIndex = f(callId, argStructIndex);
+    const errorIndex = run(callId, argStructIndex);
     finalizeCall(callId);
     if (errorIndex !== 0) {
       const errorName = stringTable[errorIndex];
@@ -129,6 +128,20 @@ export async function runWASMBinary(wasmBinary, linkages) {
       // due to address space enlargement
       src[SOURCE] = wasmMemory;
       return src;
+    }
+  }
+
+  function linkVariables() {
+    for (const [ index, target ] of linkages.entries()) {
+      const address = get(index);
+      const temp = target[MEMORY];
+      const len = temp.byteLength;
+      const wasm = new DataView(wasmMemory.buffer, address, len);
+      wasm[SOURCE] = wasmMemory;
+      const copy = getMemoryCopier(len);
+      // copy changes made to temp buffer into WASM memory
+      copy(wasm, temp);
+      Object.defineProperty(target, MEMORY, { value: wasm });
     }
   }
 
@@ -356,24 +369,11 @@ export function serializeDefinitions(structures, loadWASM) {
   const lines = [];
   let indent = 0;
   function add(s) {
-    let increase = false, decrease = false;
-    for (let i = 0; i < s.length; i++) {
-      const c = s.charAt(i);
-      if (c === '{' || c === '[') {
-        increase = true;
-      } else if (c === '}' || c === ']') {
-        if (increase) {
-          increase = false;
-        } else {
-          decrease = true;
-        }
-      }
-    }
-    if (decrease) {
+    if (/^\s*[\]\}]/.test(s)) {
       indent--;
     }
     lines.push(' '.repeat(indent * 2) + s);
-    if (increase) {
+    if (/[\[\{]\s*$/.test(s)) {
       indent++;
     }
   }
