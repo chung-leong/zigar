@@ -12,15 +12,26 @@ import { MemberType, getMemberFeature } from './member.js';
 import { decamelizeErrorName } from './error.js';
 import { getMemoryCopier } from './memory.js';
 
-export function linkWASMBinary(binaryPromise, linkages) {
-  const initPromise = binaryPromise.then((wasmBinary) => {
-    return runWASMBinary(wasmBinary, linkages);
-  });
-  // TODO: hook methods to promise
-  return initPromise;
+export async function linkWASMBinary(binaryPromise, params = {}) {
+  const {
+    resolve,
+    reject,
+    ...linkParams
+  } = params;
+  try {
+    const wasmBinary = await binaryPromise;
+    const result = runWASMBinary(wasmBinary, linkParams);
+    resolve(result);
+  } catch (err) {
+    reject(err);
+  }
 }
 
-export async function runWASMBinary(wasmBinary, linkages) {
+export async function runWASMBinary(wasmBinary, options = {}) {
+  const {
+    omitFunctions,
+    variables,
+  } = options;
   let nextValueIndex = 1;
   const valueTable = { 0: null };
   const valueIndices = new WeakMap();
@@ -132,7 +143,7 @@ export async function runWASMBinary(wasmBinary, linkages) {
   }
 
   function linkVariables() {
-    for (const [ index, target ] of linkages.entries()) {
+    for (const [ index, target ] of variables.entries()) {
       const address = get(index);
       const temp = target[MEMORY];
       const len = temp.byteLength;
@@ -365,7 +376,11 @@ export async function runWASMBinary(wasmBinary, linkages) {
   }
 }
 
-export function serializeDefinitions(structures, loadWASM) {
+export function serializeDefinitions(structures, params) {
+  const {
+    runtimeURL,
+    loadWASM,
+  } = params;
   const lines = [];
   let indent = 0;
   function add(s) {
@@ -408,7 +423,7 @@ export function serializeDefinitions(structures, loadWASM) {
   for (const name of imports) {
     add(`${name},`);
   }
-  add(`} from "../../src/wasm-exporter.js";`);
+  add(`} from ${JSON.stringify(runtimeURL)};`);
 
   add(`\n// activate features`);
   for (const feature of features) {
@@ -435,7 +450,7 @@ export function serializeDefinitions(structures, loadWASM) {
     }
     add(`];`);
   }
-  add(`const linkages = finalizeStructures(structures);`);
+  add(`const linkage = finalizeStructures(structures);`);
 
   // the root structure gets finalized last
   const root = structures[structures.length - 1];
@@ -445,7 +460,7 @@ export function serializeDefinitions(structures, loadWASM) {
     add('\n// initialize loading and compilation of WASM bytecodes');
     add(`const binaryPromise = ${loadWASM};`);
     // TODO: figure out how best to load the binary
-    add('const __init = linkWASMBinary(binaryPromise, linkages);');
+    add('const __init = linkWASMBinary(binaryPromise, linkage);');
   } else {
     add('\n// no need to initialize WASM binary');
     add('const __init = Promise.resolve(true);');
@@ -560,7 +575,7 @@ export function serializeDefinitions(structures, loadWASM) {
 }
 
 export function finalizeStructures(structures) {
-  const linkages = [];
+  const variables = [];
   for (const structure of structures) {
     for (const target of [ structure.static, structure.instance ]) {
       // first create the actual template using the provided placeholder
@@ -582,7 +597,7 @@ export function finalizeStructures(structures) {
     if (placeholder.linkage !== undefined) {
       // need to replace dataview with one pointing to WASM memory later,
       // when the VM is up and running
-      linkages[placeholder.linkage] = template;
+      variables[placeholder.linkage] = template;
     }
     return template;
   }
@@ -602,12 +617,17 @@ export function finalizeStructures(structures) {
       insertObjects(object[SLOTS], placeholder.slots);
     }
     if (placeholder.linkage !== undefined) {
-      linkages[placeholder.linkage] = object;
+      variables[placeholder.linkage] = object;
     }
     return object;
   }
 
-  return linkages;
+  let resolve, reject;
+  const promise = new Promise((r1, r2) => {
+    resolve = r1;
+    reject = r2;
+  });
+  return { promise, resolve, reject, variables };
 }
 
 export {
@@ -637,4 +657,5 @@ export {
   useEnumerationItem,
   useEnumerationItemEx,
   useObject,
+  useType,
 } from './member.js';
