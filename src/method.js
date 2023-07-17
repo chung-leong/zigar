@@ -19,8 +19,7 @@ export function addMethods(s) {
       for (const [ index, arg ] of args.entries()) {
         a[index] = arg;
       }
-      invokeThunk(thunk, a);
-      return a.retval;
+      return invokeThunk(thunk, a);
     }
     Object.defineProperties(f, {
       name: { value: name, writable: false },
@@ -36,8 +35,7 @@ export function addMethods(s) {
         for (const [ index, arg ] of args.entries()) {
           a[index + 1] = arg;
         }
-        invokeThunk(thunk, a);
-        return a.retval;
+        return invokeThunk(thunk, a);
       }
       Object.defineProperties(m, {
         name: { value: name, writable: false },
@@ -52,14 +50,29 @@ export function addMethods(s) {
 const globalSlots = {};
 
 export function invokeThunk(thunk, args) {
-  // pass the argument object as the this/recv variable
-  // while the slots and symbols are passed as arguments
-  const err = thunk.call(args, globalSlots, SLOTS, MEMORY, ZIG);
-  // errors returned by exported Zig functions are normally written into the
-  // argument object and get thrown when we access its retval property (a zig error union)
-  // error strings returned by the thunk are due to problems in the thunking process
-  // (i.e. bugs in export.zig)
-  if (err) {
-    throwZigError(err);
+  if (process.env.NODE_ZIG_TARGET === 'NODE-CPP-EXT') {
+    // pass the argument object as the this/recv variable
+    // while the slots and symbols are passed as arguments
+    const err = thunk.call(args, globalSlots, SLOTS, MEMORY, ZIG);
+    // errors returned by exported Zig functions are normally written into the
+    // argument object and get thrown when we access its retval property (a zig error union)
+    // error strings returned by the thunk are due to problems in the thunking process
+    // (i.e. bugs in export.zig)
+    if (err) {
+      throwZigError(err);
+    }
+  } else if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE2') {
+    const res = thunk(args);
+    if (res !== undefined) {
+      if (res instanceof Promise) {
+        // a promise of the function having been linked and called
+        return res.then(() => args.retval);
+      } else {
+        throwZigError(res);
+      }
+    }
+  } else {
+    throw new Error(`Unknown target: ${process.env.NODE_ZIG_TARGET}`);
   }
+  return args.retval;
 }

@@ -16,7 +16,7 @@ const Thunk = exporter.Thunk;
 const missing = exporter.missing;
 
 const CallContext = struct {
-    call_id: usize,
+    allocator: std.mem.Allocator,
 };
 
 fn ref(number: usize) Value {
@@ -84,26 +84,29 @@ fn setObjectProperty(container: Value, key: []const u8, value: anytype) void {
     }
 }
 
-const allocator: std.mem.Allocator = .{ .ptr = undefined, .vtable = &std.heap.WasmAllocator.vtable };
-
-export fn alloc(size: usize) usize {
-    if (allocator.alloc([]u8, size)) |bytes| {
-        return @intFromPtr(bytes.ptr);
-    } else |_| {
+export fn alloc(host: Host, len: usize) usize {
+    const ctx: *CallContext = @ptrCast(@alignCast(@constCast(host)));
+    if (len > 0) {
+        if (ctx.*.allocator.alloc([]u8, len)) |bytes| {
+            return @intFromPtr(bytes.ptr);
+        } else |_| {
+            return 0;
+        }
+    } else {
         return 0;
     }
 }
 
-export fn free(address: usize, size: usize) void {
+export fn free(host: Host, address: usize, len: usize) void {
+    const ctx: *CallContext = @ptrCast(@alignCast(@constCast(host)));
     const bytes: [*]u8 = @ptrFromInt(address);
-    allocator.free(bytes[0..size]);
+    ctx.*.allocator.free(bytes[0..len]);
 }
 
-extern fn _allocMemory(call_id: usize, size: usize) usize;
+extern fn _allocMemory(host: usize, size: usize) usize;
 
 fn allocateMemory(host: Host, size: usize, memory: *Memory) callconv(.C) Result {
-    const ctx: *CallContext = @ptrCast(@alignCast(@constCast(host)));
-    const address = _allocMemory(ctx.*.call_id, size);
+    const address = _allocMemory(@intFromPtr(host), size);
     if (address == 0) {
         return Result.Failure;
     }
@@ -114,21 +117,19 @@ fn allocateMemory(host: Host, size: usize, memory: *Memory) callconv(.C) Result 
     return Result.OK;
 }
 
-extern fn _freeMemory(call_id: usize, address: usize, size: usize) void;
+extern fn _freeMemory(host: usize, address: usize, len: usize) void;
 
 fn freeMemory(host: Host, memory: *const Memory) callconv(.C) Result {
-    const ctx: *CallContext = @ptrCast(@alignCast(@constCast(host)));
-    _freeMemory(ctx.*.call_id, @intFromPtr(memory.*.bytes), memory.len);
+    _freeMemory(@intFromPtr(host), @intFromPtr(memory.*.bytes), memory.len);
     return Result.OK;
 }
 
-extern fn _getMemory(callId: usize, object: usize) usize;
+extern fn _getMemory(host: usize, object: usize) usize;
 extern fn _getMemoryOffset(object: usize) usize;
 extern fn _getMemoryLength(object: usize) usize;
 
 fn getMemory(host: Host, object: Value, memory: *Memory) callconv(.C) Result {
-    const ctx: *CallContext = @ptrCast(@alignCast(@constCast(host)));
-    const view_index = _getMemory(ctx.*.call_id, index(object));
+    const view_index = _getMemory(@intFromPtr(host), index(object));
     if (view_index == 0) {
         return Result.Failure;
     }
@@ -141,7 +142,7 @@ fn getMemory(host: Host, object: Value, memory: *Memory) callconv(.C) Result {
     return Result.OK;
 }
 
-extern fn _createDataView(call_id: usize, address: usize, len: usize, on_stack: i32) usize;
+extern fn _createDataView(host: usize, address: usize, len: usize, on_stack: i32) usize;
 
 fn createDataView(host: Host, memory: *const Memory) ?Value {
     const bytes = memory.bytes orelse return null;
@@ -150,8 +151,7 @@ fn createDataView(host: Host, memory: *const Memory) ?Value {
     const stack_bottom = @intFromPtr(&stack_top);
     const address = @intFromPtr(bytes);
     const on_stack = (stack_bottom <= address and address + len <= stack_top);
-    const ctx: *CallContext = @ptrCast(@alignCast(@constCast(host)));
-    const dv_index = _createDataView(ctx.*.call_id, address, len, if (on_stack) 1 else 0);
+    const dv_index = _createDataView(@intFromPtr(host), address, len, if (on_stack) 1 else 0);
     if (dv_index == 0) {
         return null;
     }
@@ -272,7 +272,7 @@ extern fn _attachMethod(structure: usize, def: usize) void;
 fn attachMethod(_: Host, structure: Value, method: *const Method) callconv(.C) Result {
     const def = createObject();
     setObjectProperty(def, "isStatic", method.*.is_static_only);
-    setObjectProperty(def, "structure", method.*.structure);
+    setObjectProperty(def, "argStruct", method.*.structure);
     if (method.*.name) |name| {
         setObjectProperty(def, "name", name);
     }
@@ -352,22 +352,31 @@ pub fn setStage1Callbacks() void {
     ptr.*.log_values = logValues;
 }
 
-fn runThunk(call_id: usize, arg_index: usize, thunk: Thunk) usize {
-    var ctx: CallContext = .{ .call_id = call_id };
+extern fn _startCall(host: usize) void;
+extern fn _endCall(host: usize) void;
+
+fn runThunk(arg_index: usize, thunk: Thunk) usize {
+    var ctx: CallContext = .{
+        .allocator = .{ .ptr = undefined, .vtable = &std.heap.WasmAllocator.vtable },
+    };
     const host: Host = @ptrCast(&ctx);
-    const arg = ref(arg_index);
-    if (thunk(host, arg)) |error_msg| {
+    _startCall(@intFromPtr(host));
+    const result = thunk(host, ref(arg_index));
+    _endCall(@intFromPtr(host));
+    if (result) |error_msg| {
         return _createString(@intFromPtr(error_msg), strlen(error_msg));
     } else {
         return 0;
     }
 }
 
-pub fn exportModule(comptime T: type) *const fn (call_id: usize, arg_index: usize) usize {
+const RunFn = *const fn (arg_index: usize, thunk_index: usize) usize;
+
+pub fn exportModule(comptime T: type) RunFn {
     const factory = exporter.createRootFactory(T);
     const S = struct {
-        fn runFactory(call_id: usize, arg_index: usize) usize {
-            return runThunk(call_id, arg_index, factory);
+        fn runFactory(arg_index: usize, _: usize) usize {
+            return runThunk(arg_index, factory);
         }
     };
     return S.runFactory;
@@ -388,16 +397,14 @@ pub fn setStage2Callbacks() callconv(.C) void {
     ptr.*.log_values = logValues;
 }
 
-const RunFn = *const fn (call_id: usize, arg_index: usize, thunk_index: usize) usize;
-
 pub fn exportModuleFunctions(comptime T: type) RunFn {
     const thunks = comptime exporter.getFunctionThunks(T);
     const S = struct {
-        fn runFunction(call_id: usize, arg_index: usize, thunk_index: usize) usize {
-            return runThunk(call_id, arg_index, thunks[thunk_index]);
+        fn runFunction(arg_index: usize, thunk_index: usize) usize {
+            return runThunk(arg_index, thunks[thunk_index]);
         }
 
-        fn doNothing(_: usize, _: usize, _: usize) usize {
+        fn doNothing(_: usize, _: usize) usize {
             return 0;
         }
     };
@@ -417,5 +424,5 @@ pub fn exportModuleVariables(comptime T: type) GetFn {
             return 0;
         }
     };
-    return S.getAddress;
+    return if (getters.len > 0) S.getAddress else S.doNothing;
 }

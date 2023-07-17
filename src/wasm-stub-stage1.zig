@@ -7,6 +7,6 @@ export fn init() void {
     initFn();
 }
 
-export fn run(call_id: usize, arg_index: usize) usize {
-    return runFn(call_id, arg_index);
+export fn run(arg_index: usize, thunk_index: usize) usize {
+    return runFn(arg_index, thunk_index);
 }

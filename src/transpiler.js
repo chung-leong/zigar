@@ -14,20 +14,20 @@ export async function transpile(path, options = {}) {
   const buffer = await readFile(exporterPath);
   const structures = await runWASMBinary(buffer, { omitFunctions });
   const hasMethods = !!structures.find(s => s.methods.length > 0);
-  const wasmPath = (hasMethods) ? compile(path, { ...compileOptions, wasm: { stage: 2 } }) : undefined;
+  const wasmPath = (hasMethods) ? await compile(path, { ...compileOptions, wasm: { stage: 2 } }) : undefined;
   const runtimeURL = moduleResolver('node-zig/wasm-runtime');
   let loadWASM;
   if (wasmPath) {
     if (embedWASM) {
       const base64 = await readFile(wasmPath, { encoding: 'base64' });
-      loadWASM = `async () => {
-        const binaryString = ${JSON.stringify(base64)};
+      loadWASM = `(async () => {
+        const binaryString = atob(${JSON.stringify(base64)});
         const bytes = new Uint8Array(binaryString.length);
         for (var i = 0; i < binaryString.length; i++) {
           bytes[i] = binaryString.charCodeAt(i);
         }
         return bytes.buffer;
-      }`;
+      })()`;
     } else {
       if (typeof(wasmLoader) !== 'function') {
         throw new Error(`wasmLoader is a required option when embedWASM is false`);

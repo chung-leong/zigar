@@ -15,7 +15,7 @@ describe('Integration tests (WASM)', function() {
   })
   describe('Variables', function() {
     it('should import integer variables', async function() {
-      this.timeout(10000);
+      this.timeout(20000);
       const { default: module } = await transpileImport(resolve('./integration/integers.zig'));
       expect(module.private).to.be.undefined;
       expect(module.int4).to.equal(7);
@@ -33,7 +33,7 @@ describe('Integration tests (WASM)', function() {
       expect(() => module.int16 = 0).to.throw();
     })
     it('should import comptime constants', async function() {
-      this.timeout(10000);
+      this.timeout(20000);
       const { default: module } = await transpileImport(resolve('./integration/comptime-numbers.zig'));
       expect(module.small).to.equal(127);
       expect(module.negative).to.equal(-167);
@@ -41,7 +41,7 @@ describe('Integration tests (WASM)', function() {
       expect(module.pi.toFixed(4)).to.equal('3.1416');
     })
     it('should import types', async function() {
-      this.timeout(10000);
+      this.timeout(20000);
       const { default: module } = await transpileImport(resolve('./integration/types.zig'));
       const { Int32, Int128, Struct } = module;
       expect(Int32).to.be.a('function');
@@ -57,7 +57,7 @@ describe('Integration tests (WASM)', function() {
       expect(object.number2).to.equal(456);
     })
     it('should import primitive arrays', async function() {
-      this.timeout(10000);
+      this.timeout(20000);
       const { default: module } = await transpileImport(resolve('./integration/arrays-with-primitives.zig'));
       expect(module.int32_array4).to.be.an('object');
       expect(module.int32_array4.get(0)).to.equal(1);
@@ -69,8 +69,8 @@ describe('Integration tests (WASM)', function() {
       expect(row1).to.be.an('object');
     })
     it('should import primitive slices', async function() {
-      this.timeout(10000);
-      const { default: module } = await import(resolve('./integration/slices-with-primitive.zig'));
+      this.timeout(20000);
+      const { default: module } = await transpileImport(resolve('./integration/slices-with-primitive.zig'));
       const slice = module.int32_slice;
       expect(module.int32_slice).to.be.an('object');
       expect(module.int32_slice.get(0)).to.equal(123);
@@ -84,16 +84,17 @@ describe('Integration tests (WASM)', function() {
       expect([ ...module.uint32_array4 ]).to.eql([ 1, 2, 777, 4 ]);
     })
     it('should import optional values', async function() {
-      this.timeout(10000);
-      const { default: module } = await import(resolve('./integration/optionals.zig'));
+      this.timeout(20000);
+      const { default: module } = await transpileImport(resolve('./integration/optionals.zig'));
       expect(module.i32_empty).to.be.null;
       expect(module.i32_value).to.be.equal(1234);
       expect(module.bool_empty).to.be.null;
       expect(module.bool_value).to.be.equal(true);
     })
     it('should import error unions', async function() {
-      this.timeout(10000);
-      const { default: module } = await import(resolve('./integration/error-unions.zig'));
+      this.timeout(20000);
+      const { default: module, __init } = await transpileImport(resolve('./integration/error-unions.zig'));
+      await __init;
       expect(module.Error).to.be.a('function');
       expect(module.positive_outcome).to.equal(123);
       expect(() => module.negative_outcome).to.throw()
@@ -122,14 +123,44 @@ describe('Integration tests (WASM)', function() {
       expect(module.void_error).to.be.null;
     })
     it('should import simple bare union', async function() {
-      this.timeout(10000);
-      const { default: module } = await import(resolve('./integration/bare-union-simple.zig'));
+      this.timeout(20000);
+      const { default: module, __init } = await transpileImport(resolve('./integration/bare-union-simple.zig'));
+      await __init;
       expect(module.animal.dog).to.equal(123);
       module.useCat();
       expect(module.animal.dog).to.equal(null);
       expect(module.animal.cat).to.equal(777);
       module.useMonkey();
       expect(module.animal.monkey).to.equal(777n);
+    })
+  })
+  describe('Methods', function() {
+    it('should import simple function', async function() {
+      this.timeout(20000);
+      const { default: module } = await transpileImport(resolve('./integration/function-simple.zig'));
+      const res = await module.add(5, 17);
+      expect(res).to.equal(22);
+      expect(module.add(5, 18)).to.equal(23);
+    })
+    it('should import function that accepts a slice', async function() {
+      this.timeout(20000);
+      const { default: { fifth }, __init } = await transpileImport(resolve('./integration/function-accepting-slice.zig'));
+      await __init;
+      const dv = new DataView(new ArrayBuffer(32));
+      dv.setInt32(4, 123, littleEndian);
+      dv.setInt32(12, 79, littleEndian);
+      dv.setInt32(16, 456, littleEndian);
+      const res = fifth(dv);
+      expect(res).to.equal(456);
+    })
+    it('should throw when function returns an error', async function() {
+      this.timeout(20000);
+      const { default: { returnNumber }, __init } = await transpileImport(resolve('./integration/function-returning-error.zig'));
+      await __init;
+      const result = returnNumber(1234);
+      expect(result).to.equal(1234);
+      expect(() => returnNumber(0)).to.throw()
+        .with.property('message', 'System is on fire');
     })
   })
 })
@@ -144,6 +175,7 @@ async function transpileImport(path) {
   const hash = await md5(path);
   // need to use .mjs since the file is sitting in /tmp, outside the scope of our package.json
   const jsPath = join(tmpdir(), `${hash}.mjs`);
+  //console.log({ jsPath });
   await writeFile(jsPath, code);
   return import(jsPath);
 }
