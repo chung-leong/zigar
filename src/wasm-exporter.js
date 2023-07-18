@@ -16,6 +16,7 @@ export async function linkWASMBinary(binaryPromise, params = {}) {
   const {
     resolve,
     reject,
+    promise,
     ...linkParams
   } = params;
   try {
@@ -25,6 +26,7 @@ export async function linkWASMBinary(binaryPromise, params = {}) {
   } catch (err) {
     reject(err);
   }
+  return promise;
 }
 
 export async function runWASMBinary(wasmBinary, options = {}) {
@@ -439,6 +441,8 @@ export function serializeDefinitions(structures, params) {
 
   add(`\n// define structures`);
   const structureNames = new Map();
+  const arrayBufferNames = new Map();
+  let arrayBufferCount = 0;
   for (const [ index, structure ] of structures.entries()) {
     const varname = `s${index}`;
     addStructure(varname, structure);
@@ -505,6 +509,8 @@ export function serializeDefinitions(structures, params) {
   add(``);
 
   function addStructure(varname, structure) {
+    addBuffers(structure.instance.template);
+    addBuffers(structure.static.template);
     add(`const ${varname} = {`);
     for (const [ name, value ] of Object.entries(structure)) {
       switch (name) {
@@ -563,22 +569,44 @@ export function serializeDefinitions(structures, params) {
         add(`structure: ${structureNames.get(structure)},`);
       }
       if (dv) {
-        const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
-        add(`memory: [ ${ta.join(', ')} ],`);
+        const buffer = arrayBufferNames.get(dv.buffer);
+        const pairs = [ `array: ${buffer}` ];
+        if (dv.byteLength < dv.buffer.byteLength) {
+          pairs.push(`offset: ${dv.byteOffset}`);
+          pairs.push(`length: ${dv.byteLength}`);
+        }
+        add(`memory: { ${pairs.join(', ')} },`);
         if (dv.hasOwnProperty('linkage')) {
           add(`linkage: ${dv.linkage},`);
         }
       }
       if (slots && Object.keys(slots).length > 0) {
         add(`slots: {`);
-        for (const [ slot, object ] of Object.entries(slots)) {
-          addObject(slot, object);
+        for (const [ slot, child ] of Object.entries(slots)) {
+          addObject(slot, child);
         }
         add(`},`);
       }
       add(`},`);
     } else {
       add(`${name}: null`);
+    }
+  }
+
+  function addBuffers(object) {
+    if (object) {
+      const { [MEMORY]: dv, [SLOTS]: slots } = object;
+      if (dv && !arrayBufferNames.get(dv.buffer)) {
+        const varname = `a${arrayBufferCount++}`;
+        arrayBufferNames.set(dv.buffer, varname);
+        const ta = new Uint8Array(dv.buffer);
+        add(`const ${varname} = new Uint8Array([ ${ta.join(', ')} ]);`);
+      }
+      if (slots) {
+        for (const [ slot, child ] of Object.entries(slots)) {
+          addBuffers(child);
+        }
+      }
     }
   }
 
@@ -630,7 +658,8 @@ export function finalizeStructures(structures) {
   function createTemplate(placeholder) {
     const template = {};
     if (placeholder.memory) {
-      template[MEMORY] = new DataView(new Uint8Array(placeholder.memory).buffer);
+      const { array, offset, length } = placeholder.memory;
+      template[MEMORY] = new DataView(array.buffer, offset, length);
     }
     if (placeholder.slots) {
       template[SLOTS] = insertObjects({}, placeholder.slots);
@@ -651,7 +680,14 @@ export function finalizeStructures(structures) {
   }
 
   function createObject(placeholder) {
-    const dv = new DataView(new Uint8Array(placeholder.memory).buffer);
+    let dv;
+    if (placeholder.memory) {
+      const { array, offset, length } = placeholder.memory;
+      dv = new DataView(array.buffer, offset, length);
+    } else {
+      const { size } = placeholder.structure;
+      dv = new DataView(new ArrayBuffer(size));
+    }
     const { constructor } = placeholder.structure;
     const object = constructor.call(null, dv);
     if (placeholder.slots) {

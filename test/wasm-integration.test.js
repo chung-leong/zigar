@@ -70,7 +70,7 @@ describe('Integration tests (WASM)', function() {
     })
     it('should import primitive slices', async function() {
       this.timeout(20000);
-      const { default: module } = await transpileImport(resolve('./integration/slices-with-primitive.zig'));
+      const { default: module, __init } = await transpileImport(resolve('./integration/slices-with-primitive.zig'));
       const slice = module.int32_slice;
       expect(module.int32_slice).to.be.an('object');
       expect(module.int32_slice.get(0)).to.equal(123);
@@ -82,6 +82,11 @@ describe('Integration tests (WASM)', function() {
       module.uint32_slice.set(1, 777);
       expect([ ...module.uint32_slice ]).to.eql([ 2, 777, 4 ]);
       expect([ ...module.uint32_array4 ]).to.eql([ 1, 2, 777, 4 ]);
+      await __init;
+      // reading WASM memory now
+      module.uint32_slice.set(1, 888);
+      expect([ ...module.uint32_slice ]).to.eql([ 2, 888, 4 ]);
+      expect([ ...module.uint32_array4 ]).to.eql([ 1, 2, 888, 4 ]);
     })
     it('should import optional values', async function() {
       this.timeout(20000);
@@ -175,7 +180,6 @@ async function transpileImport(path) {
   const hash = await md5(path);
   // need to use .mjs since the file is sitting in /tmp, outside the scope of our package.json
   const jsPath = join(tmpdir(), `${hash}.mjs`);
-  //console.log({ jsPath });
   await writeFile(jsPath, code);
   return import(jsPath);
 }
