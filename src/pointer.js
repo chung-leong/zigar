@@ -1,7 +1,7 @@
 import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
-import { getDataView, isBuffer } from './data-view.js';
-import { MEMORY, SLOTS, SOURCE, ZIG } from './symbol.js';
+import { getDataView, isBuffer, useWASMMemory } from './data-view.js';
+import { MEMORY, SLOTS, SOURCE, ZIG, COMPTIME } from './symbol.js';
 
 export function finalizePointer(s) {
   const {
@@ -50,6 +50,24 @@ export function finalizePointer(s) {
       this[SLOTS][0] = arg;
     }
   };
+  if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE2') {
+    s.linker = function(memory, address) {
+      const dv = useWASMMemory.call(this, memory, address, size);
+      const targetAddress = dv.getInt32(0, true);
+      console.log({ targetAddress });
+      const targetObject = this[COMPTIME];
+      delete this[COMPTIME];
+      target.linker.call(targetObject, memory, targetAddress);
+    };
+    s.pointerPreserver = function() {
+      // save the target so we can link it even after the pointer has been changed
+      this[COMPTIME] = this[SLOTS][0];
+      const { pointerPreserver } = target;
+      if (pointerPreserver) {
+        pointerPreserver.call(this[SLOTS][0]);
+      }
+    };
+  }
   const retrieve = function() { return this };
   const pointerCopier = s.pointerCopier = function(arg) {
     this[SLOTS][0] = arg[SLOTS][0];

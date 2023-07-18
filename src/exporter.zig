@@ -168,6 +168,12 @@ pub const Memory = extern struct {
     len: usize = 0,
 };
 
+pub const MemoryDisposition = enum(u32) {
+    Auto,
+    Copy,
+    Link,
+};
+
 pub const Template = extern struct {
     is_static: bool = false,
     object: Value,
@@ -539,7 +545,7 @@ const Callbacks = extern struct {
     allocate_memory: *const fn (Host, usize, *Memory) callconv(.C) Result,
     free_memory: *const fn (Host, *const Memory) callconv(.C) Result,
     get_memory: *const fn (Host, Value, *Memory) callconv(.C) Result,
-    wrap_memory: *const fn (Host, Value, *const Memory, *Value) callconv(.C) Result,
+    wrap_memory: *const fn (Host, Value, *const Memory, MemoryDisposition, *Value) callconv(.C) Result,
 
     get_pointer_status: *const fn (Host, Value, *bool) callconv(.C) Result,
     set_pointer_status: *const fn (Host, Value, bool) callconv(.C) Result,
@@ -585,14 +591,29 @@ pub const Host = *opaque {
         return fromMemory(memory, T, size);
     }
 
-    fn wrapMemory(self: Host, memory: Memory, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) !Value {
+    fn wrapMemory(self: Host, memory: Memory, disposition: MemoryDisposition, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) !Value {
         const slot = getStructureSlot(T, size);
         const structure = try self.readGlobalSlot(slot);
         var value: Value = undefined;
-        if (callbacks.wrap_memory(self, structure, &memory, &value) != .OK) {
+        const actual_disposition: MemoryDisposition = switch (disposition) {
+            .Auto => if (self.isOnStack(memory)) .Copy else .Auto,
+            else => disposition,
+        };
+        if (callbacks.wrap_memory(self, structure, &memory, actual_disposition, &value) != .OK) {
             return Error.UnableToCreateObject;
         }
         return value;
+    }
+
+    fn isOnStack(self: Host, memory: Memory) bool {
+        // since the Host struct is allocated on the stack, its address is the
+        // starting point of stack space used by Zig code
+        const bytes = memory.bytes orelse return false;
+        const len = memory.len;
+        const stack_top = @intFromPtr(self);
+        const stack_bottom = @intFromPtr(&stack_top);
+        const address = @intFromPtr(bytes);
+        return (stack_bottom <= address and address + len <= stack_top);
     }
 
     fn getPointerStatus(self: Host, pointer: Value) !bool {
@@ -1080,6 +1101,21 @@ fn getPointerType(comptime T: type, comptime name: []const u8) type {
     };
 }
 
+fn getMemoryDisposition(comptime PT: type) MemoryDisposition {
+    const ptr_info = @typeInfo(PT).Pointer;
+    const FT = ptr_info.child;
+    return switch (@typeInfo(FT)) {
+        .Pointer => .Link,
+        else => switch (ptr_info.is_const) {
+            true => switch (hasPointer(FT)) {
+                true => .Link,
+                false => .Copy,
+            },
+            false => .Link,
+        },
+    };
+}
+
 fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
     const decls = switch (@typeInfo(T)) {
         .Struct => |st| st.decls,
@@ -1117,30 +1153,23 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
                 .structure = try getStructure(host, PT),
             });
             // get address to variable
-            var typed_ptr = switch (@typeInfo(@TypeOf(@field(T, decl.name)))) {
+            const FT = @TypeOf(@field(T, decl.name));
+            var typed_ptr = switch (@typeInfo(FT)) {
                 .ComptimeInt, .ComptimeFloat => ptr: {
                     // need to create variable in memory for comptime value
                     const CT = @typeInfo(PT).Pointer.child;
                     var value: CT = @field(T, decl.name);
                     break :ptr &value;
                 },
-                else => ptr: {
-                    if (@typeInfo(PT).Pointer.is_const) {
-                        // put a copy on the stack so the constant doesn't force the
-                        // shared library to stay in memory
-                        var value = @field(T, decl.name);
-                        break :ptr &value;
-                    } else {
-                        break :ptr &@field(T, decl.name);
-                    }
-                },
+                else => &@field(T, decl.name),
             };
+            const disposition = getMemoryDisposition(PT);
             // create the pointer object
             const memory: Memory = .{
                 .bytes = @ptrCast(&typed_ptr),
                 .len = @sizeOf(PT),
             };
-            const ptr_obj = try host.wrapMemory(memory, PT, .One);
+            const ptr_obj = try host.wrapMemory(memory, disposition, PT, .One);
             // dezig it, creating SharedArrayBuffer or ArrayBuffer
             try dezigStructure(host, ptr_obj, &typed_ptr);
             const template = template_maybe orelse create: {
@@ -1496,7 +1525,7 @@ fn obtainChildObject(host: Host, container: Value, slot: usize, ptr: anytype, co
 fn createChildObject(host: Host, container: Value, slot: usize, ptr: anytype) !Value {
     const pt = @typeInfo(@TypeOf(ptr)).Pointer;
     const memory = toMemory(ptr);
-    const child_obj = try host.wrapMemory(memory, pt.child, pt.size);
+    const child_obj = try host.wrapMemory(memory, .Auto, pt.child, pt.size);
     try host.writeObjectSlot(container, slot, child_obj);
     return child_obj;
 }
@@ -1765,7 +1794,7 @@ fn getVariableCount(comptime T: type) comptime_int {
             if (PT == type) {
                 count += getVariableCount(@field(T, decl.name));
             } else if (PT != void) {
-                if (!@typeInfo(PT).Pointer.is_const) {
+                if (getMemoryDisposition(PT) == .Link) {
                     count += 1;
                 }
             }
@@ -1820,7 +1849,7 @@ pub fn getVariableGetters(comptime T: type) [getVariableCount(T)]AddressGetter {
                     index += 1;
                 }
             } else if (PT != void) {
-                if (!@typeInfo(PT).Pointer.is_const) {
+                if (getMemoryDisposition(PT) == .Link) {
                     getters[index] = createAddressGetter(T, decl.name);
                     index += 1;
                 }

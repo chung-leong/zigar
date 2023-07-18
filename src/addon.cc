@@ -62,45 +62,6 @@ static Result GetMemory(Host* call,
   return Result::OK;
 }
 
-static Result CreateSharedBuffer(Host* call,
-                                 const Memory& memory,
-                                 Local<SharedArrayBuffer>* dest) {
-  auto isolate = call->isolate;
-  // create a reference to the module so that the shared library doesn't get unloaded
-  // while the shared buffer is still around pointing to it
-  auto mde = Local<External>::New(isolate, call->function_data->module_data);
-  auto emd = new ExternalMemoryData(isolate, mde);
-  std::shared_ptr<BackingStore> store = SharedArrayBuffer::NewBackingStore(memory.bytes, memory.len,
-    [](void*, size_t, void* deleter_data) {
-      // get rid of the reference
-      auto emd = reinterpret_cast<ExternalMemoryData*>(deleter_data);
-      delete emd;
-    }, emd);
-  *dest = SharedArrayBuffer::New(isolate, store);
-  return Result::OK;
-}
-
-static Result CreateStackBuffer(Host* call,
-                                const Memory& memory,
-                                Local<ArrayBuffer>* dest) {
-  auto isolate = call->isolate;
-  // see if the memory is on the stack
-  // since the Host struct is allocated on the stack, its address is the
-  // starting point of stack space used by Zig code
-  auto stack_top = reinterpret_cast<size_t>(call) + sizeof(Host);
-  auto stack_bottom = reinterpret_cast<size_t>(&stack_top);
-  auto address = reinterpret_cast<size_t>(memory.bytes);
-  if (!(stack_bottom <= address && address + memory.len <= stack_top)) {
-    return Result::Failure;
-  }
-  auto buffer = ArrayBuffer::New(isolate, memory.len);
-  std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
-  auto bytes = reinterpret_cast<uint8_t*>(store->Data());
-  memcpy(bytes, memory.bytes, memory.len);
-  *dest = buffer;
-  return Result::OK;
-}
-
 static Result FindBuffer(Host* call,
                          const Memory& memory,
                          Local<Array> array,
@@ -130,49 +91,63 @@ static Result FindBuffer(Host* call,
 
 static Result ObtainDataView(Host* call,
                              const Memory& memory,
+                             MemoryDisposition disposition,
                              Local<DataView>* dest) {
-  // see if the memory is on the stack
-  Local<ArrayBuffer> buffer;
-  size_t offset;
-  if (CreateStackBuffer(call, memory, &buffer) == Result::OK) {
-    *dest = DataView::New(buffer, 0, buffer->ByteLength());
+  auto isolate = call->isolate;
+  if (disposition == MemoryDisposition::Copy) {
+    auto buffer = ArrayBuffer::New(isolate, memory.len);
+    std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
+    auto bytes = reinterpret_cast<uint8_t*>(store->Data());
+    memcpy(bytes, memory.bytes, memory.len);
+    *dest = DataView::New(buffer, 0, memory.len);
     return Result::OK;
-  }
-  // see if it's from the memory pool
-  if (!call->mem_pool.IsEmpty()) {
-    if (FindBuffer(call, memory, call->mem_pool, &buffer, &offset) == Result::OK) {
+  } else if (disposition == MemoryDisposition::Auto) {
+    // see if it's from the memory pool
+    Local<ArrayBuffer> buffer;
+    size_t offset;
+    if (!call->mem_pool.IsEmpty()) {
+      if (FindBuffer(call, memory, call->mem_pool, &buffer, &offset) == Result::OK) {
+        *dest = DataView::New(buffer, offset, memory.len);
+        return Result::OK;
+      }
+    }
+    // see if it's from the arguments
+    if (call->arg_buffers.IsEmpty()) {
+      if (GetArgumentBuffers(call) != Result::OK) {
+        return Result::Failure;
+      }
+    }
+    if (FindBuffer(call, memory, call->arg_buffers, &buffer, &offset) == Result::OK) {
       *dest = DataView::New(buffer, offset, memory.len);
       return Result::OK;
     }
   }
-  // see if it's from the arguments
-  if (call->arg_buffers.IsEmpty()) {
-    if (GetArgumentBuffers(call) != Result::OK) {
-      return Result::Failure;
-    }
-  }
-  if (FindBuffer(call, memory, call->arg_buffers, &buffer, &offset) == Result::OK) {
-    *dest = DataView::New(buffer, offset, memory.len);
-    return Result::OK;
-  }
   // mystery memory, create a shared buffer
-  Local<SharedArrayBuffer> shared_buffer;
-  if (CreateSharedBuffer(call, memory, &shared_buffer) == Result::OK) {
-    *dest = DataView::New(shared_buffer, 0, shared_buffer->ByteLength());
-    return Result::OK;
-  }
-  return Result::Failure;
+  // create a reference to the module so that the shared library doesn't get unloaded
+  // while the shared buffer is still around pointing to it
+  auto mde = Local<External>::New(isolate, call->function_data->module_data);
+  auto emd = new ExternalMemoryData(isolate, mde);
+  std::shared_ptr<BackingStore> store = SharedArrayBuffer::NewBackingStore(memory.bytes, memory.len,
+    [](void*, size_t, void* deleter_data) {
+      // get rid of the reference
+      auto emd = reinterpret_cast<ExternalMemoryData*>(deleter_data);
+      delete emd;
+    }, emd);
+  auto shared_buffer = SharedArrayBuffer::New(isolate, store);
+  *dest = DataView::New(shared_buffer, 0, memory.len);
+  return Result::OK;
 }
 
 static Result WrapMemory(Host* call,
                          Local<Object> structure,
                          const Memory& memory,
+                         MemoryDisposition disposition,
                          Local<Object>* dest) {
   auto isolate = call->isolate;
   auto context = call->context;
   // find or create array buffer and create data view
   Local<DataView> dv;
-  if (ObtainDataView(call, memory, &dv) != Result::OK) {
+  if (ObtainDataView(call, memory, disposition, &dv) != Result::OK) {
     return Result::Failure;
   }
   // find constructor
@@ -200,7 +175,7 @@ static Result CreateTemplate(Host* call,
   auto templ = Object::New(isolate);
   if (memory.bytes) {
     Local<DataView> dv;
-    if (ObtainDataView(call, memory, &dv) != Result::OK) {
+    if (ObtainDataView(call, memory, MemoryDisposition::Copy, &dv) != Result::OK) {
       return Result::Failure;
     }
     templ->Set(context, call->symbol_memory, dv).Check();

@@ -863,12 +863,6 @@ R"=====(
         members: [ member ],
       }
     } = s;
-    if (process.env.NODE_ENV !== 'production') {
-      /* c8 ignore next 3 */
-      if (s.type !== StructureType.Array && s.type !== StructureType.Slice) {
-        throw new Error('Only arrays can have typed array accessor');
-      }
-    }
     const TypedArray = getTypedArrayClass(member);
     if (TypedArray) {
       const get = function() {
@@ -2131,13 +2125,7 @@ R"=====(
   function finalizeStructure(s) {
     try {
       const f = factories$1[s.type];
-      if (process.env.NODE_ENV !== 'production') {
-        /* c8 ignore next 10 */
-        if (typeof(f) !== 'function') {
-          const [ name ] = Object.entries(StructureType).find(a => a[1] === s.type);
-          throw new Error(`No factory for ${name}: ${f}`);
-        }
-      }
+      if ("production" !== 'production') ;
       const constructor = f(s);
       if (constructor) {
         Object.defineProperty(constructor, 'name', { value: s.name, writable: false });
@@ -2196,13 +2184,6 @@ R"=====(
 
   function getAccessors(member, options = {}) {
     const f = factories[member.type];
-    if (process.env.NODE_ENV !== 'production') {
-      /* c8 ignore next 10 */
-      if (typeof(f) !== 'function') {
-        const [ name ] = Object.entries(MemberType).find(a => a[1] === member.type);
-        throw new Error(`No factory for ${name}: ${member.name}`);
-      }
-    }
     return {
       get: f('get', member, options),
       set: f('set', member, options)
@@ -2655,8 +2636,7 @@ R"=====(
         for (const [ index, arg ] of args.entries()) {
           a[index] = arg;
         }
-        invokeThunk(thunk, a);
-        return a.retval;
+        return invokeThunk(thunk, a);
       };
       Object.defineProperties(f, {
         name: { value: name, writable: false },
@@ -2672,8 +2652,7 @@ R"=====(
           for (const [ index, arg ] of args.entries()) {
             a[index + 1] = arg;
           }
-          invokeThunk(thunk, a);
-          return a.retval;
+          return invokeThunk(thunk, a);
         };
         Object.defineProperties(m, {
           name: { value: name, writable: false },
@@ -2688,16 +2667,19 @@ R"=====(
   const globalSlots = {};
 
   function invokeThunk(thunk, args) {
-    // pass the argument object as the this/recv variable
-    // while the slots and symbols are passed as arguments
-    const err = thunk.call(args, globalSlots, SLOTS, MEMORY, ZIG);
-    // errors returned by exported Zig functions are normally written into the
-    // argument object and get thrown when we access its retval property (a zig error union)
-    // error strings returned by the thunk are due to problems in the thunking process
-    // (i.e. bugs in export.zig)
-    if (err) {
-      throwZigError(err);
+    {
+      // pass the argument object as the this/recv variable
+      // while the slots and symbols are passed as arguments
+      const err = thunk.call(args, globalSlots, SLOTS, MEMORY, ZIG);
+      // errors returned by exported Zig functions are normally written into the
+      // argument object and get thrown when we access its retval property (a zig error union)
+      // error strings returned by the thunk are due to problems in the thunking process
+      // (i.e. bugs in export.zig)
+      if (err) {
+        throwZigError(err);
+      }
     }
+    return args.retval;
   }
 
   // enable all member types (including extend types)

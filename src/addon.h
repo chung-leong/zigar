@@ -4,12 +4,12 @@
 using namespace v8;
 
 enum class Result : int {
-  OK = 0,
-  Failure = 1,
+  OK,
+  Failure,
 };
 
 enum class StructureType : uint32_t {
-  Primitive = 0,
+  Primitive,
   Array,
   Struct,
   ExternUnion,
@@ -26,7 +26,7 @@ enum class StructureType : uint32_t {
 };
 
 enum class MemberType : uint32_t {
-  Void = 0,
+  Void,
   Bool,
   Int,
   Float,
@@ -59,6 +59,12 @@ struct Member {
 struct Memory {
   uint8_t* bytes;
   size_t len;
+};
+
+enum class MemoryDisposition : uint32_t {
+  Auto,
+  Copy,
+  Link,
 };
 
 struct Template {
@@ -97,7 +103,7 @@ struct Callbacks {
   Result (*allocate_memory)(Host*, size_t, Memory*);
   Result (*free_memory)(Host*, const Memory&);
   Result (*get_memory)(Host*, Local<Object>, Memory*);
-  Result (*wrap_memory)(Host*, Local<Object>, const Memory&, Local<Object>*);
+  Result (*wrap_memory)(Host*, Local<Object>, const Memory&, MemoryDisposition, Local<Object>*);
 
   Result (*get_pointer_status)(Host*, Local<Object>, bool*);
   Result (*set_pointer_status)(Host*, Local<Object>, bool);

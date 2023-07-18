@@ -40,6 +40,13 @@ export function finalizePrimitive(s) {
       this.$ = arg;
     }
   };
+  if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE2') {
+    s.linker = function(memory, address) {
+      const value = this.$;
+      useWASMMemory.call(this, memory, address, size);
+      this.$ = value;
+    };
+  }
   const { get, set } = getAccessors(member, options);
   Object.defineProperties(constructor.prototype, {
     $: { get, set, configurable: true },

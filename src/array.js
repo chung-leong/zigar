@@ -5,7 +5,7 @@ import { getTypedArrayClass, addTypedArrayAccessor, isTypedArray } from './typed
 import { addStringAccessors } from './string.js';
 import { addJSONHandlers } from './json.js';
 import { throwInvalidArrayInitializer, throwArraySizeMismatch } from './error.js';
-import { MEMORY, SLOTS, ZIG } from './symbol.js';
+import { COMPTIME, MEMORY, SLOTS, ZIG } from './symbol.js';
 
 export function finalizeArray(s) {
   const {
@@ -13,6 +13,7 @@ export function finalizeArray(s) {
     instance: {
       members: [ member ],
     },
+    hasPointer,
     options,
   } = s;
   if (process.env.NODE_DEV !== 'production') {
@@ -67,14 +68,22 @@ export function finalizeArray(s) {
           set.call(this, i, arg[i]);
         }
       } else {
-        console.log({ arg })
         throwInvalidArrayInitializer(s, arg);
       }
     }
   };
   const retriever = function() { return this };
-  const pointerCopier = s.pointerCopier = getPointerCopier(objectMember);
-  const pointerResetter = s.pointerResetter = getPointerResetter(objectMember);
+  const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMember) : null;
+  const pointerResetter = s.pointerResetter = (hasPointer) ? getPointerResetter(objectMember) : null;
+  if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE2') {
+    s.linker = function(memory, address) {
+      useWASMMemory(memory, address, size);
+      if (objectMember) {
+        linkChildObjects(objectMember);
+      }
+    };
+    s.pointerPreserver = (hasPointer) ? getPointerPreserver(objectMember) : null;
+  }
   const { get, set } = getAccessors(member, options);
   const length = size / member.byteSize;
   Object.defineProperties(constructor.prototype, {
@@ -110,10 +119,15 @@ export function createChildObjects(member, startOffset, recv, dv) {
   }
 }
 
-export function getPointerCopier(member) {
-  if (!member?.structure.hasPointer) {
-    return null;
+export function linkChildObjects(member, memory, address) {
+  const { structure: { linker }, byteSize } = member;
+  const { slots, byteLength } = this[COMPTIME];
+  for (let slot = 0, offset = 0, len = byteLength; offset < len; slot++, offset += byteSize) {
+    linker.call(slots[slot], memory, address + offset);
   }
+}
+
+export function getPointerCopier(member) {
   return function(src) {
     const { structure: { pointerCopier }, byteSize } = member;
     const dv = this[MEMORY];
@@ -126,9 +140,6 @@ export function getPointerCopier(member) {
 }
 
 export function getPointerResetter(member) {
-  if (!member?.structure.hasPointer) {
-    return null;
-  }
   return function(src) {
     const { structure: { pointerResetter }, byteSize } = member;
     const dv = this[MEMORY];
@@ -136,6 +147,18 @@ export function getPointerResetter(member) {
     for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
       pointerResetter.call(destSlots[slot]);
     }
+  };
+}
+
+export function getPointerPreserver(member) {
+  return function() {
+    const { structure: { pointerLinker }, byteSize } = member;
+    const dv = this[MEMORY];
+    const destSlots = dest[SLOTS];
+    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+      pointerLinker.call(destSlots[slot]);
+    }
+    this[COMPTIME] = { slots: { ...destSlots }, byteLength: dv.byteLength };
   };
 }
 

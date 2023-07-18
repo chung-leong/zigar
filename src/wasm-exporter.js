@@ -12,6 +12,12 @@ import { MemberType, getMemberFeature } from './member.js';
 import { decamelizeErrorName } from './error.js';
 import { getMemoryCopier } from './memory.js';
 
+const MemoryDisposition = {
+  Auto: 0,
+  Copy: 1,
+  Link: 2,
+};
+
 export async function linkWASMBinary(binaryPromise, params = {}) {
   const {
     resolve,
@@ -93,16 +99,9 @@ export async function runWASMBinary(wasmBinary, options = {}) {
   } else if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE2') {
     init();
     // link variables
-    for (const [ index, target ] of variables.entries()) {
+    for (const [ index, { object, linker } ] of variables.entries()) {
       const address = get(index);
-      const temp = target[MEMORY];
-      const len = temp.byteLength;
-      const wasm = new DataView(wasmMemory.buffer, address, len);
-      wasm[SOURCE] = wasmMemory;
-      const copy = getMemoryCopier(len);
-      // copy changes made to temp buffer into WASM memory
-      copy(wasm, temp);
-      Object.defineProperty(target, MEMORY, { value: wasm });
+      linker.call(object, wasmMemory, address);
     }
     // link methods
     methodRunner[0] = function(thunkIndex, argStruct) {
@@ -330,35 +329,47 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     structures.push(structure);
   }
 
-  function _createDataView(ctxAddr, address, len, onStack) {
-    // look for address among existing buffers
-    const ctx = callContexts[ctxAddr];
-    let dv;
-    for (const [ buffer, { address: start, len: count } ] of ctx.bufferMap) {
-      if (start <= address && address + len <= start + count) {
-        const offset = address - start;
-        dv = new DataView(buffer, offset, len);
-      }
-    }
-    if (!dv) {
-      if (onStack || process.env.NODE_ZIG_TARGET === 'WASM-STAGE1') {
-        const buffer = new ArrayBuffer(len);
-        const copy = getMemoryCopier(len);
-        dv = new DataView(buffer);
-        ctx.bufferMap.set(buffer, { address, len, dv, copy });
-        if (!onStack) {
-          // flag the need for linkage
-          dv.linkage = nextLinkageIndex++;
+  function createCopy(ctx, address, len) {
+    const buffer = new ArrayBuffer(len);
+    const copy = getMemoryCopier(len);
+    const dv = new DataView(buffer);
+    ctx.bufferMap.set(buffer, { address, len, dv, copy });
+    return dv;
+  }
+
+  function obtainDataView(ctx, address, len, disposition) {
+    if (disposition === MemoryDisposition.Copy) {
+      return createCopy(ctx, address, len);
+    } else if (disposition === MemoryDisposition.Auto) {
+      // look for address among existing buffers
+      for (const [ buffer, { address: start, len: count } ] of ctx.bufferMap) {
+        if (start <= address && address + len <= start + count) {
+          const offset = address - start;
+          return new DataView(buffer, offset, len);
         }
-      } else {
-        // mystery memory--link directly to it, attaching the memory object
-        // so we can recreate the view in the event of buffer deattachment
-        // due to address space enlargement
-        dv = new DataView(wasmMemory.buffer, address, len);
-        dv[SOURCE] = wasmMemory;
       }
     }
-    return addObject(dv);
+    if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE1') {
+      const dv = createCopy(ctx, address, len);
+      if (disposition === MemoryDisposition.Link) {
+        // an export variable (or constant pointer)
+        // need linkage to wasm memory at runtime
+        dv.linkage = nextLinkageIndex++;
+      }
+      return dv;
+    } else {
+      // mystery memory--link directly to it, attaching the memory object
+      // so we can recreate the view in the event of buffer deattachment
+      // due to address space enlargement
+      const dv = new DataView(wasmMemory.buffer, address, len);
+      dv[SOURCE] = wasmMemory;
+      return dv;
+    }
+  }
+
+  function _createDataView(ctxAddr, address, len, disposition) {
+    const ctx = callContexts[ctxAddr];
+    return addObject(obtainDataView(ctx, address, len, disposition));
   }
 
   function _createTemplate(memoryIndex) {
@@ -664,11 +675,6 @@ export function finalizeStructures(structures) {
     if (placeholder.slots) {
       template[SLOTS] = insertObjects({}, placeholder.slots);
     }
-    if (placeholder.linkage !== undefined) {
-      // need to replace dataview with one pointing to WASM memory later,
-      // when the VM is up and running
-      variables[placeholder.linkage] = template;
-    }
     return template;
   }
 
@@ -688,13 +694,18 @@ export function finalizeStructures(structures) {
       const { size } = placeholder.structure;
       dv = new DataView(new ArrayBuffer(size));
     }
-    const { constructor } = placeholder.structure;
+    const { constructor, linker, pointerPreserver } = placeholder.structure;
     const object = constructor.call(null, dv);
     if (placeholder.slots) {
       insertObjects(object[SLOTS], placeholder.slots);
     }
     if (placeholder.linkage !== undefined) {
-      variables[placeholder.linkage] = object;
+      // need to replace dataview with one pointing to WASM memory later,
+      // when the VM is up and running
+      variables[placeholder.linkage] = { object, linker };
+      if (pointerPreserver) {
+        pointerPreserver.call(object);
+      }
     }
     return object;
   }

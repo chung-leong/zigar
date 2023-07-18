@@ -2,7 +2,7 @@ import { StructureType } from './structure.js';
 import { MemberType, isByteAligned } from './member.js';
 import { getBitAlignFunction } from './memory.js';
 import { throwBufferSizeMismatch, throwBufferExpected } from './error.js';
-import { MEMORY } from './symbol.js';
+import { MEMORY, SOURCE } from './symbol.js';
 
 export function getDataViewBoolAccessor(access, member) {
   return cacheMethod(access, member, () => {
@@ -490,6 +490,13 @@ function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
       applyBits(this, buf, offset);
     };
   }
+}
+
+export function useWASMMemory(memory, address, size) {
+  const dv = new DataView(memory.buffer, address, size);
+  dv[SOURCE] = memory;
+  Object.defineProperty(this, MEMORY, { value: dv });
+  return dv;
 }
 
 function cacheMethod(access, member, cb) {

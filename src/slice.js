@@ -1,13 +1,15 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { getDataView, addDataViewAccessor } from './data-view.js';
+import { getDataView, addDataViewAccessor, useWASMMemory } from './data-view.js';
 import { getTypedArrayClass, addTypedArrayAccessor, isTypedArray } from './typed-array.js';
 import {
   createChildObjects,
+  linkChildObjects,
   getPointerCopier,
   getPointerResetter,
+  getPointerPreserver,
   getArrayLengthGetter,
-  getArrayIterator
+  getArrayIterator,
 } from './array.js';
 import { addStringAccessors } from './string.js';
 import { addJSONHandlers } from './json.js';
@@ -20,6 +22,7 @@ export function finalizeSlice(s) {
     instance: {
       members: [ member ],
     },
+    hasPointer,
     options,
   } = s;
   if (process.env.NODE_DEV !== 'production') {
@@ -91,8 +94,18 @@ export function finalizeSlice(s) {
     }
   };
   const retriever = function() { return this };
-  const pointerCopier = s.pointerCopier = getPointerCopier(objectMember);
-  const pointerResetter = s.pointerResetter = getPointerResetter(objectMember);
+  const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMember) : null;
+  const pointerResetter = s.pointerResetter = (hasPointer) ? getPointerResetter(objectMember) : null;
+  if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE2') {
+    s.linker = function(memory, address) {
+      const currentSize = this[MEMORY].byteLength;
+      useWASMMemory.call(this, memory, address, currentSize);
+      if (objectMember) {
+        linkChildObjects(objectMember);
+      }
+    };
+    s.pointerPreserver = (hasPointer) ? getPointerPreserver(objectMember) : null;
+  }
   const { get, set } = getAccessors(member, options);
   const getLength = getArrayLengthGetter(elementSize);
   Object.defineProperties(constructor.prototype, {

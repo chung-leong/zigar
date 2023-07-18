@@ -9,8 +9,9 @@ const StructureType = exporter.StructureType;
 const Structure = exporter.Structure;
 const MemberType = exporter.MemberType;
 const Member = exporter.Member;
-const Memory = exporter.Memory;
 const Method = exporter.Method;
+const Memory = exporter.Memory;
+const MemoryDisposition = exporter.MemoryDisposition;
 const Template = exporter.Template;
 const Thunk = exporter.Thunk;
 const missing = exporter.missing;
@@ -142,16 +143,13 @@ fn getMemory(host: Host, object: Value, memory: *Memory) callconv(.C) Result {
     return Result.OK;
 }
 
-extern fn _createDataView(host: usize, address: usize, len: usize, on_stack: i32) usize;
+extern fn _createDataView(host: usize, address: usize, len: usize, disposition: u32) usize;
 
-fn createDataView(host: Host, memory: *const Memory) ?Value {
+fn createDataView(host: Host, memory: *const Memory, disposition: MemoryDisposition) ?Value {
     const bytes = memory.bytes orelse return null;
-    const len = memory.*.len;
-    const stack_top = @intFromPtr(host);
-    const stack_bottom = @intFromPtr(&stack_top);
+    const len = memory.len;
     const address = @intFromPtr(bytes);
-    const on_stack = (stack_bottom <= address and address + len <= stack_top);
-    const dv_index = _createDataView(@intFromPtr(host), address, len, if (on_stack) 1 else 0);
+    const dv_index = _createDataView(@intFromPtr(host), address, len, @intFromEnum(disposition));
     if (dv_index == 0) {
         return null;
     }
@@ -160,8 +158,8 @@ fn createDataView(host: Host, memory: *const Memory) ?Value {
 
 extern fn _wrapMemory(structure: usize, view: usize) usize;
 
-fn wrapMemory(host: Host, structure: Value, memory: *const Memory, dest: *Value) callconv(.C) Result {
-    const dv = createDataView(host, memory) orelse return Result.Failure;
+fn wrapMemory(host: Host, structure: Value, memory: *const Memory, disposition: MemoryDisposition, dest: *Value) callconv(.C) Result {
+    const dv = createDataView(host, memory, disposition) orelse return Result.Failure;
     const obj_index = _wrapMemory(index(structure), index(dv));
     if (obj_index == 0) {
         return Result.Failure;
@@ -300,7 +298,7 @@ fn finalizeStructure(_: Host, structure: Value) callconv(.C) Result {
 extern fn _createTemplate(buffer: usize) usize;
 
 fn createTemplate(host: Host, memory: *const Memory, dest: *Value) callconv(.C) Result {
-    const dv = createDataView(host, memory);
+    const dv = createDataView(host, memory, .Copy);
     const templ_index = _createTemplate(index(dv));
     if (templ_index == 0) {
         return Result.Failure;

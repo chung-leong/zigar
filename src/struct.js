@@ -15,6 +15,7 @@ export function finalizeStruct(s) {
       members,
       template,
     },
+    hasPointer,
     options,
   } = s;
   const descriptors = {};
@@ -87,7 +88,24 @@ export function finalizeStruct(s) {
     }
   };
   const retriever = function() { return this };
-  const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
+  const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMembers) : null;
+  if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE2') {
+    const nonObjectMember = members.filter(m => m.type !== MemberType.Object);
+    s.linker = function(memory, address) {
+      // save any changes that might have been made
+      const values = {};
+      for (const { name } of nonObjectMember) {
+        values[name] = this[name];
+      }
+      const dv = useWASMMemory(memory, address, size);
+      linkChildObjects.call(this, objectMembers, memory, address);
+      // apply changes to WASM memory
+      for (const { name } of nonObjectMember) {
+        this[name] = values[name];
+      }
+    };
+    s.pointerPreserver = (hasPointer) ? getPointerPreserver(objectMembers) : null;
+  }
   Object.defineProperties(constructor.prototype, {
     $: { get: retriever, set: initializer, configurable: true },
   });
@@ -104,8 +122,9 @@ export function createChildObjects(members, recv, dv) {
   if (recv !== ZIG)  {
     recv = null;
   }
+  const parentOffset = dv.byteOffset;
   for (const { structure: { constructor }, bitOffset, byteSize, slot } of members) {
-    const offset = bitOffset >> 3;
+    const offset = parentOffset + (bitOffset >> 3);
     const childDV = new DataView(dv.buffer, offset, byteSize);
     slots[slot] = constructor.call(recv, childDV);
   }
@@ -114,31 +133,40 @@ export function createChildObjects(members, recv, dv) {
   });
 }
 
+export function linkChildObjects(members, memory, address) {
+  const parentOffset = address;
+  for (const { structure: { linker }, bitOffset, slot } of members) {
+    linker.call(slots[slot], memory, address + (bitOffset >> 3));
+  }
+}
+
 export function getPointerCopier(members) {
   const pointerMembers = members.filter(m => m.structure.hasPointer);
-  if (pointerMembers.length === 0) {
-    return null;
-  }
   return function(src) {
     const destSlots = this[SLOTS];
     const srcSlots = src[SLOTS];
     for (const { slot, structure: { pointerCopier } } of pointerMembers) {
-      if (srcSlots[slot]) {
-        pointerCopier.call(destSlots[slot], srcSlots[slot]);
-      }
+      pointerCopier.call(destSlots[slot], srcSlots[slot]);
     }
   };
 }
 
 export function getPointerResetter(members) {
   const pointerMembers = members.filter(m => m.structure.hasPointer);
-  if (pointerMembers.length === 0) {
-    return null;
-  }
   return function() {
     const destSlots = this[SLOTS];
     for (const { slot, structure: { pointerResetter } } of pointerMembers) {
       pointerResetter.call(destSlots[slot]);
+    }
+  };
+}
+
+export function getPointerPreserver(members) {
+  const pointerMembers = members.filter(m => m.structure.hasPointer);
+  return function() {
+    const destSlots = this[SLOTS];
+    for (const { slot, structure: { pointerPreserver } } of pointerMembers) {
+      pointerPreserver.call(destSlots[slot]);
     }
   };
 }

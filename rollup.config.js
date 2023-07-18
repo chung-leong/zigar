@@ -7,10 +7,10 @@ export default [
   {
     input: 'src/addon.js',
     plugins: [
-      production && Replace({
+      Replace({
         preventAssignment: true,
         'process.env.NODE_ENV': '"production"',
-        'process.env.NODE_ZIG_TARGET': '"NODE_CPP_EXT"',
+        'process.env.NODE_ZIG_TARGET': '"NODE-CPP-EXT"',
       }),
     ],
     output: {
