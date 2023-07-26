@@ -61,7 +61,7 @@ export function invokeThunk(thunk, args) {
     if (err) {
       throwZigError(err);
     }
-  } else if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE2') {
+  } else if (process.env.NODE_ZIG_TARGET === 'WASM-RUNTIME') {
     const res = thunk(args);
     if (res !== undefined) {
       if (res instanceof Promise) {

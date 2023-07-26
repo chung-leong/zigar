@@ -50,8 +50,6 @@ export async function runWASMBinary(wasmBinary, options = {}) {
   const decoder = new TextDecoder();
   const callContexts = {};
   const globalSlots = {};
-  let nextLinkageIndex = 0;
-  let nextMethodIndex = 0;
   const structures = [];
   const imports = {
     _startCall,
@@ -86,21 +84,20 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     _logValues,
   };
   const { instance } = await WebAssembly.instantiate(wasmBinary, { env: imports });
-  const { memory: wasmMemory, init, run, get, alloc, free } = instance.exports;
-  if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE1') {
+  const { memory: wasmMemory, init, define, run, alloc, free } = instance.exports;
+  if (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') {
     init();
     // call factory function
     const argStructIndex = addObject({ [SLOTS]: {} });
-    const errorIndex = run(argStructIndex, 0);
+    const errorIndex = define(argStructIndex);
     if (errorIndex !== 0) {
       throwError(errorIndex);
     }
     return structures;
-  } else if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE2') {
+  } else if (process.env.NODE_ZIG_TARGET === 'WASM-RUNTIME') {
     init();
     // link variables
-    for (const [ index, { object, linker } ] of variables.entries()) {
-      const address = get(index);
+    for (const [ address, { object, linker } ] of variables.entries()) {
       linker.call(object, wasmMemory, address);
     }
     // link methods
@@ -112,7 +109,7 @@ export async function runWASMBinary(wasmBinary, options = {}) {
       }
     };
   } else {
-    throw new Error(`The environment variable NODE_ZIG_TARGET must be "WASM-STAGE1" or "WASM-STAGE2"`);
+    throw new Error(`The environment variable NODE_ZIG_TARGET must be "WASM-COMPTIME" or "WASM-RUNTIME"`);
   }
 
   function addString(address, len) {
@@ -217,7 +214,7 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     const structure = valueTable[structureIndex];
     const dv = valueTable[viewIndex];
     let object;
-    if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE1') {
+    if (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') {
       object = {
         [STRUCTURE]: structure,
         [MEMORY]: dv,
@@ -314,7 +311,6 @@ export async function runWASMBinary(wasmBinary, options = {}) {
   function _attachMethod(structureIndex, defIndex) {
     const structure = valueTable[structureIndex];
     const def = valueTable[defIndex];
-    def.thunk = { index: nextMethodIndex++ };
     attachMethod(structure, def);
   }
 
@@ -349,12 +345,12 @@ export async function runWASMBinary(wasmBinary, options = {}) {
         }
       }
     }
-    if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE1') {
+    if (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') {
       const dv = createCopy(ctx, address, len);
       if (disposition === MemoryDisposition.Link) {
-        // an export variable (or constant pointer)
+        // an exported variable (or constant pointer)
         // need linkage to wasm memory at runtime
-        dv.linkage = nextLinkageIndex++;
+        dv.address = address;
       }
       return dv;
     } else {
@@ -587,8 +583,8 @@ export function serializeDefinitions(structures, params) {
           pairs.push(`length: ${dv.byteLength}`);
         }
         add(`memory: { ${pairs.join(', ')} },`);
-        if (dv.hasOwnProperty('linkage')) {
-          add(`linkage: ${dv.linkage},`);
+        if (dv.hasOwnProperty('address')) {
+          add(`address: ${dv.address},`);
         }
       }
       if (slots && Object.keys(slots).length > 0) {
@@ -699,10 +695,10 @@ export function finalizeStructures(structures) {
     if (placeholder.slots) {
       insertObjects(object[SLOTS], placeholder.slots);
     }
-    if (placeholder.linkage !== undefined) {
+    if (placeholder.address !== undefined) {
       // need to replace dataview with one pointing to WASM memory later,
       // when the VM is up and running
-      variables[placeholder.linkage] = { object, linker };
+      variables[placeholder.address] = { object, linker };
       if (pointerPreserver) {
         pointerPreserver.call(object);
       }

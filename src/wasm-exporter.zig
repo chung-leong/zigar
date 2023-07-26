@@ -88,7 +88,7 @@ fn setObjectProperty(container: Value, key: []const u8, value: anytype) void {
 export fn alloc(host: Host, len: usize) usize {
     const ctx: *CallContext = @ptrCast(@alignCast(@constCast(host)));
     if (len > 0) {
-        if (ctx.*.allocator.alloc([]u8, len)) |bytes| {
+        if (ctx.allocator.alloc([]u8, len)) |bytes| {
             return @intFromPtr(bytes.ptr);
         } else |_| {
             return 0;
@@ -101,7 +101,7 @@ export fn alloc(host: Host, len: usize) usize {
 export fn free(host: Host, address: usize, len: usize) void {
     const ctx: *CallContext = @ptrCast(@alignCast(@constCast(host)));
     const bytes: [*]u8 = @ptrFromInt(address);
-    ctx.*.allocator.free(bytes[0..len]);
+    ctx.allocator.free(bytes[0..len]);
 }
 
 extern fn _allocMemory(host: usize, size: usize) usize;
@@ -121,7 +121,7 @@ fn allocateMemory(host: Host, size: usize, memory: *Memory) callconv(.C) Result 
 extern fn _freeMemory(host: usize, address: usize, len: usize) void;
 
 fn freeMemory(host: Host, memory: *const Memory) callconv(.C) Result {
-    _freeMemory(@intFromPtr(host), @intFromPtr(memory.*.bytes), memory.len);
+    _freeMemory(@intFromPtr(host), @intFromPtr(memory.bytes), memory.len);
     return Result.OK;
 }
 
@@ -226,10 +226,10 @@ extern fn _beginStructure(def: u32) u32;
 
 fn beginStructure(_: Host, structure: *const Structure, dest: *Value) callconv(.C) Result {
     const def = createObject();
-    setObjectProperty(def, "name", structure.*.name);
-    setObjectProperty(def, "type", structure.*.structure_type);
-    setObjectProperty(def, "size", structure.*.total_size);
-    setObjectProperty(def, "hasPointer", structure.*.has_pointer);
+    setObjectProperty(def, "name", structure.name);
+    setObjectProperty(def, "type", structure.structure_type);
+    setObjectProperty(def, "size", structure.total_size);
+    setObjectProperty(def, "hasPointer", structure.has_pointer);
     dest.* = ref(_beginStructure(index(def)));
     return Result.OK;
 }
@@ -238,27 +238,27 @@ extern fn _attachMember(structure: usize, def: usize) void;
 
 fn attachMember(_: Host, structure: Value, member: *const Member) callconv(.C) Result {
     const def = createObject();
-    setObjectProperty(def, "type", member.*.member_type);
-    setObjectProperty(def, "isSigned", member.*.is_signed);
-    setObjectProperty(def, "isConst", member.*.is_const);
-    setObjectProperty(def, "isRequired", member.*.is_required);
-    setObjectProperty(def, "isStatic", member.*.is_static);
-    if (member.*.bit_offset != missing) {
-        setObjectProperty(def, "bitOffset", member.*.bit_offset);
+    setObjectProperty(def, "type", member.member_type);
+    setObjectProperty(def, "isSigned", member.is_signed);
+    setObjectProperty(def, "isConst", member.is_const);
+    setObjectProperty(def, "isRequired", member.is_required);
+    setObjectProperty(def, "isStatic", member.is_static);
+    if (member.bit_offset != missing) {
+        setObjectProperty(def, "bitOffset", member.bit_offset);
     }
-    if (member.*.bit_size != missing) {
-        setObjectProperty(def, "bitSize", member.*.bit_size);
+    if (member.bit_size != missing) {
+        setObjectProperty(def, "bitSize", member.bit_size);
     }
-    if (member.*.byte_size != missing) {
-        setObjectProperty(def, "byteSize", member.*.byte_size);
+    if (member.byte_size != missing) {
+        setObjectProperty(def, "byteSize", member.byte_size);
     }
-    if (member.*.slot != missing) {
-        setObjectProperty(def, "slot", member.*.slot);
+    if (member.slot != missing) {
+        setObjectProperty(def, "slot", member.slot);
     }
-    if (member.*.name) |name| {
+    if (member.name) |name| {
         setObjectProperty(def, "name", name);
     }
-    if (member.*.structure) |s| {
+    if (member.structure) |s| {
         setObjectProperty(def, "structure", s);
     }
     _attachMember(index(structure), index(def));
@@ -269,9 +269,10 @@ extern fn _attachMethod(structure: usize, def: usize) void;
 
 fn attachMethod(_: Host, structure: Value, method: *const Method) callconv(.C) Result {
     const def = createObject();
-    setObjectProperty(def, "isStatic", method.*.is_static_only);
-    setObjectProperty(def, "argStruct", method.*.structure);
-    if (method.*.name) |name| {
+    setObjectProperty(def, "isStatic", method.is_static_only);
+    setObjectProperty(def, "argStruct", method.structure);
+    setObjectProperty(def, "thunk", @intFromPtr(method.thunk));
+    if (method.name) |name| {
         setObjectProperty(def, "name", name);
     }
     _attachMethod(index(structure), index(def));
@@ -282,8 +283,8 @@ extern fn _attachTemplate(structure: usize, def: usize) void;
 
 fn attachTemplate(_: Host, structure: Value, template: *const Template) callconv(.C) Result {
     const def = createObject();
-    setObjectProperty(def, "isStatic", template.*.is_static);
-    setObjectProperty(def, "template", template.*.object);
+    setObjectProperty(def, "isStatic", template.is_static);
+    setObjectProperty(def, "template", template.object);
     _attachTemplate(index(structure), index(def));
     return Result.OK;
 }
@@ -308,8 +309,8 @@ fn createTemplate(host: Host, memory: *const Memory, dest: *Value) callconv(.C) 
 }
 
 fn createString(_: Host, memory: *const Memory, dest: *Value) callconv(.C) Result {
-    const address = @intFromPtr(memory.*.bytes);
-    const len = memory.*.len;
+    const address = @intFromPtr(memory.bytes);
+    const len = memory.len;
     dest.* = ref(_createString(address, len));
     return Result.OK;
 }
@@ -328,35 +329,36 @@ fn logValues(_: Host, argc: usize, argv: [*]Value) callconv(.C) Result {
     return Result.OK;
 }
 
-pub fn setStage1Callbacks() void {
+pub fn setCallbacks() void {
     const ptr = &exporter.callbacks;
-    ptr.*.allocate_memory = allocateMemory;
-    ptr.*.free_memory = freeMemory;
-    ptr.*.get_memory = getMemory;
-    ptr.*.wrap_memory = wrapMemory;
-    ptr.*.get_pointer_status = getPointerStatus;
-    ptr.*.set_pointer_status = setPointerStatus;
-    ptr.*.read_global_slot = readGlobalSlot;
-    ptr.*.write_global_slot = writeGlobalSlot;
-    ptr.*.read_object_slot = readObjectSlot;
-    ptr.*.write_object_slot = writeObjectSlot;
-    ptr.*.begin_structure = beginStructure;
-    ptr.*.attach_member = attachMember;
-    ptr.*.attach_method = attachMethod;
-    ptr.*.attach_template = attachTemplate;
-    ptr.*.finalize_structure = finalizeStructure;
-    ptr.*.create_template = createTemplate;
-    ptr.*.create_string = createString;
-    ptr.*.log_values = logValues;
+    ptr.allocate_memory = allocateMemory;
+    ptr.free_memory = freeMemory;
+    ptr.get_memory = getMemory;
+    ptr.wrap_memory = wrapMemory;
+    ptr.get_pointer_status = getPointerStatus;
+    ptr.set_pointer_status = setPointerStatus;
+    ptr.read_global_slot = readGlobalSlot;
+    ptr.write_global_slot = writeGlobalSlot;
+    ptr.read_object_slot = readObjectSlot;
+    ptr.write_object_slot = writeObjectSlot;
+    ptr.begin_structure = beginStructure;
+    ptr.attach_member = attachMember;
+    ptr.attach_method = attachMethod;
+    ptr.attach_template = attachTemplate;
+    ptr.finalize_structure = finalizeStructure;
+    ptr.create_template = createTemplate;
+    ptr.create_string = createString;
+    ptr.log_values = logValues;
 }
 
 extern fn _startCall(host: usize) void;
 extern fn _endCall(host: usize) void;
 
-fn runThunk(arg_index: usize, thunk: Thunk) usize {
+pub fn runThunk(arg_index: usize, address: usize) usize {
     var ctx: CallContext = .{
         .allocator = .{ .ptr = undefined, .vtable = &std.heap.WasmAllocator.vtable },
     };
+    const thunk: Thunk = @ptrFromInt(address);
     const host: Host = @ptrCast(&ctx);
     _startCall(@intFromPtr(host));
     const result = thunk(host, ref(arg_index));
@@ -368,59 +370,7 @@ fn runThunk(arg_index: usize, thunk: Thunk) usize {
     }
 }
 
-const RunFn = *const fn (arg_index: usize, thunk_index: usize) usize;
-
-pub fn exportModule(comptime T: type) RunFn {
+pub fn exportModule(comptime T: type, arg_index: usize) usize {
     const factory = exporter.createRootFactory(T);
-    const S = struct {
-        fn runFactory(arg_index: usize, _: usize) usize {
-            return runThunk(arg_index, factory);
-        }
-    };
-    return S.runFactory;
-}
-
-pub fn setStage2Callbacks() callconv(.C) void {
-    const ptr = &exporter.callbacks;
-    ptr.*.allocate_memory = allocateMemory;
-    ptr.*.free_memory = freeMemory;
-    ptr.*.get_memory = getMemory;
-    ptr.*.wrap_memory = wrapMemory;
-    ptr.*.get_pointer_status = getPointerStatus;
-    ptr.*.set_pointer_status = setPointerStatus;
-    ptr.*.read_object_slot = readObjectSlot;
-    ptr.*.write_object_slot = writeObjectSlot;
-    ptr.*.create_template = createTemplate;
-    ptr.*.create_string = createString;
-    ptr.*.log_values = logValues;
-}
-
-pub fn exportModuleFunctions(comptime T: type) RunFn {
-    const thunks = comptime exporter.getFunctionThunks(T);
-    const S = struct {
-        fn runFunction(arg_index: usize, thunk_index: usize) usize {
-            return runThunk(arg_index, thunks[thunk_index]);
-        }
-
-        fn doNothing(_: usize, _: usize) usize {
-            return 0;
-        }
-    };
-    return if (thunks.len > 0) S.runFunction else S.doNothing;
-}
-
-const GetFn = *const fn (variable_index: usize) usize;
-
-pub fn exportModuleVariables(comptime T: type) GetFn {
-    const getters = comptime exporter.getVariableGetters(T);
-    const S = struct {
-        fn getAddress(variable_index: usize) usize {
-            return getters[variable_index]();
-        }
-
-        fn doNothing(_: usize) usize {
-            return 0;
-        }
-    };
-    return if (getters.len > 0) S.getAddress else S.doNothing;
+    return runThunk(arg_index, @intFromPtr(factory));
 }

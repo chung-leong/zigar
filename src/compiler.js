@@ -144,12 +144,13 @@ export async function compile(path, options = {}) {
 }
 
 function getTargetInfo(rootFile, options) {
-  const { wasm } = options;
-  const packageName = `${rootFile.name}${wasm?.stage === 1 ? '-exporter' : ''}`;
+  const { target } = options;
+  const wasm = (target === 'wasm');
+  const packageName = rootFile.name;
   const libraryName = (wasm) ? `${packageName}.wasm` : `lib${packageName}.so`;
   const exporterName = `${wasm ? 'wasm-' : ''}exporter`;
-  const stubName = (wasm) ? `wasm-stub-stage${wasm.stage}` : `stub`;
-  const buildSubFolder = (wasm) ? `wasm-stage${wasm.stage}` : '';
+  const stubName = `${wasm ? 'wasm-' : ''}stub`;
+  const buildSubFolder = (wasm) ? `wasm` : '';
   const forWASM = !!(wasm);
   return { packageName, libraryName, exporterName, stubName, forWASM, buildSubFolder };
 }

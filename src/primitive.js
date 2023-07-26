@@ -40,7 +40,7 @@ export function finalizePrimitive(s) {
       this.$ = arg;
     }
   };
-  if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE2') {
+  if (process.env.NODE_ZIG_TARGET === 'WASM-RUNTIME') {
     s.linker = function(memory, address) {
       const value = this.$;
       useWASMMemory.call(this, memory, address, size);

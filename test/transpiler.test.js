@@ -5,7 +5,7 @@ import { transpile } from '../src/transpiler.js';
 describe('Transpilation', function() {
   describe('transpile', function() {
     beforeEach(function() {
-      process.env.NODE_ZIG_TARGET = 'WASM-STAGE1';
+      process.env.NODE_ZIG_TARGET = 'WASM-COMPTIME';
     })
     it('should transpile zig source code', async function() {
       this.timeout(10000);

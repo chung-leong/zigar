@@ -96,7 +96,7 @@ export function finalizeSlice(s) {
   const retriever = function() { return this };
   const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMember) : null;
   const pointerResetter = s.pointerResetter = (hasPointer) ? getPointerResetter(objectMember) : null;
-  if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE2') {
+  if (process.env.NODE_ZIG_TARGET === 'WASM-RUNTIME') {
     s.linker = function(memory, address) {
       const currentSize = this[MEMORY].byteLength;
       useWASMMemory.call(this, memory, address, currentSize);

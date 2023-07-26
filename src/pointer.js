@@ -50,7 +50,7 @@ export function finalizePointer(s) {
       this[SLOTS][0] = arg;
     }
   };
-  if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE2') {
+  if (process.env.NODE_ZIG_TARGET === 'WASM-RUNTIME') {
     s.linker = function(memory, address) {
       const dv = useWASMMemory.call(this, memory, address, size);
       const targetAddress = dv.getInt32(0, true);

@@ -11,7 +11,7 @@ const littleEndian = true;
 skip.if(process.env.npm_lifecycle_event === 'coverage').
 describe('Integration tests (WASM)', function() {
   beforeEach(function() {
-    process.env.NODE_ZIG_TARGET = 'WASM-STAGE1';
+    process.env.NODE_ZIG_TARGET = 'WASM-COMPTIME';
   })
   describe('Variables', function() {
     it('should import integer variables', async function() {
@@ -171,7 +171,7 @@ describe('Integration tests (WASM)', function() {
 })
 
 function getWASMRuntime() {
-  process.env.NODE_ZIG_TARGET = 'WASM-STAGE2';
+  process.env.NODE_ZIG_TARGET = 'WASM-RUNTIME';
   return resolve('../src/wasm-exporter.js');
 }
 

@@ -89,7 +89,7 @@ export function finalizeStruct(s) {
   };
   const retriever = function() { return this };
   const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMembers) : null;
-  if (process.env.NODE_ZIG_TARGET === 'WASM-STAGE2') {
+  if (process.env.NODE_ZIG_TARGET === 'WASM-RUNTIME') {
     const nonObjectMember = members.filter(m => m.type !== MemberType.Object);
     s.linker = function(memory, address) {
       // save any changes that might have been made
