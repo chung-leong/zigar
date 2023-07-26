@@ -1,6 +1,6 @@
-const MagicNumber = 0x6d736100;
-const Version = 1;
-const SectionType = {
+export const MagicNumber = 0x6d736100;
+export const Version = 1;
+export const SectionType = {
   Custom: 0,
   Type: 1,
   Import: 2,
@@ -15,7 +15,7 @@ const SectionType = {
   Data: 11,
   DataCount: 12
 };
-const ObjectType = {
+export const ObjectType = {
   Function: 0,
   Table: 1,
   Memory: 2,
@@ -462,16 +462,13 @@ function createWriter(maxSize) {
   };
 }
 
-export function parseInstructions(dv) {
+export function parseFunction(dv) {
   const {
     eof,
     readBytes,
     readU8,
-    readU32,
-    readString,
     readArray,
     readU32Leb128,
-    readU64Leb128,
     readI32Leb128,
     readI64Leb128,
     readF32,
@@ -480,13 +477,13 @@ export function parseInstructions(dv) {
   const readOne = readU32Leb128;
   const readTwo = () => [ readOne(), readOne() ];
   const readMultiple = (count) => {
-    const a = [];
+    const indices = [];
     for (let i = 0; i < count; i++) {
-      a.push(readOne());
+      indices.push(readOne());
     }
-    return a;
+    return indices;
   };
-  const operandReader = {
+  const operandReaders = {
     0x02: readI32Leb128,
     0x03: readI32Leb128,
     0x04: readI32Leb128,
@@ -497,7 +494,7 @@ export function parseInstructions(dv) {
 
     0x10: readU32Leb128,
     0x11: readTwo,
-    0x1C: () => readArray(readU32Leb128),
+    0x1C: () => readArray(readU8),
 
     0x20: readOne,
     0x21: readOne,
@@ -537,7 +534,7 @@ export function parseInstructions(dv) {
     0x43: readF32,
     0x44: readF64,
 
-    0xD0: readOne,
+    0xD0: readU8,
     0xD2: readOne,
 
     0xFC: () => {
@@ -549,7 +546,7 @@ export function parseInstructions(dv) {
         case 15:
         case 16:
         case 17:
-            return [ op1, readOne() ];
+          return [ op1, readOne() ];
         case 8:
         case 10:
         case 12:
@@ -609,10 +606,124 @@ export function parseInstructions(dv) {
       }
     },
   }
+  // read locals first
+  const locals = readArray(readU8);
+  // decode the expression
+  const instructions = [];
   while (!eof()) {
     const opcode = readU8();
-
+    const f = operandReaders[opcode];
+    const operand = f?.();
+    instructions.push({ opcode, operand });
   }
+  const size = dv.byteLength;
+  return { locals, instructions, size };
 }
+
+export function repackFunction({ locals, instructions, size }) {
+  const {
+    finalize,
+    writeBytes,
+    writeU8,
+    writeArray,
+    writeU32Leb128,
+    writeI32Leb128,
+    writeI64Leb128,
+    writeF32,
+    writeF64,
+  } = createWriter(size);
+  const writeOne = writeU32Leb128;
+  const writeTwo = (op) => {
+    writeOne(op[0]);
+    writeOne(op[1]);
+  };
+  const writeMultiple = (indices) => {
+    for (const index of indices) {
+      writeOne(index);
+    }
+  };
+  const operandWriters = {
+    0x02: writeI32Leb128,
+    0x03: writeI32Leb128,
+    0x04: writeI32Leb128,
+    0x05: writeI32Leb128,
+    0x0C: writeOne,
+    0x0D: writeOne,
+    0x0E: (op) => [ writeArray(op[0], writeOne), writeU32Leb128(op[1]) ],
+
+    0x10: writeU32Leb128,
+    0x11: writeTwo,
+    0x1C: (op) => writeArray(op, writeU8),
+
+    0x20: writeOne,
+    0x21: writeOne,
+    0x22: writeOne,
+    0x23: writeOne,
+    0x24: writeOne,
+    0x25: writeOne,
+    0x26: writeOne,
+    0x28: writeTwo,
+    0x29: writeTwo,
+    0x2A: writeTwo,
+    0x2B: writeTwo,
+    0x2C: writeTwo,
+    0x2E: writeTwo,
+    0x2F: writeTwo,
+
+    0x30: writeTwo,
+    0x31: writeTwo,
+    0x32: writeTwo,
+    0x33: writeTwo,
+    0x34: writeTwo,
+    0x35: writeTwo,
+    0x36: writeTwo,
+    0x37: writeTwo,
+    0x38: writeTwo,
+    0x39: writeTwo,
+    0x3A: writeTwo,
+    0x3B: writeTwo,
+    0x3C: writeTwo,
+    0x3D: writeTwo,
+    0x3E: writeTwo,
+    0x3F: writeOne,
+
+    0x40: writeOne,
+    0x41: writeI32Leb128,
+    0x42: writeI64Leb128,
+    0x43: writeF32,
+    0x44: writeF64,
+
+    0xD0: writeU8,
+    0xD2: writeOne,
+
+    0xFC: (op) => {
+      if (op instanceof Array) {
+        writeMultiple(op);
+      } else {
+        writeOne(op);
+      }
+    },
+    0xFD: () => {
+      if (op instanceof Array) {
+        if (op[0] === 12) {
+          writeOne(op[0]);
+          writeBytes(op[1]);
+        } else {
+          writeMultiple(op);
+        }
+      } else {
+        return writeOne(op);
+      }
+    },
+  }
+  writeArray(locals, writeU8);
+  for (const { opcode, operand } of instructions) {
+    writeU8(opcode);
+    const f = operandWriters[opcode];
+    f?.(operand);
+  }
+  return finalize();
+}
+
 
 
