@@ -50,15 +50,34 @@ export function parseBinary(binary) {
   function readSection() {
     const type = readU8();
     const len = readU32Leb128();
-    console.log({ in: len, type });
     switch(type) {
       case SectionType.Import: {
         const imports = readArray(() => {
           const module = readString();
           const name = readString();
           const type = readU8();
-          const index = readU32Leb128();
-          return { type, module, name, index };
+          switch (type) {
+            case ObjectType.Function: {
+              const index = readU32Leb128();
+              return { module, name, type, index };
+            }
+            case ObjectType.Table: {
+              const reftype = readU8();
+              const limits = readLimits();
+              return { module, name, type, reftype, limits };
+            }
+            case ObjectType.Memory: {
+              const limits = readLimits();
+              return { module, name, type, limits };
+            }
+            case ObjectType.Global: {
+              const valtype = readU8();
+              const mut = readU8();
+              return { module, name, type, valtype, mut };
+            }
+            default:
+              throw new Error(`Unknown object type: ${type}`);
+          }
         });
         return { type, imports };
       }
@@ -67,7 +86,7 @@ export function parseBinary(binary) {
           const name = readString();
           const type = readU8();
           const index = readU32Leb128();
-          return { type, name, index };
+          return { name, type, index };
         });
         return { type, exports };
       }
@@ -86,6 +105,20 @@ export function parseBinary(binary) {
         const data = readBytes(len);
         return { type, data };
       }
+    }
+  }
+
+  function readLimits() {
+    const flag = readU8();
+    const min = readU32Leb128();
+    switch (flag) {
+      case 0:
+        return { flag, min };
+      case 1:
+        const max = readU32Leb128();
+        return { flag, min, max };
+      default:
+        throw new Error(`Unknown limit flag: ${flag}`);
     }
   }
 }
@@ -113,18 +146,33 @@ export function repackBinary(module) {
     writeLength(() => {
       switch(section.type) {
         case SectionType.Import: {
-          writeArray(section.imports, ({ type, module, name, index }) => {
-            writeString(module);
-            writeString(name);
-            writeU8(type);
-            writeU32Leb128(index);
+          writeArray(section.imports, (object) => {
+            writeString(object.module);
+            writeString(object.name);
+            writeU8(object.type);
+            switch (object.type) {
+              case ObjectType.Function: {
+                writeU32Leb128(object.index);
+              } break;
+              case ObjectType.Table: {
+                writeU8(object.reftype);
+                writeLimits(object.limits);
+              } break;
+              case ObjectType.Memory: {
+                writeLimits(object.limits);
+              } break;
+              case ObjectType.Global: {
+                writeU8(object.valtype);
+                writeU8(object.mut);
+              } break;
+            }
           });
         } break;
         case SectionType.Export: {
-          writeArray(section.exports, ({ type, name, index }) => {
-            writeString(name);
-            writeU8(type);
-            writeU32Leb128(index);
+          writeArray(section.exports, (object) => {
+            writeString(object.name);
+            writeU8(object.type);
+            writeU32Leb128(object.index);
           });
         } break;
         case SectionType.Function: {
@@ -141,6 +189,16 @@ export function repackBinary(module) {
         }
       }
     });
+  }
+
+  function writeLimits(limits) {
+    writeU8(limits.flag);
+    writeU32Leb128(limits.min);
+    switch (limits.flag) {
+      case 1: {
+        writeU32Leb128(limits.max);
+      } break;
+    }
   }
 }
 
@@ -404,7 +462,7 @@ function createWriter(maxSize) {
   };
 }
 
-function parseInstructions(dv) {
+export function parseInstructions(dv) {
   const {
     eof,
     readBytes,
