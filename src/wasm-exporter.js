@@ -132,7 +132,8 @@ export async function runWASMBinary(wasmBinary, options = {}) {
 
   function linkObject(object, address) {
     const dv1 = object[MEMORY];
-    const dv2 = new DataView(wasmMemory.buffer, address, dv1.byteLength);
+    const len = dv1.byteLength;
+    const dv2 = new DataView(wasmMemory.buffer, address, len);
     const copy = getMemoryCopier(dv1.byteLength);
     for (const [ index, dv ] of [ dv1, dv2 ].entries()) {
       const array = [];
@@ -141,8 +142,8 @@ export async function runWASMBinary(wasmBinary, options = {}) {
       }
     }
     copy(dv2, dv1);
-    dv2[SOURCE] = wasmMemory;
-    Object.defineProperty(object, MEMORY, { value: dv2 });
+    dv2[SOURCE] = { memory: wasmMemory, address, len };
+    Object.defineProperty(object, MEMORY, { value: dv2, configurable: true });
     if (object.hasOwnProperty(ZIG)) {
       // a pointer--link the target too
       const targetAddress = dv2.getUint32(0, true);
@@ -378,7 +379,7 @@ export async function runWASMBinary(wasmBinary, options = {}) {
       // so we can recreate the view in the event of buffer deattachment
       // due to address space enlargement
       const dv = new DataView(wasmMemory.buffer, address, len);
-      dv[SOURCE] = wasmMemory;
+      dv[SOURCE] = { memory: wasmMemory, address, len };
       return dv;
     }
   }

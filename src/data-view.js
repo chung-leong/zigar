@@ -498,10 +498,10 @@ function cacheMethod(access, member, cb) {
   const typeName = getTypeName(member);
   const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
   const name = `${access}${typeName}${suffix}`;
-  var fn = methodCache[name];
+  let fn = methodCache[name];
   if (!fn) {
     fn = methodCache[name] = cb(name);
-    if (fn && !fn.name) {
+    if (fn && fn.name !== name) {
       Object.defineProperty(fn, 'name', { value: name, configurable: true, writable: false });
     }
   }

@@ -22,7 +22,7 @@ export async function transpile(path, options = {}) {
       loadWASM = `(async () => {
         const binaryString = atob(${JSON.stringify(base64)});
         const bytes = new Uint8Array(binaryString.length);
-        for (var i = 0; i < binaryString.length; i++) {
+        for (let i = 0; i < binaryString.length; i++) {
           bytes[i] = binaryString.charCodeAt(i);
         }
         return bytes.buffer;

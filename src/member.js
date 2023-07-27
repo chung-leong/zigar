@@ -15,7 +15,7 @@ import {
   throwEnumExpected,
   rethrowRangeError,
 } from './error.js';
-import { MEMORY, SLOTS } from './symbol.js';
+import { MEMORY, SLOTS, SOURCE } from './symbol.js';
 
 export const MemberType = {
   Void: 0,
@@ -383,32 +383,105 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
   const accessor = getDataViewAccessor(access, member);
   if (bitOffset !== undefined) {
     const offset = bitOffset >> 3;
-    if (access === 'get') {
-      return function() {
-        return accessor.call(this[MEMORY], offset, littleEndian);
-      };
+    if (process.env.NODE_ZIG_TARGET === 'WASM-RUNTIME') {
+      if (access === 'get') {
+        return function() {
+          const dv = this[MEMORY];
+          try {
+            return accessor.call(dv, offset, littleEndian);
+          } catch (err) {
+            if (err instanceof TypeError && dv[SOURCE] && dv.byteOffset === 0) {
+              const { memory, address, len } = dv[SOURCE];
+              const newDV = new DataView(memory.buffer, address, len);
+              Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
+              return accessor.call(newDV, offset, littleEndian);
+            } else {
+              throw err;
+            }
+          }
+        };
+      } else {
+        return function(value) {
+          const dv = this[MEMORY];
+          try {
+            return accessor.call(dv, offset, value, littleEndian);
+          } catch (err) {
+            if (err instanceof TypeError && dv[SOURCE] && dv.byteOffset === 0) {
+              const { memory, address, len } = dv[SOURCE];
+              const newDV = new DataView(memory.buffer, address, len);
+              Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
+              return accessor.call(newDV, offset, value, littleEndian);
+            } else {
+              throw err;
+            }
+          }
+        }
+      }
     } else {
-      return function(value) {
-        return accessor.call(this[MEMORY], offset, value, littleEndian);
+      if (access === 'get') {
+        return function() {
+          return accessor.call(this[MEMORY], offset, littleEndian);
+        };
+      } else {
+        return function(value) {
+          return accessor.call(this[MEMORY], offset, value, littleEndian);
+        }
       }
     }
   } else {
-    if (access === 'get') {
-      return function(index) {
-        try {
-          return accessor.call(this[MEMORY], index * byteSize, littleEndian);
-        } catch (err) {
-          rethrowRangeError(member, index, err);
+    if (process.env.NODE_ZIG_TARGET === 'WASM-RUNTIME') {
+      if (access === 'get') {
+        return function(index) {
+          const dv = this[MEMORY];
+          try {
+            return accessor.call(dv, index * byteSize, littleEndian);
+          } catch (err) {
+            if (err instanceof TypeError && dv[SOURCE] && dv.byteOffset === 0) {
+              const { memory, address, len } = dv[SOURCE];
+              const newDV = new DataView(memory.buffer, address, len);
+              Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
+              return accessor.call(newDV, index * byteSize, littleEndian);
+            } else {
+              rethrowRangeError(member, index, err);
+            }
+          }
+        };
+      } else {
+        return function(index, value) {
+          const dv = this[MEMORY];
+          try {
+            return accessor.call(dv, index * byteSize, value, littleEndian);
+          } catch (err) {
+            if (err instanceof TypeError && dv[SOURCE] && dv.byteOffset === 0) {
+              const { memory, address, len } = dv[SOURCE];
+              const newDV = new DataView(memory.buffer, address, len);
+              Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
+              return accessor.call(newDV, index * byteSize, value, littleEndian);
+            } else {
+              rethrowRangeError(member, index, err);
+            }
+          }
         }
-      };
+      }
     } else {
-      return function(index, value) {
-        try {
-          return accessor.call(this[MEMORY], index * byteSize, value, littleEndian);
-        } catch (err) {
-          rethrowRangeError(member, index, err);
+      if (access === 'get') {
+        return function(index) {
+          try {
+            return accessor.call(this[MEMORY], index * byteSize, littleEndian);
+          } catch (err) {
+            rethrowRangeError(member, index, err);
+          }
+        };
+      } else {
+        return function(index, value) {
+          try {
+            return accessor.call(this[MEMORY], index * byteSize, value, littleEndian);
+          } catch (err) {
+            rethrowRangeError(member, index, err);
+          }
         }
       }
     }
   }
 }
+
