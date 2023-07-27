@@ -11,7 +11,7 @@ export async function transpile(path, options = {}) {
     ...compileOptions
   } = options;
   const wasmPath = await compile(path, { ...compileOptions, target: 'wasm' });
-  const buffer = await readFile(exporterPath);
+  const buffer = await readFile(wasmPath);
   const structures = await runWASMBinary(buffer, { omitFunctions });
   const hasMethods = !!structures.find(s => s.methods.length > 0);
   const runtimeURL = moduleResolver('node-zig/wasm-runtime');

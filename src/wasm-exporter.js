@@ -97,8 +97,8 @@ export async function runWASMBinary(wasmBinary, options = {}) {
   } else if (process.env.NODE_ZIG_TARGET === 'WASM-RUNTIME') {
     init();
     // link variables
-    for (const [ address, { object, linker } ] of variables.entries()) {
-      linker.call(object, wasmMemory, address);
+    for (const [ address, object ] of Object.entries(variables)) {
+      linkObject(object, address);
     }
     // link methods
     methodRunner[0] = function(thunkIndex, argStruct) {
@@ -128,6 +128,27 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     valueTable[index] = object;
     valueIndices.set(object, index);
     return index;
+  }
+
+  function linkObject(object, address) {
+    const dv1 = object[MEMORY];
+    const dv2 = new DataView(wasmMemory.buffer, address, dv1.byteLength);
+    const copy = getMemoryCopier(dv1.byteLength);
+    for (const [ index, dv ] of [ dv1, dv2 ].entries()) {
+      const array = [];
+      for (let i = 0; i < dv.byteLength; i++) {
+        array.push(dv.getUint8(i));
+      }
+    }
+    copy(dv2, dv1);
+    dv2[SOURCE] = wasmMemory;
+    Object.defineProperty(object, MEMORY, { value: dv2 });
+    if (object.hasOwnProperty(ZIG)) {
+      // a pointer--link the target too
+      const targetAddress = dv2.getUint32(0, true);
+      const targetObject = object[SLOTS][0];
+      linkObject(targetObject, targetAddress);
+    }
   }
 
   function throwError(errorIndex) {
@@ -347,8 +368,7 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     }
     if (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') {
       const dv = createCopy(ctx, address, len);
-      if (disposition === MemoryDisposition.Link) {
-        // an exported variable (or constant pointer)
+      if (disposition !== MemoryDisposition.Copy) {
         // need linkage to wasm memory at runtime
         dv.address = address;
       }
@@ -647,7 +667,7 @@ export function serializeDefinitions(structures, params) {
 }
 
 export function finalizeStructures(structures) {
-  const variables = [];
+  const variables = {};
   for (const structure of structures) {
     for (const target of [ structure.static, structure.instance ]) {
       // first create the actual template using the provided placeholder
@@ -690,7 +710,7 @@ export function finalizeStructures(structures) {
       const { size } = placeholder.structure;
       dv = new DataView(new ArrayBuffer(size));
     }
-    const { constructor, linker, pointerPreserver } = placeholder.structure;
+    const { constructor } = placeholder.structure;
     const object = constructor.call(null, dv);
     if (placeholder.slots) {
       insertObjects(object[SLOTS], placeholder.slots);
@@ -698,10 +718,7 @@ export function finalizeStructures(structures) {
     if (placeholder.address !== undefined) {
       // need to replace dataview with one pointing to WASM memory later,
       // when the VM is up and running
-      variables[placeholder.address] = { object, linker };
-      if (pointerPreserver) {
-        pointerPreserver.call(object);
-      }
+      variables[placeholder.address] = object;
     }
     return object;
   }

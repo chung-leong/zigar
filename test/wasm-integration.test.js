@@ -84,9 +84,9 @@ describe('Integration tests (WASM)', function() {
       expect([ ...module.uint32_array4 ]).to.eql([ 1, 2, 777, 4 ]);
       await __init;
       // reading WASM memory now
-      module.uint32_slice.set(1, 888);
-      expect([ ...module.uint32_slice ]).to.eql([ 2, 888, 4 ]);
+      module.uint32_array4.set(2, 888);
       expect([ ...module.uint32_array4 ]).to.eql([ 1, 2, 888, 4 ]);
+      expect([ ...module.uint32_slice ]).to.eql([ 2, 888, 4 ]);
     })
     it('should import optional values', async function() {
       this.timeout(20000);

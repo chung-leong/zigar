@@ -1101,21 +1101,6 @@ fn getPointerType(comptime T: type, comptime name: []const u8) type {
     };
 }
 
-fn getMemoryDisposition(comptime PT: type) MemoryDisposition {
-    const ptr_info = @typeInfo(PT).Pointer;
-    const FT = ptr_info.child;
-    return switch (@typeInfo(FT)) {
-        .Pointer => .Link,
-        else => switch (ptr_info.is_const) {
-            true => switch (hasPointer(FT)) {
-                true => .Link,
-                false => .Copy,
-            },
-            false => .Link,
-        },
-    };
-}
-
 fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
     const decls = switch (@typeInfo(T)) {
         .Struct => |st| st.decls,
@@ -1161,15 +1146,23 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
                     var value: CT = @field(T, decl.name);
                     break :ptr &value;
                 },
-                else => &@field(T, decl.name),
+                else => ptr: {
+                    if (@typeInfo(PT).Pointer.is_const) {
+                        // put a copy on the stack so it gets copied and we don't end
+                        // up pointing to pointing to read-only memory
+                        var value = @field(T, decl.name);
+                        break :ptr &value;
+                    } else {
+                        break :ptr &@field(T, decl.name);
+                    }
+                },
             };
-            const disposition = getMemoryDisposition(PT);
             // create the pointer object
             const memory: Memory = .{
                 .bytes = @ptrCast(&typed_ptr),
                 .len = @sizeOf(PT),
             };
-            const ptr_obj = try host.wrapMemory(memory, disposition, PT, .One);
+            const ptr_obj = try host.wrapMemory(memory, .Copy, PT, .One);
             // dezig it, creating SharedArrayBuffer or ArrayBuffer
             try dezigStructure(host, ptr_obj, &typed_ptr);
             const template = template_maybe orelse create: {
@@ -1693,187 +1686,4 @@ test "createModule" {
             assert(false);
         },
     }
-}
-
-fn getFunctionCount(comptime T: type) comptime_int {
-    const decls = switch (@typeInfo(T)) {
-        .Struct => |st| st.decls,
-        .Union => |un| un.decls,
-        .Enum => |en| en.decls,
-        .Opaque => |op| op.decls,
-        else => return 0,
-    };
-    comptime var count = 0;
-    inline for (decls) |decl| {
-        if (decl.is_pub) {
-            const member = @field(T, decl.name);
-            switch (@typeInfo(@TypeOf(member))) {
-                .Type => count += getFunctionCount(member),
-                .Fn => count += 1,
-                else => {},
-            }
-        }
-    }
-    return count;
-}
-
-test "getFunctionCount" {
-    const Test = struct {
-        pub fn functionA() void {}
-        pub fn functionB() void {}
-        fn functionC() void {}
-
-        pub const Test2 = struct {
-            pub fn functionD() void {}
-            pub fn functionE() void {}
-        };
-    };
-    const count = getFunctionCount(Test);
-    assert(count == 4);
-}
-
-pub fn getFunctionThunks(comptime T: type) [getFunctionCount(T)]Thunk {
-    const decls = switch (@typeInfo(T)) {
-        .Struct => |st| st.decls,
-        .Union => |un| un.decls,
-        .Enum => |en| en.decls,
-        .Opaque => |op| op.decls,
-        else => return .{},
-    };
-    comptime var thunks: [getFunctionCount(T)]Thunk = undefined;
-    comptime var index = 0;
-    inline for (decls) |decl| {
-        if (decl.is_pub) {
-            const member = @field(T, decl.name);
-            switch (@typeInfo(@TypeOf(member))) {
-                .Type => {
-                    for (getFunctionThunks(member)) |thunk| {
-                        thunks[index] = thunk;
-                        index += 1;
-                    }
-                },
-                .Fn => {
-                    const ArgT = ArgumentStruct(member);
-                    thunks[index] = createThunk(member, ArgT);
-                    index += 1;
-                },
-                else => {},
-            }
-        }
-    }
-    return thunks;
-}
-
-test "getFunctionThunks" {
-    const Test = struct {
-        pub fn functionA() void {}
-        pub fn functionB() void {}
-        fn functionC() void {}
-
-        pub const Test2 = struct {
-            pub fn functionD() void {}
-            pub fn functionE() void {}
-        };
-    };
-    const thunks = comptime getFunctionThunks(Test);
-    assert(thunks.len == 4);
-}
-
-fn getVariableCount(comptime T: type) comptime_int {
-    const decls = switch (@typeInfo(T)) {
-        .Struct => |st| st.decls,
-        .Union => |un| un.decls,
-        .Enum => |en| en.decls,
-        .Opaque => |op| op.decls,
-        else => return 0,
-    };
-    comptime var count = 0;
-    inline for (decls) |decl| {
-        if (decl.is_pub) {
-            const PT = getPointerType(T, decl.name);
-            if (PT == type) {
-                count += getVariableCount(@field(T, decl.name));
-            } else if (PT != void) {
-                if (getMemoryDisposition(PT) == .Link) {
-                    count += 1;
-                }
-            }
-        }
-    }
-    return count;
-}
-
-test "getVariableCount" {
-    const Test = struct {
-        pub var varA: i32 = 0;
-        pub var varB: i32 = 0;
-        var varC: i32 = 0;
-        pub const varD: i32 = 0;
-
-        pub const Test2 = struct {
-            pub var varE: i32 = 0;
-            pub const varF: i32 = 0;
-        };
-    };
-    const count = comptime getVariableCount(Test);
-    assert(count == 3);
-}
-
-const AddressGetter = *const fn () usize;
-
-fn createAddressGetter(comptime T: type, comptime name: []const u8) AddressGetter {
-    const S = struct {
-        fn get() usize {
-            return @intFromPtr(&@field(T, name));
-        }
-    };
-    return S.get;
-}
-
-pub fn getVariableGetters(comptime T: type) [getVariableCount(T)]AddressGetter {
-    const decls = switch (@typeInfo(T)) {
-        .Struct => |st| st.decls,
-        .Union => |un| un.decls,
-        .Enum => |en| en.decls,
-        .Opaque => |op| op.decls,
-        else => return .{},
-    };
-    comptime var getters: [getVariableCount(T)]AddressGetter = undefined;
-    comptime var index = 0;
-    inline for (decls) |decl| {
-        if (decl.is_pub) {
-            const PT = getPointerType(T, decl.name);
-            if (PT == type) {
-                inline for (getVariableGetters(@field(T, decl.name))) |getter| {
-                    getters[index] = getter;
-                    index += 1;
-                }
-            } else if (PT != void) {
-                if (getMemoryDisposition(PT) == .Link) {
-                    getters[index] = createAddressGetter(T, decl.name);
-                    index += 1;
-                }
-            }
-        }
-    }
-    return getters;
-}
-
-test "getVariableGetters" {
-    const Test = struct {
-        pub var varA: i32 = 0;
-        pub var varB: i32 = 0;
-        var varC: i32 = 0;
-        pub const varD: i32 = 0;
-
-        pub const Test2 = struct {
-            pub var varE: i32 = 0;
-            pub const varF: i32 = 0;
-        };
-    };
-    const getters = comptime getVariableGetters(Test);
-    assert(getters.len == 3);
-    assert(getters[0]() != 0);
-    assert(getters[1]() != 0);
-    assert(getters[2]() != 0);
 }

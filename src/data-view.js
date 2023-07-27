@@ -492,13 +492,6 @@ function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
   }
 }
 
-export function useWASMMemory(memory, address, size) {
-  const dv = new DataView(memory.buffer, address, size);
-  dv[SOURCE] = memory;
-  Object.defineProperty(this, MEMORY, { value: dv });
-  return dv;
-}
-
 function cacheMethod(access, member, cb) {
   const { bitOffset } = member;
   const bitPos = bitOffset & 0x07;

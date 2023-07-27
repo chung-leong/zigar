@@ -9,4 +9,3 @@ export const ENUM_ITEMS = Symbol('enumItems');
 export const ERROR_INDEX = Symbol('errorIndex');
 export const ENUM_ITEM = Symbol('enumItem');
 export const HIDE_PREVIOUS = Symbol('hidePrevious');
-export const COMPTIME = Symbol('comptime');

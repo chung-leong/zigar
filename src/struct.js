@@ -89,23 +89,6 @@ export function finalizeStruct(s) {
   };
   const retriever = function() { return this };
   const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMembers) : null;
-  if (process.env.NODE_ZIG_TARGET === 'WASM-RUNTIME') {
-    const nonObjectMember = members.filter(m => m.type !== MemberType.Object);
-    s.linker = function(memory, address) {
-      // save any changes that might have been made
-      const values = {};
-      for (const { name } of nonObjectMember) {
-        values[name] = this[name];
-      }
-      const dv = useWASMMemory(memory, address, size);
-      linkChildObjects.call(this, objectMembers, memory, address);
-      // apply changes to WASM memory
-      for (const { name } of nonObjectMember) {
-        this[name] = values[name];
-      }
-    };
-    s.pointerPreserver = (hasPointer) ? getPointerPreserver(objectMembers) : null;
-  }
   Object.defineProperties(constructor.prototype, {
     $: { get: retriever, set: initializer, configurable: true },
   });
@@ -131,13 +114,6 @@ export function createChildObjects(members, recv, dv) {
   Object.defineProperties(this, {
     [SLOTS]: { value: slots },
   });
-}
-
-export function linkChildObjects(members, memory, address) {
-  const parentOffset = address;
-  for (const { structure: { linker }, bitOffset, slot } of members) {
-    linker.call(slots[slot], memory, address + (bitOffset >> 3));
-  }
 }
 
 export function getPointerCopier(members) {
