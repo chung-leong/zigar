@@ -6,7 +6,6 @@ R"=====(
   const SLOTS = Symbol('slots');
   const ZIG = Symbol('Zig');
   const SOURCE = Symbol('source');
-
   const TYPED_ARRAY = Symbol('typedArray');
   const ENUM_INDEX = Symbol('enumIndex');
   const ENUM_ITEMS = Symbol('enumItems');
@@ -730,10 +729,10 @@ R"=====(
     const typeName = getTypeName(member);
     const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
     const name = `${access}${typeName}${suffix}`;
-    var fn = methodCache[name];
+    let fn = methodCache[name];
     if (!fn) {
       fn = methodCache[name] = cb(name);
-      if (fn && !fn.name) {
+      if (fn && fn.name !== name) {
         Object.defineProperty(fn, 'name', { value: name, configurable: true, writable: false });
       }
     }
@@ -943,6 +942,7 @@ R"=====(
       instance: {
         members: [ member ],
       },
+      hasPointer,
       options,
     } = s;
     if (process.env.NODE_DEV !== 'production') {
@@ -997,14 +997,13 @@ R"=====(
             set.call(this, i, arg[i]);
           }
         } else {
-          console.log({ arg });
           throwInvalidArrayInitializer(s, arg);
         }
       }
     };
     const retriever = function() { return this };
-    const pointerCopier = s.pointerCopier = getPointerCopier$1(objectMember);
-    s.pointerResetter = getPointerResetter$1(objectMember);
+    const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier$1(objectMember) : null;
+    s.pointerResetter = (hasPointer) ? getPointerResetter$1(objectMember) : null;
     const { get, set } = getAccessors(member, options);
     const length = size / member.byteSize;
     Object.defineProperties(constructor.prototype, {
@@ -1041,9 +1040,6 @@ R"=====(
   }
 
   function getPointerCopier$1(member) {
-    if (!member?.structure.hasPointer) {
-      return null;
-    }
     return function(src) {
       const { structure: { pointerCopier }, byteSize } = member;
       const dv = this[MEMORY];
@@ -1056,9 +1052,6 @@ R"=====(
   }
 
   function getPointerResetter$1(member) {
-    if (!member?.structure.hasPointer) {
-      return null;
-    }
     return function(src) {
       const { structure: { pointerResetter }, byteSize } = member;
       const dv = this[MEMORY];
@@ -1262,6 +1255,7 @@ R"=====(
         members,
         template,
       },
+      hasPointer,
       options,
     } = s;
     const descriptors = {};
@@ -1334,7 +1328,7 @@ R"=====(
       }
     };
     const retriever = function() { return this };
-    const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
+    const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMembers) : null;
     Object.defineProperties(constructor.prototype, {
       $: { get: retriever, set: initializer, configurable: true },
     });
@@ -1350,8 +1344,9 @@ R"=====(
     if (recv !== ZIG)  {
       recv = null;
     }
+    const parentOffset = dv.byteOffset;
     for (const { structure: { constructor }, bitOffset, byteSize, slot } of members) {
-      const offset = bitOffset >> 3;
+      const offset = parentOffset + (bitOffset >> 3);
       const childDV = new DataView(dv.buffer, offset, byteSize);
       slots[slot] = constructor.call(recv, childDV);
     }
@@ -1362,25 +1357,17 @@ R"=====(
 
   function getPointerCopier(members) {
     const pointerMembers = members.filter(m => m.structure.hasPointer);
-    if (pointerMembers.length === 0) {
-      return null;
-    }
     return function(src) {
       const destSlots = this[SLOTS];
       const srcSlots = src[SLOTS];
       for (const { slot, structure: { pointerCopier } } of pointerMembers) {
-        if (srcSlots[slot]) {
-          pointerCopier.call(destSlots[slot], srcSlots[slot]);
-        }
+        pointerCopier.call(destSlots[slot], srcSlots[slot]);
       }
     };
   }
 
   function getPointerResetter(members) {
     const pointerMembers = members.filter(m => m.structure.hasPointer);
-    if (pointerMembers.length === 0) {
-      return null;
-    }
     return function() {
       const destSlots = this[SLOTS];
       for (const { slot, structure: { pointerResetter } } of pointerMembers) {
@@ -1882,6 +1869,7 @@ R"=====(
       instance: {
         members: [ member ],
       },
+      hasPointer,
       options,
     } = s;
     if (process.env.NODE_DEV !== 'production') {
@@ -1953,8 +1941,8 @@ R"=====(
       }
     };
     const retriever = function() { return this };
-    const pointerCopier = s.pointerCopier = getPointerCopier$1(objectMember);
-    s.pointerResetter = getPointerResetter$1(objectMember);
+    const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier$1(objectMember) : null;
+    s.pointerResetter = (hasPointer) ? getPointerResetter$1(objectMember) : null;
     const { get, set } = getAccessors(member, options);
     const getLength = getArrayLengthGetter(elementSize);
     Object.defineProperties(constructor.prototype, {
@@ -2425,30 +2413,34 @@ R"=====(
     const accessor = getDataViewAccessor(access, member);
     if (bitOffset !== undefined) {
       const offset = bitOffset >> 3;
-      if (access === 'get') {
-        return function() {
-          return accessor.call(this[MEMORY], offset, littleEndian);
-        };
-      } else {
-        return function(value) {
-          return accessor.call(this[MEMORY], offset, value, littleEndian);
+      {
+        if (access === 'get') {
+          return function() {
+            return accessor.call(this[MEMORY], offset, littleEndian);
+          };
+        } else {
+          return function(value) {
+            return accessor.call(this[MEMORY], offset, value, littleEndian);
+          }
         }
       }
     } else {
-      if (access === 'get') {
-        return function(index) {
-          try {
-            return accessor.call(this[MEMORY], index * byteSize, littleEndian);
-          } catch (err) {
-            rethrowRangeError(member, index, err);
-          }
-        };
-      } else {
-        return function(index, value) {
-          try {
-            return accessor.call(this[MEMORY], index * byteSize, value, littleEndian);
-          } catch (err) {
-            rethrowRangeError(member, index, err);
+      {
+        if (access === 'get') {
+          return function(index) {
+            try {
+              return accessor.call(this[MEMORY], index * byteSize, littleEndian);
+            } catch (err) {
+              rethrowRangeError(member, index, err);
+            }
+          };
+        } else {
+          return function(index, value) {
+            try {
+              return accessor.call(this[MEMORY], index * byteSize, value, littleEndian);
+            } catch (err) {
+              rethrowRangeError(member, index, err);
+            }
           }
         }
       }

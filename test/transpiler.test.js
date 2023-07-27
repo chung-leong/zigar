@@ -13,7 +13,6 @@ describe('Transpilation', function() {
       const code = await transpile(pathname);
       expect(code).to.be.a('string');
       expect(code).to.contain('integers');
-      console.log(code);
     })
   })
 })

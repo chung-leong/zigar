@@ -1,8 +1,5 @@
 import { expect } from 'chai';
-import { readFile } from 'fs/promises';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import 'mocha-skip-if';
+import { readFile, writeFile } from 'fs/promises';
 
 import {
   SectionType,
@@ -85,6 +82,26 @@ describe('WASM stripper', function() {
         expect(newFn.getUint8(i)).to.equal(fn.getUint8(i));
       }
     })
+    it('should handle more complicated file', async function() {
+      const path = resolve(`./wasm-files/exporter.wasm`);
+      const content = await readFile(path);
+      const binary = new DataView(content.buffer);
+      const module = parseBinary(binary);
+      const codeSection = module.sections.find(s => s.type === SectionType.Code);
+      expect(codeSection).to.not.be.undefined;
+      const { functions } = codeSection;
+      for (const [ index, fn ] of functions.entries()) {
+        expect(fn).be.an.instanceOf(DataView);
+        const result = parseFunction(fn);
+        const newFn = repackFunction(result);
+        expect(newFn).to.be.an.instanceOf(DataView);
+        expect(newFn.byteLength).to.equal(fn.byteLength);
+        for (let i = 0; i < newFn.byteLength; i++) {
+          expect(newFn.getUint8(i)).to.equal(fn.getUint8(i));
+        }
+      }
+    })
+
   })
 })
 

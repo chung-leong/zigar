@@ -226,12 +226,6 @@ function createReader(dv) {
     return value;
   }
 
-  function readF32() {
-    const value = dv.getFloat32(offset, true);
-    offset += 4;
-    return value;
-  }
-
   function readF64() {
     const value = dv.getFloat64(offset, true);
     offset += 8;
@@ -304,7 +298,7 @@ function createReader(dv) {
       value |= BigInt(byte & 0x7f) << shift;
       shift += 7n;
       if ((0x80 & byte) === 0) {
-        if (shift < 32 && (byte & 0x40) !== 0) {
+        if ((byte & 0x40) !== 0) {
           return value | (~0n << shift);
         }
         return value;
@@ -317,7 +311,6 @@ function createReader(dv) {
     readBytes,
     readU8,
     readU32,
-    readF32,
     readF64,
     readString,
     readArray,
@@ -353,13 +346,6 @@ function createWriter(maxSize) {
   function writeU32(value) {
     if (!lengthChecking) {
       dv.setUint32(offset, value, true);
-    }
-    offset += 4;
-  }
-
-  function writeF32(value) {
-    if (!lengthChecking) {
-      dv.setFloat32(offset, value, true);
     }
     offset += 4;
   }
@@ -450,7 +436,6 @@ function createWriter(maxSize) {
     writeBytes,
     writeU8,
     writeU32,
-    writeF32,
     writeF64,
     writeString,
     writeArray,
@@ -471,7 +456,7 @@ export function parseFunction(dv) {
     readU32Leb128,
     readI32Leb128,
     readI64Leb128,
-    readF32,
+    readU32,
     readF64,
   } = createReader(dv);
   const readOne = readU32Leb128;
@@ -531,7 +516,7 @@ export function parseFunction(dv) {
     0x40: readOne,
     0x41: readI32Leb128,
     0x42: readI64Leb128,
-    0x43: readF32,
+    0x43: readU32,  // avoid precision loss due to float-to-double conversion
     0x44: readF64,
 
     0xD0: readU8,
@@ -629,7 +614,7 @@ export function repackFunction({ locals, instructions, size }) {
     writeU32Leb128,
     writeI32Leb128,
     writeI64Leb128,
-    writeF32,
+    writeU32,
     writeF64,
   } = createWriter(size);
   const writeOne = writeU32Leb128;
@@ -690,7 +675,7 @@ export function repackFunction({ locals, instructions, size }) {
     0x40: writeOne,
     0x41: writeI32Leb128,
     0x42: writeI64Leb128,
-    0x43: writeF32,
+    0x43: writeU32,   // avoid precision loss due to float-to-double conversion
     0x44: writeF64,
 
     0xD0: writeU8,

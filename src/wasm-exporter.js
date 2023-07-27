@@ -130,6 +130,11 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     return index;
   }
 
+  function getObjectIndex(object) {
+    const index = valueIndices.get(object);
+    return (index !== undefined) ? index : addObject(object);
+  }
+
   function linkObject(object, address) {
     const dv1 = object[MEMORY];
     const len = dv1.byteLength;
@@ -301,7 +306,7 @@ export async function runWASMBinary(wasmBinary, options = {}) {
 
   function _readGlobalSlot(slot) {
     const object = globalSlots[slot];
-    return object ? valueIndices.get(object) : 0;
+    return object ? getObjectIndex(object) : 0;
   }
 
   function _writeGlobalSlot(slot, valueIndex) {
@@ -311,7 +316,7 @@ export async function runWASMBinary(wasmBinary, options = {}) {
   function _readObjectSlot(objectIndex, slot) {
     const object = valueTable[objectIndex];
     const value = object[SLOTS][slot];
-    return value ? valueIndices.get(value) : 0;
+    return value ? getObjectIndex(value) : 0;
   }
 
   function _writeObjectSlot(objectIndex, slot, valueIndex) {
