@@ -758,7 +758,7 @@ fn getStructure(host: Host, comptime T: type) !Value {
 }
 
 fn getStructureName(comptime T: type) [*:0]const u8 {
-    const name = switch (@typeInfo(T)) {
+    const name = comptime switch (@typeInfo(T)) {
         .Pointer => |pt| switch (pt.size) {
             .One => @typeName(T),
             // since there're no pointers in JavaScript, we need to use a pair
@@ -769,7 +769,7 @@ fn getStructureName(comptime T: type) [*:0]const u8 {
         },
         else => getFunctionName(T) orelse @typeName(T),
     };
-    return @ptrCast(name);
+    return getCString(name);
 }
 
 test "getStructureName" {
