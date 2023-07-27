@@ -735,7 +735,7 @@ export function finalizeStructures(structures) {
     },
   };
 
-  function createThunk({ index }) {
+  function createThunk(index) {
     return function(argStruct) {
       return methodRunner[0](index, argStruct);
     };
