@@ -148,8 +148,8 @@ function getTargetInfo(rootFile, options) {
   const wasm = (target === 'wasm');
   const packageName = rootFile.name;
   const libraryName = (wasm) ? `${packageName}.wasm` : `lib${packageName}.so`;
-  const exporterName = `${wasm ? 'wasm-' : ''}exporter`;
-  const stubName = `${wasm ? 'wasm-' : ''}stub`;
+  const exporterName = `${wasm ? 'wasm-' : 'cpp-'}exporter`;
+  const stubName = `${wasm ? 'wasm-' : 'cpp-'}stub`;
   const buildSubFolder = (wasm) ? `wasm` : '';
   const forWASM = !!(wasm);
   return { packageName, libraryName, exporterName, stubName, forWASM, buildSubFolder };

@@ -5,7 +5,7 @@ const assert = std.debug.assert;
 const isFreeStanding = builtin.target.os.tag == .freestanding;
 
 // error type
-const Error = error{
+pub const Error = error{
     TODO,
     Unknown,
     UnableToAllocateMemory,
@@ -53,7 +53,7 @@ const slot_allocator = struct {
 // allocate slots for classe, function, and other language constructs on the host side
 const structure_slot = slot_allocator.get(.{});
 
-fn getStructureSlot(comptime T: anytype, comptime size: std.builtin.Type.Pointer.Size) usize {
+pub fn getStructureSlot(comptime T: anytype, comptime size: std.builtin.Type.Pointer.Size) usize {
     return structure_slot.get(.{ .Type = T, .Size = size });
 }
 
@@ -105,11 +105,6 @@ test "getCString" {
 }
 
 // enums and external structs
-pub const Result = enum(u32) {
-    OK,
-    Failure,
-};
-
 pub const StructureType = enum(u32) {
     Primitive = 0,
     Array,
@@ -138,7 +133,7 @@ pub const MemberType = enum(u32) {
 };
 
 pub const Value = *opaque {};
-pub const Thunk = *const fn (host: Host, args: Value) callconv(.C) ?[*:0]const u8;
+pub const Thunk = *const fn (ptr: *anyopaque, args: Value) callconv(.C) ?[*:0]const u8;
 
 pub const Structure = extern struct {
     name: ?[*:0]const u8 = null,
@@ -184,19 +179,6 @@ pub const Method = extern struct {
     is_static_only: bool,
     thunk: Thunk,
     structure: Value,
-};
-
-const ModuleFlags = packed struct(u32) {
-    little_endian: bool,
-    runtime_safety: bool,
-    _: u30 = 0,
-};
-
-pub const Module = extern struct {
-    version: u32,
-    flags: ModuleFlags,
-    callbacks: *Callbacks,
-    factory: Thunk,
 };
 
 fn NextIntType(comptime T: type) type {
@@ -429,7 +411,7 @@ test "getStructureType" {
     assert(getStructureType(extern union {}) == .ExternUnion);
 }
 
-fn PointerType(comptime CT: type, comptime size: std.builtin.Type.Pointer.Size) type {
+pub fn PointerType(comptime CT: type, comptime size: std.builtin.Type.Pointer.Size) type {
     return switch (size) {
         .One => *CT,
         .Slice => []CT,
@@ -438,7 +420,7 @@ fn PointerType(comptime CT: type, comptime size: std.builtin.Type.Pointer.Size) 
     };
 }
 
-fn fromMemory(memory: Memory, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) PointerType(T, size) {
+pub fn fromMemory(memory: Memory, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) PointerType(T, size) {
     return switch (size) {
         .One => @ptrCast(@alignCast(memory.bytes)),
         .Slice => slice: {
@@ -472,7 +454,7 @@ test "fromMemory" {
     assert(@typeInfo(@TypeOf(p4)).Pointer.size == .C);
 }
 
-fn toMemory(pointer: anytype) Memory {
+pub fn toMemory(pointer: anytype) Memory {
     const T = @TypeOf(pointer);
     const CT = @typeInfo(T).Pointer.child;
     const size = @typeInfo(T).Pointer.size;
@@ -540,202 +522,8 @@ test "comparePointers" {
     assert(comparePointers(j, k) == false);
 }
 
-// pointer table that's filled on the C++ side
-const Callbacks = extern struct {
-    allocate_memory: *const fn (Host, usize, *Memory) callconv(.C) Result,
-    free_memory: *const fn (Host, *const Memory) callconv(.C) Result,
-    get_memory: *const fn (Host, Value, *Memory) callconv(.C) Result,
-    wrap_memory: *const fn (Host, Value, *const Memory, MemoryDisposition, *Value) callconv(.C) Result,
-
-    get_pointer_status: *const fn (Host, Value, *bool) callconv(.C) Result,
-    set_pointer_status: *const fn (Host, Value, bool) callconv(.C) Result,
-
-    read_global_slot: *const fn (Host, usize, *Value) callconv(.C) Result,
-    write_global_slot: *const fn (Host, usize, ?Value) callconv(.C) Result,
-    read_object_slot: *const fn (Host, Value, usize, *Value) callconv(.C) Result,
-    write_object_slot: *const fn (Host, Value, usize, ?Value) callconv(.C) Result,
-
-    begin_structure: *const fn (Host, *const Structure, *Value) callconv(.C) Result,
-    attach_member: *const fn (Host, Value, *const Member) callconv(.C) Result,
-    attach_method: *const fn (Host, Value, *const Method) callconv(.C) Result,
-    attach_template: *const fn (Host, Value, *const Template) callconv(.C) Result,
-    finalize_structure: *const fn (Host, Value) callconv(.C) Result,
-    create_template: *const fn (Host, *const Memory, *Value) callconv(.C) Result,
-
-    create_string: *const fn (Host, *const Memory, *Value) callconv(.C) Result,
-    log_values: *const fn (Host, usize, [*]Value) callconv(.C) Result,
-};
-pub var callbacks: Callbacks = undefined;
-
-// host interface
-pub const Host = *opaque {
-    fn allocateMemory(self: Host, size: usize) !Memory {
-        var memory: Memory = undefined;
-        if (callbacks.allocate_memory(self, size, &memory) != .OK) {
-            return Error.UnableToAllocateMemory;
-        }
-        return memory;
-    }
-
-    fn freeMemory(self: Host, memory: Memory) !void {
-        if (callbacks.free_memory(self, &memory) != .OK) {
-            return Error.UnableToFreeMemory;
-        }
-    }
-
-    fn getMemory(self: Host, container: Value, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) !PointerType(T, size) {
-        var memory: Memory = undefined;
-        if (callbacks.get_memory(self, container, &memory) != .OK) {
-            return Error.UnableToRetrieveMemoryLocation;
-        }
-        return fromMemory(memory, T, size);
-    }
-
-    fn wrapMemory(self: Host, memory: Memory, disposition: MemoryDisposition, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) !Value {
-        const slot = getStructureSlot(T, size);
-        const structure = try self.readGlobalSlot(slot);
-        var value: Value = undefined;
-        const actual_disposition: MemoryDisposition = switch (disposition) {
-            .Auto => if (self.isOnStack(memory)) .Copy else .Auto,
-            else => disposition,
-        };
-        if (callbacks.wrap_memory(self, structure, &memory, actual_disposition, &value) != .OK) {
-            return Error.UnableToCreateObject;
-        }
-        return value;
-    }
-
-    fn isOnStack(self: Host, memory: Memory) bool {
-        // since the Host struct is allocated on the stack, its address is the
-        // starting point of stack space used by Zig code
-        const bytes = memory.bytes orelse return false;
-        const len = memory.len;
-        const stack_top = @intFromPtr(self);
-        const stack_bottom = @intFromPtr(&stack_top);
-        const address = @intFromPtr(bytes);
-        return (stack_bottom <= address and address + len <= stack_top);
-    }
-
-    fn getPointerStatus(self: Host, pointer: Value) !bool {
-        var sync: bool = undefined;
-        if (callbacks.get_pointer_status(self, pointer, &sync) != .OK) {
-            return Error.PointerIsInvalid;
-        }
-        return sync;
-    }
-
-    fn setPointerStatus(self: Host, pointer: Value, sync: bool) !void {
-        if (callbacks.set_pointer_status(self, pointer, sync) != .OK) {
-            return Error.PointerIsInvalid;
-        }
-    }
-
-    fn readGlobalSlot(self: Host, slot: usize) !Value {
-        var value: Value = undefined;
-        if (callbacks.read_global_slot(self, slot, &value) != .OK) {
-            return Error.UnableToFindObjectType;
-        }
-        return value;
-    }
-
-    fn writeGlobalSlot(self: Host, slot: usize, value: Value) !void {
-        if (callbacks.write_global_slot(self, slot, value) != .OK) {
-            return Error.UnableToSetObjectType;
-        }
-    }
-
-    fn readObjectSlot(self: Host, container: Value, id: usize) !Value {
-        var result: Value = undefined;
-        if (callbacks.read_object_slot(self, container, id, &result) != .OK) {
-            return Error.UnableToRetrieveObject;
-        }
-        return result;
-    }
-
-    fn writeObjectSlot(self: Host, container: Value, id: usize, value: ?Value) !void {
-        if (callbacks.write_object_slot(self, container, id, value) != .OK) {
-            return Error.UnableToInsertObject;
-        }
-    }
-
-    fn beginStructure(self: Host, def: Structure) !Value {
-        var structure: Value = undefined;
-        if (callbacks.begin_structure(self, &def, &structure) != .OK) {
-            return Error.UnableToStartStructureDefinition;
-        }
-        return structure;
-    }
-
-    fn attachMember(self: Host, structure: Value, member: Member) !void {
-        if (callbacks.attach_member(self, structure, &member) != .OK) {
-            if (member.is_static) {
-                return Error.UnableToAddStaticMember;
-            } else {
-                return Error.UnableToAddStructureMember;
-            }
-        }
-    }
-
-    fn attachMethod(self: Host, structure: Value, method: Method) !void {
-        if (callbacks.attach_method(self, structure, &method) != .OK) {
-            return Error.UnableToAddMethod;
-        }
-    }
-
-    fn attachTemplate(self: Host, structure: Value, template: Template) !void {
-        if (callbacks.attach_template(self, structure, &template) != .OK) {
-            return Error.UnableToAddStructureTemplate;
-        }
-    }
-
-    fn finalizeStructure(self: Host, structure: Value) !void {
-        if (callbacks.finalize_structure(self, structure) != .OK) {
-            return Error.UnableToDefineStructure;
-        }
-    }
-
-    fn createTemplate(self: Host, bytes: []u8) !Value {
-        const memory: Memory = .{
-            .bytes = if (bytes.len > 0) bytes.ptr else null,
-            .len = bytes.len,
-        };
-        var value: Value = undefined;
-        if (callbacks.create_template(self, &memory, &value) != .OK) {
-            return Error.UnableToCreateStructureTemplate;
-        }
-        return value;
-    }
-
-    fn createString(self: Host, message: []const u8) !Value {
-        const memory: Memory = .{
-            .bytes = @constCast(@ptrCast(message)),
-            .len = message.len,
-        };
-        var value: Value = undefined;
-        if (callbacks.create_string(self, &memory, &value) != .OK) {
-            return Error.UnableToCreateString;
-        }
-        return value;
-    }
-
-    fn logValues(self: Host, args: anytype) !void {
-        const fields = std.meta.fields(@TypeOf(args));
-        var values: [fields.len]Value = undefined;
-        inline for (fields, 0..) |field, index| {
-            const v = @field(args, field.name);
-            values[index] = switch (field.type) {
-                Value => v,
-                else => try self.createString(v),
-            };
-        }
-        if (callbacks.log_values(self, values.len, @ptrCast(&values)) != .OK) {
-            return Error.Unknown;
-        }
-    }
-};
-
 // export functions
-fn getStructure(host: Host, comptime T: type) !Value {
+fn getStructure(host: anytype, comptime T: type) !Value {
     const s_slot = getStructureSlot(T, .One);
     return host.readGlobalSlot(s_slot) catch undefined: {
         const def: Structure = .{
@@ -848,7 +636,7 @@ test "getUnionCurrentIndex" {
     assert(getUnionCurrentIndex(&union3) == 0);
 }
 
-fn addMembers(host: Host, structure: Value, comptime T: type) !void {
+fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
     switch (@typeInfo(T)) {
         .Bool, .Int, .Float, .Void => {
             try host.attachMember(structure, .{
@@ -1057,7 +845,7 @@ fn addMembers(host: Host, structure: Value, comptime T: type) !void {
     }
 }
 
-fn addDefaultValues(host: Host, structure: Value, comptime T: type) !void {
+fn addDefaultValues(host: anytype, structure: Value, comptime T: type) !void {
     // default data
     const fields = std.meta.fields(T);
     var values: T = undefined;
@@ -1101,7 +889,7 @@ fn getPointerType(comptime T: type, comptime name: []const u8) type {
     };
 }
 
-fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
+fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
     const decls = switch (@typeInfo(T)) {
         .Struct => |st| st.decls,
         .Union => |un| un.decls,
@@ -1181,7 +969,7 @@ fn addStaticMembers(host: Host, structure: Value, comptime T: type) !void {
     }
 }
 
-fn addMethods(host: Host, structure: Value, comptime T: type) !void {
+fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
     const decls = switch (@typeInfo(T)) {
         .Struct => |st| st.decls,
         .Union => |un| un.decls,
@@ -1210,7 +998,7 @@ fn addMethods(host: Host, structure: Value, comptime T: type) !void {
                         }
                         break :static true;
                     },
-                    .thunk = createThunk(function, ArgT),
+                    .thunk = @ptrCast(createThunk(@TypeOf(host), function, ArgT)),
                     .structure = arg_structure,
                 });
             },
@@ -1338,7 +1126,7 @@ test "getFunctionName" {
     assert(name_weird.len == 12);
 }
 
-fn rezigStructure(host: Host, obj: Value, ptr: anytype) !void {
+fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
     const T = @TypeOf(ptr.*);
     switch (@typeInfo(T)) {
         .Pointer => |pt| {
@@ -1423,7 +1211,7 @@ fn rezigStructure(host: Host, obj: Value, ptr: anytype) !void {
     }
 }
 
-fn dezigStructure(host: Host, obj: Value, ptr: anytype) !void {
+fn dezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
     const T = @TypeOf(ptr.*);
     switch (@typeInfo(T)) {
         .Pointer => |pt| {
@@ -1498,7 +1286,7 @@ fn dezigStructure(host: Host, obj: Value, ptr: anytype) !void {
     }
 }
 
-fn obtainChildObject(host: Host, container: Value, slot: usize, ptr: anytype, comptime check: bool) !Value {
+fn obtainChildObject(host: anytype, container: Value, slot: usize, ptr: anytype, comptime check: bool) !Value {
     if (host.readObjectSlot(container, slot)) |child_obj| {
         if (check) {
             // see if pointer is still pointing to what it was before
@@ -1515,7 +1303,7 @@ fn obtainChildObject(host: Host, container: Value, slot: usize, ptr: anytype, co
     }
 }
 
-fn createChildObject(host: Host, container: Value, slot: usize, ptr: anytype) !Value {
+fn createChildObject(host: anytype, container: Value, slot: usize, ptr: anytype) !Value {
     const pt = @typeInfo(@TypeOf(ptr)).Pointer;
     const memory = toMemory(ptr);
     const child_obj = try host.wrapMemory(memory, .Auto, pt.child, pt.size);
@@ -1523,10 +1311,11 @@ fn createChildObject(host: Host, container: Value, slot: usize, ptr: anytype) !V
     return child_obj;
 }
 
-fn createAllocator(host: Host) std.mem.Allocator {
+fn createAllocator(host: anytype) std.mem.Allocator {
+    const HostT = @TypeOf(host);
     const VTable = struct {
         fn alloc(p: *anyopaque, size: usize, _: u8, _: usize) ?[*]u8 {
-            const h: Host = @ptrCast(p);
+            const h = HostT.init(p);
             return if (h.allocateMemory(size)) |m| m.bytes else |_| null;
         }
 
@@ -1535,7 +1324,7 @@ fn createAllocator(host: Host) std.mem.Allocator {
         }
 
         fn free(p: *anyopaque, bytes: []u8, _: u8, _: usize) void {
-            const h: Host = @ptrCast(p);
+            const h = HostT.init(p);
             h.freeMemory(.{
                 .bytes = @ptrCast(bytes.ptr),
                 .len = bytes.len,
@@ -1549,7 +1338,7 @@ fn createAllocator(host: Host) std.mem.Allocator {
         };
     };
     return .{
-        .ptr = @ptrCast(host),
+        .ptr = host.getInitPtr(),
         .vtable = &VTable.instance,
     };
 }
@@ -1558,10 +1347,10 @@ fn getErrorMessage(err: anyerror) [*:0]const u8 {
     return @ptrCast(@errorName(err));
 }
 
-fn createThunk(comptime function: anytype, comptime ArgT: type) Thunk {
+fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: type) Thunk {
     const Args = std.meta.ArgsTuple(@TypeOf(function));
     const S = struct {
-        fn tryFunction(host: Host, arg_obj: Value) !void {
+        fn tryFunction(host: HostT, arg_obj: Value) !void {
             var arg_ptr = try host.getMemory(arg_obj, ArgT, .One);
             if (hasPointer(ArgT)) {
                 // make sure pointers have up-to-date values
@@ -1586,7 +1375,8 @@ fn createThunk(comptime function: anytype, comptime ArgT: type) Thunk {
             }
         }
 
-        fn invokeFunction(host: Host, arg_obj: Value) callconv(.C) ?[*:0]const u8 {
+        fn invokeFunction(ptr: *anyopaque, arg_obj: Value) callconv(.C) ?[*:0]const u8 {
+            const host = HostT.init(ptr);
             tryFunction(host, arg_obj) catch |err| {
                 return getErrorMessage(err);
             };
@@ -1603,7 +1393,8 @@ test "createThunk" {
         }
     };
     const ArgA = ArgumentStruct(Test.A);
-    const thunk = createThunk(Test.A, ArgA);
+    const Host = @import("./cpp-exporter.zig").Host;
+    const thunk = createThunk(Host, Test.A, ArgA);
     switch (@typeInfo(@TypeOf(thunk))) {
         .Pointer => |pt| {
             switch (@typeInfo(pt.child)) {
@@ -1622,9 +1413,10 @@ test "createThunk" {
     }
 }
 
-pub fn createRootFactory(comptime T: type) Thunk {
+pub fn createRootFactory(comptime HostT: type, comptime T: type) Thunk {
     const RootFactory = struct {
-        fn exportStructure(host: Host, args: Value) callconv(.C) ?[*:0]const u8 {
+        fn exportStructure(ptr: *anyopaque, args: Value) callconv(.C) ?[*:0]const u8 {
+            const host = HostT.init(ptr);
             var result = getStructure(host, T) catch |err| {
                 return getErrorMessage(err);
             };
@@ -1635,55 +1427,4 @@ pub fn createRootFactory(comptime T: type) Thunk {
         }
     };
     return RootFactory.exportStructure;
-}
-
-pub const api_version = 1;
-
-pub fn createModule(comptime T: type) Module {
-    return .{
-        .version = api_version,
-        .flags = .{
-            .little_endian = builtin.target.cpu.arch.endian() == .Little,
-            .runtime_safety = switch (builtin.mode) {
-                .Debug, .ReleaseSafe => true,
-                else => false,
-            },
-        },
-        .callbacks = &callbacks,
-        .factory = createRootFactory(T),
-    };
-}
-
-test "createModule" {
-    const Test = struct {
-        pub const a: i32 = 1;
-        const b: i32 = 2;
-        pub var c: bool = true;
-        pub const d: f64 = 3.14;
-        pub const e: [4]i32 = .{ 3, 4, 5, 6 };
-        pub const f = enum { Dog, Cat, Chicken };
-        pub const g = enum(c_int) { Dog = -100, Cat, Chicken };
-        pub fn h(arg1: i32, arg2: i32) bool {
-            return arg1 < arg2;
-        }
-    };
-    const module = createModule(Test);
-    assert(module.version == api_version);
-    assert(module.flags.little_endian == (builtin.target.cpu.arch.endian() == .Little));
-    switch (@typeInfo(@TypeOf(module.factory))) {
-        .Pointer => |pt| {
-            switch (@typeInfo(pt.child)) {
-                .Fn => |f| {
-                    assert(f.params.len == 2);
-                    assert(f.calling_convention == .C);
-                },
-                else => {
-                    assert(false);
-                },
-            }
-        },
-        else => {
-            assert(false);
-        },
-    }
 }

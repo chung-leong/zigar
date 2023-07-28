@@ -1,4 +1,4 @@
-import { readFile } from 'fs/promises';
+import { readFile, writeFile } from 'fs/promises';
 import { compile } from './compiler.js';
 import { runWASMBinary, serializeDefinitions } from './wasm-exporter.js';
 import { stripUnused } from './wasm-stripper.js';
@@ -26,8 +26,10 @@ export async function transpile(path, options = {}) {
         'alloc',
         'free',
       ];
-      const { buffer, byteOffset, byteLength } = stripUnused(binary, whitelist);
-      const base64 = Buffer.from(buffer, byteOffset, byteLength).toString('base64');
+      //const dv = stripUnused(binary, whitelist);
+      const dv = binary;
+      await writeFile(wasmPath.replace('.wasm', '.min.wasm'), dv);
+      const base64 = Buffer.from(dv.buffer, dv.byteOffset, dv.byteLength).toString('base64');
       loadWASM = `(async () => {
         const binaryString = atob(${JSON.stringify(base64)});
         const bytes = new Uint8Array(binaryString.length);

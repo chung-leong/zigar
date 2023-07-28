@@ -51,6 +51,22 @@ export async function runWASMBinary(wasmBinary, options = {}) {
   const callContexts = {};
   const globalSlots = {};
   const structures = [];
+  // these functions will only be called at comptime
+  const comptimeImports = /*(process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') &&*/ {
+    _readGlobalSlot,
+    _writeGlobalSlot,
+    _setObjectPropertyString,
+    _setObjectPropertyInteger,
+    _setObjectPropertyBoolean,
+    _setObjectPropertyObject,
+    _beginStructure,
+    _attachMember,
+    _attachMethod,
+    _attachTemplate,
+    _finalizeStructure,
+    _createObject,
+    _createTemplate,
+  };
   const imports = {
     _startCall,
     _endCall,
@@ -61,32 +77,19 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     _getMemoryLength,
     _wrapMemory,
     _createString,
-    _createObject,
-    _setObjectPropertyString,
-    _setObjectPropertyInteger,
-    _setObjectPropertyBoolean,
-    _setObjectPropertyObject,
     _getPointerStatus,
     _setPointerStatus,
-    _readGlobalSlot,
-    _writeGlobalSlot,
     _readObjectSlot,
     _writeObjectSlot,
-    _beginStructure,
-    _attachMember,
-    _attachMethod,
-    _attachTemplate,
-    _finalizeStructure,
     _createDataView,
-    _createTemplate,
     _createArray,
     _appendArray,
     _logValues,
+    ...comptimeImports
   };
   const { instance } = await WebAssembly.instantiate(wasmBinary, { env: imports });
-  const { memory: wasmMemory, init, define, run, alloc, free } = instance.exports;
+  const { memory: wasmMemory, define, run, alloc, free } = instance.exports;
   if (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') {
-    init();
     // call factory function
     const argStructIndex = addObject({ [SLOTS]: {} });
     const errorIndex = define(argStructIndex);

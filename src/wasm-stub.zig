@@ -1,8 +1,12 @@
 const exporter = @import("exporter");
 const package = @import("package");
 
-export fn init() void {
-    exporter.setCallbacks();
+export fn alloc(ptr: *anyopaque, len: usize) usize {
+    return exporter.alloc(ptr, len);
+}
+
+export fn free(ptr: *anyopaque, address: usize, len: usize) void {
+    exporter.free(ptr, address, len);
 }
 
 export fn define(arg_index: usize) usize {

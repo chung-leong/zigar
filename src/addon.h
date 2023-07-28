@@ -72,8 +72,8 @@ struct Template {
   Local<Value> object;
 };
 
-struct Host;
-typedef const char* (*Thunk)(Host*, Local<Value>);
+struct Call;
+typedef const char* (*Thunk)(Call*, Local<Value>);
 
 struct Method {
   const char* name;
@@ -100,28 +100,28 @@ struct Module {
 };
 
 struct Callbacks {
-  Result (*allocate_memory)(Host*, size_t, Memory*);
-  Result (*free_memory)(Host*, const Memory&);
-  Result (*get_memory)(Host*, Local<Object>, Memory*);
-  Result (*wrap_memory)(Host*, Local<Object>, const Memory&, MemoryDisposition, Local<Object>*);
+  Result (*allocate_memory)(Call*, size_t, Memory*);
+  Result (*free_memory)(Call*, const Memory&);
+  Result (*get_memory)(Call*, Local<Object>, Memory*);
+  Result (*wrap_memory)(Call*, Local<Object>, const Memory&, MemoryDisposition, Local<Object>*);
 
-  Result (*get_pointer_status)(Host*, Local<Object>, bool*);
-  Result (*set_pointer_status)(Host*, Local<Object>, bool);
+  Result (*get_pointer_status)(Call*, Local<Object>, bool*);
+  Result (*set_pointer_status)(Call*, Local<Object>, bool);
 
-  Result (*read_global_slot)(Host*, size_t, Local<Value>*);
-  Result (*write_global_slot)(Host*, size_t, Local<Value>);
-  Result (*read_object_slot)(Host*, Local<Object>, size_t, Local<Value>*);
-  Result (*write_object_slot)(Host*, Local<Object>, size_t, Local<Value>);
+  Result (*read_global_slot)(Call*, size_t, Local<Value>*);
+  Result (*write_global_slot)(Call*, size_t, Local<Value>);
+  Result (*read_object_slot)(Call*, Local<Object>, size_t, Local<Value>*);
+  Result (*write_object_slot)(Call*, Local<Object>, size_t, Local<Value>);
 
-  Result (*begin_structure)(Host*, const Structure&, Local<Object>*);
-  Result (*attach_member)(Host*, Local<Object>, const Member&);
-  Result (*attach_method)(Host*, Local<Object>, const Method&);
-  Result (*attach_template)(Host*, Local<Object>, const ::Template&);
-  Result (*finalize_structure)(Host*, Local<Object>);
-  Result (*create_template)(Host*, const Memory&, Local<Object>*);
+  Result (*begin_structure)(Call*, const Structure&, Local<Object>*);
+  Result (*attach_member)(Call*, Local<Object>, const Member&);
+  Result (*attach_method)(Call*, Local<Object>, const Method&);
+  Result (*attach_template)(Call*, Local<Object>, const ::Template&);
+  Result (*finalize_structure)(Call*, Local<Object>);
+  Result (*create_template)(Call*, const Memory&, Local<Object>*);
 
-  Result (*create_string)(Host*, const Memory&, Local<Value>*);
-  Result (*log_values)(Host*, size_t, Local<Value>*);
+  Result (*create_string)(Call*, const Memory&, Local<Value>*);
+  Result (*log_values)(Call*, size_t, Local<Value>*);
 };
 
 struct ExternalData {
@@ -209,7 +209,7 @@ struct ExternalMemoryData {
 
 struct JSBridge;
 
-struct Host {
+struct Call {
   Isolate* isolate;
   Local<Context> context;
   Local<Array> mem_pool;
@@ -223,7 +223,7 @@ struct Host {
   FunctionData* function_data;
   bool remove_function_data;
 
-  Host(Isolate* isolate,
+  Call(Isolate* isolate,
        Local<External> module_data) :
     isolate(isolate),
     context(isolate->GetCurrentContext()),
@@ -231,7 +231,7 @@ struct Host {
     remove_function_data(true) {
   }
 
-  Host(const FunctionCallbackInfo<Value> &info) :
+  Call(const FunctionCallbackInfo<Value> &info) :
     isolate(info.GetIsolate()),
     context(isolate->GetCurrentContext()),
     argument(info.This()),
@@ -243,15 +243,15 @@ struct Host {
     remove_function_data(false) {
   }
 
-  ~Host() {
+  ~Call() {
     if (remove_function_data) {
       delete function_data;
     }
   }
 };
 
-static Result GetArgumentBuffers(Host* call);
-static Result Log(Host* call,
+static Result GetArgumentBuffers(Call* call);
+static Result Log(Call* call,
                   size_t argc,
                   Local<Value>* argv) __attribute__((unused));
 

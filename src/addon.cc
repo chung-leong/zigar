@@ -1,6 +1,6 @@
 #include "addon.h"
 
-static Result AllocateMemory(Host* call,
+static Result AllocateMemory(Call* call,
                              size_t size,
                              Memory* dest) {
   auto isolate = call->isolate;
@@ -17,7 +17,7 @@ static Result AllocateMemory(Host* call,
   return Result::OK;
 }
 
-static Result FreeMemory(Host* call,
+static Result FreeMemory(Call* call,
                          const Memory& memory) {
   if (call->mem_pool.IsEmpty()) {
     return Result::Failure;
@@ -47,7 +47,7 @@ static Result FreeMemory(Host* call,
   return Result::OK;
 }
 
-static Result GetMemory(Host* call,
+static Result GetMemory(Call* call,
                         Local<Object> object,
                         Memory* dest) {
   auto context = call->context;
@@ -62,7 +62,7 @@ static Result GetMemory(Host* call,
   return Result::OK;
 }
 
-static Result FindBuffer(Host* call,
+static Result FindBuffer(Call* call,
                          const Memory& memory,
                          Local<Array> array,
                          Local<ArrayBuffer>* dest,
@@ -89,7 +89,7 @@ static Result FindBuffer(Host* call,
   return Result::Failure;
 }
 
-static Result ObtainDataView(Host* call,
+static Result ObtainDataView(Call* call,
                              const Memory& memory,
                              MemoryDisposition disposition,
                              Local<DataView>* dest) {
@@ -138,7 +138,7 @@ static Result ObtainDataView(Host* call,
   return Result::OK;
 }
 
-static Result WrapMemory(Host* call,
+static Result WrapMemory(Call* call,
                          Local<Object> structure,
                          const Memory& memory,
                          MemoryDisposition disposition,
@@ -167,7 +167,7 @@ static Result WrapMemory(Host* call,
   return Result::OK;
 }
 
-static Result CreateTemplate(Host* call,
+static Result CreateTemplate(Call* call,
                              const Memory& memory,
                              Local<Object>* dest) {
   auto isolate = call->isolate;
@@ -186,7 +186,7 @@ static Result CreateTemplate(Host* call,
   return Result::OK;
 }
 
-static Result CreateString(Host* call,
+static Result CreateString(Call* call,
                            const Memory& memory,
                            Local<Value>* dest) {
   auto isolate = call->isolate;
@@ -198,7 +198,7 @@ static Result CreateString(Host* call,
   return Result::OK;
 }
 
-static Result GetPointerStatus(Host* call,
+static Result GetPointerStatus(Call* call,
                                Local<Object> object,
                                bool* dest) {
   auto context = call->context;
@@ -210,7 +210,7 @@ static Result GetPointerStatus(Host* call,
   return Result::OK;
 }
 
-static Result SetPointerStatus(Host* call,
+static Result SetPointerStatus(Call* call,
                                Local<Object> object,
                                bool zig_owned) {
   auto isolate = call->isolate;
@@ -219,7 +219,7 @@ static Result SetPointerStatus(Host* call,
   return Result::OK;
 }
 
-static Result ReadGlobalSlot(Host* call,
+static Result ReadGlobalSlot(Call* call,
                              size_t slot_id,
                              Local<Value>* dest) {
   auto context = call->context;
@@ -233,7 +233,7 @@ static Result ReadGlobalSlot(Host* call,
   return Result::Failure;
 }
 
-static Result WriteGlobalSlot(Host* call,
+static Result WriteGlobalSlot(Call* call,
                               size_t slot_id,
                               Local<Value> object) {
   auto isolate = call->isolate;
@@ -246,7 +246,7 @@ static Result WriteGlobalSlot(Host* call,
   return Result::OK;
 }
 
-static Result ReadObjectSlot(Host* call,
+static Result ReadObjectSlot(Call* call,
                              Local<Object> object,
                              size_t slot,
                              Local<Value>* dest) {
@@ -263,7 +263,7 @@ static Result ReadObjectSlot(Host* call,
   return Result::OK;
 }
 
-static Result WriteObjectSlot(Host* call,
+static Result WriteObjectSlot(Call* call,
                               Local<Object> object,
                               size_t slot,
                               Local<Value> child) {
@@ -282,7 +282,7 @@ static Result WriteObjectSlot(Host* call,
   return Result::OK;
 }
 
-static Local<Object> NewStructure(Host* call,
+static Local<Object> NewStructure(Call* call,
                                   const Structure& s) {
   auto isolate = call->isolate;
   auto context = call->context;
@@ -300,7 +300,7 @@ static Local<Object> NewStructure(Host* call,
   return def;
 }
 
-static Local<Object> NewMember(Host* call,
+static Local<Object> NewMember(Call* call,
                                const Member& m) {
   auto isolate = call->isolate;
   auto context = call->context;
@@ -343,7 +343,7 @@ static Local<Object> NewMember(Host* call,
   return def;
 }
 
-static Local<Function> NewThunk(Host* call,
+static Local<Function> NewThunk(Call* call,
                                 Thunk thunk) {
   auto isolate = call->isolate;
   auto context = call->context;
@@ -351,9 +351,9 @@ static Local<Function> NewThunk(Host* call,
   auto fd = new FunctionData(isolate, thunk, module_data);
   auto fde = Local<External>::New(isolate, fd->external);
   return Function::New(context, [](const FunctionCallbackInfo<Value>& info) {
-    // Host will extract the FunctionData object created above from the External object
+    // Call will extract the FunctionData object created above from the External object
     // which we get from FunctionCallbackInfo::Data()
-    Host ctx(info);
+    Call ctx(info);
     const char* err = ctx.function_data->thunk(&ctx, ctx.argument);
     if (err) {
       auto message = String::NewFromUtf8(ctx.isolate, err).ToLocalChecked();
@@ -362,7 +362,7 @@ static Local<Function> NewThunk(Host* call,
   }, fde, 3).ToLocalChecked();
 }
 
-static Local<Object> NewMethod(Host* call,
+static Local<Object> NewMethod(Call* call,
                                const Method &m) {
   auto isolate = call->isolate;
   auto context = call->context;
@@ -379,7 +379,7 @@ static Local<Object> NewMethod(Host* call,
   return def;
 }
 
-static Local<Object> NewTemplate(Host* call,
+static Local<Object> NewTemplate(Call* call,
                                  const ::Template& obj_templ) {
   auto isolate = call->isolate;
   auto context = call->context;
@@ -390,7 +390,7 @@ static Local<Object> NewTemplate(Host* call,
   return def;
 }
 
-static Result GetJavaScript(Host* call,
+static Result GetJavaScript(Call* call,
                             Local<Object>* dest) {
   auto isolate = call->isolate;
   auto context = call->context;
@@ -441,7 +441,7 @@ static Result GetJavaScript(Host* call,
   return Result::OK;
 }
 
-static Result CallFunction(Host* call,
+static Result CallFunction(Call* call,
                            Local<String> name,
                            int argc,
                            Local<Value>* argv,
@@ -467,7 +467,7 @@ static Result CallFunction(Host* call,
   return Result::OK;
 }
 
-static Result BeginStructure(Host* call,
+static Result BeginStructure(Call* call,
                              const Structure& structure,
                              Local<Object>* dest) {
   auto isolate = call->isolate;
@@ -485,7 +485,7 @@ static Result BeginStructure(Host* call,
   return Result::OK;
 }
 
-static Result AttachMember(Host* call,
+static Result AttachMember(Call* call,
                            Local<Object> structure,
                            const Member& member) {
   auto isolate = call->isolate;
@@ -495,7 +495,7 @@ static Result AttachMember(Host* call,
   return CallFunction(call, name, 2, args);
 }
 
-static Result AttachMethod(Host* call,
+static Result AttachMethod(Call* call,
                            Local<Object> structure,
                            const Method& method) {
   auto isolate = call->isolate;
@@ -505,7 +505,7 @@ static Result AttachMethod(Host* call,
   return CallFunction(call, name, 2, args);
 }
 
-static Result AttachTemplate(Host* call,
+static Result AttachTemplate(Call* call,
                              Local<Object> structure,
                              const ::Template& obj_templ) {
   auto isolate = call->isolate;
@@ -515,7 +515,7 @@ static Result AttachTemplate(Host* call,
   return CallFunction(call, name, 2, args);
 }
 
-static Result FinalizeStructure(Host* call,
+static Result FinalizeStructure(Call* call,
                                 Local<Object> structure) {
   auto isolate = call->isolate;
   auto name = String::NewFromUtf8Literal(isolate, "finalizeStructure");
@@ -523,7 +523,7 @@ static Result FinalizeStructure(Host* call,
   return CallFunction(call, name, 1, args);
 }
 
-static Result GetArgumentBuffers(Host* call) {
+static Result GetArgumentBuffers(Call* call) {
   auto isolate = call->isolate;
   auto name = String::NewFromUtf8Literal(isolate, "getArgumentBuffers");
   Local<Value> args[] = { call->argument };
@@ -535,7 +535,7 @@ static Result GetArgumentBuffers(Host* call) {
   return Result::OK;
 }
 
-static Result Log(Host* call,
+static Result Log(Call* call,
                   size_t argc,
                   Local<Value>* argv) {
   auto isolate = call->isolate;
@@ -606,7 +606,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
 
   // invoke the factory thunk through JavaScript, which will give us the
   // needed symbols and slots
-  Host ctx(isolate, Local<External>::New(isolate, md->external));
+  Call ctx(isolate, Local<External>::New(isolate, md->external));
   auto factory = NewThunk(&ctx, module->factory);
   auto name = String::NewFromUtf8Literal(isolate, "invokeFactory");
   Local<Value> args[1] = { factory };
