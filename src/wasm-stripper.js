@@ -22,6 +22,154 @@ export const ObjectType = {
   Global: 3,
 };
 
+export function stripUnused(binary, whitelist) {
+  const { sections, size } = parseBinary(binary);
+  const fnCache = {};
+  const including = {};
+  // mark whitelisted functions as being in-use
+  for (const entry of whitelist) {
+    include(typeof(entry) === 'string' ? findExportedFunction(entry) : entry);
+  }
+  const codeSection = getSection(SectionType.Code);
+  const funcSection = getSection(SectionType.Function);
+  let funcCount = 0;
+  const originalIndices = {};
+  const newIndices = {};
+  for (let i = 0; i < codeSection.functions.length; i++) {
+    if (including[i]) {
+      const fn = getFunction(i);
+      const index = funcCount++;
+      originalIndices[index] = i;
+      newIndices[i] = index;
+    }
+  }
+  // create new code and function section
+  const newCodeSection = { type: SectionType.Code, functions: [] };
+  const newFuncSection = { type: SectionType.Function, types: [] };
+  for (let i = 0; i < funcCount; i++) {
+    const index = originalIndices[i];
+    const fn = getFunction(index);
+    updateFunctionRefs(fn);
+    const dv = repackFunction(fn);
+    newCodeSection.functions.push(dv);
+    const type = funcSection.types[index];
+    newFuncSection.types.push(type);
+  }
+  // create new export section
+  const exportSection = getSection(SectionType.Export);
+  const newExportSection = { type: SectionType.Export, exports: [] };
+  for (const object of exportSection.exports) {
+    if (object.type === ObjectType.Function) {
+      if (including[object.index]) {
+        const { name, type } = object;
+        const index = newIndices[object.index];
+        newExportSection.exports.push({ name, type, index });
+      }
+    } else {
+      newExportSection.exports.push(object);
+    }
+  }
+  // create new import section
+  const importSection = getSection(SectionType.Import);
+  const newImportSection = { type: SectionType.Import, imports: [] };
+  for (const object of importSection.imports) {
+    if (object.type === ObjectType.Function) {
+      if (including[object.index]) {
+        const { module, name, type } = object;
+        const index = newIndices[object.index];
+        newImportSection.imports.push({ module, name, type, index });
+      }
+    } else {
+      newImportSection.imports.push(object);
+    }
+  }
+  // create new module sections
+  const newSections = [];
+  for (const section of sections) {
+    switch (section.type) {
+      case SectionType.Code:
+        newSections.push(newCodeSection);
+        break;
+      case SectionType.Function:
+        newSections.push(newFuncSection);
+        break;
+      case SectionType.Export:
+        newSections.push(newExportSection);
+        break;
+      case SectionType.Import:
+        newSections.push(newImportSection);
+        break;
+      case SectionType.Custom:
+        break;
+      default:
+        newSections.push(section);
+        break;
+    }
+  }
+  return repackBinary({ sections: newSections, size });
+
+  function include(index) {
+    if (!including[index]) {
+      including[index] = true;
+      const fn = getFunction(index);
+      const refs = findFunctionRefs(fn)
+      for (const ref of refs) {
+        include(ref);
+      }
+    }
+  }
+
+  function findFunctionRefs({ instructions }) {
+    const list = [];
+    for (const { opcode, operand } of instructions) {
+      switch (opcode) {
+        case 0x10:
+        case 0xD2:
+          list.push(operand);
+          break;
+      }
+    }
+    return list;
+  }
+
+  function updateFunctionRefs({ instructions }) {
+    for (const instr of instructions) {
+      switch (instr.opcode) {
+        case 0x10:
+        case 0xD2:
+          instr.operand = newIndices[instr.operand];
+          break;
+      }
+    }
+  }
+
+  function getFunction(index) {
+    let fn = fnCache[index];
+    if (!fn) {
+      const section = getSection(SectionType.Code);
+      const dv = section?.functions[index];
+      if (dv === undefined) {
+        throw new Error(`Cannot find function: ${index}`);
+      }
+      fn = fnCache[index] = parseFunction(dv);
+    }
+    return fn;
+  }
+
+  function findExportedFunction(name) {
+    const section = getSection(SectionType.Export);
+    const object = section?.exports?.find(e => e.name === name);
+    if (object?.type !== ObjectType.Function) {
+      throw new Error(`Cannot find exported function: ${name}`);
+    }
+    return object.index;
+  }
+
+  function getSection(type) {
+    return sections.find(s => s.type === type);
+  }
+}
+
 export function parseBinary(binary) {
   const {
     eof,

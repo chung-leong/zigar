@@ -7,6 +7,7 @@ import {
   repackBinary,
   parseFunction,
   repackFunction,
+  stripUnused,
 } from '../src/wasm-stripper.js';
 
 const littleEndian = true;
@@ -101,7 +102,21 @@ describe('WASM stripper', function() {
         }
       }
     })
-
+  })
+  describe('stripUnused', function() {
+    it('should retain only the whitelisted functions', async function() {
+      const path = resolve(`./wasm-files/exporter.wasm`);
+      const content = await readFile(path);
+      const binary = new DataView(content.buffer);
+      const whitelist = [
+        'run',
+        'init',
+        'alloc',
+        'free',
+      ];
+      const newBinary = stripUnused(binary, whitelist);
+      await writeFile('./output.wasm', newBinary);
+    })
   })
 })
 
