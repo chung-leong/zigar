@@ -896,6 +896,7 @@ export function parseFunction(dv) {
     0x2A: readTwo,
     0x2B: readTwo,
     0x2C: readTwo,
+    0x2D: readTwo,
     0x2E: readTwo,
     0x2F: readTwo,
 
@@ -1055,6 +1056,7 @@ export function repackFunction({ locals, instructions, size }) {
     0x2A: writeTwo,
     0x2B: writeTwo,
     0x2C: writeTwo,
+    0x2D: writeTwo,
     0x2E: writeTwo,
     0x2F: writeTwo,
 
