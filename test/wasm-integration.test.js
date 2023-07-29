@@ -167,6 +167,37 @@ describe('WASM integration tests', function() {
       expect(() => returnNumber(0)).to.throw()
         .with.property('message', 'System is on fire');
     })
+    it('should return a string', async function() {
+      this.timeout(30000);
+      const { default: { getMessage } } = await transpileImport(resolve('./integration/function-returning-string.zig'));
+      const { string } = await getMessage(123, 456n, 3.14);
+      expect(string).to.equal('Numbers: 123, 456, 3.14');
+    })
+    it('should return a slice of the argument', async function() {
+      this.timeout(30000);
+      const { default: { getSlice }, __init } = await transpileImport(resolve('./integration/function-returning-slice.zig'));
+      const dv = new DataView(new ArrayBuffer(4 * 12));
+      for (let i = 0, j = 1; j <= 12; i += 4, j++) {
+        dv.setInt32(i, j, littleEndian);
+      }
+      await __init;
+      const slice = getSlice(dv, 2n, 5n);
+      expect([ ...slice ]).to.eql([ 3, 4, 5 ]);
+      expect(slice.dataView.byteOffset).to.equal(8);
+      expect(slice.dataView.buffer).to.equal(dv.buffer);
+    })
+    it('should accept a compatible TypedArray', async function() {
+      const { default: { getSlice }, __init } = await transpileImport(resolve('./integration/function-returning-slice.zig'));
+      const ta = new Int32Array(12);
+      for (let i = 0, len = ta.length; i < len; i++) {
+        ta[i] = i + 1;
+      }
+      await __init;
+      const slice = getSlice(ta, 2n, 5n);
+      expect([ ...slice ]).to.eql([ 3, 4, 5 ]);
+      expect(slice.dataView.byteOffset).to.equal(8);
+      expect(slice.dataView.buffer).to.equal(ta.buffer);
+    })
   })
 })
 
