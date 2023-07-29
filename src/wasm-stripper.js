@@ -22,47 +22,251 @@ export const ObjectType = {
   Global: 3,
 };
 
-export function stripUnused(binary, whitelist) {
+export function stripUnused(binary) {
   const { sections, size } = parseBinary(binary);
-  const fnCache = {};
-  const including = {};
-  // mark whitelisted functions as being in-use
-  for (const entry of whitelist) {
-    include(typeof(entry) === 'string' ? findExportedFunction(entry) : entry);
+  const blacklist = [
+    /^define$/,
+    /^exporter.createRootFactory/,
+  ];
+
+  function getSection(type) {
+    return sections.find(s => s.type === type);
   }
-  const codeSection = getSection(SectionType.Code);
-  const funcSection = getSection(SectionType.Function);
-  let funcCount = 0;
-  const originalIndices = {};
-  const newIndices = {};
-  for (let i = 0; i < codeSection.functions.length; i++) {
-    if (including[i]) {
-      const fn = getFunction(i);
-      const index = funcCount++;
-      originalIndices[index] = i;
-      newIndices[i] = index;
+
+  function getNames() {
+    let moduleName;
+    const functionNames = [];
+    for (const section of sections) {
+      if (section.type === SectionType.Custom) {
+        const {
+          eof,
+          readString,
+          readU8,
+          readU32Leb128,
+          readArray,
+          readBytes,
+        } = createReader(section.data);
+        const name = readString();
+        if (name === 'name') {
+          while(!eof()) {
+            const id = readU8();
+            const size = readU32Leb128();
+            switch (id) {
+              case 0: {
+                moduleName = readString();
+              } break;
+              case 1: {
+                const map = readArray(() => {
+                  const index = readU32Leb128();
+                  const name = readString();
+                  return { index, name };
+                });
+                for (const { index, name } of map) {
+                  functionNames[index] = name;
+                }
+              } break;
+              default: {
+                readBytes(size);
+              }
+            }
+          }
+          break;
+        }
+      }
+    }
+    return { moduleName, functionNames };
+  }
+
+  const { moduleName, functionNames } = getNames();
+  const functions = [];
+  // allocate indices for imported functions first
+  const importSection = sections.find(s => s.type === SectionType.Import);
+  for (const object of importSection.imports) {
+    if (object.type === ObjectType.Function) {
+      const index = functions.length;
+      functions[index] = {
+        type: 'imported',
+        name: functionNames[index],
+        descriptor: object,
+        typeIndex: object.type,
+        using: undefined,
+        index,
+        newIndex: -1,
+      };
     }
   }
+  // allocate indices for internal functions
+  const funcSection = getSection(SectionType.Function);
+  const codeSection = getSection(SectionType.Code);
+  for (const [ i, typeIndex ] of funcSection.types.entries()) {
+    const code = codeSection.functions[i];
+    const index = functions.length;
+    let parsed = null;
+    const fn = {
+      type: 'internal',
+      name: functionNames[index],
+      typeIndex,
+      code,
+      using: undefined,
+      index,
+      newIndex: -1,
+
+      get instructions() {
+        if (!parsed) {
+          parsed = parseFunction(this.code);
+        }
+        return parsed.instructions;
+      },
+      get size() {
+        return parsed.size;
+      },
+      get locals() {
+        return parsed.locals;
+      },
+    };
+    functions.push(fn);
+  }
+
+  if (functionNames.length === 0) {
+    // get the names from the export and import section if they're missing
+    const exportSection = getSection(SectionType.Export);
+    for (const object of exportSection.exports) {
+      if (object.type === ObjectType.Function) {
+        const fn = functions[object.index];
+        fn.name = object.name;
+      }
+    }
+    const importSection = getSection(SectionType.Import);
+    for (const object of importSection.imports) {
+      if (object.type === ObjectType.Function) {
+        const fn = functions[object.index];
+        fn.name = object.name;
+      }
+    }
+  }
+
+  // mark blacklisted functions as unused
+  for (const fn of functions) {
+    if (fn.name && blacklist.some(re => re.test(fn.name))) {
+      fn.using = false;
+      if (fn.name === 'define' && functionNames.length === 0) {
+        // when compiled for ReleaseSmall, we don't get the name section
+        // therefore unable to remove the factory function by name
+        // we know that define loads its address, however
+        // and that a function pointer is just an index into table 0
+        const ops = fn.instructions;
+        if (ops.length === 4 && ops[1].opcode === 0x41 && ops[2].opcode === 0x10) {
+          // 0x10 is call
+          // 0x41 is i32.const
+          const elemIndex = ops[1].operand;
+          const elemSection = getSection(SectionType.Element);
+          for (const segment of elemSection.segments) {
+            if (segment.indices) {
+              const funcIndex = segment.indices[elemIndex - 1];
+              const fn = functions[funcIndex];
+              fn.using = false;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  function useFunction(index) {
+    const fn = functions[index];
+    if (!fn) {
+      throw new Error(`Function #${index} does not exist`);
+    }
+    if (fn.using === undefined) {
+      fn.using = true;
+      if (fn.type === 'internal') {
+        // mark all functions called by this one as being in-use as well
+        for (const { opcode, operand } of fn.instructions) {
+          switch (opcode) {
+            case 0x10:    // function call
+            case 0xD2: {  // function reference
+              useFunction(operand);
+            } break;
+          }
+        }
+      }
+    }
+  }
+
+  // mark functions in table elements as used
+  const elemSection = getSection(SectionType.Element);
+  for (const segment of elemSection.segments) {
+    if (segment.indices) {
+      for (const index of segment.indices) {
+        useFunction(index);
+      }
+    }
+  }
+
+  // mark exported functions as being in-use
+  const exportSection = getSection(SectionType.Export);
+  for (const object of exportSection.exports) {
+    if (object.type === ObjectType.Function) {
+      useFunction(object.index);
+    }
+  }
+
+  // assign new indices to functions
+  const newFunctions = [];
+  for (const fn of functions) {
+    if (fn.using) {
+      fn.newIndex = newFunctions.length;
+      newFunctions.push(fn);
+    }
+  }
+
+  // update call instructions with new indices
+  for (const fn of newFunctions) {
+    if (fn.type === 'internal') {
+      for (const op of fn.instructions) {
+        switch (op.opcode) {
+          case 0x10:    // function call
+          case 0xD2: {  // function reference
+            const target = functions[op.operand];
+            op.operand = target.newIndex;
+          } break;
+        }
+      }
+      fn.code = repackFunction(fn);
+    }
+  }
+
   // create new code and function section
   const newCodeSection = { type: SectionType.Code, functions: [] };
   const newFuncSection = { type: SectionType.Function, types: [] };
-  for (let i = 0; i < funcCount; i++) {
-    const index = originalIndices[i];
-    const fn = getFunction(index);
-    updateFunctionRefs(fn);
-    const dv = repackFunction(fn);
-    newCodeSection.functions.push(dv);
-    const type = funcSection.types[index];
-    newFuncSection.types.push(type);
+  for (const fn of newFunctions) {
+    if (fn.type === 'internal') {
+      newCodeSection.functions.push(fn.code);
+      newFuncSection.types.push(fn.typeIndex);
+    }
+  }
+
+  // create new element section
+  const newElementSection = { type: SectionType.Element, segments: [] };
+  for (const segment of elemSection.segments) {
+    if (segment.indices) {
+      const indices = segment.indices.map((index) => {
+        const fn = functions[index];
+        return (fn.using) ? fn.newIndex : 0;
+      });
+      newElementSection.segments.push({ ...segment, indices });
+    } else {
+      newElementSection.segments.push(segment);
+    }
   }
   // create new export section
-  const exportSection = getSection(SectionType.Export);
   const newExportSection = { type: SectionType.Export, exports: [] };
   for (const object of exportSection.exports) {
     if (object.type === ObjectType.Function) {
-      if (including[object.index]) {
+      const fn = functions[object.index];
+      if (fn.using) {
         const { name, type } = object;
-        const index = newIndices[object.index];
+        const index = fn.newIndex;
         newExportSection.exports.push({ name, type, index });
       }
     } else {
@@ -70,19 +274,18 @@ export function stripUnused(binary, whitelist) {
     }
   }
   // create new import section
-  const importSection = getSection(SectionType.Import);
   const newImportSection = { type: SectionType.Import, imports: [] };
-  for (const object of importSection.imports) {
+  for (const [ index, object ] of importSection.imports.entries()) {
     if (object.type === ObjectType.Function) {
-      if (including[object.index]) {
-        const { module, name, type } = object;
-        const index = newIndices[object.index];
-        newImportSection.imports.push({ module, name, type, index });
+      const fn = functions[index];
+      if (fn.using) {
+        newImportSection.imports.push(object);
       }
     } else {
       newImportSection.imports.push(object);
     }
   }
+
   // create new module sections
   const newSections = [];
   for (const section of sections) {
@@ -92,6 +295,9 @@ export function stripUnused(binary, whitelist) {
         break;
       case SectionType.Function:
         newSections.push(newFuncSection);
+        break;
+      case SectionType.Element:
+        newSections.push(newElementSection);
         break;
       case SectionType.Export:
         newSections.push(newExportSection);
@@ -107,67 +313,6 @@ export function stripUnused(binary, whitelist) {
     }
   }
   return repackBinary({ sections: newSections, size });
-
-  function include(index) {
-    if (!including[index]) {
-      including[index] = true;
-      const fn = getFunction(index);
-      const refs = findFunctionRefs(fn)
-      for (const ref of refs) {
-        include(ref);
-      }
-    }
-  }
-
-  function findFunctionRefs({ instructions }) {
-    const list = [];
-    for (const { opcode, operand } of instructions) {
-      switch (opcode) {
-        case 0x10:
-        case 0xD2:
-          list.push(operand);
-          break;
-      }
-    }
-    return list;
-  }
-
-  function updateFunctionRefs({ instructions }) {
-    for (const instr of instructions) {
-      switch (instr.opcode) {
-        case 0x10:
-        case 0xD2:
-          instr.operand = newIndices[instr.operand];
-          break;
-      }
-    }
-  }
-
-  function getFunction(index) {
-    let fn = fnCache[index];
-    if (!fn) {
-      const section = getSection(SectionType.Code);
-      const dv = section?.functions[index];
-      if (dv === undefined) {
-        throw new Error(`Cannot find function: ${index}`);
-      }
-      fn = fnCache[index] = parseFunction(dv);
-    }
-    return fn;
-  }
-
-  function findExportedFunction(name) {
-    const section = getSection(SectionType.Export);
-    const object = section?.exports?.find(e => e.name === name);
-    if (object?.type !== ObjectType.Function) {
-      throw new Error(`Cannot find exported function: ${name}`);
-    }
-    return object.index;
-  }
-
-  function getSection(type) {
-    return sections.find(s => s.type === type);
-  }
 }
 
 export function parseBinary(binary) {
@@ -179,6 +324,7 @@ export function parseBinary(binary) {
     readString,
     readArray,
     readU32Leb128,
+    readExpression,
   } = createReader(binary);
   const magic = readU32();
   if (magic !== MagicNumber) {
@@ -249,6 +395,58 @@ export function parseBinary(binary) {
         });
         return { type, functions };
       }
+      case SectionType.Element: {
+        const segments = readArray(() => {
+          const type = readU32Leb128();
+          switch (type) {
+            case 0: {
+              const expr = readExpression();
+              const indices = readArray(readU32Leb128);
+              return { type, expr, indices };
+            }
+            case 1: {
+              const kind = readU8();
+              const indices = readArray(readU32Leb128);
+              return { type, kind, indices };
+            }
+            case 2: {
+              const tableidx = readU32Leb128();
+              const expr = readExpression();
+              const kind = readU8();
+              const indices = readArray(readU32Leb128);
+              return { type, tableidx, expr, kind, indices };
+            }
+            case 3: {
+              const kind = readU8();
+              const indices = readArray(readU32Leb128);
+              return { type, kind, indices };
+            }
+            case 4: {
+              const expr = readExpression();
+              const entries = readArray(readExpression);
+              return { type, expr, entries };
+            }
+            case 5: {
+              const reftype = readU8();
+              const entries = readArray(readExpression);
+              return { type, reftype, entries };
+            }
+            case 6: {
+              const tableidx = readU32Leb128();
+              const expr = readExpression();
+              const reftype = readU8();
+              const entries = readArray(readExpression);
+              return { type, tableidx, expr, reftype, entries };
+            }
+            case 7: {
+              const reftype = readU8();
+              const entries = readArray(readExpression);
+              return { type, reftype, entries };
+            }
+          }
+        });
+        return { type, segments };
+      }
       default: {
         const data = readBytes(len);
         return { type, data };
@@ -281,6 +479,7 @@ export function repackBinary(module) {
     writeString,
     writeArray,
     writeU32Leb128,
+    writeExpression,
   } = createWriter(module.size * 10);
   writeU32(MagicNumber);
   writeU32(Version);
@@ -330,6 +529,49 @@ export function repackBinary(module) {
           writeArray(section.functions, (code) => {
             writeU32Leb128(code.byteLength);
             writeBytes(code);
+          });
+        } break;
+        case SectionType.Element: {
+          writeArray(section.segments, (segment) => {
+            writeU32Leb128(segment.type);
+            switch (segment.type) {
+              case 0: {
+                writeExpression(segment.expr);
+                writeArray(segment.indices, writeU32Leb128);
+              } break;
+              case 1: {
+                writeU8(segment.kind);
+                writeArray(segment.indices, writeU32Leb128);
+              } break;
+              case 2: {
+                writeU32Leb128(segment.tableidx);
+                writeArray.writeExpression(segment.expr);
+                writeU8(segment.kind);
+                writeArray(segment.indices, writeU32Leb128);
+              } break;
+              case 3: {
+                writeU8(segment.kind);
+                writeArray(segment.indices, writeU32Leb128);
+              } break;
+              case 4: {
+                writeExpression(segment.expr);
+                writeArray(segment.entries, writeExpression);
+              } break;
+              case 5: {
+                writeU8(segment.reftype);
+                writeArray(segment.entries, writeExpression);
+              } break;
+              case 6: {
+                writeU32Leb128(segment.tableidx);
+                writeExpression(segment.expr);
+                writeU8(segment.reftype);
+                writeArray(segment.entries, writeExpression);
+              } break;
+              case 7: {
+                writeU8(segment.reftype);
+                writeArray(segment.entries, writeExpression);
+              } break;
+            }
           });
         } break;
         default: {
@@ -382,7 +624,7 @@ function createReader(dv) {
 
   function readString() {
     const len = readU32Leb128();
-    const bytes = new Uint8Array(dv.buffer, offset, len);
+    const bytes = new Uint8Array(dv.buffer, dv.byteOffset + offset, len);
     offset += len;
     return decoder.decode(bytes);
   }
@@ -454,6 +696,13 @@ function createReader(dv) {
     }
   }
 
+  function readExpression() {
+    const start = offset;
+    while (readU8() !== 0x0B);
+    const len = offset - start;
+    return new DataView(dv.buffer, dv.byteOffset + start, len);
+  }
+
   return {
     eof,
     readBytes,
@@ -466,6 +715,7 @@ function createReader(dv) {
     readU64Leb128,
     readI32Leb128,
     readI64Leb128,
+    readExpression,
   };
 }
 
@@ -579,6 +829,10 @@ function createWriter(maxSize) {
     cb();
   }
 
+  function writeExpression(code) {
+    writeBytes(code);
+  }
+
   return {
     finalize,
     writeBytes,
@@ -591,6 +845,7 @@ function createWriter(maxSize) {
     writeU64Leb128,
     writeI32Leb128,
     writeI64Leb128,
+    writeExpression,
     writeLength,
   };
 }

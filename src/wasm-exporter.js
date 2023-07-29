@@ -98,7 +98,6 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     }
     return structures;
   } else if (process.env.NODE_ZIG_TARGET === 'WASM-RUNTIME') {
-    init();
     // link variables
     for (const [ address, object ] of Object.entries(variables)) {
       linkObject(object, address);
