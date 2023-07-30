@@ -155,7 +155,9 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     Object.defineProperty(object, MEMORY, { value: dv2, configurable: true });
     if (object.hasOwnProperty(ZIG)) {
       // a pointer--link the target too
-      const targetAddress = dv2.getUint32(0, true);
+      // an 8-byte pointer is a "fat pointer", with the length coming first
+      const offset = (len === 8) ? 4 : 0;
+      const targetAddress = dv2.getUint32(offset, true);
       const targetObject = object[SLOTS][0];
       linkObject(targetObject, targetAddress);
     }
