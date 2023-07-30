@@ -1,5 +1,8 @@
+const std = @import("std");
 const exporter = @import("exporter");
 const package = @import("package");
+
+pub const os = exporter.getOS();
 
 export fn alloc(ptr: *anyopaque, len: usize) usize {
     return exporter.alloc(ptr, len);

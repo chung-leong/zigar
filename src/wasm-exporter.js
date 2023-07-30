@@ -82,9 +82,7 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     _readObjectSlot,
     _writeObjectSlot,
     _createDataView,
-    _createArray,
-    _appendArray,
-    _logValues,
+    _writeToConsole,
     ...comptimeImports
   };
   const { instance } = await WebAssembly.instantiate(wasmBinary, { env: imports });
@@ -114,9 +112,13 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     throw new Error(`The environment variable NODE_ZIG_TARGET must be "WASM-COMPTIME" or "WASM-RUNTIME"`);
   }
 
-  function addString(address, len) {
+  function getString(address, len) {
     const ta = new Uint8Array(wasmMemory.buffer, address, len);
-    const s = decoder.decode(ta);
+    return decoder.decode(ta);
+  }
+
+  function addString(address, len) {
+    const s = getString(address, len);
     let index = stringIndices[s];
     if (index === undefined) {
       index = stringIndices[s] = nextStringIndex++;
@@ -404,19 +406,10 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     });
   }
 
-  function _createArray() {
-    return addObject([]);
-  }
-
-  function _appendArray(arrayIndex, valueIndex) {
-    const array = valueTable[arrayIndex];
-    const value = valueTable[valueIndex];
-    return array.push(value);
-  }
-
-  function _logValues(arrayIndex) {
-    const array = valueTable[arrayIndex];
-    console.log(...array);
+  function _writeToConsole(address, len) {
+    const s = getString(address, len);
+    // remove any trailing newline character
+    console.log(s.replace(/\r?\n$/, ''));
   }
 }
 

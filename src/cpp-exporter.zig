@@ -172,33 +172,6 @@ pub const Host = struct {
         }
         return value;
     }
-
-    pub fn createString(self: Host, message: []const u8) !Value {
-        const memory: Memory = .{
-            .bytes = @constCast(@ptrCast(message)),
-            .len = message.len,
-        };
-        var value: Value = undefined;
-        if (callbacks.create_string(self.context, &memory, &value) != .OK) {
-            return Error.UnableToCreateString;
-        }
-        return value;
-    }
-
-    pub fn logValues(self: Host, args: anytype) !void {
-        const fields = std.meta.fields(@TypeOf(args));
-        var values: [fields.len]Value = undefined;
-        inline for (fields, 0..) |field, index| {
-            const v = @field(args, field.name);
-            values[index] = switch (field.type) {
-                Value => v,
-                else => try self.createString(v),
-            };
-        }
-        if (callbacks.log_values(self.context, values.len, @ptrCast(&values)) != .OK) {
-            return Error.Unknown;
-        }
-    }
 };
 
 // pointer table that's filled on the C++ side
@@ -223,8 +196,7 @@ const Callbacks = extern struct {
     finalize_structure: *const fn (Call, Value) callconv(.C) Result,
     create_template: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
 
-    create_string: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
-    log_values: *const fn (Call, usize, [*]Value) callconv(.C) Result,
+    write_to_console: *const fn (*const Memory) callconv(.C) Result,
 };
 
 var callbacks: Callbacks = undefined;
@@ -268,7 +240,7 @@ test "createModule" {
             return arg1 < arg2;
         }
     };
-    const module = createModule(Host, Test);
+    const module = createModule(Test);
     assert(module.version == 1);
     assert(module.flags.little_endian == (builtin.target.cpu.arch.endian() == .Little));
     switch (@typeInfo(@TypeOf(module.factory))) {
@@ -287,4 +259,26 @@ test "createModule" {
             assert(false);
         },
     }
+}
+
+pub fn getOS() type {
+    return struct {
+        // TODO: intercept calls to write() and send content to process.stdout.write()
+        // or process.stderr.write(); can't do it currently since it's not yet
+        // possible to reify a struct with decls and replicating every sinle decl
+        // manually would be a lot of work
+        pub const system = ns: {
+            const is_windows = builtin.os.tag == .windows;
+            const orig_system = if (builtin.link_libc or is_windows)
+                std.c
+            else switch (builtin.os.tag) {
+                .linux => std.os.linux,
+                .plan9 => std.os.plan9,
+                .wasi => std.os.wasi,
+                .uefi => std.os.uefi,
+                else => struct {},
+            };
+            break :ns orig_system;
+        };
+    };
 }

@@ -2,8 +2,6 @@ const std = @import("std");
 const builtin = @import("builtin");
 const assert = std.debug.assert;
 
-const isFreeStanding = builtin.target.os.tag == .freestanding;
-
 // error type
 pub const Error = error{
     TODO,
@@ -838,9 +836,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
             }
         },
         else => {
-            if (!isFreeStanding) {
-                std.debug.print("Missing: {s}\n", .{@typeName(T)});
-            }
+            std.debug.print("Missing: {s}\n", .{@typeName(T)});
         },
     }
 }
@@ -1204,9 +1200,7 @@ fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
             } else |_| {}
         },
         else => {
-            if (!isFreeStanding) {
-                std.debug.print("Ignoring {s}\n", .{@typeName(T)});
-            }
+            std.debug.print("Ignoring {s}\n", .{@typeName(T)});
         },
     }
 }
@@ -1279,9 +1273,7 @@ fn dezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
             } else |_| {}
         },
         else => {
-            if (!isFreeStanding) {
-                std.debug.print("Ignoring {s}\n", .{@typeName(T)});
-            }
+            std.debug.print("Ignoring {s}\n", .{@typeName(T)});
         },
     }
 }

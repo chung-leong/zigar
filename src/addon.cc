@@ -186,18 +186,6 @@ static Result CreateTemplate(Call* call,
   return Result::OK;
 }
 
-static Result CreateString(Call* call,
-                           const Memory& memory,
-                           Local<Value>* dest) {
-  auto isolate = call->isolate;
-  auto s = reinterpret_cast<char *>(memory.bytes);
-  auto len = memory.len;
-  if (!String::NewFromUtf8(isolate, s, NewStringType::kNormal, len).ToLocal(dest)) {
-    return Result::Failure;
-  }
-  return Result::OK;
-}
-
 static Result GetPointerStatus(Call* call,
                                Local<Object> object,
                                bool* dest) {
@@ -535,12 +523,9 @@ static Result GetArgumentBuffers(Call* call) {
   return Result::OK;
 }
 
-static Result Log(Call* call,
-                  size_t argc,
-                  Local<Value>* argv) {
-  auto isolate = call->isolate;
-  auto name = String::NewFromUtf8Literal(isolate, "log");
-  return CallFunction(call, name, argc, argv);
+static Result WriteToConsole(const Memory& memory) {
+  // TODO
+  return Result::Failure;
 }
 
 static void Load(const FunctionCallbackInfo<Value>& info) {
@@ -593,8 +578,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->attach_template = AttachTemplate;
   callbacks->finalize_structure = FinalizeStructure;
   callbacks->create_template = CreateTemplate;
-  callbacks->create_string = CreateString;
-  callbacks->log_values = Log;
+  callbacks->write_to_console = WriteToConsole;
 
   // save handle to external object, along with options and AddonData
   auto options = Object::New(isolate);

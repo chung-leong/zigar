@@ -13,6 +13,21 @@ describe('WASM integration tests', function() {
   beforeEach(function() {
     process.env.NODE_ZIG_TARGET = 'WASM-COMPTIME';
   })
+  describe('Console', function() {
+    it('should output to development console', async function() {
+      this.timeout(30000);
+      const { hello } = await transpileImport(resolve('./integration/console.zig'));
+      const origFn = console.log;
+      try {
+        let text;
+        console.log = (s) => text = s;
+        await hello();
+        expect(text).to.equal('Hello world!');
+      } finally {
+        console.log = origFn;
+      }
+    })
+  })
   describe('Variables', function() {
     it('should import integer variables', async function() {
       this.timeout(30000);

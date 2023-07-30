@@ -120,8 +120,7 @@ struct Callbacks {
   Result (*finalize_structure)(Call*, Local<Object>);
   Result (*create_template)(Call*, const Memory&, Local<Object>*);
 
-  Result (*create_string)(Call*, const Memory&, Local<Value>*);
-  Result (*log_values)(Call*, size_t, Local<Value>*);
+  Result (*write_to_console)(const Memory&);
 };
 
 struct ExternalData {
@@ -251,8 +250,5 @@ struct Call {
 };
 
 static Result GetArgumentBuffers(Call* call);
-static Result Log(Call* call,
-                  size_t argc,
-                  Local<Value>* argv) __attribute__((unused));
 
 const size_t missing = SIZE_MAX;

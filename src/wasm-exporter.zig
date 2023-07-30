@@ -18,6 +18,35 @@ const Call = struct {
     allocator: std.mem.Allocator,
 };
 
+extern fn _allocMemory(host: usize, size: usize) usize;
+extern fn _freeMemory(host: usize, address: usize, len: usize) void;
+extern fn _getMemory(host: usize, object: usize) usize;
+extern fn _getMemoryOffset(object: usize) usize;
+extern fn _getMemoryLength(object: usize) usize;
+extern fn _createDataView(host: usize, address: usize, len: usize, disposition: u32) usize;
+extern fn _wrapMemory(structure: usize, view: usize) usize;
+extern fn _getPointerStatus(object: usize) i32;
+extern fn _setPointerStatus(object: usize, status: i32) void;
+extern fn _readGlobalSlot(slot: usize) usize;
+extern fn _writeGlobalSlot(slot: usize, object: usize) void;
+extern fn _readObjectSlot(container: usize, slot: usize) usize;
+extern fn _writeObjectSlot(container: usize, slot: usize, object: usize) void;
+extern fn _beginStructure(def: u32) u32;
+extern fn _attachMember(structure: usize, def: usize) void;
+extern fn _attachMethod(structure: usize, def: usize) void;
+extern fn _attachTemplate(structure: usize, def: usize) void;
+extern fn _finalizeStructure(structure: usize) void;
+extern fn _createTemplate(buffer: usize) usize;
+extern fn _writeToConsole(address: usize, len: usize) void;
+extern fn _createObject() usize;
+extern fn _createString(address: usize, len: usize) usize;
+extern fn _setObjectPropertyString(container: usize, key: usize, value: usize) void;
+extern fn _setObjectPropertyInteger(container: usize, key: usize, value: i32) void;
+extern fn _setObjectPropertyBoolean(container: usize, key: usize, value: i32) void;
+extern fn _setObjectPropertyObject(container: usize, key: usize, value: usize) void;
+extern fn _startCall(host: usize) void;
+extern fn _endCall(host: usize) void;
+
 fn ref(number: usize) Value {
     return @ptrFromInt(number);
 }
@@ -52,37 +81,6 @@ pub fn free(ptr: *anyopaque, address: usize, len: usize) void {
     const bytes: [*]u8 = @ptrFromInt(address);
     ctx.allocator.free(bytes[0..len]);
 }
-
-extern fn _allocMemory(host: usize, size: usize) usize;
-extern fn _freeMemory(host: usize, address: usize, len: usize) void;
-extern fn _getMemory(host: usize, object: usize) usize;
-extern fn _getMemoryOffset(object: usize) usize;
-extern fn _getMemoryLength(object: usize) usize;
-extern fn _createDataView(host: usize, address: usize, len: usize, disposition: u32) usize;
-extern fn _wrapMemory(structure: usize, view: usize) usize;
-extern fn _getPointerStatus(object: usize) i32;
-extern fn _setPointerStatus(object: usize, status: i32) void;
-extern fn _readGlobalSlot(slot: usize) usize;
-extern fn _writeGlobalSlot(slot: usize, object: usize) void;
-extern fn _readObjectSlot(container: usize, slot: usize) usize;
-extern fn _writeObjectSlot(container: usize, slot: usize, object: usize) void;
-extern fn _beginStructure(def: u32) u32;
-extern fn _attachMember(structure: usize, def: usize) void;
-extern fn _attachMethod(structure: usize, def: usize) void;
-extern fn _attachTemplate(structure: usize, def: usize) void;
-extern fn _finalizeStructure(structure: usize) void;
-extern fn _createTemplate(buffer: usize) usize;
-extern fn _createArray() usize;
-extern fn _appendArray(array: usize, value: usize) void;
-extern fn _logValues(values: usize) void;
-extern fn _createObject() usize;
-extern fn _createString(address: usize, len: usize) usize;
-extern fn _setObjectPropertyString(container: usize, key: usize, value: usize) void;
-extern fn _setObjectPropertyInteger(container: usize, key: usize, value: i32) void;
-extern fn _setObjectPropertyBoolean(container: usize, key: usize, value: i32) void;
-extern fn _setObjectPropertyObject(container: usize, key: usize, value: usize) void;
-extern fn _startCall(host: usize) void;
-extern fn _endCall(host: usize) void;
 
 pub const Host = struct {
     context: u32,
@@ -296,26 +294,6 @@ pub const Host = struct {
         }
         return ref(templ_index);
     }
-
-    pub fn createString(_: Host, message: []const u8) !Value {
-        const address = @intFromPtr(message.ptr);
-        const len = message.len;
-        return ref(_createString(address, len));
-    }
-
-    pub fn logValues(self: Host, args: anytype) !void {
-        const array = _createArray();
-        const fields = std.meta.fields(@TypeOf(args));
-        inline for (fields) |field| {
-            const v = @field(args, field.name);
-            const value = switch (field.type) {
-                Value => v,
-                else => try self.createString(v),
-            };
-            _appendArray(array, index(value));
-        }
-        _logValues(array);
-    }
 };
 
 pub fn runThunk(arg_index: usize, address: usize) usize {
@@ -337,4 +315,26 @@ pub fn runThunk(arg_index: usize, address: usize) usize {
 pub fn exportModule(comptime T: type, arg_index: usize) usize {
     const factory = exporter.createRootFactory(Host, T);
     return runThunk(arg_index, @intFromPtr(factory));
+}
+
+pub fn getOS() type {
+    return struct {
+        pub const system = struct {
+            pub const fd_t = u8;
+            pub const STDERR_FILENO = 1;
+            pub const E = std.os.linux.E;
+
+            pub fn getErrno(T: usize) E {
+                _ = T;
+                return .SUCCESS;
+            }
+
+            pub fn write(f: fd_t, ptr: [*]const u8, len: usize) usize {
+                if (f == 1 or f == 2) {
+                    _writeToConsole(@intFromPtr(ptr), len);
+                }
+                return len;
+            }
+        };
+    };
 }
