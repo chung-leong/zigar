@@ -1,33 +1,29 @@
 const std = @import("std");
+const cfg = @import("./build-cfg.zig");
 
 pub fn build(b: *std.Build) void {
-    const wasm = "${FOR_WASM}"[0] == 'y';
     const target = b.standardTargetOptions(.{
-        .default_target = switch (wasm) {
-            true => .{
-                .cpu_arch = .wasm32,
-                .os_tag = .freestanding,
-            },
-            false => .{},
-        },
+        .default_target = cfg.target,
     });
-    const optimize = b.standardOptimizeOption(.{});
+    const optimize = b.standardOptimizeOption(.{
+        .preferred_optimize_mode = cfg.optimize_mode,
+    });
     const lib = b.addSharedLibrary(.{
-        .name = "${PACKAGE_NAME}",
-        .root_source_file = .{ .path = "./stub.zig" },
+        .name = cfg.package_name,
+        .root_source_file = .{ .path = cfg.stub_path },
         .target = target,
         .optimize = optimize,
     });
     lib.addModule("exporter", b.createModule(.{
-        .source_file = .{ .path = "${EXPORTER_PATH}" },
+        .source_file = .{ .path = cfg.exporter_path },
     }));
     lib.addModule("package", b.createModule(.{
-        .source_file = .{ .path = "${PACKAGE_PATH}" },
+        .source_file = .{ .path = cfg.package_path },
     }));
-    if ("${USE_CLIB}"[0] == 'y') {
+    if (cfg.use_libc) {
         lib.linkLibC();
     }
-    if (wasm) {
+    if (cfg.target.cpu_arch == .wasm32) {
         lib.use_lld = false;
         lib.rdynamic = true;
     }

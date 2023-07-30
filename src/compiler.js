@@ -2,29 +2,36 @@ import { parse, join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { stat, lstat, readdir, mkdir, rmdir, unlink, rename, chmod, utimes, readFile, writeFile, open } from 'fs/promises';
 
-const { env } = process;
-const defaults = {
-  buildDir: env.NODE_ZIG_BUILD_DIR ?? tmpdir(),
-  cacheDir: env.NODE_ZIG_CACHE_DIR ?? join(process.cwd(), 'zig-cache'),
-  zigCmd: env.NODE_ZIG_BUILD_CMD ?? (env.NODE_ENV === 'production') ? 'zig build -Doptimize=ReleaseFast' : 'zig build',
-  cleanUp: env.NODE_ZIG_CLEAN_UP ?? (env.NODE_ENV === 'production') ? '1' : '',
-};
+const cwd = process.cwd();
 
 export async function settings(options) {
   Object.assign(defaults, options);
 }
 
 export async function compile(path, options = {}) {
+  const { env } = process;
   const {
-    buildDir,
-    cacheDir,
-    zigCmd,
-    cleanUp,
-  } = { ...defaults, ...options };
+    buildDir = env.NODE_ZIG_BUILD_DIR ?? tmpdir(),
+    cacheDir = env.NODE_ZIG_CACHE_DIR ?? join(cwd, 'zig-cache'),
+    zigCmd = env.NODE_ZIG_BUILD_CMD ?? 'zig build',
+    cleanUp = env.NODE_ZIG_CLEAN_UP ?? (env.NODE_ENV === 'production') ? '1' : '',
+    target,
+    optimization = (env.NODE_ENV === 'production') ? ((target === 'wasm') ? 'ReleaseSmall' : 'ReleaseFast') : 'Debug',
+  } = options;
   const fullPath = resolve(path);
   const rootFile = parse(fullPath);
-  const targetInfo = getTargetInfo(rootFile, options);
-  const soName = targetInfo.libraryName;
+  const wasm = (target === 'wasm');
+  const config = {
+    target,
+    optimization,
+    packageName: rootFile.name,
+    packagePath: fullPath,
+    exporterPath: absolute(`${wasm ? 'wasm-' : 'cpp-'}exporter.zig`),
+    stubPath: absolute(`${wasm ? 'wasm-' : 'cpp-'}stub.zig`),
+    buildFilePath: absolute(`build.zig`),
+    useLibC: false,
+  };
+  const soName = (wasm) ? `${rootFile.name}.wasm` : `lib${rootFile.name}.so`;
   const soPath = join(cacheDir, soName);
   const soMTime = (await find(soPath))?.mtime;
   if (!buildDir || !cacheDir) {
@@ -40,29 +47,31 @@ export async function compile(path, options = {}) {
   }
   // scan the dir containing the file to see if recompilation is necessary
   // also check if there's a custom build file and for C dependency
-  const customBuildFileName = rootFile.name + '.build.zig';
-  let custom = false, changed = false, dependent = false;
+  let changed = false;
   await walk(rootFile.dir, /\.(zig|c|cc|cpp|h|hh)$/i, (dir, name, { mtime }) => {
-    if (dir === rootFile.dir && name === customBuildFileName) {
-      custom = true;
+    if (dir === rootFile.dir && name === rootFile.name + '.build.zig') {
+      config.buildFilePath = join(dir, name);
+    }
+    if (!/\.zig$/.test(name)) {
+      config.useLibC = true;
     }
     if (!(soMTime > mtime)) {
       changed = true;
     }
-    if (!/\.zig$/.test(name)) {
-      dependent = true;
-    }
   });
-  if (!changed) {
-    const { pathname } = new URL('./', import.meta.url);
-    await walk(pathname, /\.zig$/i, (dir, name, { mtime }) => {
-      if (!(soMTime > mtime)) {
-        changed = true;
-      }
-    });
+  if (process.env.NODE_ENV !== 'production') {
+    if (!changed) {
+      const { pathname } = new URL('./', import.meta.url);
+      // rebuild when source files have changed
+      await walk(pathname, /\.zig$/i, (dir, name, { mtime }) => {
+        if (!(soMTime > mtime)) {
+          changed = true;
+        }
+      });
+    }
   }
   // build in a unique temp dir
-  const soBuildDir = join(buildDir, await md5(fullPath), targetInfo.buildSubFolder);
+  const soBuildDir = join(buildDir, await md5(fullPath), (wasm) ? `wasm` : '');
   const logPath = join(soBuildDir, 'log');
   const cmdPath = join(soBuildDir, 'cmd');
   const pidPath = join(soBuildDir, 'pid');
@@ -81,16 +90,7 @@ export async function compile(path, options = {}) {
   while (!done) {
     await mkdirp(soBuildDir);
     if (await writePID(pidPath)) {
-      await createProject({
-        'stub.zig': `./${targetInfo.stubName}.zig`,
-        'build.zig': `./build.zig`,
-      }, {
-        EXPORTER_PATH: absolute(`./${targetInfo.exporterName}.zig`),
-        PACKAGE_PATH: fullPath,
-        PACKAGE_NAME: targetInfo.packageName,
-        FOR_WASM: targetInfo.forWASM ? 'yes' : 'no',
-        USE_CLIB: (dependent) ? 'yes' : 'no',
-      }, soBuildDir);
+      await createProject(config, soBuildDir);
       const { exec } = await import('child_process');
       const options = {
         cwd: soBuildDir,
@@ -141,18 +141,6 @@ export async function compile(path, options = {}) {
     throw new Error(`Zig compilation failed\n\n${errorLog}`);
   }
   return soPath;
-}
-
-function getTargetInfo(rootFile, options) {
-  const { target } = options;
-  const wasm = (target === 'wasm');
-  const packageName = rootFile.name;
-  const libraryName = (wasm) ? `${packageName}.wasm` : `lib${packageName}.so`;
-  const exporterName = `${wasm ? 'wasm-' : 'cpp-'}exporter`;
-  const stubName = `${wasm ? 'wasm-' : 'cpp-'}stub`;
-  const buildSubFolder = (wasm) ? `wasm` : '';
-  const forWASM = !!(wasm);
-  return { packageName, libraryName, exporterName, stubName, forWASM, buildSubFolder };
 }
 
 async function find(path, follow = true) {
@@ -218,15 +206,28 @@ async function writePID(path) {
   }
 }
 
-async function createProject(fileMap, vars, dir) {
-  for (const [ name, src ] of Object.entries(fileMap)) {
-    const path = absolute(src);
-    const destPath = join(dir, name);
-    let s = await readFile(path, 'utf8');
-    s = s.replace(/"\${(\w+)}"/g, (m0, m1) => JSON.stringify(vars[m1] ?? m1));
-    s = s.replace(/\${(\w+)}/g, (m0, m1) => vars[m1] ?? m1);
-    await writeFile(destPath, s);
+async function createProject(config, dir) {
+  let target = '.{}';
+  switch (config.target) {
+    case 'wasm':
+      target = '.{ .cpu_arch = .wasm32, .os_tag = .freestanding }';
+      break;
   }
+  const lines = [];
+  lines.push(`const std = @import("std");\n`);
+  lines.push(`pub const target: std.zig.CrossTarget = ${target};`);
+  lines.push(`pub const optimize_mode: std.builtin.Mode = .${config.optimization};`);
+  lines.push(`pub const package_name = ${JSON.stringify(config.packageName)};`);
+  lines.push(`pub const package_path = ${JSON.stringify(config.packagePath)};`);
+  lines.push(`pub const exporter_path = ${JSON.stringify(config.exporterPath)};`);
+  lines.push(`pub const stub_path = ${JSON.stringify(config.stubPath)};`);
+  lines.push(`pub const use_libc = ${config.useLibC ? true : false};`);
+  lines.push(``);
+  const content = lines.join('\n');
+  const cfgFilePath = join(dir, 'build-cfg.zig');
+  await writeFile(cfgFilePath, content);
+  const buildFilePath = join(dir, 'build.zig');
+  await copy(config.buildFilePath, buildFilePath);
 }
 
 async function move(srcPath, dstPath) {
@@ -234,15 +235,19 @@ async function move(srcPath, dstPath) {
     await rename(srcPath, dstPath);
   } catch (err) {
     if (err.code == 'EXDEV') {
-      const info = await stat(srcPath);
-      const data = await readFile(srcPath);
-      await writeFile(dstPath, data);
-      await chmod(dstPath, info.mode);
+      await copy(srcPath, dstPath);
       await unlink(srcPath);
     } else {
       throw err;
     }
   }
+}
+
+async function copy(srcPath, dstPath) {
+  const info = await stat(srcPath);
+  const data = await readFile(srcPath);
+  await writeFile(dstPath, data);
+  await chmod(dstPath, info.mode);
 }
 
 async function load(path, def) {
