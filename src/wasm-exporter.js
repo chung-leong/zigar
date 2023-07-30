@@ -37,7 +37,8 @@ export async function linkWASMBinary(binaryPromise, params = {}) {
 
 export async function runWASMBinary(wasmBinary, options = {}) {
   const {
-    omitFunctions,
+    omitFunctions = false,
+    slots = {},
     variables,
     methodRunner,
   } = options;
@@ -49,11 +50,10 @@ export async function runWASMBinary(wasmBinary, options = {}) {
   const stringIndices = {};
   const decoder = new TextDecoder();
   const callContexts = {};
-  const globalSlots = {};
+  const globalSlots = slots;
   const structures = [];
   // these functions will only be called at comptime
   const comptimeImports = /*(process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') &&*/ {
-    _readGlobalSlot,
     _writeGlobalSlot,
     _setObjectPropertyString,
     _setObjectPropertyInteger,
@@ -79,6 +79,7 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     _createString,
     _getPointerStatus,
     _setPointerStatus,
+    _readGlobalSlot,
     _readObjectSlot,
     _writeObjectSlot,
     _createDataView,
@@ -316,7 +317,10 @@ export async function runWASMBinary(wasmBinary, options = {}) {
   }
 
   function _writeGlobalSlot(slot, valueIndex) {
-    globalSlots[slot] = valueTable[valueIndex];
+    const value = valueTable[valueIndex];
+    globalSlots[slot] = value;
+    // remember the slot number of each structure defined
+    value.slot = slot;
   }
 
   function _readObjectSlot(objectIndex, slot) {
@@ -336,6 +340,9 @@ export async function runWASMBinary(wasmBinary, options = {}) {
   }
 
   function _attachMember(structureIndex, defIndex) {
+    if (omitFunctions) {
+      return;
+    }
     const structure = valueTable[structureIndex];
     const def = valueTable[defIndex];
     attachMember(structure, def);
@@ -666,10 +673,12 @@ export function serializeDefinitions(structures, params) {
     add(`},`);
   }
 
-  return lines.join('\n');
+  const code = lines.join('\n');
+  return code;
 }
 
 export function finalizeStructures(structures) {
+  const slots = {};
   const variables = {};
   for (const structure of structures) {
     for (const target of [ structure.static, structure.instance ]) {
@@ -683,6 +692,8 @@ export function finalizeStructures(structures) {
       method.thunk = createThunk(method.thunk);
     }
     finalizeStructure(structure);
+    // place structure into its assigned slot
+    slots[structure.slot] = structure;
   }
 
   function createTemplate(placeholder) {
@@ -744,7 +755,7 @@ export function finalizeStructures(structures) {
     };
   }
 
-  return { promise, resolve, reject, variables, methodRunner };
+  return { promise, resolve, reject, slots, variables, methodRunner };
 }
 
 export {

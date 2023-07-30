@@ -196,7 +196,7 @@ describe('WASM integration tests', function() {
         dv.setInt32(i, j, littleEndian);
       }
       await __init;
-      const slice = getSlice(dv, 2n, 5n);
+      const slice = getSlice(dv, 2, 5);
       expect([ ...slice ]).to.eql([ 3, 4, 5 ]);
       expect(slice.dataView.byteOffset).to.equal(8);
       expect(slice.dataView.buffer).to.equal(dv.buffer);
@@ -208,7 +208,7 @@ describe('WASM integration tests', function() {
         ta[i] = i + 1;
       }
       await __init;
-      const slice = getSlice(ta, 2n, 5n);
+      const slice = getSlice(ta, 2, 5);
       expect([ ...slice ]).to.eql([ 3, 4, 5 ]);
       expect(slice.dataView.byteOffset).to.equal(8);
       expect(slice.dataView.buffer).to.equal(ta.buffer);
