@@ -1,0 +1,39 @@
+{
+  "name": "zigar-runtime",
+  "version": "0.11.0",
+  "description": "JavaScript runtime for code transpile using Zigar",
+  "main": "index.js",
+  "type": "module",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "NODE_ENV=development node ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.js",
+    "debug": "NODE_ENV=development node --inspect-brk ./node_modules/mocha/bin/mocha.js -- test/*.test.js",
+    "coverage": "NODE_ENV=development node ./node_modules/c8/bin/c8.js ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.js",
+    "rollup": "rollup -c rollup.config.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chung-leong/zigar.git"
+  },
+  "keywords": [
+    "zig"
+  ],
+  "author": "Chung Leong",
+  "license": "MIT",
+  "gypfile": true,
+  "bugs": {
+    "url": "https://github.com/chung-leong/zigar/issues"
+  },
+  "homepage": "https://github.com/chung-leong/zigar/#readme",
+  "devDependencies": {
+    "@rollup/plugin-replace": "^5.0.2",
+    "c8": "^8.0.0",
+    "chai": "^4.3.7",
+    "mersenne-twister": "^1.1.0",
+    "mocha": "^10.2.0",
+    "mocha-skip-if": "^1.0.4",
+    "rollup": "^3.23.0"
+  }
+}

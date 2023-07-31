@@ -1,6 +1,7 @@
 import { cwd } from 'process';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { compile } from './compiler.js'
+import { compile } from 'zigar-compiler';
+import { load as loadModule } from 'zigar-node';
 
 const baseURL = pathToFileURL(`${cwd()}/`).href;
 const extensionsRegex = /\.zig$/;
@@ -23,13 +24,7 @@ export async function load(url, context, nextLoad) {
     // compile the file if it or any of its dependencies has changed
     const zigPath = fileURLToPath(url);
     const soPath = await compile(zigPath);
-    // use require() to load the C++ addon
-    const { createRequire } = await import('module');
-    const require = createRequire(import.meta.url);
-    const extPath = fileURLToPath(new URL('../build/Release/addon', import.meta.url));
-    const { load } = require(extPath);
-    // load the zig module and see which of its properties can be exported
-    const module = load(soPath);
+    const module = loadModule(soPath);
     const descriptors = Object.getOwnPropertyDescriptors(module);
     const names = [];
     for (const [ name, { get, set } ] of Object.entries(descriptors)) {

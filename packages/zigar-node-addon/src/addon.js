@@ -1,5 +1,5 @@
-import { MEMORY, SLOTS } from './symbol.js';
-import { invokeThunk } from './method.js';
+import { MEMORY, SLOTS } from '../../zigar-runtime/src/symbol.js';
+import { invokeThunk } from '../../zigar-runtime/src/method.js';
 import {
   useVoid,
   useBoolEx,
@@ -8,7 +8,7 @@ import {
   useEnumerationItemEx,
   useObject,
   useType,
-} from './member.js';
+} from '../../zigar-runtime/src/member.js';
 import {
   usePrimitive,
   useArray,
@@ -24,7 +24,7 @@ import {
   useSlice,
   useOpaque,
   useArgStruct,
-} from './structure.js';
+} from '../../zigar-runtime/src/structure.js';
 
 // enable all member types (including extend types)
 useVoid();
@@ -50,10 +50,6 @@ usePointer();
 useSlice();
 useOpaque();
 useArgStruct();
-
-export function log(...args) {
-  console.log(...args);
-}
 
 export function invokeFactory(thunk) {
   // our C++ code cannot call invokeThunk() directly since it doesn't have the symbol SLOTS
@@ -96,5 +92,5 @@ export {
   attachMethod,
   attachTemplate,
   finalizeStructure,
-} from './structure.js';
+} from '../../zigar-runtime/src/structure.js';
 

@@ -52,21 +52,7 @@ export async function runWASMBinary(wasmBinary, options = {}) {
   const callContexts = {};
   const globalSlots = slots;
   const structures = [];
-  // these functions will only be called at comptime
-  const comptimeImports = /*(process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') &&*/ {
-    _writeGlobalSlot,
-    _setObjectPropertyString,
-    _setObjectPropertyInteger,
-    _setObjectPropertyBoolean,
-    _setObjectPropertyObject,
-    _beginStructure,
-    _attachMember,
-    _attachMethod,
-    _attachTemplate,
-    _finalizeStructure,
-    _createObject,
-    _createTemplate,
-  };
+  const empty = () => {};
   const imports = {
     _startCall,
     _endCall,
@@ -84,7 +70,20 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     _writeObjectSlot,
     _createDataView,
     _writeToConsole,
-    ...comptimeImports
+
+    // these functions will only be called at comptime
+    _writeGlobalSlot: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _writeGlobalSlot : empty,
+    _setObjectPropertyString: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _setObjectPropertyString : empty,
+    _setObjectPropertyInteger: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _setObjectPropertyInteger : empty,
+    _setObjectPropertyBoolean: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _setObjectPropertyBoolean : empty,
+    _setObjectPropertyObject: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _setObjectPropertyObject : empty,
+    _beginStructure: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _beginStructure : empty,
+    _attachMember: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _attachMember : empty,
+    _attachMethod: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _attachMethod : empty,
+    _attachTemplate: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _attachTemplate : empty,
+    _finalizeStructure: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _finalizeStructure : empty,
+    _createObject: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _createObject : empty,
+    _createTemplate: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _createTemplate : empty,
   };
   const { instance } = await WebAssembly.instantiate(wasmBinary, { env: imports });
   const { memory: wasmMemory, define, run, alloc, free } = instance.exports;

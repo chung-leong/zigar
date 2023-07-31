@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'fs/promises';
 import { compile } from './compiler.js';
-import { runWASMBinary, serializeDefinitions } from './wasm-exporter.js';
+import { runWASMBinary, serializeDefinitions } from '../../zigar-runtime/src/index.js';
 import { stripUnused } from './wasm-stripper.js';
 
 export async function transpile(path, options = {}) {

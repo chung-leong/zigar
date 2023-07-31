@@ -2699,10 +2699,6 @@ R"=====(
   useOpaque();
   useArgStruct();
 
-  function log(...args) {
-    console.log(...args);
-  }
-
   function invokeFactory(thunk) {
     // our C++ code cannot call invokeThunk() directly since it doesn't have the symbol SLOTS
     // yet and therefore cannot create (or read from) the argument object
@@ -2745,7 +2741,6 @@ R"=====(
   exports.finalizeStructure = finalizeStructure;
   exports.getArgumentBuffers = getArgumentBuffers;
   exports.invokeFactory = invokeFactory;
-  exports.log = log;
 
   return exports;
 
