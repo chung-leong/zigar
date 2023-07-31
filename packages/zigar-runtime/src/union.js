@@ -26,11 +26,14 @@ export function finalizeUnion(s) {
     },
     options,
   } = s;
+  const {
+    runtimeSafety = true,
+  } = options;
   const descriptors = {};
   let getEnumItem;
   let showDefault;
   let valueMembers;
-  const exclusion = (type === StructureType.BareUnion || type === StructureType.TaggedUnion);
+  const exclusion = (type === StructureType.TaggedUnion || (type === StructureType.BareUnion && runtimeSafety));
   if (exclusion) {
     const selectorMember = members[members.length - 1];
     let { get: getIndex, set: setIndex } = getAccessors(selectorMember, options);

@@ -19,3 +19,7 @@ export fn define(arg_index: usize) usize {
 export fn run(arg_index: usize, thunk_address: usize) usize {
     return exporter.runThunk(arg_index, thunk_address);
 }
+
+export fn safe() u8 {
+    return exporter.getRuntimeSafety();
+}

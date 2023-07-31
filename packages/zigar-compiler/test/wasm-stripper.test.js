@@ -104,18 +104,12 @@ describe('WASM stripper', function() {
     })
   })
   describe('stripUnused', function() {
-    it('should retain only the whitelisted functions', async function() {
+    it('should remove unused functions', async function() {
       const path = resolve(`./wasm-samples/exporter.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);
-      const whitelist = [
-        'run',
-        'init',
-        'alloc',
-        'free',
-      ];
-      const newBinary = stripUnused(binary, whitelist);
-      await writeFile('./output.wasm', newBinary);
+      const newBinary = stripUnused(binary);
+      expect(newBinary.byteLength).to.be.below(binary.byteLength);
     })
   })
 })

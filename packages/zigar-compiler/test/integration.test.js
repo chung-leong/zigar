@@ -150,6 +150,17 @@ describe('WASM integration tests', function() {
       module.useMonkey();
       expect(module.animal.monkey).to.equal(777n);
     })
+    it('should import simple bare union without runtime saftey', async function() {
+      this.timeout(30000);
+      const { default: module } = await transpileImport(resolve('./integration/bare-union-simple.zig'), { optimize: 'ReleaseSmall' });
+      expect(module.animal.dog).to.equal(123);
+      module.useCat();
+      expect(module.animal.dog).to.equal(777);
+      expect(module.animal.cat).to.equal(777);
+      module.useMonkey();
+      expect(module.animal.monkey).to.equal(777n);
+    })
+
   })
   describe('Methods', function() {
     it('should import simple function', async function() {
@@ -213,9 +224,13 @@ function getWASMRuntime() {
   return resolve('../../zigar-runtime/dist/index.js');
 }
 
-async function transpileImport(path, wait = true) {
-  const code = await transpile(path, { moduleResolver: getWASMRuntime });
-  const hash = await md5(path);
+async function transpileImport(path, options = {}) {
+  const {
+    wait = true,
+    ...compileOptions
+  } = options;
+  const code = await transpile(path, { moduleResolver: getWASMRuntime, ...compileOptions });
+  const hash = await md5(path + JSON.stringify(compileOptions));
   // need to use .mjs since the file is sitting in /tmp, outside the scope of our package.json
   const jsPath = join(tmpdir(), `${hash}.mjs`);
   await writeFile(jsPath, code);

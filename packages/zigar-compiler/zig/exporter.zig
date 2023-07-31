@@ -2,6 +2,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 const assert = std.debug.assert;
 
+const runtime_safety = (builtin.mode == .ReleaseSafe or builtin.mode == .Debug);
+
 // error type
 pub const Error = error{
     TODO,
@@ -728,7 +730,13 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                 }
             }
             const TT = un.tag_type orelse IntType(u8, un.fields.len);
-            const tag_offset = if (un.layout != .Extern) getUnionSelectorOffset(TT, un.fields) else missing;
+            const has_selector = if (un.tag_type) |_|
+                true
+            else if (runtime_safety and un.layout != .Extern)
+                true
+            else
+                false;
+            const tag_offset = if (has_selector) getUnionSelectorOffset(TT, un.fields) else missing;
             const value_offset = if (tag_offset == 0) @sizeOf(TT) * 8 else 0;
             inline for (un.fields, 0..) |field, index| {
                 try host.attachMember(structure, .{
@@ -743,7 +751,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                     .structure = try getStructure(host, field.type),
                 });
             }
-            if (tag_offset != missing) {
+            if (has_selector) {
                 try host.attachMember(structure, .{
                     .name = "selector",
                     .member_type = getMemberType(TT),

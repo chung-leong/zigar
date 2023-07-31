@@ -60,7 +60,7 @@ export async function compile(path, options = {}) {
   });
   if (process.env.NODE_ENV !== 'production') {
     if (!changed) {
-      const { pathname } = new URL('./', import.meta.url);
+      const { pathname } = new URL('../zig', import.meta.url);
       // rebuild when source files have changed
       await walk(pathname, /\.zig$/i, (dir, name, { mtime }) => {
         if (!(soMTime > mtime)) {

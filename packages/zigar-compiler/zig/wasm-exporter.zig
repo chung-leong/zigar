@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const exporter = @import("exporter.zig");
 
 const Value = exporter.Value;
@@ -337,4 +338,8 @@ pub fn getOS() type {
             }
         };
     };
+}
+
+pub fn getRuntimeSafety() u8 {
+    return if (builtin.mode == .ReleaseSafe or builtin.mode == .Debug) 1 else 0;
 }

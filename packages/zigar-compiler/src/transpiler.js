@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'fs/promises';
 import { compile } from './compiler.js';
-import { runWASMBinary, serializeDefinitions } from '../../zigar-runtime/src/index.js';
+import { runWASMBinary } from '../../zigar-runtime/src/index.js';
+import { generateCode } from './code-generator.js';
 import { stripUnused } from './wasm-stripper.js';
 
 export async function transpile(path, options = {}) {
@@ -13,7 +14,7 @@ export async function transpile(path, options = {}) {
   } = options;
   const wasmPath = await compile(path, { ...compileOptions, target: 'wasm' });
   const content = await readFile(wasmPath);
-  const structures = await runWASMBinary(content, { omitFunctions });
+  const { structures, runtimeSafety } = await runWASMBinary(content, { omitFunctions });
   const hasMethods = !!structures.find(s => s.methods.length > 0);
   const runtimeURL = moduleResolver('zigar-runtime');
   let loadWASM;
@@ -38,5 +39,5 @@ export async function transpile(path, options = {}) {
       loadWASM = wasmLoader(wasmPath);
     }
   }
-  return serializeDefinitions(structures, { runtimeURL, loadWASM });
+  return generateCode(structures, { runtimeURL, loadWASM, runtimeSafety });
 }
