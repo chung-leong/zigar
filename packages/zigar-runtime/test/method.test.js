@@ -34,7 +34,8 @@ describe('Method functions', function() {
       useEnumerationItem();
       useObject();
     })
-    it('should invoke the given thunk with the expected arguments', function() {
+    it('should invoke the given thunk with the expected arguments for C++', function() {
+      process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
       const argStruct = {
         [MEMORY]: new DataView(new ArrayBuffer(16)),
         [SLOTS]: { 0: {} },

@@ -383,7 +383,7 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
   const accessor = getDataViewAccessor(access, member);
   if (bitOffset !== undefined) {
     const offset = bitOffset >> 3;
-    if (process.env.NODE_ZIG_TARGET === 'WASM-RUNTIME') {
+    if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
       if (access === 'get') {
         return function() {
           const dv = this[MEMORY];
@@ -429,7 +429,7 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
       }
     }
   } else {
-    if (process.env.NODE_ZIG_TARGET === 'WASM-RUNTIME') {
+    if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
       if (access === 'get') {
         return function(index) {
           const dv = this[MEMORY];

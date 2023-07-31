@@ -1,5 +1,5 @@
 {
-  "name": "zigar-node-addon",
+  "name": "node-zigar-addon",
   "version": "0.11.0",
   "description": "NodeJS C++ addon for loading compiled Zig module",
   "main": "index.js",

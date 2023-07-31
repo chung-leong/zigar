@@ -6,7 +6,7 @@ export default {
     Replace({
       preventAssignment: true,
       'process.env.NODE_ENV': '"production"',
-      'process.env.NODE_ZIG_TARGET': '"WASM-RUNTIME"',
+      'process.env.ZIGAR_TARGET': '"WASM-RUNTIME"',
     }),
   ],
   output: {

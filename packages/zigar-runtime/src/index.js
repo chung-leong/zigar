@@ -72,22 +72,22 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     _writeToConsole,
 
     // these functions will only be called at comptime
-    _writeGlobalSlot: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _writeGlobalSlot : empty,
-    _setObjectPropertyString: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _setObjectPropertyString : empty,
-    _setObjectPropertyInteger: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _setObjectPropertyInteger : empty,
-    _setObjectPropertyBoolean: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _setObjectPropertyBoolean : empty,
-    _setObjectPropertyObject: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _setObjectPropertyObject : empty,
-    _beginStructure: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _beginStructure : empty,
-    _attachMember: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _attachMember : empty,
-    _attachMethod: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _attachMethod : empty,
-    _attachTemplate: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _attachTemplate : empty,
-    _finalizeStructure: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _finalizeStructure : empty,
-    _createObject: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _createObject : empty,
-    _createTemplate: (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') ? _createTemplate : empty,
+    _writeGlobalSlot: (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') ? _writeGlobalSlot : empty,
+    _setObjectPropertyString: (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') ? _setObjectPropertyString : empty,
+    _setObjectPropertyInteger: (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') ? _setObjectPropertyInteger : empty,
+    _setObjectPropertyBoolean: (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') ? _setObjectPropertyBoolean : empty,
+    _setObjectPropertyObject: (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') ? _setObjectPropertyObject : empty,
+    _beginStructure: (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') ? _beginStructure : empty,
+    _attachMember: (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') ? _attachMember : empty,
+    _attachMethod: (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') ? _attachMethod : empty,
+    _attachTemplate: (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') ? _attachTemplate : empty,
+    _finalizeStructure: (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') ? _finalizeStructure : empty,
+    _createObject: (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') ? _createObject : empty,
+    _createTemplate: (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') ? _createTemplate : empty,
   };
   const { instance } = await WebAssembly.instantiate(wasmBinary, { env: imports });
   const { memory: wasmMemory, define, run, alloc, free } = instance.exports;
-  if (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') {
+  if (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') {
     // call factory function
     const argStructIndex = addObject({ [SLOTS]: {} });
     const errorIndex = define(argStructIndex);
@@ -95,7 +95,7 @@ export async function runWASMBinary(wasmBinary, options = {}) {
       throwError(errorIndex);
     }
     return structures;
-  } else if (process.env.NODE_ZIG_TARGET === 'WASM-RUNTIME') {
+  } else if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
     // link variables
     for (const [ address, object ] of Object.entries(variables)) {
       linkObject(object, address);
@@ -109,7 +109,7 @@ export async function runWASMBinary(wasmBinary, options = {}) {
       }
     };
   } else {
-    throw new Error(`The environment variable NODE_ZIG_TARGET must be "WASM-COMPTIME" or "WASM-RUNTIME"`);
+    throw new Error(`The environment variable ZIGAR_TARGET must be "WASM-COMPTIME" or "WASM-RUNTIME"`);
   }
 
   function getString(address, len) {
@@ -247,7 +247,7 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     const structure = valueTable[structureIndex];
     const dv = valueTable[viewIndex];
     let object;
-    if (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') {
+    if (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') {
       object = {
         [STRUCTURE]: structure,
         [MEMORY]: dv,
@@ -384,7 +384,7 @@ export async function runWASMBinary(wasmBinary, options = {}) {
         }
       }
     }
-    if (process.env.NODE_ZIG_TARGET === 'WASM-COMPTIME') {
+    if (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') {
       const dv = createCopy(ctx, address, len);
       if (disposition !== MemoryDisposition.Copy) {
         // need linkage to wasm memory at runtime

@@ -7,7 +7,7 @@ export default {
     Replace({
       preventAssignment: true,
       'process.env.NODE_ENV': '"production"',
-      'process.env.NODE_ZIG_TARGET': '"WASM-COMPTIME"',
+      'process.env.ZIGAR_TARGET': '"WASM-COMPTIME"',
     }),
     NodeResolve({}),
   ],

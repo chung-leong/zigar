@@ -34,7 +34,7 @@ export async function load(url, context, nextLoad) {
       }
     }
     // temporarily save the object in global
-    const globalName = `__node_zig_module_${nextModuleId}`;
+    const globalName = `__zigar_module_${nextModuleId}`;
     global[globalName] = module;
     // in the "transpiled" source, we get the object back, destructure the exportable propertie
     // and export them for ease of use while making the module itself available as the default

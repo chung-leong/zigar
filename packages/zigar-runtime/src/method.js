@@ -50,7 +50,7 @@ export function addMethods(s) {
 const globalSlots = {};
 
 export function invokeThunk(thunk, args) {
-  if (process.env.NODE_ZIG_TARGET === 'NODE-CPP-EXT') {
+  if (process.env.ZIGAR_TARGET === 'NODE-CPP-EXT') {
     // pass the argument object as the this/recv variable
     // while the slots and symbols are passed as arguments
     const err = thunk.call(args, globalSlots, SLOTS, MEMORY, ZIG);
@@ -61,7 +61,7 @@ export function invokeThunk(thunk, args) {
     if (err) {
       throwZigError(err);
     }
-  } else if (process.env.NODE_ZIG_TARGET === 'WASM-RUNTIME') {
+  } else if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
     const res = thunk(args);
     if (res !== undefined) {
       if (res instanceof Promise) {
@@ -72,7 +72,7 @@ export function invokeThunk(thunk, args) {
       }
     }
   } else {
-    throw new Error(`Unknown target: ${process.env.NODE_ZIG_TARGET}`);
+    throw new Error(`Unknown target: ${process.env.ZIGAR_TARGET}`);
   }
   return args.retval;
 }

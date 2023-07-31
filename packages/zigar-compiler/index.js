@@ -7,10 +7,10 @@ const cwd = process.cwd();
 async function compile(path, options = {}) {
   const { env } = process;
   const {
-    buildDir = env.NODE_ZIG_BUILD_DIR ?? tmpdir(),
-    cacheDir = env.NODE_ZIG_CACHE_DIR ?? join(cwd, 'zig-cache'),
-    zigCmd = env.NODE_ZIG_BUILD_CMD ?? 'zig build',
-    cleanUp = env.NODE_ZIG_CLEAN_UP ?? (env.NODE_ENV === 'production') ? '1' : '',
+    buildDir = env.ZIGAR_BUILD_DIR ?? tmpdir(),
+    cacheDir = env.ZIGAR_CACHE_DIR ?? join(cwd, 'zig-cache'),
+    zigCmd = env.ZIGAR_BUILD_CMD ?? 'zig build',
+    cleanUp = env.ZIGAR_CLEAN_UP ?? (env.NODE_ENV === 'production') ? '1' : '',
     target,
     optimization = (env.NODE_ENV === 'production') ? ((target === 'wasm') ? 'ReleaseSmall' : 'ReleaseFast') : 'Debug',
   } = options;
@@ -2234,7 +2234,7 @@ async function transpile(path, options = {}) {
   const content = await readFile(wasmPath);
   const structures = await runWASMBinary(content, { omitFunctions });
   const hasMethods = !!structures.find(s => s.methods.length > 0);
-  const runtimeURL = moduleResolver('node-zig/wasm-runtime');
+  const runtimeURL = moduleResolver('zigar-runtime');
   let loadWASM;
   if (hasMethods) {
     if (embedWASM) {

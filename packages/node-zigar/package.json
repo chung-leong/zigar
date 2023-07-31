@@ -1,5 +1,5 @@
 {
-  "name": "zigar-node",
+  "name": "node-zigar",
   "version": "0.11.0",
   "description": "Enable the use of Zig in NodeJS",
   "main": "index.js",

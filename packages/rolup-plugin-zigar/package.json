@@ -25,7 +25,7 @@
   "license": "MIT",
   "gypfile": true,
   "bugs": {
-    "url": "https://github.com/chung-leong/node-zig/issues"
+    "url": "https://github.com/chung-leong/zigar/issues"
   },
   "homepage": "https://github.com/chung-leong/node-zig#readme",
   "devDependencies": {

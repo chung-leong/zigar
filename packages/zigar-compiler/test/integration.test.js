@@ -11,7 +11,7 @@ const littleEndian = true;
 skip.if(process.env.npm_lifecycle_event === 'coverage').
 describe('WASM integration tests', function() {
   beforeEach(function() {
-    process.env.NODE_ZIG_TARGET = 'WASM-COMPTIME';
+    process.env.ZIGAR_TARGET = 'WASM-COMPTIME';
   })
   describe('Console', function() {
     it('should output to development console', async function() {
@@ -21,7 +21,7 @@ describe('WASM integration tests', function() {
       try {
         let text;
         console.log = (s) => text = s;
-        await hello();
+        hello();
         expect(text).to.equal('Hello world!');
       } finally {
         console.log = origFn;
@@ -85,7 +85,7 @@ describe('WASM integration tests', function() {
     })
     it('should import primitive slices', async function() {
       this.timeout(30000);
-      const { default: module, __init } = await transpileImport(resolve('./integration/slices-with-primitive.zig'));
+      const { default: module } = await transpileImport(resolve('./integration/slices-with-primitive.zig'));
       const slice = module.int32_slice;
       expect(module.int32_slice).to.be.an('object');
       expect(module.int32_slice.get(0)).to.equal(123);
@@ -97,7 +97,6 @@ describe('WASM integration tests', function() {
       module.uint32_slice.set(1, 777);
       expect([ ...module.uint32_slice ]).to.eql([ 2, 777, 4 ]);
       expect([ ...module.uint32_array4 ]).to.eql([ 1, 2, 777, 4 ]);
-      await __init;
       // reading WASM memory now
       module.uint32_array4.set(2, 888);
       expect([ ...module.uint32_array4 ]).to.eql([ 1, 2, 888, 4 ]);
@@ -113,8 +112,7 @@ describe('WASM integration tests', function() {
     })
     it('should import error unions', async function() {
       this.timeout(30000);
-      const { default: module, __init } = await transpileImport(resolve('./integration/error-unions.zig'));
-      await __init;
+      const { default: module } = await transpileImport(resolve('./integration/error-unions.zig'));
       expect(module.Error).to.be.a('function');
       expect(module.positive_outcome).to.equal(123);
       expect(() => module.negative_outcome).to.throw()
@@ -144,8 +142,7 @@ describe('WASM integration tests', function() {
     })
     it('should import simple bare union', async function() {
       this.timeout(30000);
-      const { default: module, __init } = await transpileImport(resolve('./integration/bare-union-simple.zig'));
-      await __init;
+      const { default: module } = await transpileImport(resolve('./integration/bare-union-simple.zig'));
       expect(module.animal.dog).to.equal(123);
       module.useCat();
       expect(module.animal.dog).to.equal(null);
@@ -164,8 +161,7 @@ describe('WASM integration tests', function() {
     })
     it('should import function that accepts a slice', async function() {
       this.timeout(30000);
-      const { default: { fifth }, __init } = await transpileImport(resolve('./integration/function-accepting-slice.zig'));
-      await __init;
+      const { default: { fifth } } = await transpileImport(resolve('./integration/function-accepting-slice.zig'));
       const dv = new DataView(new ArrayBuffer(32));
       dv.setInt32(4, 123, littleEndian);
       dv.setInt32(12, 79, littleEndian);
@@ -175,8 +171,7 @@ describe('WASM integration tests', function() {
     })
     it('should throw when function returns an error', async function() {
       this.timeout(30000);
-      const { default: { returnNumber }, __init } = await transpileImport(resolve('./integration/function-returning-error.zig'));
-      await __init;
+      const { default: { returnNumber } } = await transpileImport(resolve('./integration/function-returning-error.zig'));
       const result = returnNumber(1234);
       expect(result).to.equal(1234);
       expect(() => returnNumber(0)).to.throw()
@@ -190,24 +185,22 @@ describe('WASM integration tests', function() {
     })
     it('should return a slice of the argument', async function() {
       this.timeout(30000);
-      const { default: { getSlice }, __init } = await transpileImport(resolve('./integration/function-returning-slice.zig'));
+      const { default: { getSlice } } = await transpileImport(resolve('./integration/function-returning-slice.zig'));
       const dv = new DataView(new ArrayBuffer(4 * 12));
       for (let i = 0, j = 1; j <= 12; i += 4, j++) {
         dv.setInt32(i, j, littleEndian);
       }
-      await __init;
       const slice = getSlice(dv, 2, 5);
       expect([ ...slice ]).to.eql([ 3, 4, 5 ]);
       expect(slice.dataView.byteOffset).to.equal(8);
       expect(slice.dataView.buffer).to.equal(dv.buffer);
     })
     it('should accept a compatible TypedArray', async function() {
-      const { default: { getSlice }, __init } = await transpileImport(resolve('./integration/function-returning-slice.zig'));
+      const { default: { getSlice } } = await transpileImport(resolve('./integration/function-returning-slice.zig'));
       const ta = new Int32Array(12);
       for (let i = 0, len = ta.length; i < len; i++) {
         ta[i] = i + 1;
       }
-      await __init;
       const slice = getSlice(ta, 2, 5);
       expect([ ...slice ]).to.eql([ 3, 4, 5 ]);
       expect(slice.dataView.byteOffset).to.equal(8);
@@ -217,17 +210,20 @@ describe('WASM integration tests', function() {
 })
 
 function getWASMRuntime() {
-  process.env.NODE_ZIG_TARGET = 'WASM-RUNTIME';
-  return resolve('../src/wasm-exporter.js');
+  return resolve('../../zigar-runtime/index.js');
 }
 
-async function transpileImport(path) {
+async function transpileImport(path, wait = true) {
   const code = await transpile(path, { moduleResolver: getWASMRuntime });
   const hash = await md5(path);
   // need to use .mjs since the file is sitting in /tmp, outside the scope of our package.json
   const jsPath = join(tmpdir(), `${hash}.mjs`);
   await writeFile(jsPath, code);
-  return import(jsPath);
+  const module = await import(jsPath);
+  if (wait) {
+    await module.__init;
+  }
+  return module;
 }
 
 async function md5(text) {
