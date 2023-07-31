@@ -1,28 +1,15 @@
 import { expect } from 'chai';
 
-import { MEMORY, SLOTS, ZIG } from '../src/symbol.js';
+import { MEMORY, SLOTS, ZIG } from '../../zigar-runtime/src/symbol.js';
 import {
-  log,
   invokeFactory,
   getArgumentBuffers,
 } from '../src/addon.js';
 
 describe('C++ addon functions', function() {
-  describe('log', function() {
-    it('should dump values to the debug console', function() {
-      const original = console.log;
-      let values;
-      console.log = function(...args) { values = args };
-      try {
-        log(1, 2, 3);
-      } finally {
-        console.log = original;
-      }
-      expect(values).to.eql([ 1, 2, 3 ]);
-    })
-  })
   describe('invokeFactory', function() {
     it('should run the given thunk function with the expected arguments and return a constructor', function() {
+      process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
       let recv, slots, symbol1, symbol2, symbol3;
       const constructor = function() {};
       function thunk(...args) {

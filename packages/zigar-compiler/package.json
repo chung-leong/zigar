@@ -2,7 +2,7 @@
   "name": "zigar-compiler",
   "version": "0.11.0",
   "description": "Compile Zig code into JavaScript or C++ module",
-  "main": "index.js",
+  "main": "./dist/index.js",
   "type": "module",
   "directories": {
     "test": "test"

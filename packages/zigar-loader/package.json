@@ -2,7 +2,7 @@
   "name": "zigar-loader",
   "version": "0.11.0",
   "description": "Webpack plugin for transpiling Zig code",
-  "main": "index.js",
+  "main": "./dist/index.js",
   "type": "module",
   "directories": {
     "test": "test"

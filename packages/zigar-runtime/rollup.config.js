@@ -1,7 +1,7 @@
 import Replace from '@rollup/plugin-replace';
 
 export default {
-  input: 'src/index.js',
+  input: './src/index.js',
   plugins: [
     Replace({
       preventAssignment: true,
@@ -10,7 +10,7 @@ export default {
     }),
   ],
   output: {
-    file: './index.js',
+    file: './dist/index.js',
     format: 'esm',
   },
 };

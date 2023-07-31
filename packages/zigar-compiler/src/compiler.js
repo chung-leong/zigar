@@ -20,17 +20,17 @@ export async function compile(path, options = {}) {
   } = options;
   const fullPath = resolve(path);
   const rootFile = parse(fullPath);
-  const wasm = (target === 'wasm');
+  const prefix = (target === 'wasm') ? 'wasm' : 'cpp';
   const config = {
     target,
     packageName: rootFile.name,
     packagePath: fullPath,
-    exporterPath: absolute(`${wasm ? 'wasm-' : 'cpp-'}exporter.zig`),
-    stubPath: absolute(`${wasm ? 'wasm-' : 'cpp-'}stub.zig`),
-    buildFilePath: absolute(`build.zig`),
+    exporterPath: absolute(`../zig/${prefix}-exporter.zig`),
+    stubPath: absolute(`../zig/${prefix}-stub.zig`),
+    buildFilePath: absolute(`../zig/build.zig`),
     useLibC: false,
   };
-  const soName = (wasm) ? `${rootFile.name}.wasm` : `lib${rootFile.name}.so`;
+  const soName = (target === 'wasm') ? `${rootFile.name}.wasm` : `lib${rootFile.name}.so`;
   const soPath = join(cacheDir, soName);
   const soMTime = (await find(soPath))?.mtime;
   if (!buildDir || !cacheDir) {
