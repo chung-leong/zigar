@@ -11,19 +11,18 @@ export async function settings(options) {
 export async function compile(path, options = {}) {
   const { env } = process;
   const {
-    buildDir = env.NODE_ZIG_BUILD_DIR ?? tmpdir(),
-    cacheDir = env.NODE_ZIG_CACHE_DIR ?? join(cwd, 'zig-cache'),
-    zigCmd = env.NODE_ZIG_BUILD_CMD ?? 'zig build',
-    cleanUp = env.NODE_ZIG_CLEAN_UP ?? (env.NODE_ENV === 'production') ? '1' : '',
-    target,
-    optimization = (env.NODE_ENV === 'production') ? ((target === 'wasm') ? 'ReleaseSmall' : 'ReleaseFast') : 'Debug',
+    buildDir = env.ZIGAR_BUILD_DIR ?? tmpdir(),
+    cacheDir = env.ZIGAR_CACHE_DIR ?? join(cwd, 'zig-cache'),
+    cleanUp = env.ZIGAR_CLEAN_UP ?? (env.NODE_ENV === 'production') ? '1' : '',
+    target = '',
+    optimize = (env.NODE_ENV === 'production') ? ((target === 'wasm') ? 'ReleaseSmall' : 'ReleaseFast') : 'Debug',
+    zigCmd = env.ZIGAR_BUILD_CMD ?? `zig build -Doptimize=${optimize}`,
   } = options;
   const fullPath = resolve(path);
   const rootFile = parse(fullPath);
   const wasm = (target === 'wasm');
   const config = {
     target,
-    optimization,
     packageName: rootFile.name,
     packagePath: fullPath,
     exporterPath: absolute(`${wasm ? 'wasm-' : 'cpp-'}exporter.zig`),
@@ -70,19 +69,18 @@ export async function compile(path, options = {}) {
       });
     }
   }
-  // build in a unique temp dir
-  const soBuildDir = join(buildDir, await md5(fullPath), (wasm) ? `wasm` : '');
-  const logPath = join(soBuildDir, 'log');
-  const cmdPath = join(soBuildDir, 'cmd');
-  const pidPath = join(soBuildDir, 'pid');
-  // if there's an existing build folder, use it only if the command used to create it is the same
-  const prevCmd = await load(cmdPath, '');
-  if (prevCmd && prevCmd !== zigCmd) {
-    if (await writePID(pidPath)) {
-      await rimraf(soBuildDir);
-      changed = true;
-    }
+  // recompile if options are different
+  const optPath = soPath + '.json';
+  const optString = JSON.stringify({ zigCmd }, undefined, 2);
+  const prevOptString = await load(optPath, '');
+  if (prevOptString !== optString) {
+    changed = true;
   }
+
+  // build in a unique temp dir
+  const soBuildDir = join(buildDir, await md5(fullPath), target);
+  const logPath = join(soBuildDir, 'log');
+  const pidPath = join(soBuildDir, 'pid');
   if (!changed) {
     return soPath;
   }
@@ -112,13 +110,13 @@ export async function compile(path, options = {}) {
           const libPath = join(soBuildDir, 'zig-out', 'lib', soName);
           await mkdirp(cacheDir);
           await move(libPath, soPath);
+          await writeFile(optPath, optString);
         }
       } finally {
         if (cleanUp) {
           await rimraf(soBuildDir);
         } else {
           await unlink(pidPath);
-          await writeFile(cmdPath, zigCmd);
         }
       }
       done = true;
@@ -216,7 +214,6 @@ async function createProject(config, dir) {
   const lines = [];
   lines.push(`const std = @import("std");\n`);
   lines.push(`pub const target: std.zig.CrossTarget = ${target};`);
-  lines.push(`pub const optimize_mode: std.builtin.Mode = .${config.optimization};`);
   lines.push(`pub const package_name = ${JSON.stringify(config.packageName)};`);
   lines.push(`pub const package_path = ${JSON.stringify(config.packagePath)};`);
   lines.push(`pub const exporter_path = ${JSON.stringify(config.exporterPath)};`);
@@ -257,6 +254,8 @@ async function load(path, def) {
     return def;
   }
 }
+
+
 
 async function touch(path) {
   try {

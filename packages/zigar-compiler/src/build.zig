@@ -5,9 +5,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{
         .default_target = cfg.target,
     });
-    const optimize = b.standardOptimizeOption(.{
-        .preferred_optimize_mode = cfg.optimize_mode,
-    });
+    const optimize = b.standardOptimizeOption(.{});
     const lib = b.addSharedLibrary(.{
         .name = cfg.package_name,
         .root_source_file = .{ .path = cfg.stub_path },
