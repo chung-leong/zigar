@@ -480,7 +480,7 @@ export function repackBinary(module) {
     writeArray,
     writeU32Leb128,
     writeExpression,
-  } = createWriter(module.size * 10);
+  } = createWriter(module.size);
   writeU32(MagicNumber);
   writeU32(Version);
   for (const section of module.sections) {
@@ -996,7 +996,11 @@ export function parseFunction(dv) {
     },
   }
   // read locals first
-  const locals = readArray(readU8);
+  const locals = readArray(() => {
+    const number = readU32Leb128();
+    const type = readU8();
+    return { number, type };
+  });
   // decode the expression
   const instructions = [];
   while (!eof()) {
@@ -1106,7 +1110,10 @@ export function repackFunction({ locals, instructions, size }) {
       }
     },
   }
-  writeArray(locals, writeU8);
+  writeArray(locals, ({ number, type }) => {
+    writeU32Leb128(number);
+    writeU8(type);
+  });
   for (const { opcode, operand } of instructions) {
     writeU8(opcode);
     const f = operandWriters[opcode];

@@ -5,7 +5,6 @@ export default {
   plugins: [
     Replace({
       preventAssignment: true,
-      'process.env.NODE_ENV': '"production"',
       'process.env.ZIGAR_TARGET': '"WASM-RUNTIME"',
     }),
   ],

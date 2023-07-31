@@ -210,7 +210,7 @@ describe('WASM integration tests', function() {
 })
 
 function getWASMRuntime() {
-  return resolve('../../zigar-runtime/index.js');
+  return resolve('../../zigar-runtime/dist/index.js');
 }
 
 async function transpileImport(path, wait = true) {
