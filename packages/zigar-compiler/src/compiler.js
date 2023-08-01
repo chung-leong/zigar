@@ -1,3 +1,5 @@
+import { createHash } from 'crypto';
+import { exec } from 'child_process';
 import { parse, join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { stat, lstat, readdir, mkdir, rmdir, unlink, rename, chmod, utimes, readFile, writeFile, open } from 'fs/promises';
@@ -88,7 +90,6 @@ export async function compile(path, options = {}) {
     await mkdirp(soBuildDir);
     if (await writePID(pidPath)) {
       await createProject(config, soBuildDir);
-      const { exec } = await import('child_process');
       const options = {
         cwd: soBuildDir,
         windowsHide: true,
@@ -263,7 +264,6 @@ async function touch(path) {
 }
 
 async function md5(text) {
-  const { createHash } = await import('crypto');
   const hash = createHash('md5');
   hash.update(text);
   return hash.digest('hex');

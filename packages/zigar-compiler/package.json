@@ -20,6 +20,10 @@
   "keywords": [
     "zig"
   ],
+  "exports": {
+    ".": "./dist/index.js",
+    "./cjs": "./dist/index.cjs"
+  },
   "author": "Chung Leong",
   "license": "MIT",
   "gypfile": true,
@@ -34,6 +38,7 @@
     "chai": "^4.3.7",
     "mocha": "^10.2.0",
     "mocha-skip-if": "^1.0.4",
-    "rollup": "^3.23.0"
+    "rollup": "^3.23.0",
+    "webpack-cli": "^5.1.4"
   }
 }
