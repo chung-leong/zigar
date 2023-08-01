@@ -55,7 +55,36 @@ describe('Method functions', function() {
       expect(symbol2).to.equal(MEMORY);
       expect(symbol3).to.equal(ZIG);
     })
-    it('should throw an error if the thunk returns a string', function() {
+    it('should return a promise when trunk returns a promise', async function() {
+      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
+      const argStruct = {
+        [MEMORY]: new DataView(new ArrayBuffer(16)),
+        [SLOTS]: { 0: {} },
+      };
+      let resolve, reject, ready = false;
+      const promise = new Promise((r1, r2) => {
+        resolve = r1;
+        reject = r2;
+      });
+      let called = false;
+      function thunk(args) {
+        if (!ready) {
+          return promise;
+        }
+        called = true;
+        args.retval = 123;
+      }
+      const result = invokeThunk(thunk, argStruct);
+      expect(result).to.be.a('promise');
+      expect(called).to.be.false;
+      ready = true;
+      resolve();
+      thunk(argStruct);
+      const value = await result;
+      expect(value).to.equal(123);
+    })
+    it('should throw an error if C++ addon returns a string', function() {
+      process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
       const argStruct = {
         [MEMORY]: new DataView(new ArrayBuffer(16)),
         [SLOTS]: { 0: {} },
@@ -66,9 +95,23 @@ describe('Method functions', function() {
       expect(() => invokeThunk(thunk, argStruct)).to.throw(Error)
         .with.property('message').that.equals('Jelly donut insurrection') ;
     })
+    it('should throw an error if WASM code returns a string', function() {
+      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
+      const argStruct = {
+        [MEMORY]: new DataView(new ArrayBuffer(16)),
+        [SLOTS]: { 0: {} },
+      };
+      function thunk(...args) {
+        return `ChickensEvolvedIntoCats`;
+      }
+      expect(() => invokeThunk(thunk, argStruct)).to.throw(Error)
+        .with.property('message').that.equals('Chickens evolved into cats') ;
+    })
+
   })
   describe('addMethods', function() {
     beforeEach(function() {
+      process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
       useStruct();
       useEnumeration();
       useBool();

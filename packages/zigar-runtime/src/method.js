@@ -71,6 +71,7 @@ export function invokeThunk(thunk, args) {
         throwZigError(res);
       }
     }
+    /* c8 ignore next 3 */
   } else {
     throw new Error(`Unknown target: ${process.env.ZIGAR_TARGET}`);
   }
