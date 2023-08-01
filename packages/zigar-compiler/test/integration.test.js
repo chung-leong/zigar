@@ -9,7 +9,7 @@ import { transpile } from '../src/transpiler.js';
 const littleEndian = true;
 
 skip.if(process.env.npm_lifecycle_event === 'coverage').
-describe('WASM integration tests', function() {
+describe('Integration tests', function() {
   beforeEach(function() {
     process.env.ZIGAR_TARGET = 'WASM-COMPTIME';
   })
@@ -225,20 +225,12 @@ function getWASMRuntime() {
 }
 
 async function transpileImport(path, options = {}) {
-  const {
-    wait = true,
-    ...compileOptions
-  } = options;
-  const code = await transpile(path, { moduleResolver: getWASMRuntime, ...compileOptions });
-  const hash = await md5(path + JSON.stringify(compileOptions));
+  const code = await transpile(path, { moduleResolver: getWASMRuntime, ...options });
+  const hash = await md5(path + JSON.stringify(options));
   // need to use .mjs since the file is sitting in /tmp, outside the scope of our package.json
   const jsPath = join(tmpdir(), `${hash}.mjs`);
   await writeFile(jsPath, code);
-  const module = await import(jsPath);
-  if (wait) {
-    await module.__init;
-  }
-  return module;
+  return import(jsPath);
 }
 
 async function md5(text) {

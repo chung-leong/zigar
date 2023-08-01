@@ -6,6 +6,7 @@ export function generateCode(structures, params) {
   const {
     runtimeURL,
     loadWASM,
+    topLevelAwait,
     ...structureOptions
   } = params;
   const lines = [];
@@ -124,6 +125,10 @@ export function generateCode(structures, params) {
     add(`${name},`);
   }
   add(`};`);
+  if (topLevelAwait) {
+    add(`\n// await initialization`);
+    add(`await __init`);
+  }
   add(``);
 
   function addStructure(varname, structure) {

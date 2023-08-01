@@ -7,9 +7,10 @@ import { stripUnused } from './wasm-stripper.js';
 export async function transpile(path, options = {}) {
   const {
     embedWASM = true,
+    topLevelAwait = true,
+    omitFunctions = false,
     moduleResolver = (name) => name,
     wasmLoader,
-    omitFunctions,
     ...compileOptions
   } = options;
   const wasmPath = await compile(path, { ...compileOptions, target: 'wasm' });
@@ -39,5 +40,5 @@ export async function transpile(path, options = {}) {
       loadWASM = wasmLoader(wasmPath);
     }
   }
-  return generateCode(structures, { runtimeURL, loadWASM, runtimeSafety });
+  return generateCode(structures, { runtimeURL, loadWASM, runtimeSafety, topLevelAwait });
 }
