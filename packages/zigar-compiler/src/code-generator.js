@@ -44,7 +44,7 @@ export function generateCode(structures, params) {
   const features = [ ...Object.keys(structureFeatures), ...Object.keys(memberFeatures) ];
   const imports = [ 'finalizeStructures' ];
   if (loadWASM) {
-    imports.push('linkWASMBinary');
+    imports.push('linkModule');
   }
   imports.push(...features);
   add(`import {`);
@@ -87,12 +87,11 @@ export function generateCode(structures, params) {
   add(`const module = ${structureNames.get(root)}.constructor;`);
 
   if (loadWASM) {
-    add('\n// initialize loading and compilation of WASM bytecodes');
-    add(`const binaryPromise = ${loadWASM};`);
-    // TODO: figure out how best to load the binary
-    add('const __init = linkWASMBinary(binaryPromise, linkage);');
+    add('\n// initiate loading and compilation of WASM bytecodes');
+    add(`const wasmPromise = ${loadWASM};`);
+    add('const __init = linkModule(wasmPromise, linkage);');
   } else {
-    add('\n// no need to initialize WASM binary');
+    add('\n// no need to use WASM binary');
     add('const __init = Promise.resolve(true);');
   }
 

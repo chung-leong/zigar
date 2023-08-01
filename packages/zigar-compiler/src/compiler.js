@@ -9,14 +9,13 @@ export async function settings(options) {
 }
 
 export async function compile(path, options = {}) {
-  const { env } = process;
   const {
-    buildDir = env.ZIGAR_BUILD_DIR ?? tmpdir(),
-    cacheDir = env.ZIGAR_CACHE_DIR ?? join(cwd, 'zig-cache'),
-    cleanUp = env.ZIGAR_CLEAN_UP ?? (env.NODE_ENV === 'production') ? '1' : '',
+    optimize = 'Debug',
+    clean = false,
     target = '',
-    optimize = (env.NODE_ENV === 'production') ? ((target === 'wasm') ? 'ReleaseSmall' : 'ReleaseFast') : 'Debug',
-    zigCmd = env.ZIGAR_BUILD_CMD ?? `zig build -Doptimize=${optimize}`,
+    buildDir = tmpdir(),
+    cacheDir = join(cwd, 'zig-cache'),
+    zigCmd = `zig build -Doptimize=${optimize}`,
   } = options;
   const fullPath = resolve(path);
   const rootFile = parse(fullPath);
@@ -33,7 +32,7 @@ export async function compile(path, options = {}) {
   const soName = (target === 'wasm') ? `${rootFile.name}.wasm` : `lib${rootFile.name}.so`;
   const soPath = join(cacheDir, soName);
   const soMTime = (await find(soPath))?.mtime;
-  if (!buildDir || !cacheDir) {
+  if (!buildDir || !cacheDir || !zigCmd) {
     // can't build when no command or build directory is set to empty
     if (soMTime) {
       return soPath;
@@ -113,7 +112,7 @@ export async function compile(path, options = {}) {
           await writeFile(optPath, optString);
         }
       } finally {
-        if (cleanUp) {
+        if (clean) {
           await rimraf(soBuildDir);
         } else {
           await unlink(pidPath);
@@ -254,8 +253,6 @@ async function load(path, def) {
     return def;
   }
 }
-
-
 
 async function touch(path) {
   try {

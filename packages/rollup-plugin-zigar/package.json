@@ -29,6 +29,7 @@
   },
   "homepage": "https://github.com/chung-leong/node-zig#readme",
   "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.1.0",
     "@rollup/plugin-replace": "^5.0.2",
     "c8": "^8.0.0",
     "chai": "^4.3.7",

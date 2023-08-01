@@ -16,7 +16,7 @@ const MemoryDisposition = {
   Link: 2,
 };
 
-export async function linkWASMBinary(binaryPromise, params = {}) {
+export async function linkModule(modulePromise, params = {}) {
   const {
     resolve,
     reject,
@@ -24,8 +24,8 @@ export async function linkWASMBinary(binaryPromise, params = {}) {
     ...linkParams
   } = params;
   try {
-    const wasmBinary = await binaryPromise;
-    const result = await runWASMBinary(wasmBinary, linkParams);
+    const module = await modulePromise;
+    const result = await runModule(module, linkParams);
     resolve(result);
   } catch (err) {
     reject(err);
@@ -33,7 +33,7 @@ export async function linkWASMBinary(binaryPromise, params = {}) {
   return promise;
 }
 
-export async function runWASMBinary(wasmBinary, options = {}) {
+export async function runModule(module, options = {}) {
   const {
     omitFunctions = false,
     slots = {},
@@ -83,7 +83,7 @@ export async function runWASMBinary(wasmBinary, options = {}) {
     _createObject: (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') ? _createObject : empty,
     _createTemplate: (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') ? _createTemplate : empty,
   };
-  const { instance } = await WebAssembly.instantiate(wasmBinary, { env: imports });
+  const { instance } = await WebAssembly.instantiate(module, { env: imports });
   const { memory: wasmMemory, define, run, alloc, free, safe } = instance.exports;
   if (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') {
     // call factory function
@@ -491,7 +491,7 @@ export function finalizeStructures(structures, options) {
   });
   const methodRunner = {
     0: function(index, argStruct) {
-      // wait for linking to occur, then active the runner again
+      // wait for linking to occur, then activate the runner again
       return promise.then(() => methodRunner[0].call(this, index, argStruct));
     },
   };
