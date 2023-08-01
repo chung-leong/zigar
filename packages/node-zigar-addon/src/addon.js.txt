@@ -974,9 +974,8 @@ R"=====(
       }
       if (creating) {
         initializer.call(this, arg);
-      } else {
-        return self;
       }
+      return new Proxy(self, proxyHandlers);
     };
     const { byteSize } = member;
     const count = size / byteSize;
@@ -1019,6 +1018,69 @@ R"=====(
     addJSONHandlers(s);
     return constructor;
   }
+
+  const GETTER = Symbol('GETTER');
+  const SETTER = Symbol('SETTER');
+
+  const proxyHandlers = {
+    get(target, name) {
+      const index = (typeof(name) === 'symbol') ? 0 : name|0;
+      if (index !== 0 || index == name) {
+        return target.get(index);
+      } else {
+        switch (name) {
+          case 'get':
+            if (!target[GETTER]) {
+              target[GETTER] = target.get.bind(target);
+            }
+            return target[GETTER];
+          case 'set':
+            if (!target[SETTER]) {
+              target[SETTER] = target.set.bind(target);
+            }
+            return target[SETTER];
+          default:
+            return target[name];
+        }
+      }
+    },
+    set(target, name, value) {
+      const index = (typeof(name) === 'symbol') ? 0 : name|0;
+      if (index !== 0 || index == name) {
+        target.set(index, value);
+      } else {
+        switch (name) {
+          case 'get':
+            target[GETTER] = value;
+            break;
+          case 'set':
+            target[SETTER] = value;
+            break;
+          default:
+            target[name] = value;
+        }
+      }
+      return true;
+    },
+    deleteProperty(target, name) {
+      const index = (typeof(name) === 'symbol') ? 0 : name|0;
+      if (index !== 0 || index == name) {
+        return false;
+      } else {
+        switch (name) {
+          case 'get':
+            delete target[GETTER];
+            break;
+          case 'set':
+            delete target[SETTER];
+            break;
+          default:
+            delete target[name];
+        }
+        return true;
+      }
+    },
+  };
 
   function createChildObjects$1(member, startOffset, recv, dv) {
     let slots = this[SLOTS];
@@ -1386,11 +1448,14 @@ R"=====(
       },
       options,
     } = s;
+    const {
+      runtimeSafety = true,
+    } = options;
     const descriptors = {};
     let getEnumItem;
     let showDefault;
     let valueMembers;
-    const exclusion = (type === StructureType.BareUnion || type === StructureType.TaggedUnion);
+    const exclusion = (type === StructureType.TaggedUnion || (type === StructureType.BareUnion && runtimeSafety));
     if (exclusion) {
       const selectorMember = members[members.length - 1];
       let { get: getIndex, set: setIndex } = getAccessors(selectorMember, options);
@@ -2413,7 +2478,41 @@ R"=====(
     const accessor = getDataViewAccessor(access, member);
     if (bitOffset !== undefined) {
       const offset = bitOffset >> 3;
-      {
+      if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
+        if (access === 'get') {
+          return function() {
+            const dv = this[MEMORY];
+            try {
+              return accessor.call(dv, offset, littleEndian);
+            } catch (err) {
+              if (err instanceof TypeError && dv[SOURCE] && dv.byteOffset === 0) {
+                const { memory, address, len } = dv[SOURCE];
+                const newDV = new DataView(memory.buffer, address, len);
+                Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
+                return accessor.call(newDV, offset, littleEndian);
+              } else {
+                throw err;
+              }
+            }
+          };
+        } else {
+          return function(value) {
+            const dv = this[MEMORY];
+            try {
+              return accessor.call(dv, offset, value, littleEndian);
+            } catch (err) {
+              if (err instanceof TypeError && dv[SOURCE] && dv.byteOffset === 0) {
+                const { memory, address, len } = dv[SOURCE];
+                const newDV = new DataView(memory.buffer, address, len);
+                Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
+                return accessor.call(newDV, offset, value, littleEndian);
+              } else {
+                throw err;
+              }
+            }
+          }
+        }
+      } else {
         if (access === 'get') {
           return function() {
             return accessor.call(this[MEMORY], offset, littleEndian);
@@ -2425,7 +2524,41 @@ R"=====(
         }
       }
     } else {
-      {
+      if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
+        if (access === 'get') {
+          return function(index) {
+            const dv = this[MEMORY];
+            try {
+              return accessor.call(dv, index * byteSize, littleEndian);
+            } catch (err) {
+              if (err instanceof TypeError && dv[SOURCE] && dv.byteOffset === 0) {
+                const { memory, address, len } = dv[SOURCE];
+                const newDV = new DataView(memory.buffer, address, len);
+                Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
+                return accessor.call(newDV, index * byteSize, littleEndian);
+              } else {
+                rethrowRangeError(member, index, err);
+              }
+            }
+          };
+        } else {
+          return function(index, value) {
+            const dv = this[MEMORY];
+            try {
+              return accessor.call(dv, index * byteSize, value, littleEndian);
+            } catch (err) {
+              if (err instanceof TypeError && dv[SOURCE] && dv.byteOffset === 0) {
+                const { memory, address, len } = dv[SOURCE];
+                const newDV = new DataView(memory.buffer, address, len);
+                Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
+                return accessor.call(newDV, index * byteSize, value, littleEndian);
+              } else {
+                rethrowRangeError(member, index, err);
+              }
+            }
+          }
+        }
+      } else {
         if (access === 'get') {
           return function(index) {
             try {
@@ -2659,7 +2792,7 @@ R"=====(
   const globalSlots = {};
 
   function invokeThunk(thunk, args) {
-    {
+    if (process.env.ZIGAR_TARGET === 'NODE-CPP-EXT') {
       // pass the argument object as the this/recv variable
       // while the slots and symbols are passed as arguments
       const err = thunk.call(args, globalSlots, SLOTS, MEMORY, ZIG);
@@ -2670,6 +2803,18 @@ R"=====(
       if (err) {
         throwZigError(err);
       }
+    } else if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
+      const res = thunk(args);
+      if (res !== undefined) {
+        if (res instanceof Promise) {
+          // a promise of the function having been linked and called
+          return res.then(() => args.retval);
+        } else {
+          throwZigError(res);
+        }
+      }
+    } else {
+      throw new Error(`Unknown target: ${process.env.ZIGAR_TARGET}`);
     }
     return args.retval;
   }
