@@ -45,9 +45,8 @@ export function finalizeArray(s) {
     }
     if (creating) {
       initializer.call(this, arg);
-    } else {
-      return self;
     }
+    return new Proxy(self, proxyHandlers);
   };
   const { byteSize } = member;
   const count = size / byteSize;
@@ -90,6 +89,69 @@ export function finalizeArray(s) {
   addJSONHandlers(s);
   return constructor;
 }
+
+const GETTER = Symbol('GETTER');
+const SETTER = Symbol('SETTER');
+
+const proxyHandlers = {
+  get(target, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      return target.get(index);
+    } else {
+      switch (name) {
+        case 'get':
+          if (!target[GETTER]) {
+            target[GETTER] = target.get.bind(target);
+          }
+          return target[GETTER];
+        case 'set':
+          if (!target[SETTER]) {
+            target[SETTER] = target.set.bind(target);
+          }
+          return target[SETTER];
+        default:
+          return target[name];
+      }
+    }
+  },
+  set(target, name, value) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      target.set(index, value);
+    } else {
+      switch (name) {
+        case 'get':
+          target[GETTER] = value;
+          break;
+        case 'set':
+          target[SETTER] = value;
+          break;
+        default:
+          target[name] = value;
+      }
+    }
+    return true;
+  },
+  deleteProperty(target, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      return false;
+    } else {
+      switch (name) {
+        case 'get':
+          delete target[GETTER];
+          break;
+        case 'set':
+          delete target[SETTER];
+          break;
+        default:
+          delete target[name];
+      }
+      return true;
+    }
+  },
+};
 
 export function createChildObjects(member, startOffset, recv, dv) {
   let slots = this[SLOTS];

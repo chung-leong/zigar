@@ -49,6 +49,57 @@ describe('Array functions', function() {
       expect(object.length).to.equal(8);
       expect(object.typedArray).to.be.instanceOf(Uint32Array);
     })
+    it('should allow array access using bracket operator', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        size: 4 * 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello(new Uint32Array(8));
+      object[0] = 321;
+      expect(object[0]).to.equal(321);
+      expect(() => delete object[0]).to.throw();
+      expect(object[0]).to.equal(321);
+      for (let i = 0; i < object.length; i++) {
+        object[i] = i;
+      }
+      for (let i = 0; i < object.length; i++) {
+        expect(object[i]).to.equal(i);
+      }
+      // ensure it that it doesn't throw with symbol
+      expect(() => object[Symbol.asyncIterator]).to.not.throw();
+    })
+    it('should have getter and setter that are bound to the object', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        size: 4 * 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello(new Uint32Array(8));
+      const { get, set, length } = object;
+      for (let i = 0; i < length; i++) {
+        set(i, i);
+      }
+      for (let i = 0; i < length; i++) {
+        expect(get(i)).to.equal(i);
+      }
+    })
     it('should define array that is iterable', function() {
       const structure = beginStructure({
         type: StructureType.Array,
@@ -92,6 +143,24 @@ describe('Array functions', function() {
         expect(object.get(i)).to.equal(i + 1);
       }
     })
+    it('should accept an object of the same type as initializer', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        size: 4 * 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
+      const object2 = new Hello(object);
+      expect([ ...object2 ]).to.eql([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
+    })
     it('should accept an array of bigints as initializer', function() {
       const structure = beginStructure({
         type: StructureType.Array,
@@ -110,6 +179,38 @@ describe('Array functions', function() {
       for (let i = 0; i < 4; i++) {
         expect(object.get(i)).to.equal(BigInt(i + 1) * 100n);
       }
+    })
+    it('should throw when initializer is of the wrong length', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        size: 4 * 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello([ 1, 2, 3, 4, 5, 6, 7, 8, 9 ])).to.throw();
+    })
+    it('should throw when given an object of the incorrect type', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        size: 4 * 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello({})).to.throw();
     })
     it('should correctly initialize an array of structs', function() {
       const structStructure = beginStructure({
@@ -186,6 +287,57 @@ describe('Array functions', function() {
       for (let i = 0; i < 4; i++) {
         expect(object.get(i)).to.equal(BigInt(i + 1) * 1000n);
       }
+    })
+    it('should allow the assignment of setter and getter as well as other properties', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        size: 4 * 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
+      let called;
+      object.get = () => { called = 'get' };
+      object.get();
+      expect(called).to.equal('get');
+      object.set = () => { called = 'set' };
+      object.set();
+      expect(called).to.equal('set');
+      object.ok = () => { called = 'ok' };
+      object.ok();
+    })
+    it('should allow the deletion of setter and getter as well as other properties', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        size: 4 * 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
+      object.get = () => {};
+      delete object.get;
+      expect(object.get(0)).to.equal(1);
+      object.set = () => {};
+      delete object.set;
+      object.set(0, 1);
+      expect(object.get(0)).to.equal(1);
+      object.ok = () => {};
+      delete object.ok;
+      expect(object.ok).to.be.undefined;
     })
   })
   describe('getArrayLengthGetter', function() {
