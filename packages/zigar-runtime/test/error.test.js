@@ -15,6 +15,8 @@ import {
   throwMultipleUnionInitializers,
   throwInactiveUnionProperty,
   throwInvalidInitializer,
+  throwInvalidArrayInitializer,
+  throwArraySizeMismatch,
   throwMissingInitializers,
   throwNoProperty,
   throwOverflow,
@@ -162,6 +164,100 @@ describe('Error functions', function() {
       };
       expect(() => throwMultipleUnionInitializers(structure, 16)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
+    })
+  })
+  describe('throwInvalidArrayInitializer', function() {
+    it('should throw an error for primitive array initializers', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.Array,
+        size: 8,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+            }
+          ],
+        },
+      };
+      expect(() => throwInvalidArrayInitializer(structure, {})).to.throw(TypeError)
+        .with.property('message').that.contains('number');
+    })
+    it('should throw an error for enumeration array initializers', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.Array,
+        size: 8,
+        instance: {
+          members: [
+            {
+              type: MemberType.EnumerationItem,
+              bitSize: 32,
+              byteSize: 4,
+            }
+          ],
+        },
+      };
+      expect(() => throwInvalidArrayInitializer(structure, {})).to.throw(TypeError)
+        .with.property('message').that.contains('enum items');
+    })
+    it('should throw an error for object array initializers', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.Array,
+        size: 8,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 32,
+              byteSize: 4,
+            }
+          ],
+        },
+      };
+      expect(() => throwInvalidArrayInitializer(structure, {})).to.throw(TypeError)
+        .with.property('message').that.contains('objects');
+    })
+  })
+  describe('throwArraySizeMismatch', function() {
+    it('should throw a type error', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.Array,
+        size: 8,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+            }
+          ],
+        },
+      };
+      expect(() => throwArraySizeMismatch(structure, 2, {})).to.throw(TypeError)
+        .with.property('message').that.contains('2 elements');
+    })
+    it('should use singular noun when there is just one element', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.Array,
+        size: 4,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+            }
+          ],
+        },
+      };
+      expect(() => throwArraySizeMismatch(structure, 1, [])).to.throw(TypeError)
+        .with.property('message').that.contains('1 element,');
     })
   })
   describe('throwInactiveUnionProperty', function() {
