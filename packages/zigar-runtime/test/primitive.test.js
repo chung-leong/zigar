@@ -45,6 +45,26 @@ describe('Primitive functions', function() {
       expect(object.$).to.equal(0x7FFFFFFFFFFFFFFFn);
       expect(BigInt(object)).to.equal(0x7FFFFFFFFFFFFFFFn);
     })
+    it('should initialize a structure with a structure of the same type', function() {
+      const structure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isSigned: true,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello(12345n);
+      expect(object.$).to.equal(12345n);
+      const object2 = new Hello(object);
+      expect(object2.valueOf()).to.equal(12345n);
+    })
   })
   describe('getIntRange', function() {
     it('should return expected range for a 8-bit signed integer', function() {
