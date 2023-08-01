@@ -19,7 +19,9 @@ export async function transpile(path, options = {}) {
     ...otherOptions
   } = options;
   if (typeof(wasmLoader) !== 'function') {
-    throw new Error(`wasmLoader is a required option when embedWASM is false`);
+    if (embedWASM !== true) {
+      throw new Error(`wasmLoader is a required option when embedWASM is false`);
+    }
   }
   const wasmPath = await compile(path, { ...otherOptions, optimize, target: 'wasm' });
   const content = await readFile(wasmPath);
