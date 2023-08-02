@@ -94,7 +94,6 @@ describe('Static variable functions', function() {
         byteSize: 8,
         slot: 0,
         structure: intPtrStructure,
-        mutable: true,
       });
       attachMember(structure, {
         name: 'supercat',
@@ -203,7 +202,6 @@ describe('Static variable functions', function() {
         byteSize: 8,
         slot: 0,
         structure: intPtrStructure,
-        mutable: true,
       });
       attachMember(structure, {
         name: 'supercat',

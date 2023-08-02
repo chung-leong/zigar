@@ -386,15 +386,11 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
     if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
       if (access === 'get') {
         return function() {
-          const dv = this[MEMORY];
           try {
-            return accessor.call(dv, offset, littleEndian);
+            return accessor.call(this[MEMORY], offset, littleEndian);
           } catch (err) {
-            if (err instanceof TypeError && dv[SOURCE] && dv.byteOffset === 0) {
-              const { memory, address, len } = dv[SOURCE];
-              const newDV = new DataView(memory.buffer, address, len);
-              Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
-              return accessor.call(newDV, offset, littleEndian);
+            if (err instanceof TypeError && restoreMemory.call(this)) {
+              return accessor.call(this[MEMORY], offset, littleEndian);
             } else {
               throw err;
             }
@@ -402,15 +398,11 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
         };
       } else {
         return function(value) {
-          const dv = this[MEMORY];
           try {
-            return accessor.call(dv, offset, value, littleEndian);
+            return accessor.call(this[MEMORY], offset, value, littleEndian);
           } catch (err) {
-            if (err instanceof TypeError && dv[SOURCE] && dv.byteOffset === 0) {
-              const { memory, address, len } = dv[SOURCE];
-              const newDV = new DataView(memory.buffer, address, len);
-              Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
-              return accessor.call(newDV, offset, value, littleEndian);
+            if (err instanceof TypeError && restoreMemory.call(this)) {
+              return accessor.call(this[MEMORY], offset, value, littleEndian);
             } else {
               throw err;
             }
@@ -432,15 +424,11 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
     if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
       if (access === 'get') {
         return function(index) {
-          const dv = this[MEMORY];
           try {
-            return accessor.call(dv, index * byteSize, littleEndian);
+            return accessor.call(this[MEMORY], index * byteSize, littleEndian);
           } catch (err) {
-            if (err instanceof TypeError && dv[SOURCE] && dv.byteOffset === 0) {
-              const { memory, address, len } = dv[SOURCE];
-              const newDV = new DataView(memory.buffer, address, len);
-              Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
-              return accessor.call(newDV, index * byteSize, littleEndian);
+            if (err instanceof TypeError && restoreMemory.call(this)) {
+              return accessor.call(this[MEMORY], index * byteSize, littleEndian);
             } else {
               rethrowRangeError(member, index, err);
             }
@@ -448,15 +436,11 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
         };
       } else {
         return function(index, value) {
-          const dv = this[MEMORY];
           try {
-            return accessor.call(dv, index * byteSize, value, littleEndian);
+            return accessor.call(this[MEMORY], index * byteSize, value, littleEndian);
           } catch (err) {
-            if (err instanceof TypeError && dv[SOURCE] && dv.byteOffset === 0) {
-              const { memory, address, len } = dv[SOURCE];
-              const newDV = new DataView(memory.buffer, address, len);
-              Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
-              return accessor.call(newDV, index * byteSize, value, littleEndian);
+            if (err instanceof TypeError && restoreMemory.call(this)) {
+              return accessor.call(this[MEMORY], index * byteSize, value, littleEndian);
             } else {
               rethrowRangeError(member, index, err);
             }
@@ -485,3 +469,15 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
   }
 }
 
+export function restoreMemory() {
+  const dv = this[MEMORY];
+  const source = dv[SOURCE];
+  if (!source || dv.byteOffset !== 0) {
+    return false;
+  }
+  const { memory, address, len } = source;
+  const newDV = new DataView(memory.buffer, address, len);
+  newDV[SOURCE] = source;
+  Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
+  return true;
+}

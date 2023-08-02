@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
 import { StructureType } from '../src/structure.js';
-import { MEMORY, SLOTS } from '../src/symbol.js';
+import { MEMORY, SLOTS, SOURCE } from '../src/symbol.js';
 import {
   MemberType,
   isByteAligned,
@@ -17,9 +17,13 @@ import {
   useEnumerationItemEx,
   useObject,
   useType,
+  getMemberFeature,
 } from '../src/member.js';
 
 describe('Member functions', function() {
+  beforeEach(function() {
+    process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
+  })
   describe('isByteAligned', function() {
     it('should return true when member is byte-aligned', function() {
       const members = [
@@ -378,7 +382,7 @@ describe('Member functions', function() {
         bitOffset: 0,
         byteSize: 8,
         slot: 1,
-        mutable: true,
+        isConst: false,
         structure: {
           type: StructureType.Pointer,
           instance: {
@@ -398,7 +402,7 @@ describe('Member functions', function() {
       set.call(object, 456);
       expect(get.call(object)).to.equal(456);
     })
-    it('should return object accessors (Pointer, auto-deref to primitive)', function() {
+    it('should return object accessors (Pointer, auto-deref to structure)', function() {
       const DummyClass = function(value) {
         this.value = value;
       };
@@ -415,7 +419,7 @@ describe('Member functions', function() {
         bitOffset: 0,
         byteSize: 8,
         slot: 1,
-        mutable: true,
+        isConst: false,
         structure: {
           type: StructureType.Pointer,
           instance: {
@@ -435,6 +439,59 @@ describe('Member functions', function() {
       set.call(object, new DummyClass(456));
       // not how the pointer class actually behaves
       expect(get.call(object).value).to.equal(456);
+    })
+    it('should not return a setter when pointer is const', function() {
+      const DummyClass = function(value) {
+        this.value = value;
+      };
+      Object.defineProperties(DummyClass.prototype, {
+        $: {
+          get() { return this.value },
+          set(value) { this.value = value },
+        }
+      });
+      const dummyObject = new DummyClass(123);
+      const object = {
+        [SLOTS]: {
+          1: { '*': dummyObject },
+        },
+      };
+      const member = {
+        type: MemberType.Object,
+        signed: false,
+        bitSize: 8,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 1,
+        isConst: true,
+        structure: {
+          type: StructureType.Pointer,
+          instance: {
+            members: [
+              {
+                structure: {
+                  type: StructureType.Primitive,
+                  constructor: DummyClass
+                },
+              }
+            ]
+          }
+        }
+      };
+      const { set: set1 } = getAccessors(member, { autoDeref: true });
+      expect(set1).to.be.undefined;
+      // get primitive array accessor
+      member.slot = undefined;
+      const { set: set2 } = getAccessors(member, { autoDeref: true });
+      expect(set2).to.be.undefined;
+      // get object array accessor
+      member.structure.instance.members[0].structure.type = StructureType.Object;
+      const { set: set3 } = getAccessors(member, { autoDeref: true });
+      expect(set3).to.be.undefined;
+      // get object accessor
+      member.slot = 1;
+      const { set: set4 } = getAccessors(member, { autoDeref: true });
+      expect(set4).to.be.undefined;
     })
     it('should return type accessors', function() {
       useType();
@@ -622,7 +679,7 @@ describe('Member functions', function() {
         signed: false,
         bitSize: 8,
         byteSize: 8,
-        mutable: true,
+        isConst: false,
         structure: {
           type: StructureType.Pointer,
           instance: {
@@ -666,7 +723,7 @@ describe('Member functions', function() {
         signed: false,
         bitSize: 8,
         byteSize: 8,
-        mutable: true,
+        isConst: false,
         structure: {
           type: StructureType.Pointer,
           instance: {
@@ -736,6 +793,277 @@ describe('Member functions', function() {
       expect(get.call(object, 0, false)).to.equal(1235);
       expect(get.call(object, 1, false)).to.equal(-3);
       expect(get.call(object, 2, false)).to.equal(-2);
+    })
+    it('should return accessors for accessing WASM memory', function() {
+      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
+      useInt();
+      const memory = new WebAssembly.Memory({
+        initial: 128,
+        maximum: 1024,
+      });
+      const dv = new DataView(memory.buffer, 0, 8);
+      dv[SOURCE] = { memory, address: 0, len: 8 };
+      const object = {
+        [MEMORY]: dv,
+      };
+      const member = {
+        type: MemberType.Int,
+        signed: false,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      };
+      const { get, set } = getAccessors(member, {});
+      set.call(object, 123);
+      memory.grow(1);
+      expect(get.call(object)).to.equal(123);
+      const dv2 = object[MEMORY];
+      expect(dv2).to.not.equal(dv);
+      memory.grow(1);
+      expect(() => set.call(object, 456)).to.not.throw();
+      const dv3 = object[MEMORY];
+      expect(dv3).to.not.equal(dv2);
+    })
+    it('should return array accessors for accessing WASM memory', function() {
+      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
+      useInt();
+      const memory = new WebAssembly.Memory({
+        initial: 128,
+        maximum: 1024,
+      });
+      const dv = new DataView(memory.buffer, 0, 8);
+      dv[SOURCE] = { memory, address: 0, len: 8 };
+      const object = {
+        [MEMORY]: dv,
+      };
+      const member = {
+        type: MemberType.Int,
+        signed: false,
+        bitSize: 32,
+        byteSize: 4,
+      };
+      const { get, set } = getAccessors(member, {});
+      set.call(object, 0, 123);
+      memory.grow(1);
+      expect(get.call(object, 0)).to.equal(123);
+      const dv2 = object[MEMORY];
+      expect(dv2).to.not.equal(dv);
+      memory.grow(1);
+      set.call(object, 0, 456);
+      expect(() => set.call(object, 0, 456)).to.not.throw();
+      const dv3 = object[MEMORY];
+      expect(dv3).to.not.equal(dv2);
+    })
+    it('should not trap errors unrelated to WASM buffer detachment', function() {
+      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
+      useInt();
+      const memory = new WebAssembly.Memory({
+        initial: 128,
+        maximum: 1024,
+      });
+      const dv = new DataView(memory.buffer, 0, 8);
+      dv[SOURCE] = { memory, address: 0, len: 8 };
+      const object = {
+        [MEMORY]: dv,
+      };
+      const member = {
+        type: MemberType.Int,
+        signed: false,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      };
+      const { get, set } = getAccessors(member, {});
+      expect(() => set.call(object, 123n)).to.throw(TypeError);
+      // force a specific error
+      Object.defineProperty(object, MEMORY, {
+        get() {
+          throw new Error('Bogus man!');
+        }
+      });
+      expect(() => get.call(object)).to.throw();
+      expect(() => set.call(object, 123)).to.throw();
+    })
+    it('should throw range error when indexing beyond an array after WASM memory detachment', function() {
+      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
+      useInt();
+      const memory = new WebAssembly.Memory({
+        initial: 128,
+        maximum: 1024,
+      });
+      const dv = new DataView(memory.buffer, 0, 8);
+      dv[SOURCE] = { memory, address: 0, len: 8 };
+      const object = {
+        [MEMORY]: dv,
+      };
+      const member = {
+        type: MemberType.Int,
+        signed: false,
+        bitSize: 32,
+        byteSize: 4,
+      };
+      const { get, set } = getAccessors(member, {});
+      memory.grow(1);
+      expect(() => set.call(object, 4, 123)).to.throw(RangeError);
+      // do it a second time to hit different branch
+      expect(() => set.call(object, 4, 123)).to.throw(RangeError);
+      memory.grow(1);
+      expect(() => get.call(object, 4)).to.throw(RangeError);
+      expect(() => get.call(object, 4)).to.throw(RangeError);
+    })
+    it('should return accessors that work correctly with regular ArrayBuffer', function() {
+      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
+      useInt();
+      const dv = new DataView(new ArrayBuffer(4));
+      const object = {
+        [MEMORY]: dv,
+      };
+      const member = {
+        type: MemberType.Int,
+        signed: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      };
+      const { get, set } = getAccessors(member, {});
+      set.call(object, 123);
+      expect(get.call(object)).to.equal(123);
+      expect(() => set.call(object, 123n)).to.throw(TypeError);
+    })
+  })
+  describe('getMemberFeature', function() {
+    it('should return name of function for handling standard int', function() {
+      const member = {
+        type: MemberType.Int,
+        isSigned: true,
+        bitSize: 32,
+        byteSize: 4,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useInt');
+    })
+    it('should return name of function for handling unaligned int', function() {
+      const member = {
+        type: MemberType.Int,
+        isSigned: true,
+        bitOffset: 2,
+        bitSize: 32,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useIntEx');
+    })
+    it('should return name of function for handling non-standard int', function() {
+      const member = {
+        type: MemberType.Int,
+        isSigned: true,
+        bitSize: 35,
+        byteSize: 8,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useIntEx');
+    })
+    it('should return name of function for handling standard float', function() {
+      const member = {
+        type: MemberType.Float,
+        isSigned: true,
+        bitSize: 32,
+        byteSize: 4,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useFloat');
+    })
+    it('should return name of function for handling unaligned float', function() {
+      const member = {
+        type: MemberType.Float,
+        isSigned: true,
+        bitOffset: 2,
+        bitSize: 32,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useFloatEx');
+    })
+    it('should return name of function for handling non-standard float', function() {
+      const member = {
+        type: MemberType.Float,
+        isSigned: true,
+        bitSize: 128,
+        byteSize: 8,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useFloatEx');
+    })
+    it('should return name of function for handling standard bool', function() {
+      const member = {
+        type: MemberType.Bool,
+        bitSize: 1,
+        byteSize: 1,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useBool');
+    })
+    it('should return name of function for handling bitfields', function() {
+      const member = {
+        type: MemberType.Bool,
+        bitOffset: 2,
+        bitSize: 1,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useBoolEx');
+    })
+    it('should return name of function for handling standard enum', function() {
+      const member = {
+        type: MemberType.EnumerationItem,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useEnumerationItem');
+    })
+    it('should return name of function for handling unaligned enum', function() {
+      const member = {
+        type: MemberType.EnumerationItem,
+        isSigned: false,
+        bitOffset: 2,
+        bitSize: 8,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useEnumerationItemEx');
+    })
+    it('should return name of function for handling non-standard enum', function() {
+      const member = {
+        type: MemberType.EnumerationItem,
+        isSigned: false,
+        bitSize: 4,
+        byteSize: 1,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useEnumerationItemEx');
+    })
+    it('should return name of function for handling objects', function() {
+      const member = {
+        type: MemberType.Object,
+        bitSize: 64,
+        byteSize: 8,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useObject');
+    })
+    it('should return name of function for handling types', function() {
+      const member = {
+        type: MemberType.Type,
+        isStatic: true,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useType');
+    })
+    it('should return name of function for handling void', function() {
+      const member = {
+        type: MemberType.Void,
+        isStatic: true,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useVoid');
     })
   })
 })
