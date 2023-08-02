@@ -465,9 +465,38 @@ describe('Struct functions', function() {
         bitOffset: 32,
       });
       const Hello = finalizeStructure(structure);
-      expect(() => new Hello(5)).to.throw(TypeError)
-        .with.property('message').that.does.not.contains('dog');
+      expect(() => new Hello({ dog: 1234, cat: 4567, turkey: 1 })).to.throw(TypeError)
+        .with.property('message').that.contains('turkey');
     })
+    it('should complain about invalid initializers', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 32,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello(5)).to.throw(TypeError)
+        .with.property('message').that.does.not.contain('dog');
+    })
+
     it('should apply default value when only some properties are provided', function() {
       const structure = beginStructure({
         type: StructureType.Struct,

@@ -136,13 +136,3 @@ export function getPointerResetter(members) {
     }
   };
 }
-
-export function getPointerPreserver(members) {
-  const pointerMembers = members.filter(m => m.structure.hasPointer);
-  return function() {
-    const destSlots = this[SLOTS];
-    for (const { slot, structure: { pointerPreserver } } of pointerMembers) {
-      pointerPreserver.call(destSlots[slot]);
-    }
-  };
-}

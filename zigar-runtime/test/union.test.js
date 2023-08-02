@@ -140,6 +140,57 @@ describe('Union functions', function() {
       object[MEMORY].setInt32(0, 567, true);
       expect(object.dog).to.be.null;
       expect(object.cat).to.equal(567);
+      expect(() => object.cat = 123).to.not.throw();
+      expect(object.cat).to.equal(123);
+    })
+    it('should initialize a simple bare union', function() {
+      const structure = beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        bitOffset: 32,
+        byteSize: 2,
+      });
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(8));
+            dv.setInt32(0, 1234, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
+      })
+      const Hello = finalizeStructure(structure);
+      const object = new Hello({ cat: 123 });
+      expect(object.cat).to.equal(123);
+      expect(object.dog).to.be.null;
     })
     it('should define a simple tagged union', function() {
       const enumStructure = beginStructure({
@@ -356,6 +407,83 @@ describe('Union functions', function() {
       const object = new Hello({ dog: 1234 });
       expect(object.dog).to.equal(1234);
       expect({ ...object }).to.eql({ dog: 1234 });
+    })
+    it('should throw when an unknown initializer is encountered', function() {
+      const structure = beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        bitOffset: 32,
+        byteSize: 2,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello({ dogg: 1234 })).to.throw(TypeError)
+        .with.property('message').that.contains('dogg');
+    })
+    it('should throw when constructor is given something other than an object', function() {
+      const structure = beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        bitOffset: 32,
+        byteSize: 2,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello(5)).to.throw(TypeError);
     })
     it('should throw when attempting to set an active property', function() {
       const structure = beginStructure({

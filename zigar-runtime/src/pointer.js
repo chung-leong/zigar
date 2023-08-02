@@ -12,7 +12,6 @@ export function finalizePointer(s) {
     options,
   } = s;
   const { structure: target } = member;
-  const isSlice = target.type === StructureType.Slice;
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;

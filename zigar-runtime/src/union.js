@@ -96,8 +96,6 @@ export function finalizeUnion(s) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
-      // new operation--expect an object
-      // TODO: validate argument
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {

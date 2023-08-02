@@ -11,6 +11,7 @@ import {
   StructureType,
   useArray,
   useStruct,
+  usePointer,
   beginStructure,
   attachMember,
   finalizeStructure,
@@ -24,6 +25,7 @@ describe('Array functions', function() {
   describe('finalizeArray', function() {
     beforeEach(function() {
       useArray();
+      usePointer();
       useStruct();
       useIntEx();
       useObject();
@@ -212,7 +214,7 @@ describe('Array functions', function() {
       const Hello = finalizeStructure(structure);
       expect(() => new Hello({})).to.throw();
     })
-    it('should correctly initialize an array of structs', function() {
+    it('should correctly initialize an array of struct pointers', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -239,9 +241,26 @@ describe('Array functions', function() {
         bitSize: 32,
       });
       const Hello = finalizeStructure(structStructure);
+      const pointerStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Hello',
+        size: 8,
+      });
+      attachMember(pointerStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        byteSize: 8,
+        bitOffset: 0,
+        bitSize: 64,
+        slot: 0,
+        structure: structStructure,
+      });
+      const HelloPtr = finalizeStructure(pointerStructure);
       const structure = beginStructure({
         type: StructureType.Array,
-        name: 'Hello',
+        name: '[4]*Hello',
         size: 8 * 4,
       });
       attachMember(structure, {
@@ -249,16 +268,10 @@ describe('Array functions', function() {
         isStatic: false,
         bitSize: 64,
         byteSize: 8,
-        structure: structStructure,
+        structure: pointerStructure,
       });
-      const HelloArray = finalizeStructure(structure);
-      const object = new HelloArray([
-        { dog: 1, cat: 2 },
-        { dog: 3, cat: 4 },
-        { dog: 5, cat: 6 },
-        { dog: 7, cat: 8 },
-      ]);
-      expect(object.valueOf()).to.eql([
+      const HelloPtrArray = finalizeStructure(structure);
+      const object = new HelloPtrArray([
         { dog: 1, cat: 2 },
         { dog: 3, cat: 4 },
         { dog: 5, cat: 6 },
