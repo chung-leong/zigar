@@ -133,13 +133,13 @@ const Structs = struct {
     };
     const OverflowFloat80 = struct {
         max: f80 = std.math.floatMax(f64),
-        maxx2: f80 = @floatCast(f80, std.math.floatMax(f64)) * 2,
-        minusMaxx2: f80 = -@floatCast(f80, std.math.floatMax(f64)) * 2,
+        maxx2: f80 = @as(f80, @floatCast(std.math.floatMax(f64))) * 2,
+        minusMaxx2: f80 = -@as(f80, @floatCast(std.math.floatMax(f64))) * 2,
     };
     const OverflowFloat128 = struct {
         max: f128 = std.math.floatMax(f64),
-        maxx2: f128 = @floatCast(f128, std.math.floatMax(f64)) * 2,
-        minusMaxx2: f128 = -@floatCast(f128, std.math.floatMax(f64)) * 2,
+        maxx2: f128 = @as(f128, @floatCast(std.math.floatMax(f64))) * 2,
+        minusMaxx2: f128 = -@as(f128, @floatCast(std.math.floatMax(f64))) * 2,
     };
     const OptionalIntSet = struct {
         number: ?i64 = 0x00000FFFF,
@@ -282,7 +282,7 @@ pub fn main() !void {
                 },
             }
             try stdout.print("{s} ({d} bytes): \n\n", .{ @typeName(T), @sizeOf(T) });
-            const ptr = @ptrCast([*]u8, &s);
+            const ptr = @as([*]u8, @ptrCast(&s));
             const len = @sizeOf(T);
             var i: usize = 0;
             try stdout.print("[ ", .{});

@@ -508,4 +508,10 @@ function cacheMethod(access, member, cb) {
   return fn;
 }
 
+export function clearMethodCache() {
+  for (const key of Object.keys(methodCache)) {
+    delete methodCache[key];
+  }
+}
+
 const methodCache = {};
