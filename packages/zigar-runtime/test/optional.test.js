@@ -65,6 +65,64 @@ describe('Optional functions', function() {
       object.$ = null;
       expect(object.$).to.equal(null);
     })
+    it('should initialize an optional value based on argument given', function() {
+      const structure = beginStructure({
+        type: StructureType.Optional,
+        name: 'Hello',
+        size: 18,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Float,
+        bitOffset: 0,
+        bitSize: 128,
+        byteSize: 16,
+        structure: {
+          type: StructureType.Primitive,
+        }
+      });
+      attachMember(structure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: 128,
+        bitSize: 1,
+        byteSize: 1,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello();
+      expect(object.$).to.equal(null);
+      object.$ = 3.14;
+      expect(object.$).to.equal(3.14);
+    })
+    it('should initialize an optional value from object of same type', function() {
+      const structure = beginStructure({
+        type: StructureType.Optional,
+        name: 'Hello',
+        size: 18,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Float,
+        bitOffset: 0,
+        bitSize: 128,
+        byteSize: 16,
+        structure: {
+          type: StructureType.Primitive,
+        }
+      });
+      attachMember(structure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: 128,
+        bitSize: 1,
+        byteSize: 1,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello();
+      object.$ = 3.14;
+      const object2 = new Hello(object);
+      expect(object2.$).to.equal(3.14);
+    })
     it('should define a structure for storing an optional struct', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,

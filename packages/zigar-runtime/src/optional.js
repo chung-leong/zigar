@@ -29,7 +29,7 @@ export function finalizeOptional(s) {
       createChildObjects.call(self, objectMembers, this, dv);
     }
     if (creating) {
-      initializer.call(this, arg);
+      initializer.call(self, arg);
     } else {
       return self;
     }
@@ -45,7 +45,7 @@ export function finalizeOptional(s) {
         }
       }
     } else {
-      this.set(arg);
+      this.$ = arg;
     }
   };
   const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
