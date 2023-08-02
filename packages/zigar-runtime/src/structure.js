@@ -76,6 +76,7 @@ export function usePointer() {
 export function useSlice() {
   factories[StructureType.Slice] = finalizeSlice;
 }
+
 export function useOpaque() {
   factories[StructureType.Opaque] = finalizeStruct;
 }
