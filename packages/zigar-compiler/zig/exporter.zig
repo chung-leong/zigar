@@ -1147,7 +1147,7 @@ fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
                 // rezig the target(s)
                 if (pt.size == .One) {
                     try rezigStructure(host, child_obj, ptr.*);
-                } else if (pt.size == .Many) {
+                } else if (pt.size == .Slice) {
                     for (ptr.*, 0..) |*element_ptr, index| {
                         const element_obj = try host.readObjectSlot(child_obj, index);
                         try rezigStructure(host, element_obj, element_ptr);

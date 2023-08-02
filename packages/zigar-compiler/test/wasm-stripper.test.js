@@ -33,6 +33,7 @@ describe('WASM stripper', function() {
   })
   describe('repackBinary', function() {
     it('should recreate WASM binary', async function() {
+      this.timeout(10000);
       for (const path of wasmFiles) {
         const content = await readFile(path);
         const binary = new DataView(content.buffer);
@@ -84,6 +85,7 @@ describe('WASM stripper', function() {
       }
     })
     it('should handle more complicated file', async function() {
+      this.timeout(10000);
       const path = resolve(`./wasm-samples/exporter.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);

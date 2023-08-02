@@ -6,10 +6,6 @@ import { stat, lstat, readdir, mkdir, rmdir, unlink, rename, chmod, utimes, read
 
 const cwd = process.cwd();
 
-export async function settings(options) {
-  Object.assign(defaults, options);
-}
-
 export async function compile(path, options = {}) {
   const {
     optimize = 'Debug',
@@ -26,6 +22,7 @@ export async function compile(path, options = {}) {
     target,
     packageName: rootFile.name,
     packagePath: fullPath,
+    packageRoot: rootFile.dir,
     exporterPath: absolute(`../zig/${prefix}-exporter.zig`),
     stubPath: absolute(`../zig/${prefix}-stub.zig`),
     buildFilePath: absolute(`../zig/build.zig`),
@@ -42,33 +39,34 @@ export async function compile(path, options = {}) {
       throw new Error(`Cannot find shared library and compilation is disabled: ${soPath}`);
     }
   }
-  if (!find(fullPath)) {
+  if (!await find(fullPath)) {
     throw new Error(`Source file not found: ${fullPath}`);
   }
   // scan the dir containing the file to see if recompilation is necessary
   // also check if there's a custom build file and for C dependency
   let changed = false;
-  await walk(rootFile.dir, /\.(zig|c|cc|cpp|h|hh)$/i, (dir, name, { mtime }) => {
-    if (dir === rootFile.dir && name === rootFile.name + '.build.zig') {
+  await walk(rootFile.dir, /\.zig$/i, async (dir, name, { mtime }) => {
+    if (dir === rootFile.dir && name === 'build.zig') {
       config.buildFilePath = join(dir, name);
     }
-    if (!/\.zig$/.test(name)) {
-      config.useLibC = true;
+    if (!config.useLibC) {
+      const content = await load(join(dir, name));
+      if (content.includes('@cImport')) {
+        config.useLibC = true;
+      }
     }
     if (!(soMTime > mtime)) {
       changed = true;
     }
   });
-  if (process.env.NODE_ENV !== 'production') {
-    if (!changed) {
-      const { pathname } = new URL('../zig', import.meta.url);
-      // rebuild when source files have changed
-      await walk(pathname, /\.zig$/i, (dir, name, { mtime }) => {
-        if (!(soMTime > mtime)) {
-          changed = true;
-        }
-      });
-    }
+  if (!changed) {
+    const { pathname } = new URL('../zig', import.meta.url);
+    // rebuild when source files have changed
+    await walk(pathname, /\.zig$/i, (dir, name, { mtime }) => {
+      if (!(soMTime > mtime)) {
+        changed = true;
+      }
+    });
   }
   // recompile if options are different
   const optPath = soPath + '.json';
@@ -110,6 +108,8 @@ export async function compile(path, options = {}) {
           const libPath = join(soBuildDir, 'zig-out', 'lib', soName);
           await mkdirp(cacheDir);
           await move(libPath, soPath);
+          await touch(soPath);
+          const { mtime } = await stat(soPath);
           await writeFile(optPath, optString);
         }
       } finally {
@@ -141,6 +141,13 @@ export async function compile(path, options = {}) {
   return soPath;
 }
 
+export async function getBuildFolder(path) {
+  // only used by test script
+  const buildDir = tmpdir();
+  const fullPath = resolve(path);
+  return join(buildDir, await md5(fullPath));
+}
+
 async function find(path, follow = true) {
   try {
     return await (follow ? stat(path) : lstat(path));
@@ -151,6 +158,7 @@ async function find(path, follow = true) {
 async function walk(dir, re, cb) {
   const ino = (await find(dir))?.ino;
   if (!ino) {
+    /* c8 ignore next 2 */
     return;
   }
   const scanned = [ ino ];
@@ -166,9 +174,10 @@ async function walk(dir, re, cb) {
         if (info?.isDirectory() && !scanned.includes(info.ino)) {
           await scan(path);
         } else if (info?.isFile() && re.test(name)) {
-          cb(dir, name, info);
+          await cb(dir, name, info);
         }
       }
+      /* c8 ignore next 2 */
     } catch (err) {
     }
   };
@@ -216,6 +225,7 @@ async function createProject(config, dir) {
   lines.push(`pub const target: std.zig.CrossTarget = ${target};`);
   lines.push(`pub const package_name = ${JSON.stringify(config.packageName)};`);
   lines.push(`pub const package_path = ${JSON.stringify(config.packagePath)};`);
+  lines.push(`pub const package_root = ${JSON.stringify(config.packageRoot)};`);
   lines.push(`pub const exporter_path = ${JSON.stringify(config.exporterPath)};`);
   lines.push(`pub const stub_path = ${JSON.stringify(config.stubPath)};`);
   lines.push(`pub const use_libc = ${config.useLibC ? true : false};`);
@@ -229,6 +239,7 @@ async function createProject(config, dir) {
 
 async function move(srcPath, dstPath) {
   try {
+    const { mtime } = await stat(srcPath);
     await rename(srcPath, dstPath);
   } catch (err) {
     if (err.code == 'EXDEV') {
