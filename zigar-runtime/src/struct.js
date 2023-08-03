@@ -41,7 +41,7 @@ export function finalizeStruct(s) {
       createChildObjects.call(self, objectMembers, this, dv);
     }
     if (creating) {
-      initializer.call(this, arg);
+      initializer.call(self, arg);
       if (arg) {
         for (const [ key, value ] of Object.entries(arg)) {
           this[key] = value;

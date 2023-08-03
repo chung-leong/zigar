@@ -182,18 +182,13 @@ describe('Slice functions', function() {
       for (let i = 0; i < 4; i++) {
         expect(object.get(i)).to.equal(BigInt(i + 1) * 100n);
       }
-      object.$ = new BigUint64Array([ 1000n, 2000n, 3000n, 4000n, 5000n, 6000n ]);
-      expect(object.length).to.equal(6);
-      for (let i = 0; i < 6; i++) {
+      object.$ = new BigUint64Array([ 1000n, 2000n, 3000n, 4000n ]);
+      expect(object.length).to.equal(4);
+      for (let i = 0; i < 4; i++) {
         expect(object.get(i)).to.equal(BigInt(i + 1) * 1000n);
       }
-      object.$ = new BigUint64Array([ 10000n, 20000n, 30000n ]);
-      expect(object.length).to.equal(3);
-      for (let i = 0; i < object.length; i++) {
-        expect(object.get(i)).to.equal(BigInt(i + 1) * 10000n);
-      }
     })
-    it('should create additional objects when slice is expanded', function() {
+    it('should throw when initializer has the wrong size', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -239,33 +234,13 @@ describe('Slice functions', function() {
         { dog: 5, cat: 6 },
         { dog: 7, cat: 8 },
       ]);
-      object.$ = [
+      expect(() => object.$ = [
         { dog: 1, cat: 2 },
         { dog: 3, cat: 4 },
         { dog: 5, cat: 6 },
         { dog: 7, cat: 8 },
         { dog: 9, cat: 10 },
-      ];
-      expect(object.length).to.equal(5);
-      expect(object.valueOf()).to.eql([
-        { dog: 1, cat: 2 },
-        { dog: 3, cat: 4 },
-        { dog: 5, cat: 6 },
-        { dog: 7, cat: 8 },
-        { dog: 9, cat: 10 },
-      ]);
-      object.$ = [
-        { dog: 1, cat: 2 },
-        { dog: 3, cat: 4 },
-        { dog: 5, cat: 6 },
-      ];
-      expect(object.length).to.equal(3);
-      expect(object.valueOf()).to.eql([
-        { dog: 1, cat: 2 },
-        { dog: 3, cat: 4 },
-        { dog: 5, cat: 6 },
-      ]);
+      ]).to.throw(TypeError);
     })
-
   })
 })

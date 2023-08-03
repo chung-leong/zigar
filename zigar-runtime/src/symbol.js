@@ -11,3 +11,4 @@ export const ENUM_ITEM = Symbol('enumItem');
 export const HIDE_PREVIOUS = Symbol('hidePrevious');
 export const GETTER = Symbol('GETTER');
 export const SETTER = Symbol('SETTER');
+export const LENGTH = Symbol('LENGTH');

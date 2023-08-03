@@ -17,7 +17,6 @@ import {
   finalizeStructure,
 } from '../src/structure.js';
 import {
-  getArrayLengthGetter,
   getArrayIterator,
 } from '../src/array.js';
 
@@ -351,22 +350,6 @@ describe('Array functions', function() {
       object.ok = () => {};
       delete object.ok;
       expect(object.ok).to.be.undefined;
-    })
-  })
-  describe('getArrayLengthGetter', function() {
-    it('should return a getter that calculate length using shift', function() {
-      const get = getArrayLengthGetter(8);
-      const object = {
-        [MEMORY]: new DataView(new ArrayBuffer(32))
-      };
-      expect(get.call(object)).to.equal(4);
-    })
-    it('should return a getter that calculate length using division', function() {
-      const get = getArrayLengthGetter(6);
-      const object = {
-        [MEMORY]: new DataView(new ArrayBuffer(36))
-      };
-      expect(get.call(object)).to.equal(6);
     })
   })
   describe('getArrayIterator', function() {

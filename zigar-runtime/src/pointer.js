@@ -12,6 +12,7 @@ export function finalizePointer(s) {
     options,
   } = s;
   const { structure: target } = member;
+  const isSlice = (target.type === StructureType.Slice);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -29,12 +30,14 @@ export function finalizePointer(s) {
       [ZIG]: { value: this === ZIG, writable: true },
     });
     if (creating) {
-      initializer.call(this, arg);
-    } else {
+      initializer.call(self, arg);
+    }
+    if (isSlice) {
+      return createSliceProxy.call(self);
+    } else if (creating) {
       return self;
     }
   };
-  const { TypedArray } = target;
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
       // not doing memory copying since values stored there might not be valid anyway
@@ -52,9 +55,6 @@ export function finalizePointer(s) {
   const pointerCopier = s.pointerCopier = function(arg) {
     this[SLOTS][0] = arg[SLOTS][0];
   };
-  const getTarget = function() {
-    return this[SLOTS][0];
-  }
   const getTargetValue = function() {
     const object = this[SLOTS][0];
     return object.$;
@@ -64,10 +64,76 @@ export function finalizePointer(s) {
     object.$ = value;
   };
   Object.defineProperties(constructor.prototype, {
-    '&': { get: getTarget, configurable: true },
     '*': { get: getTargetValue, set: setTargetValue, configurable: true },
     '$': { get: retriever, set: initializer, configurable: true, },
   });
   return constructor;
 }
 
+function createSliceProxy() {
+  return new Proxy(this, proxyHandlers);
+}
+
+const proxyHandlers = {
+  get(target, name) {
+    const slice = target[SLOTS][0][SOURCE];
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      return slice.get(index);
+    } else {
+      switch (name) {
+        case 'get':
+          if (!target[GETTER]) {
+            target[GETTER] = slice.get.bind(slice);
+          }
+          return target[GETTER];
+        case 'set':
+          if (!target[SETTER]) {
+            target[SETTER] = slice.set.bind(slice);
+          }
+          return target[SETTER];
+        case 'length':
+          return slice.length;
+        default:
+          return this[name];
+      }
+    }
+  },
+  set(target, name, value) {
+    const slice = target[SLOTS][0][SOURCE];
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      slice.set(index, value);
+    } else {
+      switch (name) {
+        case 'get':
+          target[GETTER] = value;
+          break;
+        case 'set':
+          target[SETTER] = value;
+          break;
+        default:
+          target[name] = value;
+      }
+    }
+    return true;
+  },
+  deleteProperty(target, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      return false;
+    } else {
+      switch (name) {
+        case 'get':
+          delete target[GETTER];
+          break;
+        case 'set':
+          delete target[SETTER];
+          break;
+        default:
+          delete target[name];
+      }
+      return true;
+    }
+  },
+};

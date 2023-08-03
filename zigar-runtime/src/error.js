@@ -132,7 +132,6 @@ export function throwArgumentCountMismatch(structure, actual) {
 
 export function rethrowArgumentError(structure, index, err) {
   const { name, instance: { members } } = structure;
-  console.log(index);
   const { name: memberName } = members[index];
   const argCount = members.length - 1;
   const prefix = (index !== 0) ? '..., ' : '';

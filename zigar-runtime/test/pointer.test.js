@@ -57,7 +57,6 @@ describe('Pointer functions', function() {
       const PInt32 = finalizeStructure(structure);
       const int32 = new Int32(1234);
       const intPointer = new PInt32(int32);
-      expect(intPointer['&']).to.equal(int32);
       expect(intPointer['*']).to.equal(1234);
     })
   })

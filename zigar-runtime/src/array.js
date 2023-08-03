@@ -5,7 +5,7 @@ import { getTypedArrayClass, addTypedArrayAccessor, isTypedArray } from './typed
 import { addStringAccessors } from './string.js';
 import { addJSONHandlers } from './json.js';
 import { throwInvalidArrayInitializer, throwArraySizeMismatch } from './error.js';
-import { MEMORY, SLOTS, ZIG, GETTER, SETTER } from './symbol.js';
+import { MEMORY, SLOTS, ZIG, GETTER, SETTER, SOURCE } from './symbol.js';
 
 export function finalizeArray(s) {
   const {
@@ -41,12 +41,12 @@ export function finalizeArray(s) {
       [MEMORY]: { value: dv, configurable: true },
     });
     if (objectMember) {
-      createChildObjects.call(self, objectMember, 0, this, dv);
+      createChildObjects.call(self, objectMember, this, dv);
     }
     if (creating) {
-      initializer.call(this, arg);
+      initializer.call(self, arg);
     }
-    return new Proxy(self, proxyHandlers);
+    return createProxy(self, proxyHandlers)
   };
   const { byteSize } = member;
   const count = size / byteSize;
@@ -75,11 +75,10 @@ export function finalizeArray(s) {
   const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMember) : null;
   const pointerResetter = s.pointerResetter = (hasPointer) ? getPointerResetter(objectMember) : null;
   const { get, set } = getAccessors(member, options);
-  const length = size / member.byteSize;
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
-    length: { value: length, configurable: true },
+    length: { value: count, configurable: true },
     $: { get: retriever, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true },
   });
@@ -88,6 +87,70 @@ export function finalizeArray(s) {
   addStringAccessors(s);
   addJSONHandlers(s);
   return constructor;
+}
+
+export function createChildObjects(member, recv, dv) {
+  let slots = this[SLOTS];
+  if (!slots) {
+    slots = {};
+    Object.defineProperties(this, {
+      [SLOTS]: { value: slots },
+    });
+  }
+  const { structure: { constructor }, byteSize } = member;
+  if (recv !== ZIG) {
+    recv = null;
+  }
+  for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+    const childDV = new DataView(dv.buffer, offset, byteSize);
+    slots[slot] = constructor.call(recv, childDV);
+  }
+}
+
+export function getPointerCopier(member) {
+  return function(src) {
+    const { structure: { pointerCopier }, byteSize } = member;
+    const dv = this[MEMORY];
+    const destSlots = dest[SLOTS];
+    const srcSlots = src[SLOTS];
+    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+      pointerCopier.call(destSlots[slot], srcSlots[slot]);
+    }
+  };
+}
+
+export function getPointerResetter(member) {
+  return function(src) {
+    const { structure: { pointerResetter }, byteSize } = member;
+    const dv = this[MEMORY];
+    const destSlots = dest[SLOTS];
+    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+      pointerResetter.call(destSlots[slot]);
+    }
+  };
+}
+
+export function getArrayIterator() {
+  const self = this;
+  const length = this.length;
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < length) {
+        value = self.get(index);
+        done = false;
+        index++;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+
+export function createProxy() {
+  return new Proxy(this, proxyHandlers);
 }
 
 const proxyHandlers = {
@@ -107,6 +170,8 @@ const proxyHandlers = {
             target[SETTER] = target.set.bind(target);
           }
           return target[SETTER];
+        case SOURCE:
+          return target;
         default:
           return target[name];
       }
@@ -149,87 +214,3 @@ const proxyHandlers = {
     }
   },
 };
-
-export function createChildObjects(member, startOffset, recv, dv) {
-  let slots = this[SLOTS];
-  if (!slots) {
-    slots = {};
-    Object.defineProperties(this, {
-      [SLOTS]: { value: slots },
-    });
-  }
-  const { structure: { constructor }, byteSize } = member;
-  if (recv !== ZIG) {
-    recv = null;
-  }
-  const startSlot = (startOffset) ? startOffset / byteSize : 0;
-  for (let slot = startSlot, offset = startOffset, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
-    const childDV = new DataView(dv.buffer, offset, byteSize);
-    slots[slot] = constructor.call(recv, childDV);
-  }
-}
-
-export function getPointerCopier(member) {
-  return function(src) {
-    const { structure: { pointerCopier }, byteSize } = member;
-    const dv = this[MEMORY];
-    const destSlots = dest[SLOTS];
-    const srcSlots = src[SLOTS];
-    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
-      pointerCopier.call(destSlots[slot], srcSlots[slot]);
-    }
-  };
-}
-
-export function getPointerResetter(member) {
-  return function(src) {
-    const { structure: { pointerResetter }, byteSize } = member;
-    const dv = this[MEMORY];
-    const destSlots = dest[SLOTS];
-    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
-      pointerResetter.call(destSlots[slot]);
-    }
-  };
-}
-
-export function getArrayLengthGetter(size) {
-  const shift = getShift(size);
-  if (shift !== undefined) {
-    // use shift where possible
-    return function() {
-      return this[MEMORY].byteLength >> shift;
-    };
-  } else {
-    return function() {
-      return this[MEMORY].byteLength / size;
-    };
-  }
-}
-
-function getShift(size) {
-  for (let i = 0, j = 2 ** i; j <= size; i++, j = 2 ** i) {
-    if (j === size) {
-      return i;
-    }
-  }
-}
-
-export function getArrayIterator() {
-  const self = this;
-  const length = this.length;
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < length) {
-        value = self.get(index);
-        done = false;
-        index++;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
-}
-
