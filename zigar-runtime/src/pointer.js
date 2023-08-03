@@ -1,6 +1,6 @@
 import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
-import { getDataView, isBuffer } from './data-view.js';
+import { getDataView } from './data-view.js';
 import { MEMORY, SLOTS, SOURCE, ZIG } from './symbol.js';
 
 export function finalizePointer(s) {
@@ -42,88 +42,32 @@ export function finalizePointer(s) {
     } else {
       const Target = target.constructor;
       if (!(arg instanceof Target)) {
-        // automatically cast or create target
-        const recv = (this === ZIG) ? this : null;
-        arg = isBuffer(arg, TypedArray) ? Target.call(recv, arg) : new Target(arg);
+        // automatically create target
+        arg = new Target(arg);
       }
       this[SLOTS][0] = arg;
     }
   };
-  const retrieve = function() { return this };
+  const retriever = function() { return this };
   const pointerCopier = s.pointerCopier = function(arg) {
     this[SLOTS][0] = arg[SLOTS][0];
   };
-  const { get, set } = getAccessors(member, options);
+  const getTarget = function() {
+    return this[SLOTS][0];
+  }
+  const getTargetValue = function() {
+    const object = this[SLOTS][0];
+    return object.$;
+  };
+  const setTargetValue = (member.isConst) ? undefined : function(value) {
+    const object = this[SLOTS][0];
+    object.$ = value;
+  };
   Object.defineProperties(constructor.prototype, {
-    '*': { get, set, configurable: true },
-    '$': { get: retrieve, set: initializer, configurable: true, },
+    '&': { get: getTarget, configurable: true },
+    '*': { get: getTargetValue, set: setTargetValue, configurable: true },
+    '$': { get: retriever, set: initializer, configurable: true, },
   });
   return constructor;
 }
 
-export function addPointerAccessors(s) {
-  const {
-    constructor,
-    instance: { members: instanceMembers },
-    static: { members: staticMembers },
-    options,
-  } = s;
-  const list = [
-    [ constructor.prototype, instanceMembers ],
-    [ constructor, staticMembers ],
-  ];
-  for (const [ target, members ] of list) {
-    const descriptors = {};
-    for (const member of members) {
-      const accessors = getPointerAccessors(member, options);
-      if (accessors) {
-        descriptors[member.name] = { ...accessors, configurable: true, enumerable: true };
-      }
-    }
-    if (Object.keys(descriptors).length > 0) {
-      const prototype = Object.defineProperties({}, descriptors);
-      const get = function() {
-        const source = Object.create(prototype);
-        source[SOURCE] = this;
-        return source;
-      };
-      Object.defineProperties(target, {
-        '&': { get, configurable: true },
-      });
-    }
-  }
-}
-
-export function getPointerAccessors(member, options) {
-  if (member.type === MemberType.Object) {
-    const { structure, slot } = member;
-    if (structure.type === StructureType.Pointer) {
-      if (slot !== undefined) {
-        // get pointer from slot
-        return {
-          get: function() {
-            const pointer = this[SOURCE][SLOTS][slot];
-            return pointer;
-          },
-          set: function(value) {
-            const { initializer } = structure;
-            const object = this[SOURCE][SLOTS][slot];
-            initializer.call(object, value);
-          },
-        };
-      } else {
-        return {
-          get: function(index) {
-            const pointer = this[SOURCE][SLOTS][index];
-            return pointer;
-          },
-          set: function(index, value) {
-            const { initializer } = structure;
-            const object = this[SOURCE][SLOTS][index];
-            initializer.call(object, value);
-          },
-        };
-      }
-    }
-  }
-}

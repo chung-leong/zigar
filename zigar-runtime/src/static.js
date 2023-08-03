@@ -1,4 +1,4 @@
-import { getAccessors } from './member.js';
+import { MemberType, getAccessors } from './member.js';
 import { SLOTS } from './symbol.js';
 
 export function addStaticMembers(s) {
@@ -15,7 +15,20 @@ export function addStaticMembers(s) {
     descriptors[SLOTS] = { value: template[SLOTS] };
   }
   for (const member of members) {
-    const { get, set } = getAccessors(member, options);
+    // static members are either Pointer or Type
+    let { get, set } = getAccessors(member, options);
+    if (member.type === MemberType.Object) {
+      const getPtr = get;
+      get = function() {
+        // dereference pointer
+        const ptr = getPtr.call(this);
+        return ptr['*'];
+      };
+      set = (member.isConst) ? undefined : function(value) {
+        const ptr = getPtr.call(this);
+        ptr['*'] = value;
+      };
+    }
     descriptors[member.name] = { get, set, configurable: true, enumerable: true };
   };
   Object.defineProperties(constructor, descriptors);

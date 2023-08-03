@@ -234,7 +234,7 @@ describe('Optional functions', function() {
       pointer[SLOTS][0] = new Int32(0);
       expect(object.$).to.equal(null);
       object.$ = 5;
-      expect(object.$).to.equal(5);
+      expect(object.$['*']).to.equal(5);
     })
   })
   describe('getOptionalAccessors', function() {

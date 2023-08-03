@@ -2,7 +2,6 @@ import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getDataView, addDataViewAccessor } from './data-view.js';
-import { addPointerAccessors } from './pointer.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addJSONHandlers } from './json.js';
@@ -172,9 +171,6 @@ export function finalizeUnion(s) {
   Object.defineProperties(constructor.prototype, {
     $: { get: retriever, set: initializer, configurable: true },
   });
-  if (exclusion) {
-    addPointerAccessors(s);
-  }
   addDataViewAccessor(s);
   addStaticMembers(s);
   addMethods(s);

@@ -30,7 +30,7 @@ describe('ArgStruct functions', function() {
         size: 4 * 3,
       });
       attachMember(structure, {
-        name: '0',
+        name: 'cat',
         type: MemberType.Int,
         isStatic: false,
         isSigned: true,
@@ -39,7 +39,7 @@ describe('ArgStruct functions', function() {
         byteSize: 4,
       });
       attachMember(structure, {
-        name: '1',
+        name: 'dog',
         type: MemberType.Int,
         isStatic: false,
         isSigned: true,
@@ -58,10 +58,10 @@ describe('ArgStruct functions', function() {
       });
       const ArgStruct = finalizeStructure(structure);
       expect(ArgStruct).to.be.a('function');
-      const object = new ArgStruct();
-      object[0] = 123;
-      object[1] = 456;
+      const object = new ArgStruct([ 123, 456 ]);
       object.retval = 777;
+      expect(object.cat).to.equal(123);
+      expect(object.dog).to.equal(456);
       expect(object.retval).to.equal(777);
     })
     it('should define an argument struct that contains a struct', function() {
@@ -92,7 +92,7 @@ describe('ArgStruct functions', function() {
       const structure = beginStructure({
         type: StructureType.ArgStruct,
         name: 'Hello',
-        size: childStructure.size + 4,
+        size: childStructure.size + 4 + 4,
       });
       attachMember(structure, {
         name: 'pet',
@@ -113,10 +113,17 @@ describe('ArgStruct functions', function() {
         bitOffset: childStructure.size * 8,
         byteSize: 4,
       });
+      attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 64,
+        byteSize: 4,
+      });
       const ArgStruct = finalizeStructure(structure);
-      const object = new ArgStruct();
-      object.pet = { dog: 1234, cat: 4567 };
-      object.number = 789;
+      const object = new ArgStruct([ { dog: 1234, cat: 4567 }, 789 ]);
       expect({ ...object.pet }).to.eql({ dog: 1234, cat: 4567 });
     })
   })

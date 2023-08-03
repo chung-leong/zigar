@@ -653,8 +653,8 @@ describe('Struct functions', function() {
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello();
-      expect(object.dog).to.equal(1234);
-      expect(object.cat).to.equal(4567);
+      expect(object.dog['*']).to.equal(1234);
+      expect(object.cat['*']).to.equal(4567);
     })
     it('should expose pointers through special & property', function() {
       const intStructure = beginStructure({

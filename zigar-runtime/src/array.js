@@ -5,7 +5,7 @@ import { getTypedArrayClass, addTypedArrayAccessor, isTypedArray } from './typed
 import { addStringAccessors } from './string.js';
 import { addJSONHandlers } from './json.js';
 import { throwInvalidArrayInitializer, throwArraySizeMismatch } from './error.js';
-import { MEMORY, SLOTS, ZIG } from './symbol.js';
+import { MEMORY, SLOTS, ZIG, GETTER, SETTER } from './symbol.js';
 
 export function finalizeArray(s) {
   const {
@@ -89,9 +89,6 @@ export function finalizeArray(s) {
   addJSONHandlers(s);
   return constructor;
 }
-
-const GETTER = Symbol('GETTER');
-const SETTER = Symbol('SETTER');
 
 const proxyHandlers = {
   get(target, name) {

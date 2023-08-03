@@ -123,6 +123,24 @@ export function throwNoProperty(structure, propName) {
   throw new TypeError(`${name} does not have a property with that name: ${propName}`);
 }
 
+export function throwArgumentCountMismatch(structure, actual) {
+  const { name, instance: { members } } = structure;
+  const argCount = members.length - 1;
+  const s = (argCount > 1) ? 's' : '';
+  throw new Error(`${name} expects ${argCount} argument${s}, received ${actual}`);
+}
+
+export function rethrowArgumentError(structure, index, err) {
+  const { name, instance: { members } } = structure;
+  console.log(index);
+  const { name: memberName } = members[index];
+  const argCount = members.length - 1;
+  const prefix = (index !== 0) ? '..., ' : '';
+  const suffix = (index !== argCount - 1) ? ', ...' : '';
+  const argLabel = prefix + memberName + suffix;
+  throw new err.constructor(`${name}(${argLabel}): ${err.message}`);
+}
+
 export function throwOverflow(member, value) {
   const typeName = getTypeName(member);
   throw new TypeError(`${typeName} cannot represent the value given: ${value}`);

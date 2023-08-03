@@ -1024,9 +1024,8 @@ fn ArgumentStruct(comptime function: anytype) type {
     var count = 0;
     for (info.params) |param| {
         if (param.type != std.mem.Allocator) {
-            const name = std.fmt.comptimePrint("{d}", .{count});
             fields[count] = .{
-                .name = name,
+                .name = param.name,
                 .type = param.type orelse void,
                 .is_comptime = false,
                 .alignment = @alignOf(param.type orelse void),
@@ -1364,8 +1363,7 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
                 if (field.type == std.mem.Allocator) {
                     args[i] = createAllocator(host);
                 } else {
-                    const name = std.fmt.comptimePrint("{d}", .{index});
-                    args[i] = @field(arg_ptr.*, name);
+                    args[i] = @field(arg_ptr.*, fields[index].name);
                     index += 1;
                 }
             }

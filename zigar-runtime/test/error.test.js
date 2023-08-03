@@ -19,6 +19,8 @@ import {
   throwArraySizeMismatch,
   throwMissingInitializers,
   throwNoProperty,
+  throwArgumentCountMismatch,
+  rethrowArgumentError,
   throwOverflow,
   throwOutOfBound,
   rethrowRangeError,
@@ -314,6 +316,49 @@ describe('Error functions', function() {
       };
       expect(() => throwNoProperty(structure, 'cow')).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
+    })
+  })
+  describe('throwArgumentCountMismatch', function() {
+    it('should throw an error', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.BareUnion,
+        size: 8,
+        instance: {
+          members: [
+            { name: 'dog' },
+            { name: 'cat' },
+            { name: 'turkey' },
+            { name: 'retval' },
+          ],
+        }
+      };
+      expect(() => throwArgumentCountMismatch(structure, 0)).to.throw(Error)
+        .with.property('message').that.contains('0').and.contains('3');
+    })
+  })
+  describe('rethrowArgumentError', function() {
+    it('should rethrow an error', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.BareUnion,
+        size: 8,
+        instance: {
+          members: [
+            { name: 'dog' },
+            { name: 'cat' },
+            { name: 'turkey' },
+            { name: 'retval' },
+          ],
+        }
+      };
+      const err = new TypeError('Something');
+      expect(() => rethrowArgumentError(structure, 0, err)).to.throw(TypeError)
+        .with.property('message').that.contains('(dog, ...)').and.contains(err.message);
+      expect(() => rethrowArgumentError(structure, 1, err)).to.throw(TypeError)
+        .with.property('message').that.contains('(..., cat, ...)');
+      expect(() => rethrowArgumentError(structure, 2, err)).to.throw(TypeError)
+        .with.property('message').that.contains('(..., turkey)');
     })
   })
   describe('throwOverflow', function() {

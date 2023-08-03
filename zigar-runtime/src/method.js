@@ -15,10 +15,7 @@ export function addMethods(s) {
     } = method;
     const f = function(...args) {
       const { constructor } = argStruct;
-      const a = new constructor();
-      for (const [ index, arg ] of args.entries()) {
-        a[index] = arg;
-      }
+      const a = new constructor(args);
       return invokeThunk(thunk, a);
     }
     Object.defineProperties(f, {
@@ -30,11 +27,7 @@ export function addMethods(s) {
     if (!isStaticOnly) {
       const m = function(...args) {
         const { constructor } = argStruct;
-        const a = new constructor();
-        a[0] = this;
-        for (const [ index, arg ] of args.entries()) {
-          a[index + 1] = arg;
-        }
+        const a = new constructor([ this, ...args ]);
         return invokeThunk(thunk, a);
       }
       Object.defineProperties(m, {

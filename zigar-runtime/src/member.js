@@ -230,10 +230,6 @@ function addEnumerationLookup(getDataViewIntAccessor) {
 }
 
 export function getObjectAccessor(access, member, options) {
-  // automatically dereference pointer
-  const {
-    autoDeref = true,
-  } = options;
   const { structure, slot } = member;
   switch (structure.type) {
     case StructureType.ErrorUnion:
@@ -261,73 +257,6 @@ export function getObjectAccessor(access, member, options) {
             const object = this[SLOTS][index];
             return object.$ = value;
           };
-        }
-      }
-    }
-    case StructureType.Pointer: {
-      if (autoDeref) {
-        const { instance: { members: [ target ] } } = structure;
-        const { isConst } = member
-        if (target.structure.type === StructureType.Primitive) {
-          if (slot !== undefined) {
-            if (access === 'get') {
-              return function() {
-                const pointer = this[SLOTS][slot];
-                const object = pointer['*'];
-                return object.$;
-              };
-            } else {
-              return (isConst) ? undefined : function(value) {
-                const pointer = this[SLOTS][slot];
-                const object = pointer['*'];
-                object.$ = value;
-              };
-            }
-          } else {
-            // array accessors
-            if (access === 'get') {
-              return function(index) {
-                const pointer = this[SLOTS][index];
-                const object = pointer['*'];
-                return object.$;
-              };
-            } else {
-              return (isConst) ? undefined : function(index, value) {
-                const pointer = this[SLOTS][index];
-                const object = pointer['*'];
-                object.$ = value;
-              };
-            }
-          }
-        } else {
-          if (slot !== undefined) {
-            if (access === 'get') {
-              return function() {
-                const pointer = this[SLOTS][slot];
-                const object = pointer['*'];
-                return object;
-              };
-            } else {
-              return (isConst) ? undefined : function(value) {
-                const pointer = this[SLOTS][slot];
-                pointer['*'] = value;
-              };
-            }
-          } else {
-            // array accessors
-            if (access === 'get') {
-              return function(index) {
-                const pointer = this[SLOTS][index];
-                const object = pointer['*'];
-                return object;
-              };
-            } else {
-              return (isConst) ? undefined : function(index, value) {
-                const pointer = this[SLOTS][index];
-                pointer['*'] = value;
-              };
-            }
-          }
         }
       }
     }
