@@ -65,7 +65,7 @@ describe('Error union functions', function() {
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
-        structure: setStructure
+        structure: setStructure,
       });
       const Hello = finalizeStructure(structure);
       const object = Hello(new ArrayBuffer(10));
@@ -86,7 +86,7 @@ describe('Error union functions', function() {
         name: 'UnableToCreateObject',
         type: MemberType.Object,
       });
-      finalizeStructure(setStructure);
+      const SomeError = finalizeStructure(setStructure);
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Aniaml',
@@ -131,16 +131,15 @@ describe('Error union functions', function() {
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
-        structure: setStructure
+        structure: setStructure,
       });
       const Hello = finalizeStructure(structure);
-      const object = Hello(new ArrayBuffer(10));
+      const object = new Hello({ dog: 17, cat: 234 });
       expect(object.$).to.be.an('object');
-      expect(object.$).to.be.eql({ dog: 0, cat: 0 });
-      object.$ = { dog: 17, cat: 234 };
-      expect(object.$).to.be.eql({ dog: 17, cat: 234 });
+      object.$ = SomeError.UnableToCreateObject;
+      expect(() => object.$).to.throw(SomeError)
+        .with('message').that.equal('Unable to create object');
     })
-
     it('should define an error union with a pointer', function() {
       const setStructure = beginStructure({
         type: StructureType.ErrorSet,
@@ -206,6 +205,7 @@ describe('Error union functions', function() {
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
+        structure: setStructure,
       });
       const Hello = finalizeStructure(structure);
       const object = Hello(new ArrayBuffer(16));
@@ -214,6 +214,232 @@ describe('Error union functions', function() {
       object.$ = new Int32(0);
       object.$['*'] = 5;
       expect(object.$['*']).to.equal(5);
+    })
+    it('should correctly copy an error union containing a pointer', function() {
+      const setStructure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Error',
+      });
+      attachMember(setStructure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Object,
+        slot: 16,
+      });
+      attachMember(setStructure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Object,
+        slot: 17,
+      });
+      finalizeStructure(setStructure);
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(ptrStructure);
+      const structure = beginStructure({
+        type: StructureType.ErrorUnion,
+        name: 'Hello',
+        size: 16,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      attachMember(structure, {
+        name: 'error',
+        type: MemberType.Int,
+        bitOffset: 64,
+        bitSize: 16,
+        byteSize: 2,
+        structure: setStructure,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello(new Int32(777));
+      const object2 = new Hello(object);
+      expect(object2.$['*']).to.equal(777);
+    })
+    it('should release pointer when error union is set to an error', function() {
+      const setStructure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'SomeError',
+      });
+      attachMember(setStructure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Object,
+        slot: 16,
+      });
+      attachMember(setStructure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Object,
+        slot: 17,
+      });
+      const SomeError = finalizeStructure(setStructure);
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(ptrStructure);
+      const structure = beginStructure({
+        type: StructureType.ErrorUnion,
+        name: 'Hello',
+        size: 16,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      attachMember(structure, {
+        name: 'error',
+        type: MemberType.Int,
+        bitOffset: 64,
+        bitSize: 16,
+        byteSize: 2,
+        structure: setStructure,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello(new Int32(777));
+      const ptr = object.$;
+      object.$ = SomeError.UnableToCreateObject;
+      expect(ptr[SLOTS][0]).to.be.null;
+    })
+    it('should throw an error when error number is unknown', function() {
+      const setStructure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Error',
+      });
+      attachMember(setStructure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Object,
+      });
+      attachMember(setStructure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Object,
+      });
+      finalizeStructure(setStructure);
+      const structure = beginStructure({
+        type: StructureType.ErrorUnion,
+        name: 'Hello',
+        size: 10,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Int,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+      });
+      attachMember(structure, {
+        name: 'error',
+        type: MemberType.Int,
+        bitOffset: 64,
+        bitSize: 16,
+        byteSize: 2,
+        structure: setStructure,
+      });
+      const Hello = finalizeStructure(structure);
+      const dv = new DataView(new ArrayBuffer(10));
+      dv.setInt16(8, 32, true)
+      const object = Hello(dv);
+      expect(() => object.$).to.throw()
+        .with.property('message').that.contains('#32');
+    })
+    it('should throw when attempting to set an error that is not in the error set', function() {
+      const setStructure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'SomeError',
+      });
+      attachMember(setStructure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Object,
+      });
+      attachMember(setStructure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Object,
+      });
+      finalizeStructure(setStructure);
+      const structure = beginStructure({
+        type: StructureType.ErrorUnion,
+        name: 'Hello',
+        size: 10,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Int,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+      });
+      attachMember(structure, {
+        name: 'error',
+        type: MemberType.Int,
+        bitOffset: 64,
+        bitSize: 16,
+        byteSize: 2,
+        structure: setStructure,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello(123n);
+      expect(object.$).to.equal(123n);
+      expect(() => object.$ = new Error('Doh!')).to.throw(TypeError)
+        .with.property('message').that.contains('SomeError');
     })
   })
   describe('getErrorUnionAccessors', function() {

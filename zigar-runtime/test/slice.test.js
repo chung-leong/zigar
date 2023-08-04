@@ -7,9 +7,11 @@ import {
 } from '../src/member.js';
 import {
   StructureType,
+  usePrimitive,
   useArray,
   useSlice,
   useStruct,
+  usePointer,
   beginStructure,
   attachMember,
   attachTemplate,
@@ -20,9 +22,11 @@ import { MEMORY } from '../src/symbol.js';
 describe('Slice functions', function() {
   describe('finalizeSlice', function() {
     beforeEach(function() {
+      usePrimitive();
       useArray();
       useStruct();
       useSlice();
+      usePointer();
       useIntEx();
       useObject();
     })

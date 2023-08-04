@@ -5,7 +5,7 @@ import { getTypedArrayClass, addTypedArrayAccessor, isTypedArray } from './typed
 import { addStringAccessors } from './string.js';
 import { addJSONHandlers } from './json.js';
 import { throwInvalidArrayInitializer, throwArraySizeMismatch } from './error.js';
-import { MEMORY, SLOTS, ZIG, GETTER, SETTER } from './symbol.js';
+import { MEMORY, SLOTS, ZIG, GETTER, SETTER, PROXY } from './symbol.js';
 
 export function finalizeArray(s) {
   const {
@@ -71,7 +71,7 @@ export function finalizeArray(s) {
       }
     }
   };
-  const retriever = function() { return this };
+  const retriever = function() { return this[PROXY] };
   const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMember) : null;
   const pointerResetter = s.pointerResetter = (hasPointer) ? getPointerResetter(objectMember) : null;
   const { get, set } = getAccessors(member, options);
@@ -150,7 +150,9 @@ export function getArrayIterator() {
 }
 
 export function createProxy() {
-  return new Proxy(this, proxyHandlers);
+  const proxy = new Proxy(this, proxyHandlers);
+  this[PROXY] = proxy;
+  return proxy;
 }
 
 const proxyHandlers = {

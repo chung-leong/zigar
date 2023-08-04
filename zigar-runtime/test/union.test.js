@@ -12,6 +12,7 @@ import {
   StructureType,
   usePrimitive,
   usePointer,
+  useStruct,
   useExternUnion,
   useBareUnion,
   useTaggedUnion,
@@ -31,6 +32,7 @@ describe('Union functions', function() {
       useTaggedUnion();
       useEnumeration();
       usePointer();
+      useStruct();
       useBoolEx();
       useIntEx();
       useEnumerationItem();
@@ -191,6 +193,328 @@ describe('Union functions', function() {
       const object = new Hello({ cat: 123 });
       expect(object.cat).to.equal(123);
       expect(object.dog).to.be.null;
+    })
+    it('should allow casting to a simple bare union', function() {
+      const structure = beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        bitOffset: 32,
+        byteSize: 2,
+      });
+      const Hello = finalizeStructure(structure);
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setInt32(0, 1234, true);
+      dv.setInt16(4, 1, true);
+      const object = Hello(dv.buffer);
+      expect(object.cat).to.equal(1234);
+      expect(object.dog).to.be.null;
+    })
+    it('should define a bare union containing a struct', function() {
+      const structStructure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Aniaml',
+        size: 8,
+      });
+      attachMember(structStructure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structStructure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      const Aniaml = finalizeStructure(structStructure);
+      const structure = beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        size: structStructure.size * 8 + 32,
+      });
+      attachMember(structure, {
+        name: 'pets',
+        type: MemberType.Object,
+        isStatic: false,
+        isSigned: true,
+        bitSize: structStructure.size * 8,
+        bitOffset: 0,
+        byteSize: structStructure.size,
+        slot: 1,
+        structure: structStructure,
+      });
+      attachMember(structure, {
+        name: 'money',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        bitOffset: structStructure.size * 8,
+        byteSize: 2,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello({ pets: { cat: 7, dog: 9 } });
+      expect(object.$.pets.cat).to.equal(7);
+      object.$ = { money: 1000 };
+      expect(object.$.money).to.equal(1000);
+      expect(object.$.pets).to.be.null;
+    })
+    it('should define a bare union containing a pointer', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(ptrStructure);
+      const structure = beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        size: 10,
+      });
+      attachMember(structure, {
+        name: 'pointer',
+        type: MemberType.Object,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      attachMember(structure, {
+        name: 'number',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        bitOffset: 64,
+        byteSize: 2,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello({ pointer: new Int32(1234) });
+      expect(object.$.pointer['*']).to.equal(1234);
+      object.$ = { number: 4567 };
+      expect(object.$.pointer).to.be.null;
+      expect(object.$.number).to.equal(4567);
+    })
+    it('should correctly copy a bare union containing a pointer', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(ptrStructure);
+      const structure = beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        size: 10,
+      });
+      attachMember(structure, {
+        name: 'pointer',
+        type: MemberType.Object,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      attachMember(structure, {
+        name: 'number',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        bitOffset: 64,
+        byteSize: 2,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello({ pointer: new Int32(1234) });
+      const object2 = new Hello(object);
+      expect(object2.$.pointer['*']).to.equal(1234);
+      object2.$.pointer['*'] = 4567;
+      expect(object.$.pointer['*']).to.equal(4567);
+    })
+    it('should release pointer when a different property is activated', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(ptrStructure);
+      const structure = beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        size: 10,
+      });
+      attachMember(structure, {
+        name: 'pointer',
+        type: MemberType.Object,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      attachMember(structure, {
+        name: 'number',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        bitOffset: 64,
+        byteSize: 2,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello({ pointer: new Int32(1234) });
+      const pointer = object.$.pointer;
+      object.$ = { number: 4567 };
+      expect(pointer[SLOTS][0]).to.be.null;
     })
     it('should define a simple tagged union', function() {
       const enumStructure = beginStructure({

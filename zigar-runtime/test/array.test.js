@@ -49,6 +49,8 @@ describe('Array functions', function() {
       const object = new Hello(new Uint32Array(8));
       object.set(0, 321);
       expect(object.get(0)).to.equal(321);
+      expect(object.$).to.equal(object);
+      expect([ ...object ]).to.eql([ 321, 0, 0, 0, 0, 0, 0, 0 ]);
       expect(object.length).to.equal(8);
       expect(object.typedArray).to.be.instanceOf(Uint32Array);
     })

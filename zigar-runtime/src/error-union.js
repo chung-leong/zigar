@@ -47,7 +47,7 @@ export function finalizeErrorUnion(s) {
         }
       }
     } else {
-      this.set(arg);
+      this.$ = arg;
     }
   };
   const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
@@ -83,7 +83,7 @@ export function getErrorUnionAccessors(members, size, options) {
     set: function(value) {
       if (value instanceof Error) {
         const { constructor } = errorStructure;
-        const { pointerResetter } = valueStructure;
+        const pointerResetter = valueStructure?.pointerResetter;
         if (!(value instanceof constructor)) {
           throwNotInErrorSet(errorStructure);
         }
