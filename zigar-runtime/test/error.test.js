@@ -321,7 +321,7 @@ describe('Error functions', function() {
   })
   describe('throwArgumentCountMismatch', function() {
     it('should throw an error', function() {
-      const structure = {
+      const structure1 = {
         name: 'Hello',
         type: StructureType.BareUnion,
         size: 8,
@@ -334,8 +334,21 @@ describe('Error functions', function() {
           ],
         }
       };
-      expect(() => throwArgumentCountMismatch(structure, 0)).to.throw(Error)
-        .with.property('message').that.contains('0').and.contains('3');
+      const structure2 = {
+        name: 'Hello',
+        type: StructureType.BareUnion,
+        size: 8,
+        instance: {
+          members: [
+            { name: 'dog' },
+            { name: 'retval' },
+          ],
+        }
+      };
+      expect(() => throwArgumentCountMismatch(structure1, 0)).to.throw(Error)
+        .with.property('message').that.contains('0').and.contains('3 arguments');
+      expect(() => throwArgumentCountMismatch(structure2, 0)).to.throw(Error)
+        .with.property('message').that.contains('0').and.contains('1 argument,');
     })
   })
   describe('rethrowArgumentError', function() {
@@ -382,7 +395,8 @@ describe('Error functions', function() {
         .with.property('message').that.contains('a boolean');
       expect(() => throwInvalidPointerTarget(structure, {})).to.throw(TypeError)
         .with.property('message').that.contains('an object');
-
+      expect(() => throwInvalidPointerTarget(structure, undefined)).to.throw(TypeError)
+        .with.property('message').that.contains('undefined');
     })
   })
   describe('throwOverflow', function() {

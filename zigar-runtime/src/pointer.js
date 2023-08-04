@@ -36,7 +36,7 @@ export function finalizePointer(s) {
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
       // not doing memory copying since values stored there might not be valid anyway
-      pointerCopier.call(this);
+      pointerCopier.call(this, arg);
     } else {
       const Target = target.constructor;
       if (!(arg instanceof Target)) {
@@ -49,6 +49,9 @@ export function finalizePointer(s) {
   const retriever = function() { return this[PROXY] ?? this };
   const pointerCopier = s.pointerCopier = function(arg) {
     this[SLOTS][0] = arg[SLOTS][0];
+  };
+  const pointerResetter = s.pointerResetter = function() {
+    this[SLOTS][0] = null;
   };
   const getTargetValue = function() {
     const object = this[SLOTS][0];

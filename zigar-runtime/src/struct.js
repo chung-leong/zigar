@@ -88,6 +88,7 @@ export function finalizeStruct(s) {
   };
   const retriever = function() { return this };
   const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMembers) : null;
+  const pointerResetter = s.pointerResetter = (hasPointer) ? getPointerResetter(objectMembers) : null;
   Object.defineProperties(constructor.prototype, {
     $: { get: retriever, set: initializer, configurable: true },
   });

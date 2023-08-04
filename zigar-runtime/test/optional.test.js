@@ -15,6 +15,7 @@ import {
   usePointer,
   beginStructure,
   attachMember,
+  attachTemplate,
   finalizeStructure,
 } from '../src/structure.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
@@ -234,6 +235,111 @@ describe('Optional functions', function() {
       object.$ = new Int32(0);
       object.$['*'] = 5;
       expect(object.$['*']).to.equal(5);
+    })
+    it('should release pointers in struct when it is set to null', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        hasPointer: true
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(ptrStructure);
+      const structStructure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8 * 2,
+        hasPointer: true
+      });
+      attachMember(structStructure, {
+        name: 'dog',
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      attachMember(structStructure, {
+        name: 'cat',
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 64,
+        byteSize: 8,
+        slot: 1,
+        structure: ptrStructure,
+      })
+      const int1 = new Int32(1234);
+      const int2 = new Int32(4567);
+      const intPtr1 = new Int32Ptr(int1);
+      const intPtr2 = new Int32Ptr(int2);
+      attachTemplate(structStructure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(8 * 2));
+            dv.setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
+            dv.setBigUint64(8, 0xaaaaaaaaaaaaaaaan, true);
+            return dv;
+          })(),
+          [SLOTS]: {
+            0: intPtr1,
+            1: intPtr2,
+          }
+        },
+      });
+      finalizeStructure(structStructure);
+      const structure = beginStructure({
+        type: StructureType.Optional,
+        name: 'Hello',
+        size: structStructure.size + 32,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: structStructure.size * 8,
+        byteSize: structStructure.size,
+        slot: 0,
+        structure: structStructure,
+      });
+      attachMember(structure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: structStructure.size * 8,
+        bitSize: 1,
+        byteSize: 8,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello({});
+      const ptr = object.$.cat;
+      expect(ptr[SLOTS][0]).to.not.be.null;
+      object.$ = null;
+      expect(ptr[SLOTS][0]).to.be.null;
     })
   })
   describe('getOptionalAccessors', function() {

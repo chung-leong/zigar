@@ -126,5 +126,79 @@ describe('ArgStruct functions', function() {
       const object = new ArgStruct([ { dog: 1234, cat: 4567 }, 789 ]);
       expect({ ...object.pet }).to.eql({ dog: 1234, cat: 4567 });
     })
+    it('should throw when initialized with the wrong number of arguments', function() {
+      const structure = beginStructure({
+        type: StructureType.ArgStruct,
+        name: 'Hello',
+        size: 4 * 3,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 64,
+        byteSize: 4,
+      });
+      const ArgStruct = finalizeStructure(structure);
+      expect(() => new ArgStruct([ 123 ])).to.throw();
+      expect(() => new ArgStruct([ 123, 456, 789 ])).to.throw();
+    })
+    it('should throw with argument name in error message when an invalid argument is encountered', function() {
+      const structure = beginStructure({
+        type: StructureType.ArgStruct,
+        name: 'Hello',
+        size: 4 * 3,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 64,
+        byteSize: 4,
+      });
+      const ArgStruct = finalizeStructure(structure);
+      expect(() => new ArgStruct([ 123, 456n ])).to.throw(TypeError)
+        .with.property('message').that.contains('(..., dog)');
+    })
   })
 })

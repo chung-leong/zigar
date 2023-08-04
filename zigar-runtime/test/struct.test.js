@@ -657,6 +657,10 @@ describe('Struct functions', function() {
       const object = new Hello();
       expect(object.dog['*']).to.equal(1234);
       expect(object.cat['*']).to.equal(4567);
+      object.dog = new Int32(7788);
+      expect(object.dog['*']).to.equal(7788);
+      const object2 = new Hello(object);
+      expect(object2.dog['*']).to.equal(7788);
     })
   })
 })
