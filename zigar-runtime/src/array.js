@@ -5,7 +5,7 @@ import { getTypedArrayClass, addTypedArrayAccessor, isTypedArray } from './typed
 import { addStringAccessors } from './string.js';
 import { addJSONHandlers } from './json.js';
 import { throwInvalidArrayInitializer, throwArraySizeMismatch } from './error.js';
-import { MEMORY, SLOTS, ZIG, GETTER, SETTER, SOURCE } from './symbol.js';
+import { MEMORY, SLOTS, ZIG, GETTER, SETTER } from './symbol.js';
 
 export function finalizeArray(s) {
   const {
@@ -123,7 +123,7 @@ export function getPointerResetter(member) {
   return function(src) {
     const { structure: { pointerResetter }, byteSize } = member;
     const dv = this[MEMORY];
-    const destSlots = dest[SLOTS];
+    const destSlots = this[SLOTS];
     for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
       pointerResetter.call(destSlots[slot]);
     }
@@ -170,8 +170,6 @@ const proxyHandlers = {
             array[SETTER] = array.set.bind(array);
           }
           return array[SETTER];
-        case SOURCE:
-          return array;
         default:
           return array[name];
       }

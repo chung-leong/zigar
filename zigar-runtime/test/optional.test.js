@@ -17,6 +17,7 @@ import {
   attachMember,
   attachTemplate,
   finalizeStructure,
+  useArray,
 } from '../src/structure.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
 import {
@@ -30,6 +31,7 @@ describe('Optional functions', function() {
       useOptional();
       usePointer();
       useStruct();
+      useArray();
       useBool();
       useIntEx();
       useFloatEx();
@@ -340,6 +342,83 @@ describe('Optional functions', function() {
       expect(ptr[SLOTS][0]).to.not.be.null;
       object.$ = null;
       expect(ptr[SLOTS][0]).to.be.null;
+    })
+    it('should release pointers in array when it is set to null', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(ptrStructure);
+      const arrayStructure = beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        size: 8 * 4,
+        hasPointer: true,
+      });
+      attachMember(arrayStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        byteSize: 8,
+        structure: ptrStructure,
+      });
+      const Int32PtrArray = finalizeStructure(arrayStructure);
+      const structure = beginStructure({
+        type: StructureType.Optional,
+        name: 'Hello',
+        size: arrayStructure.size + 32,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: arrayStructure.size * 8,
+        byteSize: arrayStructure.size,
+        slot: 0,
+        structure: arrayStructure,
+      });
+      attachMember(structure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: arrayStructure.size * 8,
+        bitSize: 1,
+        byteSize: 8,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello([ new Int32(1234), new Int32(4567), new Int32(7890), new Int32(12345) ]);
+      const array = object.$;
+      for (let i = 0; i < 4; i++) {
+        expect(array[SLOTS][i][SLOTS][0]).to.not.be.null;
+      }
+      object.$ = null;
+      for (let i = 0; i < 4; i++) {
+        expect(array[SLOTS][i][SLOTS][0]).to.be.null;
+      }
     })
   })
   describe('getOptionalAccessors', function() {

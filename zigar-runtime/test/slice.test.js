@@ -391,6 +391,7 @@ describe('Slice functions', function() {
       const slice2 = new Int32PtrSlice(slice1);
       expect(slice2[0]['*']).to.equal(1234);
       expect(slice2[1]['*']).to.equal(4567);
+      expect(slice2[2]['*']).to.equal(7890);
     })
   })
 })

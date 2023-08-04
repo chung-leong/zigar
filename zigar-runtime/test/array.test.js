@@ -12,6 +12,7 @@ import {
   useArray,
   useStruct,
   usePointer,
+  usePrimitive,
   beginStructure,
   attachMember,
   finalizeStructure,
@@ -23,6 +24,7 @@ import {
 describe('Array functions', function() {
   describe('finalizeArray', function() {
     beforeEach(function() {
+      usePrimitive();
       useArray();
       usePointer();
       useStruct();
@@ -302,6 +304,58 @@ describe('Array functions', function() {
         expect(object.get(i)).to.equal(BigInt(i + 1) * 1000n);
       }
     })
+    it('should correctly copy array holding pointers', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(ptrStructure);
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        size: 8 * 4,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        byteSize: 8,
+        structure: ptrStructure,
+      });
+      const Int32PtrArray = finalizeStructure(structure);
+      const array1 = new Int32PtrArray([ new Int32(1234), new Int32(4567), new Int32(7890), new Int32(12345) ]);
+      const array2 = new Int32PtrArray(array1);
+      expect(array2[0]['*']).to.equal(1234);
+      expect(array2[1]['*']).to.equal(4567);
+      expect(array2[2]['*']).to.equal(7890);
+      expect(array2[3]['*']).to.equal(12345);
+    })
     it('should allow the assignment of setter and getter as well as other properties', function() {
       const structure = beginStructure({
         type: StructureType.Array,
@@ -326,6 +380,8 @@ describe('Array functions', function() {
       expect(called).to.equal('set');
       object.ok = () => { called = 'ok' };
       object.ok();
+      object[Symbol.asyncIterator] = function() {};
+      object[Symbol.asyncIterator]();
     })
     it('should allow the deletion of setter and getter as well as other properties', function() {
       const structure = beginStructure({
@@ -352,6 +408,10 @@ describe('Array functions', function() {
       object.ok = () => {};
       delete object.ok;
       expect(object.ok).to.be.undefined;
+      object[Symbol.asyncIterator] = function() {};
+      object[Symbol.asyncIterator]();
+      delete object[Symbol.asyncIterator];
+      expect(object[Symbol.asyncIterator]).to.be.undefined;
     })
   })
   describe('getArrayIterator', function() {
