@@ -71,7 +71,7 @@ export function finalizeSlice(s) {
   };
   const copy = getMemoryCopier(elementSize);
   const initializer = s.initializer = function(arg) {
-    if (getCount(arg) !== count) {
+    if (getCount(arg, ) !== count) {
       throwArraySizeMismatch(s, count, arg);
     }
     if (arg instanceof constructor) {
@@ -81,8 +81,12 @@ export function finalizeSlice(s) {
       }
     } else {
       if (Array.isArray(arg) || isTypedArray(arg, TypedArray)) {
-        for (let i = 0, len = arg.length; i < len; i++) {
+        for (let i = 0; i < count; i++) {
           set.call(this, i, arg[i]);
+        }
+      } else {
+        for (let i = 0; i < count; i++) {
+          set.call(this, i, undefined);
         }
       }
     }

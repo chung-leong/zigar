@@ -111,7 +111,7 @@ export function getPointerCopier(member) {
   return function(src) {
     const { structure: { pointerCopier }, byteSize } = member;
     const dv = this[MEMORY];
-    const destSlots = dest[SLOTS];
+    const destSlots = this[SLOTS];
     const srcSlots = src[SLOTS];
     for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
       pointerCopier.call(destSlots[slot], srcSlots[slot]);

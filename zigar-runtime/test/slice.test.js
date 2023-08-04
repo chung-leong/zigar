@@ -12,8 +12,10 @@ import {
   useStruct,
   beginStructure,
   attachMember,
+  attachTemplate,
   finalizeStructure,
 } from '../src/structure.js';
+import { MEMORY } from '../src/symbol.js';
 
 describe('Slice functions', function() {
   describe('finalizeSlice', function() {
@@ -163,6 +165,62 @@ describe('Slice functions', function() {
         { dog: 7, cat: 8 },
       ]);
     })
+    it('should correctly initialize an slice of structs using element count', function() {
+      const structStructure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 4 * 2,
+      });
+      attachMember(structStructure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: false,
+        byteSize: 4,
+        bitOffset: 0,
+        bitSize: 32,
+      });
+      attachMember(structStructure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: false,
+        byteSize: 4,
+        bitOffset: 32,
+        bitSize: 32,
+      });
+      attachTemplate(structStructure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setUint32(0, 1234, true);
+            dv.setUint32(4, 4567, true);
+            return dv;
+          })(),
+        },
+      });
+      const Hello = finalizeStructure(structStructure);
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        byteSize: 8,
+        structure: structStructure,
+      });
+      const HelloArray = finalizeStructure(structure);
+      const object = new HelloArray(4);
+      for (let i = 0; i < 4; i++) {
+        expect(object[i].valueOf()).to.eql({ dog: 1234, cat: 4567 });
+      }
+    })
     it('should allow reinitialization through the dollar property', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
@@ -241,6 +299,98 @@ describe('Slice functions', function() {
         { dog: 7, cat: 8 },
         { dog: 9, cat: 10 },
       ]).to.throw(TypeError);
+    })
+    it('should throw when initializer is of an invalid type', function() {
+      const structStructure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 4 * 2,
+      });
+      attachMember(structStructure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        byteSize: 4,
+        bitOffset: 0,
+        bitSize: 32,
+      });
+      attachMember(structStructure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        isRequired: true,
+        byteSize: 4,
+        bitOffset: 32,
+        bitSize: 32,
+      });
+      const Hello = finalizeStructure(structStructure);
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        byteSize: 8,
+        structure: structStructure,
+      });
+      const HelloArray = finalizeStructure(structure);
+      expect(() => new HelloArray({})).to.throw(TypeError);
+    })
+    it('should correctly copy a slice holding pointers', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(ptrStructure);
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: 'Hello',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        byteSize: 8,
+        structure: ptrStructure,
+      });
+      const Int32PtrSlice = finalizeStructure(structure);
+      const slice1 = new Int32PtrSlice([ new Int32(1234), new Int32(4567), new Int32(7890) ]);
+      const slice2 = new Int32PtrSlice(slice1);
+      expect(slice2[0]['*']).to.equal(1234);
+      expect(slice2[1]['*']).to.equal(4567);
     })
   })
 })
