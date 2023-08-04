@@ -46,7 +46,7 @@ export function finalizeArray(s) {
     if (creating) {
       initializer.call(self, arg);
     }
-    return createProxy(self, proxyHandlers)
+    return createProxy.call(self);
   };
   const { byteSize } = member;
   const count = size / byteSize;
@@ -154,61 +154,61 @@ export function createProxy() {
 }
 
 const proxyHandlers = {
-  get(target, name) {
+  get(array, name) {
     const index = (typeof(name) === 'symbol') ? 0 : name|0;
     if (index !== 0 || index == name) {
-      return target.get(index);
+      return array.get(index);
     } else {
       switch (name) {
         case 'get':
-          if (!target[GETTER]) {
-            target[GETTER] = target.get.bind(target);
+          if (!array[GETTER]) {
+            array[GETTER] = array.get.bind(array);
           }
-          return target[GETTER];
+          return array[GETTER];
         case 'set':
-          if (!target[SETTER]) {
-            target[SETTER] = target.set.bind(target);
+          if (!array[SETTER]) {
+            array[SETTER] = array.set.bind(array);
           }
-          return target[SETTER];
+          return array[SETTER];
         case SOURCE:
-          return target;
+          return array;
         default:
-          return target[name];
+          return array[name];
       }
     }
   },
-  set(target, name, value) {
+  set(array, name, value) {
     const index = (typeof(name) === 'symbol') ? 0 : name|0;
     if (index !== 0 || index == name) {
-      target.set(index, value);
+      array.set(index, value);
     } else {
       switch (name) {
         case 'get':
-          target[GETTER] = value;
+          array[GETTER] = value;
           break;
         case 'set':
-          target[SETTER] = value;
+          array[SETTER] = value;
           break;
         default:
-          target[name] = value;
+          array[name] = value;
       }
     }
     return true;
   },
-  deleteProperty(target, name) {
+  deleteProperty(array, name) {
     const index = (typeof(name) === 'symbol') ? 0 : name|0;
     if (index !== 0 || index == name) {
       return false;
     } else {
       switch (name) {
         case 'get':
-          delete target[GETTER];
+          delete array[GETTER];
           break;
         case 'set':
-          delete target[SETTER];
+          delete array[SETTER];
           break;
         default:
-          delete target[name];
+          delete array[name];
       }
       return true;
     }

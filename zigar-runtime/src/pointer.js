@@ -1,7 +1,7 @@
 import { StructureType } from './structure.js';
-import { MemberType, getAccessors } from './member.js';
 import { getDataView } from './data-view.js';
-import { MEMORY, SLOTS, SOURCE, ZIG } from './symbol.js';
+import { throwInvalidPointerTarget } from './error.js';
+import { MEMORY, PROXY, SLOTS, SOURCE, ZIG } from './symbol.js';
 
 export function finalizePointer(s) {
   const {
@@ -12,7 +12,6 @@ export function finalizePointer(s) {
     options,
   } = s;
   const { structure: target } = member;
-  const isSlice = (target.type === StructureType.Slice);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -32,11 +31,7 @@ export function finalizePointer(s) {
     if (creating) {
       initializer.call(self, arg);
     }
-    if (isSlice) {
-      return createSliceProxy.call(self);
-    } else if (creating) {
-      return self;
-    }
+    return createProxy.call(self, target);
   };
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -45,13 +40,13 @@ export function finalizePointer(s) {
     } else {
       const Target = target.constructor;
       if (!(arg instanceof Target)) {
-        // automatically create target
-        arg = new Target(arg);
+        throwInvalidPointerTarget(s, arg);
       }
       this[SLOTS][0] = arg;
     }
   };
-  const retriever = function() { return this };
+  // return the proxy object if one is used
+  const retriever = function() { return this[PROXY] ?? this };
   const pointerCopier = s.pointerCopier = function(arg) {
     this[SLOTS][0] = arg[SLOTS][0];
   };
@@ -70,70 +65,45 @@ export function finalizePointer(s) {
   return constructor;
 }
 
-function createSliceProxy() {
-  return new Proxy(this, proxyHandlers);
+function createProxy(target) {
+  const proxy = new Proxy(this, (target.type !== StructureType.Pointer) ? proxyHandlers : {});
+  this[PROXY] = proxy;
+  return proxy;
 }
 
 const proxyHandlers = {
-  get(target, name) {
-    const slice = target[SLOTS][0][SOURCE];
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      return slice.get(index);
-    } else {
-      switch (name) {
-        case 'get':
-          if (!target[GETTER]) {
-            target[GETTER] = slice.get.bind(slice);
-          }
-          return target[GETTER];
-        case 'set':
-          if (!target[SETTER]) {
-            target[SETTER] = slice.set.bind(slice);
-          }
-          return target[SETTER];
-        case 'length':
-          return slice.length;
-        default:
-          return this[name];
-      }
+  get(pointer, name) {
+    switch (name) {
+      case '$':
+      case '*':
+      // pointerCopier can be given the proxy object
+      // should avoid placing these functions in the structure object
+      case SLOTS:
+        return pointer[name];
+      default:
+        return pointer[SLOTS][0][name];
     }
   },
-  set(target, name, value) {
-    const slice = target[SLOTS][0][SOURCE];
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      slice.set(index, value);
-    } else {
-      switch (name) {
-        case 'get':
-          target[GETTER] = value;
-          break;
-        case 'set':
-          target[SETTER] = value;
-          break;
-        default:
-          target[name] = value;
-      }
+  set(pointer, name, value) {
+    switch (name) {
+      case '$':
+      case '*':
+        pointer[name] = value;
+        break;
+      default:
+        pointer[SLOTS][0][name] = value;
     }
     return true;
   },
-  deleteProperty(target, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      return false;
-    } else {
-      switch (name) {
-        case 'get':
-          delete target[GETTER];
-          break;
-        case 'set':
-          delete target[SETTER];
-          break;
-        default:
-          delete target[name];
-      }
-      return true;
+  deleteProperty(pointer, name) {
+    switch (name) {
+      case '$':
+      case '*':
+        delete pointer[name];
+        break;
+      default:
+        delete pointer[SLOTS][0][name];
     }
+    return true;
   },
 };

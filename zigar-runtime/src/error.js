@@ -140,6 +140,20 @@ export function rethrowArgumentError(structure, index, err) {
   throw new err.constructor(`${name}(${argLabel}): ${err.message}`);
 }
 
+export function throwInvalidPointerTarget(structure, arg) {
+  const { name } = structure;
+  let target;
+  if (arg != null) {
+    const type = typeof(arg)
+    const noun = (type === 'object' && arg.constructor !== Object) ? `${arg.constructor.name} object`: type;
+    const a = article(noun);
+    target = `${a} ${noun}`;
+  } else {
+    target = arg + '';
+  }
+  throw new TypeError(`${name} cannot point to ${target}`)
+}
+
 export function throwOverflow(member, value) {
   const typeName = getTypeName(member);
   throw new TypeError(`${typeName} cannot represent the value given: ${value}`);
@@ -188,4 +202,8 @@ export function decamelizeErrorName(name) {
   } catch (err) {
     return name;
   }
+}
+
+function article(noun) {
+  return /^[aeiou]/i.test(noun) ? 'an' : 'a';
 }

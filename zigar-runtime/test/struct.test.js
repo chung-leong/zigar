@@ -607,7 +607,7 @@ describe('Struct functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const PInt32 = finalizeStructure(ptrStructure);
+      const Int32Ptr = finalizeStructure(ptrStructure);
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -636,6 +636,8 @@ describe('Struct functions', function() {
       })
       const int1 = new Int32(1234);
       const int2 = new Int32(4567);
+      const intPtr1 = new Int32Ptr(int1);
+      const intPtr2 = new Int32Ptr(int2);
       attachTemplate(structure, {
         isStatic: false,
         template: {
@@ -646,8 +648,8 @@ describe('Struct functions', function() {
             return dv;
           })(),
           [SLOTS]: {
-            0: new PInt32(int1),
-            1: new PInt32(int2),
+            0: intPtr1,
+            1: intPtr2,
           }
         },
       });

@@ -185,7 +185,7 @@ describe('Error union functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const PInt32 = finalizeStructure(ptrStructure);
+      const Int32Ptr = finalizeStructure(ptrStructure);
       const structure = beginStructure({
         type: StructureType.ErrorUnion,
         name: 'Hello',
@@ -211,9 +211,8 @@ describe('Error union functions', function() {
       const object = Hello(new ArrayBuffer(16));
       object[MEMORY].setInt16(8, 16, true)
       expect(() => object.$).to.throw();
-      const pointer = object[SLOTS][0];
-      pointer[SLOTS][0] = new Int32(0);
-      object.$ = 5;
+      object.$ = new Int32(0);
+      object.$['*'] = 5;
       expect(object.$['*']).to.equal(5);
     })
   })

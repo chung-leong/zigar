@@ -21,6 +21,7 @@ import {
   throwNoProperty,
   throwArgumentCountMismatch,
   rethrowArgumentError,
+  throwInvalidPointerTarget,
   throwOverflow,
   throwOutOfBound,
   rethrowRangeError,
@@ -359,6 +360,29 @@ describe('Error functions', function() {
         .with.property('message').that.contains('(..., cat, ...)');
       expect(() => rethrowArgumentError(structure, 2, err)).to.throw(TypeError)
         .with.property('message').that.contains('(..., turkey)');
+    })
+  })
+  describe('throwInvalidPointerTarget', function() {
+    it('should throw a type error', function() {
+      const structure = {
+        name: '*Hello',
+        type: StructureType.Pointer,
+        size: 8,
+        instance: {
+          members: [],
+        }
+      };
+      function Bear() {};
+      function Antelope() {};
+      expect(() => throwInvalidPointerTarget(structure, new Bear())).to.throw(TypeError)
+        .with.property('message').that.contains('a Bear object');
+      expect(() => throwInvalidPointerTarget(structure, new Antelope())).to.throw(TypeError)
+        .with.property('message').that.contains('an Antelope object');
+      expect(() => throwInvalidPointerTarget(structure, false)).to.throw(TypeError)
+        .with.property('message').that.contains('a boolean');
+      expect(() => throwInvalidPointerTarget(structure, {})).to.throw(TypeError)
+        .with.property('message').that.contains('an object');
+
     })
   })
   describe('throwOverflow', function() {

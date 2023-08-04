@@ -206,7 +206,7 @@ describe('Optional functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const PInt32 = finalizeStructure(ptrStructure);
+      const Int32Ptr = finalizeStructure(ptrStructure);
       const structure = beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
@@ -230,10 +230,9 @@ describe('Optional functions', function() {
       });
       const Hello = finalizeStructure(structure);
       const object = Hello(new ArrayBuffer(8));
-      const pointer = object[SLOTS][0];
-      pointer[SLOTS][0] = new Int32(0);
       expect(object.$).to.equal(null);
-      object.$ = 5;
+      object.$ = new Int32(0);
+      object.$['*'] = 5;
       expect(object.$['*']).to.equal(5);
     })
   })

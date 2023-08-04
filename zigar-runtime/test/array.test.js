@@ -271,11 +271,13 @@ describe('Array functions', function() {
       });
       const HelloPtrArray = finalizeStructure(structure);
       const object = new HelloPtrArray([
-        { dog: 1, cat: 2 },
-        { dog: 3, cat: 4 },
-        { dog: 5, cat: 6 },
-        { dog: 7, cat: 8 },
+        new Hello({ dog: 1, cat: 2 }),
+        new Hello({ dog: 3, cat: 4 }),
+        new Hello({ dog: 5, cat: 6 }),
+        new Hello({ dog: 7, cat: 8 }),
       ]);
+      expect(object[0]['*']).to.be.instanceOf(Hello);
+      expect(object[0].dog).to.be.equal(1);
     })
     it('should allow reinitialization through the dollar property', function() {
       const structure = beginStructure({
