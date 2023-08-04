@@ -46,7 +46,7 @@ export function finalizePointer(s) {
     }
   };
   // return the proxy object if one is used
-  const retriever = function() { return this[PROXY] ?? this };
+  const retriever = function() { return this[PROXY] };
   const pointerCopier = s.pointerCopier = function(arg) {
     this[SLOTS][0] = arg[SLOTS][0];
   };

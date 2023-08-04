@@ -56,9 +56,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const PInt32 = finalizeStructure(structure);
+      const Int32Ptr = finalizeStructure(structure);
       const int32 = new Int32(1234);
-      const intPointer = new PInt32(int32);
+      const intPointer = new Int32Ptr(int32);
       expect(intPointer['*']).to.equal(1234);
     })
     it('should define a pointer for pointing to a structure', function() {
@@ -274,6 +274,122 @@ describe('Pointer functions', function() {
       expect(ptrPointer['*']).to.equal(pointer);
       expect(ptrPointer.cat).to.be.undefined;
       expect(ptrPointer.dog).to.be.undefined;
+    })
+    it('should have no setter when pointer is const', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        isConst: true,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(structure);
+      const int32 = new Int32(1234);
+      const intPointer = new Int32Ptr(int32);
+      expect(intPointer['*']).to.equal(1234);
+      expect(() => intPointer['*'] = 4567).to.throw(TypeError);
+    })
+    it('should throw when initializer is not of the right type', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(structure);
+      expect(() => new Int32Ptr(1234)).to.throw();
+      const int32 = new Int32(1234);
+      expect(() => new Int32Ptr(int32)).to.not.throw();
+      const intPtr = new Int32Ptr(int32);
+      expect(() => new Int32Ptr(intPtr)).to.not.throw();
+    })
+    it('should permit assignment and delete operations like regular objects', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(structure);
+      const int32 = new Int32(1234);
+      const intPtr = new Int32Ptr(int32);
+      intPtr.hello = "Hello";
+      expect(intPtr.hello).to.equal("Hello");
+      expect(int32.hello).to.equal("Hello");
+      delete intPtr.hello;
+      expect(intPtr.hello).to.be.undefined;
+      expect(int32.hello).to.be.undefined;
+      expect(() => delete intPtr.$).to.not.throw();
+      expect(() => delete intPtr['*']).to.not.throw();
     })
   })
 })
