@@ -199,6 +199,7 @@ describe('Optional functions', function() {
         type: StructureType.Pointer,
         name: '*Int32',
         size: 8,
+        hasPointer: true,
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -214,6 +215,7 @@ describe('Optional functions', function() {
         type: StructureType.Optional,
         name: 'Hello',
         size: 8,
+        hasPointer: true,
       });
       attachMember(structure, {
         name: 'value',

@@ -383,7 +383,8 @@ describe('Error functions', function() {
         size: 8,
         instance: {
           members: [],
-        }
+        },
+        hasPointer: true,
       };
       function Bear() {};
       function Antelope() {};

@@ -81,10 +81,12 @@ describe('Error union functions', function() {
       attachMember(setStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
+        slot: 1,
       });
       attachMember(setStructure, {
         name: 'UnableToCreateObject',
         type: MemberType.Object,
+        slot: 2,
       });
       const SomeError = finalizeStructure(setStructure);
       const structStructure = beginStructure({
@@ -138,7 +140,7 @@ describe('Error union functions', function() {
       expect(object.$).to.be.an('object');
       object.$ = SomeError.UnableToCreateObject;
       expect(() => object.$).to.throw(SomeError)
-        .with('message').that.equal('Unable to create object');
+        .with.property('message').that.equal('Unable to create object');
     })
     it('should define an error union with a pointer', function() {
       const setStructure = beginStructure({
@@ -174,6 +176,7 @@ describe('Error union functions', function() {
         type: StructureType.Pointer,
         name: '*Int32',
         size: 8,
+        hasPointer: true,
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -189,6 +192,7 @@ describe('Error union functions', function() {
         type: StructureType.ErrorUnion,
         name: 'Hello',
         size: 16,
+        hasPointer: true,
       });
       attachMember(structure, {
         name: 'value',
@@ -249,6 +253,7 @@ describe('Error union functions', function() {
         type: StructureType.Pointer,
         name: '*Int32',
         size: 8,
+        hasPointer: true,
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -264,6 +269,7 @@ describe('Error union functions', function() {
         type: StructureType.ErrorUnion,
         name: 'Hello',
         size: 16,
+        hasPointer: true,
       });
       attachMember(structure, {
         name: 'value',
@@ -285,6 +291,7 @@ describe('Error union functions', function() {
       const Hello = finalizeStructure(structure);
       const object = new Hello(new Int32(777));
       const object2 = new Hello(object);
+      expect(object.$['*']).to.equal(777);
       expect(object2.$['*']).to.equal(777);
     })
     it('should release pointer when error union is set to an error', function() {
@@ -321,6 +328,7 @@ describe('Error union functions', function() {
         type: StructureType.Pointer,
         name: '*Int32',
         size: 8,
+        hasPointer: true,
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -336,6 +344,7 @@ describe('Error union functions', function() {
         type: StructureType.ErrorUnion,
         name: 'Hello',
         size: 16,
+        hasPointer: true,
       });
       attachMember(structure, {
         name: 'value',
@@ -368,10 +377,12 @@ describe('Error union functions', function() {
       attachMember(setStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
-      });
+        slot: 1,
+     });
       attachMember(setStructure, {
         name: 'UnableToCreateObject',
         type: MemberType.Object,
+        slot: 2,
       });
       finalizeStructure(setStructure);
       const structure = beginStructure({
@@ -409,10 +420,12 @@ describe('Error union functions', function() {
       attachMember(setStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
+        slot: 1,
       });
       attachMember(setStructure, {
         name: 'UnableToCreateObject',
         type: MemberType.Object,
+        slot: 2,
       });
       finalizeStructure(setStructure);
       const structure = beginStructure({

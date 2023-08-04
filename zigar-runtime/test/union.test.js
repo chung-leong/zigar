@@ -336,6 +336,7 @@ describe('Union functions', function() {
         type: StructureType.BareUnion,
         name: 'Hello',
         size: 10,
+        hasPointer: true,
       });
       attachMember(structure, {
         name: 'pointer',
@@ -408,6 +409,7 @@ describe('Union functions', function() {
         type: StructureType.BareUnion,
         name: 'Hello',
         size: 10,
+        hasPointer: true,
       });
       attachMember(structure, {
         name: 'pointer',
@@ -480,6 +482,7 @@ describe('Union functions', function() {
         type: StructureType.BareUnion,
         name: 'Hello',
         size: 10,
+        hasPointer: true,
       });
       attachMember(structure, {
         name: 'pointer',

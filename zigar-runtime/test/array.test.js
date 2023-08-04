@@ -244,12 +244,13 @@ describe('Array functions', function() {
         bitSize: 32,
       });
       const Hello = finalizeStructure(structStructure);
-      const pointerStructure = beginStructure({
+      const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Hello',
         size: 8,
+        hasPointer: true,
       });
-      attachMember(pointerStructure, {
+      attachMember(ptrStructure, {
         type: MemberType.Object,
         isStatic: false,
         isSigned: true,
@@ -260,18 +261,19 @@ describe('Array functions', function() {
         slot: 0,
         structure: structStructure,
       });
-      const HelloPtr = finalizeStructure(pointerStructure);
+      const HelloPtr = finalizeStructure(ptrStructure);
       const structure = beginStructure({
         type: StructureType.Array,
         name: '[4]*Hello',
         size: 8 * 4,
+        hasPointer: true,
       });
       attachMember(structure, {
         type: MemberType.Object,
         isStatic: false,
         bitSize: 64,
         byteSize: 8,
-        structure: pointerStructure,
+        structure: ptrStructure,
       });
       const HelloPtrArray = finalizeStructure(structure);
       const object = new HelloPtrArray([

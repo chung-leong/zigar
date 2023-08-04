@@ -50,6 +50,7 @@ describe('Static variable functions', function() {
         type: StructureType.Pointer,
         name: '*Int32',
         size: 8,
+        hasPointer: true,
       });
       attachMember(intPtrStructure, {
         type: MemberType.Object,
@@ -149,6 +150,7 @@ describe('Static variable functions', function() {
         type: StructureType.Pointer,
         name: '*Int32',
         size: 8,
+        hasPointer: true,
       });
       attachMember(intPtrStructure, {
         type: MemberType.Object,
