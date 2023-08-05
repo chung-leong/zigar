@@ -359,20 +359,20 @@ describe('Error functions', function() {
         size: 8,
         instance: {
           members: [
-            { name: 'dog' },
-            { name: 'cat' },
-            { name: 'turkey' },
+            { name: '0' },
+            { name: '1' },
+            { name: '2' },
             { name: 'retval' },
           ],
         }
       };
       const err = new TypeError('Something');
       expect(() => rethrowArgumentError(structure, 0, err)).to.throw(TypeError)
-        .with.property('message').that.contains('(dog, ...)').and.contains(err.message);
+        .with.property('message').that.contains('(args[0], ...)').and.contains(err.message);
       expect(() => rethrowArgumentError(structure, 1, err)).to.throw(TypeError)
-        .with.property('message').that.contains('(..., cat, ...)');
+        .with.property('message').that.contains('(..., args[1], ...)');
       expect(() => rethrowArgumentError(structure, 2, err)).to.throw(TypeError)
-        .with.property('message').that.contains('(..., turkey)');
+        .with.property('message').that.contains('(..., args[2])');
     })
   })
   describe('throwInvalidPointerTarget', function() {

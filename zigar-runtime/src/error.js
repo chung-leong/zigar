@@ -132,11 +132,12 @@ export function throwArgumentCountMismatch(structure, actual) {
 
 export function rethrowArgumentError(structure, index, err) {
   const { name, instance: { members } } = structure;
-  const { name: memberName } = members[index];
+  // Zig currently does not provide the argument name
+  const argName = `args[${index}]`;
   const argCount = members.length - 1;
   const prefix = (index !== 0) ? '..., ' : '';
   const suffix = (index !== argCount - 1) ? ', ...' : '';
-  const argLabel = prefix + memberName + suffix;
+  const argLabel = prefix + argName + suffix;
   throw new err.constructor(`${name}(${argLabel}): ${err.message}`);
 }
 

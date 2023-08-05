@@ -170,7 +170,7 @@ describe('ArgStruct functions', function() {
         size: 4 * 3,
       });
       attachMember(structure, {
-        name: 'cat',
+        name: '0',
         type: MemberType.Int,
         isStatic: false,
         isSigned: true,
@@ -179,7 +179,7 @@ describe('ArgStruct functions', function() {
         byteSize: 4,
       });
       attachMember(structure, {
-        name: 'dog',
+        name: '1',
         type: MemberType.Int,
         isStatic: false,
         isSigned: true,
@@ -198,7 +198,7 @@ describe('ArgStruct functions', function() {
       });
       const ArgStruct = finalizeStructure(structure);
       expect(() => new ArgStruct([ 123, 456n ])).to.throw(TypeError)
-        .with.property('message').that.contains('(..., dog)');
+        .with.property('message').that.contains('args[1]');
     })
   })
 })
