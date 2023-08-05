@@ -63,7 +63,7 @@ export function finalizeErrorUnion(s) {
 export function getErrorUnionAccessors(members, size, options) {
   const { get: getValue, set: setValue } = getAccessors(members[0], options);
   const { get: getError, set: setError } = getAccessors(members[1], options);
-  const { structure: valueStructure } = members[0];
+  const { structure: valueStructure = {} } = members[0];
   const { structure: errorStructure } = members[1];
   const reset = getMemoryResetter(size)
   return {
@@ -83,7 +83,7 @@ export function getErrorUnionAccessors(members, size, options) {
     set: function(value) {
       if (value instanceof Error) {
         const { constructor } = errorStructure;
-        const pointerResetter = valueStructure?.pointerResetter;
+        const { pointerResetter } = valueStructure;
         if (!(value instanceof constructor)) {
           throwNotInErrorSet(errorStructure);
         }

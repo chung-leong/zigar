@@ -11,7 +11,7 @@ export function finalizePointer(s) {
     },
     options,
   } = s;
-  const { structure: target } = member;
+  const { structure: target = {} } = member;
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;

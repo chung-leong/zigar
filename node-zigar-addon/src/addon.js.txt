@@ -11,7 +11,7 @@ R"=====(
   const ENUM_ITEMS = Symbol('enumItems');
   const ERROR_INDEX = Symbol('errorIndex');
   const ENUM_ITEM = Symbol('enumItem');
-  const HIDE_PREVIOUS = Symbol('hidePrevious');
+  const CLEAR_PREVIOUS = Symbol('hidePrevious');
 
   function getBitAlignFunction(bitPos, bitSize, toAligned) {
     if (bitPos + bitSize <= 8) {
@@ -1492,11 +1492,11 @@ R"=====(
           const hide = () => Object.defineProperty(this, name, { enumerable: false });
           Object.defineProperties(this, {
             [name]: { enumerable: true },
-            [HIDE_PREVIOUS]: { value: hide, configurable: true },
+            [CLEAR_PREVIOUS]: { value: hide, configurable: true },
           });
         };
         const init = function(value) {
-          this[HIDE_PREVIOUS]?.call();
+          this[CLEAR_PREVIOUS]?.call();
           setIndex.call(this, index);
           setValue.call(this, value);
           show.call(this);

@@ -13,7 +13,7 @@ import {
   throwNoProperty,
   throwInactiveUnionProperty,
 } from './error.js';
-import { MEMORY, ENUM_INDEX, ENUM_ITEM, HIDE_PREVIOUS } from './symbol.js';
+import { MEMORY, ENUM_INDEX, ENUM_ITEM, CLEAR_PREVIOUS, SLOTS } from './symbol.js';
 
 export function finalizeUnion(s) {
   const {
@@ -24,6 +24,7 @@ export function finalizeUnion(s) {
       template,
     },
     options,
+    hasPointer,
   } = s;
   const {
     runtimeSafety = true,
@@ -67,15 +68,21 @@ export function finalizeUnion(s) {
         setValue.call(this, value);
       };
       const show = function() {
-        const { name } = member;
-        const hide = () => Object.defineProperty(this, name, { enumerable: false });
+        const { name, slot, structure: { pointerResetter } = {} } = member;
+        const clear = () => {
+          Object.defineProperty(this, name, { enumerable: false });
+          if (pointerResetter) {
+            const object = this[SLOTS][slot];
+            pointerResetter.call(object);
+          }
+        };
         Object.defineProperties(this, {
           [name]: { enumerable: true },
-          [HIDE_PREVIOUS]: { value: hide, configurable: true },
+          [CLEAR_PREVIOUS]: { value: clear, configurable: true },
         });
       };
       const init = function(value) {
-        this[HIDE_PREVIOUS]?.call();
+        this[CLEAR_PREVIOUS]?.call();
         setIndex.call(this, index);
         setValue.call(this, value);
         show.call(this);
