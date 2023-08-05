@@ -7,7 +7,7 @@ export function generateCode(structures, params) {
     runtimeURL,
     loadWASM,
     topLevelAwait,
-    ...structureOptions
+    runtimeSafety,
   } = params;
   const lines = [];
   let indent = 0;
@@ -58,7 +58,38 @@ export function generateCode(structures, params) {
     add(`${feature}();`);
   }
 
+  const defaultStructure = {
+    constructor: null,
+    initializer: null,
+    pointerCopier: null,
+    pointerResetter: null,
+    type: StructureType.Primitive,
+    name: undefined,
+    size: 4,
+    hasPointer: false,
+    instance: {
+      members: [],
+      template: null,
+    },
+    static: {
+      members: [],
+      template: null,
+    },
+    methods: [],
+    options: { runtimeSafety },
+  };
+
+  const defaultMember = {
+    type: MemberType.Void,
+    isConst: false,
+    isRequired: false,
+    bitSize: 32,
+    byteSize: 4,
+  };
+
   add(`\n// define structures`);
+  addDefaultStructure();
+  addDefaultMember();
   const structureNames = new Map();
   const arrayBufferNames = new Map();
   let arrayBufferCount = 0;
@@ -80,7 +111,7 @@ export function generateCode(structures, params) {
     }
     add(`];`);
   }
-  add(`const linkage = finalizeStructures(structures, ${JSON.stringify(structureOptions)});`);
+  add(`const linkage = finalizeStructures(structures);`);
 
   // the root structure gets finalized last
   const root = structures[structures.length - 1];
@@ -130,31 +161,44 @@ export function generateCode(structures, params) {
   }
   add(``);
 
+  function addDefaultStructure() {
+    add(`const s = {`);
+    for (const [ name, value ] of Object.entries(defaultStructure)) {
+      add(`${name}: ${JSON.stringify(value)},`);
+    }
+    add(`};`);
+  }
+
   function addStructure(varname, structure) {
     addBuffers(structure.instance.template);
     addBuffers(structure.static.template);
     add(`const ${varname} = {`);
+    add(`...s,`);
     for (const [ name, value ] of Object.entries(structure)) {
-      switch (name) {
-        case 'instance':
-        case 'static':
-          add(`${name}: {`);
-          addMembers(value.members);
-          addTemplate(value.template);
-          add(`},`);
-          break;
-        case 'methods':
-          addMethods(value);
-          break;
-        case 'options':
-          if (Object.keys(value).length === 0) {
+      if (name !== 'options' && isDifferent(value, defaultStructure[name])) {
+        switch (name) {
+          case 'instance':
+          case 'static':
+            add(`${name}: {`);
+            addMembers(value.members);
+            addTemplate(value.template);
+            add(`},`);
             break;
-          } else {
-            // falls through
-          }
-        default:
-          add(`${name}: ${JSON.stringify(value)},`);
+          case 'methods':
+            addMethods(value);
+            break;
+          default:
+            add(`${name}: ${JSON.stringify(value)},`);
+        }
       }
+    }
+    add(`};`);
+  }
+
+  function addDefaultMember() {
+    add(`const m = {`);
+    for (const [ name, value ] of Object.entries(defaultMember)) {
+      add(`${name}: ${JSON.stringify(value)},`);
     }
     add(`};`);
   }
@@ -173,13 +217,16 @@ export function generateCode(structures, params) {
 
   function addMember(member) {
     add(`{`);
+    add(`...m,`);
     for (const [ name, value ] of Object.entries(member)) {
-      switch (name) {
-        case 'structure':
-          add(`${name}: ${structureNames.get(value)},`);
-          break;
-        default:
-          add(`${name}: ${JSON.stringify(value)},`);
+      if (isDifferent(value, defaultMember[name])) {
+        switch (name) {
+          case 'structure':
+            add(`${name}: ${structureNames.get(value)},`);
+            break;
+          default:
+            add(`${name}: ${JSON.stringify(value)},`);
+        }
       }
     }
     add(`},`);
@@ -268,3 +315,25 @@ export function generateCode(structures, params) {
   return code;
 }
 
+function isDifferent(value, def) {
+  if (value === def) {
+    return false;
+  }
+  if (def == null) {
+    return value != null;
+  }
+  if (typeof(def) === 'object' && typeof(value) === 'object') {
+    const valueKeys = Object.keys(value);
+    const defKeys = Object.keys(def);
+    if (valueKeys.length !== defKeys.length) {
+      return true;
+    }
+    for (const key of defKeys) {
+      if (isDifferent(value[key], def[key])) {
+        return true;
+      }
+    }
+    return false;
+  }
+  return true;
+}

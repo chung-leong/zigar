@@ -420,7 +420,7 @@ export async function runModule(module, options = {}) {
   }
 }
 
-export function finalizeStructures(structures, options) {
+export function finalizeStructures(structures) {
   const slots = {};
   const variables = {};
   for (const structure of structures) {
@@ -433,10 +433,6 @@ export function finalizeStructures(structures, options) {
     for (const method of structure.methods) {
       // create thunk function
       method.thunk = createThunk(method.thunk);
-    }
-    if (!structure.options) {
-      // just default options unless structure has specific ones
-      structure.options = options;
     }
     finalizeStructure(structure);
     // place structure into its assigned slot

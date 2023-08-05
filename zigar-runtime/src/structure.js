@@ -115,8 +115,9 @@ export function beginStructure(def, options = {}) {
 }
 
 export function attachMember(s, def) {
-  const target = (def.isStatic) ? s.static : s.instance;
-  target.members.push(def);
+  const { isStatic, ...member } = def;
+  const target = (isStatic) ? s.static : s.instance;
+  target.members.push(member);
 }
 
 export function attachMethod(s, def) {

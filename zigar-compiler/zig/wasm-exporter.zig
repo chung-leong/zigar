@@ -236,7 +236,9 @@ pub const Host = struct {
         _ = self;
         const def = createObject();
         setObjectProperty(def, "type", member.member_type);
-        setObjectProperty(def, "isSigned", member.is_signed);
+        if (member.member_type == MemberType.Int) {
+            setObjectProperty(def, "isSigned", member.is_signed);
+        }
         setObjectProperty(def, "isConst", member.is_const);
         setObjectProperty(def, "isRequired", member.is_required);
         setObjectProperty(def, "isStatic", member.is_static);
