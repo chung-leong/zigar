@@ -8,6 +8,7 @@ import {
   parseFunction,
   repackFunction,
   stripUnused,
+  extractNames,
   MagicNumber,
 } from '../src/wasm-stripper.js';
 
@@ -170,6 +171,16 @@ describe('WASM stripper', function() {
       const binary = new DataView(content.buffer);
       const newBinary = stripUnused(binary);
       expect(newBinary.byteLength).to.be.below(binary.byteLength);
+    })
+  })
+  describe('extractNames', function() {
+    it('should extract module name from name section', async function() {
+      const path = resolve(`./wasm-samples/module-name.wasm`);
+      const content = await readFile(path);
+      const binary = new DataView(content.buffer);
+      const module = parseBinary(binary);
+      const { moduleName } = extractNames(module);
+      expect(moduleName).to.equal('my_module');
     })
   })
 })

@@ -33,51 +33,7 @@ export function stripUnused(binary) {
     return sections.find(s => s.type === type);
   }
 
-  function getNames() {
-    let moduleName;
-    const functionNames = [];
-    for (const section of sections) {
-      if (section.type === SectionType.Custom) {
-        const {
-          eof,
-          readString,
-          readU8,
-          readU32Leb128,
-          readArray,
-          readBytes,
-        } = createReader(section.data);
-        const name = readString();
-        if (name === 'name') {
-          while(!eof()) {
-            const id = readU8();
-            const size = readU32Leb128();
-            switch (id) {
-              case 0: {
-                moduleName = readString();
-              } break;
-              case 1: {
-                const map = readArray(() => {
-                  const index = readU32Leb128();
-                  const name = readString();
-                  return { index, name };
-                });
-                for (const { index, name } of map) {
-                  functionNames[index] = name;
-                }
-              } break;
-              default: {
-                readBytes(size);
-              }
-            }
-          }
-          break;
-        }
-      }
-    }
-    return { moduleName, functionNames };
-  }
-
-  const { moduleName, functionNames } = getNames();
+  const { moduleName, functionNames } = extractNames({ sections });
   const functions = [];
   // allocate indices for imported functions first
   const importSection = sections.find(s => s.type === SectionType.Import);
@@ -174,8 +130,8 @@ export function stripUnused(binary) {
 
   function useFunction(index) {
     const fn = functions[index];
+    /* c8 ignore next 3 */
     if (!fn) {
-      /* c8 ignore next 2 */
       throw new Error(`Function #${index} does not exist`);
     }
     if (fn.using === undefined) {
@@ -256,6 +212,7 @@ export function stripUnused(binary) {
         return (fn.using) ? fn.newIndex : 0;
       });
       newElementSection.segments.push({ ...segment, indices });
+      /* c8 ignore next 3 */
     } else {
       newElementSection.segments.push(segment);
     }
@@ -282,6 +239,7 @@ export function stripUnused(binary) {
       if (fn.using) {
         newImportSection.imports.push(object);
       }
+      /* c8 ignore next 3 */
     } else {
       newImportSection.imports.push(object);
     }
@@ -370,8 +328,8 @@ export function parseBinary(binary) {
               const mut = readU8();
               return { module, name, type, valtype, mut };
             }
+            /* c8 ignore next 2 */
             default:
-              /* c8 ignore next 1 */
               throw new Error(`Unknown object type: ${type}`);
           }
         });
@@ -465,8 +423,8 @@ export function parseBinary(binary) {
       case 1:
         const max = readU32Leb128();
         return { flag, min, max };
+      /* c8 ignore next 4 */
       default:
-        /* c8 ignore next 1 */
         throw new Error(`Unknown limit flag: ${flag}`);
     }
   }
@@ -1142,4 +1100,48 @@ function createEncoder(writer) {
   }
 
   return { encodeNext };
+}
+
+export function extractNames({ sections }) {
+  let moduleName;
+  const functionNames = [];
+  for (const section of sections) {
+    if (section.type === SectionType.Custom) {
+      const {
+        eof,
+        readString,
+        readU8,
+        readU32Leb128,
+        readArray,
+        readBytes,
+      } = createReader(section.data);
+      const name = readString();
+      if (name === 'name') {
+        while(!eof()) {
+          const id = readU8();
+          const size = readU32Leb128();
+          switch (id) {
+            case 0: {
+              moduleName = readString();
+            } break;
+            case 1: {
+              const map = readArray(() => {
+                const index = readU32Leb128();
+                const name = readString();
+                return { index, name };
+              });
+              for (const { index, name } of map) {
+                functionNames[index] = name;
+              }
+            } break;
+            default: {
+              readBytes(size);
+            }
+          }
+        }
+        break;
+      }
+    }
+  }
+  return { moduleName, functionNames };
 }
