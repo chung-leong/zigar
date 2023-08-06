@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { readFile, writeFile } from 'fs/promises';
+import { readFile, readdir, writeFile } from 'fs/promises';
 
 import {
   SectionType,
@@ -8,21 +8,22 @@ import {
   parseFunction,
   repackFunction,
   stripUnused,
+  MagicNumber,
 } from '../src/wasm-stripper.js';
 
 const littleEndian = true;
 
 describe('WASM stripper', function() {
-  const wasmFiles = [
-    'fail',
-    'global',
-    'memory',
-    'simple',
-    'table',
-    'table2',
-  ].map(name => resolve(`./wasm-samples/${name}.wasm`));
   describe('parseBinary', function() {
     it('should parse WASM files', async function() {
+      const wasmFiles = [
+        'fail',
+        'global',
+        'memory',
+        'simple',
+        'table',
+        'table2',
+      ].map(name => resolve(`./wasm-samples/${name}.wasm`));
       for (const path of wasmFiles) {
         const content = await readFile(path);
         const binary = new DataView(content.buffer);
@@ -30,10 +31,43 @@ describe('WASM stripper', function() {
         expect(module.sections).to.be.an('array');
       }
     })
+    it('should throw when the magic number is incorrect', async function() {
+      const binary = new DataView(new ArrayBuffer(8));
+      expect(() => parseBinary(binary)).to.throw();
+    })
+    it('should throw when the version number is incorrect', async function() {
+      const binary = new DataView(new ArrayBuffer(8));
+      binary.setUint32(0, MagicNumber, true);
+      expect(() => parseBinary(binary)).to.throw();
+    })
   })
   describe('repackBinary', function() {
     it('should recreate WASM binary', async function() {
       this.timeout(10000);
+      const wasmFiles = [
+        'fail',
+        'global',
+        'memory',
+        'simple',
+        'table',
+        'table2',
+      ].map(name => resolve(`./wasm-samples/${name}.wasm`));
+      for (const path of wasmFiles) {
+        const content = await readFile(path);
+        const binary = new DataView(content.buffer);
+        const module = parseBinary(binary);
+        const newBinary = repackBinary(module);
+        expect(newBinary.byteLength).to.equal(binary.byteLength);
+        for (let i = 0; i < newBinary.byteLength; i++) {
+          expect(newBinary.getUint8(i)).to.equal(binary.getUint8(i));
+        }
+      }
+    })
+    it('should recreate WASM files from WABT test suite', async function() {
+      this.timeout(10000);
+      const dir = resolve(`./wabt-test-suite`);
+      const names = await readdir(dir);
+      const wasmFiles = names.filter(n => /\.wasm$/.test(n)).map(n => `${dir}/${n}`);
       for (const path of wasmFiles) {
         const content = await readFile(path);
         const binary = new DataView(content.buffer);

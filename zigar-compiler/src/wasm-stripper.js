@@ -175,6 +175,7 @@ export function stripUnused(binary) {
   function useFunction(index) {
     const fn = functions[index];
     if (!fn) {
+      /* c8 ignore next 2 */
       throw new Error(`Function #${index} does not exist`);
     }
     if (fn.using === undefined) {
@@ -317,6 +318,7 @@ export function stripUnused(binary) {
 
 export function parseBinary(binary) {
   const {
+    pos,
     eof,
     readBytes,
     readU8,
@@ -335,7 +337,12 @@ export function parseBinary(binary) {
     throw new Error(`Incorrect version: ${version}`);
   }
   const sections = [];
+  let expectedOffset = 8, lastType = undefined;
   while(!eof()) {
+    if (pos() !== expectedOffset) {
+      const sectionType = Object.entries(SectionType).find(e => e[1] === lastType)[0];
+      console.log(`Incorrect offset due to erroneous parsing: ${sectionType}`)
+    }
     sections.push(readSection());
   }
   const size = binary.byteLength;
@@ -344,6 +351,8 @@ export function parseBinary(binary) {
   function readSection() {
     const type = readU8();
     const len = readU32Leb128();
+    expectedOffset = pos() + len;
+    lastType = type;
     switch(type) {
       case SectionType.Import: {
         const imports = readArray(() => {
@@ -370,6 +379,7 @@ export function parseBinary(binary) {
               return { module, name, type, valtype, mut };
             }
             default:
+              /* c8 ignore next 1 */
               throw new Error(`Unknown object type: ${type}`);
           }
         });
@@ -545,7 +555,7 @@ export function repackBinary(module) {
               } break;
               case 2: {
                 writeU32Leb128(segment.tableidx);
-                writeArray.writeExpression(segment.expr);
+                writeExpression(segment.expr);
                 writeU8(segment.kind);
                 writeArray(segment.indices, writeU32Leb128);
               } break;
@@ -593,8 +603,12 @@ export function repackBinary(module) {
 }
 
 function createReader(dv) {
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder('utf-8', { ignoreBOM: true });
   let offset = 0;
+
+  function pos() {
+    return offset;
+  }
 
   function eof() {
     return (offset >= dv.byteLength);
@@ -698,12 +712,19 @@ function createReader(dv) {
 
   function readExpression() {
     const start = offset;
-    while (readU8() !== 0x0B);
+    const { decodeNext } = createDecoder(self);
+    let op;
+    while (op = decodeNext()) {
+      if (op.opcode === 0x0B) {
+        break;
+      }
+    }
     const len = offset - start;
     return new DataView(dv.buffer, dv.byteOffset + start, len);
   }
 
-  return {
+  const self = {
+    pos,
     eof,
     readBytes,
     readU8,
@@ -717,6 +738,7 @@ function createReader(dv) {
     readI64Leb128,
     readExpression,
   };
+  return self;
 }
 
 function createWriter(maxSize) {
@@ -851,6 +873,30 @@ function createWriter(maxSize) {
 }
 
 export function parseFunction(dv) {
+  const reader = createReader(dv);
+  const {
+    readU8,
+    readArray,
+    readU32Leb128,
+  } = reader;
+  // read locals first
+  const locals = readArray(() => {
+    const number = readU32Leb128();
+    const type = readU8();
+    return { number, type };
+  });
+  // decode the expression
+  const { decodeNext } = createDecoder(reader);
+  const instructions = [];
+  let op;
+  while (op = decodeNext()) {
+    instructions.push(op);
+  }
+  const size = dv.byteLength;
+  return { locals, instructions, size };
+}
+
+function createDecoder(reader) {
   const {
     eof,
     readBytes,
@@ -861,7 +907,7 @@ export function parseFunction(dv) {
     readI64Leb128,
     readU32,
     readF64,
-  } = createReader(dv);
+  } = reader;
   const readOne = readU32Leb128;
   const readTwo = () => [ readOne(), readOne() ];
   const readMultiple = (count) => {
@@ -995,27 +1041,41 @@ export function parseFunction(dv) {
       }
     },
   }
-  // read locals first
-  const locals = readArray(() => {
-    const number = readU32Leb128();
-    const type = readU8();
-    return { number, type };
-  });
-  // decode the expression
-  const instructions = [];
-  while (!eof()) {
+
+  function decodeNext() {
+    if (eof()) {
+      return null;
+    }
     const opcode = readU8();
     const f = operandReaders[opcode];
     const operand = f?.();
-    instructions.push({ opcode, operand });
+    return { opcode, operand };
   }
-  const size = dv.byteLength;
-  return { locals, instructions, size };
+
+  return { decodeNext };
 }
 
 export function repackFunction({ locals, instructions, size }) {
+  const writer = createWriter(size);
   const {
     finalize,
+    writeU8,
+    writeArray,
+    writeU32Leb128,
+  } = writer;
+  writeArray(locals, ({ number, type }) => {
+    writeU32Leb128(number);
+    writeU8(type);
+  });
+  const { encodeNext } = createEncoder(writer);
+  for (const op of instructions) {
+    encodeNext(op);
+  }
+  return finalize();
+}
+
+function createEncoder(writer) {
+  const {
     writeBytes,
     writeU8,
     writeArray,
@@ -1024,7 +1084,7 @@ export function repackFunction({ locals, instructions, size }) {
     writeI64Leb128,
     writeU32,
     writeF64,
-  } = createWriter(size);
+  } = writer;
   const writeOne = writeU32Leb128;
   const writeTwo = (op) => {
     writeOne(op[0]);
@@ -1110,17 +1170,12 @@ export function repackFunction({ locals, instructions, size }) {
       }
     },
   }
-  writeArray(locals, ({ number, type }) => {
-    writeU32Leb128(number);
-    writeU8(type);
-  });
-  for (const { opcode, operand } of instructions) {
+
+  function encodeNext({ opcode, operand }) {
     writeU8(opcode);
     const f = operandWriters[opcode];
     f?.(operand);
   }
-  return finalize();
+
+  return { encodeNext };
 }
-
-
-
