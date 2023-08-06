@@ -155,7 +155,7 @@ export function generateCode(structures, params) {
     add(`${name},`);
   }
   add(`};`);
-  if (topLevelAwait) {
+  if (topLevelAwait && loadWASM) {
     add(`\n// await initialization`);
     add(`await __init`);
   }
@@ -282,15 +282,11 @@ export function generateCode(structures, params) {
   }
 
   function addMethods(methods) {
-    if (methods.length > 0) {
-      add(`methods: [`);
-      for (const method of methods) {
-        addMethod(method);
-      }
-      add(`],`);
-    } else {
-      add(`methods: [],`)
+    add(`methods: [`);
+    for (const method of methods) {
+      addMethod(method);
     }
+    add(`],`);
   }
 
   function addMethod(method) {
