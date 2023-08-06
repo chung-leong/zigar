@@ -318,7 +318,6 @@ export function stripUnused(binary) {
 
 export function parseBinary(binary) {
   const {
-    pos,
     eof,
     readBytes,
     readU8,
@@ -337,12 +336,7 @@ export function parseBinary(binary) {
     throw new Error(`Incorrect version: ${version}`);
   }
   const sections = [];
-  let expectedOffset = 8, lastType = undefined;
   while(!eof()) {
-    if (pos() !== expectedOffset) {
-      const sectionType = Object.entries(SectionType).find(e => e[1] === lastType)[0];
-      console.log(`Incorrect offset due to erroneous parsing: ${sectionType}`)
-    }
     sections.push(readSection());
   }
   const size = binary.byteLength;
@@ -351,8 +345,6 @@ export function parseBinary(binary) {
   function readSection() {
     const type = readU8();
     const len = readU32Leb128();
-    expectedOffset = pos() + len;
-    lastType = type;
     switch(type) {
       case SectionType.Import: {
         const imports = readArray(() => {
@@ -474,6 +466,7 @@ export function parseBinary(binary) {
         const max = readU32Leb128();
         return { flag, min, max };
       default:
+        /* c8 ignore next 1 */
         throw new Error(`Unknown limit flag: ${flag}`);
     }
   }
@@ -606,16 +599,12 @@ function createReader(dv) {
   const decoder = new TextDecoder('utf-8', { ignoreBOM: true });
   let offset = 0;
 
-  function pos() {
-    return offset;
-  }
-
   function eof() {
     return (offset >= dv.byteLength);
   }
 
   function readBytes(len) {
-    const bytes = new DataView(dv.buffer, offset, len);
+    const bytes = new DataView(dv.buffer, dv.byteOffset + offset, len);
     offset += len;
     return bytes;
   }
@@ -660,19 +649,9 @@ function createReader(dv) {
       value |= (byte & 0x7f) << shift;
       shift += 7;
       if ((0x80 & byte) === 0) {
-        return value;
-      }
-    }
-  }
-
-  function readU64Leb128() {
-    let value = 0n;
-    let shift = 0n;
-    while (true) {
-      const byte = dv.getUint8(offset++);
-      value |= BigInt(byte & 0x7f) << shift;
-      shift += 7n;
-      if ((0x80 & byte) === 0) {
+        if (value < 0) {
+          value += 2 ** 32;
+        }
         return value;
       }
     }
@@ -724,7 +703,6 @@ function createReader(dv) {
   }
 
   const self = {
-    pos,
     eof,
     readBytes,
     readU8,
@@ -733,7 +711,6 @@ function createReader(dv) {
     readString,
     readArray,
     readU32Leb128,
-    readU64Leb128,
     readI32Leb128,
     readI64Leb128,
     readExpression,
@@ -795,20 +772,8 @@ function createWriter(maxSize) {
   function writeU32Leb128(value) {
     while (true) {
       const byte = value & 0x7f;
-      value >>= 7;
+      value >>>= 7;
       if (value === 0) {
-        writeU8(byte);
-        return;
-      }
-      writeU8(byte | 0x80);
-    }
-  }
-
-  function writeU64Leb128(value) {
-    while (true) {
-      const byte = Number(value & 0x7fn);
-      value >>= 7n;
-      if (value === 0n) {
         writeU8(byte);
         return;
       }
@@ -864,7 +829,6 @@ function createWriter(maxSize) {
     writeString,
     writeArray,
     writeU32Leb128,
-    writeU64Leb128,
     writeI32Leb128,
     writeI64Leb128,
     writeExpression,
@@ -1157,7 +1121,7 @@ function createEncoder(writer) {
         writeOne(op);
       }
     },
-    0xFD: () => {
+    0xFD: (op) => {
       if (op instanceof Array) {
         if (op[0] === 12) {
           writeOne(op[0]);

@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { readFile, readdir, writeFile } from 'fs/promises';
+import { readFile, readdir } from 'fs/promises';
 
 import {
   SectionType,
@@ -135,6 +135,30 @@ describe('WASM stripper', function() {
         expect(newFn.byteLength).to.equal(fn.byteLength);
         for (let i = 0; i < newFn.byteLength; i++) {
           expect(newFn.getUint8(i)).to.equal(fn.getUint8(i));
+        }
+      }
+    })
+    it('should repack code from WABT test suite', async function() {
+      this.timeout(60000);
+      const dir = resolve(`./wabt-test-suite`);
+      const names = await readdir(dir);
+      const wasmFiles = names.filter(n => /\.wasm$/.test(n)).map(n => `${dir}/${n}`);
+      for (const path of wasmFiles) {
+        const content = await readFile(path);
+        const binary = new DataView(content.buffer);
+        const module = parseBinary(binary);
+        const codeSection = module.sections.find(s => s.type === SectionType.Code);
+        if (codeSection) {
+          const { functions } = codeSection;
+          for (const [ index, fn ] of functions.entries()) {
+            expect(fn).be.an.instanceOf(DataView);
+            const result = parseFunction(fn);
+            const newFn = repackFunction(result);
+            expect(newFn.byteLength).to.equal(fn.byteLength);
+            for (let i = 0; i < newFn.byteLength; i++) {
+              expect(newFn.getUint8(i)).to.equal(fn.getUint8(i));
+            }
+          }
         }
       }
     })
