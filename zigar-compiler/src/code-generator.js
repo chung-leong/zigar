@@ -204,15 +204,11 @@ export function generateCode(structures, params) {
   }
 
   function addMembers(members) {
-    if (members.length > 0) {
-      add(`members: [`);
-      for (const member of members) {
-        addMember(member);
-      }
-      add(`],`);
-    } else {
-      add(`members: [],`);
+    add(`members: [`);
+    for (const member of members) {
+      addMember(member);
     }
+    add(`],`);
   }
 
   function addMember(member) {
