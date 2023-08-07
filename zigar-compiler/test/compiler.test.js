@@ -34,6 +34,36 @@ describe('Compilation', function() {
       const { size: after } = await stat(libpath2);
       expect(after).to.be.below(before);
     })
+    it('should work correctly when the same file is compiled at the same time', async function() {
+      this.timeout(30000);
+      const { pathname } = new URL('./integration/integers.zig', import.meta.url);
+      await touch(pathname);
+      const promise1 = compile(pathname);
+      const promise2 = compile(pathname);
+      const libpath2 = await promise2;
+      const libpath1 = await promise1;
+      expect(libpath2).to.equal(libpath1);
+    })
+    it('should throw with the same error message when the same file fails to compile at the same time', async function() {
+      this.timeout(30000);
+      const { pathname } = new URL('./integration/invalid-syntax.zig', import.meta.url);
+      await touch(pathname);
+      let error1, error2;
+      const promise1 = compile(pathname).catch(err => error1 = err);
+      const promise2 = compile(pathname).catch(err => error2 = err);
+      await promise2;
+      await promise1;
+      expect(error1.message).to.equal(error2.message);
+    })
+    it('should ignore an existing pid file when it appears to be stale', async function() {
+      this.timeout(30000);
+      const { pathname } = new URL('./integration/integers.zig', import.meta.url);
+      await touch(pathname);
+      const promise1 = compile(pathname, { staleTime: 0 });
+      const promise2 = compile(pathname, { staleTime: 0 });
+      await promise2;
+      await promise1;
+    })
     it('should throw when source file is missing', async function() {
       this.timeout(30000);
       const { pathname } = new URL('./integration/non-existing.zig', import.meta.url);
@@ -70,7 +100,7 @@ describe('Compilation', function() {
       const libpath1 = await compile(pathname);
       const { mtime: before } = await stat(libpath1);
       await delay(1000);
-      touch(pathname);
+      await touch(pathname);
       const libpath2 = await compile(pathname);
       const { mtime: after } = await stat(libpath2);
       expect(after).to.be.above(before);
@@ -82,7 +112,7 @@ describe('Compilation', function() {
       const { mtime: before } = await stat(libpath1);
       const { pathname: exportPath } = new URL('../zig/exporter.zig', import.meta.url);
       await delay(1000);
-      touch(exportPath);
+      await touch(exportPath);
       const libpath2 = await compile(pathname);
       const { mtime: after } = await stat(libpath2);
       expect(after).to.be.above(before);
@@ -93,7 +123,7 @@ describe('Compilation', function() {
       await expect(compile(pathname)).to.eventually.be.rejectedWith(Error)
         .with.property('message').that.contains(`expected ';' after declaration`);
     })
-    it('should build folder when the clean option is given', async function() {
+    it('should remove build folder when the clean option is given', async function() {
       this.timeout(30000);
       const { pathname } = new URL('./integration/invalid-syntax.zig', import.meta.url);
       await expect(compile(pathname, { clean: true })).to.eventually.be.rejectedWith(Error);

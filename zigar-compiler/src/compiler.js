@@ -14,6 +14,7 @@ export async function compile(path, options = {}) {
     buildDir = tmpdir(),
     cacheDir = join(cwd, 'zig-cache'),
     zigCmd = `zig build -Doptimize=${optimize}`,
+    staleTime = 60000,
   } = options;
   const fullPath = resolve(path);
   const rootFile = parse(fullPath);
@@ -87,51 +88,60 @@ export async function compile(path, options = {}) {
   while (!done) {
     await mkdirp(soBuildDir);
     if (await writePID(pidPath)) {
-      await createProject(config, soBuildDir);
-      const options = {
-        cwd: soBuildDir,
-        windowsHide: true,
-      };
-      const success = await new Promise((resolve) => {
-        exec(zigCmd, options, (err, stdout, stderr) => {
-          if (err) {
-            errorLog = stderr || '[NO OUTPUT]';
-            resolve(false);
-            writeFile(logPath, errorLog).catch(() => {});
-          } else {
-            resolve(true);
-          }
-        });
-      });
       try {
+        await createProject(config, soBuildDir);
+        const options = {
+          cwd: soBuildDir,
+          windowsHide: true,
+        };
+        const success = await new Promise((resolve) => {
+          exec(zigCmd, options, (err, stdout, stderr) => {
+            if (err) {
+              errorLog = stderr /* c8 ignore next */ || '[NO OUTPUT]';
+              resolve(false);
+              writeFile(logPath, errorLog).catch(() => {});
+            } else {
+              resolve(true);
+            }
+          });
+        });
         if (success) {
+          // move library to cache directory
           const libPath = join(soBuildDir, 'zig-out', 'lib', soName);
           await mkdirp(cacheDir);
           await move(libPath, soPath);
           await touch(soPath);
-          const { mtime } = await stat(soPath);
           await writeFile(optPath, optString);
         }
       } finally {
-        if (clean) {
-          await rimraf(soBuildDir);
-        } else {
-          await unlink(pidPath);
+        try {
+          if (clean) {
+            await rimraf(soBuildDir);
+          } else {
+            await unlink(pidPath);
+          }
+          /* c8 ignore next 2 */
+        } catch (err) {
         }
       }
       done = true;
     } else {
       // perhaps another process is compiling the same file--wait for it to finish
-      if (await monitor(soBuildDir)) {
+      if (await monitor(pidPath, staleTime)) {
         // pidfile has vanished--see if the shared library has been updated
         const newMTime = (await find(soPath))?.mtime;
-        if (!(newMTime && newMTime !== soMTime)) {
+        const success = (newMTime && newMTime !== soMTime);
+        if (!success) {
           errorLog = await load(logPath, '[ERROR LOG NOT FOUND]');
         }
         done = true;
       } else {
-        // remove the stale folder
-        await rimraf(soBuildDir);
+        // ignore the pid file if it's stale
+        try {
+          await unlink(pidFile);
+          /* c8 ignore next 2 */
+        } catch (err) {
+        }
       }
     }
   }
@@ -157,8 +167,8 @@ async function find(path, follow = true) {
 
 async function walk(dir, re, cb) {
   const ino = (await find(dir))?.ino;
+  /* c8 ignore next 3 */
   if (!ino) {
-    /* c8 ignore next 2 */
     return;
   }
   const scanned = [ ino ];
@@ -184,13 +194,13 @@ async function walk(dir, re, cb) {
   await scan(dir);
 }
 
-async function monitor(path) {
+async function monitor(path, staleTime) {
   while (true) {
-    const mtime = (await find(path)).mtime;
+    const mtime = (await find(path))?.mtime;
     if (!mtime) {
       // pidfile has been removed
       return true;
-    } else if (new Date() - mtime > 2500) {
+    } else if (new Date() - mtime > staleTime) {
       // pidfile's been abandoned
       return false;
     }
@@ -207,6 +217,7 @@ async function writePID(path) {
   } catch (err) {
     if (err.code == 'EEXIST') {
       return false;
+      /* c8 ignore next 3 */
     } else {
       throw err;
     }
@@ -239,8 +250,8 @@ async function createProject(config, dir) {
 
 async function move(srcPath, dstPath) {
   try {
-    const { mtime } = await stat(srcPath);
     await rename(srcPath, dstPath);
+    /* c8 ignore next 8 -- hard to test */
   } catch (err) {
     if (err.code == 'EXDEV') {
       await copy(srcPath, dstPath);
@@ -270,6 +281,7 @@ async function touch(path) {
   try {
     const now = new Date();
     await utimes(path, now, now);
+    /* c8 ignore next 2 */
   } catch (err) {
   }
 }
@@ -285,7 +297,14 @@ async function mkdirp(path) {
   if (!exists) {
     const { root, dir } = parse(path);
     await mkdirp(dir);
-    await mkdir(path);
+    try {
+      await mkdir(path);
+    } catch (err) {
+      /* c8 ignore next 3 */
+      if (err.code != 'EEXIST') {
+        throw err;
+      }
+    }
   }
 }
 
