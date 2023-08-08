@@ -1,7 +1,7 @@
 import { StructureType } from './structure.js';
 import { getDataView } from './data-view.js';
-import { throwInvalidPointerTarget } from './error.js';
-import { MEMORY, PROXY, SLOTS, SOURCE, ZIG } from './symbol.js';
+import { MEMORY, PROXY, SLOTS, ZIG, PARENT } from './symbol.js';
+import { throwNoCastingToPointer } from './error.js';
 
 export function finalizePointer(s) {
   const {
@@ -12,21 +12,36 @@ export function finalizePointer(s) {
     options,
   } = s;
   const { structure: target = {} } = member;
+  const isTargetSlice = (target.type === StructureType.Slice);
   const constructor = s.constructor = function(arg) {
-    const creating = this instanceof constructor;
+    const calledFromZig = (this === ZIG);
+    const calledFromParent = (this === PARENT);
+    let creating = this instanceof constructor;
     let self, dv;
     if (creating) {
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView(s, arg);
+      if (calledFromZig || calledFromParent) {
+        dv = getDataView(s, arg);
+      } else {
+        if (isTargetSlice) {
+          // cast to the Target type
+          const Target = target.constructor;
+          arg = Target(arg);
+          creating = true;
+          dv = new DataView(new ArrayBuffer(size));
+        } else {
+          throwNoCastingToPointer(s);
+        }
+      }
     }
     Object.defineProperties(self, {
       [MEMORY]: { value: dv, configurable: true },
       [SLOTS]: { value: { 0: null } },
       // a boolean value indicating whether Zig currently owns the pointer
-      [ZIG]: { value: this === ZIG, writable: true },
+      [ZIG]: { value: calledFromZig, writable: true },
     });
     if (creating) {
       initializer.call(self, arg);
@@ -35,12 +50,13 @@ export function finalizePointer(s) {
   };
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
-      // not doing memory copying since values stored there might not be valid anyway
+      // not doing memory copying since the value stored there probably isn't valid anyway
       pointerCopier.call(this, arg);
     } else {
       const Target = target.constructor;
       if (!(arg instanceof Target)) {
-        throwInvalidPointerTarget(s, arg);
+        // autovivifate target object
+        arg = new Target(arg);
       }
       this[SLOTS][0] = arg;
     }

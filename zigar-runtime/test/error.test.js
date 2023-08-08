@@ -21,6 +21,7 @@ import {
   throwNoProperty,
   throwArgumentCountMismatch,
   rethrowArgumentError,
+  throwNoCastingToPointer,
   throwInvalidPointerTarget,
   throwOverflow,
   throwOutOfBound,
@@ -373,6 +374,20 @@ describe('Error functions', function() {
         .with.property('message').that.contains('(..., args[1], ...)');
       expect(() => rethrowArgumentError(structure, 2, err)).to.throw(TypeError)
         .with.property('message').that.contains('(..., args[2])');
+    })
+  })
+  describe('throwNoCastingToPointer', function() {
+    it('should throw a type error', function() {
+      const structure = {
+        name: '*Hello',
+        type: StructureType.Pointer,
+        size: 8,
+        instance: {
+          members: [],
+        },
+        hasPointer: true,
+      };
+      expect(() => throwNoCastingToPointer(structure)).to.throw(TypeError);
     })
   })
   describe('throwInvalidPointerTarget', function() {

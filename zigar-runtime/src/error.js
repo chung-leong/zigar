@@ -141,7 +141,12 @@ export function rethrowArgumentError(structure, index, err) {
   throw new err.constructor(`${name}(${argLabel}): ${err.message}`);
 }
 
+export function throwNoCastingToPointer(structure) {
+  throw new TypeError(`Non-slice pointers can only be created with the help of the new operator`);
+}
+
 export function throwInvalidPointerTarget(structure, arg) {
+  // NOTE: not being used currently
   const { name } = structure;
   let target;
   if (arg != null) {

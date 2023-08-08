@@ -546,23 +546,75 @@ fn getStructure(host: anytype, comptime T: type) !Value {
 }
 
 fn getStructureName(comptime T: type) [*:0]const u8 {
-    const name = comptime switch (@typeInfo(T)) {
-        .Pointer => |pt| switch (pt.size) {
-            .One => @typeName(T),
-            // since there're no pointers in JavaScript, we need to use a pair
-            // of objects to represent a slice, one holding the pointer with
-            // the other holding the data it points to
-            // we'll give the name "*[]T" to the former and "[]T" to the latter
-            else => @typeName(*T),
-        },
-        else => getFunctionName(T) orelse @typeName(T),
-    };
+    // name a structure after the function if it's an ArgStruct
+    const name = comptime getFunctionName(T) orelse @typeName(T);
     return getCString(name);
 }
 
 test "getStructureName" {
-    const name = getStructureName([]u8);
-    assert(name[0] == '*');
+    const S = struct {
+        fn hello(number: i32) i32 {
+            return number + 2;
+        }
+    };
+    const name1 = getStructureName([]u8);
+    assert(name1[0] == '[');
+    assert(name1[1] == ']');
+    assert(name1[4] == 0);
+    const ArgT = ArgumentStruct(S.hello);
+    const name2 = getStructureName(ArgT);
+    assert(name2[0] == 'h');
+    assert(name2[1] == 'e');
+    assert(name2[5] == 0);
+}
+
+fn getSliceName(comptime T: type) [*:0]const u8 {
+    const ptr_name = @typeName(T);
+    comptime var array: [ptr_name.len + 2]u8 = undefined;
+    comptime var index = 0;
+    comptime var in_bracket = false;
+    comptime var underscore_inserted = false;
+    inline for (ptr_name) |c| {
+        if (!in_bracket) {
+            array[index] = c;
+            index += 1;
+            if (c == '[' and !underscore_inserted) {
+                array[index] = '_';
+                index += 1;
+                in_bracket = true;
+                underscore_inserted = true;
+            }
+        } else {
+            if (c == ']') {
+                in_bracket = false;
+                array[index] = c;
+                index += 1;
+            }
+        }
+    }
+    array[index] = 0;
+    return getCString(array[0..index]);
+}
+
+test "getSliceName" {
+    const name1 = getSliceName([]const u8);
+    assert(name1[0] == '[');
+    assert(name1[1] == '_');
+    assert(name1[2] == ']');
+    assert(name1[11] == 0);
+    const name2 = getSliceName([:0]const u8);
+    assert(name2[0] == '[');
+    assert(name2[1] == '_');
+    assert(name2[2] == ']');
+    assert(name2[11] == 0);
+    const name3 = getSliceName([][4]u8);
+    assert(name3[0] == '[');
+    assert(name3[1] == '_');
+    assert(name3[2] == ']');
+    assert(name3[3] == '[');
+    assert(name3[4] == '4');
+    assert(name3[5] == ']');
+    assert(name3[8] == 0);
 }
 
 fn getUnionSelectorOffset(comptime TT: type, comptime fields: []const std.builtin.Type.UnionField) comptime_int {
@@ -663,8 +715,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                 else => slice: {
                     const slice_slot = getStructureSlot(pt.child, pt.size);
                     const slice_def: Structure = .{
-                        // see comment in getStructureName()
-                        .name = @ptrCast(@typeName(T)),
+                        .name = getSliceName(T),
                         .structure_type = .Slice,
                         .total_size = @sizeOf(pt.child),
                         .has_pointer = hasPointer(pt.child),

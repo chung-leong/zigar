@@ -5,7 +5,7 @@ import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addJSONHandlers } from './json.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoProperty } from './error.js';
-import { MEMORY, SLOTS, ZIG } from './symbol.js';
+import { MEMORY, SLOTS, ZIG, PARENT } from './symbol.js';
 
 export function finalizeStruct(s) {
   const {
@@ -102,7 +102,7 @@ export function finalizeStruct(s) {
 export function createChildObjects(members, recv, dv) {
   const slots = {};
   if (recv !== ZIG)  {
-    recv = null;
+    recv = PARENT;
   }
   const parentOffset = dv.byteOffset;
   for (const { structure: { constructor }, bitOffset, byteSize, slot } of members) {

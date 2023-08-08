@@ -468,7 +468,7 @@ export function finalizeStructures(structures) {
       dv = new DataView(new ArrayBuffer(size));
     }
     const { constructor } = placeholder.structure;
-    const object = constructor.call(null, dv);
+    const object = constructor.call(ZIG, dv);
     if (placeholder.slots) {
       insertObjects(object[SLOTS], placeholder.slots);
     }

@@ -5,7 +5,7 @@ import { getTypedArrayClass, addTypedArrayAccessor, isTypedArray } from './typed
 import { addStringAccessors } from './string.js';
 import { addJSONHandlers } from './json.js';
 import { throwInvalidArrayInitializer, throwArraySizeMismatch } from './error.js';
-import { MEMORY, SLOTS, ZIG, GETTER, SETTER, PROXY } from './symbol.js';
+import { MEMORY, SLOTS, ZIG, PARENT, GETTER, SETTER, PROXY } from './symbol.js';
 
 export function finalizeArray(s) {
   const {
@@ -99,7 +99,7 @@ export function createChildObjects(member, recv, dv) {
   }
   const { structure: { constructor }, byteSize } = member;
   if (recv !== ZIG) {
-    recv = null;
+    recv = PARENT;
   }
   for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
     const childDV = new DataView(dv.buffer, offset, byteSize);

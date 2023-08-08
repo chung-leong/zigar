@@ -10,12 +10,12 @@ import {
   usePrimitive,
   usePointer,
   useStruct,
+  useSlice,
+  useArray,
   beginStructure,
   attachMember,
   finalizeStructure,
 } from '../src/structure.js';
-import { getMemoryCopier } from '../src/memory.js';
-import { MEMORY, SLOTS, SOURCE } from '../src/symbol.js';
 
 describe('Pointer functions', function() {
   describe('finalizePointer', function() {
@@ -25,6 +25,8 @@ describe('Pointer functions', function() {
       useStruct();
       usePrimitive();
       usePointer();
+      useSlice();
+      useArray();
     })
     it('should define a pointer for pointing to integers', function() {
       const intStructure = beginStructure({
@@ -343,11 +345,177 @@ describe('Pointer functions', function() {
         structure: intStructure,
       });
       const Int32Ptr = finalizeStructure(structure);
-      expect(() => new Int32Ptr(1234)).to.throw();
+      // autovivification
+      expect(() => new Int32Ptr(1234)).to.not.throw();
+      expect(() => new Int32Ptr(1234n)).to.throw();
       const int32 = new Int32(1234);
       expect(() => new Int32Ptr(int32)).to.not.throw();
       const intPtr = new Int32Ptr(int32);
       expect(() => new Int32Ptr(intPtr)).to.not.throw();
+    })
+    it('should throw when attempting to cast a buffer to a pointer type', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(structure);
+      const buffer = new ArrayBuffer(8);
+      expect(() => Int32Ptr(buffer)).to.throw();
+    })
+    it('should automatically create slice object', function() {
+      const structStructure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8,
+        hasPointer: false,
+      });
+      attachMember(structStructure, {
+        type: MemberType.Int,
+        name: 'cat',
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structStructure, {
+        type: MemberType.Int,
+        name: 'dog',
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structStructure);
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]Hello',
+        size: 8,
+        hasPointer: false,
+      });
+      attachMember(sliceStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        byteSize: 8,
+        structure: structStructure,
+      });
+      const HelloSlice = finalizeStructure(sliceStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '[]Hello',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const HelloPtr = finalizeStructure(structure);
+      const pointer = new HelloPtr([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
+      expect(pointer['*']).to.be.instanceOf(HelloSlice);
+      expect({ ...pointer[0] }).to.eql({ cat: 123, dog: 456 });
+      expect({ ...pointer[1] }).to.eql({ cat: 1230, dog: 4560 });
+      expect({ ...pointer[2] }).to.eql({ cat: 12300, dog: 45600 });
+    })
+    it('should allow casting of a buffer to a slice', function() {
+      const structStructure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8,
+        hasPointer: false,
+      });
+      attachMember(structStructure, {
+        type: MemberType.Int,
+        name: 'cat',
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structStructure, {
+        type: MemberType.Int,
+        name: 'dog',
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structStructure);
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]Hello',
+        size: 8,
+        hasPointer: false,
+      });
+      attachMember(sliceStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        byteSize: 8,
+        structure: structStructure,
+      });
+      const HelloSlice = finalizeStructure(sliceStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '[]Hello',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const HelloPtr = finalizeStructure(structure);
+      const buffer = new ArrayBuffer(8 * 3);
+      const dv = new DataView(buffer);
+      for (let i = 0, multiplier = 1; i < 3; i++, multiplier *= 10) {
+        dv.setUint32(i * 8 + 0, 123 * multiplier, true);
+        dv.setUint32(i * 8 + 4, 456 * multiplier, true);
+      }
+      const pointer = HelloPtr(buffer);
+      expect(pointer['*']).to.be.instanceOf(HelloSlice);
+      expect({ ...pointer[0] }).to.eql({ cat: 123, dog: 456 });
+      expect({ ...pointer[1] }).to.eql({ cat: 1230, dog: 4560 });
+      expect({ ...pointer[2] }).to.eql({ cat: 12300, dog: 45600 });
     })
     it('should permit assignment and delete operations like regular objects', function() {
       const intStructure = beginStructure({
