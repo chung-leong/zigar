@@ -14,9 +14,10 @@ import {
   throwInvalidType,
   throwMultipleUnionInitializers,
   throwInactiveUnionProperty,
+  throwMissingUnionInitializer,
   throwInvalidInitializer,
   throwInvalidArrayInitializer,
-  throwArraySizeMismatch,
+  throwArrayLengthMismatch,
   throwMissingInitializers,
   throwNoProperty,
   throwArgumentCountMismatch,
@@ -30,6 +31,7 @@ import {
   decamelizeErrorName,
   throwZigError,
 } from '../src/error.js';
+import { ELEMENT } from '../src/symbol.js';
 
 describe('Error functions', function() {
   describe('throwBufferSizeMismatch', function() {
@@ -63,13 +65,23 @@ describe('Error functions', function() {
   })
   describe('throwBufferExpected', function() {
     it('should throw a type error', function() {
-      const structure = {
+      const structure1 = {
         name: 'Hello',
         type: StructureType.Struct,
         size: 88,
       };
-      expect(() => throwBufferExpected(structure)).to.throw(TypeError)
-        .with.property('message').that.contains('88');
+      expect(() => throwBufferExpected(structure1)).to.throw(TypeError)
+        .with.property('message').that.contains('88')
+        .and.that.contains('an ArrayBuffer or a DataView');
+      const structure2 = {
+        name: 'Hello',
+        type: StructureType.Struct,
+        size: 88,
+        typedArray: Uint16Array,
+      };
+      expect(() => throwBufferExpected(structure2)).to.throw(TypeError)
+        .with.property('message').that.contains('88')
+        .and.that.contains('an ArrayBuffer, a DataView or an Uint16Array');
     })
     it('should use singular wording when size is 1', function() {
       const structure = {
@@ -226,8 +238,11 @@ describe('Error functions', function() {
         .with.property('message').that.contains('objects');
     })
   })
-  describe('throwArraySizeMismatch', function() {
+  describe('throwArrayLengthMismatch', function() {
     it('should throw a type error', function() {
+      const elementConstructor = function() {};
+      const arrayConstructor = function() {};
+      arrayConstructor[ELEMENT] = elementConstructor;
       const structure = {
         name: 'Hello',
         type: StructureType.Array,
@@ -238,12 +253,25 @@ describe('Error functions', function() {
               type: MemberType.Int,
               bitSize: 32,
               byteSize: 4,
+              structure: {
+                constructor: elementConstructor,
+              }
             }
           ],
         },
+        constructor: arrayConstructor,
       };
-      expect(() => throwArraySizeMismatch(structure, 2, {})).to.throw(TypeError)
-        .with.property('message').that.contains('2 elements');
+      expect(() => throwArrayLengthMismatch(structure, { length: 5 })).to.throw(TypeError)
+        .with.property('message').that.contains('2 elements').and.that.contains('5 initializers');
+      expect(() => throwArrayLengthMismatch(structure, { length: 1 })).to.throw(TypeError)
+        .with.property('message').that.contains('2 elements').and.that.contains('1 initializer');
+      expect(() => throwArrayLengthMismatch(structure, new elementConstructor())).to.throw(TypeError)
+        .with.property('message').that.contains('only a single one');
+      const array = new arrayConstructor();
+      array.length = 5;
+      expect(() => throwArrayLengthMismatch(structure, array)).to.throw(TypeError)
+        .with.property('message').that.contains('a slice/array that has 5');
+
     })
     it('should use singular noun when there is just one element', function() {
       const structure = {
@@ -256,11 +284,15 @@ describe('Error functions', function() {
               type: MemberType.Int,
               bitSize: 32,
               byteSize: 4,
+              structure: {
+                constructor: function() {},
+              }
             }
           ],
         },
+        constructor: function() {},
       };
-      expect(() => throwArraySizeMismatch(structure, 1, [])).to.throw(TypeError)
+      expect(() => throwArrayLengthMismatch(structure, [])).to.throw(TypeError)
         .with.property('message').that.contains('1 element,');
     })
   })
@@ -279,6 +311,37 @@ describe('Error functions', function() {
       };
       expect(() => throwInactiveUnionProperty(structure, 0, 1)).to.throw(TypeError)
         .with.property('message').that.contains('cat');
+    })
+  })
+  describe('throwMissingUnionInitializer', function() {
+    it('should throw a type error', function() {
+      const structure1 = {
+        name: 'Hello',
+        type: StructureType.BareUnion,
+        size: 8,
+        instance: {
+          members: [
+            { name: 'cat' },
+            { name: 'dog' },
+          ]
+        }
+      };
+      expect(() => throwMissingUnionInitializer(structure1, {}, false)).to.throw(TypeError)
+        .with.property('message').that.contains('cat').and.that.contains('dog');
+      const structure2 = {
+        name: 'Hello',
+        type: StructureType.BareUnion,
+        size: 8,
+        instance: {
+          members: [
+            { name: 'cat' },
+            { name: 'dog' },
+            { name: 'selector' },
+          ]
+        }
+      };
+      expect(() => throwMissingUnionInitializer(structure2, {}, true)).to.throw(TypeError)
+        .with.property('message').that.does.not.contain('selector');
     })
   })
   describe('throwInvalidInitializer', function() {
@@ -429,14 +492,23 @@ describe('Error functions', function() {
   })
   describe('throwOutOfBound', function() {
     it('should throw a range error', function() {
-      const member = {
+      const member1 = {
         name: 'hello',
         type: MemberType.Int,
         isSigned: true,
         bitSize: 8,
+        bitOffset: 0,
       };
-      expect(() => throwOutOfBound(member, 16)).to.throw(RangeError)
+      expect(() => throwOutOfBound(member1, 16)).to.throw(RangeError)
         .with.property('message').that.contains('hello');
+      const member2 = {
+        type: MemberType.Int,
+        isSigned: true,
+        bitSize: 8,
+      };
+      expect(() => throwOutOfBound(member2, 16)).to.throw(RangeError)
+        .with.property('message').that.contains('array');
+
     })
   })
   describe('rethrowRangeError', function() {

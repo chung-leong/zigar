@@ -1,6 +1,6 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier, getMemoryResetter } from './memory.js';
-import { getDataView } from './data-view.js';
+import { requireDataView } from './data-view.js';
 import { createChildObjects, getPointerCopier, getPointerResetter } from './struct.js';
 import { addJSONHandlers } from './json.js';
 import { throwNotInErrorSet, throwUnknownErrorNumber } from './error.js';
@@ -23,7 +23,7 @@ export function finalizeErrorUnion(s) {
       dv = new DataView(new ArrayBuffer(size));
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView(s, arg);
+      dv = requireDataView(s, arg);
     }
     Object.defineProperties(self, {
       [MEMORY]: { value: dv, configurable: true },

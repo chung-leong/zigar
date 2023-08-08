@@ -1,11 +1,11 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { getDataView, addDataViewAccessor } from './data-view.js';
+import { requireDataView, addDataViewAccessor } from './data-view.js';
 import { getTypedArrayClass, addTypedArrayAccessor, isTypedArray } from './typed-array.js';
 import { addStringAccessors } from './string.js';
 import { addJSONHandlers } from './json.js';
-import { throwInvalidArrayInitializer, throwArraySizeMismatch } from './error.js';
-import { MEMORY, SLOTS, ZIG, PARENT, GETTER, SETTER, PROXY } from './symbol.js';
+import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
+import { MEMORY, SLOTS, ZIG, PARENT, GETTER, SETTER, PROXY, ELEMENT } from './symbol.js';
 
 export function finalizeArray(s) {
   const {
@@ -25,7 +25,6 @@ export function finalizeArray(s) {
       throw new Error(`slot must be undefined for array member`);
     }
   }
-  const TypedArray = s.TypedArray = getTypedArrayClass(member);
   const objectMember = (member.type === MemberType.Object) ? member : null;
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
@@ -35,7 +34,7 @@ export function finalizeArray(s) {
       dv = new DataView(new ArrayBuffer(size));
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView(s, arg);
+      dv = requireDataView(s, arg);
     }
     Object.defineProperties(self, {
       [MEMORY]: { value: dv, configurable: true },
@@ -48,9 +47,10 @@ export function finalizeArray(s) {
     }
     return createProxy.call(self);
   };
-  const { byteSize } = member;
-  const count = size / byteSize;
+  const { byteSize: elementSize, structure: elementStructure } = member;
+  const count = size / elementSize;
   const copy = getMemoryCopier(size);
+  const typedArray = s.typedArray = getTypedArrayClass(member);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
       copy(this[MEMORY], arg[MEMORY]);
@@ -58,10 +58,10 @@ export function finalizeArray(s) {
         pointerCopier.call(this, arg);
       }
     } else {
-      if (Array.isArray(arg) || isTypedArray(arg, TypedArray)) {
+      if (Array.isArray(arg) || isTypedArray(arg, typedArray)) {
         const len = arg.length;
         if (len !== count) {
-          throwArraySizeMismatch(s, count, arg);
+          throwArrayLengthMismatch(s, arg);
         }
         for (let i = 0; i < len; i++) {
           set.call(this, i, arg[i]);
@@ -82,6 +82,7 @@ export function finalizeArray(s) {
     $: { get: retriever, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true },
   });
+  Object.defineProperty(constructor, ELEMENT, { get: () => elementStructure.constructor });
   addDataViewAccessor(s);
   addTypedArrayAccessor(s);
   addStringAccessors(s);
@@ -97,23 +98,23 @@ export function createChildObjects(member, recv, dv) {
       [SLOTS]: { value: slots },
     });
   }
-  const { structure: { constructor }, byteSize } = member;
+  const { structure: { constructor }, byteSize: elementSize } = member;
   if (recv !== ZIG) {
     recv = PARENT;
   }
-  for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
-    const childDV = new DataView(dv.buffer, offset, byteSize);
+  for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += elementSize) {
+    const childDV = new DataView(dv.buffer, offset, elementSize);
     slots[slot] = constructor.call(recv, childDV);
   }
 }
 
 export function getPointerCopier(member) {
   return function(src) {
-    const { structure: { pointerCopier }, byteSize } = member;
+    const { structure: { pointerCopier }, byteSize: elementSize } = member;
     const dv = this[MEMORY];
     const destSlots = this[SLOTS];
     const srcSlots = src[SLOTS];
-    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += elementSize) {
       pointerCopier.call(destSlots[slot], srcSlots[slot]);
     }
   };
@@ -121,10 +122,10 @@ export function getPointerCopier(member) {
 
 export function getPointerResetter(member) {
   return function(src) {
-    const { structure: { pointerResetter }, byteSize } = member;
+    const { structure: { pointerResetter }, byteSize: elementSize } = member;
     const dv = this[MEMORY];
     const destSlots = this[SLOTS];
-    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += byteSize) {
+    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += elementSize) {
       pointerResetter.call(destSlots[slot]);
     }
   };

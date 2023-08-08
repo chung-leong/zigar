@@ -1,6 +1,6 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { getDataView, addDataViewAccessor } from './data-view.js';
+import { requireDataView, addDataViewAccessor } from './data-view.js';
 import { getTypedArrayClass, addTypedArrayAccessor, isTypedArray } from './typed-array.js';
 import {
   createChildObjects,
@@ -11,9 +11,8 @@ import {
 } from './array.js';
 import { addStringAccessors } from './string.js';
 import { addJSONHandlers } from './json.js';
-import { throwInvalidArrayInitializer, throwArraySizeMismatch } from './error.js';
-import { LENGTH, MEMORY, SLOTS } from './symbol.js';
-import { StructureType } from './structure.js';
+import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
+import { LENGTH, MEMORY, ELEMENT } from './symbol.js';
 
 export function finalizeSlice(s) {
   const {
@@ -32,11 +31,11 @@ export function finalizeSlice(s) {
       throw new Error(`slot must be undefined for slice member`);
     }
   }
-  const TypedArray = s.TypedArray = getTypedArrayClass(member);
   const objectMember = (member.type === MemberType.Object) ? member : null;
   const { byteSize: elementSize } = member;
+  const typedArray = s.typedArray = getTypedArrayClass(member);
   const getCount = (arg) => {
-    if (Array.isArray(arg) || isTypedArray(arg, TypedArray) || arg instanceof constructor) {
+    if (Array.isArray(arg) || isTypedArray(arg, typedArray) || arg instanceof constructor) {
       return arg.length;
     } else if (typeof(arg) === 'number') {
       return arg;
@@ -54,7 +53,7 @@ export function finalizeSlice(s) {
       dv = new DataView(new ArrayBuffer(elementSize * count));
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView(s, arg, TypedArray);
+      dv = requireDataView(s, arg, typedArray);
       count = dv.byteLength / elementSize;
     }
     Object.defineProperties(self, {
@@ -71,8 +70,8 @@ export function finalizeSlice(s) {
   };
   const copy = getMemoryCopier(elementSize);
   const initializer = s.initializer = function(arg) {
-    if (getCount(arg, ) !== count) {
-      throwArraySizeMismatch(s, count, arg);
+    if (getCount(arg) !== count) {
+      throwArrayLengthMismatch(s, arg);
     }
     if (arg instanceof constructor) {
       copy(this[MEMORY], arg[MEMORY]);
@@ -80,7 +79,7 @@ export function finalizeSlice(s) {
         pointerCopier.call(this, arg);
       }
     } else {
-      if (Array.isArray(arg) || isTypedArray(arg, TypedArray)) {
+      if (Array.isArray(arg) || isTypedArray(arg, typedArray)) {
         for (let i = 0; i < count; i++) {
           set.call(this, i, arg[i]);
         }
@@ -103,6 +102,7 @@ export function finalizeSlice(s) {
     $: { get: retriever, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true },
   });
+  Object.defineProperty(constructor, ELEMENT, { get: () => elementStructure.constructor });
   addDataViewAccessor(s);
   addTypedArrayAccessor(s);
   addStringAccessors(s);

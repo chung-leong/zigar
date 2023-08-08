@@ -8,6 +8,7 @@ import {
   isBuffer,
   getTypeName,
   getDataView,
+  requireDataView,
   getDataViewBoolAccessor,
   getDataViewBoolAccessorEx,
   getDataViewIntAccessor,
@@ -16,6 +17,7 @@ import {
   getDataViewFloatAccessorEx,
   clearMethodCache,
 } from '../src/data-view.js';
+import { ELEMENT, MEMORY } from '../src/symbol.js';
 
 describe('Data view functions', function() {
   beforeEach(function() {
@@ -92,15 +94,15 @@ describe('Data view functions', function() {
       const dv = getDataView(structure, arg);
       expect(dv).to.be.instanceOf(DataView);
     })
-    it('should throw when argument is not a data view or buffer', function() {
+    it('should return undefined when argument is not a data view or buffer', function() {
       const structure = {
         type: StructureType.Slice,
         name: 'Test',
         size: 8
       };
       const arg = {};
-      expect(() => getDataView(structure, arg)).to.throw(TypeError)
-        .with.property('message').that.contains('8');
+      const dv = getDataView(structure, arg);
+      expect(dv).to.be.undefined;
     })
     it('should throw when there is a size mismatch', function() {
       const structure1 = {
@@ -123,12 +125,123 @@ describe('Data view functions', function() {
       const structure = {
         type: StructureType.Slice,
         name: 'Test',
-        size: 3
+        size: 3,
+        typedArray: Uint32Array
       };
       const ta1 = new Uint32Array([ 1, 2, 3 ]);
       const ta2 = new Int32Array([ 1, 2, 3 ]);
-      expect(() => getDataView(structure, ta1, Uint32Array)).to.not.throw();
-      expect(() => getDataView(structure, ta2, Uint32Array)).to.throw(TypeError);
+      const dv1 = getDataView(structure, ta1);
+      const dv2 = getDataView(structure, ta2);
+      expect(dv1).to.be.an.instanceOf(DataView);
+      expect(dv2).to.be.undefined;
+    })
+    it('should return memory of compatible array', function() {
+      const elementConstructor = function() {};
+      const structure = {
+        type: StructureType.Slice,
+        name: 'Test',
+        size: 2,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: { constructor: elementConstructor }
+            }
+          ]
+        },
+      };
+      const arrayConstructor = function() {};
+      arrayConstructor[ELEMENT] = elementConstructor;
+      const array = new arrayConstructor();
+      array[MEMORY] = new DataView(new ArrayBuffer(6));
+      array.length = 3;
+      const dv = getDataView(structure, array);
+      expect(dv).to.be.an.instanceOf(DataView);
+    })
+    it('should return memory of compatible slice', function() {
+      const elementConstructor = function() {};
+      const structure = {
+        type: StructureType.Array,
+        name: 'Test',
+        size: 6,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: { constructor: elementConstructor }
+            }
+          ]
+        },
+      };
+      const arrayConstructor = function() {};
+      arrayConstructor[ELEMENT] = elementConstructor;
+      const array = new arrayConstructor();
+      array[MEMORY] = new DataView(new ArrayBuffer(6));
+      array.length = 3;
+      const dv = getDataView(structure, array);
+      expect(dv).to.equal(array[MEMORY]);
+    })
+    it('should return memory of compatible object', function() {
+      const elementConstructor = function() {};
+      const structure = {
+        type: StructureType.Slice,
+        name: 'Test',
+        size: 2,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: { constructor: elementConstructor }
+            }
+          ]
+        },
+      };
+      const object = new elementConstructor();
+      object[MEMORY] = new DataView(new ArrayBuffer(2));
+      const dv = getDataView(structure, object);
+      expect(dv).to.equal(object[MEMORY]);
+    })
+    it('should return memory of compatible slice', function() {
+      const elementConstructor = function() {};
+      const structure = {
+        type: StructureType.Array,
+        name: 'Test',
+        size: 6,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: { constructor: elementConstructor }
+            }
+          ]
+        },
+      };
+      const arrayConstructor = function() {};
+      arrayConstructor[ELEMENT] = elementConstructor;
+      const array = new arrayConstructor();
+      array[MEMORY] = new DataView(new ArrayBuffer(8));
+      array.length = 4;
+      expect(() => getDataView(structure, array)).to.throw(TypeError);
+    })
+  })
+  describe('requireDataView', function() {
+    it('should throw when argument is not a data view or buffer', function() {
+      const structure = {
+        type: StructureType.Slice,
+        name: 'Test',
+        size: 8
+      };
+      const arg = {};
+      expect(() => requireDataView(structure, arg)).to.throw(TypeError)
+        .with.property('message').that.contains('8');
     })
   })
   describe('getTypeName', function() {

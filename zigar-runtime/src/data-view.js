@@ -1,8 +1,8 @@
 import { StructureType } from './structure.js';
 import { MemberType, isByteAligned } from './member.js';
 import { getBitAlignFunction } from './memory.js';
-import { throwBufferSizeMismatch, throwBufferExpected } from './error.js';
-import { MEMORY, SOURCE } from './symbol.js';
+import { throwBufferSizeMismatch, throwBufferExpected, throwArrayLengthMismatch } from './error.js';
+import { ELEMENT, MEMORY } from './symbol.js';
 
 export function getDataViewBoolAccessor(access, member) {
   return cacheMethod(access, member, () => {
@@ -89,32 +89,62 @@ export function getDataViewFloatAccessorEx(access, member) {
   });
 }
 
-export function getDataView(structure, arg, TypedArray = null) {
-  let dv = null;
+export function getDataView(structure, arg, TypedArray) {
+  const { type, size, typedArray } = structure;
+  let dv;
   // not using instanceof just in case we're getting objects created in other contexts
   const tag = arg?.[Symbol.toStringTag];
   if (tag === 'DataView') {
     dv = arg;
   } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
     dv = new DataView(arg);
-  } else if (TypedArray && tag === TypedArray.name) {
+  } else if (typedArray && tag === typedArray.name) {
     dv = new DataView(arg.buffer, arg.byteOffset, arg.byteLength);
+  } else {
+    const memory = arg?.[MEMORY];
+    if (memory && (type === StructureType.Array || type === StructureType.Slice)) {
+      const { instance: { members: [ member ] } } = structure;
+      const { byteSize: elementSize, structure: { constructor: elementConstructor } } = member;
+      // casting to a array/slice
+      const { constructor: argConstructor } = arg;
+      let number;
+      if (elementConstructor === argConstructor) {
+        // matching object
+        number = 1;
+      } else if (elementConstructor === argConstructor[ELEMENT]) {
+        // matching slice/array
+        number = arg.length;
+      }
+      if (number !== undefined) {
+        if (type === StructureType.Slice || number * elementSize === size) {
+          return memory;
+        } else {
+          throwArrayLengthMismatch(structure, arg);
+        }
+      }
+    }
   }
-  if (!dv) {
-    throwBufferExpected(structure, TypedArray);
-  }
-  const { type, size } = structure;
-  if (type === StructureType.Slice ? dv.byteLength % size !== 0 : dv.byteLength !== size) {
-    throwBufferSizeMismatch(structure, dv);
+  if (dv) {
+    if (type === StructureType.Slice ? dv.byteLength % size !== 0 : dv.byteLength !== size) {
+      throwBufferSizeMismatch(structure, dv);
+    }
   }
   return dv;
 }
 
-export function isBuffer(arg, TypedArray) {
+export function requireDataView(structure, arg) {
+  const dv = getDataView(structure, arg);
+  if (!dv) {
+    throwBufferExpected(structure);
+  }
+  return dv;
+}
+
+export function isBuffer(arg, typedArray) {
   const tag = arg?.[Symbol.toStringTag];
   if (tag === 'DataView' || tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
     return true;
-  } else if (TypedArray && tag === TypedArray.name) {
+  } else if (typedArray && tag === typedArray.name) {
     return true;
   } else {
     return false;

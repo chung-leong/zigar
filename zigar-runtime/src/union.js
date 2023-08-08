@@ -122,6 +122,7 @@ export function finalizeUnion(s) {
     }
   };
   const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
+
   const copy = getMemoryCopier(size);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -142,7 +143,7 @@ export function finalizeUnion(s) {
       if (keys.length !== 1) {
         if (keys.length === 0) {
           if (!hasDefaultMember) {
-            throwMissingUnionInitializer(s);
+            throwMissingUnionInitializer(s, exclusion);
           }
         } else {
           throwMultipleUnionInitializers(s);

@@ -97,6 +97,7 @@ export function beginStructure(def, options = {}) {
     initializer: null,
     pointerCopier: null,
     pointerResetter: null,
+    typedArray: null,
     type,
     name,
     size,

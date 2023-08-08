@@ -250,6 +250,74 @@ describe('Slice functions', function() {
         expect(object.get(i)).to.equal(BigInt(i + 1) * 1000n);
       }
     })
+    it('should allow casting to slice from an array with same element type', function() {
+      const Int64 = function() {};
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: 'Int64Slice',
+        size: 8,
+      });
+      attachMember(sliceStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 64,
+        byteSize: 8,
+        structure: { constructor: Int64 },
+      });
+      const Int64Slice = finalizeStructure(sliceStructure);
+      const arrayStructure = beginStructure({
+        type: StructureType.Array,
+        name: 'Int64Array',
+        size: 8 * 4,
+      });
+      attachMember(arrayStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 64,
+        byteSize: 8,
+        structure: { constructor: Int64 },
+      });
+      const Int64Array = finalizeStructure(arrayStructure);
+      const array = new Int64Array([ 100n, 200n, 300n, 400n ]);
+      const slice = Int64Slice(array);
+      expect(slice[MEMORY]).to.equal(array[MEMORY]);
+    })
+    it('should not allow casting from an array with different element type', function() {
+      const Int64 = function() {};
+      const Uint64 = function() {};
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: 'Int64Slice',
+        size: 8,
+      });
+      attachMember(sliceStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 64,
+        byteSize: 8,
+        structure: { constructor: Int64 },
+      });
+      const Int64Slice = finalizeStructure(sliceStructure);
+      const arrayStructure = beginStructure({
+        type: StructureType.Array,
+        name: 'Uint64Array',
+        size: 8 * 4,
+      });
+      attachMember(arrayStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 64,
+        byteSize: 8,
+        structure: { constructor: Uint64 },
+      });
+      const Uint64Array = finalizeStructure(arrayStructure);
+      const array = new Uint64Array([ 100n, 200n, 300n, 400n ]);
+      expect(() => Int64Slice(array)).to.throw(TypeError);
+    })
     it('should throw when initializer has the wrong size', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,

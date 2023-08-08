@@ -7,7 +7,8 @@ export function addTypedArrayAccessor(s) {
     constructor,
     instance: {
       members: [ member ],
-    }
+    },
+    typedArray,
   } = s;
   if (process.env.NODE_ENV !== 'production') {
     /* c8 ignore next 3 */
@@ -15,12 +16,11 @@ export function addTypedArrayAccessor(s) {
       throw new Error('Only arrays can have typed array accessor');
     }
   }
-  const TypedArray = getTypedArrayClass(member);
-  if (TypedArray) {
+  if (typedArray) {
     const get = function() {
       if (!this[TYPED_ARRAY]) {
         const dv = this[MEMORY];
-        this[TYPED_ARRAY] = new TypedArray(dv.buffer, dv.byteOffset, this.length);
+        this[TYPED_ARRAY] = new typedArray(dv.buffer, dv.byteOffset, this.length);
       }
       return this[TYPED_ARRAY];
     };

@@ -1,5 +1,5 @@
 import { StructureType } from './structure.js';
-import { getDataView } from './data-view.js';
+import { requireDataView, getDataView } from './data-view.js';
 import { MEMORY, PROXY, SLOTS, ZIG, PARENT } from './symbol.js';
 import { throwNoCastingToPointer } from './error.js';
 
@@ -9,10 +9,8 @@ export function finalizePointer(s) {
     instance: {
       members: [ member ],
     },
-    options,
   } = s;
   const { structure: target = {} } = member;
-  const isTargetSlice = (target.type === StructureType.Slice);
   const constructor = s.constructor = function(arg) {
     const calledFromZig = (this === ZIG);
     const calledFromParent = (this === PARENT);
@@ -24,17 +22,9 @@ export function finalizePointer(s) {
     } else {
       self = Object.create(constructor.prototype);
       if (calledFromZig || calledFromParent) {
-        dv = getDataView(s, arg);
+        dv = requireDataView(s, arg);
       } else {
-        if (isTargetSlice) {
-          // cast to the Target type
-          const Target = target.constructor;
-          arg = Target(arg);
-          creating = true;
-          dv = new DataView(new ArrayBuffer(size));
-        } else {
-          throwNoCastingToPointer(s);
-        }
+        throwNoCastingToPointer(s);
       }
     }
     Object.defineProperties(self, {
@@ -55,8 +45,14 @@ export function finalizePointer(s) {
     } else {
       const Target = target.constructor;
       if (!(arg instanceof Target)) {
-        // autovivifate target object
-        arg = new Target(arg);
+        const dv = getDataView(target, arg);
+        if (dv) {
+          // autocast to target type
+          arg = Target(dv);
+        } else {
+          // autovivificate target object
+          arg = new Target(arg);
+        }
       }
       this[SLOTS][0] = arg;
     }

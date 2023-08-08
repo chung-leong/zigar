@@ -1,6 +1,6 @@
 import { MemberType, isByteAligned, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { getDataView } from './data-view.js';
+import { requireDataView } from './data-view.js';
 import { addJSONHandlers } from './json.js';
 import { MEMORY } from './symbol.js';
 
@@ -21,7 +21,7 @@ export function finalizePrimitive(s) {
       dv = new DataView(new ArrayBuffer(size));
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView(s, arg);
+      dv = requireDataView(s, arg);
     }
     Object.defineProperties(self, {
       [MEMORY]: { value: dv, configurable: true },

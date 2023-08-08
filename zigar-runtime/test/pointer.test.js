@@ -16,6 +16,7 @@ import {
   attachMember,
   finalizeStructure,
 } from '../src/structure.js';
+import { MEMORY } from '../src/symbol.js';
 
 describe('Pointer functions', function() {
   describe('finalizePointer', function() {
@@ -449,6 +450,174 @@ describe('Pointer functions', function() {
       expect({ ...pointer[1] }).to.eql({ cat: 1230, dog: 4560 });
       expect({ ...pointer[2] }).to.eql({ cat: 12300, dog: 45600 });
     })
+    it('should automatically cast to slice from typed array', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Int32',
+        size: 4,
+        hasPointer: false,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]Int32',
+        size: 8,
+        hasPointer: false,
+      });
+      attachMember(sliceStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      const Int32Slice = finalizeStructure(sliceStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '[]Hello',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const HelloPtr = finalizeStructure(structure);
+      const ta = new Int32Array([ 1, 2, 3, 4 ]);
+      const pointer = new HelloPtr(ta);
+      expect(pointer['*']).to.be.instanceOf(Int32Slice);
+      const { buffer } = pointer['*'][MEMORY];
+      expect(buffer).to.equal(ta.buffer);
+    })
+    it('should throw when given a typed array is of the incorrect type', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Int32',
+        size: 4,
+        hasPointer: false,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]Int32',
+        size: 8,
+        hasPointer: false,
+      });
+      attachMember(sliceStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      const Int32Slice = finalizeStructure(sliceStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '[]Hello',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const HelloPtr = finalizeStructure(structure);
+      const ta = new Uint32Array([ 1, 2, 3, 4 ]);
+      expect(() => new HelloPtr(ta)).to.throw(TypeError);
+    })
+    it('should automatically cast to slice from an array', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Int32',
+        size: 4,
+        hasPointer: false,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]Int32',
+        size: 8,
+        hasPointer: false,
+      });
+      attachMember(sliceStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      const Int32Slice = finalizeStructure(sliceStructure);
+      const arrayStructure = beginStructure({
+        type: StructureType.Array,
+        name: '[8]Int32',
+        size: 8 * 4,
+        hasPointer: false,
+      });
+      attachMember(arrayStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      const Int32Array = finalizeStructure(arrayStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '[]Hello',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const HelloPtr = finalizeStructure(structure);
+      const array = new Int32Array([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
+      const pointer = new HelloPtr(array);
+      expect(pointer['*']).to.be.instanceOf(Int32Slice);
+      const dv = pointer['*'][MEMORY];
+      expect(dv).to.equal(array[MEMORY]);
+    })
     it('should allow casting of a buffer to a slice', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
@@ -511,7 +680,7 @@ describe('Pointer functions', function() {
         dv.setUint32(i * 8 + 0, 123 * multiplier, true);
         dv.setUint32(i * 8 + 4, 456 * multiplier, true);
       }
-      const pointer = HelloPtr(buffer);
+      const pointer = new HelloPtr(buffer);
       expect(pointer['*']).to.be.instanceOf(HelloSlice);
       expect({ ...pointer[0] }).to.eql({ cat: 123, dog: 456 });
       expect({ ...pointer[1] }).to.eql({ cat: 1230, dog: 4560 });

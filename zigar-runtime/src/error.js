@@ -1,8 +1,8 @@
 import { MemberType } from './member.js';
 import { StructureType } from './structure.js';
 import { getTypeName } from './data-view.js';
-import { getTypedArrayClass } from './typed-array.js';
 import { getPrimitiveType } from './primitive.js';
+import { ELEMENT } from './symbol.js';
 
 export function throwBufferSizeMismatch(structure, dv) {
   const { type, name, size } = structure;
@@ -16,9 +16,11 @@ export function throwBufferSizeMismatch(structure, dv) {
 }
 
 export function throwBufferExpected(structure) {
-  const { size } = structure;
+  const { size, typedArray } = structure;
   const s = (size > 1) ? 's' : '';
-  throw new TypeError(`Expecting an ArrayBuffer or DataView ${size} byte(s) in length`);
+  const list = [ 'an ArrayBuffer', 'a DataView' ];
+  const last = (typedArray) ? `${article(typedArray.name)} ${typedArray.name}` : list.pop();
+  throw new TypeError(`Expecting an ${list.join(', ')} or ${last} ${size} byte${s} in length`);
 }
 
 export function throwInvalidEnum(structure, value) {
@@ -68,19 +70,20 @@ export function throwInactiveUnionProperty(structure, index, currentIndex) {
   throw new TypeError(`Modifying property ${newName} when ${oldName} is active`);
 }
 
-export function throwMissingUnionInitializer(structure, arg) {
+export function throwMissingUnionInitializer(structure, arg, exclusion) {
   const { name, instance: { members } } = structure;
-  const missing = members.slice(0, -1).map(m => m.name);
+  const missing = members.slice(0, exclusion ? -1 : undefined).map(m => m.name);
   throw new TypeError(`${name} needs an initializer for one of its union properties: ${missing.join(', ')}`);
 }
 
 export function throwInvalidInitializer(structure, expected, arg) {
   const { name } = structure;
-  throw new TypeError(`The constructor of ${name} expects ${expected} as an argument, received ${arg}`);
+  const description = Object.prototype.toString.call(arg);
+  throw new TypeError(`The constructor of ${name} expects ${expected} as an argument, received ${description}`);
 }
 
 export function throwInvalidArrayInitializer(structure, arg) {
-  const { instance: { members: [ member ] } } = structure;
+  const { instance: { members: [ member ] }, typedArray } = structure;
   const acceptable = [];
   const primitive = getPrimitiveType(member);
   if (primitive) {
@@ -90,19 +93,27 @@ export function throwInvalidArrayInitializer(structure, arg) {
   } else {
     acceptable.push(`an array of objects`);
   }
-  const TypedArray = getTypedArrayClass(member);
-  if (TypedArray) {
-    acceptable.push(`an ${TypedArray.name}`);
+  if (typedArray) {
+    acceptable.push(`${article(typedArray.name)} ${typedArray.name}`);
   }
   throwInvalidInitializer(structure, acceptable.join(' or '), arg);
 }
 
-export function throwArraySizeMismatch(structure, count, arg) {
-  const { name } = structure;
-  const actual = arg.length;
-  const s1 = (count > 1) ? 's' : '';
-  const s2 = (actual > 1) ? 's' : '';
-  throw new TypeError(`${name} has ${count} element${s1}, received ${actual} intializer${s2}`);
+export function throwArrayLengthMismatch(structure, arg) {
+  const { name, size, instance: { members: [ member ] } } = structure;
+  const { byteSize: elementSize, structure: { constructor: elementConstructor} } = member;
+  const length = size / elementSize;
+  const { length: argLength, constructor: argConstructor } = arg;
+  const s = (length > 1) ? 's' : '';
+  let source;
+  if (argConstructor === elementConstructor) {
+    source = `only a single one`;
+  } else if (argConstructor[ELEMENT] === elementConstructor) {
+    source = `a slice/array that has ${argLength}`;
+  } else {
+    source = `${argLength} initializer${argLength > 1 ? 's' : ''}`;
+  }
+  throw new TypeError(`${name} has ${length} element${s}, received ${source}`);
 }
 
 export function throwMissingInitializers(structure, arg) {
