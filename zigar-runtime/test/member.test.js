@@ -1,6 +1,10 @@
 import { expect } from 'chai';
 
-import { StructureType } from '../src/structure.js';
+import {
+  StructureType,
+  useStruct,
+  useOptional,
+} from '../src/structure.js';
 import { MEMORY, SLOTS, SOURCE } from '../src/symbol.js';
 import {
   MemberType,
@@ -23,6 +27,15 @@ import {
 describe('Member functions', function() {
   beforeEach(function() {
     process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
+    useVoid();
+    useBoolEx();
+    useIntEx();
+    useFloatEx();
+    useEnumerationItemEx();
+    useObject();
+    useType();
+    useStruct();
+    useOptional();
   })
   describe('isByteAligned', function() {
     it('should return true when member is byte-aligned', function() {
@@ -254,7 +267,6 @@ describe('Member functions', function() {
       expect(get.call(object)).to.equal(DummyValue2);
     })
     it('should return object accessors (Struct)', function() {
-      useObject();
       const DummyClass = function(arg) {
         this.value = arg
       };
@@ -429,7 +441,6 @@ describe('Member functions', function() {
       expect(dv.getBigInt64(16, true)).to.equal(5n);
     })
     it('should return object array accessors (Struct)', function() {
-      useObject();
       const DummyClass = function(arg) {
         this.value = arg
       } ;
@@ -479,7 +490,6 @@ describe('Member functions', function() {
       expect(dummyObject3.value).to.equal(7890);
     })
     it('should return object array accessors (Optional)', function() {
-      useObject();
       const DummyClass = function(arg) {
         this.value = arg;
       } ;
@@ -521,7 +531,6 @@ describe('Member functions', function() {
       expect(get.call(object, 2)).to.equal(7890);
     })
     it('should throw when index is out-of-bound', function() {
-      useInt();
       const member = {
         type: MemberType.Int,
         isSigned: true,
@@ -540,7 +549,6 @@ describe('Member functions', function() {
       expect(() => set.call(object, 4, 0)).to.throw();
     })
     it('should return functions employing the correct endianness', function() {
-      useInt();
       const member = {
         type: MemberType.Int,
         isSigned: true,
@@ -565,7 +573,6 @@ describe('Member functions', function() {
     })
     it('should return accessors for accessing WASM memory', function() {
       process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
-      useInt();
       const memory = new WebAssembly.Memory({
         initial: 128,
         maximum: 1024,
@@ -595,7 +602,6 @@ describe('Member functions', function() {
     })
     it('should return array accessors for accessing WASM memory', function() {
       process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
-      useInt();
       const memory = new WebAssembly.Memory({
         initial: 128,
         maximum: 1024,
@@ -625,7 +631,6 @@ describe('Member functions', function() {
     })
     it('should not trap errors unrelated to WASM buffer detachment', function() {
       process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
-      useInt();
       const memory = new WebAssembly.Memory({
         initial: 128,
         maximum: 1024,
@@ -655,7 +660,6 @@ describe('Member functions', function() {
     })
     it('should throw range error when indexing beyond an array after WASM memory detachment', function() {
       process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
-      useInt();
       const memory = new WebAssembly.Memory({
         initial: 128,
         maximum: 1024,
@@ -682,7 +686,6 @@ describe('Member functions', function() {
     })
     it('should return accessors that work correctly with regular ArrayBuffer', function() {
       process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
-      useInt();
       const dv = new DataView(new ArrayBuffer(4));
       const object = {
         [MEMORY]: dv,

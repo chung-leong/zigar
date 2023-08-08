@@ -191,8 +191,8 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 1,
       };
-      const f = getDataViewBoolAccessor('get', member);
-      const res = f.call(dv, 0);
+      const get = getDataViewBoolAccessor('get', member);
+      const res = get.call(dv, 0);
       expect(res).to.equal(true);
     })
     it('should return function for setting standard bool types', function() {
@@ -204,8 +204,8 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 1,
       };
-      const f = getDataViewBoolAccessor('set', member);
-      f.call(dv, 0);
+      const set = getDataViewBoolAccessor('set', member);
+      set.call(dv, 0);
       expect(dv.getUint8(0)).to.equal(0);
     })
     it('should return undefined when type is non-standard', function() {
@@ -215,22 +215,23 @@ describe('Data view functions', function() {
         bitOffset: 1,
         byteSize: undefined,
       };
-      const f = getDataViewBoolAccessor('get', member);
-      expect(f).to.be.undefined;
+      const get = getDataViewBoolAccessor('get', member);
+      expect(get).to.be.undefined;
     })
     it('should work when underlying type is a 64-bit integer', function() {
       const dv = new DataView(new ArrayBuffer(8));
-      dv.setBigInt64(0, 1n);
+      dv.setBigInt64(0, 0x8000000000000000n, true);
       const member = {
         type: MemberType.Bool,
         bitSize: 1,
         bitOffset: 0,
         byteSize: 8,
       };
-      const f = getDataViewBoolAccessor('get', member);
-      expect(f.call(dv, 0, true)).to.be.true;
-      expect(dv.getUint8(0)).to.equal(0);
-      dv.setBigInt64(0, 1n);
+      const get = getDataViewBoolAccessor('get', member);
+      expect(get.call(dv, 0, true)).to.be.true;
+      const set = getDataViewBoolAccessor('set', member);
+      set.call(dv, 0, false, true);
+      expect(dv.getBigInt64(0)).to.equal(0n);
     })
   })
   describe('getDataViewBoolAccessorEx', function() {
@@ -254,8 +255,8 @@ describe('Data view functions', function() {
           bitSize: 1,
           bitOffset,
         };
-        const f = getDataViewBoolAccessorEx('get', member);
-        const res = f.call(dv, 0);
+        const get = getDataViewBoolAccessorEx('get', member);
+        const res = get.call(dv, 0);
         expect(res).to.equal(!!(bitOffset & 0x01));
       }
     })
@@ -267,8 +268,8 @@ describe('Data view functions', function() {
           bitSize: 1,
           bitOffset,
         };
-        const f = getDataViewBoolAccessorEx('set', member);
-        f.call(dv, 0, !!(bitOffset & 0x01));
+        const set = getDataViewBoolAccessorEx('set', member);
+        set.call(dv, 0, !!(bitOffset & 0x01));
       }
       expect(dv.getUint8(0)).to.equal(0xAA);
     })
@@ -287,8 +288,8 @@ describe('Data view functions', function() {
             bitOffset: 64,
             byteSize: bitSize / 8
           }
-          const f = getDataViewIntAccessor('get', member);
-          const res = f.call(dv, 8, true);
+          const get = getDataViewIntAccessor('get', member);
+          const res = get.call(dv, 8, true);
           if (isSigned) {
             expect(Number(res)).to.equal(-1);
           } else {
@@ -310,11 +311,11 @@ describe('Data view functions', function() {
             bitOffset: 64,
             byteSize: bitSize / 8
           }
-          const f = getDataViewIntAccessor('set', member);
+          const set = getDataViewIntAccessor('set', member);
           if (isSigned) {
-            f.call(dv, 8, (bitSize == 64) ? -1n : -1, true);
+            set.call(dv, 8, (bitSize == 64) ? -1n : -1, true);
           } else {
-            f.call(dv, 8, max, true);
+            set.call(dv, 8, max, true);
           }
           expect(dv.getBigUint64(8, true)).equal(0xFFFFFFFFFFFFFFFFn);
           expect(dv.getBigUint64(0, true)).equal(0n);
@@ -329,8 +330,8 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = getDataViewIntAccessor('get', member);
-      expect(f).to.be.undefined;
+      const get = getDataViewIntAccessor('get', member);
+      expect(get).to.be.undefined;
     })
   })
   describe('getDataViewIntAccessorEx', function() {
@@ -367,8 +368,8 @@ describe('Data view functions', function() {
             bitOffset: 64,
             byteSize: [ 1, 2, 4, 8 ].find(b => b * 8 > bitSize),
           };
-          const f = getDataViewIntAccessorEx('get', member);
-          const res = f.call(dv, 8, true);
+          const get = getDataViewIntAccessorEx('get', member);
+          const res = get.call(dv, 8, true);
           if (isSigned) {
             expect(Number(res)).to.equal(-1);
           } else {
@@ -393,9 +394,9 @@ describe('Data view functions', function() {
             bitOffset: 64,
             byteSize: [ 1, 2, 4, 8 ].find(b => b * 8 > bitSize),
           };
-          const f = getDataViewIntAccessorEx('set', member);
-          f.call(dv, 0, min, true);
-          f.call(dv, 8, max, true);
+          const set = getDataViewIntAccessorEx('set', member);
+          set.call(dv, 0, min, true);
+          set.call(dv, 8, max, true);
           // assuming that the getter works properly here
           const get = getDataViewIntAccessorEx('get', member);
           expect(get.call(dv, 0, true)).to.equal(min);
@@ -417,15 +418,15 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = getDataViewIntAccessorEx('get', member);
-      const res1 = f.call(dv, 0, true);
+      const get = getDataViewIntAccessorEx('get', member);
+      const res1 = get.call(dv, 0, true);
       expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
       // from struct-bytes: BigInt2
       const bytesBE = [ 0, 0, 0, 0, 0, 0, 0, 0, 31, 255, 255, 255, 255, 255, 255, 255, ];
       for (const [ i, b ] of bytes.entries()) {
         dv.setUint8(i, b);
       }
-      const res2 = f.call(dv, 0, false);
+      const res2 = get.call(dv, 0, false);
       expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
     })
     it('should return functions for setting non-standard int types (128-bit)', function() {
@@ -439,14 +440,14 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = getDataViewIntAccessorEx('set', member);
-      f.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, true);
+      const set = getDataViewIntAccessorEx('set', member);
+      set.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, true);
       for (const [ i, b ] of bytes.entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
       // from struct-bytes: BigInt2
       const bytesBE = [ 0, 0, 0, 0, 0, 0, 0, 0, 31, 255, 255, 255, 255, 255, 255, 255, ];
-      f.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, false);
+      set.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, false);
       for (const [ i, b ] of bytesBE.entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
@@ -465,15 +466,15 @@ describe('Data view functions', function() {
         byteSize: 16,
         isSigned: false,
       };
-      const f = getDataViewIntAccessorEx('get', member);
-      const res1 = f.call(dv, 0, true);
+      const get = getDataViewIntAccessorEx('get', member);
+      const res1 = get.call(dv, 0, true);
       expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
       // from struct-bytes: BigInt4
       const bytesBE = [ 0, 31, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, ];
       for (const [ i, b ] of bytes.entries()) {
         dv.setUint8(i, b);
       }
-      const res2 = f.call(dv, 0, false);
+      const res2 = get.call(dv, 0, false);
       expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
     })
     it('should return functions for setting non-standard int types (72-bit)', function() {
@@ -487,14 +488,14 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = getDataViewIntAccessorEx('set', member);
-      f.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, true);
+      const set = getDataViewIntAccessorEx('set', member);
+      set.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, true);
       for (const [ i, b ] of bytes.entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
       // from struct-bytes: BigInt4
       const bytesBE = [ 0, 31, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, ];
-      f.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, false);
+      set.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, false);
       for (const [ i, b ] of bytesBE.entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
@@ -513,8 +514,8 @@ describe('Data view functions', function() {
         isSigned: true,
         byteSize: 16,
       };
-      const f = getDataViewIntAccessorEx('get', member);
-      const res = f.call(dv, 0, true);
+      const get = getDataViewIntAccessorEx('get', member);
+      const res = get.call(dv, 0, true);
       expect(res).to.equal(-0xFFFFFFFFFFFFFFFFn);
     })
     it('should return functions for getting non-standard int types (65-bit)', function() {
@@ -528,8 +529,8 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = getDataViewIntAccessorEx('set', member);
-      f.call(dv, 0, -0xFFFFFFFFFFFFFFFFn, true);
+      const set = getDataViewIntAccessorEx('set', member);
+      set.call(dv, 0, -0xFFFFFFFFFFFFFFFFn, true);
       for (const [ i, b ] of bytes.entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
@@ -546,9 +547,9 @@ describe('Data view functions', function() {
             bitOffset: 0,
             byteSize: Math.ceil(bitSize / 64) * 8,
           };
-          const f = getDataViewIntAccessorEx('set', member);
-          f.call(dv, 0, min, true);
-          f.call(dv, 128, max, true);
+          const set = getDataViewIntAccessorEx('set', member);
+          set.call(dv, 0, min, true);
+          set.call(dv, 128, max, true);
           // assuming that the getter works properly here
           const get = getDataViewIntAccessorEx('get', member);
           expect(get.call(dv, 0, true)).to.equal(min);
@@ -640,8 +641,8 @@ describe('Data view functions', function() {
           bitOffset: (bitSize === 32) ? 0 : 64,
           byteSize: bitSize / 8
         };
-        const f = getDataViewFloatAccessor('get', member);
-        const res = f.call(dv, (bitSize === 32) ? 0 : 8, true);
+        const get = getDataViewFloatAccessor('get', member);
+        const res = get.call(dv, (bitSize === 32) ? 0 : 8, true);
         expect(res.toFixed(2)).to.equal('3.14');
       }
     })
@@ -655,8 +656,8 @@ describe('Data view functions', function() {
           bitOffset: (bitSize === 32) ? 0 : 64,
           byteSize: bitSize / 8
         };
-        const f = getDataViewFloatAccessorEx('set', member);
-        f.call(dv, (bitSize === 32) ? 0 : 8, 3.14, true);
+        const set = getDataViewFloatAccessorEx('set', member);
+        set.call(dv, (bitSize === 32) ? 0 : 8, 3.14, true);
       }
       expect(dv.getFloat32(0, true).toFixed(2)).to.equal('3.14');
       expect(dv.getFloat64(8, true).toFixed(2)).to.equal('3.14');
@@ -690,19 +691,18 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 2,
       };
-      debugger;
-      const f = getDataViewFloatAccessorEx('get', member);
-      const res1 = f.call(dv, 0, true);
+      const get = getDataViewFloatAccessorEx('get', member);
+      const res1 = get.call(dv, 0, true);
       expect(res1.toFixed(2)).to.equal('3.14');
-      const res2 = f.call(dv, 2, true);
+      const res2 = get.call(dv, 2, true);
       expect(Object.is(res2, 0)).to.be.true;
-      const res3 = f.call(dv, 4, true);
+      const res3 = get.call(dv, 4, true);
       expect(Object.is(res3, -0)).to.be.true;
-      const res4 = f.call(dv, 6, true);
+      const res4 = get.call(dv, 6, true);
       expect(Object.is(res4, Infinity)).to.be.true;
-      const res5 = f.call(dv, 8, true);
+      const res5 = get.call(dv, 8, true);
       expect(Object.is(res5, -Infinity)).to.be.true;
-      const res6 = f.call(dv, 10, true);
+      const res6 = get.call(dv, 10, true);
       expect(Object.is(res6, NaN)).to.be.true;
     })
     it('should return functions for setting non-standard float types (16-bit)', function() {
@@ -716,28 +716,28 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 2,
       };
-      const f = getDataViewFloatAccessorEx('set', member);
-      f.call(dv, 0, 3.14159, true);
+      const set = getDataViewFloatAccessorEx('set', member);
+      set.call(dv, 0, 3.14159, true);
       for (const [ i, b ] of bytes.slice(0, 2).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, 0, true);
+      set.call(dv, 0, 0, true);
       for (const [ i, b ] of bytes.slice(2, 4).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, -0, true);
+      set.call(dv, 0, -0, true);
       for (const [ i, b ] of bytes.slice(4, 6).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, Infinity, true);
+      set.call(dv, 0, Infinity, true);
       for (const [ i, b ] of bytes.slice(6, 8).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, -Infinity, true);
+      set.call(dv, 0, -Infinity, true);
       for (const [ i, b ] of bytes.slice(8, 10).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, NaN, true);
+      set.call(dv, 0, NaN, true);
       for (const [ i, b ] of bytes.slice(10, 12).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
@@ -751,12 +751,12 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 2,
       };
-      const f = getDataViewFloatAccessorEx('set', member);
+      const set = getDataViewFloatAccessorEx('set', member);
       const get = getDataViewFloatAccessorEx('get', member);
-      f.call(dv, 0, 65504, true);
+      set.call(dv, 0, 65504, true);
       const value1 = get.call(dv, 0, true);
       expect(value1).to.equal(65504);
-      f.call(dv, 0, 65504 * 2, true);
+      set.call(dv, 0, 65504 * 2, true);
       const value2 = get.call(dv, 0, true);
       expect(value2).to.equal(Infinity);
     })
@@ -774,18 +774,18 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = getDataViewFloatAccessorEx('get', member);
-      const res1 = f.call(dv, 0, true);
+      const get = getDataViewFloatAccessorEx('get', member);
+      const res1 = get.call(dv, 0, true);
       expect(res1.toFixed(2)).to.equal('3.14');
-      const res2 = f.call(dv, 16, true);
+      const res2 = get.call(dv, 16, true);
       expect(Object.is(res2, 0)).to.be.true;
-      const res3 = f.call(dv, 32, true);
+      const res3 = get.call(dv, 32, true);
       expect(Object.is(res3, -0)).to.be.true;
-      const res4 = f.call(dv, 48, true);
+      const res4 = get.call(dv, 48, true);
       expect(Object.is(res4, Infinity)).to.be.true;
-      const res5 = f.call(dv, 64, true);
+      const res5 = get.call(dv, 64, true);
       expect(Object.is(res5, -Infinity)).to.be.true;
-      const res6 = f.call(dv, 80, true);
+      const res6 = get.call(dv, 80, true);
       expect(Object.is(res6, NaN)).to.be.true;
     })
     it('should return functions for getting non-standard float types (80-bit, big endian)', function() {
@@ -809,18 +809,18 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = getDataViewFloatAccessorEx('get', member);
-      const res1 = f.call(dv, 0, false);
+      const get = getDataViewFloatAccessorEx('get', member);
+      const res1 = get.call(dv, 0, false);
       expect(res1.toFixed(2)).to.equal('3.14');
-      const res2 = f.call(dv, 16, false);
+      const res2 = get.call(dv, 16, false);
       expect(Object.is(res2, 0)).to.be.true;
-      const res3 = f.call(dv, 32, false);
+      const res3 = get.call(dv, 32, false);
       expect(Object.is(res3, -0)).to.be.true;
-      const res4 = f.call(dv, 48, false);
+      const res4 = get.call(dv, 48, false);
       expect(Object.is(res4, Infinity)).to.be.true;
-      const res5 = f.call(dv, 64, false);
+      const res5 = get.call(dv, 64, false);
       expect(Object.is(res5, -Infinity)).to.be.true;
-      const res6 = f.call(dv, 80, false);
+      const res6 = get.call(dv, 80, false);
       expect(Object.is(res6, NaN)).to.be.true;
     })
     it('should return functions for setting non-standard float types (80-bit, little endian)', function() {
@@ -834,29 +834,29 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = getDataViewFloatAccessorEx('set', member);
+      const set = getDataViewFloatAccessorEx('set', member);
       // we lose precision converting f64 to f80 so not all bytes will match
-      f.call(dv, 0, 3.141592653589793, true);
+      set.call(dv, 0, 3.141592653589793, true);
       for (const [ i, b ] of bytes.slice(2, 16).entries()) {
         expect(dv.getUint8(i + 2)).to.equal(b);
       }
-      f.call(dv, 0, 0, true);
+      set.call(dv, 0, 0, true);
       for (const [ i, b ] of bytes.slice(16, 32).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, -0, true);
+      set.call(dv, 0, -0, true);
       for (const [ i, b ] of bytes.slice(32, 48).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, Infinity, true);
+      set.call(dv, 0, Infinity, true);
       for (const [ i, b ] of bytes.slice(48, 64).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, -Infinity, true);
+      set.call(dv, 0, -Infinity, true);
       for (const [ i, b ] of bytes.slice(64, 80).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, NaN, true);
+      set.call(dv, 0, NaN, true);
       for (const [ i, b ] of bytes.slice(80, 96).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
@@ -880,29 +880,29 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = getDataViewFloatAccessorEx('set', member);
+      const set = getDataViewFloatAccessorEx('set', member);
       // we lose precision converting f64 to f80 so not all bytes will match
-      f.call(dv, 0, 3.141592653589793, false);
+      set.call(dv, 0, 3.141592653589793, false);
       for (const [ i, b ] of bytes.slice(0, 14).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, 0, false);
+      set.call(dv, 0, 0, false);
       for (const [ i, b ] of bytes.slice(16, 32).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, -0, false);
+      set.call(dv, 0, -0, false);
       for (const [ i, b ] of bytes.slice(32, 48).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, Infinity, false);
+      set.call(dv, 0, Infinity, false);
       for (const [ i, b ] of bytes.slice(48, 64).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, -Infinity, false);
+      set.call(dv, 0, -Infinity, false);
       for (const [ i, b ] of bytes.slice(64, 80).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, NaN, false);
+      set.call(dv, 0, NaN, false);
       for (const [ i, b ] of bytes.slice(80, 96).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
@@ -921,12 +921,12 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = getDataViewFloatAccessorEx('get', member);
-      const value1 = f.call(dv, 0, true);
+      const get = getDataViewFloatAccessorEx('get', member);
+      const value1 = get.call(dv, 0, true);
       expect(value1).to.equal(Number.MAX_VALUE);
-      const value2 = f.call(dv, 16, true);
+      const value2 = get.call(dv, 16, true);
       expect(value2).to.equal(Infinity);
-      const value3 = f.call(dv, 32, true);
+      const value3 = get.call(dv, 32, true);
       expect(value3).to.equal(-Infinity);
     })
     it('should return functions for getting non-standard float types (128-bit, little endian)', function() {
@@ -943,18 +943,18 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = getDataViewFloatAccessorEx('get', member);
-      const res1 = f.call(dv, 0, true);
+      const get = getDataViewFloatAccessorEx('get', member);
+      const res1 = get.call(dv, 0, true);
       expect(res1.toFixed(15)).to.equal('3.141592653589793');
-      const res2 = f.call(dv, 16, true);
+      const res2 = get.call(dv, 16, true);
       expect(Object.is(res2, 0)).to.be.true;
-      const res3 = f.call(dv, 32, true);
+      const res3 = get.call(dv, 32, true);
       expect(Object.is(res3, -0)).to.be.true;
-      const res4 = f.call(dv, 48, true);
+      const res4 = get.call(dv, 48, true);
       expect(Object.is(res4, Infinity)).to.be.true;
-      const res5 = f.call(dv, 64, true);
+      const res5 = get.call(dv, 64, true);
       expect(Object.is(res5, -Infinity)).to.be.true;
-      const res6 = f.call(dv, 80, true);
+      const res6 = get.call(dv, 80, true);
       expect(Object.is(res6, NaN)).to.be.true;
     })
     it('should return functions for getting non-standard float types (128-bit, big endian)', function() {
@@ -978,18 +978,18 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = getDataViewFloatAccessorEx('get', member);
-      const res1 = f.call(dv, 0, false);
+      const get = getDataViewFloatAccessorEx('get', member);
+      const res1 = get.call(dv, 0, false);
       expect(res1.toFixed(15)).to.equal('3.141592653589793');
-      const res2 = f.call(dv, 16, false);
+      const res2 = get.call(dv, 16, false);
       expect(Object.is(res2, 0)).to.be.true;
-      const res3 = f.call(dv, 32, false);
+      const res3 = get.call(dv, 32, false);
       expect(Object.is(res3, -0)).to.be.true;
-      const res4 = f.call(dv, 48, false);
+      const res4 = get.call(dv, 48, false);
       expect(Object.is(res4, Infinity)).to.be.true;
-      const res5 = f.call(dv, 64, false);
+      const res5 = get.call(dv, 64, false);
       expect(Object.is(res5, -Infinity)).to.be.true;
-      const res6 = f.call(dv, 80, false);
+      const res6 = get.call(dv, 80, false);
       expect(Object.is(res6, NaN)).to.be.true;
     })
     it('should return functions for setting non-standard float types (128-bit, little endian)', function() {
@@ -1003,29 +1003,29 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = getDataViewFloatAccessorEx('set', member);
+      const set = getDataViewFloatAccessorEx('set', member);
       // we lose precision f64 to f128 so not all bytes will match
-      f.call(dv, 0, 3.141592653589793, true);
+      set.call(dv, 0, 3.141592653589793, true);
       for (const [ i, b ] of bytes.slice(8, 16).entries()) {
         expect(dv.getUint8(i + 8)).to.equal(b);
       }
-      f.call(dv, 0, 0, true);
+      set.call(dv, 0, 0, true);
       for (const [ i, b ] of bytes.slice(16, 32).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, -0, true);
+      set.call(dv, 0, -0, true);
       for (const [ i, b ] of bytes.slice(32, 48).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, Infinity, true);
+      set.call(dv, 0, Infinity, true);
       for (const [ i, b ] of bytes.slice(48, 64).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, -Infinity, true);
+      set.call(dv, 0, -Infinity, true);
       for (const [ i, b ] of bytes.slice(64, 80).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, NaN, true);
+      set.call(dv, 0, NaN, true);
       for (const [ i, b ] of bytes.slice(80, 96).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
@@ -1048,29 +1048,29 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = getDataViewFloatAccessorEx('set', member);
+      const set = getDataViewFloatAccessorEx('set', member);
       // we lose precision f64 to f128 so not all bytes will match
-      f.call(dv, 0, 3.141592653589793, false);
+      set.call(dv, 0, 3.141592653589793, false);
       for (const [ i, b ] of bytes.slice(0, 8).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, 0, false);
+      set.call(dv, 0, 0, false);
       for (const [ i, b ] of bytes.slice(16, 32).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, -0, false);
+      set.call(dv, 0, -0, false);
       for (const [ i, b ] of bytes.slice(32, 48).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, Infinity, false);
+      set.call(dv, 0, Infinity, false);
       for (const [ i, b ] of bytes.slice(48, 64).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, -Infinity, false);
+      set.call(dv, 0, -Infinity, false);
       for (const [ i, b ] of bytes.slice(64, 80).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
-      f.call(dv, 0, NaN, false);
+      set.call(dv, 0, NaN, false);
       for (const [ i, b ] of bytes.slice(80, 96).entries()) {
         expect(dv.getUint8(i)).to.equal(b);
       }
@@ -1089,12 +1089,12 @@ describe('Data view functions', function() {
         bitOffset: 0,
         byteSize: 16,
       };
-      const f = getDataViewFloatAccessorEx('get', member);
-      const value1 = f.call(dv, 0, true);
+      const get = getDataViewFloatAccessorEx('get', member);
+      const value1 = get.call(dv, 0, true);
       expect(value1).to.equal(Number.MAX_VALUE);
-      const value2 = f.call(dv, 16, true);
+      const value2 = get.call(dv, 16, true);
       expect(value2).to.equal(Infinity);
-      const value3 = f.call(dv, 32, true);
+      const value3 = get.call(dv, 32, true);
       expect(value3).to.equal(-Infinity);
     })
     it('should return functions for setting non-aligned floats', function() {
