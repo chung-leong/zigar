@@ -12,6 +12,7 @@ import {
   useArray,
   useStruct,
   usePointer,
+  useSlice,
   usePrimitive,
   beginStructure,
   attachMember,
@@ -26,6 +27,7 @@ describe('Array functions', function() {
     beforeEach(function() {
       usePrimitive();
       useArray();
+      useSlice();
       usePointer();
       useStruct();
       useIntEx();
@@ -359,6 +361,40 @@ describe('Array functions', function() {
       expect(array2[1]['*']).to.equal(4567);
       expect(array2[2]['*']).to.equal(7890);
       expect(array2[3]['*']).to.equal(12345);
+    })
+    it('should allow casting to array from a slice with same element type', function() {
+      const Int64 = function() {};
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: 'Int64Slice',
+        size: 8,
+      });
+      attachMember(sliceStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 64,
+        byteSize: 8,
+        structure: { constructor: Int64 },
+      });
+      const Int64Slice = finalizeStructure(sliceStructure);
+      const arrayStructure = beginStructure({
+        type: StructureType.Array,
+        name: 'Int64Vector',
+        size: 8 * 4,
+      });
+      attachMember(arrayStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 64,
+        byteSize: 8,
+        structure: { constructor: Int64 },
+      });
+      const Int64Array = finalizeStructure(arrayStructure);
+      const slice = new Int64Slice([ 100n, 200n, 300n, 400n ]);
+      const array = Int64Array(slice);
+      expect(slice[MEMORY]).to.equal(array[MEMORY]);
     })
     it('should allow the assignment of setter and getter as well as other properties', function() {
       const structure = beginStructure({

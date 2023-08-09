@@ -9,7 +9,7 @@ export default {
     Replace({
       preventAssignment: true,
       'process.env.NODE_ENV': '"production"',
-      'process.env.NODE_ZIG_TARGET': '"NODE-CPP-EXT"',
+      'process.env.ZIGAR_TARGET': '"NODE-CPP-EXT"',
     }),
   ],
   output: {

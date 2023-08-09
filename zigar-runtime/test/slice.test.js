@@ -12,6 +12,7 @@ import {
   useSlice,
   useStruct,
   usePointer,
+  useVector,
   beginStructure,
   attachMember,
   attachTemplate,
@@ -27,6 +28,7 @@ describe('Slice functions', function() {
       useStruct();
       useSlice();
       usePointer();
+      useVector();
       useIntEx();
       useObject();
     })
@@ -283,6 +285,40 @@ describe('Slice functions', function() {
       const array = new Int64Array([ 100n, 200n, 300n, 400n ]);
       const slice = Int64Slice(array);
       expect(slice[MEMORY]).to.equal(array[MEMORY]);
+    })
+    it('should allow casting to slice from an vector with same element type', function() {
+      const Int64 = function() {};
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: 'Int64Slice',
+        size: 8,
+      });
+      attachMember(sliceStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 64,
+        byteSize: 8,
+        structure: { constructor: Int64 },
+      });
+      const Int64Slice = finalizeStructure(sliceStructure);
+      const vectorStructure = beginStructure({
+        type: StructureType.Vector,
+        name: 'Int64Vector',
+        size: 8 * 4,
+      });
+      attachMember(vectorStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 64,
+        byteSize: 8,
+        structure: { constructor: Int64 },
+      });
+      const Int64Vector = finalizeStructure(vectorStructure);
+      const vector = new Int64Vector([ 100n, 200n, 300n, 400n ]);
+      const slice = Int64Slice(vector);
+      expect(slice[MEMORY]).to.equal(vector[MEMORY]);
     })
     it('should not allow casting from an array with different element type', function() {
       const Int64 = function() {};

@@ -6,7 +6,7 @@ import {
   getArgumentBuffers,
 } from '../src/addon.js';
 
-describe('C++ addon functions', function() {
+describe('Addon functions', function() {
   describe('invokeFactory', function() {
     it('should run the given thunk function with the expected arguments and return a constructor', function() {
       process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';

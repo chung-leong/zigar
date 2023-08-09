@@ -109,6 +109,7 @@ pub const StructureType = enum(u32) {
     Primitive = 0,
     Array,
     Struct,
+    ArgStruct,
     ExternUnion,
     BareUnion,
     TaggedUnion,
@@ -118,8 +119,9 @@ pub const StructureType = enum(u32) {
     Optional,
     Pointer,
     Slice,
+    Vector,
     Opaque,
-    ArgStruct,
+    Function,
 };
 
 pub const MemberType = enum(u32) {
@@ -367,7 +369,7 @@ fn getMemberType(comptime T: type) MemberType {
         .Int => .Int,
         .Float => .Float,
         .Enum => .EnumerationItem,
-        .Struct, .Union, .Array, .ErrorUnion, .Optional, .Pointer => .Object,
+        .Struct, .Union, .Array, .ErrorUnion, .Optional, .Pointer, .Vector => .Object,
         .Type => .Type,
         else => .Void,
     };
@@ -394,6 +396,7 @@ fn getStructureType(comptime T: type) StructureType {
         .Array => .Array,
         .Opaque => .Opaque,
         .Pointer => .Pointer,
+        .Vector => .Vector,
         else => @compileError("Unsupported type: " ++ @typeName(T)),
     };
 }
@@ -893,6 +896,15 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                     });
                 }
             }
+        },
+        .Vector => |ve| {
+            try host.attachMember(structure, .{
+                .member_type = getMemberType(ve.child),
+                .is_signed = isSigned(ve.child),
+                .bit_size = @bitSizeOf(ve.child),
+                .byte_size = @sizeOf(ve.child),
+                .structure = try getStructure(host, ve.child),
+            });
         },
         else => {
             std.debug.print("Missing: {s}\n", .{@typeName(T)});

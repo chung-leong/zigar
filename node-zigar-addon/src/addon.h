@@ -12,6 +12,7 @@ enum class StructureType : uint32_t {
   Primitive,
   Array,
   Struct,
+  ArgStruct,
   ExternUnion,
   BareUnion,
   TaggedUnion,
@@ -21,8 +22,9 @@ enum class StructureType : uint32_t {
   Optional,
   Pointer,
   Slice,
+  Vector,
   Opaque,
-  ArgStruct,
+  Function,
 };
 
 enum class MemberType : uint32_t {

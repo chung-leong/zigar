@@ -12,7 +12,7 @@ export function addTypedArrayAccessor(s) {
   } = s;
   if (process.env.NODE_ENV !== 'production') {
     /* c8 ignore next 3 */
-    if (s.type !== StructureType.Array && s.type !== StructureType.Slice) {
+    if (![ StructureType.Array, StructureType.Slice, StructureType.Vector ].includes(s.type)) {
       throw new Error('Only arrays can have typed array accessor');
     }
   }

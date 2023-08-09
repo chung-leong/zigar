@@ -32,7 +32,7 @@ export function finalizeSlice(s) {
     }
   }
   const objectMember = (member.type === MemberType.Object) ? member : null;
-  const { byteSize: elementSize } = member;
+  const { byteSize: elementSize, structure: elementStructure } = member;
   const typedArray = s.typedArray = getTypedArrayClass(member);
   const getCount = (arg) => {
     if (Array.isArray(arg) || isTypedArray(arg, typedArray) || arg instanceof constructor) {

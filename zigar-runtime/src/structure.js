@@ -8,23 +8,26 @@ import { finalizeEnumeration } from './enumeration.js';
 import { finalizeOptional } from './optional.js';
 import { finalizePointer } from './pointer.js';
 import { finalizeSlice } from './slice.js';
+import { finalizeVector } from './vector.js';
 import { finalizeArgStruct } from './arg-struct.js';
 
 export const StructureType = {
   Primitive: 0,
   Array: 1,
   Struct: 2,
-  ExternUnion: 3,
-  BareUnion: 4,
-  TaggedUnion: 5,
-  ErrorUnion: 6,
-  ErrorSet: 7,
-  Enumeration: 8,
-  Optional: 9,
-  Pointer: 10,
-  Slice: 11,
-  Opaque: 12,
-  ArgStruct: 13,
+  ArgStruct: 3,
+  ExternUnion: 4,
+  BareUnion: 5,
+  TaggedUnion: 6,
+  ErrorUnion: 7,
+  ErrorSet: 8,
+  Enumeration: 9,
+  Optional: 10,
+  Pointer: 11,
+  Slice: 12,
+  Vector: 13,
+  Opaque: 14,
+  Function: 15,
 };
 
 const factories = Array(Object.values(StructureType).length);
@@ -71,10 +74,14 @@ export function useOptional() {
 
 export function usePointer() {
   factories[StructureType.Pointer] = finalizePointer;
-
 }
+
 export function useSlice() {
   factories[StructureType.Slice] = finalizeSlice;
+}
+
+export function useVector() {
+  factories[StructureType.Vector] = finalizeVector;
 }
 
 export function useOpaque() {
