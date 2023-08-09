@@ -224,8 +224,12 @@ async function transpileImport(path, options = {}) {
     entry: path,
     target: 'node',
     output: {
+      library: {
+        type: 'module',
+      },
       filename: jsFile.base,
       path: jsFile.dir,
+      chunkFormat: 'module',
     },
     resolve: {
       modules: [ resolve(`../node_modules`) ],
@@ -236,8 +240,14 @@ async function transpileImport(path, options = {}) {
           test: /\.zig$/,
           loader,
           exclude: /node_modules/,
+          options: {
+            embedWASM: true,
+          }
         },
       ]
+    },
+    experiments: {
+      outputModule: true,
     },
   };
   await new Promise((resolve, reject) => {
