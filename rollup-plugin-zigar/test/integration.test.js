@@ -1,18 +1,16 @@
-import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import { expect } from 'chai';
 import { tmpdir } from 'os';
+import { rollup } from 'rollup'
+import NodeResolve from '@rollup/plugin-node-resolve';
 import 'mocha-skip-if';
+import Zigar from '../dist/index.js';
 
-import { transpile } from '../src/transpiler.js';
+import 'zigar-runtime';
 
 const littleEndian = true;
 
-skip.if(process.env.npm_lifecycle_event === 'coverage').
 describe('Integration tests', function() {
-  beforeEach(function() {
-    process.env.ZIGAR_TARGET = 'WASM-COMPTIME';
-  })
   describe('Console', function() {
     it('should output to development console', async function() {
       this.timeout(30000);
@@ -219,16 +217,28 @@ describe('Integration tests', function() {
   })
 })
 
-function getWASMRuntime() {
-  return resolve('../../zigar-runtime/dist/index.js');
-}
-
 async function transpileImport(path, options = {}) {
-  const code = await transpile(path, { moduleResolver: getWASMRuntime, ...options });
   const hash = await md5(path + JSON.stringify(options));
-  // need to use .mjs since the file is sitting in /tmp, outside the scope of our package.json
   const jsPath = join(tmpdir(), `${hash}.mjs`);
-  await writeFile(jsPath, code);
+  const inputOptions = {
+    input: path,
+    plugins: [
+      Zigar({ ...options, useReadFile: true }),
+      NodeResolve({
+        modulePaths: [ resolve(`../node_modules/`) ],
+      }),
+    ],
+  };
+  const outputOptions = {
+    file: jsPath,
+    format: 'esm',
+  };
+  const bundle = await rollup(inputOptions);
+  try {
+    await bundle.write(outputOptions);
+  } finally {
+    await bundle.close();
+  }
   return import(jsPath);
 }
 

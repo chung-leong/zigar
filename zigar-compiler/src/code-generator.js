@@ -63,6 +63,7 @@ export function generateCode(structures, params) {
     initializer: null,
     pointerCopier: null,
     pointerResetter: null,
+    typedArray: null,
     type: StructureType.Primitive,
     name: undefined,
     size: 4,
