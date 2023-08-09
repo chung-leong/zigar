@@ -217,7 +217,7 @@ describe('Integration tests', function() {
 
 async function transpileImport(path, options = {}) {
   const hash = await md5(path + JSON.stringify(options));
-  const jsPath = join(tmpdir(), 'webpack', `${hash}.mjs`);
+  const jsPath = join(tmpdir(), 'webpack-integration-test', `${hash}.mjs`);
   const jsFile = parse(jsPath);
   const config = {
     mode: 'development',

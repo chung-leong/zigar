@@ -2,7 +2,9 @@ import { join, parse } from 'path';
 import { expect } from 'chai';
 import { tmpdir } from 'os';
 import { readFile } from 'fs/promises';
-import webpack from 'webpack'
+import { rollup } from 'rollup'
+import NodeResolve from '@rollup/plugin-node-resolve';
+import Zigar from '../dist/index.js';
 import 'mocha-skip-if';
 
 const loader = resolve('../dist/index.js');
@@ -49,49 +51,26 @@ describe('Loader', function() {
 
 async function transpile(path, options = {}) {
   const hash = await md5(path + JSON.stringify(options));
-  const jsPath = join(tmpdir(), 'webpack-test', `${hash}.mjs`);
-  const jsFile = parse(jsPath);
-  const config = {
-    mode: 'development',
-    entry: path,
-    target: 'node',
-    output: {
-      library: {
-        type: 'module',
-      },
-      filename: jsFile.base,
-      path: jsFile.dir,
-      chunkFormat: 'module',
-    },
-    resolve: {
-      modules: [ resolve(`../node_modules`) ],
-    },
-    module: {
-      rules: [
-        {
-          test: /\.zig$/,
-          loader,
-          exclude: /node_modules/,
-          options,
-        },
-      ]
-    },
-    experiments: {
-      outputModule: true,
-    },
+  const jsPath = join(tmpdir(), 'rollup-test', `${hash}.mjs`);
+  const inputOptions = {
+    input: path,
+    plugins: [
+      Zigar({ ...options }),
+      NodeResolve({
+        modulePaths: [ resolve(`../node_modules`) ],
+      }),
+    ],
   };
-  await new Promise((resolve, reject) => {
-    webpack(config, (err, stats) => {
-      if (!err && stats?.hasErrors()) {
-        err = new Error(stats);
-      }
-      if (err) {
-        reject(err);
-      } else {
-        resolve();
-      }
-    });
-  });
+  const outputOptions = {
+    file: jsPath,
+    format: 'esm',
+  };
+  const bundle = await rollup(inputOptions);
+  try {
+    await bundle.write(outputOptions);
+  } finally {
+    await bundle.close();
+  }
   const code = await readFile(jsPath, 'utf-8');
   return code;
 }

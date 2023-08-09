@@ -3,8 +3,8 @@ import { expect } from 'chai';
 import { tmpdir } from 'os';
 import { rollup } from 'rollup'
 import NodeResolve from '@rollup/plugin-node-resolve';
-import 'mocha-skip-if';
 import Zigar from '../dist/index.js';
+import 'mocha-skip-if';
 
 const littleEndian = true;
 
@@ -217,7 +217,7 @@ describe('Integration tests', function() {
 
 async function transpileImport(path, options = {}) {
   const hash = await md5(path + JSON.stringify(options));
-  const jsPath = join(tmpdir(), 'rollup', `${hash}.mjs`);
+  const jsPath = join(tmpdir(), 'rollup-integration-test', `${hash}.mjs`);
   const inputOptions = {
     input: path,
     plugins: [
