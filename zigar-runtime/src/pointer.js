@@ -91,8 +91,7 @@ const proxyHandlers = {
     switch (name) {
       case '$':
       case '*':
-      // pointerCopier can be given the proxy object
-      // should avoid placing these functions in the structure object
+      case ZIG:
       case SLOTS:
         return pointer[name];
       default:
@@ -103,6 +102,7 @@ const proxyHandlers = {
     switch (name) {
       case '$':
       case '*':
+      case ZIG:
         pointer[name] = value;
         break;
       default:
