@@ -93,6 +93,7 @@ const proxyHandlers = {
       case '*':
       case ZIG:
       case SLOTS:
+      case MEMORY:
         return pointer[name];
       default:
         return pointer[SLOTS][0][name];
@@ -103,6 +104,8 @@ const proxyHandlers = {
       case '$':
       case '*':
       case ZIG:
+      case SLOTS:
+      case MEMORY:
         pointer[name] = value;
         break;
       default:
@@ -114,6 +117,9 @@ const proxyHandlers = {
     switch (name) {
       case '$':
       case '*':
+      case ZIG:
+      case SLOTS:
+      case MEMORY:
         delete pointer[name];
         break;
       default:

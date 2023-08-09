@@ -514,6 +514,7 @@ export {
   useOptional,
   usePointer,
   useSlice,
+  useVector,
   useOpaque,
   useArgStruct,
 } from './structure.js';

@@ -216,6 +216,16 @@ describe('Integration tests', function() {
       expect(slice.dataView.byteOffset).to.equal(8);
       expect(slice.dataView.buffer).to.equal(ta.buffer);
     })
+    it('should return correctly result from vector functions', async function() {
+      this.timeout(30000);
+      const { default: { Vector4, multiply, add } } = await transpileImport(resolve('./integration/vector-float.zig'));
+      const a = new Vector4([ 1, 2, 3, 4 ]);
+      const b = new Vector4([ 5, 6, 7, 8 ]);
+      const c = multiply(a, b);
+      const d = add(a, b);
+      expect([ ...c ]).to.eql([ 5, 12, 21, 32 ]);
+      expect([ ...d ]).to.eql([ 6, 8, 10, 12 ]);
+    })
   })
 })
 
