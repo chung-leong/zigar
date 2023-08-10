@@ -132,4 +132,22 @@ const proxyHandlers = {
     }
     return true;
   },
+  has(pointer, name) {
+    return name in pointer[SLOTS][0];
+  },
+  ownKeys(pointer) {
+    return [ ...Object.getOwnPropertyNames(pointer[SLOTS][0]), SLOTS, ZIG, MEMORY ];
+  },
+  getOwnPropertyDescriptor(pointer, name) {
+    switch (name) {
+      case '$':
+      case '*':
+      case ZIG:
+      case SLOTS:
+      case MEMORY:
+        return Object.getOwnPropertyDescriptor(pointer, name);
+      default:
+        return Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
+    }
+  },
 };

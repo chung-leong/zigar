@@ -81,8 +81,33 @@ describe('Array functions', function() {
       for (let i = 0; i < object.length; i++) {
         expect(object[i]).to.equal(i);
       }
+      expect(0 in object).to.be.true;
+      expect(7 in object).to.be.true;
+      expect('length' in object).to.be.true;
+      expect(-1 in object).to.be.false;
+      expect(9 in object).to.be.false;
       // ensure it that it doesn't throw with symbol
       expect(() => object[Symbol.asyncIterator]).to.not.throw();
+      expect(() => Symbol.asyncIterator in object).to.not.throw();
+      expect(() => Object.getOwnPropertyDescriptor(object, Symbol.asyncIterator)).to.not.throw();
+    })
+    it('should return available keys', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        size: 4 * 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello(new Uint32Array(8));
+      expect(Object.getOwnPropertyNames(object)).to.eql([ '0', '1', '2', '3', '4', '5', '6', '7', 'length' ]);
+      expect(Object.keys(object)).to.eql([ '0', '1', '2', '3', '4', '5', '6', '7' ]);
     })
     it('should have getter and setter that are bound to the object', function() {
       const structure = beginStructure({

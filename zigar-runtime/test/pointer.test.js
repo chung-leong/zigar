@@ -213,6 +213,54 @@ describe('Pointer functions', function() {
       expect(pointer['*']).to.equal(object2);
       expect(object1.cat).to.equal(123);
     })
+    it('should make keys from target available', function() {
+      const structStructure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8,
+        hasPointer: false,
+      });
+      attachMember(structStructure, {
+        type: MemberType.Int,
+        name: 'cat',
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structStructure, {
+        type: MemberType.Int,
+        name: 'dog',
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Hello',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: structStructure,
+      });
+      const HelloPtr = finalizeStructure(structure);
+      const pointer = new HelloPtr({ cat: 123, dog: 456 });
+      expect('cat' in pointer).to.be.true;
+      expect('cow' in pointer).to.be.false;
+      expect(Object.getOwnPropertyNames(pointer)).to.eql([ 'cat', 'dog' ]);
+      expect(Object.keys(pointer)).to.eql([ 'cat', 'dog' ]);
+    })
     it('should automatically dereference pointers a single-level only', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,

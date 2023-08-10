@@ -394,6 +394,10 @@ function throwNoCastingToPointer(structure) {
   throw new TypeError(`Non-slice pointers can only be created with the help of the new operator`);
 }
 
+function throwInaccessiblePointer() {
+  throw new TypeError(`Pointers within an untagged union are not accessible`);
+}
+
 function throwOverflow(member, value) {
   const typeName = getTypeName(member);
   throw new TypeError(`${typeName} cannot represent the value given: ${value}`);
@@ -497,8 +501,9 @@ function getDataViewBoolAccessorEx(access, member) {
 }
 
 function getDataViewIntAccessor(access, member) {
-  const typeName = getTypeName(member);
-  return DataView.prototype[`${access}${typeName}`];
+  return cacheMethod(access, member, (name) => {
+    return DataView.prototype[name];
+  });
 }
 
 function getDataViewIntAccessorEx(access, member) {
@@ -515,8 +520,9 @@ function getDataViewIntAccessorEx(access, member) {
 }
 
 function getDataViewFloatAccessor(access, member) {
-  const typeName = getTypeName(member);
-  return DataView.prototype[`${access}${typeName}`];
+  return cacheMethod(access, member, (name) => {
+    return DataView.prototype[name];
+  });
 }
 
 function getDataViewFloatAccessorEx(access, member) {
@@ -581,6 +587,36 @@ function requireDataView(structure, arg) {
     throwBufferExpected(structure);
   }
   return dv;
+}
+
+function getTypedArrayClass({ type, isSigned, byteSize }) {
+  if (type === MemberType.Int) {
+    if (isSigned) {
+      switch (byteSize) {
+        case 1: return Int8Array;
+        case 2: return Int16Array;
+        case 4: return Int32Array;
+        case 8: return BigInt64Array;
+      }
+    } else {
+      switch (byteSize) {
+        case 1: return Uint8Array;
+        case 2: return Uint16Array;
+        case 4: return Uint32Array;
+        case 8: return BigUint64Array;
+      }
+    }
+  } else if (type === MemberType.Float) {
+    switch (byteSize) {
+      case 4: return Float32Array;
+      case 8: return Float64Array;
+    }
+  }
+}
+
+function isTypedArray(arg, TypedArray) {
+  const tag = arg?.[Symbol.toStringTag];
+  return (!!TypedArray && tag === TypedArray.name);
 }
 
 function getTypeName({ type, isSigned, bitSize, byteSize }) {
@@ -938,7 +974,7 @@ function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
 }
 
 function cacheMethod(access, member, cb) {
-  const { bitOffset } = member;
+  const { type, bitOffset, bitSize } = member;
   const bitPos = bitOffset & 0x07;
   const typeName = getTypeName(member);
   const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
@@ -946,6 +982,16 @@ function cacheMethod(access, member, cb) {
   let fn = methodCache[name];
   if (!fn) {
     fn = methodCache[name] = cb(name);
+    if (access === 'set' && type === MemberType.Int && bitSize > 32) {
+      // automatically convert number to bigint
+      const set = fn;
+      fn = function(offset, value, littleEndian) {
+        if (typeof(value) === 'number') {
+          value = BigInt(value);
+        }
+        set.call(this, offset, value, littleEndian);
+      };
+    }
     if (fn && fn.name !== name) {
       Object.defineProperty(fn, 'name', { value: name, configurable: true, writable: false });
     }
@@ -1500,36 +1546,6 @@ function getPrimitiveType(member) {
   }
 }
 
-function getTypedArrayClass({ type, isSigned, byteSize }) {
-  if (type === MemberType.Int) {
-    if (isSigned) {
-      switch (byteSize) {
-        case 1: return Int8Array;
-        case 2: return Int16Array;
-        case 4: return Int32Array;
-        case 8: return BigInt64Array;
-      }
-    } else {
-      switch (byteSize) {
-        case 1: return Uint8Array;
-        case 2: return Uint16Array;
-        case 4: return Uint32Array;
-        case 8: return BigUint64Array;
-      }
-    }
-  } else if (type === MemberType.Float) {
-    switch (byteSize) {
-      case 4: return Float32Array;
-      case 8: return Float64Array;
-    }
-  }
-}
-
-function isTypedArray(arg, TypedArray) {
-  const tag = arg?.[Symbol.toStringTag];
-  return (!!TypedArray && tag === TypedArray.name);
-}
-
 function finalizeArray(s) {
   const {
     size,
@@ -1597,6 +1613,7 @@ function finalizeArray(s) {
   const retriever = function() { return this[PROXY] };
   const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier$1(objectMember) : null;
   s.pointerResetter = (hasPointer) ? getPointerResetter$1(objectMember) : null;
+  s.pointerDisabler = (hasPointer) ? getPointerDisabler$1(objectMember) : null;
   const { get, set } = getAccessors(member, options);
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
@@ -1622,31 +1639,39 @@ function createChildObjects$1(member, recv, dv) {
   if (recv !== ZIG) {
     recv = PARENT;
   }
-  for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += elementSize) {
+  for (let i = 0, offset = 0, len = this.length; i < len; i++, offset += elementSize) {
     const childDV = new DataView(dv.buffer, offset, elementSize);
-    slots[slot] = constructor.call(recv, childDV);
+    slots[i] = constructor.call(recv, childDV);
   }
 }
 
 function getPointerCopier$1(member) {
   return function(src) {
-    const { structure: { pointerCopier }, byteSize: elementSize } = member;
-    const dv = this[MEMORY];
+    const { structure: { pointerCopier } } = member;
     const destSlots = this[SLOTS];
     const srcSlots = src[SLOTS];
-    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += elementSize) {
-      pointerCopier.call(destSlots[slot], srcSlots[slot]);
+    for (let i = 0, len = this.length; i < len; i++) {
+      pointerCopier.call(destSlots[i], srcSlots[i]);
     }
   };
 }
 
 function getPointerResetter$1(member) {
   return function(src) {
-    const { structure: { pointerResetter }, byteSize: elementSize } = member;
-    const dv = this[MEMORY];
+    const { structure: { pointerResetter } } = member;
     const destSlots = this[SLOTS];
-    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += elementSize) {
-      pointerResetter.call(destSlots[slot]);
+    for (let i = 0, len = this.length; i < len; i++) {
+      pointerResetter.call(destSlots[i]);
+    }
+  };
+}
+
+function getPointerDisabler$1(member) {
+  return function(src) {
+    const { structure: { pointerDisabler } } = member;
+    const destSlots = this[SLOTS];
+    for (let i = 0, len = this.length; i < len; i++) {
+      pointerDisabler.call(destSlots[i]);
     }
   };
 }
@@ -1732,6 +1757,30 @@ const proxyHandlers$1 = {
           delete array[name];
       }
       return true;
+    }
+  },
+  has(array, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      return (index >= 0 && index < array.length);
+    } else {
+      return array[name];
+    }
+  },
+  ownKeys(array) {
+    const keys = [];
+    for (let i = 0, len = array.length; i < len; i++) {
+      keys.push(`${i}`);
+    }
+    keys.push('length');
+    return keys;
+  },
+  getOwnPropertyDescriptor(array, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      if (index >= 0 && index < array.length) {
+        return { value: array.get(index), enumerable: true, writable: true, configurable: true };
+      }
     }
   },
 };
@@ -1905,6 +1954,7 @@ function finalizeStruct(s) {
   const retriever = function() { return this };
   const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMembers) : null;
   s.pointerResetter = (hasPointer) ? getPointerResetter(objectMembers) : null;
+  s.pointerDisabler = (hasPointer) ? getPointerDisabler(objectMembers) : null;
   Object.defineProperties(constructor.prototype, {
     $: { get: retriever, set: initializer, configurable: true },
   });
@@ -1950,6 +2000,16 @@ function getPointerResetter(members) {
   };
 }
 
+function getPointerDisabler(members) {
+  const pointerMembers = members.filter(m => m.structure.hasPointer);
+  return function() {
+    const destSlots = this[SLOTS];
+    for (const { slot, structure: { pointerDisabler } } of pointerMembers) {
+      pointerDisabler.call(destSlots[slot]);
+    }
+  };
+}
+
 function finalizeUnion(s) {
   const {
     type,
@@ -1971,13 +2031,22 @@ function finalizeUnion(s) {
   const exclusion = (type === StructureType.TaggedUnion || (type === StructureType.BareUnion && runtimeSafety));
   if (exclusion) {
     const selectorMember = members[members.length - 1];
-    let { get: getIndex, set: setIndex } = getAccessors(selectorMember, options);
+    const { get: getSelector, set: setSelector } = getAccessors(selectorMember, options);
+    let getIndex, setIndex;
     if (type === StructureType.TaggedUnion) {
-      getEnumItem = getIndex;
+      // rely on the enumeration constructor to translate the enum values into indices
+      const { structure: { constructor } } = selectorMember;
+      getEnumItem = getSelector;
       getIndex = function() {
-        const item = getEnumItem.call(this);
+        const item = getSelector.call(this);
         return item[ENUM_INDEX];
       };
+      setIndex = function(index) {
+        setSelector.call(this, constructor(index));
+      };
+    } else {
+      getIndex = getSelector;
+      setIndex = setSelector;
     }
     showDefault = function() {
       const index = getIndex.call(this);
@@ -2031,6 +2100,7 @@ function finalizeUnion(s) {
     }
   }
   const objectMembers = members.filter(m => m.type === MemberType.Object);
+  const hasInaccessiblePointer = !hasPointer && !!objectMembers.find(m => m.structure.hasPointer);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -2047,6 +2117,9 @@ function finalizeUnion(s) {
     Object.defineProperties(self, descriptors);
     if (objectMembers.length > 0) {
       createChildObjects.call(self, objectMembers, this, dv);
+      if (hasInaccessiblePointer) {
+        pointerDisabler.call(self);
+      }
     }
     if (creating) {
       initializer.call(self, arg);
@@ -2055,7 +2128,6 @@ function finalizeUnion(s) {
     }
   };
   const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
-
   const copy = getMemoryCopier(size);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -2103,6 +2175,7 @@ function finalizeUnion(s) {
   const retriever = function() { return this };
   const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
   s.pointerResetter = getPointerResetter(objectMembers);
+  const pointerDisabler = getPointerDisabler(objectMembers);
   if (type === StructureType.TaggedUnion) {
     // enable casting to enum
     Object.defineProperties(constructor.prototype, {
@@ -2164,6 +2237,7 @@ function finalizeErrorUnion(s) {
   };
   const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
   s.pointerResetter = getPointerResetter(objectMembers);
+  s.pointerDisabler = getPointerDisabler(objectMembers);
   const { get, set, check } = getErrorUnionAccessors(members, size, options);
   Object.defineProperties(constructor.prototype, {
     $: { get, set, configurable: true },
@@ -2404,6 +2478,7 @@ function finalizeOptional(s) {
   };
   const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
   s.pointerResetter = getPointerResetter(objectMembers);
+  s.pointerDisabler = getPointerDisabler(objectMembers);
   const { get, set, check } = getOptionalAccessors(members, size, options);
   Object.defineProperties(constructor.prototype, {
     $: { get, set, configurable: true },
@@ -2504,6 +2579,11 @@ function finalizePointer(s) {
   s.pointerResetter = function() {
     this[SLOTS][0] = null;
   };
+  s.pointerDisabler = function() {
+    Object.defineProperties(this[SLOTS], {
+      0: { get: throwInaccessiblePointer, set: throwInaccessiblePointer, configurable: true },
+    });
+  };
   const getTargetValue = function() {
     const object = this[SLOTS][0];
     return object.$;
@@ -2565,6 +2645,24 @@ const proxyHandlers = {
         delete pointer[SLOTS][0][name];
     }
     return true;
+  },
+  has(pointer, name) {
+    return name in pointer[SLOTS][0];
+  },
+  ownKeys(pointer) {
+    return [ ...Object.getOwnPropertyNames(pointer[SLOTS][0]), SLOTS, ZIG, MEMORY ];
+  },
+  getOwnPropertyDescriptor(pointer, name) {
+    switch (name) {
+      case '$':
+      case '*':
+      case ZIG:
+      case SLOTS:
+      case MEMORY:
+        return Object.getOwnPropertyDescriptor(pointer, name);
+      default:
+        return Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
+    }
   },
 };
 
@@ -2647,6 +2745,7 @@ function finalizeSlice(s) {
   const retriever = function() { return this };
   const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier$1(objectMember) : null;
   s.pointerResetter = (hasPointer) ? getPointerResetter$1(objectMember) : null;
+  s.pointerDisabler = (hasPointer) ? getPointerDisabler$1(objectMember) : null;
   const { get, set } = getAccessors(member, options);
   const getLength = function() { return this[LENGTH] };
   Object.defineProperties(constructor.prototype, {

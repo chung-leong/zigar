@@ -218,4 +218,28 @@ const proxyHandlers = {
       return true;
     }
   },
+  has(array, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      return (index >= 0 && index < array.length);
+    } else {
+      return array[name];
+    }
+  },
+  ownKeys(array) {
+    const keys = [];
+    for (let i = 0, len = array.length; i < len; i++) {
+      keys.push(`${i}`);
+    }
+    keys.push('length');
+    return keys;
+  },
+  getOwnPropertyDescriptor(array, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      if (index >= 0 && index < array.length) {
+        return { value: array.get(index), enumerable: true, writable: true, configurable: true };
+      }
+    }
+  },
 };
