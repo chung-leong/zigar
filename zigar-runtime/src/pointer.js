@@ -1,7 +1,7 @@
 import { StructureType } from './structure.js';
 import { requireDataView, getDataView } from './data-view.js';
 import { MEMORY, PROXY, SLOTS, ZIG, PARENT } from './symbol.js';
-import { throwNoCastingToPointer } from './error.js';
+import { throwNoCastingToPointer, throwInaccessiblePointer } from './error.js';
 
 export function finalizePointer(s) {
   const {
@@ -64,6 +64,11 @@ export function finalizePointer(s) {
   };
   const pointerResetter = s.pointerResetter = function() {
     this[SLOTS][0] = null;
+  };
+  const pointerDisabler = s.pointerDisabler = function() {
+    Object.defineProperties(this[SLOTS], {
+      0: { get: throwInaccessiblePointer, set: throwInaccessiblePointer, configurable: true },
+    });
   };
   const getTargetValue = function() {
     const object = this[SLOTS][0];

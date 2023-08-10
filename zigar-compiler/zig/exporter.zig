@@ -324,9 +324,12 @@ fn hasPointer(comptime T: type) bool {
             break :any false;
         },
         .Union => |un| any: {
-            inline for (un.fields) |field| {
-                if (hasPointer(field.type)) {
-                    break :any true;
+            // pointer in untagged union are not exportable
+            if (un.tag_type) |_| {
+                inline for (un.fields) |field| {
+                    if (hasPointer(field.type)) {
+                        break :any true;
+                    }
                 }
             }
             break :any false;
@@ -1244,16 +1247,15 @@ fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
             }
         },
         .Union => |un| {
-            if (un.layout == .Extern) {
-                return;
-            }
-            inline for (un.fields, 0..) |field, index| {
-                if (hasPointer(field.type)) {
-                    const current_index = getUnionCurrentIndex(ptr);
-                    if (index == current_index) {
-                        const slot = getObjectSlot(T, index);
-                        const child_obj = try host.readObjectSlot(obj, slot);
-                        try rezigStructure(host, child_obj, &@field(ptr.*, field.name));
+            if (un.type_tag) |_| {
+                inline for (un.fields, 0..) |field, index| {
+                    if (hasPointer(field.type)) {
+                        const current_index = getUnionCurrentIndex(ptr);
+                        if (index == current_index) {
+                            const slot = getObjectSlot(T, index);
+                            const child_obj = try host.readObjectSlot(obj, slot);
+                            try rezigStructure(host, child_obj, &@field(ptr.*, field.name));
+                        }
                     }
                 }
             }
@@ -1316,17 +1318,16 @@ fn dezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
             }
         },
         .Union => |un| {
-            if (un.layout == .Extern) {
-                return;
-            }
-            inline for (un.fields, 0..) |field, index| {
-                if (hasPointer(field.type)) {
-                    const current_index = getUnionCurrentIndex(ptr);
-                    if (index == current_index) {
-                        const slot = getObjectSlot(T, index);
-                        const child_ptr = &@field(ptr.*, field.name);
-                        const child_obj = try obtainChildObject(host, obj, slot, child_ptr, false);
-                        try dezigStructure(host, child_obj, child_ptr);
+            if (un.tag_type) |_| {
+                inline for (un.fields, 0..) |field, index| {
+                    if (hasPointer(field.type)) {
+                        const current_index = getUnionCurrentIndex(ptr);
+                        if (index == current_index) {
+                            const slot = getObjectSlot(T, index);
+                            const child_ptr = &@field(ptr.*, field.name);
+                            const child_obj = try obtainChildObject(host, obj, slot, child_ptr, false);
+                            try dezigStructure(host, child_obj, child_ptr);
+                        }
                     }
                 }
             }

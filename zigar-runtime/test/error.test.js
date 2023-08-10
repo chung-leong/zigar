@@ -23,6 +23,7 @@ import {
   throwArgumentCountMismatch,
   rethrowArgumentError,
   throwNoCastingToPointer,
+  throwInaccessiblePointer,
   throwInvalidPointerTarget,
   throwOverflow,
   throwOutOfBound,
@@ -451,6 +452,11 @@ describe('Error functions', function() {
         hasPointer: true,
       };
       expect(() => throwNoCastingToPointer(structure)).to.throw(TypeError);
+    })
+  })
+  describe('throwInaccessiblePointer', function() {
+    it('should throw a type error', function() {
+      expect(() => throwInaccessiblePointer()).to.throw(TypeError);
     })
   })
   describe('throwInvalidPointerTarget', function() {

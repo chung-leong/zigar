@@ -1,7 +1,7 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView }  from './data-view.js';
-import { createChildObjects, getPointerCopier, getPointerResetter } from './struct.js';
+import { createChildObjects, getPointerCopier, getPointerResetter, getPointerDisabler } from './struct.js';
 import { addSpecialAccessors } from './special.js';
 import { MEMORY, SLOTS } from './symbol.js';
 
@@ -50,6 +50,7 @@ export function finalizeOptional(s) {
   };
   const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
   const pointerResetter = s.pointerResetter = getPointerResetter(objectMembers);
+  const pointerDisabler = s.pointerDisabler = getPointerDisabler(objectMembers);
   const { get, set, check } = getOptionalAccessors(members, size, options);
   Object.defineProperties(constructor.prototype, {
     $: { get, set, configurable: true },

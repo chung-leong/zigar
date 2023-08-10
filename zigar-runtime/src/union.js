@@ -5,7 +5,7 @@ import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors } from './special.js';
-import { createChildObjects, getPointerCopier, getPointerResetter } from './struct.js';
+import { createChildObjects, getPointerCopier, getPointerResetter, getPointerDisabler } from './struct.js';
 import {
   throwInvalidInitializer,
   throwMissingUnionInitializer,
@@ -36,15 +36,22 @@ export function finalizeUnion(s) {
   const exclusion = (type === StructureType.TaggedUnion || (type === StructureType.BareUnion && runtimeSafety));
   if (exclusion) {
     const selectorMember = members[members.length - 1];
-    let { get: getIndex, set: setIndex } = getAccessors(selectorMember, options);
+    const { get: getSelector, set: setSelector } = getAccessors(selectorMember, options);
+    let getIndex, setIndex;
     if (type === StructureType.TaggedUnion) {
       // rely on the enumeration constructor to translate the enum values into indices
       const { structure: { constructor } } = selectorMember;
-      getEnumItem = getIndex;
+      getEnumItem = getSelector;
       getIndex = function() {
-        const item = getEnumItem.call(this);
+        const item = getSelector.call(this);
         return item[ENUM_INDEX];
       };
+      setIndex = function(index) {
+        setSelector.call(this, constructor(index));
+      };
+    } else {
+      getIndex = getSelector;
+      setIndex = setSelector;
     }
     showDefault = function() {
       const index = getIndex.call(this);
@@ -98,6 +105,7 @@ export function finalizeUnion(s) {
     }
   }
   const objectMembers = members.filter(m => m.type === MemberType.Object);
+  const hasInaccessiblePointer = !hasPointer && !!objectMembers.find(m => m.structure.hasPointer);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -114,6 +122,9 @@ export function finalizeUnion(s) {
     Object.defineProperties(self, descriptors);
     if (objectMembers.length > 0) {
       createChildObjects.call(self, objectMembers, this, dv);
+      if (hasInaccessiblePointer) {
+        pointerDisabler.call(self);
+      }
     }
     if (creating) {
       initializer.call(self, arg);
@@ -122,7 +133,6 @@ export function finalizeUnion(s) {
     }
   };
   const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
-
   const copy = getMemoryCopier(size);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -170,6 +180,7 @@ export function finalizeUnion(s) {
   const retriever = function() { return this };
   const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
   const pointerResetter = s.pointerResetter = getPointerResetter(objectMembers);
+  const pointerDisabler = getPointerDisabler(objectMembers);
   if (type === StructureType.TaggedUnion) {
     // enable casting to enum
     Object.defineProperties(constructor.prototype, {

@@ -5,6 +5,7 @@ import {
   createChildObjects,
   getPointerCopier,
   getPointerResetter,
+  getPointerDisabler,
   getArrayIterator,
   createProxy,
 } from './array.js';
@@ -91,6 +92,7 @@ export function finalizeSlice(s) {
   const retriever = function() { return this };
   const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMember) : null;
   const pointerResetter = s.pointerResetter = (hasPointer) ? getPointerResetter(objectMember) : null;
+  const pointerDisabler = s.pointerDisabler = (hasPointer) ? getPointerDisabler(objectMember) : null;
   const { get, set } = getAccessors(member, options);
   const getLength = function() { return this[LENGTH] };
   Object.defineProperties(constructor.prototype, {

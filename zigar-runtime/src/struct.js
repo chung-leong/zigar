@@ -89,6 +89,7 @@ export function finalizeStruct(s) {
   const retriever = function() { return this };
   const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMembers) : null;
   const pointerResetter = s.pointerResetter = (hasPointer) ? getPointerResetter(objectMembers) : null;
+  const pointerDisabler = s.pointerDisabler = (hasPointer) ? getPointerDisabler(objectMembers) : null;
   Object.defineProperties(constructor.prototype, {
     $: { get: retriever, set: initializer, configurable: true },
   });
@@ -131,6 +132,16 @@ export function getPointerResetter(members) {
     const destSlots = this[SLOTS];
     for (const { slot, structure: { pointerResetter } } of pointerMembers) {
       pointerResetter.call(destSlots[slot]);
+    }
+  };
+}
+
+export function getPointerDisabler(members) {
+  const pointerMembers = members.filter(m => m.structure.hasPointer);
+  return function() {
+    const destSlots = this[SLOTS];
+    for (const { slot, structure: { pointerDisabler } } of pointerMembers) {
+      pointerDisabler.call(destSlots[slot]);
     }
   };
 }

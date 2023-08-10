@@ -156,6 +156,10 @@ export function throwNoCastingToPointer(structure) {
   throw new TypeError(`Non-slice pointers can only be created with the help of the new operator`);
 }
 
+export function throwInaccessiblePointer() {
+  throw new TypeError(`Pointers within an untagged union are not accessible`);
+}
+
 export function throwInvalidPointerTarget(structure, arg) {
   // NOTE: not being used currently
   const { name } = structure;

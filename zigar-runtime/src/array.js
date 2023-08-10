@@ -72,6 +72,7 @@ export function finalizeArray(s) {
   const retriever = function() { return this[PROXY] };
   const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMember) : null;
   const pointerResetter = s.pointerResetter = (hasPointer) ? getPointerResetter(objectMember) : null;
+  const pointerDisabler = s.pointerDisabler = (hasPointer) ? getPointerDisabler(objectMember) : null;
   const { get, set } = getAccessors(member, options);
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
@@ -97,31 +98,39 @@ export function createChildObjects(member, recv, dv) {
   if (recv !== ZIG) {
     recv = PARENT;
   }
-  for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += elementSize) {
+  for (let i = 0, offset = 0, len = this.length; i < len; i++, offset += elementSize) {
     const childDV = new DataView(dv.buffer, offset, elementSize);
-    slots[slot] = constructor.call(recv, childDV);
+    slots[i] = constructor.call(recv, childDV);
   }
 }
 
 export function getPointerCopier(member) {
   return function(src) {
-    const { structure: { pointerCopier }, byteSize: elementSize } = member;
-    const dv = this[MEMORY];
+    const { structure: { pointerCopier } } = member;
     const destSlots = this[SLOTS];
     const srcSlots = src[SLOTS];
-    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += elementSize) {
-      pointerCopier.call(destSlots[slot], srcSlots[slot]);
+    for (let i = 0, len = this.length; i < len; i++) {
+      pointerCopier.call(destSlots[i], srcSlots[i]);
     }
   };
 }
 
 export function getPointerResetter(member) {
   return function(src) {
-    const { structure: { pointerResetter }, byteSize: elementSize } = member;
-    const dv = this[MEMORY];
+    const { structure: { pointerResetter } } = member;
     const destSlots = this[SLOTS];
-    for (let slot = 0, offset = 0, len = dv.byteLength; offset < len; slot++, offset += elementSize) {
-      pointerResetter.call(destSlots[slot]);
+    for (let i = 0, len = this.length; i < len; i++) {
+      pointerResetter.call(destSlots[i]);
+    }
+  };
+}
+
+export function getPointerDisabler(member) {
+  return function(src) {
+    const { structure: { pointerDisabler } } = member;
+    const destSlots = this[SLOTS];
+    for (let i = 0, len = this.length; i < len; i++) {
+      pointerDisabler.call(destSlots[i]);
     }
   };
 }
