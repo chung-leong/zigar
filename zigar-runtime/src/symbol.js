@@ -5,7 +5,6 @@ export const PARENT = Symbol('parent');
 export const ELEMENT = Symbol('element');
 export const SOURCE = Symbol('source');
 export const STRUCTURE = Symbol('structure');
-export const TYPED_ARRAY = Symbol('typedArray');
 export const ENUM_INDEX = Symbol('enumIndex');
 export const ENUM_ITEMS = Symbol('enumItems');
 export const ERROR_INDEX = Symbol('errorIndex');

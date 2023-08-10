@@ -1,7 +1,7 @@
 import { MemberType, isByteAligned, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { requireDataView } from './data-view.js';
-import { addJSONHandlers } from './json.js';
+import { addSpecialAccessors } from './special.js';
 import { MEMORY } from './symbol.js';
 
 export function finalizePrimitive(s) {
@@ -45,7 +45,7 @@ export function finalizePrimitive(s) {
     $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
   });
-  addJSONHandlers(s);
+  addSpecialAccessors(s);
   return constructor;
 };
 

@@ -2,7 +2,7 @@ import { getAccessors } from './member.js';
 import { getPrimitiveClass } from './primitive.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
-import { addJSONHandlers } from './json.js';
+import { addSpecialAccessors } from './special.js';
 import { throwNoNewEnum } from './error.js';
 import { MEMORY, ENUM_INDEX, ENUM_ITEMS, ENUM_ITEM } from './symbol.js';
 
@@ -100,9 +100,9 @@ export function finalizeEnumeration(s) {
     });
     items[index] = item;
   }
+  addSpecialAccessors(s);
   addStaticMembers(s);
   addMethods(s);
-  addJSONHandlers(s);
   return constructor;
 };
 

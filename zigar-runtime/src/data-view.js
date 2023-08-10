@@ -140,6 +140,36 @@ export function requireDataView(structure, arg) {
   return dv;
 }
 
+export function getTypedArrayClass({ type, isSigned, byteSize }) {
+  if (type === MemberType.Int) {
+    if (isSigned) {
+      switch (byteSize) {
+        case 1: return Int8Array;
+        case 2: return Int16Array;
+        case 4: return Int32Array;
+        case 8: return BigInt64Array;
+      }
+    } else {
+      switch (byteSize) {
+        case 1: return Uint8Array;
+        case 2: return Uint16Array;
+        case 4: return Uint32Array;
+        case 8: return BigUint64Array;
+      }
+    }
+  } else if (type === MemberType.Float) {
+    switch (byteSize) {
+      case 4: return Float32Array;
+      case 8: return Float64Array;
+    }
+  }
+}
+
+export function isTypedArray(arg, TypedArray) {
+  const tag = arg?.[Symbol.toStringTag];
+  return (!!TypedArray && tag === TypedArray.name);
+}
+
 export function isBuffer(arg, typedArray) {
   const tag = arg?.[Symbol.toStringTag];
   if (tag === 'DataView' || tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
@@ -162,23 +192,6 @@ export function getTypeName({ type, isSigned, bitSize, byteSize }) {
   } else if (type === MemberType.Void) {
     return `Null`;
   }
-}
-
-export function addDataViewAccessor(s) {
-  const {
-    constructor: {
-      prototype,
-    },
-    instance: {
-      members
-    },
-  } = s;
-  const get = function() {
-    return this[MEMORY];
-  };
-  Object.defineProperties(prototype, {
-    dataView: { get, configurable: true },
-  });
 }
 
 function defineAlignedIntAccessor(access, member) {

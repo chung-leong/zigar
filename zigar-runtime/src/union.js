@@ -1,10 +1,10 @@
 import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { getDataView, addDataViewAccessor } from './data-view.js';
+import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
-import { addJSONHandlers } from './json.js';
+import { addSpecialAccessors } from './special.js';
 import { createChildObjects, getPointerCopier, getPointerResetter } from './struct.js';
 import {
   throwInvalidInitializer,
@@ -179,9 +179,8 @@ export function finalizeUnion(s) {
   Object.defineProperties(constructor.prototype, {
     $: { get: retriever, set: initializer, configurable: true },
   });
-  addDataViewAccessor(s);
+  addSpecialAccessors(s);
   addStaticMembers(s);
   addMethods(s);
-  addJSONHandlers(s);
   return constructor;
 };

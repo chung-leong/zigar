@@ -80,7 +80,6 @@ export default function createPlugin(options = {}) {
           embedWASM = false,
           ...otherOptions
         } = options;
-        console.log({ embedWASM, useReadFile });
         const wasmLoader = async (name, dv) => {
           const source = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
           const refID = this.emitFile({ type: 'asset', name, source });

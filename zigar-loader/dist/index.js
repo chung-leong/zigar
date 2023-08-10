@@ -73,7 +73,6 @@ async function loader(content, map, meta) {
     embedWASM = false,
     ...otherOptions
   } = options;
-  console.log(options);
   const wasmLoader = async (name, dv) => {
     const source = Buffer.from(new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength));
     this.emitFile(name, source);

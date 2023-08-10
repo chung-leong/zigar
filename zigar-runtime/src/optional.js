@@ -2,7 +2,7 @@ import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView }  from './data-view.js';
 import { createChildObjects, getPointerCopier, getPointerResetter } from './struct.js';
-import { addJSONHandlers } from './json.js';
+import { addSpecialAccessors } from './special.js';
 import { MEMORY, SLOTS } from './symbol.js';
 
 export function finalizeOptional(s) {
@@ -54,7 +54,7 @@ export function finalizeOptional(s) {
   Object.defineProperties(constructor.prototype, {
     $: { get, set, configurable: true },
   });
-  addJSONHandlers(s);
+  addSpecialAccessors(s);
   return constructor;
 }
 

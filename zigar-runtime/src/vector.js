@@ -1,9 +1,7 @@
 import { getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { requireDataView, addDataViewAccessor } from './data-view.js';
-import { getTypedArrayClass, addTypedArrayAccessor, isTypedArray } from './typed-array.js';
-import { addStringAccessors } from './string.js';
-import { addJSONHandlers } from './json.js';
+import { requireDataView, getTypedArrayClass, isTypedArray } from './data-view.js';
+import { addSpecialAccessors } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
 import { MEMORY, ELEMENT } from './symbol.js';
 
@@ -77,10 +75,7 @@ export function finalizeVector(s) {
     [Symbol.iterator]: { value: getVectorIterator, configurable: true },
   });
   Object.defineProperty(constructor, ELEMENT, { get: () => elementStructure.constructor });
-  addDataViewAccessor(s);
-  addTypedArrayAccessor(s);
-  addStringAccessors(s);
-  addJSONHandlers(s);
+  addSpecialAccessors(s);
   return constructor;
 }
 
