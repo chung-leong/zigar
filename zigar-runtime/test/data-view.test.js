@@ -497,7 +497,7 @@ describe('Data view functions', function() {
           }
           const set = getDataViewIntAccessor('set', member);
           if (isSigned) {
-            set.call(dv, 8, (bitSize == 64) ? -1n : -1, true);
+            set.call(dv, 8, -1, true);
           } else {
             set.call(dv, 8, max, true);
           }
@@ -529,8 +529,9 @@ describe('Data view functions', function() {
             bitOffset: 64,
             byteSize: bitSize / 8
           }
-          const f = getDataViewIntAccessorEx('set', member);
-          const g = getDataViewIntAccessor('set', member);
+          // setter for i64 would be different
+          const f = getDataViewIntAccessorEx('get', member);
+          const g = getDataViewIntAccessor('get', member);
           expect(f).equal(g);
         }
       }

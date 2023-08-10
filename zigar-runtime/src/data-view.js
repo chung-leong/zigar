@@ -54,8 +54,9 @@ export function getDataViewBoolAccessorEx(access, member) {
 }
 
 export function getDataViewIntAccessor(access, member) {
-  const typeName = getTypeName(member);
-  return DataView.prototype[`${access}${typeName}`];
+  return cacheMethod(access, member, (name) => {
+    return DataView.prototype[name];
+  });
 }
 
 export function getDataViewIntAccessorEx(access, member) {
@@ -72,8 +73,9 @@ export function getDataViewIntAccessorEx(access, member) {
 }
 
 export function getDataViewFloatAccessor(access, member) {
-  const typeName = getTypeName(member);
-  return DataView.prototype[`${access}${typeName}`];
+  return cacheMethod(access, member, (name) => {
+    return DataView.prototype[name];
+  });
 }
 
 export function getDataViewFloatAccessorEx(access, member) {
@@ -536,7 +538,7 @@ function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
 }
 
 function cacheMethod(access, member, cb) {
-  const { bitOffset } = member;
+  const { type, bitOffset, bitSize } = member;
   const bitPos = bitOffset & 0x07;
   const typeName = getTypeName(member);
   const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
@@ -544,6 +546,16 @@ function cacheMethod(access, member, cb) {
   let fn = methodCache[name];
   if (!fn) {
     fn = methodCache[name] = cb(name);
+    if (access === 'set' && type === MemberType.Int && bitSize > 32) {
+      // automatically convert number to bigint
+      const set = fn;
+      fn = function(offset, value, littleEndian) {
+        if (typeof(value) === 'number') {
+          value = BigInt(value);
+        }
+        set.call(this, offset, value, littleEndian);
+      };
+    }
     if (fn && fn.name !== name) {
       Object.defineProperty(fn, 'name', { value: name, configurable: true, writable: false });
     }
