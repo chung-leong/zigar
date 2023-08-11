@@ -13,6 +13,7 @@ import {
   usePrimitive,
   useArray,
   useStruct,
+  useArgStruct,
   useExternUnion,
   useBareUnion,
   useTaggedUnion,
@@ -22,8 +23,8 @@ import {
   useOptional,
   usePointer,
   useSlice,
+  useVector,
   useOpaque,
-  useArgStruct,
 } from '../../zigar-runtime/src/structure.js';
 
 // enable all member types (including extend types)
@@ -39,6 +40,7 @@ useType();
 usePrimitive();
 useArray();
 useStruct();
+useArgStruct();
 useExternUnion();
 useBareUnion();
 useTaggedUnion();
@@ -48,8 +50,8 @@ useEnumeration();
 useOptional();
 usePointer();
 useSlice();
+useVector();
 useOpaque();
-useArgStruct();
 
 export function invokeFactory(thunk) {
   // our C++ code cannot call invokeThunk() directly since it doesn't have the symbol SLOTS

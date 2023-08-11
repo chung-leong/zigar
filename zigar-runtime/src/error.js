@@ -149,7 +149,9 @@ export function rethrowArgumentError(structure, index, err) {
   const prefix = (index !== 0) ? '..., ' : '';
   const suffix = (index !== argCount - 1) ? ', ...' : '';
   const argLabel = prefix + argName + suffix;
-  throw new err.constructor(`${name}(${argLabel}): ${err.message}`);
+  const newError = new err.constructor(`${name}(${argLabel}): ${err.message}`);
+  newError.stack = err.stack;
+  throw newError;
 }
 
 export function throwNoCastingToPointer(structure) {

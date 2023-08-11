@@ -545,7 +545,7 @@ function cacheMethod(access, member, cb) {
   const name = `${access}${typeName}${suffix}`;
   let fn = methodCache[name];
   if (!fn) {
-    fn = methodCache[name] = cb(name);
+    fn = cb(name);
     if (access === 'set' && type === MemberType.Int && bitSize > 32) {
       // automatically convert number to bigint
       const set = fn;
@@ -559,6 +559,7 @@ function cacheMethod(access, member, cb) {
     if (fn && fn.name !== name) {
       Object.defineProperty(fn, 'name', { value: name, configurable: true, writable: false });
     }
+    methodCache[name] = fn;
   }
   return fn;
 }

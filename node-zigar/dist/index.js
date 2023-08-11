@@ -20,7 +20,8 @@ export function resolve(specifier, context, nextResolve) {
 let nextModuleId = 1;
 
 export async function load(url, context, nextLoad) {
-  if (extensionsRegex.test(url)) {
+  const { pathname } = new URL(url);
+  if (extensionsRegex.test(pathname)) {
     // compile the file if it or any of its dependencies has changed
     const zigPath = fileURLToPath(url);
     const { env } = process;
