@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import { readFile } from 'fs/promises';
 import 'mocha-skip-if';
 
 export function addTests(importModule, options) {
@@ -202,6 +203,28 @@ export function addTests(importModule, options) {
       const result = Pfannkuchen(n);
       expect(result.checksum).to.equal(73196);
       expect(result.max_flips_count).equal(38);
+    })
+    it('should produce the right results for the fasta example', async function() {
+      this.timeout(60000);
+      const { default: { fasta } } = await importModule(resolve('./zig-samples/benchmarks-game/fasta.zig'));
+      const n = 250000;
+      const origFn = console.log;
+      const lines = [];
+      try {
+        console.log = (text) => {
+          for (const line of text.split(/\r?\n/)) {
+            lines.push(line)
+          }
+        };
+        fasta(n);
+      } finally {
+        console.log = origFn;
+      }
+      const text = await readFile(resolve(`./zig-samples/benchmarks-game/fasta-${n}.txt`), 'utf-8');
+      const refLines = text.split(/\r?\n/);
+      for (const [ index, line ] of lines.entries()) {
+        expect(line).to.equal(refLines[index]);
+      }
     })
     it('should produce the right results for the nbody example', async function() {
       this.timeout(60000);

@@ -1,3 +1,5 @@
+// Adopted from https://github.com/tiehuis/zig-benchmarks-game/blob/master/src/fannkuch-redux.zig
+
 const std = @import("std");
 
 const PfannkuchenResult = struct {

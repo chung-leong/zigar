@@ -337,7 +337,8 @@ pub fn getOS() type {
     return struct {
         pub const system = struct {
             pub const fd_t = u8;
-            pub const STDERR_FILENO = 1;
+            pub const STDOUT_FILENO = 1;
+            pub const STDERR_FILENO = 2;
             pub const E = std.os.linux.E;
 
             pub fn getErrno(T: usize) E {
