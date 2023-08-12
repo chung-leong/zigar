@@ -196,6 +196,28 @@ export function addTests(importModule, options) {
     })
   })
   describe('ZIG Benchmarks Game', function() {
+    it('should produce the right results for the binary-trees example', async function() {
+      this.timeout(60000);
+      const { default: { binaryTree } } = await importModule(resolve('./zig-samples/benchmarks-game/binary-trees.zig'));
+      const n = 14;
+      const origFn = console.log;
+      const lines = [];
+      try {
+        console.log = (text) => {
+          for (const line of text.split(/\r?\n/)) {
+            lines.push(line)
+          }
+        };
+        binaryTree(n);
+      } finally {
+        console.log = origFn;
+      }
+      const text = await readFile(resolve(`./zig-samples/benchmarks-game/binary-trees-${n}.txt`), 'utf-8');
+      const refLines = text.split(/\r?\n/);
+      for (const [ index, line ] of lines.entries()) {
+        expect(line).to.equal(refLines[index]);
+      }
+    })
     it('should produce the right results for the fannkuch-redux example', async function() {
       this.timeout(60000);
       const { default: { Pfannkuchen } } = await importModule(resolve('./zig-samples/benchmarks-game/fannkuch-redux.zig'));

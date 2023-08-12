@@ -682,15 +682,16 @@ async function runModule(module, options = {}) {
 
   function _allocMemory(ctxAddr, len) {
     const address = alloc(ctxAddr, len);
-    const ctx = callContexts[ctxAddr];
+    const { bufferMap } = callContexts[ctxAddr];
     const buffer = new ArrayBuffer(len);
     const dv = new DataView(buffer);
     const copy = getMemoryCopier(len);
-    ctx.bufferMap.set(buffer, { address, len, dv, copy });
+    bufferMap.set(buffer, { address, len, dv, copy });
     return address;
   }
 
   function _freeMemory(ctxAddr, address, len) {
+    const { bufferMap } = callContexts[ctxAddr];
     for (const [ buffer, { address: matching } ] of bufferMap) {
       if (address === matching) {
         bufferMap.delete(buffer);
