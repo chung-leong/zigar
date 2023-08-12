@@ -195,6 +195,14 @@ export function addTests(importModule, options) {
     })
   })
   describe('ZIG Benchmarks Game', function() {
+    it('should produce the right results for the fannkuch-redux example', async function() {
+      this.timeout(60000);
+      const { default: { Pfannkuchen } } = await importModule(resolve('./zig-samples/benchmarks-game/fannkuch-redux.zig'));
+      const n = 10;
+      const result = Pfannkuchen(n);
+      expect(result.checksum).to.equal(73196);
+      expect(result.max_flips_count).equal(38);
+    })
     it('should produce the right results for the nbody example', async function() {
       this.timeout(60000);
       const {
