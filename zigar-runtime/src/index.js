@@ -176,6 +176,7 @@ export async function runModule(module, options = {}) {
     callContexts[ctxAddr] = { bufferMap: new Map() };
   }
 
+
   function _endCall(ctxAddr) {
     // move data from WASM memory into buffers
     const ctx = callContexts[ctxAddr];
@@ -184,10 +185,16 @@ export async function runModule(module, options = {}) {
       copy(dv, src);
     }
     delete callContexts[ctxAddr];
-    if (Object.keys(callContexts) === 0) {
+    if (Object.keys(callContexts).length === 0) {
       // clear the value table
       nextValueIndex = 1;
       valueTable = { 0: null };
+      // output pending text to console
+      if (consolePending) {
+        console.log(consolePending);
+        consolePending = '';
+        clearTimeout(consoleTimeout);
+      }
     }
   }
 

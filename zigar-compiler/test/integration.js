@@ -214,6 +214,7 @@ export function addTests(importModule, options) {
       }
       const text = await readFile(resolve(`./zig-samples/benchmarks-game/binary-trees-${n}.txt`), 'utf-8');
       const refLines = text.split(/\r?\n/);
+      expect(lines.length).to.not.equal(0);
       for (const [ index, line ] of lines.entries()) {
         expect(line).to.equal(refLines[index]);
       }
@@ -244,10 +245,35 @@ export function addTests(importModule, options) {
       }
       const text = await readFile(resolve(`./zig-samples/benchmarks-game/fasta-${n}.txt`), 'utf-8');
       const refLines = text.split(/\r?\n/);
+      expect(lines.length).to.not.equal(0);
       for (const [ index, line ] of lines.entries()) {
         expect(line).to.equal(refLines[index]);
       }
     })
+    it('should produce the right results for the mandelbrot example', async function() {
+      this.timeout(60000);
+      const { default: { mandelbrot } } = await importModule(resolve('./zig-samples/benchmarks-game/mandelbrot.zig'));
+      const n = 2000;
+      const origFn = console.log;
+      const lines = [];
+      try {
+        console.log = (text) => {
+          for (const line of text.split(/\r?\n/)) {
+            lines.push(line)
+          }
+        };
+        mandelbrot(n);
+      } finally {
+        console.log = origFn;
+      }
+      const text = await readFile(resolve(`./zig-samples/benchmarks-game/mandelbrot-${n}.txt`), 'utf-8');
+      const refLines = text.split(/\r?\n/);
+      expect(lines.length).to.not.equal(0);
+      for (const [ index, line ] of lines.entries()) {
+        expect(line).to.equal(refLines[index]);
+      }
+    })
+
     it('should produce the right results for the nbody example', async function() {
       this.timeout(60000);
       const {
