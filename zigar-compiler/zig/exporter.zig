@@ -1370,7 +1370,8 @@ fn obtainChildObject(host: anytype, container: Value, slot: usize, ptr: anytype,
 fn createChildObject(host: anytype, container: Value, slot: usize, ptr: anytype) !Value {
     const pt = @typeInfo(@TypeOf(ptr)).Pointer;
     const memory = toMemory(ptr);
-    const child_obj = try host.wrapMemory(memory, .Auto, pt.child, pt.size);
+    const disposition: MemoryDisposition = if (host.onStack(memory)) .Copy else .Auto;
+    const child_obj = try host.wrapMemory(memory, disposition, pt.child, pt.size);
     try host.writeObjectSlot(container, slot, child_obj);
     return child_obj;
 }

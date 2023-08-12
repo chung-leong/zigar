@@ -64,7 +64,7 @@ export function addTests(importModule, options) {
     it('should import primitive slices', async function() {
       this.timeout(30000);
       const { default: module } = await importModule(resolve('./integration/slices-with-primitive.zig'));
-      const slice = module.int32_slice;
+      expect([ ...module.int32_array ]).to.eql([ 123, 456, 789 ]);
       expect(module.int32_slice).to.be.an('object');
       expect(module.int32_slice.get(0)).to.equal(123);
       expect([ ...module.int32_slice ]).to.eql([ 123, 456, 789 ]);
@@ -119,8 +119,12 @@ export function addTests(importModule, options) {
       const { default: module } = await importModule(resolve('./integration/bare-union-simple.zig'));
       expect(module.animal.dog).to.equal(123);
       module.useCat();
-      expect(module.animal.dog).to.equal(null);
       expect(module.animal.cat).to.equal(777);
+      if (process.env.ZIGAR_OPTIMIZE === 'Debug' || process.env.ZIGAR_OPTIMIZE === 'ReleaseSafe') {
+        expect(module.animal.dog).to.equal(null);
+      } else {
+        expect(module.animal.dog).to.equal(777);
+      }
       module.useMonkey();
       expect(module.animal.monkey).to.equal(777n);
     })

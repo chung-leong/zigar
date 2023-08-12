@@ -85,11 +85,15 @@ pub fn free(ptr: *anyopaque, address: usize, len: usize) void {
 
 pub const Host = struct {
     context: u32,
+    stack_top: u32,
 
     pub const RuntimeHost = Host;
 
     pub fn init(ptr: *anyopaque) Host {
-        return .{ .context = @intFromPtr(ptr) };
+        return .{
+            .context = @intFromPtr(ptr),
+            .stack_top = @intFromPtr(&ptr),
+        };
     }
 
     pub fn getInitPtr(self: Host) *anyopaque {
@@ -123,6 +127,15 @@ pub const Host = struct {
             .len = len,
         };
         return exporter.fromMemory(memory, T, size);
+    }
+
+    pub fn onStack(self: Host, memory: Memory) bool {
+        const bytes = memory.bytes orelse return false;
+        const len = memory.len;
+        const stack_top = self.stack_top;
+        const stack_bottom = @intFromPtr(&bytes);
+        const address = @intFromPtr(bytes);
+        return (stack_bottom <= address and address + len <= stack_top);
     }
 
     fn createDataView(self: Host, memory: Memory, disposition: MemoryDisposition) ?Value {

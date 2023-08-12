@@ -613,6 +613,8 @@ async function runModule(module, options = {}) {
   };
   const { instance } = await WebAssembly.instantiate(module, { env: imports });
   const { memory: wasmMemory, define, run, alloc, free, safe } = instance.exports;
+  let consolePending = '', consoleTimeout = 0;
+
   {
     // call factory function
     const runtimeSafety = !!safe();
@@ -732,7 +734,7 @@ async function runModule(module, options = {}) {
 
   function _wrapMemory(structureIndex, viewIndex) {
     const structure = valueTable[structureIndex];
-    const dv = valueTable[viewIndex];
+    let dv = valueTable[viewIndex];
     let object;
     {
       object = {
@@ -892,9 +894,22 @@ async function runModule(module, options = {}) {
   }
 
   function _writeToConsole(address, len) {
+    // send text up to the last newline character
     const s = getString(address, len);
-    // remove any trailing newline character
-    console.log(s.replace(/\r?\n$/, ''));
+    const index = s.lastIndexOf('\n');
+    if (index === -1) {
+      consolePending += s;
+    } else {
+      console.log(consolePending + s.substring(0, index));
+      consolePending = s.substring(index + 1);
+    }
+    clearTimeout(consoleTimeout);
+    if (consolePending) {
+      consoleTimeout = setTimeout(() => {
+        console.log(consolePending);
+        consolePending = '';
+      }, 250);
+    }
   }
 }
 

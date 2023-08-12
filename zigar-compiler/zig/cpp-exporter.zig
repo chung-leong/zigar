@@ -58,21 +58,7 @@ pub const Host = struct {
         return exporter.fromMemory(memory, T, size);
     }
 
-    pub fn wrapMemory(self: Host, memory: Memory, disposition: MemoryDisposition, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) !Value {
-        const slot = exporter.getStructureSlot(T, size);
-        const structure = try self.readGlobalSlot(slot);
-        var value: Value = undefined;
-        const actual_disposition: MemoryDisposition = switch (disposition) {
-            .Auto => if (self.isOnStack(memory)) .Copy else .Auto,
-            else => disposition,
-        };
-        if (callbacks.wrap_memory(self.context, structure, &memory, actual_disposition, &value) != .OK) {
-            return Error.UnableToCreateObject;
-        }
-        return value;
-    }
-
-    fn isOnStack(self: Host, memory: Memory) bool {
+    pub fn onStack(self: Host, memory: Memory) bool {
         // since the context struct is allocated on the stack, its address is the
         // starting point of stack space used by Zig code
         const bytes = memory.bytes orelse return false;
@@ -81,6 +67,16 @@ pub const Host = struct {
         const stack_bottom = @intFromPtr(&stack_top);
         const address = @intFromPtr(bytes);
         return (stack_bottom <= address and address + len <= stack_top);
+    }
+
+    pub fn wrapMemory(self: Host, memory: Memory, disposition: MemoryDisposition, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) !Value {
+        const slot = exporter.getStructureSlot(T, size);
+        const structure = try self.readGlobalSlot(slot);
+        var value: Value = undefined;
+        if (callbacks.wrap_memory(self.context, structure, &memory, disposition, &value) != .OK) {
+            return Error.UnableToCreateObject;
+        }
+        return value;
     }
 
     pub fn getPointerStatus(self: Host, pointer: Value) !bool {
