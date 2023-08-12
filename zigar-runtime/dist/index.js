@@ -2657,8 +2657,6 @@ const proxyHandlers = {
   },
   getOwnPropertyDescriptor(pointer, name) {
     switch (name) {
-      case '$':
-      case '*':
       case ZIG:
       case SLOTS:
       case MEMORY:

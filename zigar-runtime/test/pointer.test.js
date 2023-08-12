@@ -16,7 +16,7 @@ import {
   attachMember,
   finalizeStructure,
 } from '../src/structure.js';
-import { MEMORY } from '../src/symbol.js';
+import { MEMORY, ZIG } from '../src/symbol.js';
 
 describe('Pointer functions', function() {
   describe('finalizePointer', function() {
@@ -260,6 +260,10 @@ describe('Pointer functions', function() {
       expect('cow' in pointer).to.be.false;
       expect(Object.getOwnPropertyNames(pointer)).to.eql([ 'cat', 'dog' ]);
       expect(Object.keys(pointer)).to.eql([ 'cat', 'dog' ]);
+      expect(Object.getOwnPropertyDescriptor(pointer, 'cow')).to.be.undefined;
+      expect(Object.getOwnPropertyDescriptor(pointer, 'cat')).to.be.an('object');
+      // check descriptors of the pointer's own properties
+      expect(Object.getOwnPropertyDescriptor(pointer, ZIG)).to.be.an('object');
     })
     it('should automatically dereference pointers a single-level only', function() {
       const structStructure = beginStructure({

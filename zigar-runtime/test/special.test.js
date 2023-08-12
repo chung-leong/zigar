@@ -27,6 +27,11 @@ import {
 describe('Special property functions', function() {
   beforeEach(() => {
     process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
+    useArray();
+    useStruct();
+    useIntEx();
+    useFloatEx();
+    useObject();
   })
   describe('getDataViewAccessors', function() {
     it('should return getter and setter for data view', function() {

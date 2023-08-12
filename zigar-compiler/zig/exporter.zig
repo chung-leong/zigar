@@ -851,8 +851,9 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                 else => @sizeOf(op.child) * 8,
             };
             const present_byte_size = switch (@typeInfo(op.child)) {
-                // use pointer value as boolean
-                .Pointer => @sizeOf(op.child),
+                // use pointer itself as boolean (null => false), returning the size of a
+                // generic pointer here since op.child could be a slice (pointer + length)
+                .Pointer => @sizeOf(*anyopaque),
                 else => @sizeOf(bool),
             };
             try host.attachMember(structure, .{

@@ -13,6 +13,7 @@ import {
   useErrorUnion,
   useStruct,
   usePointer,
+  useSlice,
   beginStructure,
   attachMember,
   finalizeStructure,
@@ -30,6 +31,7 @@ describe('Error union functions', function() {
       useErrorSet();
       useStruct();
       usePointer();
+      useSlice();
       useIntEx();
       useObject();
     })
@@ -166,7 +168,7 @@ describe('Error union functions', function() {
       attachMember(intStructure, {
         type: MemberType.Int,
         isStatic: false,
-        isSigned: false,
+        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -218,6 +220,82 @@ describe('Error union functions', function() {
       object.$ = new Int32(0);
       object.$['*'] = 5;
       expect(object.$['*']).to.equal(5);
+    })
+    it('should define an error union with a slice', function() {
+      const setStructure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Error',
+      });
+      attachMember(setStructure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Object,
+        slot: 16,
+      });
+      attachMember(setStructure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Object,
+        slot: 17,
+      });
+      finalizeStructure(setStructure);
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]Uint8',
+        size: 1,
+      })
+      attachMember(sliceStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      const Uint8Slice = finalizeStructure(sliceStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '[]Uint8',
+        size: 16,
+        hasPointer: true,
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 128,
+        bitOffset: 0,
+        byteSize: 16,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const Uint8SlicePtr = finalizeStructure(ptrStructure);
+      const structure = beginStructure({
+        type: StructureType.ErrorUnion,
+        name: 'Hello',
+        size: 18,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 128,
+        byteSize: 16,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      attachMember(structure, {
+        name: 'error',
+        type: MemberType.Int,
+        bitOffset: 64,
+        bitSize: 16,
+        byteSize: 2,
+        structure: setStructure,
+      });
+      const Hello = finalizeStructure(structure);
+      const encoder = new TextEncoder();
+      const array = encoder.encode('This is a test');
+      const object = new Hello(array);
+      expect(object.$.string).to.equal('This is a test');
+      expect(object.$.typedArray).to.eql(array);
+      expect(JSON.stringify(object)).to.eql(JSON.stringify([ ...array ]));
     })
     it('should correctly copy an error union containing a pointer', function() {
       const setStructure = beginStructure({

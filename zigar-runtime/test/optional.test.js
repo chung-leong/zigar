@@ -13,6 +13,7 @@ import {
   useStruct,
   useOptional,
   usePointer,
+  useSlice,
   beginStructure,
   attachMember,
   attachTemplate,
@@ -32,6 +33,7 @@ describe('Optional functions', function() {
       usePointer();
       useStruct();
       useArray();
+      useSlice();
       useBool();
       useIntEx();
       useFloatEx();
@@ -239,6 +241,68 @@ describe('Optional functions', function() {
       object.$ = new Int32(0);
       object.$['*'] = 5;
       expect(object.$['*']).to.equal(5);
+    })
+    it('should define a structure for storing an optional slice', function() {
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]Uint8',
+        size: 1,
+      })
+      attachMember(sliceStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      const Uint8Slice = finalizeStructure(sliceStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '[]Uint8',
+        size: 16,
+        hasPointer: true,
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 128,
+        bitOffset: 0,
+        byteSize: 16,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const Uint8SlicePtr = finalizeStructure(ptrStructure);
+      const structure = beginStructure({
+        type: StructureType.Optional,
+        name: 'Hello',
+        size: 16,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 128,
+        byteSize: 16,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      attachMember(structure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: 0,
+        bitSize: 1,
+        byteSize: 8,
+      });
+      const Hello = finalizeStructure(structure);
+      const encoder = new TextEncoder();
+      const array = encoder.encode('This is a test');
+      const object = new Hello(array);
+      expect(object.$.string).to.equal('This is a test');
+      expect(object.$.typedArray).to.eql(array);
+      expect(JSON.stringify(object)).to.eql(JSON.stringify([ ...array ]));
+      const object2 = new Hello();
+      expect(object2.$).to.be.null;
     })
     it('should release pointers in struct when it is set to null', function() {
       const intStructure = beginStructure({
