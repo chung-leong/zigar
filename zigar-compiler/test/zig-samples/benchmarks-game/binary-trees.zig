@@ -49,13 +49,13 @@ fn deleteTree(a: Allocator, node: *TreeNode) void {
     a.destroy(node);
 }
 
-var wasm_allocator: std.mem.Allocator = .{ .ptr = undefined, .vtable = &std.heap.WasmAllocator.vtable };
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub fn binaryTree(n: usize) !void {
     var buffered_stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
     defer buffered_stdout.flush() catch unreachable;
     const stdout = buffered_stdout.writer();
-    var allocator = wasm_allocator;
+    var allocator = gpa.allocator();
 
     const min_depth: usize = 4;
     const max_depth: usize = n;
