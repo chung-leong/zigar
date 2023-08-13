@@ -122,7 +122,8 @@ struct Callbacks {
   Result (*finalize_structure)(Call*, Local<Object>);
   Result (*create_template)(Call*, const Memory&, Local<Object>*);
 
-  Result (*write_to_console)(const Memory&);
+  Result (*write_to_console)(Call*, const Memory&);
+  Result (*flush_console)(Call*);
 };
 
 struct ExternalData {

@@ -186,9 +186,9 @@ export async function runModule(module, options = {}) {
     }
     delete callContexts[ctxAddr];
     if (Object.keys(callContexts).length === 0) {
-      // clear the value table
-      nextValueIndex = 1;
-      valueTable = { 0: null };
+      // TODO: clear the value table
+      // nextValueIndex = 1;
+      // valueTable = { 0: null };
       // output pending text to console
       if (consolePending) {
         console.log(consolePending);

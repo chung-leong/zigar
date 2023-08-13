@@ -88,6 +88,41 @@ export function getArgumentBuffers(args) {
   return buffers;
 }
 
+const decoder = new TextDecoder();
+let consolePending = '', consoleTimeout = 0;
+
+export function writeToConsole(buffer) {
+  try {
+    const ta = new Uint8Array(buffer);
+    const s = decoder.decode(ta);
+    // send text up to the last newline character
+    const index = s.lastIndexOf('\n');
+    if (index === -1) {
+      consolePending += s;
+    } else {
+      console.log(consolePending + s.substring(0, index));
+      consolePending = s.substring(index + 1);
+    }
+    clearTimeout(consoleTimeout);
+    if (consolePending) {
+      consoleTimeout = setTimeout(() => {
+        console.log(consolePending);
+        consolePending = '';
+      }, 250);
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+export function flushConsole() {
+  if (consolePending) {
+    console.log(consolePending);
+    consolePending = '';
+    clearTimeout(consoleTimeout);
+  }
+}
+
 export {
   beginStructure,
   attachMember,

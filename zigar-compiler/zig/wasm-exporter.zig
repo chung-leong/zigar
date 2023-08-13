@@ -85,20 +85,14 @@ pub fn free(ptr: *anyopaque, address: usize, len: usize) void {
 
 pub const Host = struct {
     context: u32,
-    stack_top: u32,
 
     pub const RuntimeHost = Host;
 
     pub fn init(ptr: *anyopaque) Host {
-        return .{
-            .context = @intFromPtr(ptr),
-            .stack_top = @intFromPtr(&ptr),
-        };
+        return .{ .context = @intFromPtr(ptr) };
     }
 
-    pub fn getInitPtr(self: Host) *anyopaque {
-        return @ptrFromInt(self.context);
-    }
+    pub fn done(_: Host) void {}
 
     pub fn allocateMemory(self: Host, size: usize) !Memory {
         const address = _allocMemory(self.context, size);
@@ -132,7 +126,8 @@ pub const Host = struct {
     pub fn onStack(self: Host, memory: Memory) bool {
         const bytes = memory.bytes orelse return false;
         const len = memory.len;
-        const stack_top = self.stack_top;
+        // self.context is a pointer to a Call object created on the stack in runThunk()
+        const stack_top = self.context + @sizeOf(Call);
         const stack_bottom = @intFromPtr(&bytes);
         const address = @intFromPtr(bytes);
         return (stack_bottom <= address and address + len <= stack_top);
@@ -347,7 +342,7 @@ pub fn getOS() type {
             }
 
             pub fn write(f: fd_t, ptr: [*]const u8, len: usize) usize {
-                if (f == 1 or f == 2) {
+                if (f == STDOUT_FILENO or f == STDERR_FILENO) {
                     _writeToConsole(@intFromPtr(ptr), len);
                 }
                 return len;

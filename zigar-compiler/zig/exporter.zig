@@ -1377,11 +1377,11 @@ fn createChildObject(host: anytype, container: Value, slot: usize, ptr: anytype)
     return child_obj;
 }
 
-fn createAllocator(host: anytype) std.mem.Allocator {
-    const HostT = @TypeOf(host);
+fn createAllocator(host_ptr: anytype) std.mem.Allocator {
+    const HostPtrT = @TypeOf(host_ptr);
     const VTable = struct {
         fn alloc(p: *anyopaque, size: usize, _: u8, _: usize) ?[*]u8 {
-            const h = HostT.init(p);
+            const h: HostPtrT = @alignCast(@ptrCast(p));
             return if (h.allocateMemory(size)) |m| m.bytes else |_| null;
         }
 
@@ -1390,7 +1390,7 @@ fn createAllocator(host: anytype) std.mem.Allocator {
         }
 
         fn free(p: *anyopaque, bytes: []u8, _: u8, _: usize) void {
-            const h = HostT.init(p);
+            const h: HostPtrT = @alignCast(@ptrCast(p));
             h.freeMemory(.{
                 .bytes = @ptrCast(bytes.ptr),
                 .len = bytes.len,
@@ -1404,7 +1404,7 @@ fn createAllocator(host: anytype) std.mem.Allocator {
         };
     };
     return .{
-        .ptr = host.getInitPtr(),
+        .ptr = @ptrCast(@constCast(host_ptr)),
         .vtable = &VTable.instance,
     };
 }
@@ -1428,7 +1428,7 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
             comptime var index = 0;
             inline for (fields, 0..) |field, i| {
                 if (field.type == std.mem.Allocator) {
-                    args[i] = createAllocator(host);
+                    args[i] = createAllocator(&host);
                 } else {
                     const name = std.fmt.comptimePrint("{d}", .{index});
                     args[i] = @field(arg_ptr.*, name);
@@ -1443,6 +1443,7 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
 
         fn invokeFunction(ptr: *anyopaque, arg_obj: Value) callconv(.C) ?[*:0]const u8 {
             const host = HostT.init(ptr);
+            defer host.done();
             tryFunction(host, arg_obj) catch |err| {
                 return getErrorMessage(err);
             };
@@ -1483,6 +1484,7 @@ pub fn createRootFactory(comptime HostT: type, comptime T: type) Thunk {
     const RootFactory = struct {
         fn exportStructure(ptr: *anyopaque, args: Value) callconv(.C) ?[*:0]const u8 {
             const host = HostT.init(ptr);
+            defer host.done();
             var result = getStructure(host, T) catch |err| {
                 return getErrorMessage(err);
             };

@@ -1,12 +1,25 @@
 import { expect } from 'chai';
 import { readFile } from 'fs/promises';
-import 'mocha-skip-if';
 
 export function addTests(importModule, options) {
   const {
     littleEndian = true,
   } = options;
-  skip.if(process.env.npm_lifecycle_event === 'coverage').
+  describe('Console', function() {
+    it('should output to development console', async function() {
+      this.timeout(30000);
+      const { hello } = await importModule(resolve('./zig-samples/basic/console.zig'));
+      const origFn = console.log;
+      try {
+        let text;
+        console.log = (s) => text = s;
+        hello();
+        expect(text).to.equal('Hello world!');
+      } finally {
+        console.log = origFn;
+      }
+    })
+  })
   describe('Variables', function() {
     it('should import integer variables', async function() {
       this.timeout(30000);
@@ -337,10 +350,10 @@ export function addTests(importModule, options) {
       const result1 = energy(solar_bodies['*']);
       advance(solar_bodies, 0.01, n);
       const result2 = energy(solar_bodies['*']);
-      expect(year).to.equal(365.24);
+      expect(year.toFixed(2)).to.equal('365.24');
       expect(solar_mass).to.equal(4.0 * Math.PI * Math.PI);
-      expect(result1).to.equal(-0.169075164);
-      expect(result2).to.equal(-0.169078071);
+      expect(result1.toFixed(9)).to.equal('-0.169075164');
+      expect(result2.toFixed(9)).to.equal('-0.169078071');
     })
     it('should produce the right results for the spectral-norm example', async function() {
       this.timeout(60000);

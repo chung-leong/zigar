@@ -523,9 +523,22 @@ static Result GetArgumentBuffers(Call* call) {
   return Result::OK;
 }
 
-static Result WriteToConsole(const Memory& memory) {
-  // TODO
-  return Result::Failure;
+static Result WriteToConsole(Call* call, const Memory& memory) {
+  auto isolate = call->isolate;
+  auto name = String::NewFromUtf8Literal(isolate, "writeToConsole");
+  auto buffer = ArrayBuffer::New(isolate, memory.len);
+  std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
+  auto bytes = reinterpret_cast<uint8_t*>(store->Data());
+  memcpy(bytes, memory.bytes, memory.len);
+  Local<Value> args[] = { buffer };
+  return CallFunction(call, name, 1, args);
+}
+
+static Result FlushConsole(Call* call) {
+  auto isolate = call->isolate;
+  auto name = String::NewFromUtf8Literal(isolate, "flushConsole");
+  Local<Value> args[0] = {};
+  return CallFunction(call, name, 0, args);
 }
 
 static void Load(const FunctionCallbackInfo<Value>& info) {
@@ -579,6 +592,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->finalize_structure = FinalizeStructure;
   callbacks->create_template = CreateTemplate;
   callbacks->write_to_console = WriteToConsole;
+  callbacks->flush_console = FlushConsole;
 
   // save handle to external object, along with options and AddonData
   auto options = Object::New(isolate);
