@@ -2,7 +2,7 @@
 
 const std = @import("std");
 
-const max_line_length = 60;
+const max_line_length: usize = 60;
 
 const im = 139968;
 const ia = 3877;
@@ -28,7 +28,7 @@ fn repeatAndWrap(out: anytype, comptime sequence: []const u8, count: usize) void
     var idx: usize = 0;
     while (idx < count) {
         const rem = count - idx;
-        const line_length = @min(@as(usize, max_line_length), rem);
+        const line_length = @min(max_line_length, rem);
 
         _ = out.write(padded_sequence[off .. off + line_length]) catch unreachable;
         _ = out.writeByte('\n') catch unreachable;
@@ -55,7 +55,7 @@ fn generateAndWrap(out: anytype, comptime nucleotides: []const AminoAcid, count:
     var idx: usize = 0;
     while (idx < count) {
         const rem = count - idx;
-        const line_length = @min(@as(usize, max_line_length), rem);
+        const line_length = @min(max_line_length, rem);
 
         for (line[0..line_length]) |*col| {
             const r = nextRandom(im);

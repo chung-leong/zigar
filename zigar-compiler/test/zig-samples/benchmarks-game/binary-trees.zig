@@ -68,7 +68,7 @@ pub fn binaryTree(n: usize) !void {
     const long_lived_tree = try bottomUpTree(allocator, max_depth);
     var depth = min_depth;
     while (depth <= max_depth) : (depth += 2) {
-        var iterations = @as(usize, @intFromFloat(std.math.pow(f32, 2, @as(f32, @floatFromInt(max_depth - depth + min_depth)))));
+        var iterations: usize = @intFromFloat(std.math.pow(f32, 2, @as(f32, @floatFromInt(max_depth - depth + min_depth))));
         var check: usize = 0;
 
         var i: usize = 1;
