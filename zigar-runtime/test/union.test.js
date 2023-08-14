@@ -138,11 +138,11 @@ describe('Union functions', function() {
       expect(object).to.be.an.instanceOf(Hello);
       expect(Object.keys(object)).to.have.lengthOf(1);
       expect(object.dog).to.equal(1234);
-      expect(object.cat).to.be.null;
+      expect(() => object.cat).to.throw(TypeError);
       expect(() => object.cat = 567).to.throw(TypeError);
       object[MEMORY].setInt16(4, 1, true);
       object[MEMORY].setInt32(0, 567, true);
-      expect(object.dog).to.be.null;
+      expect(() => object.dog).to.throw(TypeError);
       expect(object.cat).to.equal(567);
       expect(() => object.cat = 123).to.not.throw();
       expect(object.cat).to.equal(123);
@@ -194,7 +194,7 @@ describe('Union functions', function() {
       const Hello = finalizeStructure(structure);
       const object = new Hello({ cat: 123 });
       expect(object.cat).to.equal(123);
-      expect(object.dog).to.be.null;
+      expect(() => object.dog).to.throw(TypeError);
     })
     it('should allow casting to a simple bare union', function() {
       const structure = beginStructure({
@@ -235,7 +235,7 @@ describe('Union functions', function() {
       dv.setInt16(4, 1, true);
       const object = Hello(dv.buffer);
       expect(object.cat).to.equal(1234);
-      expect(object.dog).to.be.null;
+      expect(() => object.dog).to.throw(TypeError);
     })
     it('should define a bare union containing a struct', function() {
       const structStructure = beginStructure({
@@ -301,7 +301,7 @@ describe('Union functions', function() {
       expect(object.$.pets.cat).to.equal(7);
       object.$ = { money: 1000 };
       expect(object.$.money).to.equal(1000);
-      expect(object.$.pets).to.be.null;
+      expect(() => object.$.pets).to.throw(TypeError);
     })
     it('should disable pointers in a bare union', function() {
       const intStructure = beginStructure({

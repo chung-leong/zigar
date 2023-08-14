@@ -305,7 +305,7 @@ function throwInactiveUnionProperty(structure, index, currentIndex) {
   const { instance: { members } } = structure;
   const { name: newName } = members[index];
   const { name: oldName } = members[currentIndex];
-  throw new TypeError(`Modifying property ${newName} when ${oldName} is active`);
+  throw new TypeError(`Accessing property ${newName} when ${oldName} is active`);
 }
 
 function throwMissingUnionInitializer(structure, arg, exclusion) {
@@ -2059,9 +2059,15 @@ function finalizeUnion(s) {
     valueMembers = members.slice(0, -1);
     for (const [ index, member ] of valueMembers.entries()) {
       const { get: getValue, set: setValue } = getAccessors(member, options);
+      const isTagged = (type === StructureType.TaggedUnion);
       const get = function() {
-        if (index !== getIndex.call(this)) {
-          return null;
+        const currentIndex = getIndex.call(this);
+        if (index !== currentIndex) {
+          if (isTagged) {
+            return null;
+          } else {
+            throwInactiveUnionProperty(s, index, currentIndex);
+          }
         }
         return getValue.call(this);
       };
