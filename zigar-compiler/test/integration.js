@@ -39,6 +39,18 @@ export function addTests(importModule, options) {
       expect(module.uint16).to.equal(123);
       expect(() => module.int16 = 0).to.throw();
     })
+    it('should import float variables', async function() {
+      this.timeout(30000);
+      const { default: module } = await importModule(resolve('./zig-samples/basic/floats.zig'));
+      expect(module.float16_const.toFixed(1)).to.equal('-44.4');
+      expect(module.float16.toFixed(2)).to.equal('0.44');
+      expect(module.float32_const.toFixed(4)).to.equal('0.1234');
+      expect(module.float32.toFixed(2)).to.equal('34567.56');
+      expect(module.float64).to.equal(Math.PI);
+      expect(module.float80).to.equal(Math.PI);
+      expect(module.float128).to.equal(Math.PI);
+      expect(() => module.float32_const = 0).to.throw();
+    })
     it('should import comptime constants', async function() {
       this.timeout(30000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/comptime-numbers.zig'));
