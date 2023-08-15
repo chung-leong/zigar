@@ -19,10 +19,11 @@ for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]
 
 async function importModule(path) {
   const optimize = process.env.ZIGAR_OPTIMIZE;
+  const keepNames = !!process.env.ZIGAR_KEEP_NAMES;
   const moduleResolver = () => {
     return new URL('../../zigar-runtime/dist/index.js', import.meta.url).pathname;
   };
-  const code = await transpile(path, { moduleResolver, optimize });
+  const code = await transpile(path, { moduleResolver, optimize, keepNames });
   const hash = md5(path);
   // need to use .mjs since the file is sitting in /tmp, outside the scope of our package.json
   const jsDir = join(tmpdir(), 'compiler-integration-test', optimize);

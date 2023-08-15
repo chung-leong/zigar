@@ -220,6 +220,29 @@ export function addTests(importModule, options) {
       expect([ ...d ]).to.eql([ 6, 8, 10, 12 ]);
     })
   })
+  describe('Error handling', async function() {
+    beforeEach(function() {
+      process.env.ZIGAR_KEEP_NAMES = '1';
+    })
+    it('should produce an error return trace', async function() {
+      this.timeout(60000);
+      const { default: { fail } } = await importModule(resolve('./zig-samples/basic/error-trace.zig'));
+      if (process.env.ZIGAR_OPTIMIZE === 'Debug' || process.env.ZIGAR_OPTIMIZE === 'ReleaseSafe') {
+        expect(fail).to.throw(WebAssembly.RuntimeError)
+          .with.property('stack')
+            .that.contains('error-trace.fail')
+            .and.contains('error-trace.a')
+            .and.contains('error-trace.b')
+            .and.contains('error-trace.c')
+            .and.contains('error-trace.d');
+      } else {
+        expect(fail).to.not.throw();
+      }
+    })
+    afterEach(function() {
+      process.env.ZIGAR_KEEP_NAMES = '';
+    })
+  })
   describe('ZIG Benchmarks Game', function() {
     it('should produce the right results for the binary-trees example', async function() {
       this.timeout(60000);

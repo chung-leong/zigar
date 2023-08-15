@@ -1435,7 +1435,8 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
                     index += 1;
                 }
             }
-            arg_ptr.*.retval = @call(std.builtin.CallModifier.auto, function, args);
+            // never inline the function so its name would show up in the trace
+            arg_ptr.*.retval = @call(.never_inline, function, args);
             if (hasPointer(ArgT)) {
                 try dezigStructure(host, arg_obj, arg_ptr);
             }

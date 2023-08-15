@@ -8,9 +8,9 @@ import {
   parseFunction,
   repackFunction,
   stripUnused,
-  reencode,
-  extractNames,
+  parseNames,
   MagicNumber,
+  repackNames,
 } from '../src/wasm-stripper.js';
 
 const littleEndian = true;
@@ -174,23 +174,48 @@ describe('WASM stripper', function() {
       expect(newBinary.byteLength).to.be.below(binary.byteLength);
     })
   })
-  describe('extractNames', function() {
+  describe('parseNames', function() {
     it('should extract module name from name section', async function() {
       const path = resolve(`./wasm-samples/basic/module-name.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);
-      const module = parseBinary(binary);
-      const { moduleName } = extractNames(module);
+      const { sections } = parseBinary(binary);
+      const nameSection = sections.find(s => s.name === 'name');
+      const { moduleName } = parseNames(nameSection);
       expect(moduleName).to.equal('my_module');
     })
   })
-  describe('reencode', function() {
-    it('should reencode a file', async function() {
-      const path = resolve(`./wasm-samples/basic/exporter.wasm`);
-      const content = await readFile(path);
-      const binary = new DataView(content.buffer);
-      const newBinary = reencode(binary);
-      expect(newBinary.byteLength).to.be.equal(binary.byteLength);
+  describe('repackNames', function() {
+    it('should create data for name section', function() {
+      const moduleName = 'Hello';
+      const functionNames = [
+        'func1',
+        'func2',
+        'func3',
+      ];
+      const localNames = [
+        [
+          { index: 0, name: 'var1' },
+          { index: 1, name: 'var2' },
+          { index: 2, name: 'var3' },
+        ],
+        [
+          { index: 0, name: 'var1' },
+          { index: 1, name: 'var2' },
+          { index: 2, name: 'var3' },
+        ],
+        [
+          { index: 0, name: 'var1' },
+          { index: 1, name: 'var2' },
+          { index: 2, name: 'var3' },
+        ],
+      ];
+      const size = 1024;
+      const data = repackNames({ moduleName, functionNames, localNames, size });
+      const parsed = parseNames({ data });
+      expect(parsed.moduleName).to.equal(moduleName);
+      expect(parsed.functionNames).to.eql(functionNames);
+      expect(parsed.localNames).to.eql(localNames);
     })
   })
 })
