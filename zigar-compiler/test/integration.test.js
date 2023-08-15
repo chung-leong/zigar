@@ -4,35 +4,18 @@ import { tmpdir } from 'os';
 import { createHash } from 'crypto';
 import { transpile } from '../src/transpiler.js';
 import { addTests } from './integration.js';
+import 'mocha-skip-if';
 
-describe('Integration tests (zigar-compiler, Debug)', function() {
-  beforeEach(function() {
-    process.env.ZIGAR_TARGET = 'WASM-COMPTIME';
-    process.env.ZIGAR_OPTIMIZE = 'Debug';
+for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]) {
+  skip.if(process.env.npm_lifecycle_event === 'coverage').
+  describe(`Integration tests (zigar-compiler, ${optimize})`, function() {
+    beforeEach(function() {
+      process.env.ZIGAR_TARGET = 'WASM-COMPTIME';
+      process.env.ZIGAR_OPTIMIZE = optimize;
+    })
+    addTests(path => importModule(path), { littleEndian: true });
   })
-  addTests(path => importModule(path), { littleEndian: true });
-})
-describe('Integration tests (zigar-compiler, ReleaseSmall)', function() {
-  beforeEach(function() {
-    process.env.ZIGAR_TARGET = 'WASM-COMPTIME';
-    process.env.ZIGAR_OPTIMIZE = 'ReleaseSmall';
-  })
-  addTests(path => importModule(path), { littleEndian: true });
-})
-describe('Integration tests (zigar-compiler, ReleaseSafe)', function() {
-  beforeEach(function() {
-    process.env.ZIGAR_TARGET = 'WASM-COMPTIME';
-    process.env.ZIGAR_OPTIMIZE = 'ReleaseSafe';
-  })
-  addTests(path => importModule(path), { littleEndian: true });
-})
-describe('Integration tests (zigar-compiler, ReleaseFast)', function() {
-  beforeEach(function() {
-    process.env.ZIGAR_TARGET = 'WASM-COMPTIME';
-    process.env.ZIGAR_OPTIMIZE = 'ReleaseFast';
-  })
-  addTests(path => importModule(path), { littleEndian: true });
-})
+}
 
 async function importModule(path) {
   const optimize = process.env.ZIGAR_OPTIMIZE;

@@ -274,6 +274,18 @@ export function stripUnused(binary) {
   return repackBinary({ sections: newSections, size });
 }
 
+export function reencode(binary) {
+  const { sections, size } = parseBinary(binary);
+  // repack all functions
+  const codeSection = sections.find(s => s.type === SectionType.Code);
+  for (const [ i, dv ] of codeSection.functions.entries()) {
+    const parsed = parseFunction(dv);
+    const newDV = repackFunction(parsed);
+    codeSection.functions[i] = newDV;
+  }
+  return repackBinary({ sections, size });
+}
+
 export function parseBinary(binary) {
   const {
     eof,

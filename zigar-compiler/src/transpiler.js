@@ -3,7 +3,7 @@ import { basename } from 'path';
 import { compile } from './compiler.js';
 import { runModule } from '../../zigar-runtime/src/index.js';
 import { generateCode } from './code-generator.js';
-import { stripUnused } from './wasm-stripper.js';
+import { stripUnused, reencode } from './wasm-stripper.js';
 
 export async function transpile(path, options = {}) {
   const { env } = process;
@@ -33,11 +33,11 @@ export async function transpile(path, options = {}) {
   const name = basename(wasmPath);
   let loadWASM;
   if (hasMethods) {
-    let dv = new DataView(content.buffer);
-    if (stripWASM) {
-      dv = stripUnused(dv);
-      //await writeFile(wasmPath.replace('.wasm', '.min.wasm'), dv);
-    }
+    const origBinary = new DataView(content.buffer);
+    // reencoding the file reduces its size slightly, thus the main purpose
+    // is to flush out any potential bugs in the encoding process
+    const dv = (stripWASM) ? stripUnused(origBinary) : reencode(origBinary);
+    //await writeFile(wasmPath.replace('.wasm', '.min.wasm'), dv);
     if (embedWASM) {
       loadWASM = embed(name, dv);
     } else {
