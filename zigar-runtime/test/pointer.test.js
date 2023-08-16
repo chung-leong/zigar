@@ -674,7 +674,7 @@ describe('Pointer functions', function() {
     it('should allow casting of a buffer to a slice of u8', function() {
       const uintStructure = beginStructure({
         type: StructureType.Primitive,
-        name: 'Hello',
+        name: 'u8',
         size: 1,
         hasPointer: false,
       });
@@ -716,13 +716,13 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const HelloPtr = finalizeStructure(structure);
+      const U8SlicePtr = finalizeStructure(structure);
       const buffer = new ArrayBuffer(8);
       const dv = new DataView(buffer);
       for (let i = 0; i < dv.byteLength; i++) {
         dv.setUint8(i, i + 1);
       }
-      const pointer = new HelloPtr(buffer);
+      const pointer = new U8SlicePtr(buffer);
       expect(pointer['*']).to.be.instanceOf(U8Slice);
       expect([ ...pointer ]).to.eql([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
     })
@@ -799,6 +799,157 @@ describe('Pointer functions', function() {
       expect({ ...pointer2[1] }).to.eql({ cat: 1230, dog: 4560 });
       expect({ ...pointer2[2] }).to.eql({ cat: 12300, dog: 45600 });
     })
+    it('should automatically convert non-const pointer to const pointer', function() {
+      const uintStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'u8',
+        size: 1,
+        hasPointer: false,
+      });
+      attachMember(uintStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        bitOffset: 0,
+        byteSize: 1,
+      });
+      const U8 = finalizeStructure(uintStructure);
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]u8',
+        size: 8,
+        hasPointer: false,
+      });
+      attachMember(sliceStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        bitSize: 8,
+        byteSize: 1,
+        structure: uintStructure,
+      });
+      const U8Slice = finalizeStructure(sliceStructure);
+      const constStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '[]const u8',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(constStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        isConst: true,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const ConstU8SlicePtr = finalizeStructure(constStructure);
+      const nonConstStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '[]u8',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(nonConstStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        isConst: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const U8SlicePtr = finalizeStructure(nonConstStructure);
+      const buffer = new ArrayBuffer(8);
+      const dv = new DataView(buffer);
+      for (let i = 0; i < dv.byteLength; i++) {
+        dv.setUint8(i, i + 1);
+      }
+      const nonConstPointer = new U8SlicePtr(buffer);
+      const constPointer = ConstU8SlicePtr(nonConstPointer);
+      expect(constPointer['*']).to.equal(nonConstPointer['*']);
+      nonConstPointer[2] = 3;
+      expect(() => nonConstPointer[2] = 3).to.not.throw();
+      expect(() => constPointer[2] = 3).to.throw(TypeError);
+      const constPointer2 = new ConstU8SlicePtr(nonConstPointer);
+      expect(constPointer2['*']).to.equal(nonConstPointer['*']);
+    })
+    it('should require explicit cast to convert const pointer to non-const pointer', function() {
+      const uintStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'u8',
+        size: 1,
+        hasPointer: false,
+      });
+      attachMember(uintStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        bitOffset: 0,
+        byteSize: 1,
+      });
+      const U8 = finalizeStructure(uintStructure);
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]u8',
+        size: 8,
+        hasPointer: false,
+      });
+      attachMember(sliceStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        bitSize: 8,
+        byteSize: 1,
+        structure: uintStructure,
+      });
+      const U8Slice = finalizeStructure(sliceStructure);
+      const constStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '[]const u8',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(constStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        isConst: true,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const ConstU8SlicePtr = finalizeStructure(constStructure);
+      const nonConstStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '[]u8',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(nonConstStructure, {
+        type: MemberType.Object,
+        isStatic: false,
+        isConst: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const U8SlicePtr = finalizeStructure(nonConstStructure);
+      const buffer = new ArrayBuffer(8);
+      const dv = new DataView(buffer);
+      for (let i = 0; i < dv.byteLength; i++) {
+        dv.setUint8(i, i + 1);
+      }
+      const constPointer = new ConstU8SlicePtr(buffer);
+      expect(() => new U8SlicePtr(constPointer)).to.throw(TypeError);
+      expect(() => U8SlicePtr(constPointer)).to.not.throw();
+    })
     it('should permit assignment and delete operations like regular objects', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
@@ -840,6 +991,42 @@ describe('Pointer functions', function() {
       expect(int32.hello).to.be.undefined;
       expect(() => delete intPtr.$).to.not.throw();
       expect(() => delete intPtr['*']).to.not.throw();
+    })
+    it('should permit assignment to a const pointer', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        isConst: true,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(structure);
+      const int32 = new Int32(1234);
+      const intPtr = new Int32Ptr(int32);
+      expect(() => intPtr.$ = int32).to.not.throw();
     })
   })
 })

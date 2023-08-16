@@ -111,6 +111,40 @@ describe('Vector functions', function() {
       const object2 = new Hello(object);
       expect([ ...object2 ]).to.eql([ 1, 2, 3, 4 ]);
     })
+    it('should allow casting from an array', function() {
+      const Uint32 = function() {};
+      const vectorStructure = beginStructure({
+        type: StructureType.Vector,
+        name: 'Vector',
+        size: 4 * 4,
+      });
+      attachMember(vectorStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { constructor: Uint32 },
+      });
+      const Vector = finalizeStructure(vectorStructure);
+      const arrayStructure = beginStructure({
+        type: StructureType.Array,
+        name: 'Array',
+        size: 4 * 4,
+      });
+      attachMember(arrayStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { constructor: Uint32 },
+      });
+      const Array = finalizeStructure(arrayStructure);
+      const array = new Array([ 1, 2, 3, 4 ]);
+      const vector = Vector(array);
+      expect([ ...vector ]).to.eql([ 1, 2, 3, 4 ]);
+    })
     it('should throw when there is not enough initializers', function() {
       const structure = beginStructure({
         type: StructureType.Vector,

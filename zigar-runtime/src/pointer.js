@@ -1,7 +1,13 @@
 import { StructureType } from './structure.js';
 import { requireDataView, getDataView, isCompatible } from './data-view.js';
 import { MEMORY, PROXY, SLOTS, ZIG, PARENT } from './symbol.js';
-import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerTarget } from './error.js';
+import {
+  throwNoCastingToPointer,
+  throwInaccessiblePointer,
+  throwInvalidPointerTarget,
+  throwAssigningToConstant,
+  throwConstantConstraint,
+} from './error.js';
 
 export function finalizePointer(s) {
   const {
@@ -10,7 +16,7 @@ export function finalizePointer(s) {
       members: [ member ],
     },
   } = s;
-  const { structure: targetStructure } = member;
+  const { isConst, structure: targetStructure } = member;
   const isTargetSlice = targetStructure.type;
   const constructor = s.constructor = function(arg) {
     const calledFromZig = (this === ZIG);
@@ -25,7 +31,11 @@ export function finalizePointer(s) {
       if (calledFromZig || calledFromParent) {
         dv = requireDataView(s, arg);
       } else {
-        if (isTargetSlice) {
+        const Target = targetStructure.constructor;
+        if (isPointerOf(arg, Target)) {
+          creating = true;
+          arg = arg['*'];
+        } else if (isTargetSlice) {
           creating = true;
           arg = constructor.child(arg);
         } else {
@@ -42,7 +52,7 @@ export function finalizePointer(s) {
     if (creating) {
       initializer.call(self, arg);
     }
-    return createProxy.call(self, targetStructure);
+    return createProxy.call(self, member);
   };
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -50,20 +60,26 @@ export function finalizePointer(s) {
       pointerCopier.call(this, arg);
     } else {
       const Target = targetStructure.constructor;
-      if (!(arg instanceof Target)) {
-        debugger;
-        if (isCompatible(arg, Target)) {
-          // autocast to target type
-          const dv = getDataView(targetStructure, arg);
-          arg = Target(dv);
-        } else if (isTargetSlice) {
-          // autovivificate target object
-          arg = new Target(arg);
-        } else {
-          throwInvalidPointerTarget(s, arg);
+      if (isPointerOf(arg, Target)) {
+        if (!isConst && arg.constructor.const) {
+          throwConstantConstraint(s, arg);
         }
+        pointerCopier.call(this, arg);
+      } else {
+        if (!(arg instanceof Target)) {
+          if (isCompatible(arg, Target)) {
+            // autocast to target type
+            const dv = getDataView(targetStructure, arg);
+            arg = Target(dv);
+          } else if (isTargetSlice) {
+            // autovivificate target object
+            arg = new Target(arg);
+          } else {
+            throwInvalidPointerTarget(s, arg);
+          }
+        }
+        this[SLOTS][0] = arg;
       }
-      this[SLOTS][0] = arg;
     }
   };
   // return the proxy object if one is used
@@ -83,7 +99,7 @@ export function finalizePointer(s) {
     const object = this[SLOTS][0];
     return object.$;
   };
-  const setTargetValue = (member.isConst) ? undefined : function(value) {
+  const setTargetValue = (isConst) ? undefined : function(value) {
     const object = this[SLOTS][0];
     object.$ = value;
   };
@@ -92,13 +108,21 @@ export function finalizePointer(s) {
     '$': { get: retriever, set: initializer, configurable: true, },
   });
   Object.defineProperties(constructor, {
-    child: { get: () => targetStructure.constructor }
+    child: { get: () => targetStructure.constructor },
+    const: { value: isConst },
   });
   return constructor;
 }
 
-function createProxy(targetStructure) {
-  const proxy = new Proxy(this, (targetStructure.type !== StructureType.Pointer) ? proxyHandlers : {});
+function isPointerOf(arg, Target) {
+  return (arg?.constructor?.child === Target && arg['*']);
+}
+
+function createProxy({ structure, isConst }) {
+  const descriptors = (structure.type !== StructureType.Pointer)
+    ? (isConst) ? constProxyHandlers : proxyHandlers
+    : {};
+  const proxy = new Proxy(this, descriptors);
   this[PROXY] = proxy;
   return proxy;
 }
@@ -108,6 +132,7 @@ const proxyHandlers = {
     switch (name) {
       case '$':
       case '*':
+      case 'constructor':
       case ZIG:
       case SLOTS:
       case MEMORY:
@@ -120,6 +145,7 @@ const proxyHandlers = {
     switch (name) {
       case '$':
       case '*':
+      case 'constructor':
       case ZIG:
       case SLOTS:
       case MEMORY:
@@ -134,6 +160,7 @@ const proxyHandlers = {
     switch (name) {
       case '$':
       case '*':
+      case 'constructor':
       case ZIG:
       case SLOTS:
       case MEMORY:
@@ -159,5 +186,23 @@ const proxyHandlers = {
       default:
         return Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
     }
+  },
+};
+
+const constProxyHandlers = {
+  ...proxyHandlers,
+  set(pointer, name, value) {
+    switch (name) {
+      case '$':
+      case '*':
+      case ZIG:
+      case SLOTS:
+      case MEMORY:
+        pointer[name] = value;
+        break;
+      default:
+        throwAssigningToConstant(pointer);
+    }
+    return true;
   },
 };

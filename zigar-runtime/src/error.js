@@ -157,6 +157,18 @@ export function throwNoCastingToPointer(structure) {
   throw new TypeError(`Non-slice pointers can only be created with the help of the new operator`);
 }
 
+export function throwConstantConstraint(structure, pointer) {
+  const { name: name1 } = structure;
+  const { constructor: { name: name2 } } = pointer;
+  throw new TypeError(`Conversion of ${name2} to ${name1} requires an explicit cast`);
+}
+
+export function throwAssigningToConstant(pointer) {
+  const { constructor: { name } } = pointer;
+  throw new TypeError(`${name} cannot be modified`);
+}
+
+
 export function throwInaccessiblePointer() {
   throw new TypeError(`Pointers within an untagged union are not accessible`);
 }

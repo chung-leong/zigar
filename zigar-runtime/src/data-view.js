@@ -192,7 +192,6 @@ export function isCompatible(arg, constructor) {
 }
 
 export function getCompatibleTags(member) {
-  debugger;
   const tags = [];
   if (member.type === MemberType.Int || member.type === MemberType.Float) {
     const TypedArray = getTypedArrayClass(member);
