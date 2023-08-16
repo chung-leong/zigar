@@ -13,3 +13,4 @@ export const GETTER = Symbol('getter');
 export const SETTER = Symbol('setter');
 export const LENGTH = Symbol('length');
 export const PROXY = Symbol('proxy');
+export const COMPAT = Symbol('compat');

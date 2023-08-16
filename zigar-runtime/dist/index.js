@@ -2,7 +2,6 @@ const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
 const ZIG = Symbol('zig');
 const PARENT = Symbol('parent');
-const ELEMENT = Symbol('element');
 const SOURCE = Symbol('source');
 const ENUM_INDEX = Symbol('enumIndex');
 const ENUM_ITEMS = Symbol('enumItems');
@@ -13,6 +12,7 @@ const GETTER = Symbol('getter');
 const SETTER = Symbol('setter');
 const LENGTH = Symbol('length');
 const PROXY = Symbol('proxy');
+const COMPAT$1 = Symbol('compat');
 
 function getBitAlignFunction(bitPos, bitSize, toAligned) {
   if (bitPos + bitSize <= 8) {
@@ -346,7 +346,7 @@ function throwArrayLengthMismatch(structure, arg) {
   let source;
   if (argConstructor === elementConstructor) {
     source = `only a single one`;
-  } else if (argConstructor[ELEMENT] === elementConstructor) {
+  } else if (argConstructor.child === elementConstructor) {
     source = `a slice/array that has ${argLength}`;
   } else {
     source = `${argLength} initializer${argLength > 1 ? 's' : ''}`;
@@ -398,6 +398,21 @@ function throwNoCastingToPointer(structure) {
 
 function throwInaccessiblePointer() {
   throw new TypeError(`Pointers within an untagged union are not accessible`);
+}
+
+function throwInvalidPointerTarget(structure, arg) {
+  // NOTE: not being used currently
+  const { name } = structure;
+  let target;
+  if (arg != null) {
+    const type = typeof(arg);
+    const noun = (type === 'object' && arg.constructor !== Object) ? `${arg.constructor.name} object`: type;
+    const a = article(noun);
+    target = `${a} ${noun}`;
+  } else {
+    target = arg + '';
+  }
+  throw new TypeError(`${name} cannot point to ${target}`)
 }
 
 function throwOverflow(member, value) {
@@ -540,7 +555,7 @@ function getDataViewFloatAccessorEx(access, member) {
   });
 }
 
-function getDataView(structure, arg, TypedArray) {
+function getDataView(structure, arg) {
   const { type, size, typedArray } = structure;
   let dv;
   // not using instanceof just in case we're getting objects created in other contexts
@@ -553,19 +568,10 @@ function getDataView(structure, arg, TypedArray) {
     dv = new DataView(arg.buffer, arg.byteOffset, arg.byteLength);
   } else {
     const memory = arg?.[MEMORY];
-    if (memory && (type === StructureType.Array || type === StructureType.Slice)) {
+    if (memory && (type === StructureType.Array || type === StructureType.Slice || type === StructureType.Vector)) {
       const { instance: { members: [ member ] } } = structure;
-      const { byteSize: elementSize, structure: { constructor: elementConstructor } } = member;
-      // casting to a array/slice
-      const { constructor: argConstructor } = arg;
-      let number;
-      if (elementConstructor === argConstructor) {
-        // matching object
-        number = 1;
-      } else if (elementConstructor === argConstructor[ELEMENT]) {
-        // matching slice/array
-        number = arg.length;
-      }
+      const { byteSize: elementSize, structure: { constructor: Child } } = member;
+      const number = findElements(arg, Child);
       if (number !== undefined) {
         if (type === StructureType.Slice || number * elementSize === size) {
           return memory;
@@ -581,6 +587,18 @@ function getDataView(structure, arg, TypedArray) {
     }
   }
   return dv;
+}
+
+function findElements(arg, Child) {
+  // casting to a array/slice
+  const { constructor: Arg } = arg;
+  if (Arg === Child) {
+    // matching object
+    return 1;
+  } else if (Arg.child === Child) {
+    // matching slice/array
+    return arg.length;
+  }
 }
 
 function requireDataView(structure, arg) {
@@ -619,6 +637,39 @@ function getTypedArrayClass({ type, isSigned, byteSize }) {
 function isTypedArray(arg, TypedArray) {
   const tag = arg?.[Symbol.toStringTag];
   return (!!TypedArray && tag === TypedArray.name);
+}
+
+function isCompatible(arg, constructor) {
+  const tags = constructor[COMPAT$1];
+  if (tags) {
+    const tag = arg?.[Symbol.toStringTag];
+    if (tags.includes(tag)) {
+      return true;
+    }
+  }
+  if (constructor.child) {
+    if (findElements(arg, constructor.child) !== undefined) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getCompatibleTags$1(member) {
+  debugger;
+  const tags = [];
+  if (member.type === MemberType.Int || member.type === MemberType.Float) {
+    const TypedArray = getTypedArrayClass(member);
+    if (TypedArray) {
+      tags.push(TypedArray.name);
+    }
+    tags.push('DataView');
+    if (member.byteSize === 1) {
+      tags.push('ArrayBuffer');
+      tags.push('SharedArrayBuffer');
+    }
+  }
+  return tags;
 }
 
 function getTypeName({ type, isSigned, bitSize, byteSize }) {
@@ -1625,7 +1676,10 @@ function finalizeArray(s) {
     $: { get: retriever, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true },
   });
-  Object.defineProperty(constructor, ELEMENT, { get: () => elementStructure.constructor });
+  Object.defineProperties(constructor, {
+    child: { get: () => elementStructure.constructor },
+    [COMPAT]: { value: getCompatibleTags(member) },
+  });
   addSpecialAccessors(s);
   return constructor;
 }
@@ -2079,7 +2133,7 @@ function finalizeUnion(s) {
         setValue.call(this, value);
       };
       const show = function() {
-        const { name, slot, structure: { pointerResetter } = {} } = member;
+        const { name, slot, structure: { pointerResetter } } = member;
         const clear = () => {
           Object.defineProperty(this, name, { enumerable: false });
           if (pointerResetter) {
@@ -2258,7 +2312,7 @@ function finalizeErrorUnion(s) {
 function getErrorUnionAccessors(members, size, options) {
   const { get: getValue, set: setValue } = getAccessors(members[0], options);
   const { get: getError, set: setError } = getAccessors(members[1], options);
-  const { structure: valueStructure = {} } = members[0];
+  const { structure: valueStructure } = members[0];
   const { structure: errorStructure } = members[1];
   const reset = getMemoryResetter(size);
   return {
@@ -2499,7 +2553,7 @@ function finalizeOptional(s) {
 function getOptionalAccessors(members, size, options) {
   const { get: getValue, set: setValue } = getAccessors(members[0], options);
   const { get: getPresent, set: setPresent } = getAccessors(members[1], options);
-  const { structure: valueStructure = {} } = members[0];
+  const { structure: valueStructure } = members[0];
   const reset = getMemoryResetter(size);
   return {
     get: function() {
@@ -2533,7 +2587,8 @@ function finalizePointer(s) {
       members: [ member ],
     },
   } = s;
-  const { structure: target = {} } = member;
+  const { structure: targetStructure } = member;
+  const isTargetSlice = targetStructure.type;
   const constructor = s.constructor = function(arg) {
     const calledFromZig = (this === ZIG);
     const calledFromParent = (this === PARENT);
@@ -2547,7 +2602,12 @@ function finalizePointer(s) {
       if (calledFromZig || calledFromParent) {
         dv = requireDataView(s, arg);
       } else {
-        throwNoCastingToPointer();
+        if (isTargetSlice) {
+          creating = true;
+          arg = constructor.child(arg);
+        } else {
+          throwNoCastingToPointer();
+        }
       }
     }
     Object.defineProperties(self, {
@@ -2559,22 +2619,25 @@ function finalizePointer(s) {
     if (creating) {
       initializer.call(self, arg);
     }
-    return createProxy.call(self, target);
+    return createProxy.call(self, targetStructure);
   };
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
-      // not doing memory copying since the value stored there probably isn't valid anyway
+      // not doing memory copying since the value stored there likely isn't valid anyway
       pointerCopier.call(this, arg);
     } else {
-      const Target = target.constructor;
+      const Target = targetStructure.constructor;
       if (!(arg instanceof Target)) {
-        const dv = getDataView(target, arg);
-        if (dv) {
+        debugger;
+        if (isCompatible(arg, Target)) {
           // autocast to target type
+          const dv = getDataView(targetStructure, arg);
           arg = Target(dv);
-        } else {
+        } else if (isTargetSlice) {
           // autovivificate target object
           arg = new Target(arg);
+        } else {
+          throwInvalidPointerTarget(s, arg);
         }
       }
       this[SLOTS][0] = arg;
@@ -2605,11 +2668,14 @@ function finalizePointer(s) {
     '*': { get: getTargetValue, set: setTargetValue, configurable: true },
     '$': { get: retriever, set: initializer, configurable: true, },
   });
+  Object.defineProperties(constructor, {
+    child: { get: () => targetStructure.constructor }
+  });
   return constructor;
 }
 
-function createProxy(target) {
-  const proxy = new Proxy(this, (target.type !== StructureType.Pointer) ? proxyHandlers : {});
+function createProxy(targetStructure) {
+  const proxy = new Proxy(this, (targetStructure.type !== StructureType.Pointer) ? proxyHandlers : {});
   this[PROXY] = proxy;
   return proxy;
 }
@@ -2762,7 +2828,10 @@ function finalizeSlice(s) {
     $: { get: retriever, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true },
   });
-  Object.defineProperty(constructor, ELEMENT, { get: () => elementStructure.constructor });
+  Object.defineProperties(constructor, {
+    child: { get: () => elementStructure.constructor },
+    [COMPAT$1]: { value: getCompatibleTags$1(member) },
+  });
   addSpecialAccessors(s);
   return constructor;
 }
@@ -2836,7 +2905,10 @@ function finalizeVector(s) {
     $: { get: retriever, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getVectorIterator, configurable: true },
   });
-  Object.defineProperty(constructor, ELEMENT, { get: () => elementStructure.constructor });
+  Object.defineProperties(constructor, {
+    child: { get: () => elementStructure.constructor },
+    [COMPAT]: { value: getCompatibleTags(member) },
+  });
   addSpecialAccessors(s);
   return constructor;
 }

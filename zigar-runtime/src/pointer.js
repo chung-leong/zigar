@@ -1,7 +1,7 @@
 import { StructureType } from './structure.js';
-import { requireDataView, getDataView } from './data-view.js';
+import { requireDataView, getDataView, isCompatible } from './data-view.js';
 import { MEMORY, PROXY, SLOTS, ZIG, PARENT } from './symbol.js';
-import { throwNoCastingToPointer, throwInaccessiblePointer } from './error.js';
+import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerTarget } from './error.js';
 
 export function finalizePointer(s) {
   const {
@@ -10,7 +10,8 @@ export function finalizePointer(s) {
       members: [ member ],
     },
   } = s;
-  const { structure: target } = member;
+  const { structure: targetStructure } = member;
+  const isTargetSlice = targetStructure.type;
   const constructor = s.constructor = function(arg) {
     const calledFromZig = (this === ZIG);
     const calledFromParent = (this === PARENT);
@@ -24,7 +25,12 @@ export function finalizePointer(s) {
       if (calledFromZig || calledFromParent) {
         dv = requireDataView(s, arg);
       } else {
-        throwNoCastingToPointer(s);
+        if (isTargetSlice) {
+          creating = true;
+          arg = constructor.child(arg);
+        } else {
+          throwNoCastingToPointer(s);
+        }
       }
     }
     Object.defineProperties(self, {
@@ -36,23 +42,25 @@ export function finalizePointer(s) {
     if (creating) {
       initializer.call(self, arg);
     }
-    return createProxy.call(self, target);
+    return createProxy.call(self, targetStructure);
   };
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
       // not doing memory copying since the value stored there likely isn't valid anyway
       pointerCopier.call(this, arg);
     } else {
-      const Target = target.constructor;
+      const Target = targetStructure.constructor;
       if (!(arg instanceof Target)) {
-        const tag = arg?.[Symbol.toStringTag];
-        const dv = getDataView(target, arg);
-        if (dv) {
+        debugger;
+        if (isCompatible(arg, Target)) {
           // autocast to target type
+          const dv = getDataView(targetStructure, arg);
           arg = Target(dv);
-        } else {
+        } else if (isTargetSlice) {
           // autovivificate target object
           arg = new Target(arg);
+        } else {
+          throwInvalidPointerTarget(s, arg);
         }
       }
       this[SLOTS][0] = arg;
@@ -84,13 +92,13 @@ export function finalizePointer(s) {
     '$': { get: retriever, set: initializer, configurable: true, },
   });
   Object.defineProperties(constructor, {
-    child: { get: () => target.constructor }
-  })
+    child: { get: () => targetStructure.constructor }
+  });
   return constructor;
 }
 
-function createProxy(target) {
-  const proxy = new Proxy(this, (target.type !== StructureType.Pointer) ? proxyHandlers : {});
+function createProxy(targetStructure) {
+  const proxy = new Proxy(this, (targetStructure.type !== StructureType.Pointer) ? proxyHandlers : {});
   this[PROXY] = proxy;
   return proxy;
 }

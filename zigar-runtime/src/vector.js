@@ -75,7 +75,8 @@ export function finalizeVector(s) {
     [Symbol.iterator]: { value: getVectorIterator, configurable: true },
   });
   Object.defineProperties(constructor, {
-    child: { get: () => elementStructure.constructor }
+    child: { get: () => elementStructure.constructor },
+    [COMPAT]: { value: getCompatibleTags(member) },
   });
   addSpecialAccessors(s);
   return constructor;

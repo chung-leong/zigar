@@ -2,7 +2,7 @@ import { StructureType } from './structure.js';
 import { MemberType, isByteAligned } from './member.js';
 import { getBitAlignFunction } from './memory.js';
 import { throwBufferSizeMismatch, throwBufferExpected, throwArrayLengthMismatch } from './error.js';
-import { MEMORY } from './symbol.js';
+import { MEMORY, COMPAT } from './symbol.js';
 
 export function getDataViewBoolAccessor(access, member) {
   return cacheMethod(access, member, () => {
@@ -91,7 +91,7 @@ export function getDataViewFloatAccessorEx(access, member) {
   });
 }
 
-export function getDataView(structure, arg, TypedArray) {
+export function getDataView(structure, arg) {
   const { type, size, typedArray } = structure;
   let dv;
   // not using instanceof just in case we're getting objects created in other contexts
@@ -104,19 +104,10 @@ export function getDataView(structure, arg, TypedArray) {
     dv = new DataView(arg.buffer, arg.byteOffset, arg.byteLength);
   } else {
     const memory = arg?.[MEMORY];
-    if (memory && (type === StructureType.Array || type === StructureType.Slice)) {
+    if (memory && (type === StructureType.Array || type === StructureType.Slice || type === StructureType.Vector)) {
       const { instance: { members: [ member ] } } = structure;
-      const { byteSize: elementSize, structure: { constructor: elementConstructor } } = member;
-      // casting to a array/slice
-      const { constructor: argConstructor } = arg;
-      let number;
-      if (elementConstructor === argConstructor) {
-        // matching object
-        number = 1;
-      } else if (elementConstructor === argConstructor.child) {
-        // matching slice/array
-        number = arg.length;
-      }
+      const { byteSize: elementSize, structure: { constructor: Child } } = member;
+      const number = findElements(arg, Child);
       if (number !== undefined) {
         if (type === StructureType.Slice || number * elementSize === size) {
           return memory;
@@ -132,6 +123,18 @@ export function getDataView(structure, arg, TypedArray) {
     }
   }
   return dv;
+}
+
+function findElements(arg, Child) {
+  // casting to a array/slice
+  const { constructor: Arg } = arg;
+  if (Arg === Child) {
+    // matching object
+    return 1;
+  } else if (Arg.child === Child) {
+    // matching slice/array
+    return arg.length;
+  }
 }
 
 export function requireDataView(structure, arg) {
@@ -170,6 +173,39 @@ export function getTypedArrayClass({ type, isSigned, byteSize }) {
 export function isTypedArray(arg, TypedArray) {
   const tag = arg?.[Symbol.toStringTag];
   return (!!TypedArray && tag === TypedArray.name);
+}
+
+export function isCompatible(arg, constructor) {
+  const tags = constructor[COMPAT];
+  if (tags) {
+    const tag = arg?.[Symbol.toStringTag];
+    if (tags.includes(tag)) {
+      return true;
+    }
+  }
+  if (constructor.child) {
+    if (findElements(arg, constructor.child) !== undefined) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function getCompatibleTags(member) {
+  debugger;
+  const tags = [];
+  if (member.type === MemberType.Int || member.type === MemberType.Float) {
+    const TypedArray = getTypedArrayClass(member);
+    if (TypedArray) {
+      tags.push(TypedArray.name);
+    }
+    tags.push('DataView');
+    if (member.byteSize === 1) {
+      tags.push('ArrayBuffer');
+      tags.push('SharedArrayBuffer');
+    }
+  }
+  return tags;
 }
 
 export function isBuffer(arg, typedArray) {

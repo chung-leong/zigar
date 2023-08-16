@@ -399,8 +399,8 @@ describe('Pointer functions', function() {
         structure: intStructure,
       });
       const Int32Ptr = finalizeStructure(structure);
-      // autovivification
-      expect(() => new Int32Ptr(1234)).to.not.throw();
+      // no autovivification
+      expect(() => new Int32Ptr(1234)).to.throw();
       expect(() => new Int32Ptr(1234n)).to.throw();
       const int32 = new Int32(1234);
       expect(() => new Int32Ptr(int32)).to.not.throw();
@@ -671,7 +671,62 @@ describe('Pointer functions', function() {
       const dv = pointer['*'][MEMORY];
       expect(dv).to.equal(array[MEMORY]);
     })
-    it('should allow casting of a buffer to a slice', function() {
+    it('should allow casting of a buffer to a slice of u8', function() {
+      const uintStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Hello',
+        size: 1,
+        hasPointer: false,
+      });
+      attachMember(uintStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        bitOffset: 0,
+        byteSize: 1,
+      });
+      const U8 = finalizeStructure(uintStructure);
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]u8',
+        size: 8,
+        hasPointer: false,
+      });
+      attachMember(sliceStructure, {
+        type: MemberType.Int,
+        isStatic: false,
+        bitSize: 8,
+        byteSize: 1,
+        structure: uintStructure,
+      });
+      const U8Slice = finalizeStructure(sliceStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '[]u8',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const HelloPtr = finalizeStructure(structure);
+      const buffer = new ArrayBuffer(8);
+      const dv = new DataView(buffer);
+      for (let i = 0; i < dv.byteLength; i++) {
+        dv.setUint8(i, i + 1);
+      }
+      const pointer = new HelloPtr(buffer);
+      expect(pointer['*']).to.be.instanceOf(U8Slice);
+      expect([ ...pointer ]).to.eql([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
+    })
+    it('should require explicit casting of a buffer to a slice of structs', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -733,11 +788,16 @@ describe('Pointer functions', function() {
         dv.setUint32(i * 8 + 0, 123 * multiplier, true);
         dv.setUint32(i * 8 + 4, 456 * multiplier, true);
       }
-      const pointer = new HelloPtr(buffer);
+      const pointer = new HelloPtr(HelloPtr(buffer));
       expect(pointer['*']).to.be.instanceOf(HelloSlice);
       expect({ ...pointer[0] }).to.eql({ cat: 123, dog: 456 });
       expect({ ...pointer[1] }).to.eql({ cat: 1230, dog: 4560 });
       expect({ ...pointer[2] }).to.eql({ cat: 12300, dog: 45600 });
+      const pointer2 = new HelloPtr(HelloPtr.child(buffer));
+      expect(pointer2['*']).to.be.instanceOf(HelloSlice);
+      expect({ ...pointer2[0] }).to.eql({ cat: 123, dog: 456 });
+      expect({ ...pointer2[1] }).to.eql({ cat: 1230, dog: 4560 });
+      expect({ ...pointer2[2] }).to.eql({ cat: 12300, dog: 45600 });
     })
     it('should permit assignment and delete operations like regular objects', function() {
       const intStructure = beginStructure({

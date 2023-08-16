@@ -82,7 +82,8 @@ export function finalizeArray(s) {
     [Symbol.iterator]: { value: getArrayIterator, configurable: true },
   });
   Object.defineProperties(constructor, {
-    child: { get: () => elementStructure.constructor }
+    child: { get: () => elementStructure.constructor },
+    [COMPAT]: { value: getCompatibleTags(member) },
   });
   addSpecialAccessors(s);
   return constructor;

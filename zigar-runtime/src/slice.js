@@ -1,6 +1,6 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { requireDataView, getTypedArrayClass, isTypedArray } from './data-view.js';
+import { requireDataView, getTypedArrayClass, isTypedArray, getCompatibleTags } from './data-view.js';
 import {
   createChildObjects,
   getPointerCopier,
@@ -11,7 +11,7 @@ import {
 } from './array.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
-import { LENGTH, MEMORY } from './symbol.js';
+import { LENGTH, MEMORY, COMPAT } from './symbol.js';
 
 export function finalizeSlice(s) {
   const {
@@ -104,6 +104,7 @@ export function finalizeSlice(s) {
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
+    [COMPAT]: { value: getCompatibleTags(member) },
   });
   addSpecialAccessors(s);
   return constructor;
