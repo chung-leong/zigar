@@ -12,7 +12,7 @@ const GETTER = Symbol('getter');
 const SETTER = Symbol('setter');
 const LENGTH = Symbol('length');
 const PROXY = Symbol('proxy');
-const COMPAT$1 = Symbol('compat');
+const COMPAT = Symbol('compat');
 
 function getBitAlignFunction(bitPos, bitSize, toAligned) {
   if (bitPos + bitSize <= 8) {
@@ -396,6 +396,18 @@ function throwNoCastingToPointer(structure) {
   throw new TypeError(`Non-slice pointers can only be created with the help of the new operator`);
 }
 
+function throwConstantConstraint(structure, pointer) {
+  const { name: name1 } = structure;
+  const { constructor: { name: name2 } } = pointer;
+  throw new TypeError(`Conversion of ${name2} to ${name1} requires an explicit cast`);
+}
+
+function throwAssigningToConstant(pointer) {
+  const { constructor: { name } } = pointer;
+  throw new TypeError(`${name} cannot be modified`);
+}
+
+
 function throwInaccessiblePointer() {
   throw new TypeError(`Pointers within an untagged union are not accessible`);
 }
@@ -640,7 +652,7 @@ function isTypedArray(arg, TypedArray) {
 }
 
 function isCompatible(arg, constructor) {
-  const tags = constructor[COMPAT$1];
+  const tags = constructor[COMPAT];
   if (tags) {
     const tag = arg?.[Symbol.toStringTag];
     if (tags.includes(tag)) {
@@ -655,8 +667,7 @@ function isCompatible(arg, constructor) {
   return false;
 }
 
-function getCompatibleTags$1(member) {
-  debugger;
+function getCompatibleTags(member) {
   const tags = [];
   if (member.type === MemberType.Int || member.type === MemberType.Float) {
     const TypedArray = getTypedArrayClass(member);
@@ -2587,7 +2598,7 @@ function finalizePointer(s) {
       members: [ member ],
     },
   } = s;
-  const { structure: targetStructure } = member;
+  const { isConst, structure: targetStructure } = member;
   const isTargetSlice = targetStructure.type;
   const constructor = s.constructor = function(arg) {
     const calledFromZig = (this === ZIG);
@@ -2602,7 +2613,11 @@ function finalizePointer(s) {
       if (calledFromZig || calledFromParent) {
         dv = requireDataView(s, arg);
       } else {
-        if (isTargetSlice) {
+        const Target = targetStructure.constructor;
+        if (isPointerOf(arg, Target)) {
+          creating = true;
+          arg = arg['*'];
+        } else if (isTargetSlice) {
           creating = true;
           arg = constructor.child(arg);
         } else {
@@ -2619,7 +2634,7 @@ function finalizePointer(s) {
     if (creating) {
       initializer.call(self, arg);
     }
-    return createProxy.call(self, targetStructure);
+    return createProxy.call(self, member);
   };
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -2627,20 +2642,26 @@ function finalizePointer(s) {
       pointerCopier.call(this, arg);
     } else {
       const Target = targetStructure.constructor;
-      if (!(arg instanceof Target)) {
-        debugger;
-        if (isCompatible(arg, Target)) {
-          // autocast to target type
-          const dv = getDataView(targetStructure, arg);
-          arg = Target(dv);
-        } else if (isTargetSlice) {
-          // autovivificate target object
-          arg = new Target(arg);
-        } else {
-          throwInvalidPointerTarget(s, arg);
+      if (isPointerOf(arg, Target)) {
+        if (!isConst && arg.constructor.const) {
+          throwConstantConstraint(s, arg);
         }
+        pointerCopier.call(this, arg);
+      } else {
+        if (!(arg instanceof Target)) {
+          if (isCompatible(arg, Target)) {
+            // autocast to target type
+            const dv = getDataView(targetStructure, arg);
+            arg = Target(dv);
+          } else if (isTargetSlice) {
+            // autovivificate target object
+            arg = new Target(arg);
+          } else {
+            throwInvalidPointerTarget(s, arg);
+          }
+        }
+        this[SLOTS][0] = arg;
       }
-      this[SLOTS][0] = arg;
     }
   };
   // return the proxy object if one is used
@@ -2660,7 +2681,7 @@ function finalizePointer(s) {
     const object = this[SLOTS][0];
     return object.$;
   };
-  const setTargetValue = (member.isConst) ? undefined : function(value) {
+  const setTargetValue = (isConst) ? undefined : function(value) {
     const object = this[SLOTS][0];
     object.$ = value;
   };
@@ -2669,13 +2690,21 @@ function finalizePointer(s) {
     '$': { get: retriever, set: initializer, configurable: true, },
   });
   Object.defineProperties(constructor, {
-    child: { get: () => targetStructure.constructor }
+    child: { get: () => targetStructure.constructor },
+    const: { value: isConst },
   });
   return constructor;
 }
 
-function createProxy(targetStructure) {
-  const proxy = new Proxy(this, (targetStructure.type !== StructureType.Pointer) ? proxyHandlers : {});
+function isPointerOf(arg, Target) {
+  return (arg?.constructor?.child === Target && arg['*']);
+}
+
+function createProxy({ structure, isConst }) {
+  const descriptors = (structure.type !== StructureType.Pointer)
+    ? (isConst) ? constProxyHandlers : proxyHandlers
+    : {};
+  const proxy = new Proxy(this, descriptors);
   this[PROXY] = proxy;
   return proxy;
 }
@@ -2685,6 +2714,7 @@ const proxyHandlers = {
     switch (name) {
       case '$':
       case '*':
+      case 'constructor':
       case ZIG:
       case SLOTS:
       case MEMORY:
@@ -2697,6 +2727,7 @@ const proxyHandlers = {
     switch (name) {
       case '$':
       case '*':
+      case 'constructor':
       case ZIG:
       case SLOTS:
       case MEMORY:
@@ -2711,6 +2742,7 @@ const proxyHandlers = {
     switch (name) {
       case '$':
       case '*':
+      case 'constructor':
       case ZIG:
       case SLOTS:
       case MEMORY:
@@ -2736,6 +2768,24 @@ const proxyHandlers = {
       default:
         return Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
     }
+  },
+};
+
+const constProxyHandlers = {
+  ...proxyHandlers,
+  set(pointer, name, value) {
+    switch (name) {
+      case '$':
+      case '*':
+      case ZIG:
+      case SLOTS:
+      case MEMORY:
+        pointer[name] = value;
+        break;
+      default:
+        throwAssigningToConstant(pointer);
+    }
+    return true;
   },
 };
 
@@ -2830,7 +2880,7 @@ function finalizeSlice(s) {
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
-    [COMPAT$1]: { value: getCompatibleTags$1(member) },
+    [COMPAT]: { value: getCompatibleTags(member) },
   });
   addSpecialAccessors(s);
   return constructor;

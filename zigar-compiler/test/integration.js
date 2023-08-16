@@ -260,7 +260,7 @@ export function addTests(importModule, options) {
       } finally {
         console.log = origFn;
       }
-      const text = await readFile(resolve(`./zig-samples/benchmarks-game/binary-trees-${n}.txt`), 'utf-8');
+      const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/binary-trees-${n}.txt`), 'utf-8');
       const refLines = text.split(/\r?\n/);
       expect(lines.length).to.not.equal(0);
       for (const [ index, line ] of lines.entries()) {
@@ -291,12 +291,28 @@ export function addTests(importModule, options) {
       } finally {
         console.log = origFn;
       }
-      const text = await readFile(resolve(`./zig-samples/benchmarks-game/fasta-${n}.txt`), 'utf-8');
+      const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`), 'utf-8');
       const refLines = text.split(/\r?\n/);
       expect(lines.length).to.not.equal(0);
       for (const [ index, line ] of lines.entries()) {
         expect(line).to.equal(refLines[index]);
       }
+    })
+    it('should produce the right results for the k-nucleotide example', async function() {
+      this.timeout(60000);
+      const { default: { kNucleotide } } = await importModule(resolve('./zig-samples/benchmarks-game/k-nucleotide.zig'));
+      const n = 250000;
+      const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`), 'utf-8');
+      const lines = text.split(/\r?\n/);
+      const start = lines.findIndex(l => l.startsWith('>THREE'));
+      if (start === -1) {
+        throw new Error('Unable to find starting position');
+      }
+      const input = lines.slice(start + 1);
+      const outputLines = kNucleotide(input);
+      const refText = await readFile(resolve(`./zig-samples/benchmarks-game/data/k-nucleotide-${n}.txt`), 'utf-8');
+      const refLines = refText.split(/\r?\n/);
+      expect(outputLines).to.eql(refLines);
     })
     it('should produce the right results for the mandelbrot example', async function() {
       this.timeout(60000);
@@ -314,7 +330,7 @@ export function addTests(importModule, options) {
       } finally {
         console.log = origFn;
       }
-      const text = await readFile(resolve(`./zig-samples/benchmarks-game/mandelbrot-${n}.txt`), 'utf-8');
+      const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/mandelbrot-${n}.txt`), 'utf-8');
       const refLines = text.split(/\r?\n/);
       expect(lines.length).to.not.equal(0);
       for (const [ index, line ] of lines.entries()) {
@@ -389,6 +405,23 @@ export function addTests(importModule, options) {
       expect(solar_mass).to.equal(4.0 * Math.PI * Math.PI);
       expect(result1.toFixed(9)).to.equal('-0.169075164');
       expect(result2.toFixed(9)).to.equal('-0.169078071');
+    })
+    it('should produce the right results for the reverse-complement example', async function() {
+      this.timeout(60000);
+      const { default: { reverseComplement } } = await importModule(resolve('./zig-samples/benchmarks-game/reverse-complement.zig'));
+      const n = 250000;
+      const data = await readFile(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`));
+      reverseComplement(data);
+      const refData = await readFile(resolve(`./zig-samples/benchmarks-game/data/reverse-complement-${n}.txt`));
+      let different = false;
+      for (let i = 0; i < refData.byteLength; i++) {
+        if (data[i] !== refData[i]) {
+          different = true;
+          break;
+        }
+      }
+      expect(refData.byteLength).to.be.above(1000);
+      expect(different).to.be.false;
     })
     it('should produce the right results for the spectral-norm example', async function() {
       this.timeout(60000);
