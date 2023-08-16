@@ -3,7 +3,7 @@ import { getMemoryCopier } from './memory.js';
 import { requireDataView, getTypedArrayClass, isTypedArray } from './data-view.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
-import { MEMORY, ELEMENT } from './symbol.js';
+import { MEMORY } from './symbol.js';
 
 export function finalizeVector(s) {
   const {
@@ -74,7 +74,9 @@ export function finalizeVector(s) {
     $: { get: retriever, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getVectorIterator, configurable: true },
   });
-  Object.defineProperty(constructor, ELEMENT, { get: () => elementStructure.constructor });
+  Object.defineProperties(constructor, {
+    child: { get: () => elementStructure.constructor }
+  });
   addSpecialAccessors(s);
   return constructor;
 }

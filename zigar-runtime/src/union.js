@@ -81,7 +81,7 @@ export function finalizeUnion(s) {
         setValue.call(this, value);
       };
       const show = function() {
-        const { name, slot, structure: { pointerResetter } = {} } = member;
+        const { name, slot, structure: { pointerResetter } } = member;
         const clear = () => {
           Object.defineProperty(this, name, { enumerable: false });
           if (pointerResetter) {

@@ -60,6 +60,7 @@ describe('Pointer functions', function() {
         structure: intStructure,
       });
       const Int32Ptr = finalizeStructure(structure);
+      expect(Int32Ptr.child).to.equal(Int32);
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
       expect(intPointer['*']).to.equal(1234);

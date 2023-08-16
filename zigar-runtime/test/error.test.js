@@ -32,7 +32,6 @@ import {
   decamelizeErrorName,
   throwZigError,
 } from '../src/error.js';
-import { ELEMENT } from '../src/symbol.js';
 
 describe('Error functions', function() {
   describe('throwBufferSizeMismatch', function() {
@@ -243,7 +242,7 @@ describe('Error functions', function() {
     it('should throw a type error', function() {
       const elementConstructor = function() {};
       const arrayConstructor = function() {};
-      arrayConstructor[ELEMENT] = elementConstructor;
+      arrayConstructor.child = elementConstructor;
       const structure = {
         name: 'Hello',
         type: StructureType.Array,

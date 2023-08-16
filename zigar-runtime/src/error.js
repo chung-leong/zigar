@@ -2,7 +2,6 @@ import { MemberType } from './member.js';
 import { StructureType } from './structure.js';
 import { getTypeName } from './data-view.js';
 import { getPrimitiveType } from './primitive.js';
-import { ELEMENT } from './symbol.js';
 
 export function throwBufferSizeMismatch(structure, dv) {
   const { type, name, size } = structure;
@@ -108,7 +107,7 @@ export function throwArrayLengthMismatch(structure, arg) {
   let source;
   if (argConstructor === elementConstructor) {
     source = `only a single one`;
-  } else if (argConstructor[ELEMENT] === elementConstructor) {
+  } else if (argConstructor.child === elementConstructor) {
     source = `a slice/array that has ${argLength}`;
   } else {
     source = `${argLength} initializer${argLength > 1 ? 's' : ''}`;

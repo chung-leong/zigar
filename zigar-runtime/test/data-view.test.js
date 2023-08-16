@@ -19,7 +19,7 @@ import {
   getDataViewFloatAccessorEx,
   clearMethodCache,
 } from '../src/data-view.js';
-import { ELEMENT, MEMORY } from '../src/symbol.js';
+import { MEMORY } from '../src/symbol.js';
 
 describe('Data view functions', function() {
   beforeEach(function() {
@@ -224,7 +224,7 @@ describe('Data view functions', function() {
         },
       };
       const arrayConstructor = function() {};
-      arrayConstructor[ELEMENT] = elementConstructor;
+      arrayConstructor.child = elementConstructor;
       const array = new arrayConstructor();
       array[MEMORY] = new DataView(new ArrayBuffer(6));
       array.length = 3;
@@ -249,7 +249,7 @@ describe('Data view functions', function() {
         },
       };
       const arrayConstructor = function() {};
-      arrayConstructor[ELEMENT] = elementConstructor;
+      arrayConstructor.child = elementConstructor;
       const array = new arrayConstructor();
       array[MEMORY] = new DataView(new ArrayBuffer(6));
       array.length = 3;
@@ -296,7 +296,7 @@ describe('Data view functions', function() {
         },
       };
       const arrayConstructor = function() {};
-      arrayConstructor[ELEMENT] = elementConstructor;
+      arrayConstructor.child = elementConstructor;
       const array = new arrayConstructor();
       array[MEMORY] = new DataView(new ArrayBuffer(8));
       array.length = 4;

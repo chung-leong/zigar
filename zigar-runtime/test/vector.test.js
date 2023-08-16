@@ -26,15 +26,18 @@ describe('Vector functions', function() {
         name: 'Hello',
         size: 4 * 4,
       });
+      const constructor = function() {};
       attachMember(structure, {
         type: MemberType.Int,
         isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor },
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
+      expect(Hello.child).to.equal(constructor);
       const object = new Hello(new Uint32Array([ 1, 2, 3, 4 ]));
       expect(object[0]).to.equal(1);
       object[3] *= 4;

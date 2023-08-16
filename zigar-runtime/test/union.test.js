@@ -161,6 +161,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'cat',
@@ -170,6 +171,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'selector',
@@ -210,6 +212,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'cat',
@@ -219,6 +222,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'selector',
@@ -251,6 +255,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structStructure, {
         name: 'cat',
@@ -260,6 +265,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
+        structure: {},
       });
       const Aniaml = finalizeStructure(structStructure);
       const structure = beginStructure({
@@ -286,6 +292,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'selector',
@@ -476,6 +483,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'cat',
@@ -485,6 +493,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'selector',
@@ -538,6 +547,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'cat',
@@ -548,6 +558,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'selector',
@@ -653,6 +664,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'selector',
@@ -761,6 +773,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'selector',
@@ -869,6 +882,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'selector',
@@ -901,6 +915,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'cat',
@@ -911,6 +926,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'selector',
@@ -942,6 +958,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'cat',
@@ -952,6 +969,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'selector',
@@ -983,6 +1001,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'cat',
@@ -993,6 +1012,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'selector',
@@ -1022,6 +1042,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'cat',
@@ -1032,6 +1053,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'selector',
@@ -1060,6 +1082,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'cat',
@@ -1070,6 +1093,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'selector',
@@ -1100,6 +1124,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'cat',
@@ -1110,6 +1135,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'selector',

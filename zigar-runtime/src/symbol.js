@@ -2,7 +2,6 @@ export const MEMORY = Symbol('memory');
 export const SLOTS = Symbol('slots');
 export const ZIG = Symbol('zig');
 export const PARENT = Symbol('parent');
-export const ELEMENT = Symbol('element');
 export const SOURCE = Symbol('source');
 export const STRUCTURE = Symbol('structure');
 export const ENUM_INDEX = Symbol('enumIndex');

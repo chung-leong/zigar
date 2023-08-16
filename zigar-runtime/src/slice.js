@@ -11,7 +11,7 @@ import {
 } from './array.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
-import { LENGTH, MEMORY, ELEMENT } from './symbol.js';
+import { LENGTH, MEMORY } from './symbol.js';
 
 export function finalizeSlice(s) {
   const {
@@ -102,7 +102,9 @@ export function finalizeSlice(s) {
     $: { get: retriever, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true },
   });
-  Object.defineProperty(constructor, ELEMENT, { get: () => elementStructure.constructor });
+  Object.defineProperties(constructor, {
+    child: { get: () => elementStructure.constructor },
+  });
   addSpecialAccessors(s);
   return constructor;
 }

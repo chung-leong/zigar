@@ -39,15 +39,18 @@ describe('Array functions', function() {
         name: 'Hello',
         size: 4 * 8,
       });
+      const constructor = function() {};
       attachMember(structure, {
         type: MemberType.Int,
         isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor }
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
+      expect(Hello.child).to.equal(constructor);
       const object = new Hello(new Uint32Array(8));
       object.set(0, 321);
       expect(object.get(0)).to.equal(321);

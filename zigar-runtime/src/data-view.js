@@ -2,7 +2,7 @@ import { StructureType } from './structure.js';
 import { MemberType, isByteAligned } from './member.js';
 import { getBitAlignFunction } from './memory.js';
 import { throwBufferSizeMismatch, throwBufferExpected, throwArrayLengthMismatch } from './error.js';
-import { ELEMENT, MEMORY } from './symbol.js';
+import { MEMORY } from './symbol.js';
 
 export function getDataViewBoolAccessor(access, member) {
   return cacheMethod(access, member, () => {
@@ -113,7 +113,7 @@ export function getDataView(structure, arg, TypedArray) {
       if (elementConstructor === argConstructor) {
         // matching object
         number = 1;
-      } else if (elementConstructor === argConstructor[ELEMENT]) {
+      } else if (elementConstructor === argConstructor.child) {
         // matching slice/array
         number = arg.length;
       }

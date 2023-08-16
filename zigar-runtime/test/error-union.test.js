@@ -517,6 +517,7 @@ describe('Error union functions', function() {
         bitOffset: 0,
         bitSize: 64,
         byteSize: 8,
+        structure: {},
       });
       attachMember(structure, {
         name: 'error',

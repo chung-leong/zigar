@@ -10,7 +10,7 @@ export function finalizePointer(s) {
       members: [ member ],
     },
   } = s;
-  const { structure: target = {} } = member;
+  const { structure: target } = member;
   const constructor = s.constructor = function(arg) {
     const calledFromZig = (this === ZIG);
     const calledFromParent = (this === PARENT);
@@ -40,11 +40,12 @@ export function finalizePointer(s) {
   };
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
-      // not doing memory copying since the value stored there probably isn't valid anyway
+      // not doing memory copying since the value stored there likely isn't valid anyway
       pointerCopier.call(this, arg);
     } else {
       const Target = target.constructor;
       if (!(arg instanceof Target)) {
+        const tag = arg?.[Symbol.toStringTag];
         const dv = getDataView(target, arg);
         if (dv) {
           // autocast to target type
@@ -82,6 +83,9 @@ export function finalizePointer(s) {
     '*': { get: getTargetValue, set: setTargetValue, configurable: true },
     '$': { get: retriever, set: initializer, configurable: true, },
   });
+  Object.defineProperties(constructor, {
+    child: { get: () => target.constructor }
+  })
   return constructor;
 }
 

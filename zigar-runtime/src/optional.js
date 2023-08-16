@@ -62,7 +62,7 @@ export function finalizeOptional(s) {
 export function getOptionalAccessors(members, size, options) {
   const { get: getValue, set: setValue } = getAccessors(members[0], options);
   const { get: getPresent, set: setPresent } = getAccessors(members[1], options);
-  const { structure: valueStructure = {} } = members[0];
+  const { structure: valueStructure } = members[0];
   const reset = getMemoryResetter(size);
   return {
     get: function() {
