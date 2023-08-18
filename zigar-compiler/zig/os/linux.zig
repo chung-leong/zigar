@@ -44,6 +44,7 @@ pub fn with(comptime substitutes: anytype) type {
 		pub const timezone = if (@hasDecl(substitutes, "timezone")) substitutes.timezone else std.os.linux.timezone;
 		pub const ucontext_t = if (@hasDecl(substitutes, "ucontext_t")) substitutes.ucontext_t else std.os.linux.ucontext_t;
 		pub const user_desc = if (@hasDecl(substitutes, "user_desc")) substitutes.user_desc else std.os.linux.user_desc;
+		pub const getcontext = if (@hasDecl(substitutes, "getcontext")) substitutes.getcontext else std.os.linux.getcontext;
 		pub const tls = if (@hasDecl(substitutes, "tls")) substitutes.tls else std.os.linux.tls;
 		pub const pie = if (@hasDecl(substitutes, "pie")) substitutes.pie else std.os.linux.pie;
 		pub const BPF = if (@hasDecl(substitutes, "BPF")) substitutes.BPF else std.os.linux.BPF;
@@ -203,6 +204,7 @@ pub fn with(comptime substitutes: anytype) type {
 		pub const setresgid = if (@hasDecl(substitutes, "setresgid")) substitutes.setresgid else std.os.linux.setresgid;
 		pub const getgroups = if (@hasDecl(substitutes, "getgroups")) substitutes.getgroups else std.os.linux.getgroups;
 		pub const setgroups = if (@hasDecl(substitutes, "setgroups")) substitutes.setgroups else std.os.linux.setgroups;
+		pub const setsid = if (@hasDecl(substitutes, "setsid")) substitutes.setsid else std.os.linux.setsid;
 		pub const getpid = if (@hasDecl(substitutes, "getpid")) substitutes.getpid else std.os.linux.getpid;
 		pub const gettid = if (@hasDecl(substitutes, "gettid")) substitutes.gettid else std.os.linux.gettid;
 		pub const sigprocmask = if (@hasDecl(substitutes, "sigprocmask")) substitutes.sigprocmask else std.os.linux.sigprocmask;
@@ -246,10 +248,6 @@ pub fn with(comptime substitutes: anytype) type {
 		pub const fremovexattr = if (@hasDecl(substitutes, "fremovexattr")) substitutes.fremovexattr else std.os.linux.fremovexattr;
 		pub const sched_yield = if (@hasDecl(substitutes, "sched_yield")) substitutes.sched_yield else std.os.linux.sched_yield;
 		pub const sched_getaffinity = if (@hasDecl(substitutes, "sched_getaffinity")) substitutes.sched_getaffinity else std.os.linux.sched_getaffinity;
-		pub const getcpu = if (@hasDecl(substitutes, "getcpu")) substitutes.getcpu else std.os.linux.getcpu;
-		pub const sched_getcpu = if (@hasDecl(substitutes, "sched_getcpu")) substitutes.sched_getcpu else std.os.linux.sched_getcpu;
-		pub const mbind = if (@hasDecl(substitutes, "mbind")) substitutes.mbind else std.os.linux.mbind;
-		pub const sched_setaffinity = if (@hasDecl(substitutes, "sched_setaffinity")) substitutes.sched_setaffinity else std.os.linux.sched_setaffinity;
 		pub const epoll_create = if (@hasDecl(substitutes, "epoll_create")) substitutes.epoll_create else std.os.linux.epoll_create;
 		pub const epoll_create1 = if (@hasDecl(substitutes, "epoll_create1")) substitutes.epoll_create1 else std.os.linux.epoll_create1;
 		pub const epoll_ctl = if (@hasDecl(substitutes, "epoll_ctl")) substitutes.epoll_ctl else std.os.linux.epoll_ctl;
@@ -260,13 +258,6 @@ pub fn with(comptime substitutes: anytype) type {
 		pub const itimerspec = if (@hasDecl(substitutes, "itimerspec")) substitutes.itimerspec else std.os.linux.itimerspec;
 		pub const timerfd_gettime = if (@hasDecl(substitutes, "timerfd_gettime")) substitutes.timerfd_gettime else std.os.linux.timerfd_gettime;
 		pub const timerfd_settime = if (@hasDecl(substitutes, "timerfd_settime")) substitutes.timerfd_settime else std.os.linux.timerfd_settime;
-		pub const sigevent = if (@hasDecl(substitutes, "sigevent")) substitutes.sigevent else std.os.linux.sigevent;
-		pub const SIGEV = if (@hasDecl(substitutes, "SIGEV")) substitutes.SIGEV else std.os.linux.SIGEV;
-		pub const timer_t = if (@hasDecl(substitutes, "timer_t")) substitutes.timer_t else std.os.linux.timer_t;
-		pub const timer_create = if (@hasDecl(substitutes, "timer_create")) substitutes.timer_create else std.os.linux.timer_create;
-		pub const timer_delete = if (@hasDecl(substitutes, "timer_delete")) substitutes.timer_delete else std.os.linux.timer_delete;
-		pub const timer_gettime = if (@hasDecl(substitutes, "timer_gettime")) substitutes.timer_gettime else std.os.linux.timer_gettime;
-		pub const timer_settime = if (@hasDecl(substitutes, "timer_settime")) substitutes.timer_settime else std.os.linux.timer_settime;
 		pub const ITIMER = if (@hasDecl(substitutes, "ITIMER")) substitutes.ITIMER else std.os.linux.ITIMER;
 		pub const getitimer = if (@hasDecl(substitutes, "getitimer")) substitutes.getitimer else std.os.linux.getitimer;
 		pub const setitimer = if (@hasDecl(substitutes, "setitimer")) substitutes.setitimer else std.os.linux.setitimer;
@@ -406,10 +397,6 @@ pub fn with(comptime substitutes: anytype) type {
 		pub const cpu_set_t = if (@hasDecl(substitutes, "cpu_set_t")) substitutes.cpu_set_t else std.os.linux.cpu_set_t;
 		pub const cpu_count_t = if (@hasDecl(substitutes, "cpu_count_t")) substitutes.cpu_count_t else std.os.linux.cpu_count_t;
 		pub const CPU_COUNT = if (@hasDecl(substitutes, "CPU_COUNT")) substitutes.CPU_COUNT else std.os.linux.CPU_COUNT;
-		pub const CPU_ZERO = if (@hasDecl(substitutes, "CPU_ZERO")) substitutes.CPU_ZERO else std.os.linux.CPU_ZERO;
-		pub const CPU_SET = if (@hasDecl(substitutes, "CPU_SET")) substitutes.CPU_SET else std.os.linux.CPU_SET;
-		pub const CPU_ISSET = if (@hasDecl(substitutes, "CPU_ISSET")) substitutes.CPU_ISSET else std.os.linux.CPU_ISSET;
-		pub const CPU_CLR = if (@hasDecl(substitutes, "CPU_CLR")) substitutes.CPU_CLR else std.os.linux.CPU_CLR;
 		pub const MINSIGSTKSZ = if (@hasDecl(substitutes, "MINSIGSTKSZ")) substitutes.MINSIGSTKSZ else std.os.linux.MINSIGSTKSZ;
 		pub const SIGSTKSZ = if (@hasDecl(substitutes, "SIGSTKSZ")) substitutes.SIGSTKSZ else std.os.linux.SIGSTKSZ;
 		pub const SS_ONSTACK = if (@hasDecl(substitutes, "SS_ONSTACK")) substitutes.SS_ONSTACK else std.os.linux.SS_ONSTACK;

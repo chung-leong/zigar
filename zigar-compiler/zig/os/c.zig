@@ -13,10 +13,6 @@ pub fn with(comptime substitutes: anytype) type {
 		pub const AT = if (@hasDecl(substitutes, "AT")) substitutes.AT else std.c.AT;
 		pub const CLOCK = if (@hasDecl(substitutes, "CLOCK")) substitutes.CLOCK else std.c.CLOCK;
 		pub const CPU_COUNT = if (@hasDecl(substitutes, "CPU_COUNT")) substitutes.CPU_COUNT else std.c.CPU_COUNT;
-		pub const CPU_SET = if (@hasDecl(substitutes, "CPU_SET")) substitutes.CPU_SET else std.c.CPU_SET;
-		pub const CPU_ISSET = if (@hasDecl(substitutes, "CPU_ISSET")) substitutes.CPU_ISSET else std.c.CPU_ISSET;
-		pub const CPU_CLR = if (@hasDecl(substitutes, "CPU_CLR")) substitutes.CPU_CLR else std.c.CPU_CLR;
-		pub const CPU_ZERO = if (@hasDecl(substitutes, "CPU_ZERO")) substitutes.CPU_ZERO else std.c.CPU_ZERO;
 		pub const E = if (@hasDecl(substitutes, "E")) substitutes.E else std.c.E;
 		pub const Elf_Symndx = if (@hasDecl(substitutes, "Elf_Symndx")) substitutes.Elf_Symndx else std.c.Elf_Symndx;
 		pub const F = if (@hasDecl(substitutes, "F")) substitutes.F else std.c.F;
@@ -96,7 +92,6 @@ pub fn with(comptime substitutes: anytype) type {
 		pub const tcflag_t = if (@hasDecl(substitutes, "tcflag_t")) substitutes.tcflag_t else std.c.tcflag_t;
 		pub const termios = if (@hasDecl(substitutes, "termios")) substitutes.termios else std.c.termios;
 		pub const time_t = if (@hasDecl(substitutes, "time_t")) substitutes.time_t else std.c.time_t;
-		pub const timer_t = if (@hasDecl(substitutes, "timer_t")) substitutes.timer_t else std.c.timer_t;
 		pub const timespec = if (@hasDecl(substitutes, "timespec")) substitutes.timespec else std.c.timespec;
 		pub const timeval = if (@hasDecl(substitutes, "timeval")) substitutes.timeval else std.c.timeval;
 		pub const timezone = if (@hasDecl(substitutes, "timezone")) substitutes.timezone else std.c.timezone;
@@ -128,7 +123,6 @@ pub fn with(comptime substitutes: anytype) type {
 		pub const setrlimit64 = if (@hasDecl(substitutes, "setrlimit64")) substitutes.setrlimit64 else std.c.setrlimit64;
 		pub const getrandom = if (@hasDecl(substitutes, "getrandom")) substitutes.getrandom else std.c.getrandom;
 		pub const sched_getaffinity = if (@hasDecl(substitutes, "sched_getaffinity")) substitutes.sched_getaffinity else std.c.sched_getaffinity;
-		pub const sched_setaffinity = if (@hasDecl(substitutes, "sched_setaffinity")) substitutes.sched_setaffinity else std.c.sched_setaffinity;
 		pub const eventfd = if (@hasDecl(substitutes, "eventfd")) substitutes.eventfd else std.c.eventfd;
 		pub const epoll_ctl = if (@hasDecl(substitutes, "epoll_ctl")) substitutes.epoll_ctl else std.c.epoll_ctl;
 		pub const epoll_create1 = if (@hasDecl(substitutes, "epoll_create1")) substitutes.epoll_create1 else std.c.epoll_create1;
@@ -158,15 +152,11 @@ pub fn with(comptime substitutes: anytype) type {
 		pub const pthread_rwlock_t = if (@hasDecl(substitutes, "pthread_rwlock_t")) substitutes.pthread_rwlock_t else std.c.pthread_rwlock_t;
 		pub const pthread_key_t = if (@hasDecl(substitutes, "pthread_key_t")) substitutes.pthread_key_t else std.c.pthread_key_t;
 		pub const sem_t = if (@hasDecl(substitutes, "sem_t")) substitutes.sem_t else std.c.sem_t;
-		pub const PTHREAD_STACK_MIN = if (@hasDecl(substitutes, "PTHREAD_STACK_MIN")) substitutes.PTHREAD_STACK_MIN else std.c.PTHREAD_STACK_MIN;
 		pub const pthread_setname_np = if (@hasDecl(substitutes, "pthread_setname_np")) substitutes.pthread_setname_np else std.c.pthread_setname_np;
 		pub const pthread_getname_np = if (@hasDecl(substitutes, "pthread_getname_np")) substitutes.pthread_getname_np else std.c.pthread_getname_np;
 		pub const RTLD = if (@hasDecl(substitutes, "RTLD")) substitutes.RTLD else std.c.RTLD;
 		pub const dirent = if (@hasDecl(substitutes, "dirent")) substitutes.dirent else std.c.dirent;
 		pub const dirent64 = if (@hasDecl(substitutes, "dirent64")) substitutes.dirent64 else std.c.dirent64;
-		pub const MPOL = if (@hasDecl(substitutes, "MPOL")) substitutes.MPOL else std.c.MPOL;
-		pub const getcpu = if (@hasDecl(substitutes, "getcpu")) substitutes.getcpu else std.c.getcpu;
-		pub const sched_getcpu = if (@hasDecl(substitutes, "sched_getcpu")) substitutes.sched_getcpu else std.c.sched_getcpu;
 		pub const whence_t = if (@hasDecl(substitutes, "whence_t")) substitutes.whence_t else std.c.whence_t;
 		pub const DIR = if (@hasDecl(substitutes, "DIR")) substitutes.DIR else std.c.DIR;
 		pub const opendir = if (@hasDecl(substitutes, "opendir")) substitutes.opendir else std.c.opendir;
@@ -374,10 +364,7 @@ pub fn with(comptime substitutes: anytype) type {
 		pub const closelog = if (@hasDecl(substitutes, "closelog")) substitutes.closelog else std.c.closelog;
 		pub const setlogmask = if (@hasDecl(substitutes, "setlogmask")) substitutes.setlogmask else std.c.setlogmask;
 		pub const if_nametoindex = if (@hasDecl(substitutes, "if_nametoindex")) substitutes.if_nametoindex else std.c.if_nametoindex;
-		pub const timer_create = if (@hasDecl(substitutes, "timer_create")) substitutes.timer_create else std.c.timer_create;
-		pub const timer_delete = if (@hasDecl(substitutes, "timer_delete")) substitutes.timer_delete else std.c.timer_delete;
-		pub const timer_settime = if (@hasDecl(substitutes, "timer_settime")) substitutes.timer_settime else std.c.timer_settime;
-		pub const timer_gettime = if (@hasDecl(substitutes, "timer_gettime")) substitutes.timer_gettime else std.c.timer_gettime;
+		pub const getcontext = if (@hasDecl(substitutes, "getcontext")) substitutes.getcontext else std.c.getcontext;
 		pub const max_align_t = if (@hasDecl(substitutes, "max_align_t")) substitutes.max_align_t else std.c.max_align_t;
 	};
 }

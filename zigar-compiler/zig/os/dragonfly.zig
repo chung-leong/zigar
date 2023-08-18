@@ -13,10 +13,6 @@ pub fn with(comptime substitutes: anytype) type {
 		pub const AT = if (@hasDecl(substitutes, "AT")) substitutes.AT else std.os.dragonfly.AT;
 		pub const CLOCK = if (@hasDecl(substitutes, "CLOCK")) substitutes.CLOCK else std.os.dragonfly.CLOCK;
 		pub const CPU_COUNT = if (@hasDecl(substitutes, "CPU_COUNT")) substitutes.CPU_COUNT else std.os.dragonfly.CPU_COUNT;
-		pub const CPU_SET = if (@hasDecl(substitutes, "CPU_SET")) substitutes.CPU_SET else std.os.dragonfly.CPU_SET;
-		pub const CPU_ISSET = if (@hasDecl(substitutes, "CPU_ISSET")) substitutes.CPU_ISSET else std.os.dragonfly.CPU_ISSET;
-		pub const CPU_CLR = if (@hasDecl(substitutes, "CPU_CLR")) substitutes.CPU_CLR else std.os.dragonfly.CPU_CLR;
-		pub const CPU_ZERO = if (@hasDecl(substitutes, "CPU_ZERO")) substitutes.CPU_ZERO else std.os.dragonfly.CPU_ZERO;
 		pub const E = if (@hasDecl(substitutes, "E")) substitutes.E else std.os.dragonfly.E;
 		pub const Elf_Symndx = if (@hasDecl(substitutes, "Elf_Symndx")) substitutes.Elf_Symndx else std.os.dragonfly.Elf_Symndx;
 		pub const F = if (@hasDecl(substitutes, "F")) substitutes.F else std.os.dragonfly.F;
@@ -96,7 +92,6 @@ pub fn with(comptime substitutes: anytype) type {
 		pub const tcflag_t = if (@hasDecl(substitutes, "tcflag_t")) substitutes.tcflag_t else std.os.dragonfly.tcflag_t;
 		pub const termios = if (@hasDecl(substitutes, "termios")) substitutes.termios else std.os.dragonfly.termios;
 		pub const time_t = if (@hasDecl(substitutes, "time_t")) substitutes.time_t else std.os.dragonfly.time_t;
-		pub const timer_t = if (@hasDecl(substitutes, "timer_t")) substitutes.timer_t else std.os.dragonfly.timer_t;
 		pub const timespec = if (@hasDecl(substitutes, "timespec")) substitutes.timespec else std.os.dragonfly.timespec;
 		pub const timeval = if (@hasDecl(substitutes, "timeval")) substitutes.timeval else std.os.dragonfly.timeval;
 		pub const timezone = if (@hasDecl(substitutes, "timezone")) substitutes.timezone else std.os.dragonfly.timezone;
@@ -128,7 +123,6 @@ pub fn with(comptime substitutes: anytype) type {
 		pub const setrlimit64 = if (@hasDecl(substitutes, "setrlimit64")) substitutes.setrlimit64 else std.os.dragonfly.setrlimit64;
 		pub const getrandom = if (@hasDecl(substitutes, "getrandom")) substitutes.getrandom else std.os.dragonfly.getrandom;
 		pub const sched_getaffinity = if (@hasDecl(substitutes, "sched_getaffinity")) substitutes.sched_getaffinity else std.os.dragonfly.sched_getaffinity;
-		pub const sched_setaffinity = if (@hasDecl(substitutes, "sched_setaffinity")) substitutes.sched_setaffinity else std.os.dragonfly.sched_setaffinity;
 		pub const eventfd = if (@hasDecl(substitutes, "eventfd")) substitutes.eventfd else std.os.dragonfly.eventfd;
 		pub const epoll_ctl = if (@hasDecl(substitutes, "epoll_ctl")) substitutes.epoll_ctl else std.os.dragonfly.epoll_ctl;
 		pub const epoll_create1 = if (@hasDecl(substitutes, "epoll_create1")) substitutes.epoll_create1 else std.os.dragonfly.epoll_create1;
@@ -158,15 +152,11 @@ pub fn with(comptime substitutes: anytype) type {
 		pub const pthread_rwlock_t = if (@hasDecl(substitutes, "pthread_rwlock_t")) substitutes.pthread_rwlock_t else std.os.dragonfly.pthread_rwlock_t;
 		pub const pthread_key_t = if (@hasDecl(substitutes, "pthread_key_t")) substitutes.pthread_key_t else std.os.dragonfly.pthread_key_t;
 		pub const sem_t = if (@hasDecl(substitutes, "sem_t")) substitutes.sem_t else std.os.dragonfly.sem_t;
-		pub const PTHREAD_STACK_MIN = if (@hasDecl(substitutes, "PTHREAD_STACK_MIN")) substitutes.PTHREAD_STACK_MIN else std.os.dragonfly.PTHREAD_STACK_MIN;
 		pub const pthread_setname_np = if (@hasDecl(substitutes, "pthread_setname_np")) substitutes.pthread_setname_np else std.os.dragonfly.pthread_setname_np;
 		pub const pthread_getname_np = if (@hasDecl(substitutes, "pthread_getname_np")) substitutes.pthread_getname_np else std.os.dragonfly.pthread_getname_np;
 		pub const RTLD = if (@hasDecl(substitutes, "RTLD")) substitutes.RTLD else std.os.dragonfly.RTLD;
 		pub const dirent = if (@hasDecl(substitutes, "dirent")) substitutes.dirent else std.os.dragonfly.dirent;
 		pub const dirent64 = if (@hasDecl(substitutes, "dirent64")) substitutes.dirent64 else std.os.dragonfly.dirent64;
-		pub const MPOL = if (@hasDecl(substitutes, "MPOL")) substitutes.MPOL else std.os.dragonfly.MPOL;
-		pub const getcpu = if (@hasDecl(substitutes, "getcpu")) substitutes.getcpu else std.os.dragonfly.getcpu;
-		pub const sched_getcpu = if (@hasDecl(substitutes, "sched_getcpu")) substitutes.sched_getcpu else std.os.dragonfly.sched_getcpu;
 		pub const whence_t = if (@hasDecl(substitutes, "whence_t")) substitutes.whence_t else std.os.dragonfly.whence_t;
 		pub const DIR = if (@hasDecl(substitutes, "DIR")) substitutes.DIR else std.os.dragonfly.DIR;
 		pub const opendir = if (@hasDecl(substitutes, "opendir")) substitutes.opendir else std.os.dragonfly.opendir;
@@ -374,10 +364,7 @@ pub fn with(comptime substitutes: anytype) type {
 		pub const closelog = if (@hasDecl(substitutes, "closelog")) substitutes.closelog else std.os.dragonfly.closelog;
 		pub const setlogmask = if (@hasDecl(substitutes, "setlogmask")) substitutes.setlogmask else std.os.dragonfly.setlogmask;
 		pub const if_nametoindex = if (@hasDecl(substitutes, "if_nametoindex")) substitutes.if_nametoindex else std.os.dragonfly.if_nametoindex;
-		pub const timer_create = if (@hasDecl(substitutes, "timer_create")) substitutes.timer_create else std.os.dragonfly.timer_create;
-		pub const timer_delete = if (@hasDecl(substitutes, "timer_delete")) substitutes.timer_delete else std.os.dragonfly.timer_delete;
-		pub const timer_settime = if (@hasDecl(substitutes, "timer_settime")) substitutes.timer_settime else std.os.dragonfly.timer_settime;
-		pub const timer_gettime = if (@hasDecl(substitutes, "timer_gettime")) substitutes.timer_gettime else std.os.dragonfly.timer_gettime;
+		pub const getcontext = if (@hasDecl(substitutes, "getcontext")) substitutes.getcontext else std.os.dragonfly.getcontext;
 		pub const max_align_t = if (@hasDecl(substitutes, "max_align_t")) substitutes.max_align_t else std.os.dragonfly.max_align_t;
 	};
 }

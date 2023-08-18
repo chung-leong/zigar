@@ -971,9 +971,6 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
     const S = opaque {};
     var template_maybe: ?Value = null;
     inline for (decls, 0..) |decl, index| {
-        if (!decl.is_pub) {
-            continue;
-        }
         // get the pointer type (where possible)
         const PT = getPointerType(T, decl.name);
         if (PT == void) {
@@ -1049,9 +1046,6 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
         else => return,
     };
     inline for (decls) |decl| {
-        if (!decl.is_pub) {
-            continue;
-        }
         switch (@typeInfo(@TypeOf(@field(T, decl.name)))) {
             .Fn => |f| {
                 const function = @field(T, decl.name);

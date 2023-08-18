@@ -28,12 +28,10 @@ pub fn generate(comptime target: anytype, comptime target_name: []const u8, comp
     try code.print("pub fn with(comptime substitutes: anytype) type {{\n", .{});
     try code.print("\treturn struct {{\n", .{});
     inline for (@typeInfo(target).Struct.decls) |decl| {
-        if (decl.is_pub) {
-            try code.print("\t\tpub const {s} = if (@hasDecl(substitutes, \"{s}\")) ", .{ decl.name, decl.name });
-            try code.print("substitutes.{s} ", .{decl.name});
-            try code.print("else ", .{});
-            try code.print("{s}.{s};\n", .{ target_name, decl.name });
-        }
+        try code.print("\t\tpub const {s} = if (@hasDecl(substitutes, \"{s}\")) ", .{ decl.name, decl.name });
+        try code.print("substitutes.{s} ", .{decl.name});
+        try code.print("else ", .{});
+        try code.print("{s}.{s};\n", .{ target_name, decl.name });
     }
     try code.print("\t}};\n", .{});
     try code.print("}}\n", .{});
