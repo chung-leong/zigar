@@ -90,3 +90,5 @@ jspm_packages/
 node_modules
 webpack.debug.js
 coverage
+
+.DS_Store

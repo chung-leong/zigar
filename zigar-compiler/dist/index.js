@@ -1,10 +1,18 @@
 import { createHash } from 'crypto';
 import { exec } from 'child_process';
 import { join, resolve, parse, basename } from 'path';
-import { tmpdir } from 'os';
+import { tmpdir, platform } from 'os';
 import { writeFile, unlink, stat, lstat, open, rename, readFile, chmod, utimes, mkdir, readdir, rmdir } from 'fs/promises';
 
 const cwd = process.cwd();
+
+function getLibraryExt() {
+  switch (platform()) {
+    case 'darwin': return 'dylib';
+    case 'windows': return 'dll';
+    default: return 'so';
+  }
+}
 
 async function compile(path, options = {}) {
   const {
@@ -29,7 +37,7 @@ async function compile(path, options = {}) {
     buildFilePath: absolute(`../zig/build.zig`),
     useLibC: false,
   };
-  const soName = (target === 'wasm') ? `${rootFile.name}.wasm` : `lib${rootFile.name}.so`;
+  const soName = (target === 'wasm') ? `${rootFile.name}.wasm` : `lib${rootFile.name}.${getLibraryExt()}`;
   const soPath = join(cacheDir, soName);
   const soMTime = (await find(soPath))?.mtime;
   if (!buildDir || !cacheDir || !zigCmd) {
@@ -673,9 +681,9 @@ async function runModule(module, options = {}) {
     }
     delete callContexts[ctxAddr];
     if (Object.keys(callContexts).length === 0) {
-      // clear the value table
-      nextValueIndex = 1;
-      valueTable = { 0: null };
+      // TODO: clear the value table
+      // nextValueIndex = 1;
+      // valueTable = { 0: null };
       // output pending text to console
       if (consolePending) {
         console.log(consolePending);
@@ -1275,7 +1283,10 @@ const ObjectType = {
   Global: 3,
 };
 
-function stripUnused(binary) {
+function stripUnused(binary, options = {}) {
+  const {
+    keepNames = false,
+  } = options;
   const { sections, size } = parseBinary(binary);
   const blacklist = [
     /^define$/,
@@ -1286,7 +1297,8 @@ function stripUnused(binary) {
     return sections.find(s => s.type === type);
   }
 
-  const { moduleName, functionNames } = extractNames({ sections });
+  const nameSection = sections.find(s => s.type === SectionType.Custom && s.name === 'name');
+  const { moduleName, functionNames, localNames } = parseNames(nameSection);
   const functions = [];
   // allocate indices for imported functions first
   const importSection = sections.find(s => s.type === SectionType.Import);
@@ -1497,6 +1509,25 @@ function stripUnused(binary) {
       newImportSection.imports.push(object);
     }
   }
+  // create new name section
+  let newNameSection = null;
+  if (nameSection && keepNames) {
+    const newFunctionNames = [];
+    const newLocalNames = [];
+    for (const fn of newFunctions) {
+      newFunctionNames.push(fn.name);
+      if (localNames.length > 0) {
+        newLocalNames.push(localNames[fn.index]);
+      }
+    }
+    const data = repackNames({
+      moduleName,
+      functionNames: newFunctionNames,
+      localNames: newLocalNames,
+      size: nameSection.data.byteLength,
+    });
+    newNameSection = { type: SectionType.Custom, name: 'name', data };
+  }
 
   // create new module sections
   const newSections = [];
@@ -1518,6 +1549,9 @@ function stripUnused(binary) {
         newSections.push(newImportSection);
         break;
       case SectionType.Custom:
+        if (section.name === 'name' && newNameSection) {
+          newSections.push(newNameSection);
+        }
         break;
       default:
         newSections.push(section);
@@ -1537,6 +1571,7 @@ function parseBinary(binary) {
     readArray,
     readU32Leb128,
     readExpression,
+    readCustom,
   } = createReader(binary);
   const magic = readU32();
   if (magic !== MagicNumber) {
@@ -1557,6 +1592,9 @@ function parseBinary(binary) {
     const type = readU8();
     const len = readU32Leb128();
     switch(type) {
+      case SectionType.Custom:
+        const { name, data } = readCustom(len);
+        return { type, name, data };
       case SectionType.Import: {
         const imports = readArray(() => {
           const module = readString();
@@ -1694,6 +1732,7 @@ function repackBinary(module) {
     writeArray,
     writeU32Leb128,
     writeExpression,
+    writeCustom,
   } = createWriter(module.size);
   writeU32(MagicNumber);
   writeU32(Version);
@@ -1706,6 +1745,9 @@ function repackBinary(module) {
     writeU8(section.type);
     writeLength(() => {
       switch(section.type) {
+        case SectionType.Custom: {
+          writeCustom(section);
+        } break;
         case SectionType.Import: {
           writeArray(section.imports, (object) => {
             writeString(object.module);
@@ -1913,6 +1955,14 @@ function createReader(dv) {
     return new DataView(dv.buffer, dv.byteOffset + start, len);
   }
 
+  function readCustom(len) {
+    const offsetBefore = offset;
+    const name = readString();
+    const nameLen = offset - offsetBefore;
+    const data = readBytes(len - nameLen);
+    return { name, data };
+  }
+
   const self = {
     eof,
     readBytes,
@@ -1925,6 +1975,7 @@ function createReader(dv) {
     readI32Leb128,
     readI64Leb128,
     readExpression,
+    readCustom,
   };
   return self;
 }
@@ -2031,6 +2082,11 @@ function createWriter(maxSize) {
     writeBytes(code);
   }
 
+  function writeCustom({ name, data }) {
+    writeString(name);
+    writeBytes(data);
+  }
+
   return {
     finalize,
     writeBytes,
@@ -2043,6 +2099,7 @@ function createWriter(maxSize) {
     writeI32Leb128,
     writeI64Leb128,
     writeExpression,
+    writeCustom,
     writeLength,
   };
 }
@@ -2355,48 +2412,99 @@ function createEncoder(writer) {
   return { encodeNext };
 }
 
-function extractNames({ sections }) {
-  let moduleName;
+function parseNames(section) {
+  let moduleName = '';
   const functionNames = [];
-  for (const section of sections) {
-    if (section.type === SectionType.Custom) {
-      const {
-        eof,
-        readString,
-        readU8,
-        readU32Leb128,
-        readArray,
-        readBytes,
-      } = createReader(section.data);
+  const localNames = [];
+  if (section) {
+    const {
+      eof,
+      readString,
+      readU8,
+      readU32Leb128,
+      readArray,
+      readBytes,
+    } = createReader(section.data);
+    const readMap = () => readArray(() => {
+      const index = readU32Leb128();
       const name = readString();
-      if (name === 'name') {
-        while(!eof()) {
-          const id = readU8();
-          const size = readU32Leb128();
-          switch (id) {
-            case 0: {
-              moduleName = readString();
-            } break;
-            case 1: {
-              const map = readArray(() => {
-                const index = readU32Leb128();
-                const name = readString();
-                return { index, name };
-              });
-              for (const { index, name } of map) {
-                functionNames[index] = name;
-              }
-            } break;
-            default: {
-              readBytes(size);
-            }
+      return { index, name };
+    });
+    while(!eof()) {
+      const id = readU8();
+      const size = readU32Leb128();
+      switch (id) {
+        case 0: {
+          moduleName = readString();
+        } break;
+        case 1: {
+          const map = readMap();
+          for (const { index, name } of map) {
+            functionNames[index] = name;
           }
+        } break;
+        case 2:
+          const map = readArray(() => {
+            const index = readU8();
+            const locals = readMap();
+            return { index, locals };
+          });
+          for (const { index, locals } of map) {
+            localNames[index] = locals;
+          }
+          break;
+        default: {
+          readBytes(size);
         }
-        break;
       }
     }
   }
-  return { moduleName, functionNames };
+  return { moduleName, functionNames, localNames };
+}
+
+function repackNames({ moduleName, functionNames, localNames, size }) {
+  const {
+    finalize,
+    writeString,
+    writeU8,
+    writeU32Leb128,
+    writeArray,
+    writeLength,
+  } = createWriter(size);
+  const writeMap = (entries) => writeArray(entries, ({ index, name }) => {
+    writeU32Leb128(index);
+    writeString(name);
+  });
+  if (moduleName) {
+    writeU8(0);
+    writeLength(() => {
+      writeString(moduleName);
+    });
+  }
+  if (functionNames.length > 0) {
+    writeU8(1);
+    writeLength(() => {
+      const map = [];
+      for (const [ index, name ] of functionNames.entries()) {
+        map.push({ index, name });
+      }
+      writeMap(map);
+    });
+  }
+  if (localNames.length > 0) {
+    writeU8(2);
+    writeLength(() => {
+      const imap = [];
+      for (const [ index, locals ] of localNames.entries()) {
+        imap.push({ index, locals });
+      }
+      writeArray(imap, ({ index, locals }) => {
+        writeU32Leb128(index);
+        writeMap(locals);
+      });
+    });
+  }
+  return finalize();
 }
 
 async function transpile(path, options = {}) {
@@ -2408,6 +2516,7 @@ async function transpile(path, options = {}) {
     optimize = (env.NODE_ENV === 'production') ? 'ReleaseSmall' : 'Debug',
     clean = (env.NODE_ENV === 'production'),
     stripWASM = (optimize !== 'Debug'),
+    keepNames = false,
     moduleResolver = (name) => name,
     wasmLoader,
     ...otherOptions
@@ -2429,9 +2538,10 @@ async function transpile(path, options = {}) {
   if (hasMethods) {
     let dv = new DataView(content.buffer);
     if (stripWASM) {
-      dv = stripUnused(dv);
+      dv = stripUnused(dv, { keepNames });
       //await writeFile(wasmPath.replace('.wasm', '.min.wasm'), dv);
     }
+    //await writeFile(wasmPath.replace('.wasm', '.min.wasm'), dv);
     if (embedWASM) {
       loadWASM = embed(name, dv);
     } else {

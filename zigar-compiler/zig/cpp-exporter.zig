@@ -308,11 +308,12 @@ pub fn getOS() type {
             const fd_t = target.fd_t;
             const STDOUT_FILENO = target.STDOUT_FILENO;
             const STDERR_FILENO = target.STDERR_FILENO;
+            const return_t = @typeInfo(@TypeOf(target.write)).Fn.return_type orelse usize;
             const substitutes = struct {
-                pub fn write(f: fd_t, ptr: [*]const u8, len: usize) usize {
+                pub fn write(f: fd_t, ptr: [*]const u8, len: usize) return_t {
                     if (f == STDOUT_FILENO or f == STDERR_FILENO) {
                         if (Host.writeToConsole(ptr, len)) {
-                            return len;
+                            return @intCast(len);
                         }
                     }
                     return target.write(f, ptr, len);

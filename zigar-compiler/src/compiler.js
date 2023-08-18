@@ -1,10 +1,18 @@
 import { createHash } from 'crypto';
 import { exec } from 'child_process';
 import { parse, join, resolve } from 'path';
-import { tmpdir } from 'os';
+import { tmpdir, platform } from 'os';
 import { stat, lstat, readdir, mkdir, rmdir, unlink, rename, chmod, utimes, readFile, writeFile, open } from 'fs/promises';
 
 const cwd = process.cwd();
+
+function getLibraryExt(platform) {
+  switch (platform) {
+    case 'darwin': return 'dylib';
+    case 'windows': return 'dll';
+    default: return 'so';
+  }
+}
 
 export async function compile(path, options = {}) {
   const {
@@ -29,7 +37,7 @@ export async function compile(path, options = {}) {
     buildFilePath: absolute(`../zig/build.zig`),
     useLibC: false,
   };
-  const soName = (target === 'wasm') ? `${rootFile.name}.wasm` : `lib${rootFile.name}.so`;
+  const soName = (target === 'wasm') ? `${rootFile.name}.wasm` : `lib${rootFile.name}.${getLibraryExt(platform())}`;
   const soPath = join(cacheDir, soName);
   const soMTime = (await find(soPath))?.mtime;
   if (!buildDir || !cacheDir || !zigCmd) {
