@@ -24,7 +24,7 @@ export function finalizePrimitive(s) {
       dv = requireDataView(s, arg);
     }
     Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true },
+      [MEMORY]: { value: dv, configurable: true, writable: true },
     });
     if (creating) {
       initializer.call(self, arg);

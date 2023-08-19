@@ -1,7 +1,7 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { requireDataView, getTypedArrayClass, isTypedArray, getCompatibleTags } from './data-view.js';
-import { addSpecialAccessors } from './special.js';
+import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
 import { MEMORY, SLOTS, ZIG, PARENT, GETTER, SETTER, PROXY, COMPAT } from './symbol.js';
 
@@ -35,10 +35,12 @@ export function finalizeArray(s) {
       dv = requireDataView(s, arg);
     }
     Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true },
+      [MEMORY]: { value: dv, configurable: true, writable: true },
+      [GETTER]: { value: null, configurable: true, writable: true },
+      [SETTER]: { value: null, configurable: true, writable: true },
     });
     if (objectMember) {
-      createChildObjects.call(self, objectMember, this, dv);
+      createChildObjects.call(self, objectMember, this);
     }
     if (creating) {
       initializer.call(self, arg);
@@ -46,9 +48,10 @@ export function finalizeArray(s) {
     return createProxy.call(self);
   };
   const { byteSize: elementSize, structure: elementStructure } = member;
-  const count = size / elementSize;
+  const length = size / elementSize;
   const copy = getMemoryCopier(size);
   const typedArray = s.typedArray = getTypedArrayClass(member);
+  const specialKeys = getSpecialKeys(s);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
       copy(this[MEMORY], arg[MEMORY]);
@@ -56,13 +59,33 @@ export function finalizeArray(s) {
         pointerCopier.call(this, arg);
       }
     } else {
-      if (Array.isArray(arg) || isTypedArray(arg, typedArray)) {
-        const len = arg.length;
-        if (len !== count) {
+      if (arg && arg[Symbol.iterator]) {
+        let argLen = arg.length;
+        if (typeof(argLen) !== 'number') {
+          arg = [ ...arg ];
+          argLen = arg.length;
+        }
+        if (argLen !== length) {
           throwArrayLengthMismatch(s, arg);
         }
-        for (let i = 0; i < len; i++) {
+        for (let i = 0; i < length; i++) {
           set.call(this, i, arg[i]);
+        }
+      } else if (arg && typeof(arg) === 'object') {
+        const keys = Object.keys(arg);
+        let found = 0;
+        for (const key of keys) {
+          if (specialKeys.includes(key)) {
+            found++;
+          } else {
+            throwNoProperty(s, key);
+          }
+        }
+        if (found === 0) {
+          throwInvalidArrayInitializer(s, arg);
+        }
+        for (const key of keys) {
+          this[key] = arg[key];
         }
       } else {
         throwInvalidArrayInitializer(s, arg);
@@ -77,7 +100,7 @@ export function finalizeArray(s) {
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
-    length: { value: count, configurable: true },
+    length: { value: length, configurable: true },
     $: { get: retriever, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true },
   });
@@ -89,12 +112,13 @@ export function finalizeArray(s) {
   return constructor;
 }
 
-export function createChildObjects(member, recv, dv) {
+export function createChildObjects(member, recv) {
+  const dv = this[MEMORY];
   let slots = this[SLOTS];
   if (!slots) {
     slots = {};
     Object.defineProperties(this, {
-      [SLOTS]: { value: slots },
+      [SLOTS]: { value: slots, configurable: true, writable: true },
     });
   }
   const { structure: { constructor }, byteSize: elementSize } = member;
@@ -180,6 +204,8 @@ const proxyHandlers = {
             array[SETTER] = array.set.bind(array);
           }
           return array[SETTER];
+        case 'SETTER':
+          break;
         default:
           return array[name];
       }

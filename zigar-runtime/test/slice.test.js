@@ -121,6 +121,9 @@ describe('Slice functions', function() {
         expect(object.get(i)).to.equal(i + 1);
       }
     })
+    it('should accept a string as initializer', function() {
+
+    })
     it('should correctly initialize an slice of structs', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
@@ -160,8 +163,8 @@ describe('Slice functions', function() {
         byteSize: 8,
         structure: structStructure,
       });
-      const HelloArray = finalizeStructure(structure);
-      const object = new HelloArray([
+      const HelloSlice = finalizeStructure(structure);
+      const object = new HelloSlice([
         { dog: 1, cat: 2 },
         { dog: 3, cat: 4 },
         { dog: 5, cat: 6 },
@@ -174,7 +177,7 @@ describe('Slice functions', function() {
         { dog: 7, cat: 8 },
       ]);
     })
-    it('should correctly initialize an slice of structs using element count', function() {
+    it('should not set default values of structs when initialized with an element count', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -224,11 +227,13 @@ describe('Slice functions', function() {
         byteSize: 8,
         structure: structStructure,
       });
-      const HelloArray = finalizeStructure(structure);
-      const object = new HelloArray(4);
+      const HelloSlice = finalizeStructure(structure);
+      const object = new HelloSlice(4);
       for (let i = 0; i < 4; i++) {
-        expect(object[i].valueOf()).to.eql({ dog: 1234, cat: 4567 });
+        expect(object[i].valueOf()).to.eql({ dog: 0, cat: 0 });
       }
+      object[0] = {};
+      expect(object[0]).to.eql({ dog: 1234, cat: 4567 });
     })
     it('should allow reinitialization through the dollar property', function() {
       const structure = beginStructure({
@@ -396,8 +401,8 @@ describe('Slice functions', function() {
         byteSize: 8,
         structure: structStructure,
       });
-      const HelloArray = finalizeStructure(structure);
-      const object = new HelloArray([
+      const HelloSlice = finalizeStructure(structure);
+      const object = new HelloSlice([
         { dog: 1, cat: 2 },
         { dog: 3, cat: 4 },
         { dog: 5, cat: 6 },
@@ -450,8 +455,8 @@ describe('Slice functions', function() {
         byteSize: 8,
         structure: structStructure,
       });
-      const HelloArray = finalizeStructure(structure);
-      expect(() => new HelloArray({})).to.throw(TypeError);
+      const HelloSlice = finalizeStructure(structure);
+      expect(() => new HelloSlice({})).to.throw(TypeError);
     })
     it('should correctly copy a slice holding pointers', function() {
       const intStructure = beginStructure({
@@ -499,6 +504,7 @@ describe('Slice functions', function() {
       });
       const Int32PtrSlice = finalizeStructure(structure);
       const slice1 = new Int32PtrSlice([ new Int32(1234), new Int32(4567), new Int32(7890) ]);
+      debugger;
       const slice2 = new Int32PtrSlice(slice1);
       expect(slice2[0]['*']).to.equal(1234);
       expect(slice2[1]['*']).to.equal(4567);

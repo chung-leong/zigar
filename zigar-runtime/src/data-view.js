@@ -118,11 +118,16 @@ export function getDataView(structure, arg) {
     }
   }
   if (dv) {
-    if (type === StructureType.Slice ? dv.byteLength % size !== 0 : dv.byteLength !== size) {
-      throwBufferSizeMismatch(structure, dv);
-    }
+    checkDataViewSize(structure, dv);
   }
   return dv;
+}
+
+export function checkDataViewSize(structure, dv) {
+  const { type, size } = structure;
+  if (type === StructureType.Slice ? dv.byteLength % size !== 0 : dv.byteLength !== size) {
+    throwBufferSizeMismatch(structure, dv);
+  }
 }
 
 function findElements(arg, Child) {

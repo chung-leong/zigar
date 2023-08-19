@@ -3,7 +3,7 @@ import { getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
-import { addSpecialAccessors } from './special.js';
+import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoProperty } from './error.js';
 import { MEMORY, SLOTS, ZIG, PARENT } from './symbol.js';
 
@@ -34,7 +34,7 @@ export function finalizeStruct(s) {
       dv = getDataView(s, arg);
     }
     Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true },
+      [MEMORY]: { value: dv, configurable: true, writable: true },
       ...descriptors
     });
     if (objectMembers.length > 0) {
@@ -52,7 +52,8 @@ export function finalizeStruct(s) {
     }
   };
   const copy = getMemoryCopier(size);
-  const requiredNames = members.filter(m => m.isRequired).map(m => m.name);
+  const specialKeys = getSpecialKeys(s);
+  const requiredKeys = members.filter(m => m.isRequired).map(m => m.name);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
       copy(this[MEMORY], arg[MEMORY]);
@@ -60,29 +61,38 @@ export function finalizeStruct(s) {
         pointerCopier.call(this, arg);
       }
     } else {
-      if (arg && typeof(arg) !== 'object') {
-        throwInvalidInitializer(s, 'an object', arg);
-      }
-      for (const name of requiredNames) {
-        if (arg?.[name] === undefined) {
+      if (arg && typeof(arg) === 'object') {
+        const keys = Object.keys(arg);
+        let found = 0;
+        let requiredFound = 0;
+        for (const key of keys) {
+          if (descriptors.hasOwnProperty(key)) {
+            found++;
+            if (requiredKeys.includes(key)) {
+              requiredFound++;
+            }
+          } else if (specialKeys.includes(key)) {
+            found = members.length;
+            requiredFound = requiredKeys.length;
+          } else {
+            throwNoProperty(s, key);
+          }
+        }
+        if (requiredFound < requiredKeys.length) {
           throwMissingInitializers(s, arg);
         }
-      }
-      const keys = (arg) ? Object.keys(arg) : [];
-      for (const key of keys) {
-        if (!descriptors.hasOwnProperty(key)) {
-          throwNoProperty(s, key);
+        // apply default values unless all properties are initialized
+        if (template && found < members.length) {
+          copy(this[MEMORY], template[MEMORY]);
+          if (pointerCopier) {
+            pointerCopier.call(this, template);
+          }
         }
-      }
-      // apply default values unless all properties are initialized
-      if (template && keys.length < members.length) {
-        copy(this[MEMORY], template[MEMORY]);
-        if (pointerCopier) {
-          pointerCopier.call(this, template);
+        for (const key of keys) {
+          this[key] = arg[key];
         }
-      }
-      for (const key of keys) {
-        this[key] = arg[key];
+      } else if (arg !== undefined) {
+        throwInvalidInitializer(s, 'an object', arg);
       }
     }
   };
@@ -99,7 +109,8 @@ export function finalizeStruct(s) {
   return constructor;
 };
 
-export function createChildObjects(members, recv, dv) {
+export function createChildObjects(members, recv) {
+  const dv = this[MEMORY];
   const slots = {};
   if (recv !== ZIG)  {
     recv = PARENT;

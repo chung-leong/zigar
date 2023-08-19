@@ -81,8 +81,8 @@ export function throwInvalidInitializer(structure, expected, arg) {
   throw new TypeError(`The constructor of ${name} expects ${expected} as an argument, received ${description}`);
 }
 
-export function throwInvalidArrayInitializer(structure, arg) {
-  const { instance: { members: [ member ] }, typedArray } = structure;
+export function throwInvalidArrayInitializer(structure, arg, shapeless = false) {
+  const { instance: { members: [ member ] }, type, typedArray } = structure;
   const acceptable = [];
   const primitive = getPrimitiveType(member);
   if (primitive) {
@@ -94,6 +94,9 @@ export function throwInvalidArrayInitializer(structure, arg) {
   }
   if (typedArray) {
     acceptable.push(`${article(typedArray.name)} ${typedArray.name}`);
+  }
+  if (type === StructureType.Slice && shapeless) {
+    acceptable.push(`a length`);
   }
   throwInvalidInitializer(structure, acceptable.join(' or '), arg);
 }
@@ -168,6 +171,9 @@ export function throwAssigningToConstant(pointer) {
   throw new TypeError(`${name} cannot be modified`);
 }
 
+export function throwTypeMismatch(expected, arg) {
+  throw new TypeError(`Expected ${article(expected)} ${expected}, received ${arg}`)
+}
 
 export function throwInaccessiblePointer() {
   throw new TypeError(`Pointers within an untagged union are not accessible`);

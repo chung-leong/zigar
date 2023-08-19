@@ -1,8 +1,9 @@
 import { StructureType } from './structure.js';
 import { MemberType, restoreMemory } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { throwBufferSizeMismatch } from './error.js';
+import { throwBufferSizeMismatch, throwInvalidInitializer, throwTypeMismatch } from './error.js';
 import { MEMORY } from './symbol.js';
+import { isTypedArray } from './data-view.js';
 
 export function addSpecialAccessors(s) {
   const {
@@ -19,25 +20,50 @@ export function addSpecialAccessors(s) {
     toJSON: { value: getValueOf, configurable: true, writable: true },
     valueOf: { value: getValueOf, configurable: true, writable: true },
   };
-  if (s.type === StructureType.Array || s.type === StructureType.Slice) {
-    const { type, isSigned, byteSize } = members[0];
-    if (type === MemberType.Int && !isSigned && (byteSize === 1 || byteSize === 2)) {
-      const strAccessors = getStringAccessors(byteSize);
-      descriptors.string = { ...strAccessors, configurable: true };
-    }
+  if (canBeString(s)) {
+    const { byteSize } = s.instance.members[0];
+    const strAccessors = getStringAccessors(byteSize);
+    descriptors.string = { ...strAccessors, configurable: true };
   }
-  if (s.type === StructureType.Array || s.type === StructureType.Slice || s.type === StructureType.Vector) {
-    if (s.typedArray) {
-      const { byteSize } = members[0];
-      const taAccessors = getTypedArrayAccessors(s.typedArray, byteSize);
-      descriptors.typedArray = { ...taAccessors, configurable: true };
-    }
+  if (canBeTypedArray(s)) {
+    const taAccessors = getTypedArrayAccessors(s.typedArray);
+    descriptors.typedArray = { ...taAccessors, configurable: true };
   }
   Object.defineProperties(constructor.prototype, descriptors);
 }
 
+function canBeString(s) {
+  if (s.type === StructureType.Array || s.type === StructureType.Slice) {
+    const { type, isSigned, bitSize } = s.instance.members[0];
+    if (type === MemberType.Int && !isSigned && (bitSize === 8 || bitSize === 16)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function canBeTypedArray(s) {
+  if (s.type === StructureType.Array || s.type === StructureType.Slice || s.type === StructureType.Vector) {
+    if (s.typedArray) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function getSpecialKeys(s) {
+  const keys = [ 'dataView', 'base64' ];
+  if (canBeString(s)) {
+    keys.push('string');
+  }
+  if (canBeTypedArray(s)) {
+    keys.push('typedArray');
+  }
+  return keys;
+}
+
 export function getDataViewAccessors(structure) {
-  const { size } = structure;
+  const { type, resizer, size } = structure;
   const copy = getMemoryCopier(size);
   return {
     get() {
@@ -46,16 +72,24 @@ export function getDataViewAccessors(structure) {
       }
       return this[MEMORY];
     },
-    set(src) {
-      if (src.byteLength !== size) {
-        throwBufferSizeMismatch(structure, src);
-      }
+    set(dv) {
+      checkDataView(dv);
       if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
         restoreMemory.call(this);
       }
-      copy(this[MEMORY], src);
+      if (this[MEMORY].byteSize !== dv.byteLength) {
+        throwBufferSizeMismatch(structure, dv);
+      }
+      copy(this[MEMORY], dv);
     },
   };
+}
+
+export function checkDataView(dv) {
+  if (dv?.[Symbol.toStringTag] !== 'DataView') {
+    throwTypeMismatch('a DataView', dv);
+  }
+  return dv;
 }
 
 export function getBase64Accessors() {
@@ -66,20 +100,25 @@ export function getBase64Accessors() {
       const bstr = String.fromCharCode.apply(null, ta);
       return btoa(bstr);
     },
-    set(src) {
-      const bstr = atob(src);
-      const ta = new Uint8Array(bstr.length);
-      for (let i = 0; i < ta.byteLength; i++) {
-        ta[i] = bstr.charCodeAt(i);
-      }
-      const dv = new DataView(ta.buffer);
-      this.dataView = dv;
+    set(str) {
+      this.dataView = getDataViewFromBase64(str);
     }
   }
 }
 
+export function getDataViewFromBase64(str) {
+  if (typeof(str) !== 'string') {
+    throwTypeMismatch('a string', str);
+  }
+  const bstr = atob(str);
+  const ta = new Uint8Array(bstr.length);
+  for (let i = 0; i < ta.byteLength; i++) {
+    ta[i] = bstr.charCodeAt(i);
+  }
+  return new DataView(ta.buffer);
+}
+
 const decoders = {};
-const encoders = {};
 
 export function getStringAccessors(byteSize) {
   return {
@@ -94,28 +133,42 @@ export function getStringAccessors(byteSize) {
       return decoder.decode(ta);
     },
     set(src) {
-      let encoder = encoders[byteSize];
-      if (!encoder) {
-        encoder = encoders[byteSize] = new TextEncoder(`utf-${byteSize * 8}`);
-      }
-      const ta = encoder.encode(src);
-      const dv = new DataView(ta.buffer);
-      this.dataView = dv;
+      this.dataView = getDataViewFromUTF8(src, byteSize);
     },
   };
 }
 
-export function getTypedArrayAccessors(typedArray, byteSize) {
+const encoders = {};
+
+export function getDataViewFromUTF8(str, byteSize) {
+  if (typeof(str) !== 'string') {
+    throwTypeMismatch('a string', str);
+  }
+  let encoder = encoders[byteSize];
+  if (!encoder) {
+    encoder = encoders[byteSize] = new TextEncoder(`utf-${byteSize * 8}`);
+  }
+  const ta = encoder.encode(str);
+  return new DataView(ta.buffer);
+}
+
+export function getTypedArrayAccessors(TypedArray, byteSize) {
   return {
     get() {
       const dv = this.dataView;
-      return new typedArray(dv.buffer, dv.byteOffset, dv.byteLength / byteSize);
+      return new TypedArray(dv.buffer, dv.byteOffset, dv.byteLength / byteSize);
     },
-    set(src) {
-      const dv = new DataView(src.buffer, src.byteOffset, src.byteLength);;
-      this.dataView = dv;
+    set(ta) {
+      this.dataView = getDataViewFromTypedArray(ta, TypedArray);
     },
   };
+}
+
+export function getDataViewFromTypedArray(ta, TypedArray) {
+  if (!isTypedArray(ta, TypedArray)) {
+    throwTypeMismatch(TypedArray.name, ta);
+  }
+  return new DataView(ta.buffer, ta.byteOffset, ta.byteLength);;
 }
 
 export function getValueOf() {

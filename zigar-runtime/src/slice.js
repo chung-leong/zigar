@@ -1,6 +1,6 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { requireDataView, getTypedArrayClass, isTypedArray, getCompatibleTags } from './data-view.js';
+import { requireDataView, getTypedArrayClass, isTypedArray, getCompatibleTags, getDataView, checkDataViewSize } from './data-view.js';
 import {
   createChildObjects,
   getPointerCopier,
@@ -9,9 +9,9 @@ import {
   getArrayIterator,
   createProxy,
 } from './array.js';
-import { addSpecialAccessors } from './special.js';
-import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
-import { LENGTH, MEMORY, COMPAT } from './symbol.js';
+import { addSpecialAccessors, checkDataView, getDataViewFromBase64, getDataViewFromTypedArray, getDataViewFromUTF8, getSpecialKeys } from './special.js';
+import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoProperty } from './error.js';
+import { LENGTH, MEMORY, SLOTS, GETTER, SETTER, COMPAT } from './symbol.js';
 
 export function finalizeSlice(s) {
   const {
@@ -33,59 +33,129 @@ export function finalizeSlice(s) {
   const objectMember = (member.type === MemberType.Object) ? member : null;
   const { byteSize: elementSize, structure: elementStructure } = member;
   const typedArray = s.typedArray = getTypedArrayClass(member);
-  const getCount = (arg) => {
-    if (Array.isArray(arg) || isTypedArray(arg, typedArray) || arg instanceof constructor) {
-      return arg.length;
-    } else if (typeof(arg) === 'number') {
-      return arg;
-    } else {
-      throwInvalidArrayInitializer(s, arg);
-    }
-  };
-  let count;
+  // the slices are different from other structures due to their variable sizes
+  // we only know the "shape" of an object after we've processed the initializers
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
-    let self, dv;
+    let self;
     if (creating) {
       self = this;
-      count = getCount(arg);
-      dv = new DataView(new ArrayBuffer(elementSize * count));
+      initializer.call(self, arg);
     } else {
       self = Object.create(constructor.prototype);
-      dv = requireDataView(s, arg, typedArray);
-      count = dv.byteLength / elementSize;
-    }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true },
-      [LENGTH]: { value: count },
-    });
-    if (objectMember) {
-      createChildObjects.call(self, objectMember, this, dv);
-    }
-    if (creating) {
-      initializer.call(self, arg);
+      const dv = requireDataView(s, arg, typedArray);
+      shapeDefiner.call(self, dv, dv.byteLength / elementSize, this);
     }
     return createProxy.call(self);
   };
   const copy = getMemoryCopier(elementSize);
-  const initializer = s.initializer = function(arg) {
-    if (getCount(arg) !== count) {
+  const specialKeys = getSpecialKeys(s);
+  const shapeDefiner = function(dv, length, recv = null) {
+    if (!dv) {
+      dv = new DataView(new ArrayBuffer(length * elementSize));
+    }
+    Object.defineProperties(this, {
+      [MEMORY]: { value: dv, configurable: true, writable: true },
+      [GETTER]: { value: null, configurable: true, writable: true },
+      [SETTER]: { value: null, configurable: true, writable: true },
+      [LENGTH]: { value: length, configurable: true, writable: true },
+    });
+    if (objectMember) {
+      createChildObjects.call(this, objectMember, recv);
+    }
+  };
+  const shapeChecker = function(arg, length) {
+    if (length !== this[LENGTH]) {
       throwArrayLengthMismatch(s, arg);
     }
+  };
+  // the initializer behave differently depending on whether it's called  by the
+  // constructor or by a member setter (i.e. after object's shape has been established)
+  const initializer = s.initializer = function(arg) {
+    let shapeless = !this.hasOwnProperty(MEMORY);
     if (arg instanceof constructor) {
+      if (shapeless) {
+        shapeDefiner.call(this, null, arg.length);
+      } else {
+        shapeChecker.call(this, arg, arg.length);
+      }
       copy(this[MEMORY], arg[MEMORY]);
       if (pointerCopier) {
         pointerCopier.call(this, arg);
       }
     } else {
-      if (Array.isArray(arg) || isTypedArray(arg, typedArray)) {
-        for (let i = 0; i < count; i++) {
-          set.call(this, i, arg[i]);
+      if (typeof(arg) === 'string' && specialKeys.includes('string')) {
+        arg = { string: arg };
+      }
+      if (arg && arg[Symbol.iterator]) {
+        let argLen = arg.length;
+        if (typeof(argLen) !== 'number') {
+          arg = [ ...arg ];
+          argLen = arg.length;
+        }
+        if (!this[MEMORY]) {
+          shapeDefiner.call(this, null, argLen);
+        } else {
+          shapeChecker.call(this, arg, argLen);
+        }
+        let i = 0;
+        for (const value of arg) {
+          set.call(this, i, value);
+          i++;
+        }
+      } else if (typeof(arg) === 'number') {
+        if (shapeless && arg >= 0) {
+          shapeDefiner.call(this, null, arg);
+        } else {
+          throwInvalidArrayInitializer(s, arg, shapeless);
+        }
+      } else if (arg && typeof(arg) === 'object') {
+        const keys = Object.keys(arg);
+        for (const key of keys) {
+          if (!specialKeys.includes(key)) {
+            throwNoProperty(s, key);
+          }
+        }
+        if (!keys.some(k => specialKeys.includes(k))) {
+          throwInvalidArrayInitializer(s, arg);
+        }
+        for (const key of keys) {
+          if (shapeless) {
+            // can't use accessors since the object has no memory yet
+            let dup = true;
+            switch (key) {
+              case 'dataView':
+                dv = arg[key];
+                checkDataView(dv);
+                break;
+              case 'typedArray':
+                dv = getDataViewFromTypedArray(arg[key], typedArray);
+                break;
+              case 'string':
+                dv = getDataViewFromUTF8(arg[key]);
+                dup = false;
+                break;
+              case 'base64':
+                dv = getDataViewFromBase64(arg[key]);
+                dup = false;
+                break;
+            }
+            checkDataViewSize(s, dv);
+            const length = dv.byteLength / elementSize;
+            if (dup) {
+              shapeDefiner.call(this, null, length);
+              copy(this[MEMORY], dv);
+            } else {
+              // reuse memory from string decoding
+              shapeDefiner.call(this, dv, length);
+            }
+            shapeless = false;
+          } else {
+            this[key] = arg[key];
+          }
         }
       } else {
-        for (let i = 0; i < count; i++) {
-          set.call(this, i, undefined);
-        }
+        throwInvalidArrayInitializer(s, arg);
       }
     }
   };

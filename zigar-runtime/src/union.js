@@ -123,7 +123,7 @@ export function finalizeUnion(s) {
       dv = getDataView(s, arg);
     }
     Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true },
+      [MEMORY]: { value: dv, configurable: true, writable: true },
     });
     Object.defineProperties(self, descriptors);
     if (objectMembers.length > 0) {

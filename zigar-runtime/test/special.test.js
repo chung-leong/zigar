@@ -4,6 +4,7 @@ import {
   StructureType,
   usePrimitive,
   useArray,
+  useSlice,
   useStruct,
   beginStructure,
   attachMember,
@@ -20,6 +21,7 @@ import {
   getDataViewAccessors,
   getBase64Accessors,
   getStringAccessors,
+  getSpecialKeys,
   getTypedArrayAccessors,
   getValueOf,
 } from '../src/special.js';
@@ -28,6 +30,7 @@ describe('Special property functions', function() {
   beforeEach(() => {
     process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
     useArray();
+    useSlice();
     useStruct();
     useIntEx();
     useFloatEx();
@@ -286,6 +289,94 @@ describe('Special property functions', function() {
       const object = new Complex(data);
       expect(JSON.stringify(object)).to.equal(JSON.stringify(data));
     })
+  })
+  describe('getSpecialKeys', function() {
+    it('should include string and typedArray when structure is an u8 array', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[4]u8',
+        size: 4,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      finalizeStructure(structure);
+      const keys = getSpecialKeys(structure);
+      expect(keys).to.eql([ 'dataView', 'base64', 'string', 'typedArray' ]);
+    })
+    it('should include typedArray only when structure is an i8 array', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[4]i8',
+        size: 4,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      finalizeStructure(structure);
+      const keys = getSpecialKeys(structure);
+      expect(keys).to.eql([ 'dataView', 'base64', 'typedArray' ]);
+    })
+    it('should include string and typedArray when structure is an u8 slice', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]u8',
+        size: 1,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      finalizeStructure(structure);
+      const keys = getSpecialKeys(structure);
+      expect(keys).to.eql([ 'dataView', 'base64', 'string', 'typedArray' ]);
+    })
+    it('should include string and typedArray when structure is an u16 slice', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]u16',
+        size: 2,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        byteSize: 2,
+      });
+      finalizeStructure(structure);
+      const keys = getSpecialKeys(structure);
+      expect(keys).to.eql([ 'dataView', 'base64', 'string', 'typedArray' ]);
+    })
+    it('should not include string if structure is an u15 slice', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]u15',
+        size: 2,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 15,
+        byteSize: 2,
+      });
+      finalizeStructure(structure);
+      const keys = getSpecialKeys(structure);
+      expect(keys).to.eql([ 'dataView', 'base64', 'typedArray' ]);
+    })
+
   })
 })
 

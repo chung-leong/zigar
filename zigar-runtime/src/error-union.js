@@ -26,7 +26,7 @@ export function finalizeErrorUnion(s) {
       dv = requireDataView(s, arg);
     }
     Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true },
+      [MEMORY]: { value: dv, configurable: true , writable: true },
     });
     if (objectMembers.length > 0) {
       createChildObjects.call(self, objectMembers, this, dv);
