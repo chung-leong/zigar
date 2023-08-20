@@ -87,7 +87,7 @@ export function finalizeSlice(s) {
       if (typeof(arg) === 'string' && specialKeys.includes('string')) {
         arg = { string: arg };
       }
-      if (arg && arg[Symbol.iterator]) {
+      if (arg?.[Symbol.iterator]) {
         let argLen = arg.length;
         if (typeof(argLen) !== 'number') {
           arg = [ ...arg ];
@@ -100,8 +100,7 @@ export function finalizeSlice(s) {
         }
         let i = 0;
         for (const value of arg) {
-          set.call(this, i, value);
-          i++;
+          set.call(this, i++, value);
         }
       } else if (typeof(arg) === 'number') {
         if (shapeless && arg >= 0 && isFinite(arg)) {
@@ -154,7 +153,7 @@ export function finalizeSlice(s) {
             this[key] = arg[key];
           }
         }
-      } else {
+      } else if (arg !== undefined) {
         throwInvalidArrayInitializer(s, arg);
       }
     }

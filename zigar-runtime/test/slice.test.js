@@ -201,7 +201,7 @@ describe('Slice functions', function() {
     it('should allow reinitialization of []u16 using a string', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
-        name: '[_]u8',
+        name: '[_]u16',
         size: 2,
       });
       attachMember(structure, {
@@ -211,9 +211,9 @@ describe('Slice functions', function() {
         bitSize: 16,
         byteSize: 2,
       });
-      const U8Slice = finalizeStructure(structure);
+      const U16Slice = finalizeStructure(structure);
       const str = 'Hello world';
-      const slice = new U8Slice(str);
+      const slice = new U16Slice(str);
       const str2 = 'World war z';
       slice.$ = str2;
       for (let i = 0; i < str2.length; i++) {
@@ -223,7 +223,7 @@ describe('Slice functions', function() {
     it('should throw when reinitialization leads to a different length', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
-        name: '[_]u8',
+        name: '[_]u16',
         size: 2,
       });
       attachMember(structure, {
@@ -234,16 +234,16 @@ describe('Slice functions', function() {
         byteSize: 2,
         structure: { constructor: function() {} },
       });
-      const U8Slice = finalizeStructure(structure);
+      const U16Slice = finalizeStructure(structure);
       const str = 'Hello world';
-      const slice = new U8Slice(str);
-      const slice2 = new U8Slice(str + '!');
+      const slice = new U16Slice(str);
+      const slice2 = new U16Slice(str + '!');
       expect(() => slice.$ = slice2).to.throw(TypeError);
     })
     it('should allow assignment of string to []u16', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
-        name: '[_]u8',
+        name: '[_]u16',
         size: 2,
       });
       attachMember(structure, {
@@ -253,8 +253,8 @@ describe('Slice functions', function() {
         bitSize: 16,
         byteSize: 2,
       });
-      const U8Slice = finalizeStructure(structure);
-      const slice = new U8Slice(11);
+      const U16Slice = finalizeStructure(structure);
+      const slice = new U16Slice(11);
       const str = 'Hello world';
       slice.string = str;
       for (let i = 0; i < str.length; i++) {
@@ -264,7 +264,7 @@ describe('Slice functions', function() {
     it('should throw when the string is too short', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
-        name: '[_]u8',
+        name: '[_]u16',
         size: 2,
       });
       attachMember(structure, {
@@ -275,15 +275,15 @@ describe('Slice functions', function() {
         byteSize: 2,
         structure: {}
       });
-      const U8Slice = finalizeStructure(structure);
-      const slice = new U8Slice(11);
+      const U16Slice = finalizeStructure(structure);
+      const slice = new U16Slice(11);
       const str = 'Hello';
       expect(() => slice.string = str).to.throw(TypeError);
     })
     it('should throw when given an object with unrecognized properties', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
-        name: '[_]u8',
+        name: '[_]u16',
         size: 2,
       });
       attachMember(structure, {
@@ -294,13 +294,13 @@ describe('Slice functions', function() {
         byteSize: 2,
         structure: {}
       });
-      const U8Slice = finalizeStructure(structure);
-      expect(() => new U8Slice({ dogmeat: 5 })).to.throw();
+      const U16Slice = finalizeStructure(structure);
+      expect(() => new U16Slice({ dogmeat: 5 })).to.throw();
     })
     it('should throw when given something unacceptable', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
-        name: '[_]u8',
+        name: '[_]u16',
         size: 2,
       });
       attachMember(structure, {
@@ -311,8 +311,8 @@ describe('Slice functions', function() {
         byteSize: 2,
         structure: {}
       });
-      const U8Slice = finalizeStructure(structure);
-      expect(() => new U8Slice(() => {})).to.throw();
+      const U16Slice = finalizeStructure(structure);
+      expect(() => new U16Slice(() => {})).to.throw();
     })
     it('should accept base64 data as initializer', function() {
       const structure = beginStructure({

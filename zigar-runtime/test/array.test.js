@@ -215,6 +215,364 @@ describe('Array functions', function() {
         expect(object.get(i)).to.equal(BigInt(i + 1) * 100n);
       }
     })
+    it('should accept string as initializer for [#]u8', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[11]u8',
+        size: 11,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      const U8Array = finalizeStructure(structure);
+      const str = 'Hello world';
+      const array = new U8Array(str);
+      expect(array).to.have.lengthOf(str.length);
+      for (let i = 0; i < str.length; i++) {
+        expect(array[i]).to.equal(str.charCodeAt(i));
+      }
+    })
+    it('should accept string as initializer for [#]u16', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[11]u8',
+        size: 22,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        byteSize: 2,
+      });
+      const U8Array = finalizeStructure(structure);
+      const str = 'Hello world';
+      const array = new U8Array(str);
+      expect(array).to.have.lengthOf(str.length);
+      for (let i = 0; i < str.length; i++) {
+        expect(array[i]).to.equal(str.charCodeAt(i));
+      }
+    })
+    it('should allow reinitialization of [#]u16 using a string', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[11]u16',
+        size: 22,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        byteSize: 2,
+      });
+      const U16Array = finalizeStructure(structure);
+      const str = 'Hello world';
+      const array = new U16Array(str);
+      const str2 = 'World war z';
+      array.$ = str2;
+      for (let i = 0; i < str2.length; i++) {
+        expect(array[i]).to.equal(str2.charCodeAt(i));
+      }
+    })
+    it('should throw when string given is too long', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]u16',
+        size: 2,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        byteSize: 2,
+        structure: { constructor: function() {} },
+      });
+      const U16Slice = finalizeStructure(structure);
+      const str = 'Hello world';
+      const slice = new U16Slice(str);
+      expect(() => U16Slice(str + '!')).to.throw(TypeError);
+    })
+    it('should allow assignment of string to [#]u16', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[11]u16',
+        size: 22,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        byteSize: 2,
+      });
+      const U16Array = finalizeStructure(structure);
+      const array = new U16Array(undefined);
+      const str = 'Hello world';
+      array.string = str;
+      for (let i = 0; i < str.length; i++) {
+        expect(array[i]).to.equal(str.charCodeAt(i));
+      }
+    })
+    it('should throw when the string is too short', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[11]u16',
+        size: 22,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        byteSize: 2,
+        structure: {}
+      });
+      const U16Array = finalizeStructure(structure);
+      const array = new U16Array(undefined);
+      const str = 'Hello';
+      expect(() => array.string = str).to.throw(TypeError);
+    })
+    it('should throw when given an object with unrecognized properties', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[11]u16',
+        size: 22,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        byteSize: 2,
+        structure: {}
+      });
+      const U16Array = finalizeStructure(structure);
+      expect(() => new U16Array({ dogmeat: 5 })).to.throw();
+    })
+    it('should throw when given something unacceptable', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[11]u16',
+        size: 22,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        byteSize: 2,
+        structure: {}
+      });
+      const U16Array = finalizeStructure(structure);
+      expect(() => new U16Array(() => {})).to.throw();
+    })
+    it('should accept base64 data as initializer', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[11]u8',
+        size: 11,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      const U8Array = finalizeStructure(structure);
+      const str = 'Hello world';
+      const base64 = btoa(str);
+      const array = new U8Array({ base64 });
+      expect(array).to.have.lengthOf(str.length);
+      for (let i = 0; i < str.length; i++) {
+        expect(array[i]).to.equal(str.charCodeAt(i));
+      }
+    })
+    it('should allow assignment of base64 data', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[11]u8',
+        size: 11,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      const U8Array = finalizeStructure(structure);
+      const array = new U8Array('Hello world');
+      const str = 'World war z';
+      array.base64 = btoa(str);
+      for (let i = 0; i < str.length; i++) {
+        expect(array[i]).to.equal(str.charCodeAt(i));
+      }
+    })
+    it('should accept typed array as initializer', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[8]u8',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      const U8Array = finalizeStructure(structure);
+      const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
+      const array = new U8Array({ typedArray });
+      expect(array).to.have.lengthOf(typedArray.length);
+      for (let i = 0; i < typedArray.length; i++) {
+        expect(array[i]).to.equal(typedArray[i]);
+      }
+      array[0] = 123;
+      expect(array[0]).to.not.equal(typedArray[0]);
+    })
+    it('should allow assignment of typed array', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[8]u8',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      const U8Array = finalizeStructure(structure);
+      const array = new U8Array(new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]));
+      const typedArray = new Uint8Array([ 0, 10, 20, 30, 40, 50, 60, 70 ]);
+      array.typedArray = typedArray;
+      for (let i = 0; i < typedArray.length; i++) {
+        expect(array[i]).to.equal(typedArray[i]);
+      }
+    })
+    it('should throw when given typed array of a different type', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[8]u8',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      const U8Array = finalizeStructure(structure);
+      const array = new U8Array(new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]));
+      const typedArray = new Int16Array([ 0, 10, 20, 30, 40, 50, 60, 70 ]);
+      expect(() => array.typedArray = typedArray).to.throw(TypeError);
+    })
+    it('should accept data view as initializer', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[8]u8',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      const U8Array = finalizeStructure(structure);
+      const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7]);
+      const dataView = new DataView(typedArray.buffer);
+      const array = new U8Array({ dataView });
+      expect(array).to.have.lengthOf(typedArray.length);
+      for (let i = 0; i < typedArray.length; i++) {
+        expect(array[i]).to.equal(typedArray[i]);
+      }
+      array[0] = 123;
+      expect(array[0]).to.not.equal(typedArray[0]);
+    })
+    it('should allow assignment of data view', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[8]u8',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      const U8Array = finalizeStructure(structure);
+      const array = new U8Array(undefined);
+      const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7]);
+      array.dataView = new DataView(typedArray.buffer);
+      for (let i = 0; i < typedArray.length; i++) {
+        expect(array[i]).to.equal(typedArray[i]);
+      }
+      array[0] = 123;
+      expect(array[0]).to.not.equal(typedArray[0]);
+    })
+    it('should accept typed array of a different type as initializer', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: '[8]u8',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      const U8Array = finalizeStructure(structure);
+      const typedArray = new Float32Array([ 0, 1, 2, 3, 4, 5, 6, 7]);
+      const array = new U8Array(typedArray);
+      expect(array).to.have.lengthOf(typedArray.length);
+      for (let i = 0; i < typedArray.length; i++) {
+        expect(array[i]).to.equal(typedArray[i]);
+      }
+    })
+    it('should accept a generator as initializer', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[8]u8',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+        structure: {},
+      });
+      const U8Array = finalizeStructure(structure);
+      const f = function*() {
+        let i = 0;
+        while (i < 8) {
+          yield i++;
+        }
+      };
+      const gen = f();
+      const array = new U8Array(gen);
+      expect(array).to.have.lengthOf(8);
+      for (let i = 0; i < array.length; i++) {
+        expect(array[i]).to.equal(i);
+      }
+    })
     it('should throw when initializer is of the wrong length', function() {
       const structure = beginStructure({
         type: StructureType.Array,

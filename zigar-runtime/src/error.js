@@ -77,8 +77,8 @@ export function throwMissingUnionInitializer(structure, arg, exclusion) {
 
 export function throwInvalidInitializer(structure, expected, arg) {
   const { name } = structure;
-  const description = Object.prototype.toString.call(arg);
-  throw new TypeError(`The constructor of ${name} expects ${expected} as an argument, received ${description}`);
+  const received = label(arg);
+  throw new TypeError(`${name} expects ${expected} as an argument, received ${received}`);
 }
 
 export function throwInvalidArrayInitializer(structure, arg, shapeless = false) {

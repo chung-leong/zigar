@@ -59,7 +59,10 @@ export function finalizeArray(s) {
         pointerCopier.call(this, arg);
       }
     } else {
-      if (arg && arg[Symbol.iterator]) {
+      if (typeof(arg) === 'string' && specialKeys.includes('string')) {
+        arg = { string: arg };
+      }
+      if (arg?.[Symbol.iterator]) {
         let argLen = arg.length;
         if (typeof(argLen) !== 'number') {
           arg = [ ...arg ];
@@ -68,26 +71,24 @@ export function finalizeArray(s) {
         if (argLen !== length) {
           throwArrayLengthMismatch(s, this, arg);
         }
-        for (let i = 0; i < length; i++) {
-          set.call(this, i, arg[i]);
+        let i = 0;
+        for (const value of arg) {
+          set.call(this, i++, value);
         }
       } else if (arg && typeof(arg) === 'object') {
         const keys = Object.keys(arg);
-        let found = 0;
         for (const key of keys) {
-          if (specialKeys.includes(key)) {
-            found++;
-          } else {
+          if (!specialKeys.includes(key)) {
             throwNoProperty(s, key);
           }
         }
-        if (found === 0) {
+        if (!keys.some(k => specialKeys.includes(k))) {
           throwInvalidArrayInitializer(s, arg);
         }
         for (const key of keys) {
           this[key] = arg[key];
         }
-      } else {
+      } else if (arg !== undefined) {
         throwInvalidArrayInitializer(s, arg);
       }
     }
@@ -204,8 +205,6 @@ const proxyHandlers = {
             array[SETTER] = array.set.bind(array);
           }
           return array[SETTER];
-        case 'SETTER':
-          break;
         default:
           return array[name];
       }
