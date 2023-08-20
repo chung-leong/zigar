@@ -52,7 +52,7 @@ export function finalizeVector(s) {
       if (Array.isArray(arg) || isTypedArray(arg, typedArray)) {
         const len = arg.length;
         if (len !== count) {
-          throwArrayLengthMismatch(s, arg);
+          throwArrayLengthMismatch(s, this, arg);
         }
         for (let i = 0; i < len; i++) {
           this[i] = arg[i];

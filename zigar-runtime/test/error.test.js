@@ -261,15 +261,16 @@ describe('Error functions', function() {
         },
         constructor: arrayConstructor,
       };
-      expect(() => throwArrayLengthMismatch(structure, { length: 5 })).to.throw(TypeError)
+      const object = { length: 2 };
+      expect(() => throwArrayLengthMismatch(structure, object, { length: 5 })).to.throw(TypeError)
         .with.property('message').that.contains('2 elements').and.that.contains('5 initializers');
-      expect(() => throwArrayLengthMismatch(structure, { length: 1 })).to.throw(TypeError)
+      expect(() => throwArrayLengthMismatch(structure, object, { length: 1 })).to.throw(TypeError)
         .with.property('message').that.contains('2 elements').and.that.contains('1 initializer');
-      expect(() => throwArrayLengthMismatch(structure, new elementConstructor())).to.throw(TypeError)
+      expect(() => throwArrayLengthMismatch(structure, object, new elementConstructor())).to.throw(TypeError)
         .with.property('message').that.contains('only a single one');
       const array = new arrayConstructor();
       array.length = 5;
-      expect(() => throwArrayLengthMismatch(structure, array)).to.throw(TypeError)
+      expect(() => throwArrayLengthMismatch(structure, object, array)).to.throw(TypeError)
         .with.property('message').that.contains('a slice/array that has 5');
 
     })

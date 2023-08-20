@@ -66,7 +66,7 @@ export function finalizeSlice(s) {
   };
   const shapeChecker = function(arg, length) {
     if (length !== this[LENGTH]) {
-      throwArrayLengthMismatch(s, arg);
+      throwArrayLengthMismatch(s, this, arg);
     }
   };
   // the initializer behave differently depending on whether it's called  by the
@@ -104,7 +104,7 @@ export function finalizeSlice(s) {
           i++;
         }
       } else if (typeof(arg) === 'number') {
-        if (shapeless && arg >= 0) {
+        if (shapeless && arg >= 0 && isFinite(arg)) {
           shapeDefiner.call(this, null, arg);
         } else {
           throwInvalidArrayInitializer(s, arg, shapeless);

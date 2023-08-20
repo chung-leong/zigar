@@ -66,7 +66,7 @@ export function finalizeArray(s) {
           argLen = arg.length;
         }
         if (argLen !== length) {
-          throwArrayLengthMismatch(s, arg);
+          throwArrayLengthMismatch(s, this, arg);
         }
         for (let i = 0; i < length; i++) {
           set.call(this, i, arg[i]);

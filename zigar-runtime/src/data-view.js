@@ -112,7 +112,7 @@ export function getDataView(structure, arg) {
         if (type === StructureType.Slice || number * elementSize === size) {
           return memory;
         } else {
-          throwArrayLengthMismatch(structure, arg);
+          throwArrayLengthMismatch(structure, null, arg);
         }
       }
     }

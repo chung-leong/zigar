@@ -101,10 +101,10 @@ export function throwInvalidArrayInitializer(structure, arg, shapeless = false) 
   throwInvalidInitializer(structure, acceptable.join(' or '), arg);
 }
 
-export function throwArrayLengthMismatch(structure, arg) {
+export function throwArrayLengthMismatch(structure, target, arg) {
   const { name, size, instance: { members: [ member ] } } = structure;
-  const { byteSize: elementSize, structure: { constructor: elementConstructor} } = member;
-  const length = size / elementSize;
+  const { byteSize, structure: { constructor: elementConstructor} } = member;
+  const length = target?.length ?? size / byteSize;
   const { length: argLength, constructor: argConstructor } = arg;
   const s = (length > 1) ? 's' : '';
   let source;
@@ -174,6 +174,11 @@ export function throwAssigningToConstant(pointer) {
 export function throwTypeMismatch(expected, arg) {
   const received = label(arg);
   throw new TypeError(`Expected ${article(expected)} ${expected}, received ${article(received)} ${received}`)
+}
+
+export function throwNotEnoughBytes(structure, dest, src) {
+  const { name } = structure;
+  throw new TypeError(`${name} has ${dest.byteLength} bytes, received ${src.byteLength}`);
 }
 
 export function throwInaccessiblePointer() {
