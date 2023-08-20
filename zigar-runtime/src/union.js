@@ -4,7 +4,7 @@ import { getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
-import { addSpecialAccessors } from './special.js';
+import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { createChildObjects, getPointerCopier, getPointerResetter, getPointerDisabler } from './struct.js';
 import {
   throwInvalidInitializer,
@@ -140,6 +140,7 @@ export function finalizeUnion(s) {
   };
   const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
   const copy = getMemoryCopier(size);
+  const specialKeys = getSpecialKeys(s);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
       copy(this[MEMORY], arg[MEMORY]);
@@ -147,39 +148,50 @@ export function finalizeUnion(s) {
         pointerCopier.call(this, arg);
       }
     } else {
-      if (arg && typeof(arg) !== 'object') {
-        throwInvalidInitializer(s, 'an object with a single property', arg);
-      }
-      const keys = (arg) ? Object.keys(arg) : [];
-      for (const key of keys) {
-        if (!descriptors.hasOwnProperty(key)) {
-          throwNoProperty(s, key);
+      if (arg && typeof(arg) === 'object') {
+        const keys = Object.keys(arg);
+        let found = 0;
+        let specialInit = false;
+        for (const key of keys) {
+          if (descriptors.hasOwnProperty(key)) {
+            found++;
+          } else if (specialKeys.includes(key)) {
+            specialInit = true;
+          } else {
+            throwNoProperty(s, key);
+          }
         }
-      }
-      if (keys.length !== 1) {
-        if (keys.length === 0) {
-          if (!hasDefaultMember) {
-            throwMissingUnionInitializer(s, exclusion);
+        if (found !== 1) {
+          if (found === 0) {
+            if (!specialInit && !hasDefaultMember) {
+              throwMissingUnionInitializer(s, arg, exclusion);
+            }
+          } else {
+            throwMultipleUnionInitializers(s);
+          }
+        }
+        if (specialInit) {
+          for (const key of keys) {
+            this[key] = arg[keys];
+          }
+        } else if (found === 0) {
+          if (template) {
+            copy(this[MEMORY], template[MEMORY]);
+            if (pointerCopier) {
+              pointerCopier.call(this, template);
+            }
+          }
+          if (showDefault) {
+            showDefault.call(this);
           }
         } else {
-          throwMultipleUnionInitializers(s);
-        }
-      }
-      if (keys.length === 0) {
-        if (template) {
-          copy(this[MEMORY], template[MEMORY]);
-          if (pointerCopier) {
-            pointerCopier.call(this, template);
+          for (const key of keys) {
+            const { init } = descriptors[key];
+            init.call(this, arg[key]);
           }
         }
-        if (showDefault) {
-          showDefault.call(this);
-        }
-      } else {
-        for (const key of keys) {
-          const { init } = descriptors[key];
-          init.call(this, arg[keys]);
-        }
+      } else if (arg !== undefined) {
+        throwInvalidInitializer(s, 'an object with a single property', arg);
       }
     }
   };

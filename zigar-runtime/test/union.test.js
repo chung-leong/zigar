@@ -77,7 +77,7 @@ describe('Union functions', function() {
       })
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
-      const object = new Hello();
+      const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
       expect(object).to.be.an.instanceOf(Hello);
       expect(Object.keys(object)).to.have.lengthOf(2);
@@ -133,7 +133,7 @@ describe('Union functions', function() {
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
-      const object = new Hello();
+      const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
       expect(object).to.be.an.instanceOf(Hello);
       expect(Object.keys(object)).to.have.lengthOf(1);
@@ -240,6 +240,92 @@ describe('Union functions', function() {
       const object = Hello(dv.buffer);
       expect(object.cat).to.equal(1234);
       expect(() => object.dog).to.throw(TypeError);
+    })
+    it('should accept base64 data as initializer', function() {
+      const structure = beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        size: 6,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        bitOffset: 32,
+        byteSize: 2,
+      });
+      const Hello = finalizeStructure(structure);
+      const str = '\u0001\u0000\u0000\u0000\u0000\u0000';
+      const base64 = btoa(str);
+      const object = new Hello({ base64 });
+      expect(object.dog).to.equal(1);
+      expect(() => object.cat).to.throw();
+    })
+
+    it('should allow assignment of base64 data', function() {
+      const structure = beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        size: 6,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 16,
+        bitOffset: 32,
+        byteSize: 2,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello({ cat: 5 });
+      expect(object.cat).to.equal(5);
+      const str = '\u0001\u0000\u0000\u0000\u0000\u0000';
+      object.base64 = btoa(str);
+      expect(object.dog).to.equal(1);
+      expect(() => object.cat).to.throw();
     })
     it('should define a bare union containing a struct', function() {
       const structStructure = beginStructure({
@@ -519,7 +605,7 @@ describe('Union functions', function() {
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
-      const object = new Hello();
+      const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
       expect(object).to.be.an.instanceOf(Hello);
       expect(Object.keys(object)).to.have.lengthOf(1);
@@ -938,7 +1024,7 @@ describe('Union functions', function() {
         byteSize: 2,
       });
       const Hello = finalizeStructure(structure);
-      expect(() => new Hello()).to.throw(TypeError)
+      expect(() => new Hello({})).to.throw(TypeError)
         .with.property('message').that.contains('dog, cat')
       const object = new Hello({ cat: 4567 });
       expect(object.cat).to.equal(4567);

@@ -65,6 +65,7 @@ export function finalizeStruct(s) {
         const keys = Object.keys(arg);
         let found = 0;
         let requiredFound = 0;
+        let specialInit = false;
         for (const key of keys) {
           if (descriptors.hasOwnProperty(key)) {
             found++;
@@ -72,17 +73,16 @@ export function finalizeStruct(s) {
               requiredFound++;
             }
           } else if (specialKeys.includes(key)) {
-            found = members.length;
-            requiredFound = requiredKeys.length;
+            specialInit = true;
           } else {
             throwNoProperty(s, key);
           }
         }
-        if (requiredFound < requiredKeys.length) {
+        if (!specialInit && requiredFound < requiredKeys.length) {
           throwMissingInitializers(s, arg);
         }
         // apply default values unless all properties are initialized
-        if (template && found < members.length) {
+        if (template && !specialInit && found < members.length) {
           copy(this[MEMORY], template[MEMORY]);
           if (pointerCopier) {
             pointerCopier.call(this, template);
