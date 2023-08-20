@@ -491,7 +491,7 @@ describe('Array functions', function() {
         byteSize: 1,
       });
       const U8Array = finalizeStructure(structure);
-      const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7]);
+      const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const dataView = new DataView(typedArray.buffer);
       const array = new U8Array({ dataView });
       expect(array).to.have.lengthOf(typedArray.length);
@@ -516,7 +516,7 @@ describe('Array functions', function() {
       });
       const U8Array = finalizeStructure(structure);
       const array = new U8Array(undefined);
-      const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7]);
+      const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       array.dataView = new DataView(typedArray.buffer);
       for (let i = 0; i < typedArray.length; i++) {
         expect(array[i]).to.equal(typedArray[i]);
@@ -538,7 +538,7 @@ describe('Array functions', function() {
         byteSize: 1,
       });
       const U8Array = finalizeStructure(structure);
-      const typedArray = new Float32Array([ 0, 1, 2, 3, 4, 5, 6, 7]);
+      const typedArray = new Float32Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const array = new U8Array(typedArray);
       expect(array).to.have.lengthOf(typedArray.length);
       for (let i = 0; i < typedArray.length; i++) {

@@ -433,7 +433,7 @@ describe('Slice functions', function() {
         byteSize: 1,
       });
       const U8Slice = finalizeStructure(structure);
-      const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7]);
+      const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const dataView = new DataView(typedArray.buffer);
       const slice = new U8Slice({ dataView });
       expect(slice).to.have.lengthOf(typedArray.length);
@@ -458,7 +458,7 @@ describe('Slice functions', function() {
       });
       const U8Slice = finalizeStructure(structure);
       const slice = new U8Slice(8);
-      const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7]);
+      const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       slice.dataView = new DataView(typedArray.buffer);
       for (let i = 0; i < typedArray.length; i++) {
         expect(slice[i]).to.equal(typedArray[i]);
@@ -480,7 +480,7 @@ describe('Slice functions', function() {
         byteSize: 1,
       });
       const U8Slice = finalizeStructure(structure);
-      const typedArray = new Float32Array([ 0, 1, 2, 3, 4, 5, 6, 7]);
+      const typedArray = new Float32Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const slice = new U8Slice(typedArray);
       expect(slice).to.have.lengthOf(typedArray.length);
       for (let i = 0; i < typedArray.length; i++) {

@@ -66,7 +66,7 @@ describe('Struct functions', function() {
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
-      const object = new Hello();
+      const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
       expect(object).to.be.an.instanceOf(Hello);
       expect(Object.keys(object)).to.have.lengthOf(2);
@@ -111,7 +111,7 @@ describe('Struct functions', function() {
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
-      const object = new Hello();
+      const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
       expect(object).to.be.an.instanceOf(Hello);
       expect(Object.keys(object)).to.have.lengthOf(2);
@@ -155,7 +155,7 @@ describe('Struct functions', function() {
         },
       });
       const Hello = finalizeStructure(structure);
-      const object = new Hello();
+      const object = new Hello({});
       object.dog = 72;
       expect(object.dog).to.equal(72);
       expect(object.cat).to.equal(4567);
@@ -200,7 +200,7 @@ describe('Struct functions', function() {
         },
       });
       const Hello = finalizeStructure(structure);
-      const object = new Hello();
+      const object = new Hello({});
       expect(object.dataView).to.be.instanceOf(DataView);
     })
     it('should throw when a value exceed the maximum capability of the type', function () {
@@ -240,7 +240,7 @@ describe('Struct functions', function() {
         },
       });
       const Hello = finalizeStructure(structure);
-      const object = new Hello();
+      const object = new Hello({});
       expect(() => object.dog = 0x1FFFFFFFF).to.throw(TypeError);
     })
     it('should permit overflow when runtime safety is off', function () {
@@ -280,7 +280,7 @@ describe('Struct functions', function() {
         },
       });
       const Hello = finalizeStructure(structure);
-      const object = new Hello();
+      const object = new Hello({});
       expect(() => object.dog = 0x1FFFFFFFF).to.not.throw();
     })
     it('should be able to handle bitfields', function() {
@@ -315,7 +315,7 @@ describe('Struct functions', function() {
         },
       });
       const Hello = finalizeStructure(structure);
-      const object = new Hello();
+      const object = new Hello({});
       expect(object.dog).to.be.false;
       expect(object.cat).to.be.true;
       expect(object.typedArray).to.be.undefined;
@@ -358,7 +358,7 @@ describe('Struct functions', function() {
         },
       });
       const Hello = finalizeStructure(structure);
-      const object = new Hello();
+      const object = new Hello({});
       expect(object.dog).to.equal(3);
       expect(object.cat).to.equal(1);
       expect(() => object.dog = 4).to.throw();
@@ -403,7 +403,7 @@ describe('Struct functions', function() {
         },
       });
       const Hello = finalizeStructure(structure);
-      const object = new Hello();
+      const object = new Hello({});
       expect(object.dog).to.equal(0);
       expect(object.cat).to.equal(2);
     })
@@ -432,7 +432,7 @@ describe('Struct functions', function() {
         bitOffset: 32,
       });
       const Hello = finalizeStructure(structure);
-      expect(() => new Hello()).to.throw(TypeError)
+      expect(() => new Hello({})).to.throw(TypeError)
         .with.property('message').that.contains('dog, cat');
       expect(() => new Hello({ dog: 1234 })).to.throw(TypeError)
         .with.property('message').that.does.not.contain('dog');
@@ -529,10 +529,134 @@ describe('Struct functions', function() {
         },
       });
       const Hello = finalizeStructure(structure);
-      expect(() => new Hello).to.throw();
+      expect(() => new Hello({})).to.throw();
       const object = new Hello({ cat: 4567 });
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(4567);
+    })
+    it('should accept base64 data as initializer', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 32,
+      });
+      const Hello = finalizeStructure(structure);
+      const str = '\u0001\u0000\u0000\u0000\u0007\u0000\u0000\u0000';
+      const base64 = btoa(str);
+      const object = new Hello({ base64 });
+      expect(object.dog).to.equal(1);
+      expect(object.cat).to.equal(7);
+    })
+    it('should allow assignment of base64 data', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 32,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello(undefined);
+      const str = '\u000f\u0000\u0000\u0000\u000a\u0000\u0000\u0000';
+      object.base64 = btoa(str);
+      expect(object.dog).to.equal(15);
+      expect(object.cat).to.equal(10);
+    })
+    it('should accept data view as initializer', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 32,
+      });
+      const Hello = finalizeStructure(structure);
+      const typedArray = new Uint32Array([ 123, 456 ]);
+      const dataView = new DataView(typedArray.buffer);
+      const object = new Hello({ dataView });
+      expect(object.dog).to.equal(123);
+      expect(object.cat).to.equal(456);
+    })
+    it('should allow assignment of data view', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 32,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello(undefined);
+      const typedArray = new Uint32Array([ 123, 456 ]);
+      object.dataView = new DataView(typedArray.buffer);
+      expect(object.dog).to.equal(123);
+      expect(object.cat).to.equal(456);
     })
     it('should allow assignment through the dollar property', function() {
       const structure = beginStructure({
@@ -568,7 +692,7 @@ describe('Struct functions', function() {
         },
       });
       const Hello = finalizeStructure(structure);
-      const object = new Hello();
+      const object = new Hello({});
       expect(object).to.eql({ dog: 1234, cat: 4567 });
       object.dog = 777;
       expect(object).to.eql({ dog: 777, cat: 4567 });
@@ -654,7 +778,7 @@ describe('Struct functions', function() {
         },
       });
       const Hello = finalizeStructure(structure);
-      const object = new Hello();
+      const object = new Hello({});
       expect(object.dog['*']).to.equal(1234);
       expect(object.cat['*']).to.equal(4567);
       object.dog = new Int32(7788);
