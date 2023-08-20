@@ -77,7 +77,7 @@ export function getDataViewAccessors(structure) {
       if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
         restoreMemory.call(this);
       }
-      if (this[MEMORY].byteSize !== dv.byteLength) {
+      if (this[MEMORY].byteLength !== dv.byteLength) {
         throwBufferSizeMismatch(structure, dv);
       }
       copy(this[MEMORY], dv);
@@ -120,7 +120,7 @@ export function getDataViewFromBase64(str) {
 
 const decoders = {};
 
-export function getStringAccessors(byteSize) {
+export function getStringAccessors(byteSize, littleEndian) {
   return {
     get() {
       let decoder = decoders[byteSize];
@@ -133,22 +133,30 @@ export function getStringAccessors(byteSize) {
       return decoder.decode(ta);
     },
     set(src) {
-      this.dataView = getDataViewFromUTF8(src, byteSize);
+      this.dataView = getDataViewFromUTF8(src, byteSize, littleEndian);
     },
   };
 }
 
-const encoders = {};
+let encoder;
 
 export function getDataViewFromUTF8(str, byteSize) {
   if (typeof(str) !== 'string') {
     throwTypeMismatch('a string', str);
   }
-  let encoder = encoders[byteSize];
-  if (!encoder) {
-    encoder = encoders[byteSize] = new TextEncoder(`utf-${byteSize * 8}`);
+  let ta;
+  if (byteSize === 1) {
+    if (!encoder) {
+      encoder = new TextEncoder(`utf-${byteSize * 8}`);
+    }
+    ta = encoder.encode(str);
+  } else if (byteSize === 2) {
+    const { length } = str;
+    ta = new Uint16Array(length);
+    for (let i = 0; i < length; i++) {
+      ta[i] = str.charCodeAt(i);
+    }
   }
-  const ta = encoder.encode(str);
   return new DataView(ta.buffer);
 }
 

@@ -25,6 +25,21 @@ describe('Memory functions', function() {
           expect(dest.getInt8(i)).to.equal(i);
         }
       }
+      for (let size = 1; size <= 64; size++) {
+        const src = new DataView(new ArrayBuffer(size * 16));
+        for (let i = 0; i < size; i++) {
+          src.setInt8(i, i);
+        }
+        const dest = new DataView(new ArrayBuffer(size * 16));
+        const f = getMemoryCopier(size, true);
+        if (!functions.includes(f)) {
+          functions.push(f);
+        }
+        f(dest, src);
+        for (let i = 0; i < size; i++) {
+          expect(dest.getInt8(i)).to.equal(i);
+        }
+      }
       expect(functions).to.have.lengthOf(10);
     })
   })

@@ -48,7 +48,7 @@ export function finalizeSlice(s) {
     }
     return createProxy.call(self);
   };
-  const copy = getMemoryCopier(elementSize);
+  const copy = getMemoryCopier(elementSize, true);
   const specialKeys = getSpecialKeys(s);
   const shapeDefiner = function(dv, length, recv = null) {
     if (!dv) {
@@ -122,7 +122,7 @@ export function finalizeSlice(s) {
         for (const key of keys) {
           if (shapeless) {
             // can't use accessors since the object has no memory yet
-            let dup = true;
+            let dv, dup = true;
             switch (key) {
               case 'dataView':
                 dv = arg[key];
@@ -132,7 +132,7 @@ export function finalizeSlice(s) {
                 dv = getDataViewFromTypedArray(arg[key], typedArray);
                 break;
               case 'string':
-                dv = getDataViewFromUTF8(arg[key]);
+                dv = getDataViewFromUTF8(arg[key], elementSize);
                 dup = false;
                 break;
               case 'base64':

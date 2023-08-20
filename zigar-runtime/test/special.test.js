@@ -24,6 +24,10 @@ import {
   getSpecialKeys,
   getTypedArrayAccessors,
   getValueOf,
+  checkDataView,
+  getDataViewFromBase64,
+  getDataViewFromUTF8,
+  getDataViewFromTypedArray,
 } from '../src/special.js';
 
 describe('Special property functions', function() {
@@ -376,7 +380,61 @@ describe('Special property functions', function() {
       const keys = getSpecialKeys(structure);
       expect(keys).to.eql([ 'dataView', 'base64', 'typedArray' ]);
     })
-
+  })
+  describe('checkDataView', function() {
+    it('should not throw when a DataView is given', function() {
+      const arg = new DataView(new ArrayBuffer(4));
+      expect(() => checkDataView(arg)).to.not.throw();
+    })
+    it('should throw when the given object is not a DataView', function() {
+      const arg = new ArrayBuffer(4);
+      expect(() => checkDataView(arg)).to.throw(TypeError);
+      expect(() => checkDataView(1)).to.throw(TypeError);
+      expect(() => checkDataView(null)).to.throw(TypeError);
+      expect(() => checkDataView(undefined)).to.throw(TypeError);
+    })
+  })
+  describe('getDataViewFromBase64', function() {
+    it('should return a data view with decoded data from a base64 string', function() {
+      const bstr = btoa('\u0001\u0002\u0003\u0004');
+      const dv = getDataViewFromBase64(bstr);
+      for (let i = 0; i < 4; i++) {
+        expect(dv.getUint8(i)).to.equal(i + 1);
+      }
+    })
+    it('should throw when it does not get a string', function() {
+      expect(() => getDataViewFromBase64(1)).to.throw(TypeError);
+    })
+  })
+  describe('getDataViewFromUTF8', function() {
+    it('should return a data view with u8 data from a string', function() {
+      const dv = getDataViewFromUTF8('Hello', 1);
+      expect(dv).to.have.property('byteLength', 5);
+      expect(dv.getUint8(0)).to.equal('H'.charCodeAt(0));
+    })
+    it('should return a data view with u16 data from a string', function() {
+      const dv = getDataViewFromUTF8('Cześć', 2);
+      expect(dv).to.have.property('byteLength', 10);
+      expect(dv.getUint16(3 * 2, true)).to.equal('ś'.charCodeAt(0));
+    })
+    it('should throw when it does not get a string', function() {
+      expect(() => getDataViewFromUTF8(1)).to.throw(TypeError);
+    })
+  })
+  describe('getDataViewFromTypedArray', function() {
+    it('should return a data view from a typed array', function() {
+      const buffer = new ArrayBuffer(20);
+      const ta = new Float32Array(buffer, 4, 4);
+      const dv = getDataViewFromTypedArray(ta, Float32Array);
+      expect(dv).to.have.property('byteLength', 16);
+      expect(dv).to.have.property('byteOffset', 4);
+    })
+    it('should throw when it receives a typed array of the wrong type', function() {
+      const ta = new Float32Array([ 1, 2, 3, 4 ]);
+      expect(() => getDataViewFromTypedArray(ta, Float64Array)).to.throw(TypeError);
+      expect(() => getDataViewFromTypedArray(undefined, Float64Array)).to.throw(TypeError);
+      expect(() => getDataViewFromTypedArray(1, Float64Array)).to.throw(TypeError);
+    })
   })
 })
 

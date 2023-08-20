@@ -172,7 +172,8 @@ export function throwAssigningToConstant(pointer) {
 }
 
 export function throwTypeMismatch(expected, arg) {
-  throw new TypeError(`Expected ${article(expected)} ${expected}, received ${arg}`)
+  const received = label(arg);
+  throw new TypeError(`Expected ${article(expected)} ${expected}, received ${article(received)} ${received}`)
 }
 
 export function throwInaccessiblePointer() {
@@ -244,6 +245,15 @@ export function decamelizeErrorName(name) {
   }
 }
 
+function label(arg) {
+  const type = typeof(arg);
+  if (type === 'object') {
+    return (arg) ? Object.prototype.toString.call(arg) : 'null';
+  } else {
+    return type;
+  }
+}
+
 function article(noun) {
-  return /^[aeiou]/i.test(noun) ? 'an' : 'a';
+  return /^\W*[aeiou]/i.test(noun) ? 'an' : 'a';
 }

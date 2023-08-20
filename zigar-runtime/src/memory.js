@@ -78,20 +78,21 @@ export function getBitAlignFunction(bitPos, bitSize, toAligned) {
   }
 }
 
-export function getMemoryCopier(size) {
-  switch (size) {
-    case 1: return copy1;
-    case 2: return copy2;
-    case 4: return copy4;
-    case 8: return copy8;
-    case 16: return copy16;
-    case 32: return copy32;
-    default:
-      if (!(size & 0x07)) return copy8x;
-      if (!(size & 0x03)) return copy4x;
-      if (!(size & 0x01)) return copy2x;
-      return copy1x;
+export function getMemoryCopier(size, multiple = false) {
+  if (!multiple) {
+    switch (size) {
+      case 1: return copy1;
+      case 2: return copy2;
+      case 4: return copy4;
+      case 8: return copy8;
+      case 16: return copy16;
+      case 32: return copy32;
+    }
   }
+  if (!(size & 0x07)) return copy8x;
+  if (!(size & 0x03)) return copy4x;
+  if (!(size & 0x01)) return copy2x;
+  return copy1x;
 }
 
 function copy1x(dest, src) {
