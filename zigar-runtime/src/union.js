@@ -191,7 +191,7 @@ export function finalizeUnion(s) {
           }
         }
       } else if (arg !== undefined) {
-        throwInvalidInitializer(s, 'an object with a single property', arg);
+        throwInvalidInitializer(s, 'object with a single property', arg);
       }
     }
   };

@@ -78,7 +78,7 @@ export function throwMissingUnionInitializer(structure, arg, exclusion) {
 export function throwInvalidInitializer(structure, expected, arg) {
   const { name } = structure;
   const received = label(arg);
-  throw new TypeError(`${name} expects ${expected} as an argument, received ${received}`);
+  throw new TypeError(`${name} expects ${article(expected)} ${expected} as an argument, received ${article(received)} ${received}`);
 }
 
 export function throwInvalidArrayInitializer(structure, arg, shapeless = false) {

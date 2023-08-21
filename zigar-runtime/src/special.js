@@ -43,12 +43,7 @@ function canBeString(s) {
 }
 
 function canBeTypedArray(s) {
-  if (s.type === StructureType.Array || s.type === StructureType.Slice || s.type === StructureType.Vector) {
-    if (s.typedArray) {
-      return true;
-    }
-  }
-  return false;
+  return !!s.typedArray;
 }
 
 export function getSpecialKeys(s) {

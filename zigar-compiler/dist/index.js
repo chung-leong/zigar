@@ -6,8 +6,8 @@ import { writeFile, unlink, stat, lstat, open, rename, readFile, chmod, utimes, 
 
 const cwd = process.cwd();
 
-function getLibraryExt() {
-  switch (platform()) {
+function getLibraryExt(platform) {
+  switch (platform) {
     case 'darwin': return 'dylib';
     case 'windows': return 'dll';
     default: return 'so';
@@ -37,7 +37,7 @@ async function compile(path, options = {}) {
     buildFilePath: absolute(`../zig/build.zig`),
     useLibC: false,
   };
-  const soName = (target === 'wasm') ? `${rootFile.name}.wasm` : `lib${rootFile.name}.${getLibraryExt()}`;
+  const soName = (target === 'wasm') ? `${rootFile.name}.wasm` : `lib${rootFile.name}.${getLibraryExt(platform())}`;
   const soPath = join(cacheDir, soName);
   const soMTime = (await find(soPath))?.mtime;
   if (!buildDir || !cacheDir || !zigCmd) {
@@ -339,20 +339,21 @@ const SLOTS = Symbol('slots');
 const ZIG = Symbol('zig');
 const STRUCTURE = Symbol('structure');
 
-function getMemoryCopier(size) {
-  switch (size) {
-    case 1: return copy1;
-    case 2: return copy2;
-    case 4: return copy4;
-    case 8: return copy8;
-    case 16: return copy16;
-    case 32: return copy32;
-    default:
-      if (!(size & 0x07)) return copy8x;
-      if (!(size & 0x03)) return copy4x;
-      if (!(size & 0x01)) return copy2x;
-      return copy1x;
+function getMemoryCopier(size, multiple = false) {
+  if (!multiple) {
+    switch (size) {
+      case 1: return copy1;
+      case 2: return copy2;
+      case 4: return copy4;
+      case 8: return copy8;
+      case 16: return copy16;
+      case 32: return copy32;
+    }
   }
+  if (!(size & 0x07)) return copy8x;
+  if (!(size & 0x03)) return copy4x;
+  if (!(size & 0x01)) return copy2x;
+  return copy1x;
 }
 
 function copy1x(dest, src) {

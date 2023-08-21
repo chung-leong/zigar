@@ -1,8 +1,9 @@
 import { MemberType, isByteAligned, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { requireDataView } from './data-view.js';
-import { addSpecialAccessors } from './special.js';
+import { getTypedArrayClass, requireDataView } from './data-view.js';
+import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { MEMORY } from './symbol.js';
+import { throwInvalidInitializer, throwNoProperty } from './error.js';
 
 export function finalizePrimitive(s) {
   const {
@@ -33,11 +34,29 @@ export function finalizePrimitive(s) {
     }
   };
   const copy = getMemoryCopier(size);
+  const typedArray = s.typedArray = getTypedArrayClass(member);
+  const specialKeys = getSpecialKeys(s);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
       copy(this[MEMORY], arg[MEMORY]);
     } else {
-      this.$ = arg;
+      if (arg && typeof(arg) === 'object') {
+        const keys = Object.keys(arg);
+        for (const key of keys) {
+          if (!specialKeys.includes(key)) {
+            throwNoProperty(s, key);
+          }
+        }
+        if (!keys.some(k => specialKeys.includes(k))) {
+          const type = getPrimitiveType(member);
+          throwInvalidInitializer(s, type, arg);
+        }
+        for (const key of keys) {
+          this[key] = arg[key];
+        }
+      } else if (arg !== undefined) {
+        this.$ = arg;
+      }
     }
   };
   const { get, set } = getAccessors(member, options);

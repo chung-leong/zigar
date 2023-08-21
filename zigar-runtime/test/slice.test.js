@@ -926,7 +926,6 @@ describe('Slice functions', function() {
       });
       const Int32PtrSlice = finalizeStructure(structure);
       const slice1 = new Int32PtrSlice([ new Int32(1234), new Int32(4567), new Int32(7890) ]);
-      debugger;
       const slice2 = new Int32PtrSlice(slice1);
       expect(slice2[0]['*']).to.equal(1234);
       expect(slice2[1]['*']).to.equal(4567);

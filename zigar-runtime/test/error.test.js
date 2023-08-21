@@ -261,40 +261,17 @@ describe('Error functions', function() {
         },
         constructor: arrayConstructor,
       };
-      const object = { length: 2 };
-      expect(() => throwArrayLengthMismatch(structure, object, { length: 5 })).to.throw(TypeError)
-        .with.property('message').that.contains('2 elements').and.that.contains('5 initializers');
-      expect(() => throwArrayLengthMismatch(structure, object, { length: 1 })).to.throw(TypeError)
+      expect(() => throwArrayLengthMismatch(structure, { length: 1 }, { length: 5 })).to.throw(TypeError)
+        .with.property('message').that.contains('1 element').and.that.contains('5 initializers');
+      expect(() => throwArrayLengthMismatch(structure, { length: 2 }, { length: 1 })).to.throw(TypeError)
         .with.property('message').that.contains('2 elements').and.that.contains('1 initializer');
-      expect(() => throwArrayLengthMismatch(structure, object, new elementConstructor())).to.throw(TypeError)
+      expect(() => throwArrayLengthMismatch(structure, { length: 2 }, new elementConstructor())).to.throw(TypeError)
         .with.property('message').that.contains('only a single one');
       const array = new arrayConstructor();
       array.length = 5;
-      expect(() => throwArrayLengthMismatch(structure, object, array)).to.throw(TypeError)
+      expect(() => throwArrayLengthMismatch(structure, { length: 2 }, array)).to.throw(TypeError)
         .with.property('message').that.contains('a slice/array that has 5');
 
-    })
-    it('should use singular noun when there is just one element', function() {
-      const structure = {
-        name: 'Hello',
-        type: StructureType.Array,
-        size: 4,
-        instance: {
-          members: [
-            {
-              type: MemberType.Int,
-              bitSize: 32,
-              byteSize: 4,
-              structure: {
-                constructor: function() {},
-              }
-            }
-          ],
-        },
-        constructor: function() {},
-      };
-      expect(() => throwArrayLengthMismatch(structure, [])).to.throw(TypeError)
-        .with.property('message').that.contains('1 element,');
     })
   })
   describe('throwInactiveUnionProperty', function() {
@@ -352,7 +329,7 @@ describe('Error functions', function() {
         type: StructureType.BareUnion,
         size: 8,
       };
-      expect(() => throwInvalidInitializer(structure, 'an object', 16)).to.throw(TypeError)
+      expect(() => throwInvalidInitializer(structure, 'object', 16)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
     })
   })

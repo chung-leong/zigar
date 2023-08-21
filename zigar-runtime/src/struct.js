@@ -92,7 +92,7 @@ export function finalizeStruct(s) {
           this[key] = arg[key];
         }
       } else if (arg !== undefined) {
-        throwInvalidInitializer(s, 'an object', arg);
+        throwInvalidInitializer(s, 'object', arg);
       }
     }
   };

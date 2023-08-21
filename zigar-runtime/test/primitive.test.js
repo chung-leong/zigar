@@ -65,6 +65,162 @@ describe('Primitive functions', function() {
       const object2 = new Hello(object);
       expect(object2.valueOf()).to.equal(12345n);
     })
+    it('should have special properties', function() {
+      const structure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'i64',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isSigned: true,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello(12345n);
+      expect(object.dataView).to.be.an.instanceOf(DataView);
+      expect(object.typedArray).to.be.an.instanceOf(BigInt64Array);
+    })
+    it('should accept base64 data as initializer', function() {
+      const structure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'i64',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+      });
+      const I64 = finalizeStructure(structure);
+      const str = '\u0001\u0000\u0000\u0000\u0000\u0000\u0000\u0000';
+      const base64 = btoa(str);
+      const int = new I64({ base64 });
+      expect(int.$).to.equal(1n);
+    })
+    it('should allow assignment of base64 data', function() {
+      const structure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'i64',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+      });
+      const I64 = finalizeStructure(structure);
+      const str = '\u0001\u0000\u0000\u0000\u0000\u0000\u0000\u0000';
+      const int = new I64(0n);
+      int.base64 = btoa(str);
+      expect(int.$).to.equal(1n);
+    })
+    it('should accept typed array as initializer', function() {
+      const structure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'i64',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+      });
+      const I64 = finalizeStructure(structure);
+      const typedArray = new BigInt64Array([ 1234n ]);
+      const int = new I64({ typedArray });
+      expect(int.$).to.equal(typedArray[0]);
+      int.$ = 123n;
+      expect(int.$).to.not.equal(typedArray[0]);
+    })
+    it('should allow assignment of typed array', function() {
+      const structure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'i64',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+      });
+      const I64 = finalizeStructure(structure);
+      const int = new I64(77n);
+      const typedArray = new BigInt64Array([ 1234n ]);
+      int.typedArray = typedArray;
+      expect(int.$).to.equal(typedArray[0]);
+    })
+    it('should allow casting of typed array into primitive', function() {
+      const structure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'i64',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+      });
+      const I64 = finalizeStructure(structure);
+      const typedArray = new BigInt64Array([ 1234n ]);
+      const int = I64(typedArray);
+      expect(int.$).to.equal(typedArray[0]);
+      int.$ = 123n;
+      expect(int.$).to.equal(typedArray[0]);
+    })
+    it('should throw when given an object with unrecognized properties', function() {
+      const structure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'i64',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+      });
+      const I64 = finalizeStructure(structure);
+      expect(() => new I64({ dogmeat: 5 })).to.throw(TypeError);
+    })
+    it('should throw when given an empty object', function() {
+      const structure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'i64',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: true,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+      });
+      const I64 = finalizeStructure(structure);
+      expect(() => new I64({})).to.throw(TypeError);
+    })
+
   })
   describe('getIntRange', function() {
     it('should return expected range for a 8-bit signed integer', function() {

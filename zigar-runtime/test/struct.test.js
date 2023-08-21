@@ -496,7 +496,6 @@ describe('Struct functions', function() {
       expect(() => new Hello(5)).to.throw(TypeError)
         .with.property('message').that.does.not.contain('dog');
     })
-
     it('should apply default value when only some properties are provided', function() {
       const structure = beginStructure({
         type: StructureType.Struct,

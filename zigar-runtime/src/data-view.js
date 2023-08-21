@@ -150,7 +150,8 @@ export function requireDataView(structure, arg) {
   return dv;
 }
 
-export function getTypedArrayClass({ type, isSigned, byteSize }) {
+export function getTypedArrayClass(member) {
+  const { type, isSigned, byteSize } = member;
   if (type === MemberType.Int) {
     if (isSigned) {
       switch (byteSize) {
