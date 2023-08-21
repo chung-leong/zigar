@@ -31,6 +31,8 @@ import {
   throwNotNull,
   decamelizeErrorName,
   throwZigError,
+  article,
+  formatList,
 } from '../src/error.js';
 
 describe('Error functions', function() {
@@ -540,6 +542,30 @@ describe('Error functions', function() {
     it('should throw error with the correct message', function() {
       expect(() => throwZigError('PantsOnFire')).to.throw()
         .with.property('message').that.equals('Pants on fire');
+    })
+  })
+  describe('article', function() {
+    it('should return an when noun starts with a vowel', function() {
+      expect(article('apple')).to.equal('an');
+      expect(article('[apple]')).to.equal('an');
+    })
+    it('should return a when noun does not start with a vowel', function() {
+      expect(article('banana')).to.equal('a');
+      expect(article('[banana]')).to.equal('a');
+    })
+  })
+  describe('formatList', function() {
+    it('should correct format a list of three items', function() {
+      const list = [ 'apple', 'banana', 'cantaloupe' ];
+      expect(formatList(list)).to.equal('apple, banana or cantaloupe');
+    })
+    it('should correct format a list of two items', function() {
+      const list = [ 'apple', 'banana' ];
+      expect(formatList(list)).to.equal('apple or banana');
+    })
+    it('should correct format a list of one item', function() {
+      const list = [ 'apple' ];
+      expect(formatList(list)).to.equal('apple');
     })
   })
 })

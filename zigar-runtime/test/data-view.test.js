@@ -551,9 +551,7 @@ describe('Data view functions', function() {
       const get = getDataViewIntAccessor('get', member);
       const dv = new DataView(new ArrayBuffer(8));
       dv.setBigInt64(0, BigInt(Number.MIN_SAFE_INTEGER), true);
-      debugger;
       expect(get.call(dv, 0, true)).to.equal(Number.MIN_SAFE_INTEGER);
-      return;
       dv.setBigInt64(0, BigInt(Number.MIN_SAFE_INTEGER) - 1n, true);
       expect(get.call(dv, 0, true)).to.equal(BigInt(Number.MIN_SAFE_INTEGER) - 1n);
     })

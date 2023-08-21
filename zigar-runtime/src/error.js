@@ -17,9 +17,11 @@ export function throwBufferSizeMismatch(structure, dv) {
 export function throwBufferExpected(structure) {
   const { size, typedArray } = structure;
   const s = (size > 1) ? 's' : '';
-  const list = [ 'an ArrayBuffer', 'a DataView' ];
-  const last = (typedArray) ? `${article(typedArray.name)} ${typedArray.name}` : list.pop();
-  throw new TypeError(`Expecting an ${list.join(', ')} or ${last} ${size} byte${s} in length`);
+  const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle);
+  if (typedArray) {
+    acceptable.push(addArticle(typedArray.name));
+  }
+  throw new TypeError(`Expecting ${formatList(acceptable)} ${size} byte${s} in length`);
 }
 
 export function throwInvalidEnum(structure, value) {
@@ -27,9 +29,9 @@ export function throwInvalidEnum(structure, value) {
   throw new TypeError(`Value given does not correspond to an item of enum ${name}: ${value}`);
 }
 
-export function throwEnumExpected(structure) {
+export function throwEnumExpected(structure, arg) {
   const { name } = structure;
-  throw new TypeError(`Enum item expected: ${name}`);
+  throw new TypeError(`Enum item of the type ${name} expected, received ${arg}`);
 }
 
 export function throwNoNewEnum(structure) {
@@ -77,8 +79,16 @@ export function throwMissingUnionInitializer(structure, arg, exclusion) {
 
 export function throwInvalidInitializer(structure, expected, arg) {
   const { name } = structure;
-  const received = label(arg);
-  throw new TypeError(`${name} expects ${article(expected)} ${expected} as an argument, received ${article(received)} ${received}`);
+  const acceptable = [];
+  if (Array.isArray(expected)) {
+    for (const type of expected) {
+      acceptable.push(addArticle(type));
+    }
+  } else {
+    acceptable.push(addArticle(expected));
+  }
+  const received = addArticle(getDescription(arg));
+  throw new TypeError(`${name} expects ${formatList(acceptable)} as an argument, received ${received}`);
 }
 
 export function throwInvalidArrayInitializer(structure, arg, shapeless = false) {
@@ -107,15 +117,15 @@ export function throwArrayLengthMismatch(structure, target, arg) {
   const length = target?.length ?? size / byteSize;
   const { length: argLength, constructor: argConstructor } = arg;
   const s = (length > 1) ? 's' : '';
-  let source;
+  let received;
   if (argConstructor === elementConstructor) {
-    source = `only a single one`;
+    received = `only a single one`;
   } else if (argConstructor.child === elementConstructor) {
-    source = `a slice/array that has ${argLength}`;
+    received = `a slice/array that has ${argLength}`;
   } else {
-    source = `${argLength} initializer${argLength > 1 ? 's' : ''}`;
+    received = `${argLength} initializer${argLength > 1 ? 's' : ''}`;
   }
-  throw new TypeError(`${name} has ${length} element${s}, received ${source}`);
+  throw new TypeError(`${name} has ${length} element${s}, received ${received}`);
 }
 
 export function throwMissingInitializers(structure, arg) {
@@ -172,8 +182,8 @@ export function throwAssigningToConstant(pointer) {
 }
 
 export function throwTypeMismatch(expected, arg) {
-  const received = label(arg);
-  throw new TypeError(`Expected ${article(expected)} ${expected}, received ${article(received)} ${received}`)
+  const received = addArticle(getDescription(arg));
+  throw new TypeError(`Expected ${addArticle(expected)}, received ${received}`)
 }
 
 export function throwNotEnoughBytes(structure, dest, src) {
@@ -250,15 +260,30 @@ export function decamelizeErrorName(name) {
   }
 }
 
-function label(arg) {
+function getDescription(arg) {
   const type = typeof(arg);
+  let s;
   if (type === 'object') {
-    return (arg) ? Object.prototype.toString.call(arg) : 'null';
+    s = (arg) ? Object.prototype.toString.call(arg) : 'null';
   } else {
-    return type;
+    s = type;
   }
+  return addArticle(s);
 }
 
-function article(noun) {
+function addArticle(noun) {
+  return `${article(noun)} ${noun}`;
+}
+
+export function article(noun) {
   return /^\W*[aeiou]/i.test(noun) ? 'an' : 'a';
+}
+
+export function formatList(list, conj = 'or') {
+  const sep = ` ${conj} `;
+  if (list.length > 2) {
+    return list.slice(0, -1).join(', ') + sep + list[list.length - 1];
+  } else {
+    return list.join(sep);
+  }
 }

@@ -96,6 +96,81 @@ describe('Enumeration functions', function() {
       expect(Hello(0)).to.equal(Hello.Dog);
       expect(Hello(1)).to.equal(Hello.Cat);
     })
+    it('should look up the correct enum object by name', function() {
+      const structure = beginStructure({
+        type: StructureType.Enumeration,
+        name: 'Hello',
+      });
+      attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setUint32(0, 0, true);
+            dv.setUint32(4, 1, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
+      });
+      const Hello = finalizeStructure(structure);
+      expect(Hello('Dog')).to.equal(Hello.Dog);
+      expect(Hello('Cat')).to.equal(Hello.Cat);
+    })
+    it('should throw when given incompatible input', function() {
+      const structure = beginStructure({
+        type: StructureType.Enumeration,
+        name: 'Hello',
+      });
+      attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: (() => {
+            const dv = new DataView(new ArrayBuffer(4 * 2));
+            dv.setUint32(0, 0, true);
+            dv.setUint32(4, 1, true);
+            return dv;
+          })(),
+          [SLOTS]: {},
+        },
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => Hello({})).to.throw(TypeError);
+      expect(() => Hello(undefined)).to.throw(TypeError);
+      expect(() => Hello(Symbol.asyncIterator)).to.throw(TypeError);
+    })
     it('should look up the correct enum object when values are not sequential', function() {
       const structure = beginStructure({
         type: StructureType.Enumeration,

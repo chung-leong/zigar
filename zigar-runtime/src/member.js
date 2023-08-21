@@ -220,10 +220,16 @@ function addEnumerationLookup(getDataViewIntAccessor) {
     } else {
       return function(offset, value, littleEndian) {
         const { constructor } = structure;
-        if (!(value instanceof constructor)) {
-          throwEnumExpected(constructor);
+        let item;
+        if (value instanceof constructor) {
+          item = value;
+        } else {
+          item = constructor(value);
         }
-        accessor.call(this, offset, value.valueOf(), littleEndian);
+        if (!item) {
+          throwEnumExpected(structure, value);
+        }
+        accessor.call(this, offset, item.valueOf(), littleEndian);
       };
     }
   };

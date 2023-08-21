@@ -221,17 +221,21 @@ describe('Member functions', function() {
         bitSize: 8,
         bitOffset: 32,
         byteSize: 1,
-        structure: { type: StructureType.Enumeration, constructor: DummyEnum },
+        structure: {
+          name: 'DummEnum',
+          type: StructureType.Enumeration,
+          constructor: DummyEnum
+        },
       };
       const { get, set } = getAccessors(member, { runtimeSafety: false });
       expect(get.call(object)).to.equal(DummyValue1);
       set.call(object, DummyEnum(2));
       expect(dv.getUint32(4, true)).to.equal(2);
       expect(get.call(object)).to.equal(DummyValue2);
+      expect(() => set.call(object, 1)).to.not.throw();
       expect(() => set.call(object, 5)).to.throw();
       dv.setUint32(4, 3, true);
       expect(() => get.call(object)).to.throw();
-
     })
     it('should return small enum item accessor', function() {
       useEnumerationItemEx();

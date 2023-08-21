@@ -3,7 +3,7 @@ import { getPrimitiveClass } from './primitive.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors } from './special.js';
-import { throwNoNewEnum } from './error.js';
+import { throwInvalidInitializer, throwNoNewEnum } from './error.js';
 import { MEMORY, ENUM_INDEX, ENUM_ITEMS, ENUM_ITEM } from './symbol.js';
 
 export function finalizeEnumeration(s) {
@@ -33,30 +33,32 @@ export function finalizeEnumeration(s) {
       // new enum items cannot be created
       throwNoNewEnum(s);
     }
-    if (arg && typeof(arg) === 'object') {
-      // if it's a tagged union, return the active tag
-      if (arg[ENUM_ITEM]) {
-        return arg[ENUM_ITEM];
-      }
-    }
-    let index = -1;
-    if (isSequential) {
-      // normal enums start at 0 and go up, so the value is the index
-      index = Number(arg);
-    } else {
-      // values aren't sequential, so we need to compare values
-      // casting just in case the enum is BigInt
-      const given = Primitive(arg);
-      for (let i = 0; i < count; i++) {
-        const value = getValue.call(constructor, i);
-        if (value === given) {
-          index = i;
-          break;
+    if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+      let index = -1;
+      if (isSequential) {
+        // normal enums start at 0 and go up, so the value is the index
+        index = Number(arg);
+      } else {
+        // values aren't sequential, so we need to compare values
+        const given = Primitive(arg);
+        for (let i = 0; i < count; i++) {
+          const value = getValue.call(constructor, i);
+          if (value === given) {
+            index = i;
+            break;
+          }
         }
       }
+      // return the enum object (created down below)
+      return items[index];
+    } else if (arg && typeof(arg) === 'object' && arg[ENUM_ITEM]) {
+      // a tagged union, return the active tag
+      return arg[ENUM_ITEM];
+    } else if (typeof(arg)  === 'string') {
+      return constructor[arg];
+    } else {
+      throwInvalidInitializer(s, [ 'number', 'string', 'tagged union' ], arg);
     }
-    // return the enum object (created down below)
-    return items[index];
   };
   // attach the numeric values to the class as its binary data
   // this allows us to reuse the array getter
