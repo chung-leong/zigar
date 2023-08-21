@@ -407,7 +407,7 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
 export function restoreMemory() {
   const dv = this[MEMORY];
   const source = dv[SOURCE];
-  if (!source || dv.byteOffset !== 0) {
+  if (!source || dv.buffer.byteLength !== 0) {
     return false;
   }
   const { memory, address, len } = source;
