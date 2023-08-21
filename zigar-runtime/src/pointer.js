@@ -38,7 +38,6 @@ export function finalizePointer(s) {
           arg = arg['*'];
         } else if (isTargetSlice) {
           creating = true;
-          warnTypedArray?.(arg);
           arg = constructor.child(arg);
         } else {
           throwNoCastingToPointer(s);

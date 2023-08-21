@@ -4,6 +4,7 @@ import {
   MemberType,
   useIntEx,
   useObject,
+  useBool,
 } from '../src/member.js';
 import {
   StructureType,
@@ -22,6 +23,7 @@ describe('Pointer functions', function() {
   describe('finalizePointer', function() {
     beforeEach(function() {
       useIntEx();
+      useBool();
       useObject();
       useStruct();
       usePrimitive();
@@ -587,7 +589,7 @@ describe('Pointer functions', function() {
       const Int32Slice = finalizeStructure(sliceStructure);
       const structure = beginStructure({
         type: StructureType.Pointer,
-        name: '[]Hello',
+        name: '[]Int32',
         size: 8,
         hasPointer: true,
       });
@@ -600,17 +602,73 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const HelloPtr = finalizeStructure(structure);
+      const Int32SlicePtr = finalizeStructure(structure);
       const origFn = console.warn;
       let message;
       try {
         console.warn = (msg) => message = msg;
         const ta = new Uint32Array([ 1, 2, 3, 4 ]);
-        expect(() => new HelloPtr(ta)).to.not.throw(TypeError);
+        expect(() => new Int32SlicePtr(ta)).to.not.throw(TypeError);
       } finally {
         console.warn = origFn;
       }
       expect(message).to.be.a('string');
+    })
+    it('should show no warning when target slice is not compatiable with any typed array', function() {
+      const boolStructure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Bool',
+        size: 1,
+        hasPointer: false,
+      });
+      attachMember(boolStructure, {
+        type: MemberType.Bool,
+        isStatic: false,
+        isSigned: true,
+        bitSize: 1,
+        byteSize: 8,
+      });
+      const Bool = finalizeStructure(boolStructure);
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]Bool',
+        size: 1,
+        hasPointer: false,
+      });
+      attachMember(sliceStructure, {
+        type: MemberType.Bool,
+        isStatic: false,
+        bitSize: 1,
+        byteSize: 1,
+        structure: boolStructure,
+      });
+      const BoolSlice = finalizeStructure(sliceStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '[]Bool',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        isStatic: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const BoolSlicePtr = finalizeStructure(structure);
+      const origFn = console.warn;
+      let message;
+      try {
+        console.warn = (msg) => message = msg;
+        const ta = new Uint32Array([ 1, 2, 3, 4 ]);
+        expect(() => new BoolSlicePtr(ta)).to.not.throw(TypeError);
+      } finally {
+        console.warn = origFn;
+      }
+      expect(message).to.be.undefined;
     })
     it('should automatically cast to slice from an array', function() {
       const intStructure = beginStructure({
