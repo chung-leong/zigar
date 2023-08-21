@@ -1,6 +1,6 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { requireDataView, getTypedArrayClass, getCompatibleTags, checkDataViewSize } from './data-view.js';
+import { requireDataView, getTypedArrayClass, checkDataViewSize } from './data-view.js';
 import {
   createChildObjects,
   getPointerCopier,
@@ -180,9 +180,13 @@ export function finalizeSlice(s) {
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     entries: { value: createArrayEntries, configurable: true, writable: true },
   });
+  const compatTags = [ 'DataView', 'ArrayBuffer', 'SharedArrayBuffer', 'Uint8Array' ];
+  if (typedArray && typedArray !== Uint8Array) {
+    compatTags.push(typedArray.name);
+  }
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
-    [COMPAT]: { value: getCompatibleTags(member) },
+    [COMPAT]: { value: compatTags },
   });
   addSpecialAccessors(s);
   return constructor;

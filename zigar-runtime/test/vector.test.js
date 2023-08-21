@@ -124,6 +124,42 @@ describe('Vector functions', function() {
       expect(object.length).to.equal(4);
       expect(object.typedArray).to.be.instanceOf(Float32Array);
     })
+    it('should have special properties', function() {
+      const structure = beginStructure({
+        type: StructureType.Vector,
+        name: 'Hello',
+        size: 8 * 3,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isSigned: true,
+        isStatic: false,
+        bitSize: 64,
+        byteSize: 8,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello([ 12345n, 12345n, 12345n ]);
+      expect(object.dataView).to.be.an.instanceOf(DataView);
+      expect(object.typedArray).to.be.an.instanceOf(BigInt64Array);
+    })
+    it('should not have typedArray prop when it is a 128-bit vector', function() {
+      const structure = beginStructure({
+        type: StructureType.Vector,
+        name: 'Hello',
+        size: 16 * 3,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isSigned: true,
+        isStatic: false,
+        bitSize: 128,
+        byteSize: 16,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello([ 12345n, 12345n, 12345n ]);
+      expect(object.dataView).to.be.an.instanceOf(DataView);
+      expect(object.typedArray).to.be.undefined;
+    })
     it('should allow casting to an int vector', function() {
       const structure = beginStructure({
         type: StructureType.Vector,

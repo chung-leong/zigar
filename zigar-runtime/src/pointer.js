@@ -36,9 +36,6 @@ export function finalizePointer(s) {
         if (isPointerOf(arg, Target)) {
           creating = true;
           arg = arg['*'];
-        } else if (isTargetSlice) {
-          creating = true;
-          arg = constructor.child(arg);
         } else {
           throwNoCastingToPointer(s);
         }
@@ -55,13 +52,6 @@ export function finalizePointer(s) {
     }
     return createProxy.call(self, member);
   };
-  const warnTypedArray = (targetStructure.typedArray) ? function(arg) {
-    if (isBuffer(arg?.buffer)) {
-      const created = addArticle(targetStructure.typedArray.name);
-      const source = addArticle(arg.constructor.name);
-      console.warn(`Implicitly creating ${created} from ${source}`);
-    }
-  } : null;
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
       // not doing memory copying since the value stored there likely isn't valid anyway
@@ -81,8 +71,18 @@ export function finalizePointer(s) {
             arg = Target(dv);
           } else if (isTargetSlice) {
             // autovivificate target object
-            warnTypedArray?.(arg);
-            arg = new Target(arg);
+            const autoObj = new Target(arg);
+            if (process.env.NODE_ENV !== 'production') {
+              // creation of a new slice using a typed array is probably
+              // not what the user wants; it's more likely that the intention
+              // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
+              if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
+                const created = addArticle(targetStructure.typedArray.name);
+                const source = addArticle(arg.constructor.name);
+                console.warn(`Implicitly creating ${created} from ${source}`);
+              }
+            }
+            arg = autoObj;
           } else {
             throwInvalidPointerTarget(s, arg);
           }

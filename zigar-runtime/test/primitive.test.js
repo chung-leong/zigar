@@ -84,6 +84,25 @@ describe('Primitive functions', function() {
       expect(object.dataView).to.be.an.instanceOf(DataView);
       expect(object.typedArray).to.be.an.instanceOf(BigInt64Array);
     })
+    it('should not have typedArray prop when it is a 128-bit integer', function() {
+      const structure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'i128',
+        size: 16,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isSigned: true,
+        isStatic: false,
+        bitSize: 128,
+        bitOffset: 0,
+        byteSize: 16,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello(12345n);
+      expect(object.dataView).to.be.an.instanceOf(DataView);
+      expect(object.typedArray).to.be.undefined;
+    })
     it('should accept base64 data as initializer', function() {
       const structure = beginStructure({
         type: StructureType.Primitive,

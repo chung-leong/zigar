@@ -100,7 +100,7 @@ export function getDataView(structure, arg) {
     dv = arg;
   } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
     dv = new DataView(arg);
-  } else if (typedArray && tag === typedArray.name) {
+  } else if (tag === 'Uint8Array' || (typedArray && tag === typedArray.name)) {
     dv = new DataView(arg.buffer, arg.byteOffset, arg.byteLength);
   } else {
     const memory = arg?.[MEMORY];
@@ -195,22 +195,6 @@ export function isCompatible(arg, constructor) {
     }
   }
   return false;
-}
-
-export function getCompatibleTags(member) {
-  const tags = [];
-  if (member.type === MemberType.Int || member.type === MemberType.Float) {
-    const TypedArray = getTypedArrayClass(member);
-    if (TypedArray) {
-      tags.push(TypedArray.name);
-    }
-    tags.push('DataView');
-    if (member.byteSize === 1) {
-      tags.push('ArrayBuffer');
-      tags.push('SharedArrayBuffer');
-    }
-  }
-  return tags;
 }
 
 export function isBuffer(arg, typedArray) {

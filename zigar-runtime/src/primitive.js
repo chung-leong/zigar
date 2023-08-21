@@ -2,7 +2,7 @@ import { MemberType, isByteAligned, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getTypedArrayClass, requireDataView } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
-import { MEMORY } from './symbol.js';
+import { MEMORY, COMPAT } from './symbol.js';
 import { throwInvalidInitializer, throwNoProperty } from './error.js';
 
 export function finalizePrimitive(s) {
@@ -63,6 +63,9 @@ export function finalizePrimitive(s) {
   Object.defineProperties(constructor.prototype, {
     $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
+  });
+  Object.defineProperties(constructor, {
+    [COMPAT]: { value: (typedArray) ? [ typedArray.name ] : [] },
   });
   addSpecialAccessors(s);
   return constructor;

@@ -1,6 +1,6 @@
 import { getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { requireDataView, getTypedArrayClass, isTypedArray, getCompatibleTags } from './data-view.js';
+import { requireDataView, getTypedArrayClass, isTypedArray } from './data-view.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
 import { MEMORY, COMPAT } from './symbol.js';
@@ -77,7 +77,7 @@ export function finalizeVector(s) {
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
-    [COMPAT]: { value: getCompatibleTags(member) },
+    [COMPAT]: { value: (typedArray) ? [ typedArray.name ] : [] },
   });
   addSpecialAccessors(s);
   return constructor;
