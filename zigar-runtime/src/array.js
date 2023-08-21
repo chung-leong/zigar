@@ -103,7 +103,8 @@ export function finalizeArray(s) {
     set: { value: set, configurable: true, writable: true },
     length: { value: length, configurable: true },
     $: { get: retriever, set: initializer, configurable: true },
-    [Symbol.iterator]: { value: getArrayIterator, configurable: true },
+    [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
+    entries: { value: createArrayEntries, configurable: true, writable: true }
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
@@ -179,6 +180,32 @@ export function getArrayIterator() {
       }
       return { value, done };
     },
+  };
+}
+
+export function getArrayEntriesIterator() {
+  const self = this;
+  const length = this.length;
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < length) {
+        value = [ index, self.get(index) ];
+        done = false;
+        index++;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+
+export function createArrayEntries() {
+  return {
+    [Symbol.iterator]: getArrayEntriesIterator.bind(this),
+    length: this.length,
   };
 }
 

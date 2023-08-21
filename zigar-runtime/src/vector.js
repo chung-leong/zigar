@@ -72,7 +72,8 @@ export function finalizeVector(s) {
     ...elementDescriptors,
     length: { value: count, configurable: true },
     $: { get: retriever, set: initializer, configurable: true },
-    [Symbol.iterator]: { value: getVectorIterator, configurable: true },
+    [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
+    entries: { value: createVectorEntries, configurable: true, writable: true },
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
@@ -98,5 +99,31 @@ export function getVectorIterator() {
       }
       return { value, done };
     },
+  };
+}
+
+export function getVectorEntriesIterator() {
+  const self = this;
+  const length = this.length;
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < length) {
+        value = [ index, self[index] ];
+        done = false;
+        index++;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+
+export function createVectorEntries() {
+  return {
+    [Symbol.iterator]: getVectorEntriesIterator.bind(this),
+    length: this.length,
   };
 }

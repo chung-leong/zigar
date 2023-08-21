@@ -55,6 +55,57 @@ describe('Slice functions', function() {
       expect(object.get(1)).to.equal(321);
       expect(object.length).to.equal(8);
     })
+    it('should define slice that is iterable', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: 'Hello',
+        size: 4,
+      });
+      const constructor = function() {};
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { constructor },
+      });
+      const Hello = finalizeStructure(structure);
+      const object = Hello(new ArrayBuffer(32));
+      object.set(1, 321);
+      const list = [];
+      for (const value of object) {
+        list.push(value);
+      }
+      expect(list).to.eql([ 0, 321, 0, 0, 0, 0, 0, 0]);
+    })
+    it('should permit retrieval of indices during iteration', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: 'Hello',
+        size: 4,
+      });
+      const constructor = function() {};
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { constructor },
+      });
+      const Hello = finalizeStructure(structure);
+      const object = Hello(new ArrayBuffer(32));
+      object.set(1, 321);
+      const indexList = [];
+      const valueList = [];
+      for (const [ index, value ] of object.entries()) {
+        indexList.push(index);
+        valueList.push(value);
+      }
+      expect(indexList).to.eql([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
+      expect(valueList).to.eql([ 0, 321, 0, 0, 0, 0, 0, 0]);
+    })
     it('should have string property when slice contains Uint8', function() {
       const structure = beginStructure({
         type: StructureType.Slice,

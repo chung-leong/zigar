@@ -20,6 +20,8 @@ import {
 } from '../src/structure.js';
 import {
   getArrayIterator,
+  getArrayEntriesIterator,
+  createArrayEntries,
 } from '../src/array.js';
 
 describe('Array functions', function() {
@@ -158,6 +160,33 @@ describe('Array functions', function() {
         list.push(value);
       }
       expect(list).to.eql([ 1234, 0, 0, 0, 4567, 0, 0, 0 ]);
+    })
+    it('should permit retrieval of indices during iteration', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        size: 4 * 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      const dv = new DataView(new ArrayBuffer(4 * 8));
+      dv.setUint32(0, 1234, true);
+      dv.setUint32(16, 4567, true);
+      const object = Hello(dv);
+      const indexList = [];
+      const valueList = [];
+      for (const [ index, value ] of object.entries()) {
+        indexList.push(index);
+        valueList.push(value);
+      }
+      expect(indexList).to.eql([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
+      expect(valueList).to.eql([ 1234, 0, 0, 0, 4567, 0, 0, 0 ]);
     })
     it('should accept an array as initializer', function() {
       const structure = beginStructure({
@@ -875,6 +904,80 @@ describe('Array functions', function() {
         list.push(value);
       }
       expect(list).to.eql([ 1234, -2, -1]);
+    })
+  })
+  describe('getArrayEntriesIterator', function() {
+    beforeEach(function() {
+      useIntEx();
+    })
+    it('should return a iterator', function() {
+      const member = {
+        type: MemberType.Int,
+        isSigned: true,
+        bitSize: 32,
+        byteSize: 4,
+      };
+      const dv = new DataView(new ArrayBuffer(12));
+      dv.setInt32(0, 1234, true);
+      dv.setInt32(4, -2, true);
+      dv.setInt32(8, -1, true);
+      const object = { [MEMORY]: dv };
+      const { get } = getAccessors(member, {});
+      Object.defineProperty(object, 'get', { value: get });
+      Object.defineProperty(object, 'length', {
+        get: function() {
+          const dv = this[MEMORY];
+          return dv.byteLength / 4;
+        },
+      });
+      const it = getArrayEntriesIterator.call(object);
+      expect(it.next()).to.eql({ value: [ 0, 1234 ], done: false });
+      expect(it.next()).to.eql({ value: [ 1, -2 ], done: false });
+      expect(it.next()).to.eql({ value: [ 2, -1 ], done: false });
+      expect(it.next()).to.eql({ value: undefined, done: true });
+      object.entries = function() {
+        return { [Symbol.iterator]: getArrayEntriesIterator.bind(this) };
+      };
+      const indexList = [];
+      const valueList = [];
+      for (const [ index, value ] of object.entries()) {
+        indexList.push(index);
+        valueList.push(value);
+      }
+      expect(indexList).to.eql([ 0, 1, 2 ]);
+      expect(valueList).to.eql([ 1234, -2, -1]);
+    })
+  })
+  describe('createArrayEntries', function() {
+    it('should create an entries object from an array', function() {
+      const member = {
+        type: MemberType.Int,
+        isSigned: true,
+        bitSize: 32,
+        byteSize: 4,
+      };
+      const dv = new DataView(new ArrayBuffer(12));
+      dv.setInt32(0, 1234, true);
+      dv.setInt32(4, -2, true);
+      dv.setInt32(8, -1, true);
+      const object = { [MEMORY]: dv };
+      const { get } = getAccessors(member, {});
+      Object.defineProperty(object, 'get', { value: get });
+      Object.defineProperty(object, 'length', {
+        get: function() {
+          const dv = this[MEMORY];
+          return dv.byteLength / 4;
+        },
+      });
+      const entries = createArrayEntries.call(object);
+      const indexList = [];
+      const valueList = [];
+      for (const [ index, value ] of entries) {
+        indexList.push(index);
+        valueList.push(value);
+      }
+      expect(indexList).to.eql([ 0, 1, 2 ]);
+      expect(valueList).to.eql([ 1234, -2, -1]);
     })
   })
 })

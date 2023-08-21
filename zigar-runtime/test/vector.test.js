@@ -8,6 +8,7 @@ import {
 import {
   StructureType,
   useVector,
+  useArray,
   beginStructure,
   attachMember,
   finalizeStructure,
@@ -17,6 +18,7 @@ describe('Vector functions', function() {
   describe('finalizeVector', function() {
     beforeEach(function() {
       useVector();
+      useArray();
       useIntEx();
       useFloatEx();
     })
@@ -46,6 +48,57 @@ describe('Vector functions', function() {
       expect([ ...object ]).to.eql([ 1, 2, 3, 16 ]);
       expect(object.length).to.equal(4);
       expect(object.typedArray).to.be.instanceOf(Uint32Array);
+    })
+    it('should define vector that is iterable', function() {
+      const structure = beginStructure({
+        type: StructureType.Vector,
+        name: 'Hello',
+        size: 4 * 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      const dv = new DataView(new ArrayBuffer(4 * 8));
+      dv.setUint32(0, 1234, true);
+      dv.setUint32(16, 4567, true);
+      const object = Hello(dv);
+      const list = [];
+      for (const value of object) {
+        list.push(value);
+      }
+      expect(list).to.eql([ 1234, 0, 0, 0, 4567, 0, 0, 0 ]);
+    })
+    it('should permit retrieval of indices during iteration', function() {
+      const structure = beginStructure({
+        type: StructureType.Vector,
+        name: 'Hello',
+        size: 4 * 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      const dv = new DataView(new ArrayBuffer(4 * 8));
+      dv.setUint32(0, 1234, true);
+      dv.setUint32(16, 4567, true);
+      const object = Hello(dv);
+      const indexList = [];
+      const valueList = [];
+      for (const [ index, value ] of object.entries()) {
+        indexList.push(index);
+        valueList.push(value);
+      }
+      expect(indexList).to.eql([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
+      expect(valueList).to.eql([ 1234, 0, 0, 0, 4567, 0, 0, 0 ]);
     })
     it('should define structure for holding an float vector', function() {
       const structure = beginStructure({

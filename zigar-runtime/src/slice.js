@@ -1,6 +1,6 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { requireDataView, getTypedArrayClass, isTypedArray, getCompatibleTags, getDataView, checkDataViewSize } from './data-view.js';
+import { requireDataView, getTypedArrayClass, getCompatibleTags, checkDataViewSize } from './data-view.js';
 import {
   createChildObjects,
   getPointerCopier,
@@ -8,10 +8,18 @@ import {
   getPointerDisabler,
   getArrayIterator,
   createProxy,
+  createArrayEntries,
 } from './array.js';
-import { addSpecialAccessors, checkDataView, getDataViewFromBase64, getDataViewFromTypedArray, getDataViewFromUTF8, getSpecialKeys } from './special.js';
+import {
+  addSpecialAccessors,
+  checkDataView,
+  getDataViewFromBase64,
+  getDataViewFromTypedArray,
+  getDataViewFromUTF8,
+  getSpecialKeys
+} from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoProperty } from './error.js';
-import { LENGTH, MEMORY, SLOTS, GETTER, SETTER, COMPAT } from './symbol.js';
+import { LENGTH, MEMORY, GETTER, SETTER, COMPAT } from './symbol.js';
 
 export function finalizeSlice(s) {
   const {
@@ -169,7 +177,8 @@ export function finalizeSlice(s) {
     set: { value: set, configurable: true, writable: true },
     length: { get: getLength, configurable: true },
     $: { get: retriever, set: initializer, configurable: true },
-    [Symbol.iterator]: { value: getArrayIterator, configurable: true },
+    [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
+    entries: { value: createArrayEntries, configurable: true, writable: true },
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
