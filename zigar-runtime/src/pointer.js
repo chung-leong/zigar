@@ -1,5 +1,5 @@
 import { StructureType } from './structure.js';
-import { requireDataView, getDataView, isCompatible } from './data-view.js';
+import { requireDataView, getDataView, isCompatible, isBuffer } from './data-view.js';
 import { MEMORY, PROXY, SLOTS, ZIG, PARENT } from './symbol.js';
 import {
   throwNoCastingToPointer,
@@ -7,6 +7,7 @@ import {
   throwInvalidPointerTarget,
   throwAssigningToConstant,
   throwConstantConstraint,
+  addArticle,
 } from './error.js';
 
 export function finalizePointer(s) {
@@ -37,6 +38,7 @@ export function finalizePointer(s) {
           arg = arg['*'];
         } else if (isTargetSlice) {
           creating = true;
+          warnTypedArray?.(arg);
           arg = constructor.child(arg);
         } else {
           throwNoCastingToPointer(s);
@@ -54,6 +56,13 @@ export function finalizePointer(s) {
     }
     return createProxy.call(self, member);
   };
+  const warnTypedArray = (targetStructure.typedArray) ? function(arg) {
+    if (isBuffer(arg?.buffer)) {
+      const created = addArticle(targetStructure.typedArray.name);
+      const source = addArticle(arg.constructor.name);
+      console.warn(`Implicitly creating ${created} from ${source}`);
+    }
+  } : null;
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
       // not doing memory copying since the value stored there likely isn't valid anyway
@@ -73,6 +82,7 @@ export function finalizePointer(s) {
             arg = Target(dv);
           } else if (isTargetSlice) {
             // autovivificate target object
+            warnTypedArray?.(arg);
             arg = new Target(arg);
           } else {
             throwInvalidPointerTarget(s, arg);

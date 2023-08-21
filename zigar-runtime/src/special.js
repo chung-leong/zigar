@@ -26,7 +26,8 @@ export function addSpecialAccessors(s) {
     descriptors.string = { ...strAccessors, configurable: true };
   }
   if (canBeTypedArray(s)) {
-    const taAccessors = getTypedArrayAccessors(s.typedArray);
+    const { byteSize } = s.instance.members[0];
+    const taAccessors = getTypedArrayAccessors(s.typedArray, byteSize);
     descriptors.typedArray = { ...taAccessors, configurable: true };
   }
   Object.defineProperties(constructor.prototype, descriptors);

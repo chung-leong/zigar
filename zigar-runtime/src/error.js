@@ -271,7 +271,7 @@ function getDescription(arg) {
   return addArticle(s);
 }
 
-function addArticle(noun) {
+export function addArticle(noun) {
   return `${article(noun)} ${noun}`;
 }
 

@@ -555,7 +555,7 @@ describe('Pointer functions', function() {
       const { buffer } = pointer['*'][MEMORY];
       expect(buffer).to.equal(ta.buffer);
     })
-    it('should throw when given a typed array is of the incorrect type', function() {
+    it('should show a warning when given a typed array is of the incorrect type', function() {
       const intStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Int32',
@@ -601,8 +601,16 @@ describe('Pointer functions', function() {
         structure: sliceStructure,
       });
       const HelloPtr = finalizeStructure(structure);
-      const ta = new Uint32Array([ 1, 2, 3, 4 ]);
-      expect(() => new HelloPtr(ta)).to.throw(TypeError);
+      const origFn = console.warn;
+      let message;
+      try {
+        console.warn = (msg) => message = msg;
+        const ta = new Uint32Array([ 1, 2, 3, 4 ]);
+        expect(() => new HelloPtr(ta)).to.not.throw(TypeError);
+      } finally {
+        console.warn = origFn;
+      }
+      expect(message).to.be.a('string');
     })
     it('should automatically cast to slice from an array', function() {
       const intStructure = beginStructure({
