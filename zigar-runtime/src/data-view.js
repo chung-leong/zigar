@@ -579,7 +579,7 @@ function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
 }
 
 function cacheMethod(access, member, cb) {
-  const { type, bitOffset, bitSize } = member;
+  const { type, bitOffset, bitSize, structure } = member;
   const bitPos = bitOffset & 0x07;
   const typeName = getTypeName(member);
   const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
@@ -587,15 +587,32 @@ function cacheMethod(access, member, cb) {
   let fn = methodCache[name];
   if (!fn) {
     fn = cb(name);
-    if (access === 'set' && type === MemberType.Int && bitSize > 32) {
-      // automatically convert number to bigint
-      const set = fn;
-      fn = function(offset, value, littleEndian) {
-        if (typeof(value) === 'number') {
-          value = BigInt(value);
+    if (type === MemberType.Int && bitSize === 64) {
+      const name = structure?.name;
+      if (name === 'usize' || name === 'isize') {
+        if (access === 'get') {
+          const get = fn;
+          const min = BigInt(Number.MIN_SAFE_INTEGER);
+          const max = BigInt(Number.MAX_SAFE_INTEGER);
+          fn = function(offset, littleEndian) {
+            const value = get.call(this, offset, littleEndian);
+            if (min <= value && value <= max) {
+              return Number(value);
+            } else {
+              return value;
+            }
+          };
+        } else {
+          // automatically convert number to bigint
+          const set = fn;
+          fn = function(offset, value, littleEndian) {
+            if (typeof(value) === 'number') {
+              value = BigInt(value);
+            }
+            set.call(this, offset, value, littleEndian);
+          };
         }
-        set.call(this, offset, value, littleEndian);
-      };
+      }
     }
     if (fn && fn.name !== name) {
       Object.defineProperty(fn, 'name', { value: name, configurable: true, writable: false });

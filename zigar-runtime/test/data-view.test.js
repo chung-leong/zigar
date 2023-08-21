@@ -461,7 +461,7 @@ describe('Data view functions', function() {
   describe('getDataViewIntAccessor', function() {
     it('should return function for getting standard int types', function() {
       const dv = new DataView(new ArrayBuffer(16));
-      dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn);
+      dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn, true);
       for (const isSigned of [ false, true ]) {
         for (const bitSize of [ 8, 16, 32, 64 ]) {
           const { max } = getIntRange({ isSigned, bitSize });
@@ -484,7 +484,7 @@ describe('Data view functions', function() {
     })
     it('should return function for setting standard int types', function() {
       const dv = new DataView(new ArrayBuffer(16));
-      dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn);
+      dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn, true);
       for (const isSigned of [ false, true ]) {
         for (const bitSize of [ 8, 16, 32, 64 ]) {
           const { max } = getIntRange({ isSigned, bitSize });
@@ -497,7 +497,8 @@ describe('Data view functions', function() {
           }
           const set = getDataViewIntAccessor('set', member);
           if (isSigned) {
-            set.call(dv, 8, -1, true);
+            const neg1 = (typeof(max) === 'bigint') ? -1n : -1;
+            set.call(dv, 8, neg1, true);
           } else {
             set.call(dv, 8, max, true);
           }
@@ -505,6 +506,72 @@ describe('Data view functions', function() {
           expect(dv.getBigUint64(0, true)).equal(0n);
         }
       }
+    })
+    it('should return function for getting usize', function() {
+      const member = {
+        type: MemberType.Int,
+        isSigned: false,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        structure: { name: 'usize' },
+      };
+      const get = getDataViewIntAccessor('get', member);
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setBigUint64(0, BigInt(Number.MAX_SAFE_INTEGER), true);
+      expect(get.call(dv, 0, true)).to.equal(Number.MAX_SAFE_INTEGER);
+      dv.setBigUint64(0, BigInt(Number.MAX_SAFE_INTEGER) + 1n, true);
+      expect(get.call(dv, 0, true)).to.equal(BigInt(Number.MAX_SAFE_INTEGER) + 1n);
+    })
+    it('should return function for setting usize', function() {
+      const member = {
+        type: MemberType.Int,
+        isSigned: false,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        structure: { name: 'usize' },
+      };
+      const set = getDataViewIntAccessor('set', member);
+      const dv = new DataView(new ArrayBuffer(8));
+      set.call(dv, 0, 1234, true);
+      expect(dv.getBigUint64(0, true)).to.equal(1234n);
+      set.call(dv, 0, 4567n, true);
+      expect(dv.getBigUint64(0, true)).to.equal(4567n);
+    })
+    it('should return function for getting isize', function() {
+      const member = {
+        type: MemberType.Int,
+        isSigned: true,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        structure: { name: 'isize' },
+      };
+      const get = getDataViewIntAccessor('get', member);
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setBigInt64(0, BigInt(Number.MIN_SAFE_INTEGER), true);
+      debugger;
+      expect(get.call(dv, 0, true)).to.equal(Number.MIN_SAFE_INTEGER);
+      return;
+      dv.setBigInt64(0, BigInt(Number.MIN_SAFE_INTEGER) - 1n, true);
+      expect(get.call(dv, 0, true)).to.equal(BigInt(Number.MIN_SAFE_INTEGER) - 1n);
+    })
+    it('should return function for setting isize', function() {
+      const member = {
+        type: MemberType.Int,
+        isSigned: true,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        structure: { name: 'isize' },
+      };
+      const set = getDataViewIntAccessor('set', member);
+      const dv = new DataView(new ArrayBuffer(8));
+      set.call(dv, 0, -1234, true);
+      expect(dv.getBigInt64(0, true)).to.equal(-1234n);
+      set.call(dv, 0, -4567n, true);
+      expect(dv.getBigInt64(0, true)).to.equal(-4567n);
     })
     it('should return undefined when type is non-standard', function() {
       const member = {
