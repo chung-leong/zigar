@@ -1,7 +1,7 @@
 import { StructureType } from './structure.js';
 import { MemberType, restoreMemory } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { throwNotEnoughBytes, throwTypeMismatch } from './error.js';
+import { throwBufferSizeMismatch, throwTypeMismatch } from './error.js';
 import { MEMORY } from './symbol.js';
 import { isTypedArray } from './data-view.js';
 
@@ -11,6 +11,7 @@ export function addSpecialAccessors(s) {
     instance: {
       members,
     },
+    termination,
   } = s;
   const dvAccessors = getDataViewAccessors(s);
   const base64Acccessors = getBase64Accessors();
@@ -22,7 +23,7 @@ export function addSpecialAccessors(s) {
   };
   if (canBeString(s)) {
     const { byteSize } = s.instance.members[0];
-    const strAccessors = getStringAccessors(byteSize);
+    const strAccessors = getStringAccessors(byteSize, termination?.value);
     descriptors.string = { ...strAccessors, configurable: true };
   }
   if (canBeTypedArray(s)) {
@@ -59,7 +60,7 @@ export function getSpecialKeys(s) {
 }
 
 export function getDataViewAccessors(structure) {
-  const { type, size } = structure;
+  const { type, size, termination } = structure;
   const copy = getMemoryCopier(size, type === StructureType.Slice);
   return {
     get() {
@@ -75,8 +76,9 @@ export function getDataViewAccessors(structure) {
       }
       const dest = this[MEMORY];
       if (dest.byteLength !== dv.byteLength) {
-        throwNotEnoughBytes(structure, dest, dv);
+        throwBufferSizeMismatch(structure, dv, this);
       }
+      termination?.validateData(dv, this.length);
       copy(dest, dv);
     },
   };
@@ -117,7 +119,7 @@ export function getDataViewFromBase64(str) {
 
 const decoders = {};
 
-export function getStringAccessors(byteSize, littleEndian) {
+export function getStringAccessors(byteSize, terminating) {
   return {
     get() {
       let decoder = decoders[byteSize];
@@ -127,19 +129,25 @@ export function getStringAccessors(byteSize, littleEndian) {
       const dv = this.dataView;
       const TypedArray = (byteSize === 1) ? Int8Array : Int16Array;
       const ta = new TypedArray(dv.buffer, dv.byteOffset, dv.byteLength / byteSize);
-      return decoder.decode(ta);
+      const s = decoder.decode(ta);
+      return (terminating === undefined) ? s : s.slice(0, -1);
     },
     set(src) {
-      this.dataView = getDataViewFromUTF8(src, byteSize, littleEndian);
+      this.dataView = getDataViewFromUTF8(src, byteSize, terminating);
     },
   };
 }
 
 let encoder;
 
-export function getDataViewFromUTF8(str, byteSize) {
+export function getDataViewFromUTF8(str, byteSize, terminating) {
   if (typeof(str) !== 'string') {
     throwTypeMismatch('a string', str);
+  }
+  if (terminating !== undefined) {
+    if (str.charCodeAt(str.length - 1) !== terminating) {
+      str = str + String.fromCharCode(terminating);
+    }
   }
   let ta;
   if (byteSize === 1) {

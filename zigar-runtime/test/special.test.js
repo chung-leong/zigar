@@ -420,6 +420,11 @@ describe('Special property functions', function() {
     it('should throw when it does not get a string', function() {
       expect(() => getDataViewFromUTF8(1)).to.throw(TypeError);
     })
+    it('should add terminating value', function() {
+      const dv = getDataViewFromUTF8('Hello', 1, 0);
+      expect(dv).to.have.property('byteLength', 6);
+      expect(dv.getUint8(5)).to.equal(0);
+    })
   })
   describe('getDataViewFromTypedArray', function() {
     it('should return a data view from a typed array', function() {

@@ -18,7 +18,13 @@ import {
   getDataViewFromUTF8,
   getSpecialKeys
 } from './special.js';
-import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoProperty } from './error.js';
+import {
+  throwInvalidArrayInitializer,
+  throwArrayLengthMismatch,
+  throwNoProperty,
+  throwMisplacedTerminator,
+  throwMissingTerminator,
+} from './error.js';
 import { LENGTH, MEMORY, GETTER, SETTER, COMPAT } from './symbol.js';
 
 export function finalizeSlice(s) {
@@ -41,6 +47,12 @@ export function finalizeSlice(s) {
   const objectMember = (member.type === MemberType.Object) ? member : null;
   const { byteSize: elementSize, structure: elementStructure } = member;
   const typedArray = s.typedArray = getTypedArrayClass(member);
+  const termination = getTermination(s, options);
+  if (termination) {
+    // zero-terminated strings aren't expected to be commonly used
+    // so we're not putting this prop into the standard structure
+    s.termination = termination;
+  }
   // the slices are different from other structures due to their variable sizes
   // we only know the "shape" of an object after we've processed the initializers
   const constructor = s.constructor = function(arg) {
@@ -108,6 +120,7 @@ export function finalizeSlice(s) {
         }
         let i = 0;
         for (const value of arg) {
+          termination?.validateValue(value, i, argLen);
           set.call(this, i++, value);
         }
       } else if (typeof(arg) === 'number') {
@@ -139,7 +152,7 @@ export function finalizeSlice(s) {
                 dv = getDataViewFromTypedArray(arg[key], typedArray);
                 break;
               case 'string':
-                dv = getDataViewFromUTF8(arg[key], elementSize);
+                dv = getDataViewFromUTF8(arg[key], elementSize, termination?.value);
                 dup = false;
                 break;
               case 'base64':
@@ -149,6 +162,7 @@ export function finalizeSlice(s) {
             }
             checkDataViewSize(s, dv);
             const length = dv.byteLength / elementSize;
+            termination?.validateData(dv, length);
             if (dup) {
               shapeDefiner.call(this, null, length);
               copy(this[MEMORY], dv);
@@ -186,4 +200,58 @@ export function finalizeSlice(s) {
   });
   addSpecialAccessors(s);
   return constructor;
+}
+
+export function getTermination(structure, options) {
+  const {
+    runtimeSafety = true,
+  } = options;
+  const {
+    instance: { members: [ member, terminator ], template },
+  } = structure;
+  if (!terminator) {
+    return;
+  }
+  if (process.env.NODE_DEV !== 'production') {
+    /* c8 ignore next 3 */
+    if (terminator.bitOffset === undefined) {
+      throw new Error(`bitOffset must be 0 for terminator member`);
+    }
+  }
+  const { byteSize } = terminator;
+  const { get: getTerminatingValue } = getAccessors(terminator, options);
+  const value = getTerminatingValue.call(template, 0);
+  const { get } = getAccessors(member, options);
+  const validateValue = (runtimeSafety) ? function(v, i, l) {
+    if (v === value && i !== l - 1) {
+      throwMisplacedTerminator(structure, v, i, l);
+    } else if (v !== value && i === l - 1) {
+      throwMissingTerminator(structure, value, i, l);
+    }
+  } : function(v, i, l) {
+    if (v !== value && i === l - 1) {
+      throwMissingTerminator(structure, value, l);
+    }
+  };
+  const validateData = (runtimeSafety) ? function(dv, l) {
+    const object = { [MEMORY]: dv };
+    for (let i = 0; i < l; i++) {
+      const v = get.call(object, i);
+      if (v === value && i !== l - 1) {
+        throwMisplacedTerminator(structure, value, i, l);
+      } else if (v !== value && i === l - 1) {
+        throwMissingTerminator(structure, value, l);
+      }
+    }
+  } : function(dv, l) {
+    const object = { [MEMORY]: dv };
+    if (l > 0) {
+      const i = l - 1;
+      const v = get.call(object, i);
+      if (v !== value) {
+        throwMissingTerminator(structure, value, l);
+      }
+    }
+  };
+  return { value, validateValue, validateData };
 }

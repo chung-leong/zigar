@@ -23,6 +23,9 @@ import {
   throwArgumentCountMismatch,
   rethrowArgumentError,
   throwNoCastingToPointer,
+  throwConstantConstraint,
+  throwMisplacedTerminator,
+  throwMissingTerminator,
   throwInaccessiblePointer,
   throwInvalidPointerTarget,
   throwOverflow,
@@ -46,14 +49,23 @@ describe('Error functions', function() {
       expect(() => throwBufferSizeMismatch(structure, 16)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
     })
-    it('should use different message for slices', function() {
+    it('should use different message for shapeless slices', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Slice,
         size: 8,
       };
       expect(() => throwBufferSizeMismatch(structure, 16)).to.throw(TypeError)
-        .with.property('message').that.contains('Hello');
+        .with.property('message').that.contains('elements');
+    })
+    it('should not use different message when a slice has been created already', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.Slice,
+        size: 8,
+      };
+      expect(() => throwBufferSizeMismatch(structure, 16, { length: 5 })).to.throw(TypeError)
+        .with.property('message').that.does.not.contains('elements');
     })
     it('should use singular wording when size is 1', function() {
       const structure = {
@@ -431,6 +443,49 @@ describe('Error functions', function() {
         hasPointer: true,
       };
       expect(() => throwNoCastingToPointer(structure)).to.throw(TypeError);
+    })
+  })
+  describe('throwConstantConstraint', function() {
+    it('should throw a type error', function() {
+      const structure = {
+        name: '[]const u8',
+        type: StructureType.Pointer,
+        size: 1,
+        instance: {
+          members: [],
+        },
+        hasPointer: true,
+      };
+      const pointer = {};
+      expect(() => throwConstantConstraint(structure, pointer)).to.throw(TypeError);
+    })
+  })
+  describe('throwMisplacedTerminator', function() {
+    it('should throw a type error', function() {
+      const structure = {
+        name: '[_:0]u8',
+        type: StructureType.Slice,
+        size: 1,
+        instance: {
+          members: [],
+        },
+        hasPointer: false,
+      };
+      expect(() => throwMisplacedTerminator(structure, 0, 5, 8)).to.throw(TypeError);
+    })
+  })
+  describe('throwMissingTerminator', function() {
+    it('should throw a type error', function() {
+      const structure = {
+        name: '[_:0]u8',
+        type: StructureType.Slice,
+        size: 1,
+        instance: {
+          members: [],
+        },
+        hasPointer: false,
+      };
+      expect(() => throwMissingTerminator(structure, 0, 8)).to.throw(TypeError);
     })
   })
   describe('throwInaccessiblePointer', function() {

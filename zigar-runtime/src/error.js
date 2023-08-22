@@ -3,14 +3,15 @@ import { StructureType } from './structure.js';
 import { getTypeName } from './data-view.js';
 import { getPrimitiveType } from './primitive.js';
 
-export function throwBufferSizeMismatch(structure, dv) {
+export function throwBufferSizeMismatch(structure, dv, target = null) {
   const { type, name, size } = structure;
   const actual = dv.byteLength;
   const s = (size > 1) ? 's' : '';
-  if (type === StructureType.Slice) {
+  if (type === StructureType.Slice && !target) {
     throw new TypeError(`${name} has elements that are ${size} byte${s} in length, received ${actual}`);
   } else {
-    throw new TypeError(`${name} has ${size} byte${s}, received ${actual}`);
+    const length = (type === StructureType.Slice) ? target.length : size;
+    throw new TypeError(`${name} has ${length} byte${s}, received ${actual}`);
   }
 }
 
@@ -176,6 +177,16 @@ export function throwConstantConstraint(structure, pointer) {
   throw new TypeError(`Conversion of ${name2} to ${name1} requires an explicit cast`);
 }
 
+export function throwMisplacedTerminator(structure, value, index, length) {
+  const { name } = structure;
+  throw new TypeError(`${name} expects the terminating value ${value} at ${length - 1}, found at ${index}`);
+}
+
+export function throwMissingTerminator(structure, value, length) {
+  const { name } = structure;
+  throw new TypeError(`${name} expects the terminating value ${value} at ${length - 1}`);
+}
+
 export function throwAssigningToConstant(pointer) {
   const { constructor: { name } } = pointer;
   throw new TypeError(`${name} cannot be modified`);
@@ -184,11 +195,6 @@ export function throwAssigningToConstant(pointer) {
 export function throwTypeMismatch(expected, arg) {
   const received = getDescription(arg);
   throw new TypeError(`Expected ${addArticle(expected)}, received ${received}`)
-}
-
-export function throwNotEnoughBytes(structure, dest, src) {
-  const { name } = structure;
-  throw new TypeError(`${name} has ${dest.byteLength} bytes, received ${src.byteLength}`);
 }
 
 export function throwInaccessiblePointer() {

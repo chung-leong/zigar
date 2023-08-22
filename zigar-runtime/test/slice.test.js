@@ -982,5 +982,209 @@ describe('Slice functions', function() {
       expect(slice2[1]['*']).to.equal(4567);
       expect(slice2[2]['*']).to.equal(7890);
     })
+    it('should return string without terminator', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_:0]u8',
+        size: 1,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitOffset: 0,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: new DataView(new ArrayBuffer(1)),
+        },
+      });
+      const U8Slice = finalizeStructure(structure);
+      const array = [ ...'Hello\0' ].map(c => c.charCodeAt(0));
+      const slice = new U8Slice(array);
+      expect(slice).to.have.lengthOf(6);
+      const str = slice.string;
+      expect(str).to.have.lengthOf(5);
+    })
+    it('should automatically insert terminating character', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_:0]u8',
+        size: 1,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitOffset: 0,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: new DataView(new ArrayBuffer(1)),
+        },
+      });
+      const U8Slice = finalizeStructure(structure);
+      const slice = new U8Slice('Hello');
+      expect(slice).to.have.lengthOf(6);
+      expect(slice[5]).to.equal(0);
+    })
+    it('should not add unnecessary terminating character', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_:0]u8',
+        size: 1,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitOffset: 0,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: new DataView(new ArrayBuffer(1)),
+        },
+      });
+      const U8Slice = finalizeStructure(structure);
+      const slice = new U8Slice('Hello\0');
+      expect(slice).to.have.lengthOf(6);
+    })
+    it('should should throw when terminator appears too early', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_:0]u8',
+        size: 1,
+      }, { runtimeSafety: true });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitOffset: 0,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: new DataView(new ArrayBuffer(1)),
+        },
+      });
+      const U8Slice = finalizeStructure(structure);
+      const array = [ ...'H\0llo\0' ].map(c => c.charCodeAt(0));
+      expect(() => new U8Slice(array)).to.throw(TypeError);
+      expect(() => new U8Slice('H\0llo\0')).to.throw(TypeError);
+      expect(() => new U8Slice({ typedArray: new Uint8Array(array) })).to.throw(TypeError);
+      const slice = new U8Slice(6);
+      expect(() => slice.$.typedArray = new Uint8Array(array)).to.throw(TypeError);
+    })
+    it('should should throw when terminator is missing', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_:0]u8',
+        size: 1,
+      }, { runtimeSafety: true });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitOffset: 0,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: new DataView(new ArrayBuffer(1)),
+        },
+      });
+      const U8Slice = finalizeStructure(structure);
+      const array = [ ...'Hello' ].map(c => c.charCodeAt(0));
+      expect(() => new U8Slice(array)).to.throw(TypeError);
+      expect(() => new U8Slice({ typedArray: new Uint8Array(array) })).to.throw(TypeError);
+      expect(() => new U8Slice('Hello')).to.not.throw();
+      const slice = new U8Slice(5);
+      expect(() => slice.$.typedArray = new Uint8Array(array)).to.throw(TypeError)
+        .with.property('message').that.contains(4);
+    })
+    it('should should throw when terminator is missing even if runtimeSafety is false', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_:0]u8',
+        size: 1,
+      }, { runtimeSafety: false });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isStatic: false,
+        isSigned: false,
+        bitOffset: 0,
+        bitSize: 8,
+        byteSize: 1,
+      });
+      attachTemplate(structure, {
+        isStatic: false,
+        template: {
+          [MEMORY]: new DataView(new ArrayBuffer(1)),
+        },
+      });
+      const U8Slice = finalizeStructure(structure);
+      const array = [ ...'Hello' ].map(c => c.charCodeAt(0));
+      expect(() => new U8Slice(array)).to.throw(TypeError);
+      expect(() => new U8Slice({ typedArray: new Uint8Array(array) })).to.throw(TypeError);
+      expect(() => new U8Slice('Hello')).to.not.throw();
+      const slice = new U8Slice(5);
+      expect(() => slice.$.typedArray = new Uint8Array(array)).to.throw(TypeError)
+        .with.property('message').that.contains(4);
+    })
   })
 })
