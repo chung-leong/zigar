@@ -851,7 +851,7 @@ R"=====(
       instance: {
         members,
       },
-      termination,
+      sentinel,
     } = s;
     const dvAccessors = getDataViewAccessors(s);
     const base64Acccessors = getBase64Accessors();
@@ -863,7 +863,7 @@ R"=====(
     };
     if (canBeString(s)) {
       const { byteSize } = s.instance.members[0];
-      const strAccessors = getStringAccessors(byteSize, termination?.value);
+      const strAccessors = getStringAccessors(byteSize, sentinel?.value);
       descriptors.string = { ...strAccessors, configurable: true };
     }
     if (canBeTypedArray(s)) {
@@ -900,7 +900,7 @@ R"=====(
   }
 
   function getDataViewAccessors(structure) {
-    const { type, size, termination } = structure;
+    const { type, size, sentinel } = structure;
     const copy = getMemoryCopier(size, type === StructureType.Slice);
     return {
       get() {
@@ -912,7 +912,7 @@ R"=====(
         if (dest.byteLength !== dv.byteLength) {
           throwBufferSizeMismatch(structure, dv, this);
         }
-        termination?.validateData(dv, this.length);
+        sentinel?.validateData(dv, this.length);
         copy(dest, dv);
       },
     };
@@ -2364,11 +2364,11 @@ R"=====(
     const objectMember = (member.type === MemberType.Object) ? member : null;
     const { byteSize: elementSize, structure: elementStructure } = member;
     const typedArray = s.typedArray = getTypedArrayClass(member);
-    const termination = getTermination(s, options);
-    if (termination) {
+    const sentinel = getSentinel(s, options);
+    if (sentinel) {
       // zero-terminated strings aren't expected to be commonly used
       // so we're not putting this prop into the standard structure
-      s.termination = termination;
+      s.sentinel = sentinel;
     }
     // the slices are different from other structures due to their variable sizes
     // we only know the "shape" of an object after we've processed the initializers
@@ -2437,7 +2437,7 @@ R"=====(
           }
           let i = 0;
           for (const value of arg) {
-            termination?.validateValue(value, i, argLen);
+            sentinel?.validateValue(value, i, argLen);
             set.call(this, i++, value);
           }
         } else if (typeof(arg) === 'number') {
@@ -2469,7 +2469,7 @@ R"=====(
                   dv = getDataViewFromTypedArray(arg[key], typedArray);
                   break;
                 case 'string':
-                  dv = getDataViewFromUTF8(arg[key], elementSize, termination?.value);
+                  dv = getDataViewFromUTF8(arg[key], elementSize, sentinel?.value);
                   dup = false;
                   break;
                 case 'base64':
@@ -2479,7 +2479,7 @@ R"=====(
               }
               checkDataViewSize(s, dv);
               const length = dv.byteLength / elementSize;
-              termination?.validateData(dv, length);
+              sentinel?.validateData(dv, length);
               if (dup) {
                 shapeDefiner.call(this, null, length);
                 copy(this[MEMORY], dv);
@@ -2519,34 +2519,34 @@ R"=====(
     return constructor;
   }
 
-  function getTermination(structure, options) {
+  function getSentinel(structure, options) {
     const {
       runtimeSafety = true,
     } = options;
     const {
-      instance: { members: [ member, terminator ], template },
+      instance: { members: [ member, sentinel ], template },
     } = structure;
-    if (!terminator) {
+    if (!sentinel) {
       return;
     }
     if (process.env.NODE_DEV !== 'production') {
       /* c8 ignore next 3 */
-      if (terminator.bitOffset === undefined) {
-        throw new Error(`bitOffset must be 0 for terminator member`);
+      if (sentinel.bitOffset === undefined) {
+        throw new Error(`bitOffset must be 0 for sentinel member`);
       }
     }
-    const { get: getTerminatingValue } = getAccessors(terminator, options);
-    const value = getTerminatingValue.call(template, 0);
+    const { get: getSentinelValue } = getAccessors(sentinel, options);
+    const value = getSentinelValue.call(template, 0);
     const { get } = getAccessors(member, options);
     const validateValue = (runtimeSafety) ? function(v, i, l) {
       if (v === value && i !== l - 1) {
-        throwMisplacedTerminator(structure, v, i, l);
+        throwMisplacedSentinel(structure, v, i, l);
       } else if (v !== value && i === l - 1) {
-        throwMissingTerminator(structure, value, i);
+        throwMissingSentinel(structure, value, i);
       }
     } : function(v, i, l) {
       if (v !== value && i === l - 1) {
-        throwMissingTerminator(structure, value, l);
+        throwMissingSentinel(structure, value, l);
       }
     };
     const validateData = (runtimeSafety) ? function(dv, l) {
@@ -2554,9 +2554,9 @@ R"=====(
       for (let i = 0; i < l; i++) {
         const v = get.call(object, i);
         if (v === value && i !== l - 1) {
-          throwMisplacedTerminator(structure, value, i, l);
+          throwMisplacedSentinel(structure, value, i, l);
         } else if (v !== value && i === l - 1) {
-          throwMissingTerminator(structure, value, l);
+          throwMissingSentinel(structure, value, l);
         }
       }
     } : function(dv, l) {
@@ -2565,7 +2565,7 @@ R"=====(
         const i = l - 1;
         const v = get.call(object, i);
         if (v !== value) {
-          throwMissingTerminator(structure, value, l);
+          throwMissingSentinel(structure, value, l);
         }
       }
     };
@@ -3305,14 +3305,14 @@ R"=====(
     throw new TypeError(`Conversion of ${name2} to ${name1} requires an explicit cast`);
   }
 
-  function throwMisplacedTerminator(structure, value, index, length) {
+  function throwMisplacedSentinel(structure, value, index, length) {
     const { name } = structure;
-    throw new TypeError(`${name} expects the terminating value ${value} at ${length - 1}, found at ${index}`);
+    throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}, found at ${index}`);
   }
 
-  function throwMissingTerminator(structure, value, length) {
+  function throwMissingSentinel(structure, value, length) {
     const { name } = structure;
-    throw new TypeError(`${name} expects the terminating value ${value} at ${length - 1}`);
+    throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}`);
   }
 
   function throwAssigningToConstant(pointer) {

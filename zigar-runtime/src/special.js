@@ -11,7 +11,7 @@ export function addSpecialAccessors(s) {
     instance: {
       members,
     },
-    termination,
+    sentinel,
   } = s;
   const dvAccessors = getDataViewAccessors(s);
   const base64Acccessors = getBase64Accessors();
@@ -23,7 +23,7 @@ export function addSpecialAccessors(s) {
   };
   if (canBeString(s)) {
     const { byteSize } = s.instance.members[0];
-    const strAccessors = getStringAccessors(byteSize, termination?.value);
+    const strAccessors = getStringAccessors(byteSize, sentinel?.value);
     descriptors.string = { ...strAccessors, configurable: true };
   }
   if (canBeTypedArray(s)) {
@@ -60,7 +60,7 @@ export function getSpecialKeys(s) {
 }
 
 export function getDataViewAccessors(structure) {
-  const { type, size, termination } = structure;
+  const { type, size, sentinel } = structure;
   const copy = getMemoryCopier(size, type === StructureType.Slice);
   return {
     get() {
@@ -78,7 +78,7 @@ export function getDataViewAccessors(structure) {
       if (dest.byteLength !== dv.byteLength) {
         throwBufferSizeMismatch(structure, dv, this);
       }
-      termination?.validateData(dv, this.length);
+      sentinel?.validateData(dv, this.length);
       copy(dest, dv);
     },
   };
@@ -119,7 +119,7 @@ export function getDataViewFromBase64(str) {
 
 const decoders = {};
 
-export function getStringAccessors(byteSize, terminating) {
+export function getStringAccessors(byteSize, sentinelValue) {
   return {
     get() {
       let decoder = decoders[byteSize];
@@ -130,23 +130,23 @@ export function getStringAccessors(byteSize, terminating) {
       const TypedArray = (byteSize === 1) ? Int8Array : Int16Array;
       const ta = new TypedArray(dv.buffer, dv.byteOffset, dv.byteLength / byteSize);
       const s = decoder.decode(ta);
-      return (terminating === undefined) ? s : s.slice(0, -1);
+      return (sentinelValue === undefined) ? s : s.slice(0, -1);
     },
     set(src) {
-      this.dataView = getDataViewFromUTF8(src, byteSize, terminating);
+      this.dataView = getDataViewFromUTF8(src, byteSize, sentinelValue);
     },
   };
 }
 
 let encoder;
 
-export function getDataViewFromUTF8(str, byteSize, terminating) {
+export function getDataViewFromUTF8(str, byteSize, sentinelValue) {
   if (typeof(str) !== 'string') {
     throwTypeMismatch('a string', str);
   }
-  if (terminating !== undefined) {
-    if (str.charCodeAt(str.length - 1) !== terminating) {
-      str = str + String.fromCharCode(terminating);
+  if (sentinelValue !== undefined) {
+    if (str.charCodeAt(str.length - 1) !== sentinelValue) {
+      str = str + String.fromCharCode(sentinelValue);
     }
   }
   let ta;

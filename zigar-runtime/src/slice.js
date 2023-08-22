@@ -22,8 +22,8 @@ import {
   throwInvalidArrayInitializer,
   throwArrayLengthMismatch,
   throwNoProperty,
-  throwMisplacedTerminator,
-  throwMissingTerminator,
+  throwMisplacedSentinel,
+  throwMissingSentinel,
 } from './error.js';
 import { LENGTH, MEMORY, GETTER, SETTER, COMPAT } from './symbol.js';
 
@@ -47,11 +47,11 @@ export function finalizeSlice(s) {
   const objectMember = (member.type === MemberType.Object) ? member : null;
   const { byteSize: elementSize, structure: elementStructure } = member;
   const typedArray = s.typedArray = getTypedArrayClass(member);
-  const termination = getTermination(s, options);
-  if (termination) {
+  const sentinel = getSentinel(s, options);
+  if (sentinel) {
     // zero-terminated strings aren't expected to be commonly used
     // so we're not putting this prop into the standard structure
-    s.termination = termination;
+    s.sentinel = sentinel;
   }
   // the slices are different from other structures due to their variable sizes
   // we only know the "shape" of an object after we've processed the initializers
@@ -120,7 +120,7 @@ export function finalizeSlice(s) {
         }
         let i = 0;
         for (const value of arg) {
-          termination?.validateValue(value, i, argLen);
+          sentinel?.validateValue(value, i, argLen);
           set.call(this, i++, value);
         }
       } else if (typeof(arg) === 'number') {
@@ -152,7 +152,7 @@ export function finalizeSlice(s) {
                 dv = getDataViewFromTypedArray(arg[key], typedArray);
                 break;
               case 'string':
-                dv = getDataViewFromUTF8(arg[key], elementSize, termination?.value);
+                dv = getDataViewFromUTF8(arg[key], elementSize, sentinel?.value);
                 dup = false;
                 break;
               case 'base64':
@@ -162,7 +162,7 @@ export function finalizeSlice(s) {
             }
             checkDataViewSize(s, dv);
             const length = dv.byteLength / elementSize;
-            termination?.validateData(dv, length);
+            sentinel?.validateData(dv, length);
             if (dup) {
               shapeDefiner.call(this, null, length);
               copy(this[MEMORY], dv);
@@ -202,35 +202,34 @@ export function finalizeSlice(s) {
   return constructor;
 }
 
-export function getTermination(structure, options) {
+export function getSentinel(structure, options) {
   const {
     runtimeSafety = true,
   } = options;
   const {
-    instance: { members: [ member, terminator ], template },
+    instance: { members: [ member, sentinel ], template },
   } = structure;
-  if (!terminator) {
+  if (!sentinel) {
     return;
   }
   if (process.env.NODE_DEV !== 'production') {
     /* c8 ignore next 3 */
-    if (terminator.bitOffset === undefined) {
-      throw new Error(`bitOffset must be 0 for terminator member`);
+    if (sentinel.bitOffset === undefined) {
+      throw new Error(`bitOffset must be 0 for sentinel member`);
     }
   }
-  const { byteSize } = terminator;
-  const { get: getTerminatingValue } = getAccessors(terminator, options);
-  const value = getTerminatingValue.call(template, 0);
+  const { get: getSentinelValue } = getAccessors(sentinel, options);
+  const value = getSentinelValue.call(template, 0);
   const { get } = getAccessors(member, options);
   const validateValue = (runtimeSafety) ? function(v, i, l) {
     if (v === value && i !== l - 1) {
-      throwMisplacedTerminator(structure, v, i, l);
+      throwMisplacedSentinel(structure, v, i, l);
     } else if (v !== value && i === l - 1) {
-      throwMissingTerminator(structure, value, i, l);
+      throwMissingSentinel(structure, value, i, l);
     }
   } : function(v, i, l) {
     if (v !== value && i === l - 1) {
-      throwMissingTerminator(structure, value, l);
+      throwMissingSentinel(structure, value, l);
     }
   };
   const validateData = (runtimeSafety) ? function(dv, l) {
@@ -238,9 +237,9 @@ export function getTermination(structure, options) {
     for (let i = 0; i < l; i++) {
       const v = get.call(object, i);
       if (v === value && i !== l - 1) {
-        throwMisplacedTerminator(structure, value, i, l);
+        throwMisplacedSentinel(structure, value, i, l);
       } else if (v !== value && i === l - 1) {
-        throwMissingTerminator(structure, value, l);
+        throwMissingSentinel(structure, value, l);
       }
     }
   } : function(dv, l) {
@@ -249,7 +248,7 @@ export function getTermination(structure, options) {
       const i = l - 1;
       const v = get.call(object, i);
       if (v !== value) {
-        throwMissingTerminator(structure, value, l);
+        throwMissingSentinel(structure, value, l);
       }
     }
   };

@@ -24,8 +24,8 @@ import {
   rethrowArgumentError,
   throwNoCastingToPointer,
   throwConstantConstraint,
-  throwMisplacedTerminator,
-  throwMissingTerminator,
+  throwMisplacedSentinel,
+  throwMissingSentinel,
   throwInaccessiblePointer,
   throwInvalidPointerTarget,
   throwOverflow,
@@ -460,7 +460,7 @@ describe('Error functions', function() {
       expect(() => throwConstantConstraint(structure, pointer)).to.throw(TypeError);
     })
   })
-  describe('throwMisplacedTerminator', function() {
+  describe('throwMisplacedSentinel', function() {
     it('should throw a type error', function() {
       const structure = {
         name: '[_:0]u8',
@@ -471,10 +471,10 @@ describe('Error functions', function() {
         },
         hasPointer: false,
       };
-      expect(() => throwMisplacedTerminator(structure, 0, 5, 8)).to.throw(TypeError);
+      expect(() => throwMisplacedSentinel(structure, 0, 5, 8)).to.throw(TypeError);
     })
   })
-  describe('throwMissingTerminator', function() {
+  describe('throwMissingSentinel', function() {
     it('should throw a type error', function() {
       const structure = {
         name: '[_:0]u8',
@@ -485,7 +485,7 @@ describe('Error functions', function() {
         },
         hasPointer: false,
       };
-      expect(() => throwMissingTerminator(structure, 0, 8)).to.throw(TypeError);
+      expect(() => throwMissingSentinel(structure, 0, 8)).to.throw(TypeError);
     })
   })
   describe('throwInaccessiblePointer', function() {

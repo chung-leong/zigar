@@ -177,14 +177,14 @@ export function throwConstantConstraint(structure, pointer) {
   throw new TypeError(`Conversion of ${name2} to ${name1} requires an explicit cast`);
 }
 
-export function throwMisplacedTerminator(structure, value, index, length) {
+export function throwMisplacedSentinel(structure, value, index, length) {
   const { name } = structure;
-  throw new TypeError(`${name} expects the terminating value ${value} at ${length - 1}, found at ${index}`);
+  throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}, found at ${index}`);
 }
 
-export function throwMissingTerminator(structure, value, length) {
+export function throwMissingSentinel(structure, value, length) {
   const { name } = structure;
-  throw new TypeError(`${name} expects the terminating value ${value} at ${length - 1}`);
+  throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}`);
 }
 
 export function throwAssigningToConstant(pointer) {

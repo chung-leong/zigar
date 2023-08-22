@@ -982,7 +982,7 @@ describe('Slice functions', function() {
       expect(slice2[1]['*']).to.equal(4567);
       expect(slice2[2]['*']).to.equal(7890);
     })
-    it('should return string without terminator', function() {
+    it('should return string without sentinel value', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_:0]u8',
@@ -1016,7 +1016,7 @@ describe('Slice functions', function() {
       const str = slice.string;
       expect(str).to.have.lengthOf(5);
     })
-    it('should automatically insert terminating character', function() {
+    it('should automatically insert sentinel character', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_:0]u8',
@@ -1048,7 +1048,7 @@ describe('Slice functions', function() {
       expect(slice).to.have.lengthOf(6);
       expect(slice[5]).to.equal(0);
     })
-    it('should not add unnecessary terminating character', function() {
+    it('should not add unnecessary sentinel character', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_:0]u8',
@@ -1079,7 +1079,7 @@ describe('Slice functions', function() {
       const slice = new U8Slice('Hello\0');
       expect(slice).to.have.lengthOf(6);
     })
-    it('should should throw when terminator appears too early', function() {
+    it('should should throw when sentinel appears too early', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_:0]u8',
@@ -1114,7 +1114,7 @@ describe('Slice functions', function() {
       const slice = new U8Slice(6);
       expect(() => slice.$.typedArray = new Uint8Array(array)).to.throw(TypeError);
     })
-    it('should should throw when terminator is missing', function() {
+    it('should should throw when sentinel is missing', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_:0]u8',
@@ -1150,7 +1150,7 @@ describe('Slice functions', function() {
       expect(() => slice.$.typedArray = new Uint8Array(array)).to.throw(TypeError)
         .with.property('message').that.contains(4);
     })
-    it('should should throw when terminator is missing even if runtimeSafety is false', function() {
+    it('should should throw when sentinel is missing even if runtimeSafety is false', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_:0]u8',
