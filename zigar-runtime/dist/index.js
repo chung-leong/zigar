@@ -248,14 +248,15 @@ function reset32(dest) {
 }
 /* c8 ignore end */
 
-function throwBufferSizeMismatch(structure, dv) {
+function throwBufferSizeMismatch(structure, dv, target = null) {
   const { type, name, size } = structure;
   const actual = dv.byteLength;
   const s = (size > 1) ? 's' : '';
-  if (type === StructureType.Slice) {
+  if (type === StructureType.Slice && !target) {
     throw new TypeError(`${name} has elements that are ${size} byte${s} in length, received ${actual}`);
   } else {
-    throw new TypeError(`${name} has ${size} byte${s}, received ${actual}`);
+    const length = (type === StructureType.Slice) ? target.length : size;
+    throw new TypeError(`${name} has ${length} byte${s}, received ${actual}`);
   }
 }
 
@@ -327,8 +328,8 @@ function throwInvalidInitializer(structure, expected, arg) {
   } else {
     acceptable.push(addArticle(expected));
   }
-  const received = addArticle(getDescription(arg));
-  throw new TypeError(`${name} expects ${formatList(acceptable)} as an argument, received ${received}`);
+  const received = getDescription(arg);
+  throw new TypeError(`${name} expects ${formatList(acceptable)} as argument, received ${received}`);
 }
 
 function throwInvalidArrayInitializer(structure, arg, shapeless = false) {
@@ -416,19 +417,24 @@ function throwConstantConstraint(structure, pointer) {
   throw new TypeError(`Conversion of ${name2} to ${name1} requires an explicit cast`);
 }
 
+function throwMisplacedTerminator(structure, value, index, length) {
+  const { name } = structure;
+  throw new TypeError(`${name} expects the terminating value ${value} at ${length - 1}, found at ${index}`);
+}
+
+function throwMissingTerminator(structure, value, length) {
+  const { name } = structure;
+  throw new TypeError(`${name} expects the terminating value ${value} at ${length - 1}`);
+}
+
 function throwAssigningToConstant(pointer) {
   const { constructor: { name } } = pointer;
   throw new TypeError(`${name} cannot be modified`);
 }
 
 function throwTypeMismatch(expected, arg) {
-  const received = addArticle(getDescription(arg));
+  const received = getDescription(arg);
   throw new TypeError(`Expected ${addArticle(expected)}, received ${received}`)
-}
-
-function throwNotEnoughBytes(structure, dest, src) {
-  const { name } = structure;
-  throw new TypeError(`${name} has ${dest.byteLength} bytes, received ${src.byteLength}`);
 }
 
 function throwInaccessiblePointer() {
@@ -718,6 +724,20 @@ function isCompatible(arg, constructor) {
     }
   }
   return false;
+}
+
+function getCompatibleTags(structure) {
+  const { typedArray } = structure;
+  const tags = [];
+  if (typedArray) {
+    tags.push(typedArray.name);
+    tags.push('DataView');
+    if (typedArray === Uint8Array || typedArray === Int8Array) {
+      tags.push('ArrayBuffer');
+      tags.push('SharedArrayBuffer');
+    }
+  }
+  return tags;
 }
 
 function isBuffer(arg, typedArray) {
@@ -1471,6 +1491,7 @@ function addSpecialAccessors(s) {
     instance: {
       members,
     },
+    termination,
   } = s;
   const dvAccessors = getDataViewAccessors(s);
   const base64Acccessors = getBase64Accessors();
@@ -1482,7 +1503,7 @@ function addSpecialAccessors(s) {
   };
   if (canBeString(s)) {
     const { byteSize } = s.instance.members[0];
-    const strAccessors = getStringAccessors(byteSize);
+    const strAccessors = getStringAccessors(byteSize, termination?.value);
     descriptors.string = { ...strAccessors, configurable: true };
   }
   if (canBeTypedArray(s)) {
@@ -1519,7 +1540,7 @@ function getSpecialKeys(s) {
 }
 
 function getDataViewAccessors(structure) {
-  const { type, size } = structure;
+  const { type, size, termination } = structure;
   const copy = getMemoryCopier(size, type === StructureType.Slice);
   return {
     get() {
@@ -1535,8 +1556,9 @@ function getDataViewAccessors(structure) {
       }
       const dest = this[MEMORY];
       if (dest.byteLength !== dv.byteLength) {
-        throwNotEnoughBytes(structure, dest, dv);
+        throwBufferSizeMismatch(structure, dv, this);
       }
+      termination?.validateData(dv, this.length);
       copy(dest, dv);
     },
   };
@@ -1577,7 +1599,7 @@ function getDataViewFromBase64(str) {
 
 const decoders = {};
 
-function getStringAccessors(byteSize, littleEndian) {
+function getStringAccessors(byteSize, terminating) {
   return {
     get() {
       let decoder = decoders[byteSize];
@@ -1587,19 +1609,25 @@ function getStringAccessors(byteSize, littleEndian) {
       const dv = this.dataView;
       const TypedArray = (byteSize === 1) ? Int8Array : Int16Array;
       const ta = new TypedArray(dv.buffer, dv.byteOffset, dv.byteLength / byteSize);
-      return decoder.decode(ta);
+      const s = decoder.decode(ta);
+      return (terminating === undefined) ? s : s.slice(0, -1);
     },
     set(src) {
-      this.dataView = getDataViewFromUTF8(src, byteSize);
+      this.dataView = getDataViewFromUTF8(src, byteSize, terminating);
     },
   };
 }
 
 let encoder;
 
-function getDataViewFromUTF8(str, byteSize) {
+function getDataViewFromUTF8(str, byteSize, terminating) {
   if (typeof(str) !== 'string') {
     throwTypeMismatch('a string', str);
+  }
+  if (terminating !== undefined) {
+    if (str.charCodeAt(str.length - 1) !== terminating) {
+      str = str + String.fromCharCode(terminating);
+    }
   }
   let ta;
   if (byteSize === 1) {
@@ -1690,7 +1718,7 @@ function finalizePrimitive(s) {
     }
   };
   const copy = getMemoryCopier(size);
-  const typedArray = s.typedArray = getTypedArrayClass(member);
+  s.typedArray = getTypedArrayClass(member);
   const specialKeys = getSpecialKeys(s);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -1721,7 +1749,7 @@ function finalizePrimitive(s) {
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
   });
   Object.defineProperties(constructor, {
-    [COMPAT]: { value: (typedArray) ? [ typedArray.name ] : [] },
+    [COMPAT]: { value: getCompatibleTags(s) },
   });
   addSpecialAccessors(s);
   return constructor;
@@ -1805,7 +1833,7 @@ function finalizeArray(s) {
   const { byteSize: elementSize, structure: elementStructure } = member;
   const length = size / elementSize;
   const copy = getMemoryCopier(size);
-  const typedArray = s.typedArray = getTypedArrayClass(member);
+  s.typedArray = getTypedArrayClass(member);
   const specialKeys = getSpecialKeys(s);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -1863,7 +1891,7 @@ function finalizeArray(s) {
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
-    [COMPAT]: { value: (typedArray) ? [ typedArray.name ] : [] },
+    [COMPAT]: { value: getCompatibleTags(s) },
   });
   addSpecialAccessors(s);
   return constructor;
@@ -2843,6 +2871,10 @@ function finalizePointer(s) {
         if (isPointerOf(arg, Target)) {
           creating = true;
           arg = arg['*'];
+        } else if (isTargetSlice) {
+          // allow casting to slice through constructor of its pointer
+          creating = true;
+          arg = Target(arg);
         } else {
           throwNoCastingToPointer();
         }
@@ -3043,6 +3075,12 @@ function finalizeSlice(s) {
   const objectMember = (member.type === MemberType.Object) ? member : null;
   const { byteSize: elementSize, structure: elementStructure } = member;
   const typedArray = s.typedArray = getTypedArrayClass(member);
+  const termination = getTermination(s, options);
+  if (termination) {
+    // zero-terminated strings aren't expected to be commonly used
+    // so we're not putting this prop into the standard structure
+    s.termination = termination;
+  }
   // the slices are different from other structures due to their variable sizes
   // we only know the "shape" of an object after we've processed the initializers
   const constructor = s.constructor = function(arg) {
@@ -3110,6 +3148,7 @@ function finalizeSlice(s) {
         }
         let i = 0;
         for (const value of arg) {
+          termination?.validateValue(value, i, argLen);
           set.call(this, i++, value);
         }
       } else if (typeof(arg) === 'number') {
@@ -3141,7 +3180,7 @@ function finalizeSlice(s) {
                 dv = getDataViewFromTypedArray(arg[key], typedArray);
                 break;
               case 'string':
-                dv = getDataViewFromUTF8(arg[key], elementSize);
+                dv = getDataViewFromUTF8(arg[key], elementSize, termination?.value);
                 dup = false;
                 break;
               case 'base64':
@@ -3151,6 +3190,7 @@ function finalizeSlice(s) {
             }
             checkDataViewSize(s, dv);
             const length = dv.byteLength / elementSize;
+            termination?.validateData(dv, length);
             if (dup) {
               shapeDefiner.call(this, null, length);
               copy(this[MEMORY], dv);
@@ -3182,16 +3222,65 @@ function finalizeSlice(s) {
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     entries: { value: createArrayEntries, configurable: true, writable: true },
   });
-  const compatTags = [ 'DataView', 'ArrayBuffer', 'SharedArrayBuffer', 'Uint8Array' ];
-  if (typedArray && typedArray !== Uint8Array) {
-    compatTags.push(typedArray.name);
-  }
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
-    [COMPAT]: { value: compatTags },
+    [COMPAT]: { value: getCompatibleTags(s) },
   });
   addSpecialAccessors(s);
   return constructor;
+}
+
+function getTermination(structure, options) {
+  const {
+    runtimeSafety = true,
+  } = options;
+  const {
+    instance: { members: [ member, terminator ], template },
+  } = structure;
+  if (!terminator) {
+    return;
+  }
+  if (process.env.NODE_DEV !== 'production') {
+    /* c8 ignore next 3 */
+    if (terminator.bitOffset === undefined) {
+      throw new Error(`bitOffset must be 0 for terminator member`);
+    }
+  }
+  const { get: getTerminatingValue } = getAccessors(terminator, options);
+  const value = getTerminatingValue.call(template, 0);
+  const { get } = getAccessors(member, options);
+  const validateValue = (runtimeSafety) ? function(v, i, l) {
+    if (v === value && i !== l - 1) {
+      throwMisplacedTerminator(structure, v, i, l);
+    } else if (v !== value && i === l - 1) {
+      throwMissingTerminator(structure, value, i);
+    }
+  } : function(v, i, l) {
+    if (v !== value && i === l - 1) {
+      throwMissingTerminator(structure, value, l);
+    }
+  };
+  const validateData = (runtimeSafety) ? function(dv, l) {
+    const object = { [MEMORY]: dv };
+    for (let i = 0; i < l; i++) {
+      const v = get.call(object, i);
+      if (v === value && i !== l - 1) {
+        throwMisplacedTerminator(structure, value, i, l);
+      } else if (v !== value && i === l - 1) {
+        throwMissingTerminator(structure, value, l);
+      }
+    }
+  } : function(dv, l) {
+    const object = { [MEMORY]: dv };
+    if (l > 0) {
+      const i = l - 1;
+      const v = get.call(object, i);
+      if (v !== value) {
+        throwMissingTerminator(structure, value, l);
+      }
+    }
+  };
+  return { value, validateValue, validateData };
 }
 
 function finalizeVector(s) {
@@ -3266,7 +3355,7 @@ function finalizeVector(s) {
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
-    [COMPAT]: { value: (typedArray) ? [ typedArray.name ] : [] },
+    [COMPAT]: { value: getCompatibleTags(s) },
   });
   addSpecialAccessors(s);
   return constructor;

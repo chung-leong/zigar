@@ -363,7 +363,8 @@ test "hasPointer" {
     assert(hasPointer(A) == false);
     assert(hasPointer(B) == false);
     assert(hasPointer(C) == true);
-    assert(hasPointer(D) == true);
+    // pointers in union are inaccessible
+    assert(hasPointer(D) == false);
 }
 
 fn getMemberType(comptime T: type) MemberType {
@@ -471,7 +472,14 @@ pub fn toMemory(pointer: anytype) Memory {
     const len = switch (size) {
         .One => @sizeOf(CT),
         .Slice => @sizeOf(CT) * pointer.len,
-        .Many, .C => 0,
+        .Many => if (getSentinel(T)) |sentinel| find: {
+            var len: usize = 0;
+            while (pointer[len] != sentinel) {
+                len += 1;
+            }
+            break :find (len + 1) * @sizeOf(CT);
+        } else 0,
+        .C => 0,
     };
     return .{
         .bytes = @ptrFromInt(address),
@@ -490,11 +498,14 @@ test "toMemory" {
     const memD = toMemory(d);
     const e = &b;
     const memE = toMemory(e);
+    const f: [*:0]const u8 = "Hello";
+    const memF = toMemory(f);
     assert(memA.len == 4);
     assert(memB.len == 5);
     assert(memC.len == 0);
     assert(memD.len == 0);
     assert(memE.len == @sizeOf(@TypeOf(b)));
+    assert(memF.len == 6);
 }
 
 fn comparePointers(p1: anytype, p2: anytype) bool {
@@ -576,30 +587,40 @@ test "getStructureName" {
 
 fn getSliceName(comptime T: type) [*:0]const u8 {
     const ptr_name = @typeName(T);
-    comptime var array: [ptr_name.len + 2]u8 = undefined;
-    comptime var index = 0;
-    comptime var in_bracket = false;
-    comptime var underscore_inserted = false;
-    inline for (ptr_name) |c| {
-        if (!in_bracket) {
-            array[index] = c;
-            index += 1;
-            if (c == '[' and !underscore_inserted) {
-                array[index] = '_';
-                index += 1;
-                in_bracket = true;
-                underscore_inserted = true;
-            }
-        } else {
-            if (c == ']') {
-                in_bracket = false;
+    switch (@typeInfo(T).Pointer.size) {
+        .Slice => {
+            comptime var array: [ptr_name.len + 2]u8 = undefined;
+            comptime var index = 0;
+            comptime var underscore_inserted = false;
+            inline for (ptr_name) |c| {
                 array[index] = c;
                 index += 1;
+                if (c == '[' and !underscore_inserted) {
+                    array[index] = '_';
+                    index += 1;
+                    underscore_inserted = true;
+                }
             }
-        }
+            array[index] = 0;
+            return getCString(array[0..index]);
+        },
+        .Many => {
+            comptime var array: [ptr_name.len + 1]u8 = undefined;
+            comptime var asterisk_replaced = false;
+            const replacement = if (@typeInfo(T).Pointer.sentinel) |_| '_' else '0';
+            inline for (ptr_name, 0..) |c, index| {
+                if (c == '*' and !asterisk_replaced) {
+                    array[index] = replacement;
+                    asterisk_replaced = true;
+                } else {
+                    array[index] = c;
+                }
+            }
+            array[ptr_name.len] = 0;
+            return getCString(array[0..ptr_name.len]);
+        },
+        else => @compileError("Unexpected pointer type: " ++ @typeName(T)),
     }
-    array[index] = 0;
-    return getCString(array[0..index]);
 }
 
 test "getSliceName" {
@@ -611,8 +632,10 @@ test "getSliceName" {
     const name2 = getSliceName([:0]const u8);
     assert(name2[0] == '[');
     assert(name2[1] == '_');
-    assert(name2[2] == ']');
-    assert(name2[11] == 0);
+    assert(name2[2] == ':');
+    assert(name2[3] == '0');
+    assert(name2[4] == ']');
+    assert(name2[13] == 0);
     const name3 = getSliceName([][4]u8);
     assert(name3[0] == '[');
     assert(name3[1] == '_');
@@ -621,6 +644,32 @@ test "getSliceName" {
     assert(name3[4] == '4');
     assert(name3[5] == ']');
     assert(name3[8] == 0);
+    const name4 = getSliceName([*:0]const u8);
+    assert(name4[0] == '[');
+    assert(name4[1] == '_');
+    assert(name4[2] == ':');
+    assert(name4[3] == '0');
+    assert(name4[4] == ']');
+    assert(name4[13] == 0);
+    const name5 = getSliceName([*]const u8);
+    assert(name5[0] == '[');
+    assert(name5[1] == '0');
+    assert(name5[2] == ']');
+    assert(name5[11] == 0);
+}
+
+fn getSentinel(comptime T: type) ?@typeInfo(T).Pointer.child {
+    if (@typeInfo(T).Pointer.sentinel) |ptr| {
+        const sentinel_ptr: *const @typeInfo(T).Pointer.child = @alignCast(@ptrCast(ptr));
+        return sentinel_ptr.*;
+    }
+}
+
+test "getSentinel" {
+    const sentinel1 = getSentinel([*:0]const u8);
+    assert(sentinel1 == 0);
+    const sentinel2 = getSentinel([*:7]const i32);
+    assert(sentinel2 == 7);
 }
 
 fn getUnionSelectorOffset(comptime TT: type, comptime fields: []const std.builtin.Type.UnionField) comptime_int {
@@ -731,11 +780,27 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                     try host.attachMember(slice_structure, .{
                         .member_type = getMemberType(pt.child),
                         .is_signed = isSigned(pt.child),
-                        .is_const = pt.is_const,
                         .bit_size = @bitSizeOf(pt.child),
                         .byte_size = @sizeOf(pt.child),
                         .structure = child_structure,
                     });
+                    if (getSentinel(T)) |sentinel| {
+                        try host.attachMember(slice_structure, .{
+                            .name = "sentinel",
+                            .member_type = getMemberType(pt.child),
+                            .is_signed = isSigned(pt.child),
+                            .bit_offset = 0,
+                            .bit_size = @bitSizeOf(pt.child),
+                            .byte_size = @sizeOf(pt.child),
+                            .structure = child_structure,
+                        });
+                        var bytes: []u8 = @as([*]u8, @constCast(@alignCast(@ptrCast(&sentinel))))[0..@sizeOf(pt.child)];
+                        const template = try host.createTemplate(bytes);
+                        try host.attachTemplate(slice_structure, .{
+                            .is_static = false,
+                            .object = template,
+                        });
+                    }
                     try host.finalizeStructure(slice_structure);
                     break :slice slice_structure;
                 },
@@ -931,22 +996,12 @@ fn addDefaultValues(host: anytype, structure: Value, comptime T: type) !void {
             @field(values, field.name) = typed_ptr.*;
         }
     }
-    const has_data = check_data: {
-        for (bytes) |byte| {
-            if (byte != 0) {
-                break :check_data true;
-            }
-        }
-        break :check_data false;
-    };
-    if (has_data) {
-        const template = try host.createTemplate(bytes);
-        try dezigStructure(host, template, &values);
-        return host.attachTemplate(structure, .{
-            .is_static = false,
-            .object = template,
-        });
-    }
+    const template = try host.createTemplate(bytes);
+    try dezigStructure(host, template, &values);
+    try host.attachTemplate(structure, .{
+        .is_static = false,
+        .object = template,
+    });
 }
 
 fn getPointerType(comptime T: type, comptime name: []const u8) type {
@@ -1030,7 +1085,7 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
         }
     }
     if (template_maybe) |template| {
-        return host.attachTemplate(structure, .{
+        try host.attachTemplate(structure, .{
             .is_static = true,
             .object = template,
         });

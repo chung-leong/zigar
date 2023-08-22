@@ -155,6 +155,13 @@ export function addTests(importModule, options) {
       module.useMonkey();
       expect(module.animal.monkey).to.equal(777n);
     })
+    it('should import slices with sentinel', async function() {
+      this.timeout(60000);
+      const { default: module } = await importModule(resolve('./zig-samples/basic/slices-with-sentinel.zig'));
+      const { string } = module.u8_slice;
+      expect(string).to.equal('Hello world');
+      expect([ ...module.i64_slice ]).to.eql([ 0n, 1n, 2n, 3n, 4n, 5n, 6n, 7n ]);
+    })
   })
   describe('Methods', function() {
     it('should import simple function', async function() {
