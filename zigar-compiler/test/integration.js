@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { readFile } from 'fs/promises';
+import 'mocha-skip-if';
 
 export function addTests(importModule, options) {
   const {
@@ -224,6 +225,7 @@ export function addTests(importModule, options) {
     beforeEach(function() {
       process.env.ZIGAR_KEEP_NAMES = '1';
     })
+    skip.permanently.unless(process.env.ZIGAR_TARGET === 'WASM-COMPTIME').
     it('should produce an error return trace', async function() {
       this.timeout(60000);
       const { default: { fail } } = await importModule(resolve('./zig-samples/basic/error-trace.zig'));

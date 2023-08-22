@@ -1,6 +1,6 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { requireDataView, getTypedArrayClass } from './data-view.js';
+import { requireDataView, getTypedArrayClass, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
 import { MEMORY, SLOTS, ZIG, PARENT, GETTER, SETTER, PROXY, COMPAT } from './symbol.js';
@@ -108,7 +108,7 @@ export function finalizeArray(s) {
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
-    [COMPAT]: { value: (typedArray) ? [ typedArray.name ] : [] },
+    [COMPAT]: { value: getCompatibleTags(s) },
   });
   addSpecialAccessors(s);
   return constructor;

@@ -36,6 +36,10 @@ export function finalizePointer(s) {
         if (isPointerOf(arg, Target)) {
           creating = true;
           arg = arg['*'];
+        } else if (isTargetSlice) {
+          // allow casting to slice through constructor of its pointer
+          creating = true;
+          arg = Target(arg);
         } else {
           throwNoCastingToPointer(s);
         }

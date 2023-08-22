@@ -197,6 +197,20 @@ export function isCompatible(arg, constructor) {
   return false;
 }
 
+export function getCompatibleTags(structure) {
+  const { typedArray } = structure;
+  const tags = [];
+  if (typedArray) {
+    tags.push(typedArray.name);
+    tags.push('DataView');
+    if (typedArray === Uint8Array || typedArray === Int8Array) {
+      tags.push('ArrayBuffer');
+      tags.push('SharedArrayBuffer');
+    }
+  }
+  return tags;
+}
+
 export function isBuffer(arg, typedArray) {
   const tag = arg?.[Symbol.toStringTag];
   if (tag === 'DataView' || tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {

@@ -262,9 +262,11 @@ function throwBufferSizeMismatch(structure, dv) {
 function throwBufferExpected(structure) {
   const { size, typedArray } = structure;
   const s = (size > 1) ? 's' : '';
-  const list = [ 'an ArrayBuffer', 'a DataView' ];
-  const last = (typedArray) ? `${article(typedArray.name)} ${typedArray.name}` : list.pop();
-  throw new TypeError(`Expecting an ${list.join(', ')} or ${last} ${size} byte${s} in length`);
+  const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle);
+  if (typedArray) {
+    acceptable.push(addArticle(typedArray.name));
+  }
+  throw new TypeError(`Expecting ${formatList(acceptable)} ${size} byte${s} in length`);
 }
 
 function throwInvalidEnum(structure, value) {
@@ -272,9 +274,9 @@ function throwInvalidEnum(structure, value) {
   throw new TypeError(`Value given does not correspond to an item of enum ${name}: ${value}`);
 }
 
-function throwEnumExpected(structure) {
+function throwEnumExpected(structure, arg) {
   const { name } = structure;
-  throw new TypeError(`Enum item expected: ${name}`);
+  throw new TypeError(`Enum item of the type ${name} expected, received ${arg}`);
 }
 
 function throwNoNewEnum(structure) {
@@ -317,8 +319,16 @@ function throwMissingUnionInitializer(structure, arg, exclusion) {
 
 function throwInvalidInitializer(structure, expected, arg) {
   const { name } = structure;
-  const received = label(arg);
-  throw new TypeError(`${name} expects ${article(expected)} ${expected} as an argument, received ${article(received)} ${received}`);
+  const acceptable = [];
+  if (Array.isArray(expected)) {
+    for (const type of expected) {
+      acceptable.push(addArticle(type));
+    }
+  } else {
+    acceptable.push(addArticle(expected));
+  }
+  const received = addArticle(getDescription(arg));
+  throw new TypeError(`${name} expects ${formatList(acceptable)} as an argument, received ${received}`);
 }
 
 function throwInvalidArrayInitializer(structure, arg, shapeless = false) {
@@ -326,17 +336,17 @@ function throwInvalidArrayInitializer(structure, arg, shapeless = false) {
   const acceptable = [];
   const primitive = getPrimitiveType(member);
   if (primitive) {
-    acceptable.push(`an array of ${primitive}s`);
+    acceptable.push(`array of ${primitive}s`);
   } else if (member.type === MemberType.EnumerationItem) {
-    acceptable.push(`an array of enum items`);
+    acceptable.push(`array of enum items`);
   } else {
-    acceptable.push(`an array of objects`);
+    acceptable.push(`array of objects`);
   }
   if (typedArray) {
-    acceptable.push(`${article(typedArray.name)} ${typedArray.name}`);
+    acceptable.push(typedArray.name);
   }
   if (type === StructureType.Slice && shapeless) {
-    acceptable.push(`a length`);
+    acceptable.push(`length`);
   }
   throwInvalidInitializer(structure, acceptable.join(' or '), arg);
 }
@@ -347,15 +357,15 @@ function throwArrayLengthMismatch(structure, target, arg) {
   const length = target?.length ?? size / byteSize;
   const { length: argLength, constructor: argConstructor } = arg;
   const s = (length > 1) ? 's' : '';
-  let source;
+  let received;
   if (argConstructor === elementConstructor) {
-    source = `only a single one`;
+    received = `only a single one`;
   } else if (argConstructor.child === elementConstructor) {
-    source = `a slice/array that has ${argLength}`;
+    received = `a slice/array that has ${argLength}`;
   } else {
-    source = `${argLength} initializer${argLength > 1 ? 's' : ''}`;
+    received = `${argLength} initializer${argLength > 1 ? 's' : ''}`;
   }
-  throw new TypeError(`${name} has ${length} element${s}, received ${source}`);
+  throw new TypeError(`${name} has ${length} element${s}, received ${received}`);
 }
 
 function throwMissingInitializers(structure, arg) {
@@ -412,8 +422,8 @@ function throwAssigningToConstant(pointer) {
 }
 
 function throwTypeMismatch(expected, arg) {
-  const received = label(arg);
-  throw new TypeError(`Expected ${article(expected)} ${expected}, received ${article(received)} ${received}`)
+  const received = addArticle(getDescription(arg));
+  throw new TypeError(`Expected ${addArticle(expected)}, received ${received}`)
 }
 
 function throwNotEnoughBytes(structure, dest, src) {
@@ -490,17 +500,32 @@ function decamelizeErrorName(name) {
   }
 }
 
-function label(arg) {
+function getDescription(arg) {
   const type = typeof(arg);
+  let s;
   if (type === 'object') {
-    return (arg) ? Object.prototype.toString.call(arg) : 'null';
+    s = (arg) ? Object.prototype.toString.call(arg) : 'null';
   } else {
-    return type;
+    s = type;
   }
+  return addArticle(s);
+}
+
+function addArticle(noun) {
+  return `${article(noun)} ${noun}`;
 }
 
 function article(noun) {
   return /^\W*[aeiou]/i.test(noun) ? 'an' : 'a';
+}
+
+function formatList(list, conj = 'or') {
+  const sep = ` ${conj} `;
+  if (list.length > 2) {
+    return list.slice(0, -1).join(', ') + sep + list[list.length - 1];
+  } else {
+    return list.join(sep);
+  }
 }
 
 function getDataViewBoolAccessor(access, member) {
@@ -598,7 +623,7 @@ function getDataView(structure, arg) {
     dv = arg;
   } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
     dv = new DataView(arg);
-  } else if (typedArray && tag === typedArray.name) {
+  } else if (tag === 'Uint8Array' || (typedArray && tag === typedArray.name)) {
     dv = new DataView(arg.buffer, arg.byteOffset, arg.byteLength);
   } else {
     const memory = arg?.[MEMORY];
@@ -695,20 +720,15 @@ function isCompatible(arg, constructor) {
   return false;
 }
 
-function getCompatibleTags(member) {
-  const tags = [];
-  if (member.type === MemberType.Int || member.type === MemberType.Float) {
-    const TypedArray = getTypedArrayClass(member);
-    if (TypedArray) {
-      tags.push(TypedArray.name);
-    }
-    tags.push('DataView');
-    if (member.byteSize === 1) {
-      tags.push('ArrayBuffer');
-      tags.push('SharedArrayBuffer');
-    }
+function isBuffer(arg, typedArray) {
+  const tag = arg?.[Symbol.toStringTag];
+  if (tag === 'DataView' || tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
+    return true;
+  } else if (typedArray && tag === typedArray.name) {
+    return true;
+  } else {
+    return false;
   }
-  return tags;
 }
 
 function getTypeName({ type, isSigned, bitSize, byteSize }) {
@@ -1066,7 +1086,7 @@ function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
 }
 
 function cacheMethod(access, member, cb) {
-  const { type, bitOffset, bitSize } = member;
+  const { type, bitOffset, bitSize, structure } = member;
   const bitPos = bitOffset & 0x07;
   const typeName = getTypeName(member);
   const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
@@ -1074,15 +1094,32 @@ function cacheMethod(access, member, cb) {
   let fn = methodCache[name];
   if (!fn) {
     fn = cb(name);
-    if (access === 'set' && type === MemberType.Int && bitSize > 32) {
-      // automatically convert number to bigint
-      const set = fn;
-      fn = function(offset, value, littleEndian) {
-        if (typeof(value) === 'number') {
-          value = BigInt(value);
+    if (type === MemberType.Int && bitSize === 64) {
+      const name = structure?.name;
+      if (name === 'usize' || name === 'isize') {
+        if (access === 'get') {
+          const get = fn;
+          const min = BigInt(Number.MIN_SAFE_INTEGER);
+          const max = BigInt(Number.MAX_SAFE_INTEGER);
+          fn = function(offset, littleEndian) {
+            const value = get.call(this, offset, littleEndian);
+            if (min <= value && value <= max) {
+              return Number(value);
+            } else {
+              return value;
+            }
+          };
+        } else {
+          // automatically convert number to bigint
+          const set = fn;
+          fn = function(offset, value, littleEndian) {
+            if (typeof(value) === 'number') {
+              value = BigInt(value);
+            }
+            set.call(this, offset, value, littleEndian);
+          };
         }
-        set.call(this, offset, value, littleEndian);
-      };
+      }
     }
     if (fn && fn.name !== name) {
       Object.defineProperty(fn, 'name', { value: name, configurable: true, writable: false });
@@ -1261,10 +1298,16 @@ function addEnumerationLookup(getDataViewIntAccessor) {
     } else {
       return function(offset, value, littleEndian) {
         const { constructor } = structure;
-        if (!(value instanceof constructor)) {
-          throwEnumExpected(constructor);
+        let item;
+        if (value instanceof constructor) {
+          item = value;
+        } else {
+          item = constructor(value);
         }
-        accessor.call(this, offset, value.valueOf(), littleEndian);
+        if (!item) {
+          throwEnumExpected(structure, value);
+        }
+        accessor.call(this, offset, item.valueOf(), littleEndian);
       };
     }
   };
@@ -1412,7 +1455,7 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
 function restoreMemory() {
   const dv = this[MEMORY];
   const source = dv[SOURCE];
-  if (!source || dv.byteOffset !== 0) {
+  if (!source || dv.buffer.byteLength !== 0) {
     return false;
   }
   const { memory, address, len } = source;
@@ -1443,7 +1486,8 @@ function addSpecialAccessors(s) {
     descriptors.string = { ...strAccessors, configurable: true };
   }
   if (canBeTypedArray(s)) {
-    const taAccessors = getTypedArrayAccessors(s.typedArray);
+    const { byteSize } = s.instance.members[0];
+    const taAccessors = getTypedArrayAccessors(s.typedArray, byteSize);
     descriptors.typedArray = { ...taAccessors, configurable: true };
   }
   Object.defineProperties(constructor.prototype, descriptors);
@@ -1646,7 +1690,7 @@ function finalizePrimitive(s) {
     }
   };
   const copy = getMemoryCopier(size);
-  s.typedArray = getTypedArrayClass(member);
+  const typedArray = s.typedArray = getTypedArrayClass(member);
   const specialKeys = getSpecialKeys(s);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -1675,6 +1719,9 @@ function finalizePrimitive(s) {
   Object.defineProperties(constructor.prototype, {
     $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
+  });
+  Object.defineProperties(constructor, {
+    [COMPAT]: { value: (typedArray) ? [ typedArray.name ] : [] },
   });
   addSpecialAccessors(s);
   return constructor;
@@ -1758,7 +1805,7 @@ function finalizeArray(s) {
   const { byteSize: elementSize, structure: elementStructure } = member;
   const length = size / elementSize;
   const copy = getMemoryCopier(size);
-  s.typedArray = getTypedArrayClass(member);
+  const typedArray = s.typedArray = getTypedArrayClass(member);
   const specialKeys = getSpecialKeys(s);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -1811,11 +1858,12 @@ function finalizeArray(s) {
     set: { value: set, configurable: true, writable: true },
     length: { value: length, configurable: true },
     $: { get: retriever, set: initializer, configurable: true },
-    [Symbol.iterator]: { value: getArrayIterator, configurable: true },
+    [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
+    entries: { value: createArrayEntries, configurable: true, writable: true }
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
-    [COMPAT]: { value: getCompatibleTags(member) },
+    [COMPAT]: { value: (typedArray) ? [ typedArray.name ] : [] },
   });
   addSpecialAccessors(s);
   return constructor;
@@ -1887,6 +1935,32 @@ function getArrayIterator() {
       }
       return { value, done };
     },
+  };
+}
+
+function getArrayEntriesIterator() {
+  const self = this;
+  const length = this.length;
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < length) {
+        value = [ index, self.get(index) ];
+        done = false;
+        index++;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+
+function createArrayEntries() {
+  return {
+    [Symbol.iterator]: getArrayEntriesIterator.bind(this),
+    length: this.length,
   };
 }
 
@@ -2584,30 +2658,32 @@ function finalizeEnumeration(s) {
       // new enum items cannot be created
       throwNoNewEnum(s);
     }
-    if (arg && typeof(arg) === 'object') {
-      // if it's a tagged union, return the active tag
-      if (arg[ENUM_ITEM]) {
-        return arg[ENUM_ITEM];
-      }
-    }
-    let index = -1;
-    if (isSequential) {
-      // normal enums start at 0 and go up, so the value is the index
-      index = Number(arg);
-    } else {
-      // values aren't sequential, so we need to compare values
-      // casting just in case the enum is BigInt
-      const given = Primitive(arg);
-      for (let i = 0; i < count; i++) {
-        const value = getValue.call(constructor, i);
-        if (value === given) {
-          index = i;
-          break;
+    if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+      let index = -1;
+      if (isSequential) {
+        // normal enums start at 0 and go up, so the value is the index
+        index = Number(arg);
+      } else {
+        // values aren't sequential, so we need to compare values
+        const given = Primitive(arg);
+        for (let i = 0; i < count; i++) {
+          const value = getValue.call(constructor, i);
+          if (value === given) {
+            index = i;
+            break;
+          }
         }
       }
+      // return the enum object (created down below)
+      return items[index];
+    } else if (arg && typeof(arg) === 'object' && arg[ENUM_ITEM]) {
+      // a tagged union, return the active tag
+      return arg[ENUM_ITEM];
+    } else if (typeof(arg)  === 'string') {
+      return constructor[arg];
+    } else {
+      throwInvalidInitializer(s, [ 'number', 'string', 'tagged union' ], arg);
     }
-    // return the enum object (created down below)
-    return items[index];
   };
   // attach the numeric values to the class as its binary data
   // this allows us to reuse the array getter
@@ -2767,9 +2843,6 @@ function finalizePointer(s) {
         if (isPointerOf(arg, Target)) {
           creating = true;
           arg = arg['*'];
-        } else if (isTargetSlice) {
-          creating = true;
-          arg = constructor.child(arg);
         } else {
           throwNoCastingToPointer();
         }
@@ -2805,7 +2878,18 @@ function finalizePointer(s) {
             arg = Target(dv);
           } else if (isTargetSlice) {
             // autovivificate target object
-            arg = new Target(arg);
+            const autoObj = new Target(arg);
+            if (process.env.NODE_ENV !== 'production') {
+              // creation of a new slice using a typed array is probably
+              // not what the user wants; it's more likely that the intention
+              // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
+              if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
+                const created = addArticle(targetStructure.typedArray.name);
+                const source = addArticle(arg.constructor.name);
+                console.warn(`Implicitly creating ${created} from ${source}`);
+              }
+            }
+            arg = autoObj;
           } else {
             throwInvalidPointerTarget(s, arg);
           }
@@ -3095,11 +3179,16 @@ function finalizeSlice(s) {
     set: { value: set, configurable: true, writable: true },
     length: { get: getLength, configurable: true },
     $: { get: retriever, set: initializer, configurable: true },
-    [Symbol.iterator]: { value: getArrayIterator, configurable: true },
+    [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
+    entries: { value: createArrayEntries, configurable: true, writable: true },
   });
+  const compatTags = [ 'DataView', 'ArrayBuffer', 'SharedArrayBuffer', 'Uint8Array' ];
+  if (typedArray && typedArray !== Uint8Array) {
+    compatTags.push(typedArray.name);
+  }
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
-    [COMPAT]: { value: getCompatibleTags(member) },
+    [COMPAT]: { value: compatTags },
   });
   addSpecialAccessors(s);
   return constructor;
@@ -3172,11 +3261,12 @@ function finalizeVector(s) {
     ...elementDescriptors,
     length: { value: count, configurable: true },
     $: { get: retriever, set: initializer, configurable: true },
-    [Symbol.iterator]: { value: getVectorIterator, configurable: true },
+    [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
+    entries: { value: createVectorEntries, configurable: true, writable: true },
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
-    [COMPAT]: { value: getCompatibleTags(member) },
+    [COMPAT]: { value: (typedArray) ? [ typedArray.name ] : [] },
   });
   addSpecialAccessors(s);
   return constructor;
@@ -3198,6 +3288,32 @@ function getVectorIterator() {
       }
       return { value, done };
     },
+  };
+}
+
+function getVectorEntriesIterator() {
+  const self = this;
+  const length = this.length;
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < length) {
+        value = [ index, self[index] ];
+        done = false;
+        index++;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+
+function createVectorEntries() {
+  return {
+    [Symbol.iterator]: getVectorEntriesIterator.bind(this),
+    length: this.length,
   };
 }
 

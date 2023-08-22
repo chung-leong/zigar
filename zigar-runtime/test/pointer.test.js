@@ -792,7 +792,7 @@ describe('Pointer functions', function() {
       expect(pointer['*']).to.be.instanceOf(U8Slice);
       expect([ ...pointer ]).to.eql([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
     })
-    it('should implicitly cast a buffer to a slice of structs', function() {
+    it('should require explicit casting of a buffer to a slice of structs', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -854,7 +854,8 @@ describe('Pointer functions', function() {
         dv.setUint32(i * 8 + 0, 123 * multiplier, true);
         dv.setUint32(i * 8 + 4, 456 * multiplier, true);
       }
-      const pointer = new HelloPtr(buffer);
+      expect(() => new HelloPtr(buffer)).to.throw(TypeError);
+      const pointer = HelloPtr(buffer);
       expect(pointer['*']).to.be.instanceOf(HelloSlice);
       expect({ ...pointer[0] }).to.eql({ cat: 123, dog: 456 });
       expect({ ...pointer[1] }).to.eql({ cat: 1230, dog: 4560 });

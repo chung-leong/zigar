@@ -87,8 +87,8 @@ export function throwInvalidInitializer(structure, expected, arg) {
   } else {
     acceptable.push(addArticle(expected));
   }
-  const received = addArticle(getDescription(arg));
-  throw new TypeError(`${name} expects ${formatList(acceptable)} as an argument, received ${received}`);
+  const received = getDescription(arg);
+  throw new TypeError(`${name} expects ${formatList(acceptable)} as argument, received ${received}`);
 }
 
 export function throwInvalidArrayInitializer(structure, arg, shapeless = false) {
@@ -96,17 +96,17 @@ export function throwInvalidArrayInitializer(structure, arg, shapeless = false) 
   const acceptable = [];
   const primitive = getPrimitiveType(member);
   if (primitive) {
-    acceptable.push(`an array of ${primitive}s`);
+    acceptable.push(`array of ${primitive}s`);
   } else if (member.type === MemberType.EnumerationItem) {
-    acceptable.push(`an array of enum items`);
+    acceptable.push(`array of enum items`);
   } else {
-    acceptable.push(`an array of objects`);
+    acceptable.push(`array of objects`);
   }
   if (typedArray) {
-    acceptable.push(`${article(typedArray.name)} ${typedArray.name}`);
+    acceptable.push(typedArray.name);
   }
   if (type === StructureType.Slice && shapeless) {
-    acceptable.push(`a length`);
+    acceptable.push(`length`);
   }
   throwInvalidInitializer(structure, acceptable.join(' or '), arg);
 }
@@ -182,7 +182,7 @@ export function throwAssigningToConstant(pointer) {
 }
 
 export function throwTypeMismatch(expected, arg) {
-  const received = addArticle(getDescription(arg));
+  const received = getDescription(arg);
   throw new TypeError(`Expected ${addArticle(expected)}, received ${received}`)
 }
 
