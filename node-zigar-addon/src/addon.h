@@ -73,7 +73,6 @@ typedef const char* (*Thunk)(Call*, Local<Value>);
 
 struct Method {
   const char* name;
-  bool is_static_only;
   Thunk thunk;
   Local<Value> structure;
 };

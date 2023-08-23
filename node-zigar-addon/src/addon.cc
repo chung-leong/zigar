@@ -353,11 +353,9 @@ static Local<Object> NewMethod(Call* call,
   auto isolate = call->isolate;
   auto context = call->context;
   auto thunk = NewThunk(call, m.thunk);
-  auto is_static_only = Boolean::New(isolate, m.is_static_only);
   auto def = Object::New(isolate);
   def->Set(context, String::NewFromUtf8Literal(isolate, "argStruct"), m.structure).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "thunk"), thunk).Check();
-  def->Set(context, String::NewFromUtf8Literal(isolate, "isStaticOnly"), is_static_only).Check();
   if (m.name) {
     auto name = String::NewFromUtf8(isolate, m.name).ToLocalChecked();
     def->Set(context, String::NewFromUtf8Literal(isolate, "name"), name).Check();
