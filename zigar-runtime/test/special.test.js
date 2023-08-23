@@ -217,7 +217,6 @@ describe('Special property functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         byteSize: 4,
@@ -227,7 +226,6 @@ describe('Special property functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         byteSize: 4,
@@ -242,7 +240,6 @@ describe('Special property functions', function() {
       });
       attachMember(arrayStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         byteSize: 8,
         structure: structStructure,
@@ -303,7 +300,6 @@ describe('Special property functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
@@ -320,7 +316,6 @@ describe('Special property functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 8,
         byteSize: 1,
@@ -337,7 +332,6 @@ describe('Special property functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
@@ -354,7 +348,6 @@ describe('Special property functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
@@ -371,7 +364,6 @@ describe('Special property functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 15,
         byteSize: 2,

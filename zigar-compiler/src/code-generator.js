@@ -71,13 +71,14 @@ export function generateCode(structures, params) {
     hasPointer: false,
     instance: {
       members: [],
+      methods: [],
       template: null,
     },
     static: {
       members: [],
+      methods: [],
       template: null,
     },
-    methods: [],
     options: { runtimeSafety },
   };
 

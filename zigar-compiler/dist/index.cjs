@@ -530,6 +530,7 @@ function beginStructure(def, options = {}) {
     type,
     name,
     size,
+    isConst,
     hasPointer,
   } = def;
   return {
@@ -542,33 +543,37 @@ function beginStructure(def, options = {}) {
     type,
     name,
     size,
+    isConst,
     hasPointer,
     instance: {
       members: [],
+      methods: [],
       template: null,
     },
     static: {
       members: [],
+      methods: [],
       template: null,
     },
-    methods: [],
     options,
   };
 }
 
-function attachMember(s, def) {
-  const { isStatic, ...member } = def;
+function attachMember(s, member, isStatic = false) {
   const target = (isStatic) ? s.static : s.instance;
   target.members.push(member);
 }
 
-function attachMethod(s, def) {
-  s.methods.push(def);
+function attachMethod(s, method, isStaticOnly = false) {
+  s.static.methods.push(method);
+  if (!isStaticOnly) {
+    s.instance.methods.push(method);
+  }
 }
 
-function attachTemplate(s, def) {
-  const target = (def.isStatic) ? s.static : s.instance;
-  target.template = def.template;
+function attachTemplate(s, template, isStatic = false) {
+  const target = (isStatic) ? s.static : s.instance;
+  target.template = template;
 }
 
 function getStructureFeature(structure) {
@@ -853,25 +858,25 @@ async function runModule(module, options = {}) {
     return addObject(beginStructure(def));
   }
 
-  function _attachMember(structureIndex, defIndex) {
+  function _attachMember(structureIndex, defIndex, isStatic) {
     if (omitFunctions) {
       return;
     }
     const structure = valueTable[structureIndex];
     const def = valueTable[defIndex];
-    attachMember(structure, def);
+    attachMember(structure, def, !!isStatic);
   }
 
-  function _attachMethod(structureIndex, defIndex) {
+  function _attachMethod(structureIndex, defIndex, isStaticOnly) {
     const structure = valueTable[structureIndex];
     const def = valueTable[defIndex];
-    attachMethod(structure, def);
+    attachMethod(structure, def, !!isStaticOnly);
   }
 
-  function _attachTemplate(structureIndex, templateIndex) {
+  function _attachTemplate(structureIndex, templateIndex, isStatic) {
     const structure = valueTable[structureIndex];
     const template = valueTable[templateIndex];
-    attachTemplate(structure, template);
+    attachTemplate(structure, template, !!isStatic);
   }
 
   function _finalizeStructure(structureIndex) {

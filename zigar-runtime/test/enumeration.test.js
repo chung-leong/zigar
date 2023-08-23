@@ -28,7 +28,6 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -36,22 +35,18 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setUint32(0, 0, true);
-            dv.setUint32(4, 1, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 0, true);
+          dv.setUint32(4, 1, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       expect(Number(Hello.Dog)).to.equal(0);
@@ -67,7 +62,6 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -75,22 +69,18 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setUint32(0, 0, true);
-            dv.setUint32(4, 1, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 0, true);
+          dv.setUint32(4, 1, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       expect(Hello(0)).to.equal(Hello.Dog);
@@ -104,7 +94,6 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -112,22 +101,18 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setUint32(0, 0, true);
-            dv.setUint32(4, 1, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 0, true);
+          dv.setUint32(4, 1, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       expect(Hello('Dog')).to.equal(Hello.Dog);
@@ -141,7 +126,6 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -149,22 +133,18 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setUint32(0, 0, true);
-            dv.setUint32(4, 1, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 0, true);
+          dv.setUint32(4, 1, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       expect(() => Hello({})).to.throw(TypeError);
@@ -179,7 +159,6 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -187,22 +166,18 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setUint32(0, 123, true);
-            dv.setUint32(4, 456, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 123, true);
+          dv.setUint32(4, 456, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       expect(Hello(123)).to.equal(Hello.Dog);
@@ -218,7 +193,6 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
@@ -226,22 +200,18 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(8 * 2));
-            dv.setBigUint64(0, 1234n, true);
-            dv.setBigUint64(8, 4567n, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(8 * 2));
+          dv.setBigUint64(0, 1234n, true);
+          dv.setBigUint64(8, 4567n, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       expect(Hello(1234n)).to.equal(Hello.Dog);
@@ -256,7 +226,6 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -264,22 +233,18 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setUint32(0, 0, true);
-            dv.setUint32(4, 1, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 0, true);
+          dv.setUint32(4, 1, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       expect(JSON.stringify(Hello.Dog)).to.equal('0');
@@ -293,7 +258,6 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -301,22 +265,18 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setUint32(0, 0, true);
-            dv.setUint32(4, 1, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 0, true);
+          dv.setUint32(4, 1, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       expect(() => new Hello(5)).to.throw();
@@ -329,7 +289,6 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -337,22 +296,18 @@ describe('Enumeration functions', function() {
       attachMember(structure, {
         name: 'Cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setUint32(0, 0, true);
-            dv.setUint32(4, 1, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 0, true);
+          dv.setUint32(4, 1, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       expect(Hello(1)).to.be.an('object');

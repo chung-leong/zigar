@@ -16,9 +16,11 @@ export function finalizePointer(s) {
     instance: {
       members: [ member ],
     },
+    isConst,
   } = s;
-  const { isConst, structure: targetStructure } = member;
-  const isTargetSlice = targetStructure.type;
+  const { structure: targetStructure } = member;
+  const isTargetSlice = (targetStructure.type === StructureType.Slice);
+  const isTargetPointer = (targetStructure.type === StructureType.Pointer);
   const constructor = s.constructor = function(arg) {
     const calledFromZig = (this === ZIG);
     const calledFromParent = (this === PARENT);
@@ -54,7 +56,7 @@ export function finalizePointer(s) {
     if (creating) {
       initializer.call(self, arg);
     }
-    return createProxy.call(self, member);
+    return createProxy.call(self, isConst, isTargetPointer);
   };
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -131,10 +133,8 @@ function isPointerOf(arg, Target) {
   return (arg?.constructor?.child === Target && arg['*']);
 }
 
-function createProxy({ structure, isConst }) {
-  const descriptors = (structure.type !== StructureType.Pointer)
-    ? (isConst) ? constProxyHandlers : proxyHandlers
-    : {};
+function createProxy(isConst, isTargetPointer) {
+  const descriptors = (!isTargetPointer) ? (isConst) ? constProxyHandlers : proxyHandlers : {};
   const proxy = new Proxy(this, descriptors);
   this[PROXY] = proxy;
   return proxy;

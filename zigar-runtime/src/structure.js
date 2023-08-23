@@ -97,6 +97,7 @@ export function beginStructure(def, options = {}) {
     type,
     name,
     size,
+    isConst,
     hasPointer,
   } = def;
   return {
@@ -109,33 +110,37 @@ export function beginStructure(def, options = {}) {
     type,
     name,
     size,
+    isConst,
     hasPointer,
     instance: {
       members: [],
+      methods: [],
       template: null,
     },
     static: {
       members: [],
+      methods: [],
       template: null,
     },
-    methods: [],
     options,
   };
 }
 
-export function attachMember(s, def) {
-  const { isStatic, ...member } = def;
+export function attachMember(s, member, isStatic = false) {
   const target = (isStatic) ? s.static : s.instance;
   target.members.push(member);
 }
 
-export function attachMethod(s, def) {
-  s.methods.push(def);
+export function attachMethod(s, method, isStaticOnly = false) {
+  s.static.methods.push(method);
+  if (!isStaticOnly) {
+    s.instance.methods.push(method);
+  }
 }
 
-export function attachTemplate(s, def) {
-  const target = (def.isStatic) ? s.static : s.instance;
-  target.template = def.template;
+export function attachTemplate(s, template, isStatic = false) {
+  const target = (isStatic) ? s.static : s.instance;
+  target.template = template;
 }
 
 export function finalizeStructure(s) {

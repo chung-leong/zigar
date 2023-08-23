@@ -37,7 +37,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -46,23 +45,19 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setInt32(0, 1234, true);
-            dv.setInt32(4, 4567, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        }
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setInt32(0, 1234, true);
+          dv.setInt32(4, 4567, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
@@ -82,7 +77,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -91,23 +85,19 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setInt32(0, 1234, false);
-            dv.setInt32(4, 4567, false);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setInt32(0, 1234, false);
+          dv.setInt32(4, 4567, false);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
@@ -127,7 +117,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -136,23 +125,19 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setInt32(0, 1234, true);
-            dv.setInt32(4, 4567, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setInt32(0, 1234, true);
+          dv.setInt32(4, 4567, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({});
@@ -172,7 +157,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -181,23 +165,19 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setInt32(0, 1234, true);
-            dv.setInt32(4, 4567, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setInt32(0, 1234, true);
+          dv.setInt32(4, 4567, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({});
@@ -212,7 +192,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -221,23 +200,19 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setInt32(0, 1234, true);
-            dv.setInt32(4, 4567, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setInt32(0, 1234, true);
+          dv.setInt32(4, 4567, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({});
@@ -252,7 +227,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -261,23 +235,19 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setInt32(0, 1234, true);
-            dv.setInt32(4, 4567, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setInt32(0, 1234, true);
+          dv.setInt32(4, 4567, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({});
@@ -292,27 +262,22 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Bool,
-        isStatic: false,
         bitSize: 1,
         bitOffset: 0,
       });
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Bool,
-        isStatic: false,
         bitSize: 1,
         bitOffset: 1,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(1));
-            dv.setInt8(0, 2, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(1));
+          dv.setInt8(0, 2, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({});
@@ -333,7 +298,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 2,
         bitOffset: 0,
@@ -341,21 +305,17 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 3,
         bitOffset: 2,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(1));
-            dv.setInt8(0, 7, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(1));
+          dv.setInt8(0, 7, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({});
@@ -378,7 +338,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 2,
         bitOffset: 0,
@@ -386,21 +345,17 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 2,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(5));
-            dv.setUint32(0, 8, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(5));
+          dv.setUint32(0, 8, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({});
@@ -416,7 +371,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: true,
         bitSize: 32,
@@ -425,7 +379,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: true,
         bitSize: 32,
@@ -449,7 +402,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: true,
         bitSize: 32,
@@ -458,7 +410,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: true,
         bitSize: 32,
@@ -477,7 +428,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: true,
         bitSize: 32,
@@ -486,7 +436,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: true,
         bitSize: 32,
@@ -505,7 +454,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -513,7 +461,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: true,
         bitSize: 32,
@@ -522,10 +469,7 @@ describe('Struct functions', function() {
       const dv = new DataView(new ArrayBuffer(8));
       dv.setUint32(0, 1234, true);
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: dv,
-        },
+        [MEMORY]: dv,
       });
       const Hello = finalizeStructure(structure);
       expect(() => new Hello({})).to.throw();
@@ -542,7 +486,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: true,
         bitSize: 32,
@@ -551,7 +494,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: true,
         bitSize: 32,
@@ -573,7 +515,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: true,
         bitSize: 32,
@@ -582,7 +523,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: true,
         bitSize: 32,
@@ -604,7 +544,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: true,
         bitSize: 32,
@@ -613,7 +552,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: true,
         bitSize: 32,
@@ -635,7 +573,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: true,
         bitSize: 32,
@@ -644,7 +581,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: true,
         bitSize: 32,
@@ -666,7 +602,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: false,
         bitSize: 32,
@@ -675,7 +610,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         isRequired: false,
         bitSize: 32,
@@ -685,10 +619,7 @@ describe('Struct functions', function() {
       dv.setUint32(0, 1234, true);
       dv.setUint32(4, 4567, true);
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: dv,
-        },
+        [MEMORY]: dv,
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({});
@@ -708,7 +639,6 @@ describe('Struct functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -723,7 +653,6 @@ describe('Struct functions', function() {
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -740,7 +669,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -750,7 +678,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 64,
         byteSize: 8,
@@ -762,19 +689,16 @@ describe('Struct functions', function() {
       const intPtr1 = new Int32Ptr(int1);
       const intPtr2 = new Int32Ptr(int2);
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(8 * 2));
-            dv.setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
-            dv.setBigUint64(8, 0xaaaaaaaaaaaaaaaan, true);
-            return dv;
-          })(),
-          [SLOTS]: {
-            0: intPtr1,
-            1: intPtr2,
-          }
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(8 * 2));
+          dv.setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
+          dv.setBigUint64(8, 0xaaaaaaaaaaaaaaaan, true);
+          return dv;
+        })(),
+        [SLOTS]: {
+          0: intPtr1,
+          1: intPtr2,
+        }
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({});

@@ -828,7 +828,6 @@ describe('Member functions', function() {
     it('should return name of function for handling types', function() {
       const member = {
         type: MemberType.Type,
-        isStatic: true,
       };
       const name = getMemberFeature(member);
       expect(name).to.equal('useType');
@@ -836,7 +835,6 @@ describe('Member functions', function() {
     it('should return name of function for handling void', function() {
       const member = {
         type: MemberType.Void,
-        isStatic: true,
       };
       const name = getMemberFeature(member);
       expect(name).to.equal('useVoid');

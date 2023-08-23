@@ -4,14 +4,14 @@ import { MEMORY, SLOTS, ZIG } from './symbol.js';
 export function addMethods(s) {
   const {
     constructor,
-    methods,
+    instance: { methods: instanceMembers },
+    static: { methods: staticMethods },
   } = s;
-  for (const method of methods) {
+  for (const method of staticMethods) {
     const {
       name,
       argStruct,
       thunk,
-      isStaticOnly,
     } = method;
     const f = function(...args) {
       const { constructor } = argStruct;
@@ -24,19 +24,24 @@ export function addMethods(s) {
     Object.defineProperties(constructor, {
       [name]: { value: f, configurable: true, enumerable: true, writable: true },
     });
-    if (!isStaticOnly) {
-      const m = function(...args) {
-        const { constructor } = argStruct;
-        const a = new constructor([ this, ...args ]);
-        return invokeThunk(thunk, a);
-      }
-      Object.defineProperties(m, {
-        name: { value: name, writable: false },
-      });
-      Object.defineProperties(constructor.prototype, {
-        [name]: { value: m, configurable: true, writable: true },
-      });
+  }
+  for (const method of instanceMembers) {
+    const {
+      name,
+      argStruct,
+      thunk,
+    } = method;
+    const f = function(...args) {
+      const { constructor } = argStruct;
+      const a = new constructor([ this, ...args ]);
+      return invokeThunk(thunk, a);
     }
+    Object.defineProperties(f, {
+      name: { value: name, writable: false },
+    });
+    Object.defineProperties(constructor.prototype, {
+      [name]: { value: f, configurable: true, writable: true },
+    });
   }
 }
 

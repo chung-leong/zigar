@@ -32,7 +32,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -41,7 +40,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 32,
@@ -50,7 +48,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'retval',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 64,
@@ -73,7 +70,6 @@ describe('ArgStruct functions', function() {
       attachMember(childStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -82,7 +78,6 @@ describe('ArgStruct functions', function() {
       attachMember(childStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 32,
@@ -97,7 +92,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'pet',
         type: MemberType.Object,
-        isStatic: false,
         bitSize: childStructure.size * 8,
         bitOffset: 0,
         byteSize: childStructure.size,
@@ -107,7 +101,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: childStructure.size * 8,
@@ -116,7 +109,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'retval',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 64,
@@ -135,7 +127,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -144,7 +135,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 32,
@@ -153,7 +143,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'retval',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 64,
@@ -172,7 +161,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: '0',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -181,7 +169,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: '1',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 32,
@@ -190,7 +177,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'retval',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 64,

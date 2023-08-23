@@ -22,13 +22,13 @@ describe('Code generation', function() {
         type: StructureType.Primitive,
         name: "i32",
         size: 4,
+        isConst: false,
         hasPointer: false,
         instance: {
           members: [
             {
               type: MemberType.Int,
               isSigned: true,
-              isConst: false,
               bitOffset: 0,
               bitSize: 32,
               byteSize: 4,
@@ -56,13 +56,13 @@ describe('Code generation', function() {
         type: StructureType.Primitive,
         name: "i31",
         size: 4,
+        isConst: false,
         hasPointer: false,
         instance: {
           members: [
             {
               type: MemberType.Int,
               isSigned: true,
-              isConst: false,
               bitOffset: 0,
               bitSize: 31,
               byteSize: 4,
@@ -91,12 +91,12 @@ describe('Code generation', function() {
         type: StructureType.Primitive,
         name: "f32",
         size: 4,
+        isConst: false,
         hasPointer: false,
         instance: {
           members: [
             {
               type: MemberType.Float,
-              isConst: false,
               bitOffset: 0,
               bitSize: 32,
               byteSize: 4,
@@ -124,12 +124,12 @@ describe('Code generation', function() {
         type: StructureType.Primitive,
         name: "f80",
         size: 16,
+        isConst: false,
         hasPointer: false,
         instance: {
           members: [
             {
               type: MemberType.Float,
-              isConst: false,
               bitOffset: 0,
               bitSize: 80,
               byteSize: 16,
@@ -158,12 +158,12 @@ describe('Code generation', function() {
         type: StructureType.Primitive,
         name: "bool",
         size: 1,
+        isConst: false,
         hasPointer: false,
         instance: {
           members: [
             {
               type: MemberType.Bool,
-              isConst: false,
               bitOffset: 0,
               bitSize: 1,
               byteSize: 1,
@@ -191,20 +191,19 @@ describe('Code generation', function() {
         type: StructureType.Struct,
         name: "flags",
         size: 1,
+        isConst: false,
         hasPointer: false,
         instance: {
           members: [
             {
               type: MemberType.Bool,
               name: "option1",
-              isConst: false,
               bitOffset: 0,
               bitSize: 1,
             },
             {
               type: MemberType.Bool,
               name: "option2",
-              isConst: false,
               bitOffset: 1,
               bitSize: 1,
             },
@@ -252,12 +251,12 @@ describe('Code generation', function() {
         type: StructureType.Primitive,
         name: "enumItem",
         size: 2,
+        isConst: false,
         hasPointer: false,
         instance: {
           members: [
             {
               type: MemberType.EnumerationItem,
-              isConst: false,
               bitOffset: 0,
               bitSize: 16,
               byteSize: 2,
@@ -307,12 +306,12 @@ describe('Code generation', function() {
         type: StructureType.Primitive,
         name: "enumItem",
         size: 2,
+        isConst: false,
         hasPointer: false,
         instance: {
           members: [
             {
               type: MemberType.EnumerationItem,
-              isConst: false,
               bitOffset: 3,
               bitSize: 16,
               structure: enumSetStructure,
@@ -361,6 +360,7 @@ describe('Code generation', function() {
         type: StructureType.Struct,
         name: "package",
         size: 0,
+        isConst: false,
         hasPointer: false,
         instance: {
           members: [],
@@ -371,7 +371,6 @@ describe('Code generation', function() {
             {
               type: MemberType.Type,
               name: 'Enum',
-              isConst: false,
               structure: enumSetStructure,
             },
           ],
@@ -433,7 +432,6 @@ describe('Code generation', function() {
               type: MemberType.Object,
               name: "panda",
               isSigned: true,
-              isConst: true,
               bitOffset: 0,
               bitSize: 32,
               byteSize: 4,
@@ -628,13 +626,13 @@ describe('Code generation', function() {
           type: StructureType.Primitive,
           name: `i${bitSize}`,
           size: 8,
+          isConst: false,
           hasPointer: false,
           instance: {
             members: [
               {
                 type: MemberType.Int,
                 isSigned: true,
-                isConst: false,
                 bitOffset: 0,
                 bitSize,
                 byteSize: 8,

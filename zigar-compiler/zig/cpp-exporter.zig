@@ -11,7 +11,6 @@ const Member = exporter.Member;
 const Method = exporter.Method;
 const Memory = exporter.Memory;
 const MemoryDisposition = exporter.MemoryDisposition;
-const Template = exporter.Template;
 const Thunk = exporter.Thunk;
 const Error = exporter.Error;
 const missing = exporter.missing;
@@ -142,9 +141,9 @@ pub const Host = struct {
         return structure;
     }
 
-    pub fn attachMember(self: Host, structure: Value, member: Member) !void {
-        if (callbacks.attach_member(self.context, structure, &member) != .OK) {
-            if (member.is_static) {
+    pub fn attachMember(self: Host, structure: Value, member: Member, is_static: bool) !void {
+        if (callbacks.attach_member(self.context, structure, &member, is_static) != .OK) {
+            if (is_static) {
                 return Error.UnableToAddStaticMember;
             } else {
                 return Error.UnableToAddStructureMember;
@@ -152,14 +151,14 @@ pub const Host = struct {
         }
     }
 
-    pub fn attachMethod(self: Host, structure: Value, method: Method) !void {
-        if (callbacks.attach_method(self.context, structure, &method) != .OK) {
+    pub fn attachMethod(self: Host, structure: Value, method: Method, is_static_only: bool) !void {
+        if (callbacks.attach_method(self.context, structure, &method, is_static_only) != .OK) {
             return Error.UnableToAddMethod;
         }
     }
 
-    pub fn attachTemplate(self: Host, structure: Value, template: Template) !void {
-        if (callbacks.attach_template(self.context, structure, &template) != .OK) {
+    pub fn attachTemplate(self: Host, structure: Value, template: Value, is_static: bool) !void {
+        if (callbacks.attach_template(self.context, structure, template, is_static) != .OK) {
             return Error.UnableToAddStructureTemplate;
         }
     }
@@ -213,9 +212,9 @@ const Callbacks = extern struct {
     write_object_slot: *const fn (Call, Value, usize, ?Value) callconv(.C) Result,
 
     begin_structure: *const fn (Call, *const Structure, *Value) callconv(.C) Result,
-    attach_member: *const fn (Call, Value, *const Member) callconv(.C) Result,
-    attach_method: *const fn (Call, Value, *const Method) callconv(.C) Result,
-    attach_template: *const fn (Call, Value, *const Template) callconv(.C) Result,
+    attach_member: *const fn (Call, Value, *const Member, bool) callconv(.C) Result,
+    attach_method: *const fn (Call, Value, *const Method, bool) callconv(.C) Result,
+    attach_template: *const fn (Call, Value, Value, bool) callconv(.C) Result,
     finalize_structure: *const fn (Call, Value) callconv(.C) Result,
     create_template: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
 

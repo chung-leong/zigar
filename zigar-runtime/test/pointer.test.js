@@ -39,7 +39,6 @@ describe('Pointer functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -54,7 +53,6 @@ describe('Pointer functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -77,7 +75,6 @@ describe('Pointer functions', function() {
       attachMember(structStructure, {
         type: MemberType.Int,
         name: 'cat',
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -86,7 +83,6 @@ describe('Pointer functions', function() {
       attachMember(structStructure, {
         type: MemberType.Int,
         name: 'dog',
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 32,
@@ -101,7 +97,6 @@ describe('Pointer functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -128,7 +123,6 @@ describe('Pointer functions', function() {
       attachMember(structStructure, {
         type: MemberType.Int,
         name: 'cat',
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -137,7 +131,6 @@ describe('Pointer functions', function() {
       attachMember(structStructure, {
         type: MemberType.Int,
         name: 'dog',
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 32,
@@ -152,7 +145,6 @@ describe('Pointer functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -177,7 +169,6 @@ describe('Pointer functions', function() {
       attachMember(structStructure, {
         type: MemberType.Int,
         name: 'cat',
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -186,7 +177,6 @@ describe('Pointer functions', function() {
       attachMember(structStructure, {
         type: MemberType.Int,
         name: 'dog',
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 32,
@@ -201,7 +191,6 @@ describe('Pointer functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -226,7 +215,6 @@ describe('Pointer functions', function() {
       attachMember(structStructure, {
         type: MemberType.Int,
         name: 'cat',
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -235,7 +223,6 @@ describe('Pointer functions', function() {
       attachMember(structStructure, {
         type: MemberType.Int,
         name: 'dog',
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 32,
@@ -250,7 +237,6 @@ describe('Pointer functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -258,7 +244,7 @@ describe('Pointer functions', function() {
         structure: structStructure,
       });
       const HelloPtr = finalizeStructure(structure);
-      const pointer = new HelloPtr({ cat: 123, dog: 456 });
+      const pointer = new HelloPtr(new Hello({ cat: 123, dog: 456 }));
       expect('cat' in pointer).to.be.true;
       expect('cow' in pointer).to.be.false;
       expect(Object.getOwnPropertyNames(pointer)).to.eql([ 'cat', 'dog' ]);
@@ -278,7 +264,6 @@ describe('Pointer functions', function() {
       attachMember(structStructure, {
         type: MemberType.Int,
         name: 'cat',
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -287,7 +272,6 @@ describe('Pointer functions', function() {
       attachMember(structStructure, {
         type: MemberType.Int,
         name: 'dog',
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 32,
@@ -302,7 +286,6 @@ describe('Pointer functions', function() {
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -318,7 +301,6 @@ describe('Pointer functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -341,7 +323,6 @@ describe('Pointer functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -352,12 +333,11 @@ describe('Pointer functions', function() {
         type: StructureType.Pointer,
         name: '*Int32',
         size: 8,
+        isConst: true,
         hasPointer: true,
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
-        isConst: true,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -378,7 +358,6 @@ describe('Pointer functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -393,7 +372,6 @@ describe('Pointer functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -417,7 +395,6 @@ describe('Pointer functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -432,7 +409,6 @@ describe('Pointer functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -453,7 +429,6 @@ describe('Pointer functions', function() {
       attachMember(structStructure, {
         type: MemberType.Int,
         name: 'cat',
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -462,7 +437,6 @@ describe('Pointer functions', function() {
       attachMember(structStructure, {
         type: MemberType.Int,
         name: 'dog',
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 32,
@@ -477,7 +451,6 @@ describe('Pointer functions', function() {
       });
       attachMember(sliceStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         byteSize: 8,
         structure: structStructure,
@@ -491,7 +464,6 @@ describe('Pointer functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -514,7 +486,6 @@ describe('Pointer functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         byteSize: 4,
@@ -528,7 +499,6 @@ describe('Pointer functions', function() {
       });
       attachMember(sliceStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         byteSize: 4,
@@ -543,7 +513,6 @@ describe('Pointer functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -566,7 +535,6 @@ describe('Pointer functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         byteSize: 4,
@@ -580,7 +548,6 @@ describe('Pointer functions', function() {
       });
       attachMember(sliceStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         byteSize: 4,
@@ -595,7 +562,6 @@ describe('Pointer functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -623,7 +589,6 @@ describe('Pointer functions', function() {
       });
       attachMember(boolStructure, {
         type: MemberType.Bool,
-        isStatic: false,
         isSigned: true,
         bitSize: 1,
         byteSize: 8,
@@ -637,7 +602,6 @@ describe('Pointer functions', function() {
       });
       attachMember(sliceStructure, {
         type: MemberType.Bool,
-        isStatic: false,
         bitSize: 1,
         byteSize: 1,
         structure: boolStructure,
@@ -651,7 +615,6 @@ describe('Pointer functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -679,7 +642,6 @@ describe('Pointer functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         byteSize: 4,
@@ -693,7 +655,6 @@ describe('Pointer functions', function() {
       });
       attachMember(sliceStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         byteSize: 4,
@@ -708,7 +669,6 @@ describe('Pointer functions', function() {
       });
       attachMember(arrayStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         byteSize: 4,
@@ -723,7 +683,6 @@ describe('Pointer functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -746,7 +705,6 @@ describe('Pointer functions', function() {
       });
       attachMember(uintStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         bitOffset: 0,
@@ -761,7 +719,6 @@ describe('Pointer functions', function() {
       });
       attachMember(sliceStructure, {
         type: MemberType.Int,
-        isStatic: false,
         bitSize: 8,
         byteSize: 1,
         structure: uintStructure,
@@ -775,7 +732,6 @@ describe('Pointer functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -802,7 +758,6 @@ describe('Pointer functions', function() {
       attachMember(structStructure, {
         type: MemberType.Int,
         name: 'cat',
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -811,7 +766,6 @@ describe('Pointer functions', function() {
       attachMember(structStructure, {
         type: MemberType.Int,
         name: 'dog',
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 32,
@@ -826,7 +780,6 @@ describe('Pointer functions', function() {
       });
       attachMember(sliceStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         byteSize: 8,
         structure: structStructure,
@@ -840,7 +793,6 @@ describe('Pointer functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -875,7 +827,6 @@ describe('Pointer functions', function() {
       });
       attachMember(uintStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         bitOffset: 0,
@@ -890,7 +841,6 @@ describe('Pointer functions', function() {
       });
       attachMember(sliceStructure, {
         type: MemberType.Int,
-        isStatic: false,
         bitSize: 8,
         byteSize: 1,
         structure: uintStructure,
@@ -900,12 +850,11 @@ describe('Pointer functions', function() {
         type: StructureType.Pointer,
         name: '[]const u8',
         size: 8,
+        isConst: true,
         hasPointer: true,
       });
       attachMember(constStructure, {
         type: MemberType.Object,
-        isStatic: false,
-        isConst: true,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -917,12 +866,11 @@ describe('Pointer functions', function() {
         type: StructureType.Pointer,
         name: '[]u8',
         size: 8,
+        isConst: false,
         hasPointer: true,
       });
       attachMember(nonConstStructure, {
         type: MemberType.Object,
-        isStatic: false,
-        isConst: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -953,7 +901,6 @@ describe('Pointer functions', function() {
       });
       attachMember(uintStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         bitOffset: 0,
@@ -968,7 +915,6 @@ describe('Pointer functions', function() {
       });
       attachMember(sliceStructure, {
         type: MemberType.Int,
-        isStatic: false,
         bitSize: 8,
         byteSize: 1,
         structure: uintStructure,
@@ -978,12 +924,11 @@ describe('Pointer functions', function() {
         type: StructureType.Pointer,
         name: '[]const u8',
         size: 8,
+        isConst: true,
         hasPointer: true,
       });
       attachMember(constStructure, {
         type: MemberType.Object,
-        isStatic: false,
-        isConst: true,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -995,12 +940,11 @@ describe('Pointer functions', function() {
         type: StructureType.Pointer,
         name: '[]u8',
         size: 8,
+        isConst: false,
         hasPointer: true,
       });
       attachMember(nonConstStructure, {
         type: MemberType.Object,
-        isStatic: false,
-        isConst: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -1025,7 +969,6 @@ describe('Pointer functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -1040,7 +983,6 @@ describe('Pointer functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -1067,7 +1009,6 @@ describe('Pointer functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -1078,12 +1019,11 @@ describe('Pointer functions', function() {
         type: StructureType.Pointer,
         name: '*Int32',
         size: 8,
+        isConst: true,
         hasPointer: true,
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
-        isConst: true,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,

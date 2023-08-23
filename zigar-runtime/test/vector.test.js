@@ -31,7 +31,6 @@ describe('Vector functions', function() {
       const constructor = function() {};
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -57,7 +56,6 @@ describe('Vector functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -81,7 +79,6 @@ describe('Vector functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -108,7 +105,6 @@ describe('Vector functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Float,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -133,7 +129,6 @@ describe('Vector functions', function() {
       attachMember(structure, {
         type: MemberType.Int,
         isSigned: true,
-        isStatic: false,
         bitSize: 64,
         byteSize: 8,
       });
@@ -151,7 +146,6 @@ describe('Vector functions', function() {
       attachMember(structure, {
         type: MemberType.Int,
         isSigned: true,
-        isStatic: false,
         bitSize: 128,
         byteSize: 16,
       });
@@ -168,7 +162,6 @@ describe('Vector functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -190,7 +183,6 @@ describe('Vector functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -209,7 +201,6 @@ describe('Vector functions', function() {
       });
       attachMember(vectorStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -223,7 +214,6 @@ describe('Vector functions', function() {
       });
       attachMember(arrayStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -242,7 +232,6 @@ describe('Vector functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -263,7 +252,6 @@ describe('Vector functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,

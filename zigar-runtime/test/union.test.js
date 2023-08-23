@@ -49,7 +49,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -58,22 +57,18 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4));
-            dv.setInt32(0, 1234, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4));
+          dv.setInt32(0, 1234, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       })
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
@@ -96,7 +91,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -105,7 +99,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -114,22 +107,18 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(8));
-            dv.setInt32(0, 1234, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(8));
+          dv.setInt32(0, 1234, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
@@ -156,7 +145,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -166,7 +154,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -176,22 +163,18 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(8));
-            dv.setInt32(0, 1234, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(8));
+          dv.setInt32(0, 1234, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       })
       const Hello = finalizeStructure(structure);
       const object = new Hello({ cat: 123 });
@@ -207,7 +190,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -217,7 +199,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -227,7 +208,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         bitOffset: 32,
@@ -250,7 +230,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -260,7 +239,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -270,7 +248,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         bitOffset: 32,
@@ -293,7 +270,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -303,7 +279,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -313,7 +288,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         bitOffset: 32,
@@ -336,7 +310,6 @@ describe('Union functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -346,7 +319,6 @@ describe('Union functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 32,
@@ -362,7 +334,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'pets',
         type: MemberType.Object,
-        isStatic: false,
         isSigned: true,
         bitSize: structStructure.size * 8,
         bitOffset: 0,
@@ -373,7 +344,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'money',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -383,7 +353,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         bitOffset: structStructure.size * 8,
@@ -404,7 +373,6 @@ describe('Union functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -419,7 +387,6 @@ describe('Union functions', function() {
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -436,7 +403,6 @@ describe('Union functions', function() {
       attachMember(structStructure, {
         name: 'pointer',
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -452,7 +418,6 @@ describe('Union functions', function() {
       });
       attachMember(arrayStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         byteSize: 8,
         structure: ptrStructure,
@@ -467,7 +432,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'pointer',
         type: MemberType.Object,
-        isStatic: false,
         isSigned: true,
         bitSize: 64,
         bitOffset: 0,
@@ -478,7 +442,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'struct',
         type: MemberType.Object,
-        isStatic: false,
         isSigned: true,
         bitSize: 64,
         bitOffset: 0,
@@ -489,7 +452,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'array',
         type: MemberType.Object,
-        isStatic: false,
         isSigned: true,
         bitSize: 64,
         bitOffset: 0,
@@ -500,7 +462,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -530,7 +491,6 @@ describe('Union functions', function() {
       attachMember(enumStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -538,22 +498,18 @@ describe('Union functions', function() {
       attachMember(enumStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
       });
       attachTemplate(enumStructure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setUint32(0, 100, true);
-            dv.setUint32(4, 200, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 100, true);
+          dv.setUint32(4, 200, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const HelloType = finalizeStructure(enumStructure);
       const structure = beginStructure({
@@ -564,7 +520,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -574,7 +529,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -584,7 +538,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.EnumerationItem,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 32,
@@ -592,16 +545,13 @@ describe('Union functions', function() {
         structure: enumStructure,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(8));
-            dv.setInt32(0, 1234, true);
-            dv.setInt32(4, 100, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(8));
+          dv.setInt32(0, 1234, true);
+          dv.setInt32(4, 100, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
@@ -627,7 +577,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         bitSize: 32,
@@ -638,7 +587,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         bitSize: 32,
@@ -649,7 +597,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         bitOffset: 32,
@@ -668,7 +615,6 @@ describe('Union functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -683,7 +629,6 @@ describe('Union functions', function() {
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -699,7 +644,6 @@ describe('Union functions', function() {
       attachMember(enumStructure, {
         name: 'pointer',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
@@ -707,22 +651,18 @@ describe('Union functions', function() {
       attachMember(enumStructure, {
         name: 'number',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
       });
       attachTemplate(enumStructure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(2 * 2));
-            dv.setUint16(0, 0, true);
-            dv.setUint16(2, 1, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(2 * 2));
+          dv.setUint16(0, 0, true);
+          dv.setUint16(2, 1, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const HelloTag = finalizeStructure(enumStructure);
       const structure = beginStructure({
@@ -734,7 +674,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'pointer',
         type: MemberType.Object,
-        isStatic: false,
         isSigned: true,
         bitSize: 64,
         bitOffset: 0,
@@ -745,7 +684,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -755,7 +693,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.EnumerationItem,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         bitOffset: 64,
@@ -777,7 +714,6 @@ describe('Union functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -792,7 +728,6 @@ describe('Union functions', function() {
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -808,7 +743,6 @@ describe('Union functions', function() {
       attachMember(enumStructure, {
         name: 'pointer',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
@@ -816,22 +750,18 @@ describe('Union functions', function() {
       attachMember(enumStructure, {
         name: 'number',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
       });
       attachTemplate(enumStructure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(2 * 2));
-            dv.setUint16(0, 0, true);
-            dv.setUint16(2, 1, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(2 * 2));
+          dv.setUint16(0, 0, true);
+          dv.setUint16(2, 1, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const HelloTag = finalizeStructure(enumStructure);
       const structure = beginStructure({
@@ -843,7 +773,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'pointer',
         type: MemberType.Object,
-        isStatic: false,
         isSigned: true,
         bitSize: 64,
         bitOffset: 0,
@@ -854,7 +783,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -864,7 +792,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.EnumerationItem,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         bitOffset: 64,
@@ -886,7 +813,6 @@ describe('Union functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -901,7 +827,6 @@ describe('Union functions', function() {
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -917,7 +842,6 @@ describe('Union functions', function() {
       attachMember(enumStructure, {
         name: 'pointer',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
@@ -925,22 +849,18 @@ describe('Union functions', function() {
       attachMember(enumStructure, {
         name: 'number',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
       });
       attachTemplate(enumStructure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(2 * 2));
-            dv.setUint16(0, 0, true);
-            dv.setUint16(2, 1, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(2 * 2));
+          dv.setUint16(0, 0, true);
+          dv.setUint16(2, 1, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const HelloTag = finalizeStructure(enumStructure);
       const structure = beginStructure({
@@ -952,7 +872,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'pointer',
         type: MemberType.Object,
-        isStatic: false,
         isSigned: true,
         bitSize: 64,
         bitOffset: 0,
@@ -963,7 +882,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -973,7 +891,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.EnumerationItem,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         bitOffset: 64,
@@ -995,7 +912,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         bitSize: 32,
@@ -1006,7 +922,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         bitSize: 32,
@@ -1017,7 +932,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         bitOffset: 32,
@@ -1038,7 +952,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         bitSize: 32,
@@ -1049,7 +962,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         bitSize: 32,
@@ -1060,7 +972,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         bitOffset: 32,
@@ -1081,7 +992,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         bitSize: 32,
@@ -1092,7 +1002,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         bitSize: 32,
@@ -1103,7 +1012,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         bitOffset: 32,
@@ -1122,7 +1030,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         bitSize: 32,
@@ -1133,7 +1040,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         bitSize: 32,
@@ -1144,7 +1050,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         bitOffset: 32,
@@ -1162,7 +1067,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         bitSize: 32,
@@ -1173,7 +1077,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         bitSize: 32,
@@ -1184,7 +1087,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         bitOffset: 32,
@@ -1204,7 +1106,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         bitSize: 32,
@@ -1215,7 +1116,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         bitSize: 32,
@@ -1226,7 +1126,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         bitOffset: 32,

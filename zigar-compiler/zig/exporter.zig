@@ -141,6 +141,7 @@ pub const Structure = extern struct {
     name: ?[*:0]const u8 = null,
     structure_type: StructureType,
     total_size: usize = 0,
+    is_const: bool = false,
     has_pointer: bool,
 };
 
@@ -149,10 +150,8 @@ pub const missing = std.math.maxInt(usize);
 pub const Member = extern struct {
     name: ?[*:0]const u8 = null,
     member_type: MemberType,
-    is_static: bool = false,
     is_required: bool = false,
     is_signed: bool = false,
-    is_const: bool = true,
     bit_offset: usize = missing,
     bit_size: usize = missing,
     byte_size: usize = missing,
@@ -171,14 +170,8 @@ pub const MemoryDisposition = enum(u32) {
     Link,
 };
 
-pub const Template = extern struct {
-    is_static: bool = false,
-    object: Value,
-};
-
 pub const Method = extern struct {
     name: ?[*:0]const u8 = null,
-    is_static_only: bool,
     thunk: Thunk,
     structure: Value,
 };
@@ -548,6 +541,7 @@ fn getStructure(host: anytype, comptime T: type) Error!Value {
             .name = getStructureName(T),
             .structure_type = getStructureType(T),
             .total_size = @sizeOf(T),
+            .is_const = isConst(T),
             .has_pointer = hasPointer(T),
         };
         // create the structure and place it in the slot immediately
@@ -756,7 +750,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                 .bit_offset = 0,
                 .byte_size = @sizeOf(T),
                 .structure = try getStructure(host, T),
-            });
+            }, false);
         },
         .Array => |ar| {
             try host.attachMember(structure, .{
@@ -765,7 +759,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                 .bit_size = @bitSizeOf(ar.child),
                 .byte_size = @sizeOf(ar.child),
                 .structure = try getStructure(host, ar.child),
-            });
+            }, false);
         },
         .Pointer => |pt| {
             const child_structure = try getStructure(host, pt.child);
@@ -787,7 +781,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                         .bit_size = @bitSizeOf(pt.child),
                         .byte_size = @sizeOf(pt.child),
                         .structure = child_structure,
-                    });
+                    }, false);
                     if (getSentinel(T)) |sentinel| {
                         try host.attachMember(slice_structure, .{
                             .name = "sentinel",
@@ -797,13 +791,10 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                             .bit_size = @bitSizeOf(pt.child),
                             .byte_size = @sizeOf(pt.child),
                             .structure = child_structure,
-                        });
+                        }, false);
                         var bytes: []u8 = @as([*]u8, @constCast(@alignCast(@ptrCast(&sentinel))))[0..@sizeOf(pt.child)];
                         const template = try host.createTemplate(bytes);
-                        try host.attachTemplate(slice_structure, .{
-                            .is_static = false,
-                            .object = template,
-                        });
+                        try host.attachTemplate(slice_structure, template, false);
                     }
                     try host.finalizeStructure(slice_structure);
                     break :slice slice_structure;
@@ -811,12 +802,11 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
             };
             try host.attachMember(structure, .{
                 .member_type = getMemberType(T),
-                .is_const = pt.is_const,
                 .bit_size = @bitSizeOf(T),
                 .byte_size = @sizeOf(T),
                 .slot = 0,
                 .structure = target_structure,
-            });
+            }, false);
         },
         .Struct => |st| {
             // pre-allocate relocatable slots for fields that always need them
@@ -834,14 +824,13 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                         .name = getCString(field.name),
                         .member_type = getMemberType(field.type),
                         .is_signed = isSigned(field.type),
-                        .is_const = isConst(field.type),
                         .is_required = field.default_value == null,
                         .bit_offset = @bitOffsetOf(T, field.name),
                         .bit_size = @bitSizeOf(field.type),
                         .byte_size = if (isPacked(T)) missing else @sizeOf(field.type),
                         .slot = getObjectSlot(T, index),
                         .structure = try getStructure(host, field.type),
-                    });
+                    }, false);
                 }
             }
             if (!isArgumentStruct(T)) {
@@ -869,13 +858,12 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                     .name = getCString(field.name),
                     .member_type = getMemberType(field.type),
                     .is_signed = isSigned(field.type),
-                    .is_const = isConst(field.type),
                     .bit_offset = value_offset,
                     .bit_size = @bitSizeOf(field.type),
                     .byte_size = if (isPacked(T)) missing else @sizeOf(field.type),
                     .slot = getObjectSlot(T, index),
                     .structure = try getStructure(host, field.type),
-                });
+                }, false);
             }
             if (has_selector) {
                 try host.attachMember(structure, .{
@@ -886,7 +874,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                     .bit_size = @bitSizeOf(TT),
                     .byte_size = if (isPacked(T)) missing else @sizeOf(TT),
                     .structure = if (un.tag_type) |_| try getStructure(host, TT) else null,
-                });
+                }, false);
             }
         },
         .Enum => |en| {
@@ -900,7 +888,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                     .bit_size = @bitSizeOf(IT),
                     .byte_size = @sizeOf(IT),
                     .structure = try getStructure(host, IT),
-                });
+                }, false);
             }
         },
         .Optional => |op| {
@@ -914,7 +902,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                 .byte_size = @sizeOf(op.child),
                 .slot = 0,
                 .structure = try getStructure(host, op.child),
-            });
+            }, false);
             const present_offset = switch (@typeInfo(op.child)) {
                 // present overlaps value (i.e. null pointer means false)
                 .Pointer => 0,
@@ -933,7 +921,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                 .bit_size = @bitSizeOf(bool),
                 .byte_size = present_byte_size,
                 .structure = try getStructure(host, bool),
-            });
+            }, false);
         },
         .ErrorUnion => |eu| {
             // value is placed after the error number if its alignment is smaller than that of anyerror
@@ -948,7 +936,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                 .byte_size = @sizeOf(eu.payload),
                 .slot = 0,
                 .structure = try getStructure(host, eu.payload),
-            });
+            }, false);
             try host.attachMember(structure, .{
                 .name = "error",
                 .member_type = .Int,
@@ -957,7 +945,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                 .bit_size = @bitSizeOf(anyerror),
                 .byte_size = @sizeOf(anyerror),
                 .structure = try getStructure(host, eu.error_set),
-            });
+            }, false);
         },
         .ErrorSet => |es| {
             if (es) |errors| {
@@ -969,7 +957,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                         .member_type = .Object,
                         .slot = @intFromError(err),
                         .structure = null,
-                    });
+                    }, false);
                 }
             }
         },
@@ -980,7 +968,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                 .bit_size = @bitSizeOf(ve.child),
                 .byte_size = @sizeOf(ve.child),
                 .structure = try getStructure(host, ve.child),
-            });
+            }, false);
         },
         else => {
             std.debug.print("Missing: {s}\n", .{@typeName(T)});
@@ -1005,10 +993,7 @@ fn addDefaultValues(host: anytype, structure: Value, comptime T: type) !void {
     }
     const template = try host.createTemplate(bytes);
     try dezigStructure(host, template, &values);
-    try host.attachTemplate(structure, .{
-        .is_static = false,
-        .object = template,
-    });
+    try host.attachTemplate(structure, template, false);
 }
 
 fn getPointerType(comptime T: type, comptime name: []const u8) type {
@@ -1041,20 +1026,17 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
             try host.attachMember(structure, .{
                 .name = getCString(decl.name),
                 .member_type = .Type,
-                .is_static = true,
                 .slot = getObjectSlot(S, index),
                 .structure = try getStructure(host, @field(T, decl.name)),
-            });
+            }, true);
         } else {
             const slot = getObjectSlot(S, index);
             try host.attachMember(structure, .{
                 .name = getCString(decl.name),
                 .member_type = .Object,
-                .is_static = true,
-                .is_const = isConst(PT),
                 .slot = slot,
                 .structure = try getStructure(host, PT),
-            });
+            }, true);
             // get address to variable
             const FT = @TypeOf(@field(T, decl.name));
             var typed_ptr = switch (@typeInfo(FT)) {
@@ -1092,10 +1074,7 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
         }
     }
     if (template_maybe) |template| {
-        try host.attachTemplate(structure, .{
-            .is_static = true,
-            .object = template,
-        });
+        try host.attachTemplate(structure, template, true);
     }
 }
 
@@ -1113,21 +1092,21 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
                 const function = @field(T, decl.name);
                 const ArgT = ArgumentStruct(function);
                 const arg_structure = try getStructure(host, ArgT);
-                try host.attachMethod(structure, .{
-                    .name = getCString(decl.name),
-                    .is_static_only = static: {
-                        if (f.params.len > 0) {
-                            if (f.params[0].type) |PT| {
-                                if (PT == T) {
-                                    break :static false;
-                                }
+                const is_static_only = static: {
+                    if (f.params.len > 0) {
+                        if (f.params[0].type) |ParamT| {
+                            if (ParamT == T) {
+                                break :static false;
                             }
                         }
-                        break :static true;
-                    },
+                    }
+                    break :static true;
+                };
+                try host.attachMethod(structure, .{
+                    .name = getCString(decl.name),
                     .thunk = @ptrCast(createThunk(@TypeOf(host), function, ArgT)),
                     .structure = arg_structure,
-                });
+                }, is_static_only);
             },
             else => {},
         }

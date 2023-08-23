@@ -137,7 +137,6 @@ describe('Optional functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -146,7 +145,6 @@ describe('Optional functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 32,
@@ -190,7 +188,6 @@ describe('Optional functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -205,7 +202,6 @@ describe('Optional functions', function() {
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -250,7 +246,6 @@ describe('Optional functions', function() {
       })
       attachMember(sliceStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
@@ -264,7 +259,6 @@ describe('Optional functions', function() {
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 128,
         bitOffset: 0,
         byteSize: 16,
@@ -312,7 +306,6 @@ describe('Optional functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -327,7 +320,6 @@ describe('Optional functions', function() {
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -344,7 +336,6 @@ describe('Optional functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -354,7 +345,6 @@ describe('Optional functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 64,
         byteSize: 8,
@@ -366,19 +356,16 @@ describe('Optional functions', function() {
       const intPtr1 = new Int32Ptr(int1);
       const intPtr2 = new Int32Ptr(int2);
       attachTemplate(structStructure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(8 * 2));
-            dv.setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
-            dv.setBigUint64(8, 0xaaaaaaaaaaaaaaaan, true);
-            return dv;
-          })(),
-          [SLOTS]: {
-            0: intPtr1,
-            1: intPtr2,
-          }
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(8 * 2));
+          dv.setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
+          dv.setBigUint64(8, 0xaaaaaaaaaaaaaaaan, true);
+          return dv;
+        })(),
+        [SLOTS]: {
+          0: intPtr1,
+          1: intPtr2,
+        }
       });
       finalizeStructure(structStructure);
       const structure = beginStructure({
@@ -417,7 +404,6 @@ describe('Optional functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -432,7 +418,6 @@ describe('Optional functions', function() {
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -448,7 +433,6 @@ describe('Optional functions', function() {
       });
       attachMember(arrayStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         byteSize: 8,
         structure: ptrStructure,

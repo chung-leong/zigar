@@ -2150,9 +2150,11 @@ R"=====(
       instance: {
         members: [ member ],
       },
+      isConst,
     } = s;
-    const { isConst, structure: targetStructure } = member;
-    const isTargetSlice = targetStructure.type;
+    const { structure: targetStructure } = member;
+    const isTargetSlice = (targetStructure.type === StructureType.Slice);
+    const isTargetPointer = (targetStructure.type === StructureType.Pointer);
     const constructor = s.constructor = function(arg) {
       const calledFromZig = (this === ZIG);
       const calledFromParent = (this === PARENT);
@@ -2188,7 +2190,7 @@ R"=====(
       if (creating) {
         initializer.call(self, arg);
       }
-      return createProxy.call(self, member);
+      return createProxy.call(self, isConst, isTargetPointer);
     };
     const initializer = s.initializer = function(arg) {
       if (arg instanceof constructor) {
@@ -2255,10 +2257,8 @@ R"=====(
     return (arg?.constructor?.child === Target && arg['*']);
   }
 
-  function createProxy({ structure, isConst }) {
-    const descriptors = (structure.type !== StructureType.Pointer)
-      ? (isConst) ? constProxyHandlers : proxyHandlers
-      : {};
+  function createProxy(isConst, isTargetPointer) {
+    const descriptors = (!isTargetPointer) ? (isConst) ? constProxyHandlers : proxyHandlers : {};
     const proxy = new Proxy(this, descriptors);
     this[PROXY] = proxy;
     return proxy;
@@ -2823,6 +2823,7 @@ R"=====(
       type,
       name,
       size,
+      isConst,
       hasPointer,
     } = def;
     return {
@@ -2835,33 +2836,37 @@ R"=====(
       type,
       name,
       size,
+      isConst,
       hasPointer,
       instance: {
         members: [],
+        methods: [],
         template: null,
       },
       static: {
         members: [],
+        methods: [],
         template: null,
       },
-      methods: [],
       options,
     };
   }
 
-  function attachMember(s, def) {
-    const { isStatic, ...member } = def;
+  function attachMember(s, member, isStatic = false) {
     const target = (isStatic) ? s.static : s.instance;
     target.members.push(member);
   }
 
-  function attachMethod(s, def) {
-    s.methods.push(def);
+  function attachMethod(s, method, isStaticOnly = false) {
+    s.static.methods.push(method);
+    if (!isStaticOnly) {
+      s.instance.methods.push(method);
+    }
   }
 
-  function attachTemplate(s, def) {
-    const target = (def.isStatic) ? s.static : s.instance;
-    target.template = def.template;
+  function attachTemplate(s, template, isStatic = false) {
+    const target = (isStatic) ? s.static : s.instance;
+    target.template = template;
   }
 
   function finalizeStructure(s) {
@@ -3424,14 +3429,14 @@ R"=====(
   function addMethods(s) {
     const {
       constructor,
-      methods,
+      instance: { methods: instanceMembers },
+      static: { methods: staticMethods },
     } = s;
-    for (const method of methods) {
+    for (const method of staticMethods) {
       const {
         name,
         argStruct,
         thunk,
-        isStaticOnly,
       } = method;
       const f = function(...args) {
         const { constructor } = argStruct;
@@ -3444,19 +3449,24 @@ R"=====(
       Object.defineProperties(constructor, {
         [name]: { value: f, configurable: true, enumerable: true, writable: true },
       });
-      if (!isStaticOnly) {
-        const m = function(...args) {
-          const { constructor } = argStruct;
-          const a = new constructor([ this, ...args ]);
-          return invokeThunk(thunk, a);
-        };
-        Object.defineProperties(m, {
-          name: { value: name, writable: false },
-        });
-        Object.defineProperties(constructor.prototype, {
-          [name]: { value: m, configurable: true, writable: true },
-        });
-      }
+    }
+    for (const method of instanceMembers) {
+      const {
+        name,
+        argStruct,
+        thunk,
+      } = method;
+      const f = function(...args) {
+        const { constructor } = argStruct;
+        const a = new constructor([ this, ...args ]);
+        return invokeThunk(thunk, a);
+      };
+      Object.defineProperties(f, {
+        name: { value: name, writable: false },
+      });
+      Object.defineProperties(constructor.prototype, {
+        [name]: { value: f, configurable: true, writable: true },
+      });
     }
   }
 

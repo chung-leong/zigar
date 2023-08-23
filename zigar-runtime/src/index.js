@@ -348,25 +348,25 @@ export async function runModule(module, options = {}) {
     return addObject(beginStructure(def));
   }
 
-  function _attachMember(structureIndex, defIndex) {
+  function _attachMember(structureIndex, defIndex, isStatic) {
     if (omitFunctions) {
       return;
     }
     const structure = valueTable[structureIndex];
     const def = valueTable[defIndex];
-    attachMember(structure, def);
+    attachMember(structure, def, !!isStatic);
   }
 
-  function _attachMethod(structureIndex, defIndex) {
+  function _attachMethod(structureIndex, defIndex, isStaticOnly) {
     const structure = valueTable[structureIndex];
     const def = valueTable[defIndex];
-    attachMethod(structure, def);
+    attachMethod(structure, def, !!isStaticOnly);
   }
 
-  function _attachTemplate(structureIndex, templateIndex) {
+  function _attachTemplate(structureIndex, templateIndex, isStatic) {
     const structure = valueTable[structureIndex];
     const template = valueTable[templateIndex];
-    attachTemplate(structure, template);
+    attachTemplate(structure, template, !!isStatic);
   }
 
   function _finalizeStructure(structureIndex) {

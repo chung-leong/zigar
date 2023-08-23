@@ -2116,14 +2116,14 @@ function addStaticMembers(s) {
 function addMethods(s) {
   const {
     constructor,
-    methods,
+    instance: { methods: instanceMembers },
+    static: { methods: staticMethods },
   } = s;
-  for (const method of methods) {
+  for (const method of staticMethods) {
     const {
       name,
       argStruct,
       thunk,
-      isStaticOnly,
     } = method;
     const f = function(...args) {
       const { constructor } = argStruct;
@@ -2136,19 +2136,24 @@ function addMethods(s) {
     Object.defineProperties(constructor, {
       [name]: { value: f, configurable: true, enumerable: true, writable: true },
     });
-    if (!isStaticOnly) {
-      const m = function(...args) {
-        const { constructor } = argStruct;
-        const a = new constructor([ this, ...args ]);
-        return invokeThunk(thunk, a);
-      };
-      Object.defineProperties(m, {
-        name: { value: name, writable: false },
-      });
-      Object.defineProperties(constructor.prototype, {
-        [name]: { value: m, configurable: true, writable: true },
-      });
-    }
+  }
+  for (const method of instanceMembers) {
+    const {
+      name,
+      argStruct,
+      thunk,
+    } = method;
+    const f = function(...args) {
+      const { constructor } = argStruct;
+      const a = new constructor([ this, ...args ]);
+      return invokeThunk(thunk, a);
+    };
+    Object.defineProperties(f, {
+      name: { value: name, writable: false },
+    });
+    Object.defineProperties(constructor.prototype, {
+      [name]: { value: f, configurable: true, writable: true },
+    });
   }
 }
 
@@ -2850,9 +2855,11 @@ function finalizePointer(s) {
     instance: {
       members: [ member ],
     },
+    isConst,
   } = s;
-  const { isConst, structure: targetStructure } = member;
-  const isTargetSlice = targetStructure.type;
+  const { structure: targetStructure } = member;
+  const isTargetSlice = (targetStructure.type === StructureType.Slice);
+  const isTargetPointer = (targetStructure.type === StructureType.Pointer);
   const constructor = s.constructor = function(arg) {
     const calledFromZig = (this === ZIG);
     const calledFromParent = (this === PARENT);
@@ -2888,7 +2895,7 @@ function finalizePointer(s) {
     if (creating) {
       initializer.call(self, arg);
     }
-    return createProxy.call(self, member);
+    return createProxy.call(self, isConst, isTargetPointer);
   };
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -2965,10 +2972,8 @@ function isPointerOf(arg, Target) {
   return (arg?.constructor?.child === Target && arg['*']);
 }
 
-function createProxy({ structure, isConst }) {
-  const descriptors = (structure.type !== StructureType.Pointer)
-    ? (isConst) ? constProxyHandlers : proxyHandlers
-    : {};
+function createProxy(isConst, isTargetPointer) {
+  const descriptors = (!isTargetPointer) ? (isConst) ? constProxyHandlers : proxyHandlers : {};
   const proxy = new Proxy(this, descriptors);
   this[PROXY] = proxy;
   return proxy;

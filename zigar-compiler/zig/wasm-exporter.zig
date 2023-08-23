@@ -33,9 +33,9 @@ extern fn _writeGlobalSlot(slot: usize, object: usize) void;
 extern fn _readObjectSlot(container: usize, slot: usize) usize;
 extern fn _writeObjectSlot(container: usize, slot: usize, object: usize) void;
 extern fn _beginStructure(def: u32) u32;
-extern fn _attachMember(structure: usize, def: usize) void;
-extern fn _attachMethod(structure: usize, def: usize) void;
-extern fn _attachTemplate(structure: usize, def: usize) void;
+extern fn _attachMember(structure: usize, def: usize, is_static: i32) void;
+extern fn _attachMethod(structure: usize, def: usize, is_static_only: i32) void;
+extern fn _attachTemplate(structure: usize, def: usize, is_static: i32) void;
 extern fn _finalizeStructure(structure: usize) void;
 extern fn _createTemplate(buffer: usize) usize;
 extern fn _writeToConsole(address: usize, len: usize) void;
@@ -240,16 +240,14 @@ pub const Host = struct {
         return ref(_beginStructure(index(structure)));
     }
 
-    pub fn attachMember(self: Host, structure: Value, member: Member) !void {
+    pub fn attachMember(self: Host, structure: Value, member: Member, is_static: bool) !void {
         _ = self;
         const def = createObject();
         setObjectProperty(def, "type", member.member_type);
         if (member.member_type == MemberType.Int) {
             setObjectProperty(def, "isSigned", member.is_signed);
         }
-        setObjectProperty(def, "isConst", member.is_const);
         setObjectProperty(def, "isRequired", member.is_required);
-        setObjectProperty(def, "isStatic", member.is_static);
         if (member.bit_offset != missing) {
             setObjectProperty(def, "bitOffset", member.bit_offset);
         }
@@ -268,25 +266,21 @@ pub const Host = struct {
         if (member.structure) |s| {
             setObjectProperty(def, "structure", s);
         }
-        _attachMember(index(structure), index(def));
+        _attachMember(index(structure), index(def), if (is_static) 1 else 0);
     }
 
-    pub fn attachMethod(_: Host, structure: Value, method: Method) !void {
+    pub fn attachMethod(_: Host, structure: Value, method: Method, is_static_only: bool) !void {
         const def = createObject();
-        setObjectProperty(def, "isStatic", method.is_static_only);
         setObjectProperty(def, "argStruct", method.structure);
         setObjectProperty(def, "thunk", @intFromPtr(method.thunk));
         if (method.name) |name| {
             setObjectProperty(def, "name", name);
         }
-        _attachMethod(index(structure), index(def));
+        _attachMethod(index(structure), index(def), if (is_static_only) 1 else 0);
     }
 
-    pub fn attachTemplate(_: Host, structure: Value, template: Template) !void {
-        const def = createObject();
-        setObjectProperty(def, "isStatic", template.is_static);
-        setObjectProperty(def, "template", template.object);
-        _attachTemplate(index(structure), index(def));
+    pub fn attachTemplate(_: Host, structure: Value, template: Value, is_static: bool) !void {
+        _attachTemplate(index(structure), index(template), if (is_static) 1 else 0);
     }
 
     pub fn finalizeStructure(_: Host, structure: Value) !void {

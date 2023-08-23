@@ -41,7 +41,6 @@ describe('Slice functions', function() {
       const constructor = function() {};
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -64,7 +63,6 @@ describe('Slice functions', function() {
       const constructor = function() {};
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -88,7 +86,6 @@ describe('Slice functions', function() {
       const constructor = function() {};
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -114,7 +111,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
@@ -137,7 +133,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
@@ -160,7 +155,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -180,7 +174,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -197,7 +190,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -215,7 +207,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
@@ -236,7 +227,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
@@ -257,7 +247,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
@@ -279,7 +268,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
@@ -299,7 +287,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
@@ -320,7 +307,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
@@ -339,7 +325,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
@@ -356,7 +341,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
@@ -373,7 +357,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
@@ -395,7 +378,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
@@ -416,7 +398,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
@@ -439,7 +420,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
@@ -460,7 +440,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
@@ -478,7 +457,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
@@ -502,7 +480,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
@@ -525,7 +502,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
@@ -546,7 +522,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
@@ -573,7 +548,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
@@ -606,7 +580,6 @@ describe('Slice functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         byteSize: 4,
@@ -616,7 +589,6 @@ describe('Slice functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         byteSize: 4,
@@ -631,7 +603,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         byteSize: 8,
         structure: structStructure,
@@ -659,7 +630,6 @@ describe('Slice functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: false,
         byteSize: 4,
@@ -669,7 +639,6 @@ describe('Slice functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: false,
         byteSize: 4,
@@ -677,15 +646,12 @@ describe('Slice functions', function() {
         bitSize: 32,
       });
       attachTemplate(structStructure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setUint32(0, 1234, true);
-            dv.setUint32(4, 4567, true);
-            return dv;
-          })(),
-        },
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 1234, true);
+          dv.setUint32(4, 4567, true);
+          return dv;
+        })(),
       });
       const Hello = finalizeStructure(structStructure);
       const structure = beginStructure({
@@ -695,7 +661,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         byteSize: 8,
         structure: structStructure,
@@ -716,7 +681,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
@@ -742,7 +706,6 @@ describe('Slice functions', function() {
       });
       attachMember(sliceStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
@@ -756,7 +719,6 @@ describe('Slice functions', function() {
       });
       attachMember(arrayStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
@@ -776,7 +738,6 @@ describe('Slice functions', function() {
       });
       attachMember(sliceStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
@@ -790,7 +751,6 @@ describe('Slice functions', function() {
       });
       attachMember(vectorStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
@@ -811,7 +771,6 @@ describe('Slice functions', function() {
       });
       attachMember(sliceStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
@@ -825,7 +784,6 @@ describe('Slice functions', function() {
       });
       attachMember(arrayStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
@@ -844,7 +802,6 @@ describe('Slice functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         byteSize: 4,
@@ -854,7 +811,6 @@ describe('Slice functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         byteSize: 4,
@@ -869,7 +825,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         byteSize: 8,
         structure: structStructure,
@@ -898,7 +853,6 @@ describe('Slice functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         byteSize: 4,
@@ -908,7 +862,6 @@ describe('Slice functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         isRequired: true,
         byteSize: 4,
@@ -923,7 +876,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         byteSize: 8,
         structure: structStructure,
@@ -939,7 +891,6 @@ describe('Slice functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -954,7 +905,6 @@ describe('Slice functions', function() {
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -970,7 +920,6 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         byteSize: 8,
         structure: ptrStructure,
@@ -990,24 +939,19 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: new DataView(new ArrayBuffer(1)),
-        },
+        [MEMORY]: new DataView(new ArrayBuffer(1)),
       });
       const U8Slice = finalizeStructure(structure);
       const array = [ ...'Hello\0' ].map(c => c.charCodeAt(0));
@@ -1024,24 +968,19 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: new DataView(new ArrayBuffer(1)),
-        },
+        [MEMORY]: new DataView(new ArrayBuffer(1)),
       });
       const U8Slice = finalizeStructure(structure);
       const slice = new U8Slice('Hello');
@@ -1056,24 +995,19 @@ describe('Slice functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: new DataView(new ArrayBuffer(1)),
-        },
+        [MEMORY]: new DataView(new ArrayBuffer(1)),
       });
       const U8Slice = finalizeStructure(structure);
       const slice = new U8Slice('Hello\0');
@@ -1087,24 +1021,19 @@ describe('Slice functions', function() {
       }, { runtimeSafety: true });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: new DataView(new ArrayBuffer(1)),
-        },
+        [MEMORY]: new DataView(new ArrayBuffer(1)),
       });
       const U8Slice = finalizeStructure(structure);
       const array = [ ...'H\0llo\0' ].map(c => c.charCodeAt(0));
@@ -1122,24 +1051,19 @@ describe('Slice functions', function() {
       }, { runtimeSafety: true });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: new DataView(new ArrayBuffer(1)),
-        },
+        [MEMORY]: new DataView(new ArrayBuffer(1)),
       });
       const U8Slice = finalizeStructure(structure);
       const array = [ ...'Hello' ].map(c => c.charCodeAt(0));
@@ -1158,24 +1082,19 @@ describe('Slice functions', function() {
       }, { runtimeSafety: false });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: new DataView(new ArrayBuffer(1)),
-        },
+        [MEMORY]: new DataView(new ArrayBuffer(1)),
       });
       const U8Slice = finalizeStructure(structure);
       const array = [ ...'Hello' ].map(c => c.charCodeAt(0));

@@ -41,16 +41,15 @@ struct Structure {
   const char* name;
   StructureType type;
   size_t total_size;
+  bool is_const;
   bool has_pointer;
 };
 
 struct Member {
   const char* name;
   MemberType type;
-  bool is_static;
   bool is_required;
   bool is_signed;
-  bool is_const;
   size_t bit_offset;
   size_t bit_size;
   size_t byte_size;
@@ -67,11 +66,6 @@ enum class MemoryDisposition : uint32_t {
   Auto,
   Copy,
   Link,
-};
-
-struct Template {
-  bool is_static;
-  Local<Value> object;
 };
 
 struct Call;
@@ -116,9 +110,9 @@ struct Callbacks {
   Result (*write_object_slot)(Call*, Local<Object>, size_t, Local<Value>);
 
   Result (*begin_structure)(Call*, const Structure&, Local<Object>*);
-  Result (*attach_member)(Call*, Local<Object>, const Member&);
-  Result (*attach_method)(Call*, Local<Object>, const Method&);
-  Result (*attach_template)(Call*, Local<Object>, const ::Template&);
+  Result (*attach_member)(Call*, Local<Object>, const Member&, bool);
+  Result (*attach_method)(Call*, Local<Object>, const Method&, bool);
+  Result (*attach_template)(Call*, Local<Object>, Local<Object>, bool);
   Result (*finalize_structure)(Call*, Local<Object>);
   Result (*create_template)(Call*, const Memory&, Local<Object>*);
 

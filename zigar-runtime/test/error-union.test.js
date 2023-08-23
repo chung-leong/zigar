@@ -99,7 +99,6 @@ describe('Error union functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -108,7 +107,6 @@ describe('Error union functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 32,
@@ -167,7 +165,6 @@ describe('Error union functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -182,7 +179,6 @@ describe('Error union functions', function() {
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -244,7 +240,6 @@ describe('Error union functions', function() {
       })
       attachMember(sliceStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
@@ -258,7 +253,6 @@ describe('Error union functions', function() {
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 128,
         bitOffset: 0,
         byteSize: 16,
@@ -320,7 +314,6 @@ describe('Error union functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -335,7 +328,6 @@ describe('Error union functions', function() {
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -395,7 +387,6 @@ describe('Error union functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         bitOffset: 0,
@@ -410,7 +401,6 @@ describe('Error union functions', function() {
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,

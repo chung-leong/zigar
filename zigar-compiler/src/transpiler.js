@@ -29,7 +29,8 @@ export async function transpile(path, options = {}) {
   const wasmPath = await compile(path, { ...otherOptions, optimize, target: 'wasm' });
   const content = await readFile(wasmPath);
   const { structures, runtimeSafety } = await runModule(content, { omitFunctions });
-  const hasMethods = !!structures.find(s => s.methods.length > 0);
+  // all methods are static, so there's no need to check the instance methods
+  const hasMethods = !!structures.find(s => s.static.methods.length > 0);
   const runtimeURL = moduleResolver('zigar-runtime');
   const name = basename(wasmPath);
   let loadWASM;

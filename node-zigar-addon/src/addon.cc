@@ -277,9 +277,11 @@ static Local<Object> NewStructure(Call* call,
   auto def = Object::New(isolate);
   auto type = Int32::New(isolate, static_cast<int32_t>(s.type));
   auto size = Uint32::NewFromUnsigned(isolate, s.total_size);
+  auto is_const = Boolean::New(isolate, s.is_const);
   auto has_pointer = Boolean::New(isolate, s.has_pointer);
   def->Set(context, String::NewFromUtf8Literal(isolate, "type"), type).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "size"), size).Check();
+  def->Set(context, String::NewFromUtf8Literal(isolate, "isConst"), is_const).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "hasPointer"), has_pointer).Check();
   if (s.name) {
     auto name = String::NewFromUtf8(isolate, s.name).ToLocalChecked();
@@ -294,12 +296,8 @@ static Local<Object> NewMember(Call* call,
   auto context = call->context;
   auto def = Object::New(isolate);
   auto type = Int32::New(isolate, static_cast<int32_t>(m.type));
-  auto is_static = Boolean::New(isolate, m.is_static);
   auto is_required = Boolean::New(isolate, m.is_required);
-  auto is_const = Boolean::New(isolate, m.is_const);
   def->Set(context, String::NewFromUtf8Literal(isolate, "type"), type).Check();
-  def->Set(context, String::NewFromUtf8Literal(isolate, "isStatic"), is_static).Check();
-  def->Set(context, String::NewFromUtf8Literal(isolate, "isConst"), is_const).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "isRequired"), is_required).Check();
   if (m.type == MemberType::Int) {
     auto is_signed = Boolean::New(isolate, m.is_signed);
@@ -364,17 +362,6 @@ static Local<Object> NewMethod(Call* call,
     auto name = String::NewFromUtf8(isolate, m.name).ToLocalChecked();
     def->Set(context, String::NewFromUtf8Literal(isolate, "name"), name).Check();
   }
-  return def;
-}
-
-static Local<Object> NewTemplate(Call* call,
-                                 const ::Template& obj_templ) {
-  auto isolate = call->isolate;
-  auto context = call->context;
-  auto def = Object::New(isolate);
-  auto is_static = Boolean::New(isolate, obj_templ.is_static);
-  def->Set(context, String::NewFromUtf8Literal(isolate, "isStatic"), is_static).Check();
-  def->Set(context, String::NewFromUtf8Literal(isolate, "template"), obj_templ.object).Check();
   return def;
 }
 
@@ -462,9 +449,10 @@ static Result BeginStructure(Call* call,
   auto name = String::NewFromUtf8Literal(isolate, "beginStructure");
   auto mde = Local<External>::New(isolate, call->function_data->module_data);
   auto md = reinterpret_cast<ModuleData*>(mde->Value());
-  auto options = Local<Object>::New(isolate, md->js_options);
-  auto def = NewStructure(call, structure);
-  Local<Value> args[2] = { def, options };
+  Local<Value> args[2] = {
+    NewStructure(call, structure),
+    Local<Object>::New(isolate, md->js_options),
+  };
   Local<Value> result;
   if (CallFunction(call, name, 2, args, &result) != Result::OK || !result->IsObject()) {
     return Result::Failure;
@@ -475,32 +463,44 @@ static Result BeginStructure(Call* call,
 
 static Result AttachMember(Call* call,
                            Local<Object> structure,
-                           const Member& member) {
+                           const Member& member,
+                           bool is_static) {
   auto isolate = call->isolate;
   auto name = String::NewFromUtf8Literal(isolate, "attachMember");
-  auto def = NewMember(call, member);
-  Local<Value> args[2] = { structure, def };
-  return CallFunction(call, name, 2, args);
+  Local<Value> args[3] = {
+    structure,
+    NewMember(call, member),
+    Boolean::New(isolate, is_static),
+  };
+  return CallFunction(call, name, 3, args);
 }
 
 static Result AttachMethod(Call* call,
                            Local<Object> structure,
-                           const Method& method) {
+                           const Method& method,
+                           bool is_static_only) {
   auto isolate = call->isolate;
   auto name = String::NewFromUtf8Literal(isolate, "attachMethod");
-  auto def = NewMethod(call, method);
-  Local<Value> args[2] = { structure, def };
-  return CallFunction(call, name, 2, args);
+  Local<Value> args[3] = {
+    structure,
+    NewMethod(call, method),
+    Boolean::New(isolate, is_static_only),
+  };
+  return CallFunction(call, name, 3, args);
 }
 
 static Result AttachTemplate(Call* call,
                              Local<Object> structure,
-                             const ::Template& obj_templ) {
+                             Local<Object> templateObj,
+                             bool is_static) {
   auto isolate = call->isolate;
   auto name = String::NewFromUtf8Literal(isolate, "attachTemplate");
-  auto def = NewTemplate(call, obj_templ);
-  Local<Value> args[2] = { structure, def };
-  return CallFunction(call, name, 2, args);
+  Local<Value> args[3] = {
+    structure,
+    templateObj,
+    Boolean::New(isolate, is_static),
+  };
+  return CallFunction(call, name, 3, args);
 }
 
 static Result FinalizeStructure(Call* call,
@@ -599,7 +599,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   auto little_endian = Boolean::New(isolate, module->flags.little_endian);
   auto runtime_safety = Boolean::New(isolate, module->flags.runtime_safety);
   options->Set(context, String::NewFromUtf8Literal(isolate, "littleEndian"), little_endian).Check();
-  options->Set(context, String::NewFromUtf8Literal(isolate, "runtimeSafety"), runtime_safety).Check();
+  options->Set(context, String::NewFromUtf8Literal(isolate, "runimeSafety"), runtime_safety).Check();
   auto md = new ModuleData(isolate, handle, options, info.Data().As<External>());
 
   // invoke the factory thunk through JavaScript, which will give us the

@@ -32,7 +32,6 @@ describe('Primitive functions', function() {
       attachMember(structure, {
         type: MemberType.Int,
         isSigned: false,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -54,7 +53,6 @@ describe('Primitive functions', function() {
       attachMember(structure, {
         type: MemberType.Int,
         isSigned: true,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -74,7 +72,6 @@ describe('Primitive functions', function() {
       attachMember(structure, {
         type: MemberType.Int,
         isSigned: true,
-        isStatic: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -93,7 +90,6 @@ describe('Primitive functions', function() {
       attachMember(structure, {
         type: MemberType.Int,
         isSigned: true,
-        isStatic: false,
         bitSize: 128,
         bitOffset: 0,
         byteSize: 16,
@@ -111,7 +107,6 @@ describe('Primitive functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitOffset: 0,
         bitSize: 64,
@@ -131,7 +126,6 @@ describe('Primitive functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitOffset: 0,
         bitSize: 64,
@@ -151,7 +145,6 @@ describe('Primitive functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitOffset: 0,
         bitSize: 64,
@@ -172,7 +165,6 @@ describe('Primitive functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitOffset: 0,
         bitSize: 64,
@@ -192,7 +184,6 @@ describe('Primitive functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitOffset: 0,
         bitSize: 64,
@@ -213,7 +204,6 @@ describe('Primitive functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitOffset: 0,
         bitSize: 64,
@@ -230,7 +220,6 @@ describe('Primitive functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitOffset: 0,
         bitSize: 64,

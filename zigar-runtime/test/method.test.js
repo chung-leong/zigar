@@ -129,7 +129,6 @@ describe('Method functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 0,
@@ -138,7 +137,6 @@ describe('Method functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 32,
@@ -152,7 +150,6 @@ describe('Method functions', function() {
       attachMember(argStruct, {
         name: '0',
         type: MemberType.Object,
-        isStatic: false,
         bitSize: structure.size * 8,
         bitOffset: 0,
         byteSize: structure.size,
@@ -162,7 +159,6 @@ describe('Method functions', function() {
       attachMember(argStruct, {
         name: 'retval',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 64,
@@ -200,7 +196,6 @@ describe('Method functions', function() {
       attachMember(structure, {
         name: 'Dog',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
@@ -208,22 +203,18 @@ describe('Method functions', function() {
       attachMember(structure, {
         name: 'Cat',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
       });
       attachTemplate(structure, {
-        isStatic: false,
-        template: {
-          [MEMORY]: (() => {
-            const dv = new DataView(new ArrayBuffer(4 * 2));
-            dv.setUint32(0, 0, true);
-            dv.setUint32(4, 1, true);
-            return dv;
-          })(),
-          [SLOTS]: {},
-        }
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 0, true);
+          dv.setUint32(4, 1, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
       });
       const argStruct = beginStructure({
         type: StructureType.Struct,
@@ -233,7 +224,6 @@ describe('Method functions', function() {
       attachMember(argStruct, {
         name: '0',
         type: MemberType.EnumerationItem,
-        isStatic: false,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -242,7 +232,6 @@ describe('Method functions', function() {
       attachMember(argStruct, {
         name: '1',
         type: MemberType.Int,
-        isStatic: false,
         isSigned: true,
         bitSize: 32,
         bitOffset: 32,
@@ -251,7 +240,6 @@ describe('Method functions', function() {
       attachMember(argStruct, {
         name: 'retval',
         type: MemberType.Bool,
-        isStatic: false,
         bitSize: 1,
         bitOffset: 64,
         byteSize: 1,
