@@ -671,7 +671,7 @@ describe('Slice functions', function() {
         expect(object[i].valueOf()).to.eql({ dog: 0, cat: 0 });
       }
       object[0] = {};
-      expect(object[0]).to.eql({ dog: 1234, cat: 4567 });
+      expect(object[0].valueOf()).to.eql({ dog: 1234, cat: 4567 });
     })
     it('should allow reinitialization through the dollar property', function() {
       const structure = beginStructure({

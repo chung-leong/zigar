@@ -623,13 +623,13 @@ describe('Struct functions', function() {
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({});
-      expect(object).to.eql({ dog: 1234, cat: 4567 });
+      expect({ ...object }).to.eql({ dog: 1234, cat: 4567 });
       object.dog = 777;
-      expect(object).to.eql({ dog: 777, cat: 4567 });
+      expect({ ...object }).to.eql({ dog: 777, cat: 4567 });
       object.$ = { cat: 999 };
-      expect(object).to.eql({ dog: 1234, cat: 999 });
+      expect({ ...object }).to.eql({ dog: 1234, cat: 999 });
       object.$ = {};
-      expect(object.$).to.eql({ dog: 1234, cat: 4567 });
+      expect({ ...object.$ }).to.eql({ dog: 1234, cat: 4567 });
     })
     it('should define a struct that contains pointers', function() {
       const intStructure = beginStructure({
@@ -708,6 +708,43 @@ describe('Struct functions', function() {
       expect(object.dog['*']).to.equal(7788);
       const object2 = new Hello(object);
       expect(object2.dog['*']).to.equal(7788);
+    })
+    it('should have correct string tag', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'zig.super.Hello',
+        size: 4 * 2,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      attachTemplate(structure, {
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setInt32(0, 1234, true);
+          dv.setInt32(4, 4567, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
+      });
+      const Hello = finalizeStructure(structure);
+      expect(Hello.name).to.equal('Hello');
+      const object = new Hello({});
+      const desc = Object.prototype.toString.call(object);
+      expect(desc).to.equal('[object zig.super.Hello]');
     })
   })
 })

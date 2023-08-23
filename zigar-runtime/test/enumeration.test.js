@@ -310,8 +310,73 @@ describe('Enumeration functions', function() {
         [SLOTS]: {},
       });
       const Hello = finalizeStructure(structure);
-      expect(Hello(1)).to.be.an('object');
+      expect(Hello(1)).to.be.instanceOf(Hello);
       expect(Hello(5)).to.be.undefined;
+    })
+    it('should return undefined when look-up of enum item fails', function() {
+      const structure = beginStructure({
+        type: StructureType.Enumeration,
+        name: 'Hello'
+      });
+      attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      attachTemplate(structure, {
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 0, true);
+          dv.setUint32(4, 1, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
+      });
+      const Hello = finalizeStructure(structure);
+      expect(Hello(1)).to.be.instanceOf(Hello);
+      expect(Hello(5)).to.be.undefined;
+    })
+    it('should have correct string tag', function() {
+      const structure = beginStructure({
+        type: StructureType.Enumeration,
+        name: 'zig.Hello'
+      });
+      attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      attachTemplate(structure, {
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 0, true);
+          dv.setUint32(4, 1, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
+      });
+      const Hello = finalizeStructure(structure);
+      expect(Hello.name).to.equal('Hello');
+      const desc = Object.prototype.toString.call(Hello.Dog);
+      expect(desc).to.equal('[object zig.Hello]');
     })
   })
 })

@@ -131,7 +131,7 @@ describe('Optional functions', function() {
     it('should define a structure for storing an optional struct', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
-        name: 'Aniaml',
+        name: 'Animal',
         size: 8,
       });
       attachMember(structStructure, {
@@ -150,7 +150,7 @@ describe('Optional functions', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      const Aniaml = finalizeStructure(structStructure);
+      const Animal = finalizeStructure(structStructure);
       const structure = beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
@@ -176,7 +176,7 @@ describe('Optional functions', function() {
       const object = Hello(new ArrayBuffer(18));
       expect(object.$).to.equal(null);
       object.$ = { dog: 1, cat: 2 };
-      expect(object.$).to.be.an('object');
+      expect(object.$).to.be.instanceOf(Animal);
       object.$ = null;
       expect(object.$).to.equal(null);
     })

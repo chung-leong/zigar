@@ -143,6 +143,11 @@ export function attachTemplate(s, template, isStatic = false) {
   target.template = template;
 }
 
+export function getShortName(s) {
+  const { name } = s;
+  return name.replace(/[^. ]*?\./g, '');
+}
+
 export function finalizeStructure(s) {
   try {
     const f = factories[s.type];
@@ -155,7 +160,14 @@ export function finalizeStructure(s) {
     }
     const constructor = f(s);
     if (constructor) {
-      Object.defineProperty(constructor, 'name', { value: s.name, writable: false });
+      Object.defineProperties(constructor, {
+        name: { value: getShortName(s), writable: false }
+      });
+      if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
+        Object.defineProperties(constructor.prototype, {
+          [Symbol.toStringTag]: { value: s.name, configurable: true, writable: false }
+        });
+      }
     }
     return constructor;
     /* c8 ignore next 4 */

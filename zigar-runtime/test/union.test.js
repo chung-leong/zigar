@@ -1134,9 +1134,9 @@ describe('Union functions', function() {
       const Hello = finalizeStructure(structure);
       const object = new Hello({ dog: 1234 });
       object.$ = { cat: 4567 };
-      expect(object).to.eql({ cat: 4567 });
       expect({ ...object }).to.eql({ cat: 4567 });
-      expect(object.$).to.eql({ cat: 4567 });
+      expect({ ...object }).to.eql({ cat: 4567 });
+      expect({ ...object.$ }).to.eql({ cat: 4567 });
     })
   })
 })

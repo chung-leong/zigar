@@ -137,7 +137,7 @@ describe('Error union functions', function() {
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({ dog: 17, cat: 234 });
-      expect(object.$).to.be.an('object');
+      expect({ ...object.$ }).to.be.an('object');
       object.$ = SomeError.UnableToCreateObject;
       expect(() => object.$).to.throw(SomeError)
         .with.property('message').that.equal('Unable to create object');
