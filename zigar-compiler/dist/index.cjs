@@ -148,9 +148,12 @@ async function compile(path$1, options = {}) {
       } else {
         // ignore the pid file if it's stale
         try {
-          await promises.unlink(pidFile);
+          await promises.unlink(pidPath);
           /* c8 ignore next 2 */
         } catch (err) {
+          if (await find(pidPath)) {
+            throw err;
+          }
         }
       }
     }
@@ -203,9 +206,13 @@ async function monitor(path, staleTime) {
     if (!mtime) {
       // pidfile has been removed
       return true;
-    } else if (new Date() - mtime > staleTime) {
-      // pidfile's been abandoned
-      return false;
+    } else {
+      const now = new Date();
+      const diff = now - mtime;
+      if(diff > staleTime) {
+        // pidfile's been abandoned
+        return false;
+      }
     }
     await delay(500);
   }

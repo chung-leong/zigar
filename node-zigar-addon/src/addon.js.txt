@@ -953,7 +953,7 @@ R"=====(
 
   const decoders = {};
 
-  function getStringAccessors(byteSize, terminating) {
+  function getStringAccessors(byteSize, sentinelValue) {
     return {
       get() {
         let decoder = decoders[byteSize];
@@ -964,23 +964,23 @@ R"=====(
         const TypedArray = (byteSize === 1) ? Int8Array : Int16Array;
         const ta = new TypedArray(dv.buffer, dv.byteOffset, dv.byteLength / byteSize);
         const s = decoder.decode(ta);
-        return (terminating === undefined) ? s : s.slice(0, -1);
+        return (sentinelValue === undefined) ? s : s.slice(0, -1);
       },
       set(src) {
-        this.dataView = getDataViewFromUTF8(src, byteSize, terminating);
+        this.dataView = getDataViewFromUTF8(src, byteSize, sentinelValue);
       },
     };
   }
 
   let encoder;
 
-  function getDataViewFromUTF8(str, byteSize, terminating) {
+  function getDataViewFromUTF8(str, byteSize, sentinelValue) {
     if (typeof(str) !== 'string') {
       throwTypeMismatch('a string', str);
     }
-    if (terminating !== undefined) {
-      if (str.charCodeAt(str.length - 1) !== terminating) {
-        str = str + String.fromCharCode(terminating);
+    if (sentinelValue !== undefined) {
+      if (str.charCodeAt(str.length - 1) !== sentinelValue) {
+        str = str + String.fromCharCode(sentinelValue);
       }
     }
     let ta;
@@ -2916,12 +2916,12 @@ R"=====(
     factories[MemberType.Object] = getObjectAccessor;
   }
 
-  function isByteAligned({ bitOffset, bitSize, byteSize }) {
-    return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
-  }
-
   function useType() {
     factories[MemberType.Type] = getTypeAccessor;
+  }
+
+  function isByteAligned({ bitOffset, bitSize, byteSize }) {
+    return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
   }
 
   function getAccessors(member, options = {}) {
@@ -3095,10 +3095,9 @@ R"=====(
 
   function getAccessorUsing(access, member, options, getDataViewAccessor) {
     const {
-      runtimeSafety = true,
       littleEndian = true,
     } = options;
-    const { type, bitOffset, byteSize } = member;
+    const { bitOffset, byteSize } = member;
     const accessor = getDataViewAccessor(access, member);
     if (bitOffset !== undefined) {
       const offset = bitOffset >> 3;

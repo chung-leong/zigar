@@ -157,7 +157,7 @@ pub const Member = extern struct {
     bit_size: usize = missing,
     byte_size: usize = missing,
     slot: usize = missing,
-    structure: ?Value = null,
+    structure: ?Value,
 };
 
 pub const Memory = extern struct {
@@ -539,8 +539,9 @@ test "comparePointers" {
     assert(comparePointers(j, k) == false);
 }
 
-// export functions
-fn getStructure(host: anytype, comptime T: type) !Value {
+// NOTE: error type has to be specified here since the function is called recursively
+// and https://github.com/ziglang/zig/issues/2971 has not been fully resolved yet
+fn getStructure(host: anytype, comptime T: type) Error!Value {
     const s_slot = getStructureSlot(T, .One);
     return host.readGlobalSlot(s_slot) catch undefined: {
         const def: Structure = .{
@@ -662,6 +663,8 @@ fn getSentinel(comptime T: type) ?@typeInfo(T).Pointer.child {
     if (@typeInfo(T).Pointer.sentinel) |ptr| {
         const sentinel_ptr: *const @typeInfo(T).Pointer.child = @alignCast(@ptrCast(ptr));
         return sentinel_ptr.*;
+    } else {
+        return null;
     }
 }
 
@@ -752,6 +755,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                 .bit_size = @bitSizeOf(T),
                 .bit_offset = 0,
                 .byte_size = @sizeOf(T),
+                .structure = try getStructure(host, T),
             });
         },
         .Array => |ar| {
@@ -810,8 +814,8 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                 .is_const = pt.is_const,
                 .bit_size = @bitSizeOf(T),
                 .byte_size = @sizeOf(T),
-                .structure = target_structure,
                 .slot = 0,
+                .structure = target_structure,
             });
         },
         .Struct => |st| {
@@ -895,6 +899,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                     .is_signed = isSigned(IT),
                     .bit_size = @bitSizeOf(IT),
                     .byte_size = @sizeOf(IT),
+                    .structure = try getStructure(host, IT),
                 });
             }
         },
@@ -927,6 +932,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                 .bit_offset = present_offset,
                 .bit_size = @bitSizeOf(bool),
                 .byte_size = present_byte_size,
+                .structure = try getStructure(host, bool),
             });
         },
         .ErrorUnion => |eu| {
@@ -962,6 +968,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                         .name = getCString(err_rec.name),
                         .member_type = .Object,
                         .slot = @intFromError(err),
+                        .structure = null,
                     });
                 }
             }

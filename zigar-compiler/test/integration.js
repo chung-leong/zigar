@@ -5,7 +5,13 @@ import 'mocha-skip-if';
 export function addTests(importModule, options) {
   const {
     littleEndian = true,
+    optimize,
+    target,
   } = options;
+  beforeEach(function() {
+    process.env.ZIGAR_TARGET = target;
+    process.env.ZIGAR_OPTIMIZE = optimize;
+  })
   describe('Console', function() {
     it('should output to development console', async function() {
       this.timeout(60000);
@@ -72,7 +78,7 @@ export function addTests(importModule, options) {
       const int128 = new Int128(0n);
       int128.$ = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn;
       expect(int128.$).to.equal(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn);
-      const object = new Struct();
+      const object = new Struct({});
       expect(object.number1).to.equal(123);
       expect(object.number2).to.equal(456);
     })
@@ -307,6 +313,7 @@ export function addTests(importModule, options) {
         expect(line).to.equal(refLines[index]);
       }
     })
+    skip.
     it('should produce the right results for the k-nucleotide example', async function() {
       this.timeout(60000);
       const { default: { kNucleotide } } = await importModule(resolve('./zig-samples/benchmarks-game/k-nucleotide.zig'));

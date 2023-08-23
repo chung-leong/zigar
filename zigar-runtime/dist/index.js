@@ -417,14 +417,14 @@ function throwConstantConstraint(structure, pointer) {
   throw new TypeError(`Conversion of ${name2} to ${name1} requires an explicit cast`);
 }
 
-function throwMisplacedTerminator(structure, value, index, length) {
+function throwMisplacedSentinel(structure, value, index, length) {
   const { name } = structure;
-  throw new TypeError(`${name} expects the terminating value ${value} at ${length - 1}, found at ${index}`);
+  throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}, found at ${index}`);
 }
 
-function throwMissingTerminator(structure, value, length) {
+function throwMissingSentinel(structure, value, length) {
   const { name } = structure;
-  throw new TypeError(`${name} expects the terminating value ${value} at ${length - 1}`);
+  throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}`);
 }
 
 function throwAssigningToConstant(pointer) {
@@ -1203,12 +1203,12 @@ function useObject() {
   factories$1[MemberType.Object] = getObjectAccessor;
 }
 
-function isByteAligned({ bitOffset, bitSize, byteSize }) {
-  return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
-}
-
 function useType() {
   factories$1[MemberType.Type] = getTypeAccessor;
+}
+
+function isByteAligned({ bitOffset, bitSize, byteSize }) {
+  return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
 }
 
 function getAccessors(member, options = {}) {
@@ -1407,10 +1407,9 @@ function getTypeAccessor(type, member, options) {
 
 function getAccessorUsing(access, member, options, getDataViewAccessor) {
   const {
-    runtimeSafety = true,
     littleEndian = true,
   } = options;
-  const { type, bitOffset, byteSize } = member;
+  const { bitOffset, byteSize } = member;
   const accessor = getDataViewAccessor(access, member);
   if (bitOffset !== undefined) {
     const offset = bitOffset >> 3;
@@ -1491,7 +1490,7 @@ function addSpecialAccessors(s) {
     instance: {
       members,
     },
-    termination,
+    sentinel,
   } = s;
   const dvAccessors = getDataViewAccessors(s);
   const base64Acccessors = getBase64Accessors();
@@ -1503,7 +1502,7 @@ function addSpecialAccessors(s) {
   };
   if (canBeString(s)) {
     const { byteSize } = s.instance.members[0];
-    const strAccessors = getStringAccessors(byteSize, termination?.value);
+    const strAccessors = getStringAccessors(byteSize, sentinel?.value);
     descriptors.string = { ...strAccessors, configurable: true };
   }
   if (canBeTypedArray(s)) {
@@ -1540,7 +1539,7 @@ function getSpecialKeys(s) {
 }
 
 function getDataViewAccessors(structure) {
-  const { type, size, termination } = structure;
+  const { type, size, sentinel } = structure;
   const copy = getMemoryCopier(size, type === StructureType.Slice);
   return {
     get() {
@@ -1558,7 +1557,7 @@ function getDataViewAccessors(structure) {
       if (dest.byteLength !== dv.byteLength) {
         throwBufferSizeMismatch(structure, dv, this);
       }
-      termination?.validateData(dv, this.length);
+      sentinel?.validateData(dv, this.length);
       copy(dest, dv);
     },
   };
@@ -1599,7 +1598,7 @@ function getDataViewFromBase64(str) {
 
 const decoders = {};
 
-function getStringAccessors(byteSize, terminating) {
+function getStringAccessors(byteSize, sentinelValue) {
   return {
     get() {
       let decoder = decoders[byteSize];
@@ -1610,23 +1609,23 @@ function getStringAccessors(byteSize, terminating) {
       const TypedArray = (byteSize === 1) ? Int8Array : Int16Array;
       const ta = new TypedArray(dv.buffer, dv.byteOffset, dv.byteLength / byteSize);
       const s = decoder.decode(ta);
-      return (terminating === undefined) ? s : s.slice(0, -1);
+      return (sentinelValue === undefined) ? s : s.slice(0, -1);
     },
     set(src) {
-      this.dataView = getDataViewFromUTF8(src, byteSize, terminating);
+      this.dataView = getDataViewFromUTF8(src, byteSize, sentinelValue);
     },
   };
 }
 
 let encoder;
 
-function getDataViewFromUTF8(str, byteSize, terminating) {
+function getDataViewFromUTF8(str, byteSize, sentinelValue) {
   if (typeof(str) !== 'string') {
     throwTypeMismatch('a string', str);
   }
-  if (terminating !== undefined) {
-    if (str.charCodeAt(str.length - 1) !== terminating) {
-      str = str + String.fromCharCode(terminating);
+  if (sentinelValue !== undefined) {
+    if (str.charCodeAt(str.length - 1) !== sentinelValue) {
+      str = str + String.fromCharCode(sentinelValue);
     }
   }
   let ta;
@@ -3075,11 +3074,11 @@ function finalizeSlice(s) {
   const objectMember = (member.type === MemberType.Object) ? member : null;
   const { byteSize: elementSize, structure: elementStructure } = member;
   const typedArray = s.typedArray = getTypedArrayClass(member);
-  const termination = getTermination(s, options);
-  if (termination) {
+  const sentinel = getSentinel(s, options);
+  if (sentinel) {
     // zero-terminated strings aren't expected to be commonly used
     // so we're not putting this prop into the standard structure
-    s.termination = termination;
+    s.sentinel = sentinel;
   }
   // the slices are different from other structures due to their variable sizes
   // we only know the "shape" of an object after we've processed the initializers
@@ -3148,7 +3147,7 @@ function finalizeSlice(s) {
         }
         let i = 0;
         for (const value of arg) {
-          termination?.validateValue(value, i, argLen);
+          sentinel?.validateValue(value, i, argLen);
           set.call(this, i++, value);
         }
       } else if (typeof(arg) === 'number') {
@@ -3180,7 +3179,7 @@ function finalizeSlice(s) {
                 dv = getDataViewFromTypedArray(arg[key], typedArray);
                 break;
               case 'string':
-                dv = getDataViewFromUTF8(arg[key], elementSize, termination?.value);
+                dv = getDataViewFromUTF8(arg[key], elementSize, sentinel?.value);
                 dup = false;
                 break;
               case 'base64':
@@ -3190,7 +3189,7 @@ function finalizeSlice(s) {
             }
             checkDataViewSize(s, dv);
             const length = dv.byteLength / elementSize;
-            termination?.validateData(dv, length);
+            sentinel?.validateData(dv, length);
             if (dup) {
               shapeDefiner.call(this, null, length);
               copy(this[MEMORY], dv);
@@ -3230,34 +3229,34 @@ function finalizeSlice(s) {
   return constructor;
 }
 
-function getTermination(structure, options) {
+function getSentinel(structure, options) {
   const {
     runtimeSafety = true,
   } = options;
   const {
-    instance: { members: [ member, terminator ], template },
+    instance: { members: [ member, sentinel ], template },
   } = structure;
-  if (!terminator) {
+  if (!sentinel) {
     return;
   }
   if (process.env.NODE_DEV !== 'production') {
     /* c8 ignore next 3 */
-    if (terminator.bitOffset === undefined) {
-      throw new Error(`bitOffset must be 0 for terminator member`);
+    if (sentinel.bitOffset === undefined) {
+      throw new Error(`bitOffset must be 0 for sentinel member`);
     }
   }
-  const { get: getTerminatingValue } = getAccessors(terminator, options);
-  const value = getTerminatingValue.call(template, 0);
+  const { get: getSentinelValue } = getAccessors(sentinel, options);
+  const value = getSentinelValue.call(template, 0);
   const { get } = getAccessors(member, options);
   const validateValue = (runtimeSafety) ? function(v, i, l) {
     if (v === value && i !== l - 1) {
-      throwMisplacedTerminator(structure, v, i, l);
+      throwMisplacedSentinel(structure, v, i, l);
     } else if (v !== value && i === l - 1) {
-      throwMissingTerminator(structure, value, i);
+      throwMissingSentinel(structure, value, i);
     }
   } : function(v, i, l) {
     if (v !== value && i === l - 1) {
-      throwMissingTerminator(structure, value, l);
+      throwMissingSentinel(structure, value, l);
     }
   };
   const validateData = (runtimeSafety) ? function(dv, l) {
@@ -3265,9 +3264,9 @@ function getTermination(structure, options) {
     for (let i = 0; i < l; i++) {
       const v = get.call(object, i);
       if (v === value && i !== l - 1) {
-        throwMisplacedTerminator(structure, value, i, l);
+        throwMisplacedSentinel(structure, value, i, l);
       } else if (v !== value && i === l - 1) {
-        throwMissingTerminator(structure, value, l);
+        throwMissingSentinel(structure, value, l);
       }
     }
   } : function(dv, l) {
@@ -3276,7 +3275,7 @@ function getTermination(structure, options) {
       const i = l - 1;
       const v = get.call(object, i);
       if (v !== value) {
-        throwMissingTerminator(structure, value, l);
+        throwMissingSentinel(structure, value, l);
       }
     }
   };

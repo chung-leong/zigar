@@ -9,11 +9,11 @@ import 'mocha-skip-if';
 for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]) {
   skip.if(process.env.npm_lifecycle_event === 'coverage').
   describe(`Integration tests (zigar-compiler, ${optimize})`, function() {
-    beforeEach(function() {
-      process.env.ZIGAR_TARGET = 'WASM-COMPTIME';
-      process.env.ZIGAR_OPTIMIZE = optimize;
-    })
-    addTests(path => importModule(path), { littleEndian: true });
+    addTests(path => importModule(path), {
+      littleEndian: true,
+      target: 'WASM-COMPTIME',
+      optimize,
+    });
   })
 }
 

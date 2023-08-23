@@ -26,8 +26,8 @@ export async function load(url, context, nextLoad) {
     const zigPath = fileURLToPath(url);
     const { env } = process;
     const options = {
-      clean: !!(env.ZIGAR_CLEAN ?? (env.NODE_ENV === 'production') ? '1' : '0'),
-      optimize: env.ZIGAR_OPTIMIZE ?? (env.NODE_ENV === 'production') ? 'ReleaseFast' : 'Debug',
+      clean: !!parseInt(env.ZIGAR_CLEAN ?? ((env.NODE_ENV === 'production') ? '1' : '0')),
+      optimize: env.ZIGAR_OPTIMIZE ?? ((env.NODE_ENV === 'production') ? 'ReleaseFast' : 'Debug'),
       zigCmd: env.ZIGAR_BUILD_CMD,
       buildDir: env.ZIGAR_BUILD_DIR,
       cacheDir: env.ZIGAR_CACHE_DIR,

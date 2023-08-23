@@ -69,6 +69,10 @@ export function useObject() {
   factories[MemberType.Object] = getObjectAccessor;
 }
 
+export function useType() {
+  factories[MemberType.Type] = getTypeAccessor;
+}
+
 export function getMemberFeature(member) {
   const { type, bitSize } = member;
   switch (type) {
@@ -107,10 +111,6 @@ export function getMemberFeature(member) {
 
 export function isByteAligned({ bitOffset, bitSize, byteSize }) {
   return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
-}
-
-export function useType() {
-  factories[MemberType.Type] = getTypeAccessor;
 }
 
 export function getAccessors(member, options = {}) {
@@ -311,10 +311,9 @@ export function getTypeAccessor(type, member, options) {
 
 function getAccessorUsing(access, member, options, getDataViewAccessor) {
   const {
-    runtimeSafety = true,
     littleEndian = true,
   } = options;
-  const { type, bitOffset, byteSize } = member;
+  const { bitOffset, byteSize } = member;
   const accessor = getDataViewAccessor(access, member);
   if (bitOffset !== undefined) {
     const offset = bitOffset >> 3;
