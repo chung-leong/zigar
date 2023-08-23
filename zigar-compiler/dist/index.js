@@ -130,6 +130,9 @@ async function compile(path, options = {}) {
           }
           /* c8 ignore next 2 */
         } catch (err) {
+          if (await find(pidPath)) {
+            throw err;
+          }
         }
       }
       done = true;

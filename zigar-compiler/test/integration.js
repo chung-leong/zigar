@@ -262,7 +262,7 @@ export function addTests(importModule, options) {
     it('should produce the right results for the binary-trees example', async function() {
       this.timeout(60000);
       const { default: { binaryTree } } = await importModule(resolve('./zig-samples/benchmarks-game/binary-trees.zig'));
-      const n = 14;
+      const n = 12;
       const origFn = console.log;
       const lines = [];
       try {
