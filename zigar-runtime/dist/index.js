@@ -249,7 +249,8 @@ function reset32(dest) {
 /* c8 ignore end */
 
 function throwBufferSizeMismatch(structure, dv, target = null) {
-  const { type, name, size } = structure;
+  const { type, size } = structure;
+  const name = getShortName(structure);
   const actual = dv.byteLength;
   const s = (size > 1) ? 's' : '';
   if (type === StructureType.Slice && !target) {
@@ -271,37 +272,37 @@ function throwBufferExpected(structure) {
 }
 
 function throwInvalidEnum(structure, value) {
-  const { name } = structure;
+  const name = getShortName(structure);
   throw new TypeError(`Value given does not correspond to an item of enum ${name}: ${value}`);
 }
 
 function throwEnumExpected(structure, arg) {
-  const { name } = structure;
+  const name = getShortName(structure);
   throw new TypeError(`Enum item of the type ${name} expected, received ${arg}`);
 }
 
 function throwNoNewEnum(structure) {
-  const { name } = structure;
+  const name = getShortName(structure);
   throw new TypeError(`Cannot create new enum item\nCall ${name} without the use of "new" to obtain an enum object`);
 }
 
 function throwNoNewError(structure) {
-  const { name } = structure;
+  const name = getShortName(structure);
   throw new TypeError(`Cannot create new error\nCall ${name} without the use of "new" to obtain an error object`);
 }
 
 function throwNotInErrorSet(structure) {
-  const { name } = structure;
+  const name = getShortName(structure);
   throw new TypeError(`Error given is not a part of error set ${name}`);
 }
 
 function throwUnknownErrorNumber(structure, number) {
-  const { name } = structure;
+  const name = getShortName(structure);
   throw new TypeError(`Error number does not corresponds to any error in error set ${name}: #${number}`);
 }
 
 function throwMultipleUnionInitializers(structure) {
-  const { name } = structure;
+  const name = getShortName(structure);
   throw new TypeError(`Only one property of ${name} can be given a value`);
 }
 
@@ -313,13 +314,14 @@ function throwInactiveUnionProperty(structure, index, currentIndex) {
 }
 
 function throwMissingUnionInitializer(structure, arg, exclusion) {
-  const { name, instance: { members } } = structure;
+  const { instance: { members } } = structure;
+  const name = getShortName(structure);
   const missing = members.slice(0, exclusion ? -1 : undefined).map(m => m.name);
   throw new TypeError(`${name} needs an initializer for one of its union properties: ${missing.join(', ')}`);
 }
 
 function throwInvalidInitializer(structure, expected, arg) {
-  const { name } = structure;
+  const name = getShortName(structure);
   const acceptable = [];
   if (Array.isArray(expected)) {
     for (const type of expected) {
@@ -353,7 +355,8 @@ function throwInvalidArrayInitializer(structure, arg, shapeless = false) {
 }
 
 function throwArrayLengthMismatch(structure, target, arg) {
-  const { name, size, instance: { members: [ member ] } } = structure;
+  const { size, instance: { members: [ member ] } } = structure;
+  const name = getShortName(structure);
   const { byteSize, structure: { constructor: elementConstructor} } = member;
   const length = target?.length ?? size / byteSize;
   const { length: argLength, constructor: argConstructor } = arg;
@@ -370,7 +373,8 @@ function throwArrayLengthMismatch(structure, target, arg) {
 }
 
 function throwMissingInitializers(structure, arg) {
-  const { name, instance: { members } } = structure;
+  const { instance: { members } } = structure;
+  const name = getShortName(structure);
   const missing = [];
   for (const { name, isRequired } of members) {
     if (isRequired) {
@@ -383,19 +387,21 @@ function throwMissingInitializers(structure, arg) {
 }
 
 function throwNoProperty$1(structure, propName) {
-  const { name } = structure;
+  const name = getShortName(structure);
   throw new TypeError(`${name} does not have a property with that name: ${propName}`);
 }
 
 function throwArgumentCountMismatch(structure, actual) {
-  const { name, instance: { members } } = structure;
+  const { instance: { members } } = structure;
+  const name = getShortName(structure);
   const argCount = members.length - 1;
   const s = (argCount > 1) ? 's' : '';
   throw new Error(`${name} expects ${argCount} argument${s}, received ${actual}`);
 }
 
 function rethrowArgumentError(structure, index, err) {
-  const { name, instance: { members } } = structure;
+  const { instance: { members } } = structure;
+  const name = getShortName(structure);
   // Zig currently does not provide the argument name
   const argName = `args[${index}]`;
   const argCount = members.length - 1;
@@ -412,18 +418,18 @@ function throwNoCastingToPointer(structure) {
 }
 
 function throwConstantConstraint(structure, pointer) {
-  const { name: name1 } = structure;
+  const name1 = getShortName(structure);
   const { constructor: { name: name2 } } = pointer;
   throw new TypeError(`Conversion of ${name2} to ${name1} requires an explicit cast`);
 }
 
 function throwMisplacedSentinel(structure, value, index, length) {
-  const { name } = structure;
+  const name = getShortName(structure);
   throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}, found at ${index}`);
 }
 
 function throwMissingSentinel(structure, value, length) {
-  const { name } = structure;
+  const name = getShortName(structure);
   throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}`);
 }
 
@@ -443,7 +449,7 @@ function throwInaccessiblePointer() {
 
 function throwInvalidPointerTarget(structure, arg) {
   // NOTE: not being used currently
-  const { name } = structure;
+  const name = getShortName(structure);
   let target;
   if (arg != null) {
     const type = typeof(arg);
@@ -2104,7 +2110,7 @@ function addStaticMembers(s) {
         const ptr = getPtr.call(this);
         return ptr['*'];
       };
-      set = (member.isConst) ? undefined : function(value) {
+      set = function(value) {
         const ptr = getPtr.call(this);
         ptr['*'] = value;
       };
@@ -3533,6 +3539,11 @@ function useArgStruct() {
   factories[StructureType.ArgStruct] = finalizeArgStruct;
 }
 
+function getShortName(s) {
+  const { name } = s;
+  return name.replace(/[^. ]*?\./g, '');
+}
+
 function finalizeStructure(s) {
   try {
     const f = factories[s.type];
@@ -3545,7 +3556,14 @@ function finalizeStructure(s) {
     }
     const constructor = f(s);
     if (constructor) {
-      Object.defineProperty(constructor, 'name', { value: s.name, writable: false });
+      Object.defineProperties(constructor, {
+        name: { value: getShortName(s), writable: false }
+      });
+      if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
+        Object.defineProperties(constructor.prototype, {
+          [Symbol.toStringTag]: { value: s.name, configurable: true, writable: false }
+        });
+      }
     }
     return constructor;
     /* c8 ignore next 4 */

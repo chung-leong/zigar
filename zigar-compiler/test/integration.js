@@ -85,20 +85,20 @@ export function addTests(importModule, options) {
     it('should import primitive arrays', async function() {
       this.timeout(60000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/arrays-with-primitives.zig'));
-      expect(module.int32_array4).to.be.an('object');
+      expect(module.int32_array4).to.be.an('[4]i32');
       expect(module.int32_array4.get(0)).to.equal(1);
       expect([ ...module.int32_array4 ]).to.eql([ 1, 2, 3, 4 ]);
       module.int32_array4.set(1, 123);
       expect([ ...module.int32_array4 ]).to.eql([ 1, 123, 3, 4 ]);
-      expect(module.float64_array4x4).to.be.an('object');
+      expect(module.float64_array4x4).to.be.an('[4][4]f64');
       const row1 = module.float64_array4x4.get(1);
-      expect(row1).to.be.an('object');
+      expect(row1).to.be.an('[4]f64');
     })
     it('should import primitive slices', async function() {
       this.timeout(60000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/slices-with-primitive.zig'));
       expect([ ...module.int32_array ]).to.eql([ 123, 456, 789 ]);
-      expect(module.int32_slice).to.be.an('object');
+      expect(module.int32_slice).to.be.an('[_]const i32');
       expect(module.int32_slice.get(0)).to.equal(123);
       expect([ ...module.int32_slice ]).to.eql([ 123, 456, 789 ]);
       expect(module.u8_slice).to.have.lengthOf(11);
@@ -175,6 +175,7 @@ export function addTests(importModule, options) {
       const { default: module } = await importModule(resolve('./zig-samples/basic/function-simple.zig'));
       const res = module.add(5, 17);
       expect(res).to.equal(22);
+      expect(module.add).to.have.property('name', 'add');
     })
     it('should import function that accepts a slice', async function() {
       this.timeout(60000);
