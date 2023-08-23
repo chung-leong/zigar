@@ -182,7 +182,9 @@ export async function runModule(module, options = {}) {
     const ctx = callContexts[ctxAddr];
     for (const [ buffer, { address, len, dv, copy } ] of ctx.bufferMap) {
       const src = new DataView(wasmMemory.buffer, address, len);
-      copy(dv, src);
+      if (copy) {
+        copy(dv, src);
+      }
     }
     delete callContexts[ctxAddr];
     if (Object.keys(callContexts).length === 0) {
@@ -378,7 +380,10 @@ export async function runModule(module, options = {}) {
     const buffer = new ArrayBuffer(len);
     const copy = getMemoryCopier(len);
     const dv = new DataView(buffer);
-    ctx.bufferMap.set(buffer, { address, len, dv, copy });
+    // copy content immediately, since address is likely pointing to a stack location
+    const src = new DataView(wasmMemory.buffer, address, len);
+    copy(dv, src);
+    ctx.bufferMap.set(buffer, { address, len, dv, copy: null });
     return dv;
   }
 
