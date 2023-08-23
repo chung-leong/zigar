@@ -1013,22 +1013,23 @@ function generateCode(structures, params) {
     type: StructureType.Primitive,
     name: undefined,
     size: 4,
+    isConst: false,
     hasPointer: false,
     instance: {
       members: [],
+      methods: [],
       template: null,
     },
     static: {
       members: [],
+      methods: [],
       template: null,
     },
-    methods: [],
     options: { runtimeSafety },
   };
 
   const defaultMember = {
     type: MemberType.Void,
-    isConst: false,
     isRequired: false,
     bitSize: 32,
     byteSize: 4,
@@ -1038,8 +1039,10 @@ function generateCode(structures, params) {
   addDefaultStructure();
   addDefaultMember();
   const structureNames = new Map();
+  const methodNames = new Map();
   const arrayBufferNames = new Map();
   let arrayBufferCount = 0;
+  let methodCount = 0;
   for (const [ index, structure ] of structures.entries()) {
     const varname = `s${index}`;
     addStructure(varname, structure);
@@ -1075,7 +1078,7 @@ function generateCode(structures, params) {
 
   add('\n// export functions, types, and constants');
   const exportables = [];
-  for (const method of root.methods) {
+  for (const method of root.static.methods) {
     exportables.push(method.name);
   }
   for (const member of root.static.members) {
@@ -1111,7 +1114,14 @@ function generateCode(structures, params) {
   function addDefaultStructure() {
     add(`const s = {`);
     for (const [ name, value ] of Object.entries(defaultStructure)) {
-      add(`${name}: ${JSON.stringify(value)},`);
+      switch (name) {
+        case 'instance':
+        case 'static':
+          addStructureContent(name, value);
+          break;
+        default:
+          add(`${name}: ${JSON.stringify(value)},`);
+      }
     }
     add(`};`);
   }
@@ -1119,6 +1129,8 @@ function generateCode(structures, params) {
   function addStructure(varname, structure) {
     addBuffers(structure.instance.template);
     addBuffers(structure.static.template);
+    // instance methods are also static methods, so no need to add them separately
+    addMethods(structure.static.methods);
     add(`const ${varname} = {`);
     add(`...s,`);
     for (const [ name, value ] of Object.entries(structure)) {
@@ -1126,13 +1138,7 @@ function generateCode(structures, params) {
         switch (name) {
           case 'instance':
           case 'static':
-            add(`${name}: {`);
-            addMembers(value.members);
-            addTemplate(value.template);
-            add(`},`);
-            break;
-          case 'methods':
-            addMethods(value);
+            addStructureContent(name, value);
             break;
           default:
             add(`${name}: ${JSON.stringify(value)},`);
@@ -1140,6 +1146,14 @@ function generateCode(structures, params) {
       }
     }
     add(`};`);
+  }
+
+  function addStructureContent(name, { members, methods, template }) {
+    add(`${name}: {`);
+    addMembers(members);
+    addMethodRefs(methods);
+    addTemplate(template);
+    add(`},`);
   }
 
   function addDefaultMember() {
@@ -1151,11 +1165,15 @@ function generateCode(structures, params) {
   }
 
   function addMembers(members) {
-    add(`members: [`);
-    for (const member of members) {
-      addMember(member);
+    if (members.length > 0) {
+      add(`members: [`);
+      for (const member of members) {
+        addMember(member);
+      }
+      add(`],`);
+    } else {
+      add(`members: [],`);
     }
-    add(`],`);
   }
 
   function addMember(member) {
@@ -1229,15 +1247,24 @@ function generateCode(structures, params) {
   }
 
   function addMethods(methods) {
-    add(`methods: [`);
     for (const method of methods) {
-      addMethod(method);
+      const varname = `f${methodCount++}`;
+      methodNames.set(method, varname);
+      addMethod(varname, method);
     }
-    add(`],`);
   }
 
-  function addMethod(method) {
-    add(`{`);
+  function addMethodRefs(methods) {
+    const list = methods.map(m => methodNames.get(m));
+    if (list.length > 0) {
+      add(`methods: [ ${list.join(', ')} ],`);
+    } else {
+      add(`methods: [],`);
+    }
+  }
+
+  function addMethod(varname, method) {
+    add(`const ${varname} = {`);
     for (const [ name, value ] of Object.entries(method)) {
       switch (name) {
         case 'argStruct':
@@ -1247,7 +1274,7 @@ function generateCode(structures, params) {
           add(`${name}: ${JSON.stringify(value)},`);
       }
     }
-    add(`},`);
+    add(`};`);
   }
 
   const code = lines.join('\n');
@@ -2549,7 +2576,8 @@ async function transpile(path$1, options = {}) {
   const wasmPath = await compile(path$1, { ...otherOptions, optimize, target: 'wasm' });
   const content = await promises.readFile(wasmPath);
   const { structures, runtimeSafety } = await runModule(content, { omitFunctions });
-  const hasMethods = !!structures.find(s => s.methods.length > 0);
+  // all methods are static, so there's no need to check the instance methods
+  const hasMethods = !!structures.find(s => s.static.methods.length > 0);
   const runtimeURL = moduleResolver('zigar-runtime');
   const name = path.basename(wasmPath);
   let loadWASM;
@@ -2559,7 +2587,6 @@ async function transpile(path$1, options = {}) {
       dv = stripUnused(dv, { keepNames });
       //await writeFile(wasmPath.replace('.wasm', '.min.wasm'), dv);
     }
-    //await writeFile(wasmPath.replace('.wasm', '.min.wasm'), dv);
     if (embedWASM) {
       loadWASM = embed(name, dv);
     } else {

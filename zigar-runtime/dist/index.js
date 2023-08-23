@@ -3896,7 +3896,7 @@ function finalizeStructures(structures) {
         target.template = createTemplate(target.template);
       }
     }
-    for (const method of structure.methods) {
+    for (const method of structure.static.methods) {
       // create thunk function
       method.thunk = createThunk(method.thunk);
     }

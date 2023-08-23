@@ -1,6 +1,5 @@
 import { expect, use } from 'chai';
 import ChaiAsPromised from 'chai-as-promised';
-import { stat, utimes } from 'fs/promises';
 
 use(ChaiAsPromised);
 
@@ -34,13 +33,14 @@ describe('Code generation', function() {
               byteSize: 4,
             }
           ],
+          methods: [],
           template: null,
         },
         static: {
           members: [],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const code = generateCode([ structure ], {});
@@ -68,13 +68,14 @@ describe('Code generation', function() {
               byteSize: 4,
             }
           ],
+          methods: [],
           template: null,
         },
         static: {
           members: [],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const code = generateCode([ structure ], {});
@@ -102,13 +103,14 @@ describe('Code generation', function() {
               byteSize: 4,
             }
           ],
+          methods: [],
           template: null,
         },
         static: {
           members: [],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const code = generateCode([ structure ], {});
@@ -135,13 +137,14 @@ describe('Code generation', function() {
               byteSize: 16,
             }
           ],
+          methods: [],
           template: null,
         },
         static: {
           members: [],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const code = generateCode([ structure ], {});
@@ -169,13 +172,14 @@ describe('Code generation', function() {
               byteSize: 1,
             }
           ],
+          methods: [],
           template: null,
         },
         static: {
           members: [],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const code = generateCode([ structure ], {});
@@ -208,13 +212,14 @@ describe('Code generation', function() {
               bitSize: 1,
             },
           ],
+          methods: [],
           template: null,
         },
         static: {
           members: [],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const code = generateCode([ structure ], {});
@@ -234,13 +239,14 @@ describe('Code generation', function() {
         hasPointer: false,
         instance: {
           members: [],
+          methods: [],
           template: null,
         },
         static: {
           members: [],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const structure = {
@@ -263,13 +269,14 @@ describe('Code generation', function() {
               structure: enumSetStructure,
             }
           ],
+          methods: [],
           template: null,
         },
         static: {
           members: [],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const code = generateCode([ enumSetStructure, structure ], {});
@@ -289,13 +296,14 @@ describe('Code generation', function() {
         hasPointer: false,
         instance: {
           members: [],
+          methods: [],
           template: null,
         },
         static: {
           members: [],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const structure = {
@@ -317,13 +325,14 @@ describe('Code generation', function() {
               structure: enumSetStructure,
             }
           ],
+          methods: [],
           template: null,
         },
         static: {
           members: [],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const code = generateCode([ enumSetStructure, structure ], {});
@@ -343,13 +352,14 @@ describe('Code generation', function() {
         hasPointer: false,
         instance: {
           members: [],
+          methods: [],
           template: null,
         },
         static: {
           members: [],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const structure = {
@@ -364,6 +374,7 @@ describe('Code generation', function() {
         hasPointer: false,
         instance: {
           members: [],
+          methods: [],
           template: null,
         },
         static: {
@@ -374,9 +385,9 @@ describe('Code generation', function() {
               structure: enumSetStructure,
             },
           ],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const code = generateCode([ enumSetStructure, structure ], {});
@@ -404,13 +415,14 @@ describe('Code generation', function() {
               slot: 0,
             },
           ],
+          methods: [],
           template: null,
         },
         static: {
           members: [],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const structure = {
@@ -424,6 +436,7 @@ describe('Code generation', function() {
         hasPointer: false,
         instance: {
           members: [],
+          methods: [],
           template: null,
         },
         static: {
@@ -438,9 +451,9 @@ describe('Code generation', function() {
               structure: ptrStructure,
             }
           ],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const code = generateCode([ ptrStructure, structure ], {});
@@ -468,13 +481,14 @@ describe('Code generation', function() {
               byteSize: 0,
             },
           ],
+          methods: [],
           template: null,
         },
         static: {
           members: [],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const structure = {
@@ -488,20 +502,20 @@ describe('Code generation', function() {
         hasPointer: false,
         instance: {
           members: [],
+          methods: [],
           template: null,
         },
         static: {
           members: [],
+          methods: [
+            {
+              name: "hello",
+              thunk: 123,
+              argStruct: argStructure,
+            }
+          ],
           template: null,
         },
-        methods: [
-          {
-            name: "hello",
-            isStaticOnly: true,
-            thunk: 123,
-            argStruct: argStructure,
-          }
-        ],
         options: {},
       };
       const code = generateCode([ argStructure, structure ], { loadWASM: `loadWASM()`, topLevelAwait: true });
@@ -534,6 +548,7 @@ describe('Code generation', function() {
               byteSize: 4,
             },
           ],
+          methods: [],
           template: {
             [MEMORY]: memory,
             [SLOTS]: {
@@ -545,9 +560,9 @@ describe('Code generation', function() {
         },
         static: {
           members: [],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const structure = {
@@ -567,13 +582,14 @@ describe('Code generation', function() {
               structure: structStructure,
             }
           ],
+          methods: [],
           template: null,
         },
         static: {
           members: [],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const code = generateCode([ structStructure, structure ], { loadWASM: `loadWASM()`, topLevelAwait: true });
@@ -602,13 +618,14 @@ describe('Code generation', function() {
               byteSize: 4,
             }
           ],
+          methods: [],
           template: null,
         },
         static: {
           members: [],
+          methods: [],
           template: null,
         },
-        methods: [],
         options: {},
       };
       const code = generateCode([ structure ], { loadWASM: 'loadWASM()'});
@@ -638,13 +655,14 @@ describe('Code generation', function() {
                 byteSize: 8,
               }
             ],
+            methods: [],
             template: null,
           },
           static: {
             members: [],
+            methods: [],
             template: null,
           },
-          methods: [],
           options: {},
         });
        }

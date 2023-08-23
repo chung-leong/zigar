@@ -40,7 +40,6 @@ export async function transpile(path, options = {}) {
       dv = stripUnused(dv, { keepNames });
       //await writeFile(wasmPath.replace('.wasm', '.min.wasm'), dv);
     }
-    //await writeFile(wasmPath.replace('.wasm', '.min.wasm'), dv);
     if (embedWASM) {
       loadWASM = embed(name, dv);
     } else {

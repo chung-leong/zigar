@@ -236,6 +236,7 @@ pub const Host = struct {
         setObjectProperty(structure, "name", def.name);
         setObjectProperty(structure, "type", def.structure_type);
         setObjectProperty(structure, "size", def.total_size);
+        setObjectProperty(structure, "isConst", def.is_const);
         setObjectProperty(structure, "hasPointer", def.has_pointer);
         return ref(_beginStructure(index(structure)));
     }
