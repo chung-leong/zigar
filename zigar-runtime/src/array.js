@@ -2,7 +2,7 @@ import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { requireDataView, getTypedArrayClass, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
-import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
+import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
 import { MEMORY, SLOTS, ZIG, PARENT, GETTER, SETTER, PROXY, COMPAT } from './symbol.js';
 
 export function finalizeArray(s) {
@@ -28,6 +28,9 @@ export function finalizeArray(s) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer(s);
+      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {

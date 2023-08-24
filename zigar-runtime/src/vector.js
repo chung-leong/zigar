@@ -26,6 +26,9 @@ export function finalizeVector(s) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer(s);
+      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {

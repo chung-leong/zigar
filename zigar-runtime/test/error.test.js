@@ -3,6 +3,7 @@ import { expect } from 'chai';
 import { StructureType } from '../src/structure.js';
 import { MemberType } from '../src/member.js';
 import {
+  throwNoInitializer,
   throwBufferSizeMismatch,
   throwBufferExpected,
   throwInvalidEnum,
@@ -39,6 +40,18 @@ import {
 } from '../src/error.js';
 
 describe('Error functions', function() {
+  describe('throwNoInitializer', function() {
+    it('should throw a type error', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.Struct,
+        size: 8,
+      };
+      expect(() => throwNoInitializer(structure)).to.throw(TypeError)
+        .with.property('message').that.contains('undefined');
+    })
+
+  })
   describe('throwBufferSizeMismatch', function() {
     it('should throw a type error', function() {
       const structure = {

@@ -94,7 +94,7 @@ describe('Optional functions', function() {
         byteSize: 1,
       });
       const Hello = finalizeStructure(structure);
-      const object = new Hello();
+      const object = new Hello(undefined);
       expect(object.$).to.equal(null);
       object.$ = 3.14;
       expect(object.$).to.equal(3.14);
@@ -123,7 +123,7 @@ describe('Optional functions', function() {
         byteSize: 1,
       });
       const Hello = finalizeStructure(structure);
-      const object = new Hello();
+      const object = new Hello({});
       object.$ = 3.14;
       const object2 = new Hello(object);
       expect(object2.$).to.equal(3.14);
@@ -249,6 +249,7 @@ describe('Optional functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {} },
       });
       const Uint8Slice = finalizeStructure(sliceStructure);
       const ptrStructure = beginStructure({
@@ -287,6 +288,7 @@ describe('Optional functions', function() {
         bitOffset: 0,
         bitSize: 1,
         byteSize: 8,
+        structure: {},
       });
       const Hello = finalizeStructure(structure);
       const encoder = new TextEncoder();
@@ -295,7 +297,7 @@ describe('Optional functions', function() {
       expect(object.$.string).to.equal('This is a test');
       expect(object.$.typedArray).to.eql(array);
       expect(JSON.stringify(object)).to.eql(JSON.stringify([ ...array ]));
-      const object2 = new Hello();
+      const object2 = new Hello(null);
       expect(object2.$).to.be.null;
     })
     it('should release pointers in struct when it is set to null', function() {

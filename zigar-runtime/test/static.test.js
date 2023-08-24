@@ -131,7 +131,7 @@ describe('Static variable functions', function() {
       expect(Hello.supercat).to.equal(4567);
       expect(() => Hello.supercat = 777).to.throw();
       expect(Hello.supercat).to.equal(4567);
-      const object = new Hello();
+      const object = new Hello(undefined);
       expect(object.dog).to.equal(0);
       object.dog = 123;
       expect(object.dog).to.equal(123);

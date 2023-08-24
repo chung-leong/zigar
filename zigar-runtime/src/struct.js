@@ -4,7 +4,7 @@ import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
-import { throwInvalidInitializer, throwMissingInitializers, throwNoProperty } from './error.js';
+import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer, throwNoProperty } from './error.js';
 import { MEMORY, SLOTS, ZIG, PARENT } from './symbol.js';
 
 export function finalizeStruct(s) {
@@ -27,6 +27,9 @@ export function finalizeStruct(s) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer(s);
+      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {

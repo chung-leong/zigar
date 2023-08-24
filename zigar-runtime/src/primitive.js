@@ -3,7 +3,7 @@ import { getMemoryCopier } from './memory.js';
 import { getCompatibleTags, getTypedArrayClass, requireDataView } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { MEMORY, COMPAT } from './symbol.js';
-import { throwInvalidInitializer, throwNoProperty } from './error.js';
+import { throwInvalidInitializer, throwNoInitializer, throwNoProperty } from './error.js';
 
 export function finalizePrimitive(s) {
   const {
@@ -17,7 +17,9 @@ export function finalizePrimitive(s) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
-      // new operation--expect matching primitive
+      if (arguments.length === 0) {
+        throwNoInitializer(s);
+      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {

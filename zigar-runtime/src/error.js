@@ -3,6 +3,11 @@ import { StructureType, getShortName } from './structure.js';
 import { getTypeName } from './data-view.js';
 import { getPrimitiveType } from './primitive.js';
 
+export function throwNoInitializer(structure) {
+  const name = getShortName(structure);
+  throw new TypeError(`An initializer must be provided to the constructor of ${name}, even when it's undefined`);
+}
+
 export function throwBufferSizeMismatch(structure, dv, target = null) {
   const { type, size } = structure;
   const name = getShortName(structure);

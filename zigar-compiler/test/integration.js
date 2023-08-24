@@ -314,7 +314,7 @@ export function addTests(importModule, options) {
         expect(line).to.equal(refLines[index]);
       }
     })
-    skip.
+    //skip.
     it('should produce the right results for the k-nucleotide example', async function() {
       this.timeout(60000);
       const { default: { kNucleotide } } = await importModule(resolve('./zig-samples/benchmarks-game/k-nucleotide.zig'));

@@ -1055,7 +1055,9 @@ R"=====(
       const creating = this instanceof constructor;
       let self, dv;
       if (creating) {
-        // new operation--expect matching primitive
+        if (arguments.length === 0) {
+          throwNoInitializer$1(s);
+        }
         self = this;
         dv = new DataView(new ArrayBuffer(size));
       } else {
@@ -1165,6 +1167,9 @@ R"=====(
       const creating = this instanceof constructor;
       let self, dv;
       if (creating) {
+        if (arguments.length === 0) {
+          throwNoInitializer$1(s);
+        }
         self = this;
         dv = new DataView(new ArrayBuffer(size));
       } else {
@@ -1488,6 +1493,9 @@ R"=====(
       const creating = this instanceof constructor;
       let self, dv;
       if (creating) {
+        if (arguments.length === 0) {
+          throwNoInitializer$1(s);
+        }
         self = this;
         dv = new DataView(new ArrayBuffer(size));
       } else {
@@ -1718,6 +1726,9 @@ R"=====(
       const creating = this instanceof constructor;
       let self, dv;
       if (creating) {
+        if (arguments.length === 0) {
+          throwNoInitializer$1(s);
+        }
         self = this;
         dv = new DataView(new ArrayBuffer(size));
       } else {
@@ -1828,7 +1839,9 @@ R"=====(
       const creating = this instanceof constructor;
       let self, dv;
       if (creating) {
-        // new operation
+        if (arguments.length === 0) {
+          throwNoInitializer$1(s);
+        }
         self = this;
         dv = new DataView(new ArrayBuffer(size));
       } else {
@@ -2071,6 +2084,9 @@ R"=====(
       const creating = this instanceof constructor;
       let self, dv;
       if (creating) {
+        if (arguments.length === 0) {
+          throwNoInitializer$1(s);
+        }
         self = this;
         dv = new DataView(new ArrayBuffer(size));
       } else {
@@ -2161,6 +2177,9 @@ R"=====(
       let creating = this instanceof constructor;
       let self, dv;
       if (creating) {
+        if (arguments.length === 0) {
+          throwNoInitializer(s);
+        }
         self = this;
         dv = new DataView(new ArrayBuffer(size));
       } else {
@@ -2376,6 +2395,9 @@ R"=====(
       const creating = this instanceof constructor;
       let self;
       if (creating) {
+        if (arguments.length === 0) {
+          throwNoInitializer(s);
+        }
         self = this;
         initializer.call(self, arg);
       } else {
@@ -2593,6 +2615,9 @@ R"=====(
       const creating = this instanceof constructor;
       let self, dv;
       if (creating) {
+        if (arguments.length === 0) {
+          throwNoInitializer(s);
+        }
         self = this;
         dv = new DataView(new ArrayBuffer(size));
       } else {
@@ -3150,6 +3175,11 @@ R"=====(
         }
       }
     }
+  }
+
+  function throwNoInitializer$1(structure) {
+    const name = getShortName(structure);
+    throw new TypeError(`An initializer must be provided to the constructor of ${name}, even when it's undefined`);
   }
 
   function throwBufferSizeMismatch(structure, dv, target = null) {

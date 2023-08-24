@@ -248,6 +248,11 @@ function reset32(dest) {
 }
 /* c8 ignore end */
 
+function throwNoInitializer$1(structure) {
+  const name = getShortName(structure);
+  throw new TypeError(`An initializer must be provided to the constructor of ${name}, even when it's undefined`);
+}
+
 function throwBufferSizeMismatch(structure, dv, target = null) {
   const { type, size } = structure;
   const name = getShortName(structure);
@@ -1706,7 +1711,9 @@ function finalizePrimitive(s) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
-      // new operation--expect matching primitive
+      if (arguments.length === 0) {
+        throwNoInitializer$1(s);
+      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {
@@ -1816,6 +1823,9 @@ function finalizeArray(s) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer$1(s);
+      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {
@@ -2199,6 +2209,9 @@ function finalizeStruct(s) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer$1(s);
+      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {
@@ -2429,6 +2442,9 @@ function finalizeUnion(s) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer$1(s);
+      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {
@@ -2539,7 +2555,9 @@ function finalizeErrorUnion(s) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
-      // new operation
+      if (arguments.length === 0) {
+        throwNoInitializer$1(s);
+      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {
@@ -2782,6 +2800,9 @@ function finalizeOptional(s) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer$1(s);
+      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {
@@ -2872,6 +2893,9 @@ function finalizePointer(s) {
     let creating = this instanceof constructor;
     let self, dv;
     if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer(s);
+      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {
@@ -3097,6 +3121,9 @@ function finalizeSlice(s) {
     const creating = this instanceof constructor;
     let self;
     if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer(s);
+      }
       self = this;
       initializer.call(self, arg);
     } else {
@@ -3314,6 +3341,9 @@ function finalizeVector(s) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer(s);
+      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {

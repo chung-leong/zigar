@@ -12,6 +12,7 @@ import {
   throwMultipleUnionInitializers,
   throwNoProperty,
   throwInactiveUnionProperty,
+  throwNoInitializer,
 } from './error.js';
 import { MEMORY, ENUM_INDEX, ENUM_ITEM, CLEAR_PREVIOUS, SLOTS } from './symbol.js';
 
@@ -116,6 +117,9 @@ export function finalizeUnion(s) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer(s);
+      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {

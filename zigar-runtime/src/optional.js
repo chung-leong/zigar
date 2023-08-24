@@ -4,6 +4,7 @@ import { requireDataView }  from './data-view.js';
 import { createChildObjects, getPointerCopier, getPointerResetter, getPointerDisabler } from './struct.js';
 import { addSpecialAccessors } from './special.js';
 import { MEMORY, SLOTS } from './symbol.js';
+import { throwNoInitializer } from './error.js';
 
 export function finalizeOptional(s) {
   const {
@@ -16,6 +17,9 @@ export function finalizeOptional(s) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer(s);
+      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {

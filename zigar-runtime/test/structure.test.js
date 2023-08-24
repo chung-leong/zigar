@@ -20,7 +20,7 @@ describe('Structure functions', function() {
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
-      const object = new Hello();
+      const object = new Hello(undefined);
       expect(object).to.be.instanceOf(Hello);
     })
   })

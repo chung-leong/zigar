@@ -478,7 +478,7 @@ describe('Union functions', function() {
         .with.property('message').that.contains('not accessible');
       expect(() => new Hello({ array })).to.throw(TypeError)
         .with.property('message').that.contains('not accessible');
-      const object = new Hello();
+      const object = new Hello(undefined);
       // getter will throw
       expect(() => object.pointer['*']).to.throw(TypeError)
         .with.property('message').that.contains('not accessible');

@@ -3,7 +3,7 @@ import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView } from './data-view.js';
 import { createChildObjects, getPointerCopier, getPointerResetter, getPointerDisabler } from './struct.js';
 import { addSpecialAccessors } from './special.js';
-import { throwNotInErrorSet, throwUnknownErrorNumber } from './error.js';
+import { throwNoInitializer, throwNotInErrorSet, throwUnknownErrorNumber } from './error.js';
 import { MEMORY, SLOTS } from './symbol.js';
 
 export function finalizeErrorUnion(s) {
@@ -18,7 +18,9 @@ export function finalizeErrorUnion(s) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
-      // new operation
+      if (arguments.length === 0) {
+        throwNoInitializer(s);
+      }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
     } else {

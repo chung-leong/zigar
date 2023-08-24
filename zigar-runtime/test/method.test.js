@@ -175,7 +175,7 @@ describe('Method functions', function() {
         thunk,
       });
       const Hello = finalizeStructure(structure);
-      const object = new Hello();
+      const object = new Hello({});
       expect(Hello.merge).to.be.a('function');
       expect(Hello.merge).to.have.property('name', 'merge');
       expect(Hello.prototype.merge).to.be.a('function');

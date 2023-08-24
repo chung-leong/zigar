@@ -59,6 +59,9 @@ export function finalizeSlice(s) {
     const creating = this instanceof constructor;
     let self;
     if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer(s);
+      }
       self = this;
       initializer.call(self, arg);
     } else {
