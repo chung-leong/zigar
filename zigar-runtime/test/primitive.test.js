@@ -44,6 +44,22 @@ describe('Primitive functions', function() {
       expect(object.$).to.equal(0x7FFFFFFFFFFFFFFFn);
       expect(BigInt(object)).to.equal(0x7FFFFFFFFFFFFFFFn);
     })
+    it('should throw when no initializer is provided', function() {
+      const structure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Hello',
+        size: 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello).to.throw(TypeError);
+    })
     it('should initialize a structure with a structure of the same type', function() {
       const structure = beginStructure({
         type: StructureType.Primitive,

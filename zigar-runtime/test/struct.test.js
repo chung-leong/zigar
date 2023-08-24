@@ -68,6 +68,31 @@ describe('Struct functions', function() {
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(4567);
     })
+    it('should throw when no initializer is provided', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 4 * 2,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello).to.throw(TypeError);
+    })
     it('should work correctly with big-endian data', function() {
       const structure = beginStructure({
         type: StructureType.Struct,

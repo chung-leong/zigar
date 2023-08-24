@@ -65,6 +65,37 @@ describe('Pointer functions', function() {
       const intPointer = new Int32Ptr(int32);
       expect(intPointer['*']).to.equal(1234);
     })
+    it('should throw when no initializer is provided', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(structure);
+      expect(() => new Int32Ptr).to.throw(TypeError);
+    })
     it('should define a pointer for pointing to a structure', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,

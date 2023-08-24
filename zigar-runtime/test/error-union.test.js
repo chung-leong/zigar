@@ -75,6 +75,43 @@ describe('Error union functions', function() {
       object.$ = 1234n;
       expect(object.$).to.equal(1234n);
     })
+    it('should throw when no initializer is provided', function() {
+      const setStructure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Error',
+      });
+      attachMember(setStructure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Object,
+      });
+      attachMember(setStructure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Object,
+      });
+      finalizeStructure(setStructure);
+      const structure = beginStructure({
+        type: StructureType.ErrorUnion,
+        name: 'Hello',
+        size: 10,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Int,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+      });
+      attachMember(structure, {
+        name: 'error',
+        type: MemberType.Int,
+        bitOffset: 64,
+        bitSize: 16,
+        byteSize: 2,
+        structure: setStructure,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello).to.throw(TypeError);
+    })
     it('should define an error union with internal struct', function() {
       const setStructure = beginStructure({
         type: StructureType.ErrorSet,

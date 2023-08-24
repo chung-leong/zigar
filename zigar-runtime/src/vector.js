@@ -2,7 +2,7 @@ import { getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { requireDataView, getTypedArrayClass, isTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors } from './special.js';
-import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
+import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
 import { MEMORY, COMPAT } from './symbol.js';
 
 export function finalizeVector(s) {

@@ -7,6 +7,7 @@ import {
   throwInvalidPointerTarget,
   throwAssigningToConstant,
   throwConstantConstraint,
+  throwNoInitializer,
   addArticle,
 } from './error.js';
 

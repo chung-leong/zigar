@@ -182,6 +182,22 @@ describe('Array functions', function() {
       expect(indexList).to.eql([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       expect(valueList).to.eql([ 1234, 0, 0, 0, 4567, 0, 0, 0 ]);
     })
+    it('should throw when no initializer is provided', function() {
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        size: 4 * 8,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello).to.throw(TypeError);
+    })
+
     it('should accept an array as initializer', function() {
       const structure = beginStructure({
         type: StructureType.Array,

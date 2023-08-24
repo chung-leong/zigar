@@ -48,6 +48,23 @@ describe('Vector functions', function() {
       expect(object.length).to.equal(4);
       expect(object.typedArray).to.be.instanceOf(Uint32Array);
     })
+    it('should throw when no initializer is provided', function() {
+      const structure = beginStructure({
+        type: StructureType.Vector,
+        name: 'Hello',
+        size: 4 * 4,
+      });
+      const constructor = function() {};
+      attachMember(structure, {
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { constructor },
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello).to.throw(TypeError);
+    })
     it('should define vector that is iterable', function() {
       const structure = beginStructure({
         type: StructureType.Vector,

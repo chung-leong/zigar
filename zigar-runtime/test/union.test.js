@@ -82,6 +82,31 @@ describe('Union functions', function() {
       expect(object.dog).to.equal(777);
       expect(object.cat).to.equal(777);
     })
+    it('should throw when no initializer is provided', function() {
+      const structure = beginStructure({
+        type: StructureType.ExternUnion,
+        name: 'Hello',
+        size: 4,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello).to.throw(TypeError);
+    })
     it('should define a simple bare union', function() {
       const structure = beginStructure({
         type: StructureType.BareUnion,

@@ -54,6 +54,23 @@ describe('Slice functions', function() {
       expect(object.get(1)).to.equal(321);
       expect(object.length).to.equal(8);
     })
+    it('should throw when no initializer is provided', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: 'Hello',
+        size: 4,
+      });
+      const constructor = function() {};
+      attachMember(structure, {
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { constructor },
+      });
+      const Hello = finalizeStructure(structure);
+      expect(() => new Hello).to.throw(TypeError);
+    })
     it('should define slice that is iterable', function() {
       const structure = beginStructure({
         type: StructureType.Slice,

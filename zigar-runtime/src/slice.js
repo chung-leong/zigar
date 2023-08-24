@@ -24,6 +24,7 @@ import {
   throwNoProperty,
   throwMisplacedSentinel,
   throwMissingSentinel,
+  throwNoInitializer,
 } from './error.js';
 import { LENGTH, MEMORY, GETTER, SETTER, COMPAT } from './symbol.js';
 
