@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import { readFile } from 'fs/promises';
 import 'mocha-skip-if';
+import { it } from 'mocha-skip-if';
 
 export function addTests(importModule, options) {
   const {
@@ -16,15 +17,8 @@ export function addTests(importModule, options) {
     it('should output to development console', async function() {
       this.timeout(60000);
       const { hello } = await importModule(resolve('./zig-samples/basic/console.zig'));
-      const origFn = console.log;
-      try {
-        let text;
-        console.log = (s) => text = s;
-        hello();
-        expect(text).to.equal('Hello world!');
-      } finally {
-        console.log = origFn;
-      }
+      const lines = await capture(() => hello());
+      expect(lines).to.eql([ 'Hello world!' ]);
     })
   })
   describe('Variables', function() {
@@ -168,6 +162,42 @@ export function addTests(importModule, options) {
       expect(string).to.equal('Hello world');
       expect([ ...module.i64_slice ]).to.eql([ 0n, 1n, 2n, 3n, 4n, 5n, 6n, 7n ]);
     })
+    it('should import error sets', async function() {
+      this.timeout(60000);
+      const { default: module } = await importModule(resolve('./zig-samples/basic/error-sets.zig'));
+      const { NormalError, StrangeError, PossibleError } = module;
+      expect(NormalError.OutOfMemory).to.be.instanceOf(Error);
+      expect(NormalError.OutOfMemory).to.be.instanceOf(NormalError);
+      expect(PossibleError.OutOfMemory).to.be.instanceOf(PossibleError);
+      expect(StrangeError.SystemIsOnFire).to.equal(PossibleError.SystemIsOnFire);
+      expect(StrangeError.SystemIsOnFire).to.be.instanceOf(PossibleError);
+    })
+    it('should import arrays with structs', async function() {
+      this.timeout(60000);
+      const { default: module } = await importModule(resolve('./zig-samples/basic/array-with-structs.zig'));
+      expect(module.array_a.valueOf()).to.eql(
+        [ 
+          { number1: 1, number2: 2 },
+          { number1: 3, number2: 4 },
+          { number1: 5, number2: 6 },
+          { number1: 7, number2: 8 },
+        ]
+      );
+      expect(module.array_b.valueOf()).to.eql([
+        { good: true, numbers: [ 1, 2, 3, 4 ] },
+        { good: false, numbers: [ 3, 4, 5, 6 ] },
+        { good: false, numbers: [ 2, 2, 7, 7 ] },
+      ])
+    })
+    it('should import structs with complex members', async function() {
+      this.timeout(60000);
+      const { default: module } = await importModule(resolve('./zig-samples/basic/structs-with-complex-members.zig'));
+      const { Pet, StructB, StructC } = module;
+      expect(module.struct_b.pet).to.equal(Pet.Dog);
+      expect({ ...module.struct_b.a }).to.eql({ number1: 0, number2: 0 });
+      expect([ ...module.struct_b.floats ]).to.eql([ 0.1, 0.2, 0.3, 0.4 ]);
+      expect([ ...module.struct_b.integers ]).to.eql([ 1, 2, 3, 4 ]);
+    })
   })
   describe('Methods', function() {
     it('should import simple function', async function() {
@@ -186,6 +216,30 @@ export function addTests(importModule, options) {
       dv.setInt32(16, 456, littleEndian);
       const res = fifth(dv);
       expect(res).to.equal(456);
+    })
+    it('should import function that output a slice of strings to console', async function() {
+      this.timeout(60000);
+      const { default: { print } } = await importModule(resolve('./zig-samples/basic/function-outputting-slice-of-slices.zig'));
+      const inputStrings = [
+        'Test string 1',
+        'Test string 2',
+        'Test string 3',
+      ];
+      const outputStrings = await capture(() => print(inputStrings));
+      expect(outputStrings).to.eql(inputStrings);
+    })
+    it('should import function that takes and returns a slice of strings', async function() {
+      this.timeout(60000);
+      const { default: { bounce } } = await importModule(resolve('./zig-samples/basic/function-returning-slice-of-slices.zig'));
+      const inputStrings = [
+        'Test string 1',
+        'Test string 2',
+        'Test string 3',
+      ];
+      const result = bounce(inputStrings);
+      expect(result).to.be.an('[]const[]const u8');
+      const outputStrings = [ ...result ].map(a => a.string);
+      expect(outputStrings).to.eql(inputStrings);
     })
     it('should throw when function returns an error', async function() {
       this.timeout(60000);
@@ -264,18 +318,7 @@ export function addTests(importModule, options) {
       this.timeout(60000);
       const { default: { binaryTree } } = await importModule(resolve('./zig-samples/benchmarks-game/binary-trees.zig'));
       const n = 12;
-      const origFn = console.log;
-      const lines = [];
-      try {
-        console.log = (text) => {
-          for (const line of text.split(/\r?\n/)) {
-            lines.push(line)
-          }
-        };
-        binaryTree(n);
-      } finally {
-        console.log = origFn;
-      }
+      const lines = await capture(() => binaryTree(n));
       const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/binary-trees-${n}.txt`), 'utf-8');
       const refLines = text.split(/\r?\n/);
       expect(lines.length).to.not.equal(0);
@@ -295,18 +338,7 @@ export function addTests(importModule, options) {
       this.timeout(60000);
       const { default: { fasta } } = await importModule(resolve('./zig-samples/benchmarks-game/fasta.zig'));
       const n = 250000;
-      const origFn = console.log;
-      const lines = [];
-      try {
-        console.log = (text) => {
-          for (const line of text.split(/\r?\n/)) {
-            lines.push(line)
-          }
-        };
-        fasta(n);
-      } finally {
-        console.log = origFn;
-      }
+      const lines = await capture(() => fasta(n));
       const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`), 'utf-8');
       const refLines = text.split(/\r?\n/);
       expect(lines.length).to.not.equal(0);
@@ -335,18 +367,7 @@ export function addTests(importModule, options) {
       this.timeout(60000);
       const { default: { mandelbrot } } = await importModule(resolve('./zig-samples/benchmarks-game/mandelbrot.zig'));
       const n = 2000;
-      const origFn = console.log;
-      const lines = [];
-      try {
-        console.log = (text) => {
-          for (const line of text.split(/\r?\n/)) {
-            lines.push(line)
-          }
-        };
-        mandelbrot(n);
-      } finally {
-        console.log = origFn;
-      }
+      const lines = await capture(() => mandelbrot(n));
       const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/mandelbrot-${n}.txt`), 'utf-8');
       const refLines = text.split(/\r?\n/);
       expect(lines.length).to.not.equal(0);
@@ -452,4 +473,20 @@ export function addTests(importModule, options) {
 
 function resolve(relPath) {
   return new URL(relPath, import.meta.url).pathname;
+}
+
+async function capture(cb) {
+  const logFn = console.log;
+  const lines = [];
+  try {
+    console.log =  (text) => {
+      for (const line of text.split(/\r?\n/)) {
+        lines.push(line)
+      }
+    }; 
+    await cb();
+  } finally {
+    console.log = logFn;
+  }
+  return lines;
 }
