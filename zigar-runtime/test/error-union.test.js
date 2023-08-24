@@ -18,6 +18,7 @@ import {
   attachMember,
   finalizeStructure,
 } from '../src/structure.js';
+import { clearErrors } from '../src/error-set.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
 import {
   getErrorUnionAccessors,
@@ -34,6 +35,7 @@ describe('Error union functions', function() {
       useSlice();
       useIntEx();
       useObject();
+      clearErrors();
     })
     it('should define an error union', function() {
       const setStructure = beginStructure({

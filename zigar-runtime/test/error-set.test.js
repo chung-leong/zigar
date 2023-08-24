@@ -11,12 +11,14 @@ import {
   attachMember,
   finalizeStructure,
 } from '../src/structure.js';
+import { clearErrors } from '../src/error-set.js';
 
 describe('Error set functions', function() {
   describe('finalizeErrorSet', function() {
     beforeEach(function() {
       useIntEx();
       useErrorSet();
+      clearErrors();
     })
     it('should define an error set', function() {
       const structure = beginStructure({
@@ -66,6 +68,127 @@ describe('Error set functions', function() {
       });
       const Hello = finalizeStructure(structure);
       expect(() => new Hello()).to.throw(TypeError);
+    })
+    it('should make previously defined error sets its subclasses if it has all its error numbers', function() {
+      const catStructure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'CatError',
+      });
+      attachMember(catStructure, {
+        name: 'CucumberEncountered',
+        type: MemberType.Object,
+        slot: 5,
+      });
+      attachMember(catStructure, {
+        name: 'CatnipEncountered',
+        type: MemberType.Object,
+        slot: 6,
+      });
+      const CatError = finalizeStructure(catStructure);
+      const dogStructure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'DogError',
+      });
+      attachMember(dogStructure, {
+        name: 'StrangerEncountered',
+        type: MemberType.Object,
+        slot: 7,
+      });
+      attachMember(dogStructure, {
+        name: 'BathRequired',
+        type: MemberType.Object,
+        slot: 8,
+      });
+      const DogError = finalizeStructure(dogStructure);
+      const petStructure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'PetError',        
+      });
+      attachMember(petStructure, {
+        name: 'CucumberEncountered',
+        type: MemberType.Object,
+        slot: 5,
+      });
+      attachMember(petStructure, {
+        name: 'CatnipEncountered',
+        type: MemberType.Object,
+        slot: 6,
+      });
+      attachMember(petStructure, {
+        name: 'StrangerEncountered',
+        type: MemberType.Object,
+        slot: 7,
+      });
+      attachMember(petStructure, {
+        name: 'BathRequired',
+        type: MemberType.Object,
+        slot: 8,
+      });
+      const PetError = finalizeStructure(petStructure);
+      expect(PetError.BathRequired).to.equal(DogError.BathRequired);
+      expect(DogError.BathRequired).to.be.instanceOf(PetError);
+      expect(CatError.CucumberEncountered).to.be.instanceOf(PetError);
+    })
+    it('should use previously defined error set as parent class if the other has all its error numbers', function() {
+      // same test as above, with the error sets processed in different order
+      const petStructure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'PetError',        
+      });
+      attachMember(petStructure, {
+        name: 'CucumberEncountered',
+        type: MemberType.Object,
+        slot: 5,
+      });
+      attachMember(petStructure, {
+        name: 'CatnipEncountered',
+        type: MemberType.Object,
+        slot: 6,
+      });
+      attachMember(petStructure, {
+        name: 'StrangerEncountered',
+        type: MemberType.Object,
+        slot: 7,
+      });
+      attachMember(petStructure, {
+        name: 'BathRequired',
+        type: MemberType.Object,
+        slot: 8,
+      });
+      const PetError = finalizeStructure(petStructure);
+      const catStructure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'CatError',
+      });
+      attachMember(catStructure, {
+        name: 'CucumberEncountered',
+        type: MemberType.Object,
+        slot: 5,
+      });
+      attachMember(catStructure, {
+        name: 'CatnipEncountered',
+        type: MemberType.Object,
+        slot: 6,
+      });
+      const CatError = finalizeStructure(catStructure);
+      const dogStructure = beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'DogError',
+      });
+      attachMember(dogStructure, {
+        name: 'StrangerEncountered',
+        type: MemberType.Object,
+        slot: 7,
+      });
+      attachMember(dogStructure, {
+        name: 'BathRequired',
+        type: MemberType.Object,
+        slot: 8,
+      });
+      const DogError = finalizeStructure(dogStructure);
+      expect(PetError.BathRequired).to.equal(DogError.BathRequired);
+      expect(DogError.BathRequired).to.be.instanceOf(PetError);
+      expect(CatError.CucumberEncountered).to.be.instanceOf(PetError);
     })
   })
 })
