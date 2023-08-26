@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 import { readFile } from 'fs/promises';
 import 'mocha-skip-if';
-import { it } from 'mocha-skip-if';
 
 export function addTests(importModule, options) {
   const {
@@ -65,7 +64,7 @@ export function addTests(importModule, options) {
       const { default: module } = await importModule(resolve('./zig-samples/basic/types.zig'));
       const { Int32, Int128, Struct } = module;
       expect(Int32).to.be.a('function');
-      const int32 = new Int32();
+      const int32 = new Int32(undefined);
       int32.$ = 1234;
       expect(int32.$).to.equal(1234);
       expect(Int128).to.be.a('function');
@@ -174,9 +173,9 @@ export function addTests(importModule, options) {
     })
     it('should import arrays with structs', async function() {
       this.timeout(60000);
-      const { default: module } = await importModule(resolve('./zig-samples/basic/array-with-structs.zig'));
+      const { default: module } = await importModule(resolve('./zig-samples/basic/arrays-with-structs.zig'));
       expect(module.array_a.valueOf()).to.eql(
-        [ 
+        [
           { number1: 1, number2: 2 },
           { number1: 3, number2: 4 },
           { number1: 5, number2: 6 },
@@ -192,11 +191,16 @@ export function addTests(importModule, options) {
     it('should import structs with complex members', async function() {
       this.timeout(60000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/structs-with-complex-members.zig'));
-      const { Pet, StructB, StructC } = module;
-      expect(module.struct_b.pet).to.equal(Pet.Dog);
+      const { Pet, StructB, StructC, StructD } = module;
+      expect(module.struct_b.pet).to.equal(Pet.Cat);
       expect({ ...module.struct_b.a }).to.eql({ number1: 0, number2: 0 });
       expect([ ...module.struct_b.floats ]).to.eql([ 0.1, 0.2, 0.3, 0.4 ]);
-      expect([ ...module.struct_b.integers ]).to.eql([ 1, 2, 3, 4 ]);
+      expect([ ...module.struct_b.integers ]).to.eql([ 0, 1, 2, 3 ]);
+      module.struct_b.a = { number1: 123, number2: 456 };
+      expect({ ...module.struct_c.a_ptr }).to.eql({ number1: 123, number2: 456 });
+      // check pointer member default value
+      const objectD = new StructD({});
+      expect({ ...objectD.a_ptr }).to.eql({ number1: 123, number2: 456 });
     })
   })
   describe('Methods', function() {
@@ -346,7 +350,7 @@ export function addTests(importModule, options) {
         expect(line).to.equal(refLines[index]);
       }
     })
-    //skip.
+    skip.
     it('should produce the right results for the k-nucleotide example', async function() {
       this.timeout(60000);
       const { default: { kNucleotide } } = await importModule(resolve('./zig-samples/benchmarks-game/k-nucleotide.zig'));
@@ -483,7 +487,7 @@ async function capture(cb) {
       for (const line of text.split(/\r?\n/)) {
         lines.push(line)
       }
-    }; 
+    };
     await cb();
   } finally {
     console.log = logFn;

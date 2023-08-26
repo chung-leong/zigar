@@ -11,4 +11,4 @@ pub const NormalError = error{
     OutOfMemory,
 };
 
-pub const PossibleError = NormalError!StrangeError;
+pub const PossibleError = NormalError || StrangeError;

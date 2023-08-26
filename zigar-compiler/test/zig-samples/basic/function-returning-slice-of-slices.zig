@@ -1,3 +1,3 @@
-pub fn bounce([]const[]const u8 input) []const[]const u8 input {
-  return input;
+pub fn bounce(input: []const []const u8) []const []const u8 {
+    return input;
 }

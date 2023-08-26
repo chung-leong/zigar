@@ -880,7 +880,9 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
         .Enum => |en| {
             // find a type that fit all values
             const IT = EnumType(T);
-            inline for (en.fields) |field| {
+            var values: [en.fields.len]IT = undefined;
+            inline for (en.fields, 0..) |field, index| {
+                values[index] = field.value;
                 try host.attachMember(structure, .{
                     .name = getCString(field.name),
                     .member_type = getMemberType(IT),
@@ -890,6 +892,9 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                     .structure = try getStructure(host, IT),
                 }, false);
             }
+            var bytes: []u8 = @as([*]u8, @alignCast(@ptrCast(&values)))[0..@sizeOf([en.fields.len]IT)];
+            const template = try host.createTemplate(bytes);
+            try host.attachTemplate(structure, template, false);
         },
         .Optional => |op| {
             // value always comes first
@@ -992,7 +997,17 @@ fn addDefaultValues(host: anytype, structure: Value, comptime T: type) !void {
         }
     }
     const template = try host.createTemplate(bytes);
-    try dezigStructure(host, template, &values);
+    // dezig members that has (or are) pointers
+    inline for (fields, 0..) |field, index| {
+        if (field.default_value) |_| {
+            if (hasPointer(field.type)) {
+                const slot = getObjectSlot(T, index);
+                const child_ptr = &@field(values, field.name);
+                const child_obj = try obtainChildObject(host, template, slot, child_ptr, false);
+                try dezigStructure(host, child_obj, child_ptr);
+            }
+        }
+    }
     try host.attachTemplate(structure, template, false);
 }
 
@@ -1243,7 +1258,8 @@ fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
             const child_obj = try host.readObjectSlot(obj, 0);
             const current_ptr = try host.getMemory(child_obj, pt.child, pt.size);
             if (!comparePointers(ptr.*, current_ptr)) {
-                ptr.* = current_ptr;
+                const writable_ptr = @constCast(ptr);
+                writable_ptr.* = current_ptr;
             }
             if (hasPointer(pt.child)) {
                 // rezig the target(s)
@@ -1315,6 +1331,7 @@ fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
 }
 
 fn dezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
+    //std.debug.print("dezigging {s}\n", .{@typeName(@TypeOf(ptr))});
     const T = @TypeOf(ptr.*);
     switch (@typeInfo(T)) {
         .Pointer => |pt| {
