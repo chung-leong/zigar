@@ -241,7 +241,7 @@ export function addTests(importModule, options) {
         'Test string 3',
       ];
       const result = bounce(inputStrings);
-      expect(result).to.be.an('[]const[]const u8');
+      expect(result).to.be.an('[_]const []const u8');
       const outputStrings = [ ...result ].map(a => a.string);
       expect(outputStrings).to.eql(inputStrings);
     })
@@ -350,7 +350,6 @@ export function addTests(importModule, options) {
         expect(line).to.equal(refLines[index]);
       }
     })
-    skip.
     it('should produce the right results for the k-nucleotide example', async function() {
       this.timeout(60000);
       const { default: { kNucleotide } } = await importModule(resolve('./zig-samples/benchmarks-game/k-nucleotide.zig'));
@@ -361,8 +360,9 @@ export function addTests(importModule, options) {
       if (start === -1) {
         throw new Error('Unable to find starting position');
       }
-      const input = lines.slice(start + 1);
-      const outputLines = kNucleotide(input);
+      const input = lines.slice(start + 1, -1);
+      const output = kNucleotide(input);
+      const outputLines = [ ...output ].map(a => a.string);
       const refText = await readFile(resolve(`./zig-samples/benchmarks-game/data/k-nucleotide-${n}.txt`), 'utf-8');
       const refLines = refText.split(/\r?\n/);
       expect(outputLines).to.eql(refLines);

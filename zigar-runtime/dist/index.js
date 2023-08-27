@@ -248,7 +248,7 @@ function reset32(dest) {
 }
 /* c8 ignore end */
 
-function throwNoInitializer$1(structure) {
+function throwNoInitializer(structure) {
   const name = getShortName(structure);
   throw new TypeError(`An initializer must be provided to the constructor of ${name}, even when it's undefined`);
 }
@@ -1712,7 +1712,7 @@ function finalizePrimitive(s) {
     let self, dv;
     if (creating) {
       if (arguments.length === 0) {
-        throwNoInitializer$1(s);
+        throwNoInitializer(s);
       }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
@@ -1824,7 +1824,7 @@ function finalizeArray(s) {
     let self, dv;
     if (creating) {
       if (arguments.length === 0) {
-        throwNoInitializer$1(s);
+        throwNoInitializer(s);
       }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
@@ -2210,7 +2210,7 @@ function finalizeStruct(s) {
     let self, dv;
     if (creating) {
       if (arguments.length === 0) {
-        throwNoInitializer$1(s);
+        throwNoInitializer(s);
       }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
@@ -2443,7 +2443,7 @@ function finalizeUnion(s) {
     let self, dv;
     if (creating) {
       if (arguments.length === 0) {
-        throwNoInitializer$1(s);
+        throwNoInitializer(s);
       }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
@@ -2556,7 +2556,7 @@ function finalizeErrorUnion(s) {
     let self, dv;
     if (creating) {
       if (arguments.length === 0) {
-        throwNoInitializer$1(s);
+        throwNoInitializer(s);
       }
       self = this;
       dv = new DataView(new ArrayBuffer(size));
@@ -2644,6 +2644,8 @@ function getErrorUnionAccessors(members, size, options) {
   };
 }
 
+const errors = {};
+
 function finalizeErrorSet(s) {
   const {
     name,
@@ -2651,7 +2653,6 @@ function finalizeErrorSet(s) {
       members,
     },
   } = s;
-  const errors = {};
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     if (creating) {
@@ -2671,18 +2672,45 @@ function finalizeErrorSet(s) {
     [Symbol.toStringTag]: { get: toStringTag, configurable: true },
   });
   // attach the errors to the constructor and the
+  let errorIndices;
   for (const [ index, { name, slot } ] of members.entries()) {
-    // can't use the constructor since it would throw
-    const error = Object.create(constructor.prototype);
-    const message = decamelizeErrorName(name);
-    Object.defineProperties(error, {
-      message: { value: message, configurable: true, enumerable: true, writable: false },
-      [ERROR_INDEX]: { value: slot },
-    });
+    let error = errors[slot];
+    if (error) {
+      // error already exists in a previously defined set 
+      // see if we should make that set a subclass or superclass of this one
+      if (!(error instanceof constructor)) {
+        if (!errorIndices) {
+          errorIndices = members.map(m => m.slot);
+        }
+        const otherSet = error.constructor;
+        const otherErrors = Object.values(otherSet);
+        if (otherErrors.every(e => errorIndices.includes(e[ERROR_INDEX]))) {
+          // this set contains the all errors of the other one, so it's a superclass
+          Object.setPrototypeOf(otherSet.prototype, constructor.prototype);
+        } else {
+          // make this set a subclass of the other 
+          Object.setPrototypeOf(constructor.prototype, otherSet.prototype);
+          for (const otherError of otherErrors) {
+            if (errorIndices.includes(otherError[ERROR_INDEX])) {
+              // this set should be this error object's class
+              Object.setPrototypeOf(otherError, constructor.prototype);
+            }
+          }
+        }
+      }
+    } else {
+      // need to create the error object--can't use the constructor since it would throw
+      error = Object.create(constructor.prototype);
+      const message = decamelizeErrorName(name);
+      Object.defineProperties(error, {
+        message: { value: message, configurable: true, enumerable: true, writable: false },
+        [ERROR_INDEX]: { value: slot },
+      });
+      errors[slot] = error;
+    }
     Object.defineProperties(constructor, {
       [name]: { value: error, configurable: true, enumerable: true, writable: true },
     });
-    errors[slot] = error;
   }
   return constructor;
 }
@@ -2801,7 +2829,7 @@ function finalizeOptional(s) {
     let self, dv;
     if (creating) {
       if (arguments.length === 0) {
-        throwNoInitializer$1(s);
+        throwNoInitializer(s);
       }
       self = this;
       dv = new DataView(new ArrayBuffer(size));

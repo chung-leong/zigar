@@ -1248,6 +1248,7 @@ test "getFunctionName" {
 }
 
 fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
+    //std.debug.print("rezigging {s}\n", .{@typeName(@TypeOf(ptr))});
     const T = @TypeOf(ptr.*);
     switch (@typeInfo(T)) {
         .Pointer => |pt| {
@@ -1255,6 +1256,7 @@ fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
             if (try host.getPointerStatus(obj)) {
                 return;
             }
+            try host.setPointerStatus(obj, true);
             const child_obj = try host.readObjectSlot(obj, 0);
             const current_ptr = try host.getMemory(child_obj, pt.child, pt.size);
             if (!comparePointers(ptr.*, current_ptr)) {
@@ -1272,7 +1274,6 @@ fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
                     }
                 }
             }
-            try host.setPointerStatus(obj, true);
         },
         .Array => |ar| {
             if (hasPointer(ar.child)) {
@@ -1338,6 +1339,7 @@ fn dezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
             if (!try host.getPointerStatus(obj)) {
                 return;
             }
+            try host.setPointerStatus(obj, false);
             // pointer objects store their target in slot 0
             const child_obj = try obtainChildObject(host, obj, 0, ptr.*, true);
             if (hasPointer(pt.child)) {
@@ -1345,12 +1347,11 @@ fn dezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
                     try dezigStructure(host, child_obj, ptr.*);
                 } else if (pt.size == .Slice) {
                     for (ptr.*, 0..) |*element_ptr, index| {
-                        const element_obj = try obtainChildObject(host, obj, index, element_ptr, false);
+                        const element_obj = try obtainChildObject(host, child_obj, index, element_ptr, false);
                         try dezigStructure(host, element_obj, element_ptr);
                     }
                 }
             }
-            try host.setPointerStatus(obj, false);
         },
         .Array => |ar| {
             if (hasPointer(ar.child)) {
