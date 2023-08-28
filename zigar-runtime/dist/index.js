@@ -2644,7 +2644,7 @@ function getErrorUnionAccessors(members, size, options) {
   };
 }
 
-const errors = {};
+let currentErrorSets;
 
 function finalizeErrorSet(s) {
   const {
@@ -2653,6 +2653,7 @@ function finalizeErrorSet(s) {
       members,
     },
   } = s;
+  const errors = currentErrorSets;
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     if (creating) {
@@ -2676,7 +2677,7 @@ function finalizeErrorSet(s) {
   for (const [ index, { name, slot } ] of members.entries()) {
     let error = errors[slot];
     if (error) {
-      // error already exists in a previously defined set 
+      // error already exists in a previously defined set
       // see if we should make that set a subclass or superclass of this one
       if (!(error instanceof constructor)) {
         if (!errorIndices) {
@@ -2688,7 +2689,7 @@ function finalizeErrorSet(s) {
           // this set contains the all errors of the other one, so it's a superclass
           Object.setPrototypeOf(otherSet.prototype, constructor.prototype);
         } else {
-          // make this set a subclass of the other 
+          // make this set a subclass of the other
           Object.setPrototypeOf(constructor.prototype, otherSet.prototype);
           for (const otherError of otherErrors) {
             if (errorIndices.includes(otherError[ERROR_INDEX])) {
@@ -2713,6 +2714,9 @@ function finalizeErrorSet(s) {
     });
   }
   return constructor;
+}
+function initializeErrorSets() {
+  currentErrorSets = {};
 }
 
 function finalizeEnumeration(s) {
@@ -3982,6 +3986,7 @@ async function runModule(module, options = {}) {
 function finalizeStructures(structures) {
   const slots = {};
   const variables = {};
+  initializeErrorSets();
   for (const structure of structures) {
     for (const target of [ structure.static, structure.instance ]) {
       // first create the actual template using the provided placeholder

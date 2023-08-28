@@ -11,14 +11,14 @@ import {
   attachMember,
   finalizeStructure,
 } from '../src/structure.js';
-import { clearErrors } from '../src/error-set.js';
+import { initializeErrorSets } from '../src/error-set.js';
 
 describe('Error set functions', function() {
   describe('finalizeErrorSet', function() {
     beforeEach(function() {
       useIntEx();
       useErrorSet();
-      clearErrors();
+      initializeErrorSets();
     })
     it('should define an error set', function() {
       const structure = beginStructure({
@@ -102,7 +102,7 @@ describe('Error set functions', function() {
       const DogError = finalizeStructure(dogStructure);
       const petStructure = beginStructure({
         type: StructureType.ErrorSet,
-        name: 'PetError',        
+        name: 'PetError',
       });
       attachMember(petStructure, {
         name: 'CucumberEncountered',
@@ -133,7 +133,7 @@ describe('Error set functions', function() {
       // same test as above, with the error sets processed in different order
       const petStructure = beginStructure({
         type: StructureType.ErrorSet,
-        name: 'PetError',        
+        name: 'PetError',
       });
       attachMember(petStructure, {
         name: 'CucumberEncountered',

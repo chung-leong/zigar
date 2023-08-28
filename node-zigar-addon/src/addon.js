@@ -26,6 +26,9 @@ import {
   useVector,
   useOpaque,
 } from '../../zigar-runtime/src/structure.js';
+import {
+  initializeErrorSets,
+} from '../../zigar-runtime/src/error-set.js';
 
 // enable all member types (including extend types)
 useVoid();
@@ -54,6 +57,7 @@ useVector();
 useOpaque();
 
 export function invokeFactory(thunk) {
+  initializeErrorSets();
   // our C++ code cannot call invokeThunk() directly since it doesn't have the symbol SLOTS
   // yet and therefore cannot create (or read from) the argument object
   const args = { [SLOTS]: {} };

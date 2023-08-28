@@ -8,6 +8,7 @@ import {
   finalizeStructure,
 } from './structure.js';
 import { decamelizeErrorName } from './error.js';
+import { initializeErrorSets } from './error-set.js';
 import { getMemoryCopier } from './memory.js';
 
 const MemoryDisposition = {
@@ -452,6 +453,7 @@ export async function runModule(module, options = {}) {
 export function finalizeStructures(structures) {
   const slots = {};
   const variables = {};
+  initializeErrorSets();
   for (const structure of structures) {
     for (const target of [ structure.static, structure.instance ]) {
       // first create the actual template using the provided placeholder
