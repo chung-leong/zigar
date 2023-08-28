@@ -426,8 +426,11 @@ pub fn fromMemory(memory: Memory, comptime T: type, comptime size: std.builtin.T
     return switch (size) {
         .One => @ptrCast(@alignCast(memory.bytes)),
         .Slice => slice: {
-            const many_ptr: [*]T = @ptrCast(@alignCast(memory.bytes));
+            if (memory.bytes == null) {
+                break :slice &.{};
+            }
             const count = memory.len / @sizeOf(T);
+            const many_ptr: [*]T = @ptrCast(@alignCast(memory.bytes));
             break :slice many_ptr[0..count];
         },
         .Many => @ptrCast(@alignCast(memory.bytes)),

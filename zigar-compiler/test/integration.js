@@ -227,6 +227,7 @@ export function addTests(importModule, options) {
       const inputStrings = [
         'Test string 1',
         'Test string 2',
+        '',
         'Test string 3',
       ];
       const outputStrings = await capture(() => print(inputStrings));
@@ -238,6 +239,7 @@ export function addTests(importModule, options) {
       const inputStrings = [
         'Test string 1',
         'Test string 2',
+        '',
         'Test string 3',
       ];
       const result = bounce(inputStrings);
