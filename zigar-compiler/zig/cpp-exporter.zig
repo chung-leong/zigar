@@ -48,16 +48,16 @@ pub const Host = struct {
         }
     }
 
-    pub fn allocateMemory(self: Host, size: usize) !Memory {
+    pub fn allocateMemory(self: Host, size: usize, ptr_align: u8) !Memory {
         var memory: Memory = undefined;
-        if (callbacks.allocate_memory(self.context, size, &memory) != .OK) {
+        if (callbacks.allocate_memory(self.context, size, ptr_align, &memory) != .OK) {
             return Error.UnableToAllocateMemory;
         }
         return memory;
     }
 
-    pub fn freeMemory(self: Host, memory: Memory) !void {
-        if (callbacks.free_memory(self.context, &memory) != .OK) {
+    pub fn freeMemory(self: Host, memory: Memory, ptr_align: u8) !void {
+        if (callbacks.free_memory(self.context, &memory, ptr_align) != .OK) {
             return Error.UnableToFreeMemory;
         }
     }
@@ -198,8 +198,8 @@ pub const Host = struct {
 
 // pointer table that's filled on the C++ side
 const Callbacks = extern struct {
-    allocate_memory: *const fn (Call, usize, *Memory) callconv(.C) Result,
-    free_memory: *const fn (Call, *const Memory) callconv(.C) Result,
+    allocate_memory: *const fn (Call, usize, u8, *Memory) callconv(.C) Result,
+    free_memory: *const fn (Call, *const Memory, u8) callconv(.C) Result,
     get_memory: *const fn (Call, Value, *Memory) callconv(.C) Result,
     wrap_memory: *const fn (Call, Value, *const Memory, MemoryDisposition, *Value) callconv(.C) Result,
 

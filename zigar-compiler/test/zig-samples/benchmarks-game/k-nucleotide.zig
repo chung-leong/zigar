@@ -103,10 +103,9 @@ fn generateCount(allocator: std.mem.Allocator, poly: []const u8, comptime olig: 
     }
 }
 
-pub fn kNucleotide(lines: [][]const u8) ![][]const u8 {
+pub fn kNucleotide(allocator: std.mem.Allocator, lines: [][]const u8) ![][]const u8 {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var allocator = gpa.allocator();
-    var poly = std.ArrayList(u8).init(allocator);
+    var poly = std.ArrayList(u8).init(gpa.allocator());
     defer poly.deinit();
 
     for (lines) |line| {
@@ -130,10 +129,12 @@ pub fn kNucleotide(lines: [][]const u8) ![][]const u8 {
         try generateCount(allocator, poly_shrunk, entry, output[i + counts.len][0..]);
     }
 
-    var output_lines: [counts.len + entries.len][]const u8 = undefined;
+    var output_lines: [][]const u8 = try allocator.alloc([]const u8, counts.len + entries.len);
     for (output, 0..) |entry, index| {
         const entry_len = std.mem.indexOfScalarPos(u8, entry[0..], 0, 0) orelse unreachable;
-        output_lines[index] = entry[0..entry_len];
+        const line: []u8 = try allocator.alloc(u8, entry_len);
+        @memcpy(line, entry[0..entry_len]);
+        output_lines[index] = line;
     }
-    return output_lines[0..output_lines.len];
+    return output_lines;
 }

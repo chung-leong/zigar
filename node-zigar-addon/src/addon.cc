@@ -1,24 +1,26 @@
 #include "addon.h"
 
 static Result AllocateMemory(Call* call,
-                             size_t size,
+                             size_t len,
+                             uint8_t ptr_align,
                              Memory* dest) {
   auto isolate = call->isolate;
   auto context = call->context;
   if (call->mem_pool.IsEmpty()) {
     call->mem_pool = Array::New(isolate);
   }
-  auto buffer = ArrayBuffer::New(isolate, size);
+  auto buffer = ArrayBuffer::New(isolate, len);
   auto index = call->mem_pool->Length();
   call->mem_pool->Set(context, index, buffer).Check();
   std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
   dest->bytes = reinterpret_cast<uint8_t*>(store->Data());
-  dest->len = store->ByteLength();
+  dest->len = len;
   return Result::OK;
 }
 
 static Result FreeMemory(Call* call,
-                         const Memory& memory) {
+                         const Memory& memory,
+                         uint8_t ptr_align) {
   if (call->mem_pool.IsEmpty()) {
     return Result::Failure;
   }
@@ -27,9 +29,9 @@ static Result FreeMemory(Call* call,
   int index = -1;
   size_t address = reinterpret_cast<size_t>(memory.bytes);
   for (int i = 0; i < buf_count; i++) {
-    MaybeLocal<Value> item = call->mem_pool->Get(context, i);
-    if (!item.IsEmpty()) {
-      Local<ArrayBuffer> buffer = item.ToLocalChecked().As<ArrayBuffer>();
+    auto item = call->mem_pool->Get(context, i).ToLocalChecked();
+    if (item->IsArrayBuffer()) {
+      Local<ArrayBuffer> buffer = item.As<ArrayBuffer>();
       if (buffer->ByteLength() == memory.len) {
         std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
         size_t buf_start = reinterpret_cast<size_t>(store->Data());
@@ -71,9 +73,9 @@ static Result FindBuffer(Call* call,
   auto address = reinterpret_cast<size_t>(memory.bytes);
   int buf_count = array->Length();
   for (int i = 0; i < buf_count; i++) {
-    auto item = array->Get(context, i);
-    if (!item.IsEmpty()) {
-      auto buffer = item.ToLocalChecked().As<ArrayBuffer>();
+    auto item = array->Get(context, i).ToLocalChecked();
+    if (item->IsArrayBuffer()) {
+      auto buffer = item.As<ArrayBuffer>();
       if (buffer->ByteLength() >= memory.len) {
         std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
         auto buf_start = reinterpret_cast<size_t>(store->Data());

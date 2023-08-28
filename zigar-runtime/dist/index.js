@@ -3487,13 +3487,25 @@ function finalizeArgStruct(s) {
     descriptors[member.name] = getAccessors(member, options);
   }
   const objectMembers = members.filter(m => m.type === MemberType.Object);
-  const constructor = s.constructor = function(args) {
+  const { slot: retvalSlot } = members[members.length - 1];
+    const constructor = s.constructor = function(args) {
     const dv = new DataView(new ArrayBuffer(size));
     Object.defineProperties(this, {
       [MEMORY]: { value: dv },
     });
     if (objectMembers.length > 0) {
-      createChildObjects.call(this, objectMembers, this, dv);
+      const slots = {};
+      const parentOffset = dv.byteOffset;
+      for (const { structure: { constructor }, bitOffset, byteSize, slot } of objectMembers) {
+        const offset = parentOffset + (bitOffset >> 3);
+        const childDV = new DataView(dv.buffer, offset, byteSize);
+        // use ZIG as receiver for retval, so pointers will already be owned by ZIG
+        const recv = (slot === retvalSlot) ? ZIG : PARENT;
+        slots[slot] = constructor.call(recv, childDV);
+      }
+      Object.defineProperties(this, {
+        [SLOTS]: { value: slots },
+      });
     }
     initializer.call(this, args);
   };
@@ -3809,8 +3821,8 @@ async function runModule(module, options = {}) {
     }
   }
 
-  function _allocMemory(ctxAddr, len) {
-    const address = alloc(ctxAddr, len);
+  function _allocMemory(ctxAddr, len, ptrAlign) {
+    const address = alloc(ctxAddr, len, ptrAlign);
     const { bufferMap } = callContexts[ctxAddr];
     const buffer = new ArrayBuffer(len);
     const dv = new DataView(buffer);
@@ -3819,12 +3831,12 @@ async function runModule(module, options = {}) {
     return address;
   }
 
-  function _freeMemory(ctxAddr, address, len) {
+  function _freeMemory(ctxAddr, address, len, ptrAlign) {
     const { bufferMap } = callContexts[ctxAddr];
     for (const [ buffer, { address: matching } ] of bufferMap) {
       if (address === matching) {
         bufferMap.delete(buffer);
-        free(ctxAddr, address, len);
+        free(ctxAddr, address, len, ptrAlign);
       }
     }
   }

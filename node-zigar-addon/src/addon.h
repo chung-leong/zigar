@@ -95,8 +95,8 @@ struct Module {
 };
 
 struct Callbacks {
-  Result (*allocate_memory)(Call*, size_t, Memory*);
-  Result (*free_memory)(Call*, const Memory&);
+  Result (*allocate_memory)(Call*, size_t, uint8_t, Memory*);
+  Result (*free_memory)(Call*, const Memory&, uint8_t);
   Result (*get_memory)(Call*, Local<Object>, Memory*);
   Result (*wrap_memory)(Call*, Local<Object>, const Memory&, MemoryDisposition, Local<Object>*);
 

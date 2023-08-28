@@ -19,8 +19,8 @@ const Call = struct {
     allocator: std.mem.Allocator,
 };
 
-extern fn _allocMemory(host: usize, size: usize) usize;
-extern fn _freeMemory(host: usize, address: usize, len: usize) void;
+extern fn _allocMemory(host: usize, len: usize, ptr_align: u8) usize;
+extern fn _freeMemory(host: usize, address: usize, len: usize, ptr_align: u8) void;
 extern fn _getMemory(host: usize, object: usize) usize;
 extern fn _getMemoryOffset(object: usize) usize;
 extern fn _getMemoryLength(object: usize) usize;
@@ -64,12 +64,12 @@ fn strlen(s: [*:0]const u8) usize {
     return len;
 }
 
-pub fn alloc(ptr: *anyopaque, len: usize) usize {
+pub fn alloc(ptr: *anyopaque, len: usize, ptr_align: u8) usize {
     const ctx: *Call = @alignCast(@ptrCast(ptr));
     if (len > 0) {
-        if (ctx.allocator.alloc([]u8, len)) |bytes| {
-            return @intFromPtr(bytes.ptr);
-        } else |_| {
+        if (ctx.allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
+            return @intFromPtr(bytes);
+        } else {
             return 0;
         }
     } else {
@@ -77,10 +77,10 @@ pub fn alloc(ptr: *anyopaque, len: usize) usize {
     }
 }
 
-pub fn free(ptr: *anyopaque, address: usize, len: usize) void {
+pub fn free(ptr: *anyopaque, address: usize, len: usize, ptr_align: u8) void {
     const ctx: *Call = @alignCast(@ptrCast(ptr));
     const bytes: [*]u8 = @ptrFromInt(address);
-    ctx.allocator.free(bytes[0..len]);
+    ctx.allocator.rawFree(bytes[0..len], ptr_align, 0);
 }
 
 pub const Host = struct {
@@ -94,8 +94,8 @@ pub const Host = struct {
 
     pub fn done(_: Host) void {}
 
-    pub fn allocateMemory(self: Host, size: usize) !Memory {
-        const address = _allocMemory(self.context, size);
+    pub fn allocateMemory(self: Host, size: usize, ptr_align: u8) !Memory {
+        const address = _allocMemory(self.context, size, ptr_align);
         if (address == 0) {
             return Error.UnableToAllocateMemory;
         }
@@ -105,8 +105,8 @@ pub const Host = struct {
         };
     }
 
-    pub fn freeMemory(self: Host, memory: Memory) !void {
-        _freeMemory(self.context, @intFromPtr(memory.bytes), memory.len);
+    pub fn freeMemory(self: Host, memory: Memory, ptr_align: u8) !void {
+        _freeMemory(self.context, @intFromPtr(memory.bytes), memory.len, ptr_align);
     }
 
     pub fn getMemory(self: Host, container: Value, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) !exporter.PointerType(T, size) {

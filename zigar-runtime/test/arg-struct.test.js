@@ -5,11 +5,13 @@ import {
   useIntEx,
   useObject,
 } from '../src/member.js';
-import { MEMORY, SLOTS } from '../src/symbol.js';
+import { ZIG } from '../src/symbol.js';
 import {
   StructureType,
   useArgStruct,
   useStruct,
+  usePointer,
+  usePrimitive,
   beginStructure,
   attachMember,
   finalizeStructure,
@@ -19,6 +21,8 @@ describe('ArgStruct functions', function() {
   describe('finalizeArgStruct', function() {
     beforeEach(function() {
       useArgStruct();
+      usePointer();
+      usePrimitive();
       useIntEx();
       useStruct();
       useObject();
@@ -151,6 +155,66 @@ describe('ArgStruct functions', function() {
       const ArgStruct = finalizeStructure(structure);
       expect(() => new ArgStruct([ 123 ])).to.throw();
       expect(() => new ArgStruct([ 123, 456, 789 ])).to.throw();
+    })
+    it('should initialize retval pointer as be ZIG owned', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        isConst: true,
+        hasPointer: true,
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(ptrStructure);
+      const structure = beginStructure({
+        type: StructureType.ArgStruct,
+        name: 'Hello',
+        size: 8 * 2,
+      });
+      attachMember(structure, {
+        name: '0',
+        type: MemberType.Object,
+        isSigned: true,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Object,
+        isSigned: true,
+        bitSize: 64,
+        bitOffset: 64,
+        byteSize: 8,
+        slot: 1,
+        structure: ptrStructure,
+      });
+      const ArgStruct = finalizeStructure(structure);
+      const int32 = new Int32(0);
+      const argStruct = new ArgStruct([ int32 ]);
+      expect(argStruct.retval[ZIG]).to.be.true;
     })
     it('should throw with argument name in error message when an invalid argument is encountered', function() {
       const structure = beginStructure({

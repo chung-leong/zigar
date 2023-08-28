@@ -2761,13 +2761,25 @@ R"=====(
       descriptors[member.name] = getAccessors(member, options);
     }
     const objectMembers = members.filter(m => m.type === MemberType.Object);
-    const constructor = s.constructor = function(args) {
+    const { slot: retvalSlot } = members[members.length - 1];
+      const constructor = s.constructor = function(args) {
       const dv = new DataView(new ArrayBuffer(size));
       Object.defineProperties(this, {
         [MEMORY]: { value: dv },
       });
       if (objectMembers.length > 0) {
-        createChildObjects.call(this, objectMembers, this, dv);
+        const slots = {};
+        const parentOffset = dv.byteOffset;
+        for (const { structure: { constructor }, bitOffset, byteSize, slot } of objectMembers) {
+          const offset = parentOffset + (bitOffset >> 3);
+          const childDV = new DataView(dv.buffer, offset, byteSize);
+          // use ZIG as receiver for retval, so pointers will already be owned by ZIG
+          const recv = (slot === retvalSlot) ? ZIG : PARENT;
+          slots[slot] = constructor.call(recv, childDV);
+        }
+        Object.defineProperties(this, {
+          [SLOTS]: { value: slots },
+        });
       }
       initializer.call(this, args);
     };

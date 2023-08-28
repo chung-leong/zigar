@@ -327,6 +327,8 @@ fn hasPointer(comptime T: type) bool {
             }
             break :any false;
         },
+        .Optional => |op| hasPointer(op.child),
+        .ErrorUnion => |eu| hasPointer(eu.payload),
         else => false,
     };
 }
@@ -1286,14 +1288,11 @@ fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
         .Struct => |st| {
             inline for (st.fields, 0..) |field, index| {
                 if (hasPointer(field.type)) {
-                    const slot = getObjectSlot(T, index);
-                    const child_obj = try host.readObjectSlot(obj, slot);
-                    // FIXME: this is broken, since there can be pointers inside the structure
-                    // should initialize the pointer as being owned by Zig already on JS side
-                    if (isArgumentStruct(T) and index == st.fields.len - 1) {
-                        // retval is not going to be pointing to anything--just set ownership
-                        try host.setPointerStatus(child_obj, true);
-                    } else {
+                    const is_output = comptime isArgumentStruct(T) and index == st.fields.len - 1;
+                    // retval should already be initialized as being owned by Zig on JS side
+                    if (!is_output) {
+                        const slot = getObjectSlot(T, index);
+                        const child_obj = try host.readObjectSlot(obj, slot);
                         try rezigStructure(host, child_obj, &@field(ptr.*, field.name));
                     }
                 }
@@ -1366,7 +1365,8 @@ fn dezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
                 if (hasPointer(field.type)) {
                     const slot = getObjectSlot(T, index);
                     const child_ptr = &@field(ptr.*, field.name);
-                    const child_obj = try obtainChildObject(host, obj, slot, child_ptr, false);
+                    const is_output = comptime isArgumentStruct(T) and index == st.fields.len - 1;
+                    const child_obj = try obtainChildObject(host, obj, slot, child_ptr, is_output);
                     try dezigStructure(host, child_obj, child_ptr);
                 }
             }
@@ -1388,13 +1388,13 @@ fn dezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
         },
         .Optional => {
             if (ptr.*) |*child_ptr| {
-                const child_obj = try host.readObjectSlot(obj, 0);
+                const child_obj = try obtainChildObject(host, obj, 0, child_ptr, false);
                 try dezigStructure(host, child_obj, child_ptr);
             }
         },
         .ErrorUnion => {
             if (ptr.*) |*child_ptr| {
-                const child_obj = try host.readObjectSlot(obj, 0);
+                const child_obj = try obtainChildObject(host, obj, 0, child_ptr, true);
                 try dezigStructure(host, child_obj, child_ptr);
             } else |_| {}
         },
@@ -1433,21 +1433,21 @@ fn createChildObject(host: anytype, container: Value, slot: usize, ptr: anytype)
 fn createAllocator(host_ptr: anytype) std.mem.Allocator {
     const HostPtrT = @TypeOf(host_ptr);
     const VTable = struct {
-        fn alloc(p: *anyopaque, size: usize, _: u8, _: usize) ?[*]u8 {
+        fn alloc(p: *anyopaque, size: usize, ptr_align: u8, _: usize) ?[*]u8 {
             const h: HostPtrT = @alignCast(@ptrCast(p));
-            return if (h.allocateMemory(size)) |m| m.bytes else |_| null;
+            return if (h.allocateMemory(size, ptr_align)) |m| m.bytes else |_| null;
         }
 
         fn resize(_: *anyopaque, _: []u8, _: u8, _: usize, _: usize) bool {
             return false;
         }
 
-        fn free(p: *anyopaque, bytes: []u8, _: u8, _: usize) void {
+        fn free(p: *anyopaque, bytes: []u8, ptr_align: u8, _: usize) void {
             const h: HostPtrT = @alignCast(@ptrCast(p));
             h.freeMemory(.{
                 .bytes = @ptrCast(bytes.ptr),
                 .len = bytes.len,
-            }) catch {};
+            }, ptr_align) catch {};
         }
 
         const instance: std.mem.Allocator.VTable = .{

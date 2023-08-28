@@ -200,8 +200,8 @@ export async function runModule(module, options = {}) {
     }
   }
 
-  function _allocMemory(ctxAddr, len) {
-    const address = alloc(ctxAddr, len);
+  function _allocMemory(ctxAddr, len, ptrAlign) {
+    const address = alloc(ctxAddr, len, ptrAlign);
     const { bufferMap } = callContexts[ctxAddr];
     const buffer = new ArrayBuffer(len);
     const dv = new DataView(buffer);
@@ -210,12 +210,12 @@ export async function runModule(module, options = {}) {
     return address;
   }
 
-  function _freeMemory(ctxAddr, address, len) {
+  function _freeMemory(ctxAddr, address, len, ptrAlign) {
     const { bufferMap } = callContexts[ctxAddr];
     for (const [ buffer, { address: matching } ] of bufferMap) {
       if (address === matching) {
         bufferMap.delete(buffer);
-        free(ctxAddr, address, len);
+        free(ctxAddr, address, len, ptrAlign);
       }
     }
   }

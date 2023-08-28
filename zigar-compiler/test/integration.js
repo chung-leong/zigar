@@ -355,16 +355,16 @@ export function addTests(importModule, options) {
       const { default: { kNucleotide } } = await importModule(resolve('./zig-samples/benchmarks-game/k-nucleotide.zig'));
       const n = 250000;
       const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`), 'utf-8');
-      const lines = text.split(/\r?\n/);
+      const lines = text.trim().split(/\r?\n/);
       const start = lines.findIndex(l => l.startsWith('>THREE'));
       if (start === -1) {
         throw new Error('Unable to find starting position');
       }
-      const input = lines.slice(start + 1, -1);
+      const input = lines.slice(start + 1);
       const output = kNucleotide(input);
-      const outputLines = [ ...output ].map(a => a.string);
+      const outputLines = [ ...output ].map(a => a.string.split(/\n/)).flat();
       const refText = await readFile(resolve(`./zig-samples/benchmarks-game/data/k-nucleotide-${n}.txt`), 'utf-8');
-      const refLines = refText.split(/\r?\n/);
+      const refLines = refText.trim().split(/\r?\n/);
       expect(outputLines).to.eql(refLines);
     })
     it('should produce the right results for the mandelbrot example', async function() {

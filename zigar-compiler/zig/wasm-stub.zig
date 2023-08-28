@@ -4,12 +4,12 @@ const package = @import("package");
 
 pub const os = exporter.getOS();
 
-export fn alloc(ptr: *anyopaque, len: usize) usize {
-    return exporter.alloc(ptr, len);
+export fn alloc(ptr: *anyopaque, len: usize, ptr_align: u8) usize {
+    return exporter.alloc(ptr, len, ptr_align);
 }
 
-export fn free(ptr: *anyopaque, address: usize, len: usize) void {
-    exporter.free(ptr, address, len);
+export fn free(ptr: *anyopaque, address: usize, len: usize, ptr_align: u8) void {
+    exporter.free(ptr, address, len, ptr_align);
 }
 
 export fn define(arg_index: usize) usize {
