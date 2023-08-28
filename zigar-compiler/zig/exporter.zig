@@ -797,7 +797,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                             .byte_size = @sizeOf(pt.child),
                             .structure = child_structure,
                         }, false);
-                        var bytes: []u8 = @as([*]u8, @constCast(@alignCast(@ptrCast(&sentinel))))[0..@sizeOf(pt.child)];
+                        var bytes: []u8 = @constCast(std.mem.asBytes(&sentinel));
                         const template = try host.createTemplate(bytes);
                         try host.attachTemplate(slice_structure, template, false);
                     }
@@ -897,7 +897,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                     .structure = try getStructure(host, IT),
                 }, false);
             }
-            var bytes: []u8 = @as([*]u8, @alignCast(@ptrCast(&values)))[0..@sizeOf([en.fields.len]IT)];
+            var bytes: []u8 = @constCast(std.mem.asBytes(&values));
             const template = try host.createTemplate(bytes);
             try host.attachTemplate(structure, template, false);
         },
@@ -990,7 +990,7 @@ fn addDefaultValues(host: anytype, structure: Value, comptime T: type) !void {
     // default data
     const fields = std.meta.fields(T);
     var values: T = undefined;
-    var bytes: []u8 = @as([*]u8, @alignCast(@ptrCast(&values)))[0..@sizeOf(T)];
+    var bytes: []u8 = @constCast(std.mem.asBytes(&values));
     for (bytes) |*byte_ptr| {
         byte_ptr.* = 0;
     }
