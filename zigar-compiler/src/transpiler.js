@@ -26,7 +26,7 @@ export async function transpile(path, options = {}) {
       }
     }
   }
-  const wasmPath = await compile(path, { ...otherOptions, optimize, target: 'wasm' });
+  const wasmPath = await compile(path, { ...otherOptions, optimize, arch: 'wasm32', platform: 'freestanding' });
   const content = await readFile(wasmPath);
   const { structures, runtimeSafety } = await runModule(content, { omitFunctions });
   // all methods are static, so there's no need to check the instance methods
