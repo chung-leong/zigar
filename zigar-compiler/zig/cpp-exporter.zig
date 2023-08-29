@@ -70,13 +70,14 @@ pub const Host = struct {
         return exporter.fromMemory(memory, T, size);
     }
 
-    pub fn onStack(self: Host, memory: Memory) bool {
+    pub noinline fn onStack(self: Host, memory: Memory) bool {
         // since the context struct is allocated on the stack, its address is the
         // starting point of stack space used by Zig code
+        // function cannot be inlined, since the variable below must be lower in the stack
         const bytes = memory.bytes orelse return false;
         const len = memory.len;
         const stack_top = @intFromPtr(self.context);
-        const stack_bottom = @intFromPtr(&stack_top);
+        const stack_bottom = @intFromPtr(&bytes);
         const address = @intFromPtr(bytes);
         return (stack_bottom <= address and address + len <= stack_top);
     }

@@ -1070,8 +1070,8 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                     if (@typeInfo(PT).Pointer.is_const) {
                         // put a copy on the stack so it gets copied and we don't end
                         // up pointing to pointing to read-only memory
-                        var value = @field(T, decl.name);
-                        break :ptr &value;
+                        var stack_value = @field(T, decl.name);
+                        break :ptr &stack_value;
                     } else {
                         break :ptr &@field(T, decl.name);
                     }

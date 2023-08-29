@@ -123,7 +123,7 @@ pub const Host = struct {
         return exporter.fromMemory(memory, T, size);
     }
 
-    pub fn onStack(self: Host, memory: Memory) bool {
+    pub noinline fn onStack(self: Host, memory: Memory) bool {
         const bytes = memory.bytes orelse return false;
         const len = memory.len;
         // self.context is a pointer to a Call object created on the stack in runThunk()
