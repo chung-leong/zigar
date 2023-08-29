@@ -599,7 +599,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   auto little_endian = Boolean::New(isolate, module->flags.little_endian);
   auto runtime_safety = Boolean::New(isolate, module->flags.runtime_safety);
   options->Set(context, String::NewFromUtf8Literal(isolate, "littleEndian"), little_endian).Check();
-  options->Set(context, String::NewFromUtf8Literal(isolate, "runimeSafety"), runtime_safety).Check();
+  options->Set(context, String::NewFromUtf8Literal(isolate, "runtimeSafety"), runtime_safety).Check();
   auto md = new ModuleData(isolate, handle, options, info.Data().As<External>());
 
   // invoke the factory thunk through JavaScript, which will give us the
