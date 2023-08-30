@@ -3677,14 +3677,15 @@ async function runModule(module, options = {}) {
     variables,
     methodRunner,
   } = options;
-  let nextValueIndex = 1;
-  let valueTable = { 0: null };
-  const valueIndices = new WeakMap();
-  let nextStringIndex = 1;
-  const stringTable = { 0: null };
-  const stringIndices = {};
+  let nextValueIndex = 0;
+  let valueTable = null;
+  let valueIndices = null;
+  let nextStringIndex = 0;
+  let stringTable = null;
+  let stringIndices = null;
   const decoder = new TextDecoder();
   const callContexts = {};
+  let callContextCount = 0;
   const globalSlots = slots;
   const empty = () => {};
   const imports = {
@@ -3722,6 +3723,7 @@ async function runModule(module, options = {}) {
   const { instance } = await WebAssembly.instantiate(module, { env: imports });
   const { memory: wasmMemory, define, run, alloc, free, safe } = instance.exports;
   let consolePending = '', consoleTimeout = 0;
+  resetTables();
 
   {
     // link variables
@@ -3736,6 +3738,19 @@ async function runModule(module, options = {}) {
         throwError(errorIndex);
       }
     };
+  }
+
+  function resetTables() {
+    if (nextValueIndex !== 1) {
+      nextValueIndex = 1;
+      valueTable = { 0: null };
+      valueIndices = new WeakMap();
+    }
+    if (nextStringIndex !== 1) {
+      nextStringIndex = 1;
+      stringTable = { 0: null };
+      stringIndices = {};
+    }
   }
 
   function getString(address, len) {
@@ -3799,8 +3814,8 @@ async function runModule(module, options = {}) {
 
   function _startCall(ctxAddr) {
     callContexts[ctxAddr] = { bufferMap: new Map() };
+    callContextCount++;
   }
-
 
   function _endCall(ctxAddr) {
     // move data from WASM memory into buffers
@@ -3812,10 +3827,10 @@ async function runModule(module, options = {}) {
       }
     }
     delete callContexts[ctxAddr];
-    if (Object.keys(callContexts).length === 0) {
-      // TODO: clear the value table
-      // nextValueIndex = 1;
-      // valueTable = { 0: null };
+    callContextCount--;
+    if (callContextCount === 0) {
+      // clear the value tables
+      resetTables();
       // output pending text to console
       if (consolePending) {
         console.log(consolePending);
