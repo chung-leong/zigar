@@ -223,11 +223,11 @@ export function addTests(importModule, options) {
     it('should import tagged union with pointers', async function() {
       this.timeout(60000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/tagged-union-with-slice.zig'));
-      expect(module.variant_a.string.string).to.equal('apple');
-      expect(module.variant_a.integer).to.be.null;
-      expect(module.variant_a.float).to.be.null;
-      expect(module.variant_b.integer).to.equal(123);
-      expect(module.variant_c.float).to.equal(3.14);      
+      expect(module.variant_a.String.string).to.equal('apple');
+      expect(module.variant_a.Integer).to.be.null;
+      expect(module.variant_a.Float).to.be.null;
+      expect(module.variant_b.Integer).to.equal(123);
+      expect(module.variant_c.Float).to.equal(3.14);      
       const { printVariant, printVariantPtr } = module;
       const lines = await capture(() => {
         printVariant(module.variant_a);
@@ -238,6 +238,19 @@ export function addTests(importModule, options) {
         printVariantPtr(module.variant_c);
       });
       console.log(lines);
+    })
+    it('should allow assignment to a pointer variable', async function() {
+      this.timeout(60000);
+      const { default: module } = await importModule(resolve('./zig-samples/basic/slice-variable.zig'));
+      const lines = await capture(() => {
+        module.printText();
+        module.text = "This is a test";
+        module.printText();
+      });
+      expect(lines).to.eql([ 
+        'Hello world',
+        'This is a test',
+      ]);
     })
   })
   describe('Methods', function() {
@@ -347,6 +360,23 @@ export function addTests(importModule, options) {
         printName(null);
       });
       expect(lines).to.eql([ 'Bigus Dickus', 'Anonymous' ]);
+    })
+    it('shoud allocate a slice of structs', async function() {
+      this.timeout(60000);
+      const { default: { allocate } } = await importModule(resolve('./zig-samples/basic/function-allocating-slice-of-structs.zig'));
+      const structs = allocate(10);
+      expect(structs).to.have.lengthOf(10);
+      for (const [ index, struct ] of structs.entries()) {
+        const { vector1, vector2 } = struct;
+        expect(vector1[0].toFixed(9)).to.equal((Math.PI * 0.25 * (index + 1)).toFixed(9));
+        expect(vector1[1].toFixed(9)).to.equal((Math.PI * 0.50 * (index + 1)).toFixed(9));
+        expect(vector1[2].toFixed(9)).to.equal((Math.PI * 0.75 * (index + 1)).toFixed(9));
+        expect(vector1[3].toFixed(9)).to.equal((Math.PI * 1.00 * (index + 1)).toFixed(9));
+        expect(vector2[0]).to.equal(Math.PI * 0.25 / (index + 1));
+        expect(vector2[1]).to.equal(Math.PI * 0.50 / (index + 1));
+        expect(vector2[2]).to.equal(Math.PI * 0.75 / (index + 1));
+        expect(vector2[3]).to.equal(Math.PI * 1.00 / (index + 1));
+      }
     })
   })
   describe('Error handling', async function() {
