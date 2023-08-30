@@ -203,6 +203,42 @@ export function addTests(importModule, options) {
       const objectD = new StructD({});
       expect({ ...objectD.a_ptr }).to.eql({ number1: 123, number2: 456 });
     })
+    it('should import bare union with pointers', async function() {
+      this.timeout(60000);
+      const { default: module } = await importModule(resolve('./zig-samples/basic/bare-union-with-slice.zig'));
+      expect(() => module.variant_a.value.string).to.throw();
+      expect(module.variant_b.value.integer).to.equal(123);
+      expect(module.variant_c.value.float).to.equal(3.14);
+      const { printVariant, printVariantPtr } = module;
+      const lines = await capture(() => {
+        printVariant(module.variant_a);
+        printVariant(module.variant_b);
+        printVariant(module.variant_c);
+        printVariantPtr(module.variant_a);
+        printVariantPtr(module.variant_b);
+        printVariantPtr(module.variant_c);
+      });
+      console.log(lines);
+    })
+    it('should import tagged union with pointers', async function() {
+      this.timeout(60000);
+      const { default: module } = await importModule(resolve('./zig-samples/basic/tagged-union-with-slice.zig'));
+      expect(module.variant_a.string.string).to.equal('apple');
+      expect(module.variant_a.integer).to.be.null;
+      expect(module.variant_a.float).to.be.null;
+      expect(module.variant_b.integer).to.equal(123);
+      expect(module.variant_c.float).to.equal(3.14);      
+      const { printVariant, printVariantPtr } = module;
+      const lines = await capture(() => {
+        printVariant(module.variant_a);
+        printVariant(module.variant_b);
+        printVariant(module.variant_c);
+        printVariantPtr(module.variant_a);
+        printVariantPtr(module.variant_b);
+        printVariantPtr(module.variant_c);
+      });
+      console.log(lines);
+    })
   })
   describe('Methods', function() {
     it('should import simple function', async function() {
@@ -212,7 +248,7 @@ export function addTests(importModule, options) {
       expect(res).to.equal(22);
       expect(module.add).to.have.property('name', 'add');
     })
-    it('should import function that accepts a slice', async function() {
+    it('should accept a slice', async function() {
       this.timeout(60000);
       const { default: { fifth } } = await importModule(resolve('./zig-samples/basic/function-accepting-slice.zig'));
       const dv = new DataView(new ArrayBuffer(32));
@@ -222,7 +258,7 @@ export function addTests(importModule, options) {
       const res = fifth(dv);
       expect(res).to.equal(456);
     })
-    it('should import function that output a slice of strings to console', async function() {
+    it('should output a slice of strings to console', async function() {
       this.timeout(60000);
       const { default: { print } } = await importModule(resolve('./zig-samples/basic/function-outputting-slice-of-slices.zig'));
       const inputStrings = [
@@ -234,7 +270,7 @@ export function addTests(importModule, options) {
       const outputStrings = await capture(() => print(inputStrings));
       expect(outputStrings).to.eql(inputStrings);
     })
-    it('should import function that takes and returns a slice of strings', async function() {
+    it('should takes and returns a slice of strings', async function() {
       this.timeout(60000);
       const { default: { bounce } } = await importModule(resolve('./zig-samples/basic/function-returning-slice-of-slices.zig'));
       const inputStrings = [
@@ -250,7 +286,7 @@ export function addTests(importModule, options) {
     })
     it('should throw when function returns an error', async function() {
       this.timeout(60000);
-      const { default: { returnNumber } } = await importModule(resolve('./zig-samples/basic/function-returning-error.zig'));
+      const { default: { returnNumber } } = await importModule(resolve('./zig-samples/basic/function-returning-error-union.zig'));
       const result = returnNumber(1234);
       expect(result).to.equal(1234);
       expect(() => returnNumber(0)).to.throw()
@@ -294,6 +330,23 @@ export function addTests(importModule, options) {
       const d = add(a, b);
       expect([ ...c ]).to.eql([ 5, 12, 21, 32 ]);
       expect([ ...d ]).to.eql([ 6, 8, 10, 12 ]);
+    })
+    it('should return optional pointer', async function() {
+      this.timeout(60000);
+      const { default: { getSentence } } = await importModule(resolve('./zig-samples/basic/function-returning-optional-pointer'));
+      const res1 = getSentence(0);
+      const res2 = getSentence(1);
+      expect(res1.string).to.equal('Hello world');
+      expect(res2).to.be.null;
+    })
+    it('should accept optional pointer', async function() {
+      this.timeout(60000);
+      const { default: { printName } } = await importModule(resolve('./zig-samples/basic/function-accepting-optional-pointer'));
+      const lines = await capture(() => {
+        printName("Bigus Dickus");
+        printName(null);
+      });
+      expect(lines).to.eql([ 'Bigus Dickus', 'Anonymous' ]);
     })
   })
   describe('Error handling', async function() {
