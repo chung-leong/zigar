@@ -10,7 +10,7 @@ pub const Variant = union(ValueType) {
 
 pub const variant_a: Variant = .{ .String = "apple" };
 pub const variant_b: Variant = .{ .Integer = 123 };
-pub const variant_C: Variant = .{ .Float = 3.14 };
+pub const variant_c: Variant = .{ .Float = 3.14 };
 
 pub fn printVariant(arg: Variant) void {
     switch (arg) {
@@ -21,9 +21,5 @@ pub fn printVariant(arg: Variant) void {
 }
 
 pub fn printVariantPtr(arg: *const Variant) void {
-    switch (arg) {
-        .String => |s| std.debug.print("{s}\n", .{s}),
-        .Integer => |i| std.debug.print("{d}\n", .{i}),
-        .Float => |f| std.debug.print("{d}\n", .{f}),
-    }
+    printVariant(arg.*);
 }

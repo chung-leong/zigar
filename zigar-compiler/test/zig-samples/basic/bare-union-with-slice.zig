@@ -21,7 +21,7 @@ pub const variant_b: Variant = .{
     .type = .Integer,
     .value = .{ .integer = 123 },
 };
-pub const variant_C: Variant = .{
+pub const variant_c: Variant = .{
     .type = .Float,
     .value = .{ .float = 3.14 },
 };
@@ -35,9 +35,5 @@ pub fn printVariant(arg: Variant) void {
 }
 
 pub fn printVariantPtr(arg: *const Variant) void {
-    switch (arg.type) {
-        .String => std.debug.print("{s}\n", .{arg.value.string}),
-        .Integer => std.debug.print("{d}\n", .{arg.value.integer}),
-        .Float => std.debug.print("{d}\n", .{arg.value.float}),
-    }
+    printVariant(arg.*);
 }

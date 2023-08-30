@@ -1302,7 +1302,7 @@ fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
             }
         },
         .Union => |un| {
-            if (un.type_tag) |_| {
+            if (un.tag_type) |_| {
                 inline for (un.fields, 0..) |field, index| {
                     if (hasPointer(field.type)) {
                         const current_index = getUnionCurrentIndex(ptr);
