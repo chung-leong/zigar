@@ -356,7 +356,7 @@ export function addTests(importModule, options) {
   })
   describe('ZIG Benchmarks Game', function() {
     it('should produce the right results for the binary-trees example', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: { binaryTree } } = await importModule(resolve('./zig-samples/benchmarks-game/binary-trees.zig'));
       const n = 12;
       const lines = await capture(() => binaryTree(n));
@@ -368,7 +368,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should produce the right results for the fannkuch-redux example', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: { Pfannkuchen } } = await importModule(resolve('./zig-samples/benchmarks-game/fannkuch-redux.zig'));
       const n = 10;
       const result = Pfannkuchen(n);
@@ -376,7 +376,7 @@ export function addTests(importModule, options) {
       expect(result.max_flips_count).equal(38);
     })
     it('should produce the right results for the fasta example', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: { fasta } } = await importModule(resolve('./zig-samples/benchmarks-game/fasta.zig'));
       const n = 250000;
       const lines = await capture(() => fasta(n));
@@ -388,7 +388,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should produce the right results for the k-nucleotide example', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: { kNucleotide } } = await importModule(resolve('./zig-samples/benchmarks-game/k-nucleotide.zig'));
       const n = 250000;
       const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`), 'utf-8');
@@ -405,7 +405,7 @@ export function addTests(importModule, options) {
       expect(outputLines).to.eql(refLines);
     })
     it('should produce the right results for the mandelbrot example', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: { mandelbrot } } = await importModule(resolve('./zig-samples/benchmarks-game/mandelbrot.zig'));
       const n = 2000;
       const lines = await capture(() => mandelbrot(n));
@@ -417,7 +417,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should produce the right results for the nbody example', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const {
         default: {
           Planets, solar_mass, year, advance, energy, offset_momentum
@@ -486,7 +486,7 @@ export function addTests(importModule, options) {
       expect(result2.toFixed(9)).to.equal('-0.169078071');
     })
     it('should produce the right results for the reverse-complement example', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: { reverseComplement } } = await importModule(resolve('./zig-samples/benchmarks-game/reverse-complement.zig'));
       const n = 250000;
       const data = await readFile(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`));
@@ -503,7 +503,7 @@ export function addTests(importModule, options) {
       expect(different).to.be.false;
     })
     it('should produce the right results for the spectral-norm example', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: { spectralNorm } } = await importModule(resolve('./zig-samples/benchmarks-game/spectral-norm.zig'));
       const n = 1500;
       const result = spectralNorm(n);

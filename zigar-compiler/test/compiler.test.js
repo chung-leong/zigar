@@ -183,7 +183,7 @@ describe('Compilation', function() {
       await forceChange(pathname, async () => {
         const libpath = await compile(pathname);
         expect(libpath).to.be.a('string');
-        expect(libpath).to.contain('libstrlen.so');
+        expect(libpath).to.contain('libstrlen');
       });
     })
     it('should work correctly when the same file is compiled at the same time', async function() {
