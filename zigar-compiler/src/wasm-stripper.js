@@ -41,67 +41,75 @@ export function stripUnused(binary, options = {}) {
   const functions = [];
   // allocate indices for imported functions first
   const importSection = sections.find(s => s.type === SectionType.Import);
-  for (const object of importSection.imports) {
-    if (object.type === ObjectType.Function) {
-      const index = functions.length;
-      functions[index] = {
-        type: 'imported',
-        name: functionNames[index],
-        descriptor: object,
-        typeIndex: object.type,
-        using: undefined,
-        index,
-        newIndex: -1,
-      };
-    }
+  if (importSection) {
+    for (const object of importSection.imports) {
+      if (object.type === ObjectType.Function) {
+        const index = functions.length;
+        functions[index] = {
+          type: 'imported',
+          name: functionNames[index],
+          descriptor: object,
+          typeIndex: object.type,
+          using: undefined,
+          index,
+          newIndex: -1,
+        };
+      }
+    }  
   }
   // allocate indices for internal functions
   const funcSection = getSection(SectionType.Function);
   const codeSection = getSection(SectionType.Code);
-  for (const [ i, typeIndex ] of funcSection.types.entries()) {
-    const code = codeSection.functions[i];
-    const index = functions.length;
-    let parsed = null;
-    const fn = {
-      type: 'internal',
-      name: functionNames[index],
-      typeIndex,
-      code,
-      using: undefined,
-      index,
-      newIndex: -1,
-
-      get instructions() {
-        if (!parsed) {
-          parsed = parseFunction(this.code);
-        }
-        return parsed.instructions;
-      },
-      get size() {
-        return parsed.size;
-      },
-      get locals() {
-        return parsed.locals;
-      },
-    };
-    functions.push(fn);
+  if (funcSection && codeSection) {
+    for (const [ i, typeIndex ] of funcSection.types.entries()) {
+      const code = codeSection.functions[i];
+      const index = functions.length;
+      let parsed = null;
+      const fn = {
+        type: 'internal',
+        name: functionNames[index],
+        typeIndex,
+        code,
+        using: undefined,
+        index,
+        newIndex: -1,
+  
+        get instructions() {
+          if (!parsed) {
+            parsed = parseFunction(this.code);
+          }
+          return parsed.instructions;
+        },
+        get size() {
+          return parsed.size;
+        },
+        get locals() {
+          return parsed.locals;
+        },
+      };
+      functions.push(fn);
+    }  
   }
 
   if (functionNames.length === 0) {
     // get the names from the export and import section if they're missing
     const exportSection = getSection(SectionType.Export);
-    for (const object of exportSection.exports) {
-      if (object.type === ObjectType.Function) {
-        const fn = functions[object.index];
-        fn.name = object.name;
-      }
+    if (exportSection) {
+      for (const object of exportSection.exports) {
+        if (object.type === ObjectType.Function) {
+          const fn = functions[object.index];
+          fn.name = object.name;
+        }
+      }  
     }
     const importSection = getSection(SectionType.Import);
-    for (const object of importSection.imports) {
-      if (object.type === ObjectType.Function) {
-        const fn = functions[object.index];
-        fn.name = object.name;
-      }
+    if (importSection) {
+      for (const object of importSection.imports) {
+        if (object.type === ObjectType.Function) {
+          const fn = functions[object.index];
+          fn.name = object.name;
+        }
+      }  
     }
   }
 
@@ -156,20 +164,24 @@ export function stripUnused(binary, options = {}) {
 
   // mark functions in table elements as used
   const elemSection = getSection(SectionType.Element);
-  for (const segment of elemSection.segments) {
-    if (segment.indices) {
-      for (const index of segment.indices) {
-        useFunction(index);
+  if (elemSection) {
+    for (const segment of elemSection.segments) {
+      if (segment.indices) {
+        for (const index of segment.indices) {
+          useFunction(index);
+        }
       }
-    }
+    }  
   }
 
   // mark exported functions as being in-use
   const exportSection = getSection(SectionType.Export);
-  for (const object of exportSection.exports) {
-    if (object.type === ObjectType.Function) {
-      useFunction(object.index);
-    }
+  if (exportSection) {
+    for (const object of exportSection.exports) {
+      if (object.type === ObjectType.Function) {
+        useFunction(object.index);
+      }
+    }  
   }
 
   // assign new indices to functions
@@ -209,44 +221,50 @@ export function stripUnused(binary, options = {}) {
 
   // create new element section
   const newElementSection = { type: SectionType.Element, segments: [] };
-  for (const segment of elemSection.segments) {
-    if (segment.indices) {
-      const indices = segment.indices.map((index) => {
-        const fn = functions[index];
-        return (fn.using) ? fn.newIndex : 0;
-      });
-      newElementSection.segments.push({ ...segment, indices });
-      /* c8 ignore next 3 */
-    } else {
-      newElementSection.segments.push(segment);
-    }
+  if (elemSection) {
+    for (const segment of elemSection.segments) {
+      if (segment.indices) {
+        const indices = segment.indices.map((index) => {
+          const fn = functions[index];
+          return (fn.using) ? fn.newIndex : 0;
+        });
+        newElementSection.segments.push({ ...segment, indices });
+        /* c8 ignore next 3 */
+      } else {
+        newElementSection.segments.push(segment);
+      }
+    }  
   }
   // create new export section
   const newExportSection = { type: SectionType.Export, exports: [] };
-  for (const object of exportSection.exports) {
-    if (object.type === ObjectType.Function) {
-      const fn = functions[object.index];
-      if (fn.using) {
-        const { name, type } = object;
-        const index = fn.newIndex;
-        newExportSection.exports.push({ name, type, index });
+  if (exportSection) {
+    for (const object of exportSection.exports) {
+      if (object.type === ObjectType.Function) {
+        const fn = functions[object.index];
+        if (fn.using) {
+          const { name, type } = object;
+          const index = fn.newIndex;
+          newExportSection.exports.push({ name, type, index });
+        }
+      } else {
+        newExportSection.exports.push(object);
       }
-    } else {
-      newExportSection.exports.push(object);
-    }
+    }  
   }
   // create new import section
   const newImportSection = { type: SectionType.Import, imports: [] };
-  for (const [ index, object ] of importSection.imports.entries()) {
-    if (object.type === ObjectType.Function) {
-      const fn = functions[index];
-      if (fn.using) {
+  if (importSection) {
+    for (const [ index, object ] of importSection.imports.entries()) {
+      if (object.type === ObjectType.Function) {
+        const fn = functions[index];
+        if (fn.using) {
+          newImportSection.imports.push(object);
+        }
+        /* c8 ignore next 3 */
+      } else {
         newImportSection.imports.push(object);
       }
-      /* c8 ignore next 3 */
-    } else {
-      newImportSection.imports.push(object);
-    }
+    }  
   }
   // create new name section
   let newNameSection = null;

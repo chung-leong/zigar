@@ -173,6 +173,16 @@ describe('WASM stripper', function() {
       const newBinary = stripUnused(binary);
       expect(newBinary.byteLength).to.be.below(binary.byteLength);
     })
+    it('should retain names when keepNames is true', async function() {
+      const path = resolve(`./wasm-samples/basic/module-name.wasm`);
+      const content = await readFile(path);
+      const binary = new DataView(content.buffer);
+      const newBinary = stripUnused(binary, { keepNames: true });
+      const module = parseBinary(newBinary);
+      const nameSection = module.sections.find(s => s.type === SectionType.Custom);
+      expect(nameSection).to.not.be.undefined;
+      expect(nameSection).to.have.property('name', 'name');
+    })
   })
   describe('parseNames', function() {
     it('should extract module name from name section', async function() {
