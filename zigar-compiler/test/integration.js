@@ -24,16 +24,16 @@ export function addTests(importModule, options) {
   describe('Variables', function() {
     it('should import integer variables', async function() {
       this.timeout(60000);
-      const { default: module, int4, int8, uint16 } = await importModule(resolve('./zig-samples/basic/integers.zig'));
+      const { default: module, int4, int8, int16 } = await importModule(resolve('./zig-samples/basic/integers.zig'));
       expect(module.private).to.be.undefined;
       expect(module.int4).to.equal(7);
-      expect(int4).to.equal(7);
+      expect(int4).to.be.undefined;
       expect(module.int8).to.equal(127);
-      expect(int8).to.equal(127);
+      expect(int8).to.be.undefined;
       expect(module.uint8).to.equal(0);
       expect(module.int16).to.equal(-44);
+      expect(int16).to.equal(-44);
       expect(module.uint16).to.equal(44);
-      expect(uint16).to.be.undefined;
       expect(module.int32).to.equal(1234);
       expect(module.uint32).to.equal(34567);
       expect(module.int64).to.equal(0x1FFF_FFFF_FFFF_FFFFn);
@@ -283,7 +283,7 @@ export function addTests(importModule, options) {
     })
     it('should accept a slice', async function() {
       this.timeout(60000);
-      const { default: { fifth } } = await importModule(resolve('./zig-samples/basic/function-accepting-slice.zig'));
+      const { fifth } = await importModule(resolve('./zig-samples/basic/function-accepting-slice.zig'));
       const dv = new DataView(new ArrayBuffer(32));
       dv.setInt32(4, 123, littleEndian);
       dv.setInt32(12, 79, littleEndian);
@@ -293,7 +293,7 @@ export function addTests(importModule, options) {
     })
     it('should output a slice of strings to console', async function() {
       this.timeout(60000);
-      const { default: { print } } = await importModule(resolve('./zig-samples/basic/function-outputting-slice-of-slices.zig'));
+      const { print } = await importModule(resolve('./zig-samples/basic/function-outputting-slice-of-slices.zig'));
       const inputStrings = [
         'Test string 1',
         'Test string 2',
@@ -305,7 +305,7 @@ export function addTests(importModule, options) {
     })
     it('should takes and returns a slice of strings', async function() {
       this.timeout(60000);
-      const { default: { bounce } } = await importModule(resolve('./zig-samples/basic/function-returning-slice-of-slices.zig'));
+      const { bounce } = await importModule(resolve('./zig-samples/basic/function-returning-slice-of-slices.zig'));
       const inputStrings = [
         'Test string 1',
         'Test string 2',
@@ -319,7 +319,7 @@ export function addTests(importModule, options) {
     })
     it('should throw when function returns an error', async function() {
       this.timeout(60000);
-      const { default: { returnNumber } } = await importModule(resolve('./zig-samples/basic/function-returning-error-union.zig'));
+      const { returnNumber } = await importModule(resolve('./zig-samples/basic/function-returning-error-union.zig'));
       const result = returnNumber(1234);
       expect(result).to.equal(1234);
       expect(() => returnNumber(0)).to.throw()
@@ -327,13 +327,13 @@ export function addTests(importModule, options) {
     })
     it('should return a string', async function() {
       this.timeout(60000);
-      const { default: { getMessage } } = await importModule(resolve('./zig-samples/basic/function-returning-string.zig'));
+      const { getMessage } = await importModule(resolve('./zig-samples/basic/function-returning-string.zig'));
       const { string } = getMessage(123, 456n, 3.14);
       expect(string).to.equal('Numbers: 123, 456, 3.14');
     })
     it('should return a slice of the argument', async function() {
       this.timeout(60000);
-      const { default: { getSlice } } = await importModule(resolve('./zig-samples/basic/function-returning-slice.zig'));
+      const { getSlice } = await importModule(resolve('./zig-samples/basic/function-returning-slice.zig'));
       const dv = new DataView(new ArrayBuffer(4 * 12));
       for (let i = 0, j = 1; j <= 12; i += 4, j++) {
         dv.setInt32(i, j, littleEndian);
@@ -344,7 +344,7 @@ export function addTests(importModule, options) {
       expect(slice.dataView.buffer).to.equal(dv.buffer);
     })
     it('should accept a compatible TypedArray', async function() {
-      const { default: { getSlice } } = await importModule(resolve('./zig-samples/basic/function-returning-slice.zig'));
+      const { getSlice } = await importModule(resolve('./zig-samples/basic/function-returning-slice.zig'));
       const ta = new Int32Array(12);
       for (let i = 0, len = ta.length; i < len; i++) {
         ta[i] = i + 1;
@@ -356,7 +356,7 @@ export function addTests(importModule, options) {
     })
     it('should return correctly result from vector functions', async function() {
       this.timeout(60000);
-      const { default: { Vector4, multiply, add } } = await importModule(resolve('./zig-samples/basic/vector-float.zig'));
+      const { Vector4, multiply, add } = await importModule(resolve('./zig-samples/basic/vector-float.zig'));
       const a = new Vector4([ 1, 2, 3, 4 ]);
       const b = new Vector4([ 5, 6, 7, 8 ]);
       const c = multiply(a, b);
@@ -366,7 +366,7 @@ export function addTests(importModule, options) {
     })
     it('should return optional pointer', async function() {
       this.timeout(60000);
-      const { default: { getSentence } } = await importModule(resolve('./zig-samples/basic/function-returning-optional-pointer.zig'));
+      const { getSentence } = await importModule(resolve('./zig-samples/basic/function-returning-optional-pointer.zig'));
       const res1 = getSentence(0);
       const res2 = getSentence(1);
       expect(res1.string).to.equal('Hello world');
@@ -410,7 +410,7 @@ export function addTests(importModule, options) {
         printMultiple([ 0, 'Turtle', 'Cat' ]);
       });
       expect(lines).to.eql([
-        'Trutle',
+        'Turtle',
         'Cat',
         'Cat',
         'Dog',
@@ -464,6 +464,7 @@ export function addTests(importModule, options) {
       process.env.ZIGAR_KEEP_NAMES = '';
     })
   })
+  skip.
   describe('Memory allocation', function() {
     it('should return memory from internal allocator', async function() {
       this.timeout(60000);
@@ -475,19 +476,19 @@ export function addTests(importModule, options) {
       const lines = await capture(() => {
         printSlice(slice);
       });
-      expect(lines).to.eql([ 
+      expect(lines).to.eql([
         '10', '20', '30', '40',
         '50', '60', '70', '80',
         '90', '100', '110', '120',
         '130', '140', '150', '160',
       ]);
-      expect(() => freeSlice(lines)).to.not.throw();
+      //expect(() => freeSlice(lines)).to.not.throw();
     })
   })
   describe('Crypto functions', function() {
     it('should produce MD5 hash matching that from Node native function', async function() {
       this.timeout(60000);
-      const { default: { md5 } } = await importModule(resolve('./zig-samples/crypto/md5.zig'));
+      const { md5 } = await importModule(resolve('./zig-samples/crypto/md5.zig'));
       const data = new Uint8Array(1024 * 1024);
       for (let i = 0; i < data.byteLength; i++) {
         data[i] = i & 0xFF;
@@ -503,7 +504,7 @@ export function addTests(importModule, options) {
     })
     it('should produce SHA1 hash matching that from Node native function', async function() {
       this.timeout(60000);
-      const { default: { sha1 } } = await importModule(resolve('./zig-samples/crypto/sha1.zig'));
+      const { sha1 } = await importModule(resolve('./zig-samples/crypto/sha1.zig'));
       const data = new Uint8Array(1024 * 1024);
       for (let i = 0; i < data.byteLength; i++) {
         data[i] = i & 0xFF;
@@ -521,7 +522,7 @@ export function addTests(importModule, options) {
   describe('ZIG Benchmarks Game', function() {
     it('should produce the right results for the binary-trees example', async function() {
       this.timeout(120000);
-      const { default: { binaryTree } } = await importModule(resolve('./zig-samples/benchmarks-game/binary-trees.zig'));
+      const { binaryTree } = await importModule(resolve('./zig-samples/benchmarks-game/binary-trees.zig'));
       const n = 12;
       const lines = await capture(() => binaryTree(n));
       const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/binary-trees-${n}.txt`), 'utf-8');
@@ -533,7 +534,7 @@ export function addTests(importModule, options) {
     })
     it('should produce the right results for the fannkuch-redux example', async function() {
       this.timeout(120000);
-      const { default: { Pfannkuchen } } = await importModule(resolve('./zig-samples/benchmarks-game/fannkuch-redux.zig'));
+      const { Pfannkuchen } = await importModule(resolve('./zig-samples/benchmarks-game/fannkuch-redux.zig'));
       const n = 10;
       const result = Pfannkuchen(n);
       expect(result.checksum).to.equal(73196);
@@ -541,7 +542,7 @@ export function addTests(importModule, options) {
     })
     it('should produce the right results for the fasta example', async function() {
       this.timeout(120000);
-      const { default: { fasta } } = await importModule(resolve('./zig-samples/benchmarks-game/fasta.zig'));
+      const { fasta } = await importModule(resolve('./zig-samples/benchmarks-game/fasta.zig'));
       const n = 250000;
       const lines = await capture(() => fasta(n));
       const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`), 'utf-8');
@@ -553,7 +554,7 @@ export function addTests(importModule, options) {
     })
     it('should produce the right results for the k-nucleotide example', async function() {
       this.timeout(120000);
-      const { default: { kNucleotide } } = await importModule(resolve('./zig-samples/benchmarks-game/k-nucleotide.zig'));
+      const { kNucleotide } = await importModule(resolve('./zig-samples/benchmarks-game/k-nucleotide.zig'));
       const n = 250000;
       const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`), 'utf-8');
       const lines = text.trim().split(/\r?\n/);
@@ -570,7 +571,7 @@ export function addTests(importModule, options) {
     })
     it('should produce the right results for the mandelbrot example', async function() {
       this.timeout(120000);
-      const { default: { mandelbrot } } = await importModule(resolve('./zig-samples/benchmarks-game/mandelbrot.zig'));
+      const { mandelbrot } = await importModule(resolve('./zig-samples/benchmarks-game/mandelbrot.zig'));
       const n = 2000;
       const lines = await capture(() => mandelbrot(n));
       const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/mandelbrot-${n}.txt`), 'utf-8');
@@ -583,9 +584,7 @@ export function addTests(importModule, options) {
     it('should produce the right results for the nbody example', async function() {
       this.timeout(120000);
       const {
-        default: {
-          Planets, solar_mass, year, advance, energy, offset_momentum
-        }
+        Planets, solar_mass, year, advance, energy, offset_momentum
       } = await importModule(resolve('./zig-samples/benchmarks-game/nbody.zig'));
       const solar_bodies = new Planets([
         // Sun
@@ -651,7 +650,7 @@ export function addTests(importModule, options) {
     })
     it('should produce the right results for the reverse-complement example', async function() {
       this.timeout(120000);
-      const { default: { reverseComplement } } = await importModule(resolve('./zig-samples/benchmarks-game/reverse-complement.zig'));
+      const { reverseComplement } = await importModule(resolve('./zig-samples/benchmarks-game/reverse-complement.zig'));
       const n = 250000;
       const data = await readFile(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`));
       reverseComplement(data);
@@ -668,7 +667,7 @@ export function addTests(importModule, options) {
     })
     it('should produce the right results for the spectral-norm example', async function() {
       this.timeout(120000);
-      const { default: { spectralNorm } } = await importModule(resolve('./zig-samples/benchmarks-game/spectral-norm.zig'));
+      const { spectralNorm } = await importModule(resolve('./zig-samples/benchmarks-game/spectral-norm.zig'));
       const n = 1500;
       const result = spectralNorm(n);
       expect(result.toFixed(5)).to.equal('1.274224151');

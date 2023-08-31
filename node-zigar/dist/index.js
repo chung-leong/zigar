@@ -38,7 +38,7 @@ export async function load(url, context, nextLoad) {
     const names = [];
     for (const [ name, { get, set } ] of Object.entries(descriptors)) {
       // any prop with a setter needs to be involved through the object
-      if (!get && !set) {
+      if (!set) {
         names.push(name);
       }
     }

@@ -1271,7 +1271,7 @@ R"=====(
     if (recv !== ZIG) {
       recv = PARENT;
     }
-    for (let i = 0, offset = 0, len = this.length; i < len; i++, offset += elementSize) {
+    for (let i = 0, offset = dv.byteOffset, len = this.length; i < len; i++, offset += elementSize) {
       const childDV = new DataView(dv.buffer, offset, elementSize);
       slots[i] = constructor.call(recv, childDV);
     }

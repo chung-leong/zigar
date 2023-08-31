@@ -86,7 +86,7 @@ export async function runModule(source, options = {}) {
     _createTemplate: (process.env.ZIGAR_TARGET === 'WASM-COMPTIME') ? _createTemplate : empty,
   };
   const importObject = { env: imports };
-  const promise = (source instanceof Response)
+  const promise = (source[Symbol.toStringTag] === 'Response')
     ? WebAssembly.instantiateStreaming(source, importObject)
     : WebAssembly.instantiate(source, importObject);
   const { instance } = await promise;

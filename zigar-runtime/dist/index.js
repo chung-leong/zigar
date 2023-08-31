@@ -1909,7 +1909,7 @@ function createChildObjects$1(member, recv) {
   if (recv !== ZIG) {
     recv = PARENT;
   }
-  for (let i = 0, offset = 0, len = this.length; i < len; i++, offset += elementSize) {
+  for (let i = 0, offset = dv.byteOffset, len = this.length; i < len; i++, offset += elementSize) {
     const childDV = new DataView(dv.buffer, offset, elementSize);
     slots[i] = constructor.call(recv, childDV);
   }
@@ -3667,7 +3667,7 @@ async function runModule(source, options = {}) {
     _createTemplate: empty,
   };
   const importObject = { env: imports };
-  const promise = (source instanceof Response)
+  const promise = (source[Symbol.toStringTag] === 'Response')
     ? WebAssembly.instantiateStreaming(source, importObject)
     : WebAssembly.instantiate(source, importObject);
   const { instance } = await promise;
