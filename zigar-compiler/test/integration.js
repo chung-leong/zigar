@@ -240,6 +240,20 @@ export function addTests(importModule, options) {
       });
       expect(lines).to.eql([ 'apple', '123', '3.14', 'apple', '123', '3.14' ]);
     })
+    it('should import a tagged union that contains a tagged union', async function() {
+      this.timeout(60000);
+      const { default: module, Donut, VariantType } = await importModule(resolve('./zig-samples/basic/tagged-union-with-tagged-union.zig'));
+      expect(module.donut_a.Jelly.String.string).to.equal('Hello world');
+      expect(module.donut_a.Chocolate).to.be.null;
+      expect(module.donut_b.Jelly).to.be.null;
+      expect(module.donut_b.Chocolate).to.equal(1234);
+      expect(Donut(module.donut_a)).to.equal(Donut.Jelly);
+      expect(Donut(module.donut_b)).to.equal(Donut.Chocolate);
+      module.donut_a = { Chocolate: 5678 };
+      expect(module.donut_a.Jelly).to.be.null;
+      expect(module.donut_a.Chocolate).to.equal(5678);
+      expect(Donut(module.donut_a)).to.equal(Donut.Chocolate);
+    })
     // this does not work yet
     skip.permanently.
     it('should allow assignment to a pointer variable', async function() {
@@ -357,16 +371,16 @@ export function addTests(importModule, options) {
     })
     it('should accept optional pointer', async function() {
       this.timeout(60000);
-      const { default: { printName } } = await importModule(resolve('./zig-samples/basic/function-accepting-optional-pointer.zig'));
+      const { printName } = await importModule(resolve('./zig-samples/basic/function-accepting-optional-pointer.zig'));
       const lines = await capture(() => {
         printName("Bigus Dickus");
         printName(null);
       });
       expect(lines).to.eql([ 'Bigus Dickus', 'Anonymous' ]);
     })
-    it('shoud allocate a slice of structs', async function() {
+    it('should allocate a slice of structs', async function() {
       this.timeout(60000);
-      const { default: { allocate } } = await importModule(resolve('./zig-samples/basic/function-allocating-slice-of-structs.zig'));
+      const { allocate } = await importModule(resolve('./zig-samples/basic/function-allocating-slice-of-structs.zig'));
       const structs1 = allocate(10);
       expect(structs1).to.have.lengthOf(10);
       for (const [ index, struct ] of structs1.entries()) {
@@ -381,15 +395,56 @@ export function addTests(importModule, options) {
         expect(vector2[3]).to.equal(Math.PI * 1.00 / (index + 1));
       }
     })
+    it('should accept enum as argument', async function() {
+      this.timeout(60000);
+      const { Pet, printOne, printMultiple } = await importModule(resolve('./zig-samples/basic/function-accepting-enum-items.zig'));
+      const lines = await capture(() => {
+        printOne(Pet.Turtle);
+        printOne(Pet.Cat);
+        printOne('Cat');
+        printOne(0);
+        printMultiple([ Pet.Dog, Pet.Turtle, Pet.Cat ]);
+        printMultiple([ 0, 'Turtle', 'Cat' ]);
+      });
+      expect(lines).to.eql([
+        'Trutle',
+        'Cat',
+        'Cat',
+        'Dog',
+        'Dog',
+        'Turtle',
+        'Cat',
+        'Dog',
+        'Turtle',
+        'Cat',
+      ]);
+      expect(() => printOne('Cow')).to.throw(TypeError);
+      expect(() => printOne(88)).to.throw(TypeError);
+      expect(() => printMultiple([ 'Dog', 'Cat', 'Tanooki' ])).to.throw(TypeError);
+    })
+    it('should import the same function under different names', async function() {
+      this.timeout(60000);
+      const { hello1, hello2, hello3 } = await importModule(resolve('./zig-samples/basic/function-under-different-names.zig'));
+      const lines = await capture(() => {
+        hello1();
+        hello2();
+        hello3();
+      });
+      expect(lines).to.eql([
+        'Hello world',
+        'Hello world',
+        'Hello world',
+      ]);
+    })
   })
-  describe('Error handling', async function() {
+  describe('Error handling', function() {
     beforeEach(function() {
       process.env.ZIGAR_KEEP_NAMES = '1';
     })
     skip.permanently.unless(process.env.ZIGAR_TARGET === 'WASM-COMPTIME').
     it('should produce an error return trace', async function() {
       this.timeout(60000);
-      const { default: { fail } } = await importModule(resolve('./zig-samples/basic/error-trace.zig'));
+      const { fail } = await importModule(resolve('./zig-samples/basic/error-trace.zig'));
       if (process.env.ZIGAR_OPTIMIZE === 'Debug' || process.env.ZIGAR_OPTIMIZE === 'ReleaseSafe') {
         expect(fail).to.throw(WebAssembly.RuntimeError)
           .with.property('stack')
@@ -404,6 +459,26 @@ export function addTests(importModule, options) {
     })
     afterEach(function() {
       process.env.ZIGAR_KEEP_NAMES = '';
+    })
+  })
+  describe('Memory allocation', function() {
+    it('should return memory from internal allocator', async function() {
+      this.timeout(60000);
+      const { createSlice, printSlice, freeSlice } = await importModule(resolve('./zig-samples/basic/memory-allocation.zig'));
+      const slice = createSlice(16);
+      for (let i = 0, { length, set } = slice; i < length; i++) {
+        set(i, (i + 1) * 10);
+      }
+      const lines = await capture(() => {
+        printSlice(slice);
+      });
+      expect(lines).to.eql([ 
+        '10', '20', '30', '40',
+        '50', '60', '70', '80',
+        '90', '100', '110', '120',
+        '130', '140', '150', '160',
+      ]);
+      expect(() => freeSlice(lines)).to.not.throw();
     })
   })
   describe('Crypto functions', function() {
