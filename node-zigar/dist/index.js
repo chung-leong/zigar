@@ -7,11 +7,12 @@ const baseURL = pathToFileURL(`${cwd()}/`).href;
 const extensionsRegex = /\.zig$/;
 
 export function resolve(specifier, context, nextResolve) {
-  if (extensionsRegex.test(specifier)) {
-    const { parentURL = baseURL } = context;
+  const { parentURL = baseURL } = context;
+  const { pathname, href } = new URL(specifier, parentURL);
+  if (extensionsRegex.test(pathname)) {
     return {
       shortCircuit: true,
-      url: new URL(specifier, parentURL).href,
+      url: href,
     };
   }
   return nextResolve(specifier);
