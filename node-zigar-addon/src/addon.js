@@ -114,6 +114,7 @@ export function writeToConsole(buffer) {
         consolePending = '';
       }, 250);
     }
+    /* c8 ignore next 3 */
   } catch (err) {
     console.error(err);
   }
