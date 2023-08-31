@@ -656,6 +656,41 @@ describe('Struct functions', function() {
       object.$ = {};
       expect({ ...object.$ }).to.eql({ dog: 1234, cat: 4567 });
     })
+    it('should define a struct that contains another struct', function() {
+      const structureA = beginStructure({
+        type: StructureType.Struct,
+        name: 'StructA',
+        size: 4,
+      });
+      attachMember(structureA, {
+        type: MemberType.Int,
+        name: 'number',
+        isSigned: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const StructA = finalizeStructure(structureA);
+      const structureB = beginStructure({
+        type: StructureType.Struct,
+        name: 'StructB',
+        size: 4,
+      });
+      attachMember(structureB, {
+        type: MemberType.Object,
+        name: 'a',
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: structureA,
+      });
+      const StructB = finalizeStructure(structureB);
+      const buffer = new ArrayBuffer(8);
+      const dv = new DataView(buffer, 4, 4);
+      dv.setInt32(0, 1234, true);
+      const object = StructB(dv);
+      expect(object.a.number).to.equal(1234);
+    })
     it('should define a struct that contains pointers', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,

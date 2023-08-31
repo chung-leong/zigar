@@ -114,6 +114,28 @@ describe('Vector functions', function() {
       expect(indexList).to.eql([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       expect(valueList).to.eql([ 1234, 0, 0, 0, 4567, 0, 0, 0 ]);
     })
+    it('should correctly cast a data view with byteOffset', function() {
+      const structure = beginStructure({
+        type: StructureType.Vector,
+        name: 'Hello',
+        size: 4 * 4,
+      });
+      const constructor = function() {};
+      attachMember(structure, {
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { constructor },
+      });
+      const Hello = finalizeStructure(structure);
+      const buffer = new ArrayBuffer(32);
+      const dv = new DataView(buffer, 16, 16);
+      dv.setUint32(0, 1234, true);
+      dv.setUint32(8, 5678, true);
+      const vector = Hello(dv);
+      expect([ ...vector ]).to.eql([ 1234, 0, 5678, 0 ]);
+    })
     it('should define structure for holding an float vector', function() {
       const structure = beginStructure({
         type: StructureType.Vector,

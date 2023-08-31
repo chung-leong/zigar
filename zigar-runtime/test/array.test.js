@@ -686,6 +686,52 @@ describe('Array functions', function() {
       expect(object[0]['*']).to.be.instanceOf(Hello);
       expect(object[0].dog).to.be.equal(1);
     })
+    it('should correctly cast a data view with byteOffset', function() {
+      const structStructure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 4 * 2,
+      });
+      attachMember(structStructure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isSigned: true,
+        isRequired: true,
+        byteSize: 4,
+        bitOffset: 0,
+        bitSize: 32,
+      });
+      attachMember(structStructure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isSigned: true,
+        isRequired: true,
+        byteSize: 4,
+        bitOffset: 32,
+        bitSize: 32,
+      });
+      const Hello = finalizeStructure(structStructure);
+      const structure = beginStructure({
+        type: StructureType.Array,
+        name: '[4]Hello',
+        size: 8 * 4,
+        hasPointer: false,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        byteSize: 8,
+        structure: structStructure,
+      });
+      const HelloArray = finalizeStructure(structure);
+      const buffer = new ArrayBuffer(64);
+      const dv = new DataView(buffer, 32, 32);
+      dv.setInt32(0, 1234, true);
+      dv.setInt32(4, 4567, true);
+      const array = HelloArray(dv);
+      expect({ ...array[0] }).to.eql({ dog: 1234, cat: 4567 });
+    })
+
     it('should allow reinitialization through the dollar property', function() {
       const structure = beginStructure({
         type: StructureType.Array,
