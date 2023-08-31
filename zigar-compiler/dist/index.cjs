@@ -605,21 +605,22 @@ const MemoryDisposition = {
   Link: 2,
 };
 
-async function runModule(module, options = {}) {
+async function runModule(source, options = {}) {
   const {
     omitFunctions = false,
     slots = {},
     variables,
     methodRunner,
   } = options;
-  let nextValueIndex = 1;
-  let valueTable = { 0: null };
-  const valueIndices = new WeakMap();
-  let nextStringIndex = 1;
-  const stringTable = { 0: null };
-  const stringIndices = {};
+  let nextValueIndex = 0;
+  let valueTable = null;
+  let valueIndices = null;
+  let nextStringIndex = 0;
+  let stringTable = null;
+  let stringIndices = null;
   const decoder = new TextDecoder();
   const callContexts = {};
+  let callContextCount = 0;
   const globalSlots = slots;
   const structures = [];
   const imports = {
@@ -654,9 +655,14 @@ async function runModule(module, options = {}) {
     _createObject: _createObject ,
     _createTemplate: _createTemplate ,
   };
-  const { instance } = await WebAssembly.instantiate(module, { env: imports });
+  const importObject = { env: imports };
+  const promise = (source instanceof Response)
+    ? WebAssembly.instantiateStreaming(source, importObject)
+    : WebAssembly.instantiate(source, importObject);
+  const { instance } = await promise;
   const { memory: wasmMemory, define, run, alloc, free, safe } = instance.exports;
   let consolePending = '', consoleTimeout = 0;
+  resetTables();
 
   {
     // call factory function
@@ -667,6 +673,19 @@ async function runModule(module, options = {}) {
       throwError(errorIndex);
     }
     return { structures, runtimeSafety };
+  }
+
+  function resetTables() {
+    if (nextValueIndex !== 1) {
+      nextValueIndex = 1;
+      valueTable = { 0: null };
+      valueIndices = new WeakMap();
+    }
+    if (nextStringIndex !== 1) {
+      nextStringIndex = 1;
+      stringTable = { 0: null };
+      stringIndices = {};
+    }
   }
 
   function getString(address, len) {
@@ -704,8 +723,8 @@ async function runModule(module, options = {}) {
 
   function _startCall(ctxAddr) {
     callContexts[ctxAddr] = { bufferMap: new Map() };
+    callContextCount++;
   }
-
 
   function _endCall(ctxAddr) {
     // move data from WASM memory into buffers
@@ -717,10 +736,10 @@ async function runModule(module, options = {}) {
       }
     }
     delete callContexts[ctxAddr];
-    if (Object.keys(callContexts).length === 0) {
-      // TODO: clear the value table
-      // nextValueIndex = 1;
-      // valueTable = { 0: null };
+    callContextCount--;
+    if (callContextCount === 0) {
+      // clear the value tables
+      resetTables();
       // output pending text to console
       if (consolePending) {
         console.log(consolePending);
@@ -1104,6 +1123,7 @@ function generateCode(structures, params) {
     exportables.push(method.name);
   }
   for (const member of root.static.members) {
+    // TODO: this code is out dated
     // only read-only properties are exportable
     let readOnly = false;
     if (member.type === MemberType.Type) {
@@ -2588,11 +2608,9 @@ async function transpile(path$1, options = {}) {
     wasmLoader,
     ...otherOptions
   } = options;
-  if (process.env.NODE_ENV !== 'production') {
-    if (typeof(wasmLoader) !== 'function') {
-      if (embedWASM !== true) {
-        throw new Error(`wasmLoader is a required option when embedWASM is false`);
-      }
+  if (typeof(wasmLoader) !== 'function') {
+    if (embedWASM !== true) {
+      throw new Error(`wasmLoader is a required option when embedWASM is false`);
     }
   }
   const wasmPath = await compile(path$1, { ...otherOptions, optimize, arch: 'wasm32', platform: 'freestanding' });

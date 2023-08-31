@@ -71,13 +71,19 @@ function verifyOptions(options) {
 
 export default function createPlugin(options = {}) {
   verifyOptions(options);
+  let embedWASMDefault = false;
   return {
     name: 'Zigar',
+    apply(config, { command }) {
+      // embed WASM by default when Vite is serving
+      embedWASMDefault = (command === 'serve');
+      return true;
+    },
     async load(id) {
       if (id.endsWith('.zig')) {
         const {
           useReadFile = false,
-          embedWASM = false,
+          embedWASM = embedWASMDefault,
           ...otherOptions
         } = options;
         const wasmLoader = async (name, dv) => {
@@ -97,8 +103,8 @@ export default function createPlugin(options = {}) {
 
 function fetchWASM(refID) {
   return `(async () => {
-  const source = fetch(import.meta.ROLLUP_FILE_URL_${refID});
-  return WebAssembly.compileStreaming(source);
+  const url = import.meta.ROLLUP_FILE_URL_${refID};
+  return fetch(url);
 })()`;
 }
 

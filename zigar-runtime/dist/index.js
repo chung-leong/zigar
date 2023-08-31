@@ -3599,7 +3599,7 @@ const MemoryDisposition = {
   Link: 2,
 };
 
-async function linkModule(modulePromise, params = {}) {
+async function linkModule(sourcePromise, params = {}) {
   const {
     resolve,
     reject,
@@ -3607,8 +3607,8 @@ async function linkModule(modulePromise, params = {}) {
     ...linkParams
   } = params;
   try {
-    const module = await modulePromise;
-    const result = await runModule(module, linkParams);
+    const source = await sourcePromise;
+    const result = await runModule(source, linkParams);
     resolve(result);
   } catch (err) {
     reject(err);
@@ -3616,7 +3616,7 @@ async function linkModule(modulePromise, params = {}) {
   return promise;
 }
 
-async function runModule(module, options = {}) {
+async function runModule(source, options = {}) {
   const {
     omitFunctions = false,
     slots = {},
@@ -3666,7 +3666,11 @@ async function runModule(module, options = {}) {
     _createObject: empty,
     _createTemplate: empty,
   };
-  const { instance } = await WebAssembly.instantiate(module, { env: imports });
+  const importObject = { env: imports };
+  const promise = (source instanceof Response)
+    ? WebAssembly.instantiateStreaming(source, importObject)
+    : WebAssembly.instantiate(source, importObject);
+  const { instance } = await promise;
   const { memory: wasmMemory, define, run, alloc, free, safe } = instance.exports;
   let consolePending = '', consoleTimeout = 0;
   resetTables();

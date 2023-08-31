@@ -88,8 +88,8 @@ async function loader(content, map, meta) {
 
 function fetchWASM(name) {
   return `(async () => {
-  const source = fetch(${JSON.stringify(name)});
-  return WebAssembly.compileStreaming(source);
+  const url = ${JSON.stringify(name)};
+  return fetch(url);
 })()`;
 }
 
