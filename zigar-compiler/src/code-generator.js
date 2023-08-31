@@ -142,7 +142,7 @@ export function generateCode(structures, params) {
     if (member.type === MemberType.Type) {
       readOnly = true;
     } else if (member.type === MemberType.Object && member.structure.type === StructureType.Pointer) {
-      if (member.isConst) {
+      if (member.structure.isConst) {
         readOnly = true;
       }
     }

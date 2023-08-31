@@ -24,13 +24,16 @@ export function addTests(importModule, options) {
   describe('Variables', function() {
     it('should import integer variables', async function() {
       this.timeout(60000);
-      const { default: module } = await importModule(resolve('./zig-samples/basic/integers.zig'));
+      const { default: module, int4, int8, uint16 } = await importModule(resolve('./zig-samples/basic/integers.zig'));
       expect(module.private).to.be.undefined;
       expect(module.int4).to.equal(7);
+      expect(int4).to.equal(7);
       expect(module.int8).to.equal(127);
+      expect(int8).to.equal(127);
       expect(module.uint8).to.equal(0);
       expect(module.int16).to.equal(-44);
       expect(module.uint16).to.equal(44);
+      expect(uint16).to.be.undefined;
       expect(module.int32).to.equal(1234);
       expect(module.uint32).to.equal(34567);
       expect(module.int64).to.equal(0x1FFF_FFFF_FFFF_FFFFn);

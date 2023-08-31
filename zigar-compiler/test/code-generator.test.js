@@ -404,6 +404,7 @@ describe('Code generation', function() {
         type: StructureType.Pointer,
         name: "*int32",
         size: 0,
+        isConst: true,
         hasPointer: true,
         instance: {
           members: [
@@ -460,7 +461,10 @@ describe('Code generation', function() {
       expect(code).to.contain('package');
       expect(code).to.contain('useStruct()');
       expect(code).to.contain('usePointer()');
-      expect(code).to.contain('panda');
+      // find export section
+      const m = /export \{([\s\S]*)\}/.exec(code);
+      expect(m).to.not.be.null;
+      expect(m[1]).to.contain('panda,');
     })
     it('should generate code for exporting a function', function() {
       const argStructure = {
