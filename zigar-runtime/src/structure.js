@@ -151,7 +151,7 @@ export function getShortName(s) {
 export function finalizeStructure(s) {
   try {
     const f = factories[s.type];
-    if (process.env.NODE_ENV !== 'production') {
+    if (process.env.ZIGAR_DEV) {
       /* c8 ignore next 10 */
       if (typeof(f) !== 'function') {
         const [ name ] = Object.entries(StructureType).find(a => a[1] === s.type);

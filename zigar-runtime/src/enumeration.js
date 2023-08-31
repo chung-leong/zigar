@@ -14,7 +14,7 @@ export function finalizeEnumeration(s) {
     },
     options,
   } = s;
-  if (process.env.NODE_DEV !== 'production') {
+  if (process.env.ZIGAR_DEV) {
     /* c8 ignore next 5 */
     for (const member of members) {
       if (member.bitOffset !== undefined) {

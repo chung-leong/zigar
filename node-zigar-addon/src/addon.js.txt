@@ -445,6 +445,17 @@ R"=====(
     return tags;
   }
 
+  function isBuffer(arg, typedArray) {
+    const tag = arg?.[Symbol.toStringTag];
+    if (tag === 'DataView' || tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
+      return true;
+    } else if (typedArray && tag === typedArray.name) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
   function getTypeName({ type, isSigned, bitSize, byteSize }) {
     if (type === MemberType.Int) {
       return `${bitSize <= 32 ? '' : 'Big' }${isSigned ? 'Int' : 'Uint'}${bitSize}`;
@@ -1153,15 +1164,6 @@ R"=====(
       hasPointer,
       options,
     } = s;
-    if (process.env.NODE_DEV !== 'production') {
-      /* c8 ignore next 6 */
-      if (member.bitOffset !== undefined) {
-        throw new Error(`bitOffset must be undefined for array member`);
-      }
-      if (member.slot !== undefined) {
-        throw new Error(`slot must be undefined for array member`);
-      }
-    }
     const objectMember = (member.type === MemberType.Object) ? member : null;
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
@@ -2011,14 +2013,6 @@ R"=====(
       },
       options,
     } = s;
-    if (process.env.NODE_DEV !== 'production') {
-      /* c8 ignore next 5 */
-      for (const member of members) {
-        if (member.bitOffset !== undefined) {
-          throw new Error(`bitOffset must be undefined for enumeration member`);
-        }
-      }
-    }
     const Primitive = getPrimitiveClass(members[0]);
     const { get: getValue } = getAccessors(members[0], options);
     const count = members.length;
@@ -2263,6 +2257,16 @@ R"=====(
             } else if (isTargetSlice) {
               // autovivificate target object
               const autoObj = new Target(arg);
+              if ((typeof(process) !== 'object' || process.env.NODE_ENV !== 'production') && (!undefined || !undefined.PROD)) {
+                // creation of a new slice using a typed array is probably
+                // not what the user wants; it's more likely that the intention
+                // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
+                if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
+                  const created = addArticle(targetStructure.typedArray.name);
+                  const source = addArticle(arg.constructor.name);
+                  console.warn(`Implicitly creating ${created} from ${source}`);
+                }
+              }
               arg = autoObj;
             } else {
               throwInvalidPointerTarget(s, arg);
@@ -2403,15 +2407,6 @@ R"=====(
       hasPointer,
       options,
     } = s;
-    if (process.env.NODE_DEV !== 'production') {
-      /* c8 ignore next 6 */
-      if (member.bitOffset !== undefined) {
-        throw new Error(`bitOffset must be undefined for slice member`);
-      }
-      if (member.slot !== undefined) {
-        throw new Error(`slot must be undefined for slice member`);
-      }
-    }
     const objectMember = (member.type === MemberType.Object) ? member : null;
     const { byteSize: elementSize, structure: elementStructure } = member;
     const typedArray = s.typedArray = getTypedArrayClass(member);
@@ -2583,12 +2578,6 @@ R"=====(
     if (!sentinel) {
       return;
     }
-    if (process.env.NODE_DEV !== 'production') {
-      /* c8 ignore next 3 */
-      if (sentinel.bitOffset === undefined) {
-        throw new Error(`bitOffset must be 0 for sentinel member`);
-      }
-    }
     const { get: getSentinelValue } = getAccessors(sentinel, options);
     const value = getSentinelValue.call(template, 0);
     const { get } = getAccessors(member, options);
@@ -2634,15 +2623,6 @@ R"=====(
       },
       options,
     } = s;
-    if (process.env.NODE_DEV !== 'production') {
-      /* c8 ignore next 6 */
-      if (member.bitOffset !== undefined) {
-        throw new Error(`bitOffset must be undefined for vector member`);
-      }
-      if (member.slot !== undefined) {
-        throw new Error(`slot must be undefined for vector member`);
-      }
-    }
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
       let self, dv;
@@ -2946,7 +2926,7 @@ R"=====(
   function finalizeStructure(s) {
     try {
       const f = factories$1[s.type];
-      if ("production" !== 'production') ;
+      if (false) ;
       const constructor = f(s);
       if (constructor) {
         Object.defineProperties(constructor, {

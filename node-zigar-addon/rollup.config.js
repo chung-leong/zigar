@@ -8,8 +8,8 @@ export default {
   plugins: [
     Replace({
       preventAssignment: true,
-      'process.env.NODE_ENV': '"production"',
       'process.env.ZIGAR_TARGET': '"NODE-CPP-EXT"',
+      'process.env.ZIGAR_DEV': 'false',
     }),
   ],
   output: {

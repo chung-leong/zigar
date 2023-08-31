@@ -13,7 +13,7 @@ export function finalizeVector(s) {
     },
     options,
   } = s;
-  if (process.env.NODE_DEV !== 'production') {
+  if (process.env.ZIGAR_DEV) {
     /* c8 ignore next 6 */
     if (member.bitOffset !== undefined) {
       throw new Error(`bitOffset must be undefined for vector member`);

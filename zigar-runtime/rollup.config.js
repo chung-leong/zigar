@@ -6,6 +6,7 @@ export default {
     Replace({
       preventAssignment: true,
       'process.env.ZIGAR_TARGET': '"WASM-RUNTIME"',
+      'process.env.ZIGAR_DEV': 'false',
     }),
   ],
   output: {

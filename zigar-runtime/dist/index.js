@@ -1224,13 +1224,6 @@ function isByteAligned({ bitOffset, bitSize, byteSize }) {
 
 function getAccessors(member, options = {}) {
   const f = factories$1[member.type];
-  if (process.env.NODE_ENV !== 'production') {
-    /* c8 ignore next 10 */
-    if (typeof(f) !== 'function') {
-      const [ name ] = Object.entries(MemberType).find(a => a[1] === member.type);
-      throw new Error(`No factory for ${name}: ${member.name}`);
-    }
-  }
   return {
     get: f('get', member, options),
     set: f('set', member, options)
@@ -1809,15 +1802,6 @@ function finalizeArray(s) {
     hasPointer,
     options,
   } = s;
-  if (process.env.NODE_DEV !== 'production') {
-    /* c8 ignore next 6 */
-    if (member.bitOffset !== undefined) {
-      throw new Error(`bitOffset must be undefined for array member`);
-    }
-    if (member.slot !== undefined) {
-      throw new Error(`slot must be undefined for array member`);
-    }
-  }
   const objectMember = (member.type === MemberType.Object) ? member : null;
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
@@ -2727,14 +2711,6 @@ function finalizeEnumeration(s) {
     },
     options,
   } = s;
-  if (process.env.NODE_DEV !== 'production') {
-    /* c8 ignore next 5 */
-    for (const member of members) {
-      if (member.bitOffset !== undefined) {
-        throw new Error(`bitOffset must be undefined for enumeration member`);
-      }
-    }
-  }
   const Primitive = getPrimitiveClass(members[0]);
   const { get: getValue } = getAccessors(members[0], options);
   const count = members.length;
@@ -2979,7 +2955,7 @@ function finalizePointer(s) {
           } else if (isTargetSlice) {
             // autovivificate target object
             const autoObj = new Target(arg);
-            if (process.env.NODE_ENV !== 'production') {
+            if ((typeof(process) !== 'object' || process.env.NODE_ENV !== 'production') && (!import.meta.env || !import.meta.env.PROD)) {
               // creation of a new slice using a typed array is probably
               // not what the user wants; it's more likely that the intention
               // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
@@ -3129,15 +3105,6 @@ function finalizeSlice(s) {
     hasPointer,
     options,
   } = s;
-  if (process.env.NODE_DEV !== 'production') {
-    /* c8 ignore next 6 */
-    if (member.bitOffset !== undefined) {
-      throw new Error(`bitOffset must be undefined for slice member`);
-    }
-    if (member.slot !== undefined) {
-      throw new Error(`slot must be undefined for slice member`);
-    }
-  }
   const objectMember = (member.type === MemberType.Object) ? member : null;
   const { byteSize: elementSize, structure: elementStructure } = member;
   const typedArray = s.typedArray = getTypedArrayClass(member);
@@ -3309,12 +3276,6 @@ function getSentinel(structure, options) {
   if (!sentinel) {
     return;
   }
-  if (process.env.NODE_DEV !== 'production') {
-    /* c8 ignore next 3 */
-    if (sentinel.bitOffset === undefined) {
-      throw new Error(`bitOffset must be 0 for sentinel member`);
-    }
-  }
   const { get: getSentinelValue } = getAccessors(sentinel, options);
   const value = getSentinelValue.call(template, 0);
   const { get } = getAccessors(member, options);
@@ -3360,15 +3321,6 @@ function finalizeVector(s) {
     },
     options,
   } = s;
-  if (process.env.NODE_DEV !== 'production') {
-    /* c8 ignore next 6 */
-    if (member.bitOffset !== undefined) {
-      throw new Error(`bitOffset must be undefined for vector member`);
-    }
-    if (member.slot !== undefined) {
-      throw new Error(`slot must be undefined for vector member`);
-    }
-  }
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -3621,13 +3573,7 @@ function getShortName(s) {
 function finalizeStructure(s) {
   try {
     const f = factories[s.type];
-    if (process.env.NODE_ENV !== 'production') {
-      /* c8 ignore next 10 */
-      if (typeof(f) !== 'function') {
-        const [ name ] = Object.entries(StructureType).find(a => a[1] === s.type);
-        throw new Error(`No factory for ${name}: ${f}`);
-      }
-    }
+    if (false) ;
     const constructor = f(s);
     if (constructor) {
       Object.defineProperties(constructor, {

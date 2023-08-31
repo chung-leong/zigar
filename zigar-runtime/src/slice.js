@@ -36,7 +36,7 @@ export function finalizeSlice(s) {
     hasPointer,
     options,
   } = s;
-  if (process.env.NODE_DEV !== 'production') {
+  if (process.env.ZIGAR_DEV) {
     /* c8 ignore next 6 */
     if (member.bitOffset !== undefined) {
       throw new Error(`bitOffset must be undefined for slice member`);
@@ -216,7 +216,7 @@ export function getSentinel(structure, options) {
   if (!sentinel) {
     return;
   }
-  if (process.env.NODE_DEV !== 'production') {
+  if (process.env.ZIGAR_DEV) {
     /* c8 ignore next 3 */
     if (sentinel.bitOffset === undefined) {
       throw new Error(`bitOffset must be 0 for sentinel member`);

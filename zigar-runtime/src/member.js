@@ -115,7 +115,7 @@ export function isByteAligned({ bitOffset, bitSize, byteSize }) {
 
 export function getAccessors(member, options = {}) {
   const f = factories[member.type];
-  if (process.env.NODE_ENV !== 'production') {
+  if (process.env.ZIGAR_DEV) {
     /* c8 ignore next 10 */
     if (typeof(f) !== 'function') {
       const [ name ] = Object.entries(MemberType).find(a => a[1] === member.type);
