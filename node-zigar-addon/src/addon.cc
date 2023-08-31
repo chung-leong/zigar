@@ -1,19 +1,34 @@
 #include "addon.h"
 
+
+
+static size_t GetExtraCount(uint8_t ptr_align) {
+  size_t alignment = (1 << ptr_align);
+  size_t default_alignment = sizeof(size_t) * 2;
+  return (alignment <= default_alignment) ? 0 : alignment;
+}
+
+static size_t GetAddressMask(size_t extra) {
+  return (extra) ? ~(extra - 1) : -1;
+}
+
 static Result AllocateMemory(Call* call,
                              size_t len,
                              uint8_t ptr_align,
                              Memory* dest) {
   auto isolate = call->isolate;
   auto context = call->context;
+  auto extra = GetExtraCount(ptr_align);
+  auto address_mask = GetAddressMask(extra);
   if (call->mem_pool.IsEmpty()) {
     call->mem_pool = Array::New(isolate);
   }
-  auto buffer = ArrayBuffer::New(isolate, len);
+  auto buffer = ArrayBuffer::New(isolate, len + extra);
   auto index = call->mem_pool->Length();
   call->mem_pool->Set(context, index, buffer).Check();
   std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
-  dest->bytes = reinterpret_cast<uint8_t*>(store->Data());
+  auto address = reinterpret_cast<size_t>(store->Data());
+  dest->bytes = reinterpret_cast<uint8_t*>((address & address_mask) + extra);
   dest->len = len;
   return Result::OK;
 }
@@ -25,6 +40,8 @@ static Result FreeMemory(Call* call,
     return Result::Failure;
   }
   auto context = call->context;
+  auto extra = GetExtraCount(ptr_align);
+  auto address_mask = GetAddressMask(extra);
   int buf_count = call->mem_pool->Length();
   int index = -1;
   size_t address = reinterpret_cast<size_t>(memory.bytes);
@@ -32,10 +49,10 @@ static Result FreeMemory(Call* call,
     auto item = call->mem_pool->Get(context, i).ToLocalChecked();
     if (item->IsArrayBuffer()) {
       Local<ArrayBuffer> buffer = item.As<ArrayBuffer>();
-      if (buffer->ByteLength() == memory.len) {
+      if (buffer->ByteLength() == memory.len + extra) {
         std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
-        size_t buf_start = reinterpret_cast<size_t>(store->Data());
-        if (buf_start == address) {
+        size_t buf_start = reinterpret_cast<size_t>(store->Data()) ;
+        if (((buf_start & address_mask) + extra) == address) {
           index = i;
           break;
         }
@@ -57,10 +74,12 @@ static Result GetMemory(Call* call,
   if (!object->Get(context, call->symbol_memory).ToLocal(&value) || !value->IsDataView()) {
     return Result::Failure;
   }
-  auto buffer = value.As<DataView>()->Buffer();
+  auto dv = value.As<DataView>();
+  auto buffer = dv->Buffer();
+  auto offset = dv->ByteOffset();
   auto content = buffer->GetBackingStore();
-  dest->bytes = reinterpret_cast<uint8_t*>(content->Data());
-  dest->len = content->ByteLength();
+  dest->bytes = reinterpret_cast<uint8_t*>(content->Data()) + offset;
+  dest->len = dv->ByteLength();
   return Result::OK;
 }
 
