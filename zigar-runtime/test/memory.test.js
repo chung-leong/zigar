@@ -4,7 +4,9 @@ import {
   getMemoryCopier,
   getMemoryResetter,
   getBitAlignFunction,
+  restoreMemory,
 } from '../src/memory.js';
+import { MEMORY, SOURCE } from '../src/symbol.js';
 
 describe('Memory functions', function() {
   describe('getMemoryCopier', function() {
@@ -139,6 +141,28 @@ describe('Memory functions', function() {
       expect(misaligned.getUint8(2)).to.equal(0x10);
       expect(misaligned.getUint8(3)).to.equal(0xE0);
       expect(misaligned.getUint8(4)).to.equal(0xFF);
+    })
+  })
+  describe('restoreMemory', function() {
+    afterEach(function() {
+      process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
+    })
+    it('should restore WASM memory buffer that has become detached', function() {
+      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
+      const memory = new WebAssembly.Memory({
+        initial: 128,
+        maximum: 1024,
+      });
+      const dv = new DataView(memory.buffer, 0, 8);
+      dv[SOURCE] = { memory, address: 0, len: 8 };
+      const object = {
+        [MEMORY]: dv,
+      };
+      memory.grow(1);
+      expect(() => dv.getInt8(0)).to.throw(TypeError);
+      restoreMemory.call(object);
+      expect(object[MEMORY]).to.not.equal(dv);
+      expect(() => object[MEMORY].getInt8(0)).to.not.throw();
     })
   })
 })

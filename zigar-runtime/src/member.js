@@ -15,7 +15,8 @@ import {
   throwEnumExpected,
   rethrowRangeError,
 } from './error.js';
-import { MEMORY, SLOTS, SOURCE } from './symbol.js';
+import { restoreMemory } from './memory.js';
+import { MEMORY, SLOTS } from './symbol.js';
 
 export const MemberType = {
   Void: 0,
@@ -403,15 +404,3 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
   }
 }
 
-export function restoreMemory() {
-  const dv = this[MEMORY];
-  const source = dv[SOURCE];
-  if (!source || dv.buffer.byteLength !== 0) {
-    return false;
-  }
-  const { memory, address, len } = source;
-  const newDV = new DataView(memory.buffer, address, len);
-  newDV[SOURCE] = source;
-  Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
-  return true;
-}

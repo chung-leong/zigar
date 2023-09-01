@@ -1,5 +1,5 @@
 import { MemberType, isByteAligned, getAccessors } from './member.js';
-import { getMemoryCopier } from './memory.js';
+import { getMemoryCopier, restoreMemory } from './memory.js';
 import { getCompatibleTags, getTypedArrayClass, requireDataView } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { MEMORY, COMPAT } from './symbol.js';
@@ -40,6 +40,8 @@ export function finalizePrimitive(s) {
   const specialKeys = getSpecialKeys(s);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
+      restoreMemory.call(this);
+      restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
     } else {
       if (arg && typeof(arg) === 'object') {

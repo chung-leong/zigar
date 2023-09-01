@@ -1,6 +1,6 @@
 import { StructureType } from './structure.js';
-import { MemberType, restoreMemory } from './member.js';
-import { getMemoryCopier } from './memory.js';
+import { MemberType } from './member.js';
+import { getMemoryCopier, restoreMemory } from './memory.js';
 import { throwBufferSizeMismatch, throwTypeMismatch } from './error.js';
 import { MEMORY } from './symbol.js';
 import { isTypedArray } from './data-view.js';
@@ -64,16 +64,12 @@ export function getDataViewAccessors(structure) {
   const copy = getMemoryCopier(size, type === StructureType.Slice);
   return {
     get() {
-      if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
-        restoreMemory.call(this);
-      }
+      restoreMemory.call(this);
       return this[MEMORY];
     },
     set(dv) {
       checkDataView(dv);
-      if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
-        restoreMemory.call(this);
-      }
+      restoreMemory.call(this);
       const dest = this[MEMORY];
       if (dest.byteLength !== dv.byteLength) {
         throwBufferSizeMismatch(structure, dv, this);

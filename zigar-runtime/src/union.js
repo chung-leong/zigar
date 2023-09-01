@@ -1,6 +1,6 @@
 import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier } from './memory.js';
+import { getMemoryCopier, restoreMemory } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
@@ -147,6 +147,8 @@ export function finalizeUnion(s) {
   const specialKeys = getSpecialKeys(s);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
+      restoreMemory.call(this);
+      restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (pointerCopier) {
         pointerCopier.call(this, arg);
@@ -180,6 +182,7 @@ export function finalizeUnion(s) {
           }
         } else if (found === 0) {
           if (template) {
+            restoreMemory.call(this);
             copy(this[MEMORY], template[MEMORY]);
             if (pointerCopier) {
               pointerCopier.call(this, template);

@@ -1,5 +1,5 @@
 import { getAccessors } from './member.js';
-import { getMemoryCopier } from './memory.js';
+import { getMemoryCopier, restoreMemory } from './memory.js';
 import { requireDataView, getTypedArrayClass, isTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
@@ -50,6 +50,8 @@ export function finalizeVector(s) {
   const typedArray = s.typedArray = getTypedArrayClass(member);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
+      restoreMemory.call(this);
+      restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
     } else {
       if (Array.isArray(arg) || isTypedArray(arg, typedArray)) {

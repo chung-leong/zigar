@@ -248,6 +248,21 @@ function reset32(dest) {
 }
 /* c8 ignore end */
 
+function restoreMemory() {
+  {
+    const dv = this[MEMORY];
+    const source = dv[SOURCE];
+    if (!source || dv.buffer.byteLength !== 0) {
+      return false;
+    }
+    const { memory, address, len } = source;
+    const newDV = new DataView(memory.buffer, address, len);
+    newDV[SOURCE] = source;
+    Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
+    return true;
+  }
+}
+
 function throwNoInitializer(structure) {
   const name = getShortName(structure);
   throw new TypeError(`An initializer must be provided to the constructor of ${name}, even when it's undefined`);
@@ -1475,19 +1490,6 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
   }
 }
 
-function restoreMemory() {
-  const dv = this[MEMORY];
-  const source = dv[SOURCE];
-  if (!source || dv.buffer.byteLength !== 0) {
-    return false;
-  }
-  const { memory, address, len } = source;
-  const newDV = new DataView(memory.buffer, address, len);
-  newDV[SOURCE] = source;
-  Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
-  return true;
-}
-
 function addSpecialAccessors(s) {
   const {
     constructor,
@@ -1547,16 +1549,12 @@ function getDataViewAccessors(structure) {
   const copy = getMemoryCopier(size, type === StructureType.Slice);
   return {
     get() {
-      {
-        restoreMemory.call(this);
-      }
+      restoreMemory.call(this);
       return this[MEMORY];
     },
     set(dv) {
       checkDataView(dv);
-      {
-        restoreMemory.call(this);
-      }
+      restoreMemory.call(this);
       const dest = this[MEMORY];
       if (dest.byteLength !== dv.byteLength) {
         throwBufferSizeMismatch(structure, dv, this);
@@ -1727,6 +1725,8 @@ function finalizePrimitive(s) {
   const specialKeys = getSpecialKeys(s);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
+      restoreMemory.call(this);
+      restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
     } else {
       if (arg && typeof(arg) === 'object') {
@@ -1836,6 +1836,8 @@ function finalizeArray(s) {
   const specialKeys = getSpecialKeys(s);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
+      restoreMemory.call(this);
+      restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (pointerCopier) {
         pointerCopier.call(this, arg);
@@ -2226,6 +2228,8 @@ function finalizeStruct(s) {
   const requiredKeys = members.filter(m => m.isRequired).map(m => m.name);
   const initializer = s.initializer = (constructible) ? function(arg) {
     if (arg instanceof constructor) {
+      restoreMemory.call(this);
+      restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (pointerCopier) {
         pointerCopier.call(this, arg);
@@ -2459,6 +2463,8 @@ function finalizeUnion(s) {
   const specialKeys = getSpecialKeys(s);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
+      restoreMemory.call(this);
+      restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (pointerCopier) {
         pointerCopier.call(this, arg);
@@ -2492,6 +2498,7 @@ function finalizeUnion(s) {
           }
         } else if (found === 0) {
           if (template) {
+            restoreMemory.call(this);
             copy(this[MEMORY], template[MEMORY]);
             if (pointerCopier) {
               pointerCopier.call(this, template);
@@ -2835,6 +2842,8 @@ function finalizeOptional(s) {
   const copy = getMemoryCopier(size);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
+      restoreMemory.call(this);
+      restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (pointerCopier) {
         // don't bother copying pointers when it's empty
@@ -3181,6 +3190,8 @@ function finalizeSlice(s) {
       } else {
         shapeChecker.call(this, arg, arg.length);
       }
+      restoreMemory.call(this);
+      restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (pointerCopier) {
         pointerCopier.call(this, arg);
@@ -3367,6 +3378,8 @@ function finalizeVector(s) {
   const typedArray = s.typedArray = getTypedArrayClass(member);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
+      restoreMemory.call(this);
+      restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
     } else {
       if (Array.isArray(arg) || isTypedArray(arg, typedArray)) {

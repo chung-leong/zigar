@@ -1,5 +1,5 @@
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, getMemoryResetter } from './memory.js';
+import { getMemoryCopier, getMemoryResetter, restoreMemory } from './memory.js';
 import { requireDataView }  from './data-view.js';
 import { createChildObjects, getPointerCopier, getPointerResetter, getPointerDisabler } from './struct.js';
 import { addSpecialAccessors } from './special.js';
@@ -41,6 +41,8 @@ export function finalizeOptional(s) {
   const copy = getMemoryCopier(size);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
+      restoreMemory.call(this);
+      restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (pointerCopier) {
         // don't bother copying pointers when it's empty

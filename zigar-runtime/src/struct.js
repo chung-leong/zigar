@@ -1,5 +1,5 @@
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier } from './memory.js';
+import { getMemoryCopier, restoreMemory } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
@@ -60,6 +60,8 @@ export function finalizeStruct(s) {
   const requiredKeys = members.filter(m => m.isRequired).map(m => m.name);
   const initializer = s.initializer = (constructible) ? function(arg) {
     if (arg instanceof constructor) {
+      restoreMemory.call(this);
+      restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (pointerCopier) {
         pointerCopier.call(this, arg);

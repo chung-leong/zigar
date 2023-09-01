@@ -1,5 +1,5 @@
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier } from './memory.js';
+import { getMemoryCopier, restoreMemory } from './memory.js';
 import { requireDataView, getTypedArrayClass, checkDataViewSize, getCompatibleTags } from './data-view.js';
 import {
   createChildObjects,
@@ -103,6 +103,8 @@ export function finalizeSlice(s) {
       } else {
         shapeChecker.call(this, arg, arg.length);
       }
+      restoreMemory.call(this);
+      restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (pointerCopier) {
         pointerCopier.call(this, arg);
