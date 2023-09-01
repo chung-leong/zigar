@@ -443,7 +443,6 @@ function copy32(dest, src) {
   dest.setInt32(24, src.getInt32(24, true), true);
   dest.setInt32(28, src.getInt32(28, true), true);
 }
-/* c8 ignore end */
 
 function decamelizeErrorName(name) {
   // use a try block in case Unicode regex fails

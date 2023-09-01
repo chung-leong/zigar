@@ -254,7 +254,7 @@ export function restoreMemory() {
     const { memory, address, len } = source;
     const newDV = new DataView(memory.buffer, address, len);
     newDV[SOURCE] = source;
-    Object.defineProperty(this, MEMORY, { value: newDV, configurable: true });
+    this[MEMORY] = newDV;
     return true;
   }
 }
