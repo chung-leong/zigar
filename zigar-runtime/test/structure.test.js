@@ -19,9 +19,7 @@ describe('Structure functions', function() {
         size: 0
       });
       const Hello = finalizeStructure(structure);
-      expect(Hello).to.be.a('function');
-      const object = new Hello(undefined);
-      expect(object).to.be.instanceOf(Hello);
+      expect(Hello).to.be.an('object');
     })
   })
   describe('getStructureFeature', function() {

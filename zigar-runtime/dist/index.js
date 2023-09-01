@@ -2188,8 +2188,9 @@ function finalizeStruct(s) {
     const { get, set } = getAccessors(member, options);
     descriptors[member.name] = { get, set, configurable: true, enumerable: true };
   }
+  const constructible = (members.length > 0);
   const objectMembers = members.filter(m => m.type === MemberType.Object);
-  const constructor = s.constructor = function(arg) {
+  const constructor = s.constructor = (constructible) ? function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
@@ -2219,11 +2220,11 @@ function finalizeStruct(s) {
     } else {
       return self;
     }
-  };
+  } : Object.create(null);
   const copy = getMemoryCopier(size);
   const specialKeys = getSpecialKeys(s);
   const requiredKeys = members.filter(m => m.isRequired).map(m => m.name);
-  const initializer = s.initializer = function(arg) {
+  const initializer = s.initializer = (constructible) ? function(arg) {
     if (arg instanceof constructor) {
       copy(this[MEMORY], arg[MEMORY]);
       if (pointerCopier) {
@@ -2264,15 +2265,17 @@ function finalizeStruct(s) {
         throwInvalidInitializer(s, 'object', arg);
       }
     }
-  };
-  const retriever = function() { return this };
+  } : null;
   const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMembers) : null;
   s.pointerResetter = (hasPointer) ? getPointerResetter(objectMembers) : null;
   s.pointerDisabler = (hasPointer) ? getPointerDisabler(objectMembers) : null;
-  Object.defineProperties(constructor.prototype, {
-    $: { get: retriever, set: initializer, configurable: true },
-  });
-  addSpecialAccessors(s);
+  if ((constructible)) {
+    const retriever = function() { return this };
+    Object.defineProperties(constructor.prototype, {
+      $: { get: retriever, set: initializer, configurable: true },
+    });
+    addSpecialAccessors(s);
+  }
   addStaticMembers(s);
   addMethods(s);
   return constructor;
@@ -2955,7 +2958,7 @@ function finalizePointer(s) {
           } else if (isTargetSlice) {
             // autovivificate target object
             const autoObj = new Target(arg);
-            if ((typeof(process) !== 'object' || process.env.NODE_ENV !== 'production') && (!import.meta.env || !import.meta.env.PROD)) {
+            if ((typeof(process) !== 'object' || process.env.NODE_ENV !== 'production') && /* c8 ignore next */ (!import.meta.env || !import.meta.env.PROD)) {
               // creation of a new slice using a typed array is probably
               // not what the user wants; it's more likely that the intention
               // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
@@ -3575,7 +3578,7 @@ function finalizeStructure(s) {
     const f = factories[s.type];
     if (false) ;
     const constructor = f(s);
-    if (constructor) {
+    if (typeof(constructor) === 'function') {
       Object.defineProperties(constructor, {
         name: { value: getShortName(s), writable: false }
       });

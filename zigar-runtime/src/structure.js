@@ -159,7 +159,7 @@ export function finalizeStructure(s) {
       }
     }
     const constructor = f(s);
-    if (constructor) {
+    if (typeof(constructor) === 'function') {
       Object.defineProperties(constructor, {
         name: { value: getShortName(s), writable: false }
       });

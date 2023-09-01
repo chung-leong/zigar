@@ -22,8 +22,9 @@ export function finalizeStruct(s) {
     const { get, set } = getAccessors(member, options);
     descriptors[member.name] = { get, set, configurable: true, enumerable: true };
   }
+  const constructible = (members.length > 0);
   const objectMembers = members.filter(m => m.type === MemberType.Object);
-  const constructor = s.constructor = function(arg) {
+  const constructor = s.constructor = (constructible) ? function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
@@ -53,11 +54,11 @@ export function finalizeStruct(s) {
     } else {
       return self;
     }
-  };
+  } : Object.create(null);
   const copy = getMemoryCopier(size);
   const specialKeys = getSpecialKeys(s);
   const requiredKeys = members.filter(m => m.isRequired).map(m => m.name);
-  const initializer = s.initializer = function(arg) {
+  const initializer = s.initializer = (constructible) ? function(arg) {
     if (arg instanceof constructor) {
       copy(this[MEMORY], arg[MEMORY]);
       if (pointerCopier) {
@@ -98,15 +99,17 @@ export function finalizeStruct(s) {
         throwInvalidInitializer(s, 'object', arg);
       }
     }
-  };
-  const retriever = function() { return this };
+  } : null;
   const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMembers) : null;
   const pointerResetter = s.pointerResetter = (hasPointer) ? getPointerResetter(objectMembers) : null;
   const pointerDisabler = s.pointerDisabler = (hasPointer) ? getPointerDisabler(objectMembers) : null;
-  Object.defineProperties(constructor.prototype, {
-    $: { get: retriever, set: initializer, configurable: true },
-  });
-  addSpecialAccessors(s);
+  if ((constructible)) {
+    const retriever = function() { return this };
+    Object.defineProperties(constructor.prototype, {
+      $: { get: retriever, set: initializer, configurable: true },
+    });
+    addSpecialAccessors(s);
+  }
   addStaticMembers(s);
   addMethods(s);
   return constructor;

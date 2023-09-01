@@ -1402,7 +1402,7 @@ function stripUnused(binary, options = {}) {
           newIndex: -1,
         };
       }
-    }  
+    }
   }
   // allocate indices for internal functions
   const funcSection = getSection(SectionType.Function);
@@ -1420,7 +1420,7 @@ function stripUnused(binary, options = {}) {
         using: undefined,
         index,
         newIndex: -1,
-  
+
         get instructions() {
           if (!parsed) {
             parsed = parseFunction(this.code);
@@ -1435,7 +1435,7 @@ function stripUnused(binary, options = {}) {
         },
       };
       functions.push(fn);
-    }  
+    }
   }
 
   if (functionNames.length === 0) {
@@ -1447,7 +1447,7 @@ function stripUnused(binary, options = {}) {
           const fn = functions[object.index];
           fn.name = object.name;
         }
-      }  
+      }
     }
     const importSection = getSection(SectionType.Import);
     if (importSection) {
@@ -1456,7 +1456,7 @@ function stripUnused(binary, options = {}) {
           const fn = functions[object.index];
           fn.name = object.name;
         }
-      }  
+      }
     }
   }
 
@@ -1518,7 +1518,7 @@ function stripUnused(binary, options = {}) {
           useFunction(index);
         }
       }
-    }  
+    }
   }
 
   // mark exported functions as being in-use
@@ -1528,7 +1528,7 @@ function stripUnused(binary, options = {}) {
       if (object.type === ObjectType.Function) {
         useFunction(object.index);
       }
-    }  
+    }
   }
 
   // assign new indices to functions
@@ -1580,7 +1580,7 @@ function stripUnused(binary, options = {}) {
       } else {
         newElementSection.segments.push(segment);
       }
-    }  
+    }
   }
   // create new export section
   const newExportSection = { type: SectionType.Export, exports: [] };
@@ -1596,7 +1596,7 @@ function stripUnused(binary, options = {}) {
       } else {
         newExportSection.exports.push(object);
       }
-    }  
+    }
   }
   // create new import section
   const newImportSection = { type: SectionType.Import, imports: [] };
@@ -1611,7 +1611,7 @@ function stripUnused(binary, options = {}) {
       } else {
         newImportSection.imports.push(object);
       }
-    }  
+    }
   }
   // create new name section
   let newNameSection = null;
@@ -1620,6 +1620,7 @@ function stripUnused(binary, options = {}) {
     const newLocalNames = [];
     for (const fn of newFunctions) {
       newFunctionNames.push(fn.name);
+      /* c8 ignore next 3 -- can't find a file with local names */
       if (localNames.length > 0) {
         newLocalNames.push(localNames[fn.index]);
       }
@@ -1807,6 +1808,7 @@ function parseBinary(binary) {
         return { type, data };
       }
     }
+    /* c8 ignore next -- unreachable */
   }
 
   function readLimits() {

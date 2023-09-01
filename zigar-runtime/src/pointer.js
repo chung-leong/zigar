@@ -82,7 +82,7 @@ export function finalizePointer(s) {
           } else if (isTargetSlice) {
             // autovivificate target object
             const autoObj = new Target(arg);
-            if ((typeof(process) !== 'object' || process.env.NODE_ENV !== 'production') && (!import.meta.env || !import.meta.env.PROD)) {
+            if ((typeof(process) !== 'object' || process.env.NODE_ENV !== 'production') && /* c8 ignore next */ (!import.meta.env || !import.meta.env.PROD)) {
               // creation of a new slice using a typed array is probably
               // not what the user wants; it's more likely that the intention
               // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)

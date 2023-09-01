@@ -68,6 +68,15 @@ describe('Struct functions', function() {
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(4567);
     })
+    it('should define an empty struct as anonymous object', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 0,
+      });
+      const Hello = finalizeStructure(structure);
+      expect(Hello).to.not.be.a('function');
+    })
     it('should throw when no initializer is provided', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
