@@ -9,7 +9,7 @@ import 'mocha-skip-if';
 
 describe('Loader', function() {
   describe('Options', function() {
-    const path = resolve('../../zigar-compiler/test/integration/console.zig');
+    const path = resolve('../../zigar-compiler/test/zig-samples/basic/console.zig');
     it('should generate code with embedded WASM by default', async function() {
       const code = await transpile(path, { embedWASM: true });
       expect(code).to.contain('atob');

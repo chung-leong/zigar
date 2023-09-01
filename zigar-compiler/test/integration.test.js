@@ -7,7 +7,7 @@ import { addTests } from './integration.js';
 import 'mocha-skip-if';
 
 for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]) {
-  skip.if(process.env.npm_lifecycle_event === 'coverage').
+  skip.permanently.if(process.env.npm_lifecycle_event === 'coverage').
   describe(`Integration tests (zigar-compiler, ${optimize})`, function() {
     addTests(path => importModule(path), {
       littleEndian: true,

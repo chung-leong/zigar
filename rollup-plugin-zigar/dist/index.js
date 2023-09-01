@@ -74,6 +74,7 @@ export default function createPlugin(options = {}) {
   let embedWASMDefault = false;
   return {
     name: 'Zigar',
+    /* c8 ignore next 5 */
     apply(config, { command }) {
       // embed WASM by default when Vite is serving
       embedWASMDefault = (command === 'serve');
