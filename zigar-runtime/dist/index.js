@@ -2104,7 +2104,7 @@ function addStaticMembers(s) {
         const ptr = getPtr.call(this);
         return ptr['*'];
       };
-      set = function(value) {
+      set = (member.structure.isConst) ? undefined : function(value) {
         const ptr = getPtr.call(this);
         ptr['*'] = value;
       };
@@ -3097,6 +3097,21 @@ const constProxyHandlers = {
         throwAssigningToConstant(pointer);
     }
     return true;
+  },
+  getOwnPropertyDescriptor(pointer, name) {
+    switch (name) {
+      case ZIG:
+      case SLOTS:
+      case MEMORY:
+        return Object.getOwnPropertyDescriptor(pointer, name);
+      default:
+        const descriptor = Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
+        if (descriptor?.set) {
+          descriptor.set = undefined;
+        }
+        return descriptor;
+    }
+    /* c8 ignore next -- unreachable */
   },
 };
 

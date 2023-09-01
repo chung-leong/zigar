@@ -222,4 +222,19 @@ const constProxyHandlers = {
     }
     return true;
   },
+  getOwnPropertyDescriptor(pointer, name) {
+    switch (name) {
+      case ZIG:
+      case SLOTS:
+      case MEMORY:
+        return Object.getOwnPropertyDescriptor(pointer, name);
+      default:
+        const descriptor = Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
+        if (descriptor?.set) {
+          descriptor.set = undefined;
+        }
+        return descriptor;
+    }
+    /* c8 ignore next -- unreachable */
+  },
 };

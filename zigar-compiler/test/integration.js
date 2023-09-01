@@ -645,8 +645,8 @@ export function addTests(importModule, options) {
       const result2 = energy(solar_bodies['*']);
       expect(year.toFixed(2)).to.equal('365.24');
       expect(solar_mass).to.equal(4.0 * Math.PI * Math.PI);
-      expect(result1.toFixed(5)).to.equal('-0.169075164');
-      expect(result2.toFixed(5)).to.equal('-0.169078071');
+      expect(result1.toFixed(9)).to.equal('-0.169075164');
+      expect(result2.toFixed(9)).to.equal('-0.169078071');
     })
     it('should produce the right results for the reverse-complement example', async function() {
       this.timeout(120000);
@@ -670,7 +670,7 @@ export function addTests(importModule, options) {
       const { spectralNorm } = await importModule(resolve('./zig-samples/benchmarks-game/spectral-norm.zig'));
       const n = 1500;
       const result = spectralNorm(n);
-      expect(result.toFixed(5)).to.equal('1.274224151');
+      expect(result.toFixed(9)).to.equal('1.274224151');
     })
   })
 }

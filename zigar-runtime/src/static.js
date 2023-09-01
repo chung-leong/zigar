@@ -24,7 +24,7 @@ export function addStaticMembers(s) {
         const ptr = getPtr.call(this);
         return ptr['*'];
       };
-      set = function(value) {
+      set = (member.structure.isConst) ? undefined : function(value) {
         const ptr = getPtr.call(this);
         ptr['*'] = value;
       };

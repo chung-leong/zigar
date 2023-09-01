@@ -285,6 +285,54 @@ describe('Pointer functions', function() {
       // check descriptors of the pointer's own properties
       expect(Object.getOwnPropertyDescriptor(pointer, ZIG)).to.be.an('object');
     })
+    it('should not return setters from target when it is const', function() {
+      const structStructure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8,
+        hasPointer: false,
+      });
+      attachMember(structStructure, {
+        type: MemberType.Int,
+        name: 'cat',
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structStructure, {
+        type: MemberType.Int,
+        name: 'dog',
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Hello',
+        size: 8,
+        isConst: true,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: structStructure,
+      });
+      const HelloPtr = finalizeStructure(structure);
+      const pointer = new HelloPtr(new Hello({ cat: 123, dog: 456 }));
+      const descriptor = Object.getOwnPropertyDescriptor(pointer, 'cat');
+      expect(descriptor.set).to.be.undefined;
+      // check descriptors of the pointer's own properties
+      expect(Object.getOwnPropertyDescriptor(pointer, ZIG)).to.be.an('object');
+      // check non-existing prop
+      expect(Object.getOwnPropertyDescriptor(pointer, 'cow')).to.be.undefined;
+    })
     it('should automatically dereference pointers a single-level only', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,

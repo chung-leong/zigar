@@ -136,6 +136,9 @@ describe('Static variable functions', function() {
       object.dog = 123;
       expect(object.dog).to.equal(123);
       expect(Hello.superdog).to.equal(43);
+      const descriptors = Object.getOwnPropertyDescriptors(Hello);
+      expect(descriptors.superdog.set).to.be.a('function');
+      expect(descriptors.supercat.set).to.be.undefined;
     })
     it('should attach variables to an enumeration', function() {
       const intStructure = beginStructure({
