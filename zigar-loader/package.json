@@ -10,7 +10,8 @@
   "scripts": {
     "test": "node ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.mjs",
     "debug": "node --inspect-brk ./node_modules/mocha/bin/mocha.js -- test/*.test.mjs",
-    "coverage": "node ./node_modules/c8/bin/c8.js ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.mjs"
+    "coverage": "node ./node_modules/c8/bin/c8.js ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.mjs",
+    "integration-coverage": "node ./node_modules/c8/bin/c8.js ./node_modules/mocha/bin/mocha.js --parallel -- test/integration.test.mjs"
   },
   "repository": {
     "type": "git",

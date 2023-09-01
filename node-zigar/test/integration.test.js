@@ -1,5 +1,5 @@
 import { endianness } from 'os';
-import { addTests } from '../../zigar-compiler/test/integration.js';
+import { addTests } from 'zigar-compiler/test/integration.js';
 import 'mocha-skip-if';
 
 for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]) {
