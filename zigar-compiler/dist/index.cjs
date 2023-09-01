@@ -366,6 +366,7 @@ function absolute(relpath) {
 const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
 const ZIG = Symbol('zig');
+const SOURCE = Symbol('source');
 const STRUCTURE = Symbol('structure');
 
 function getMemoryCopier(size, multiple = false) {
@@ -729,10 +730,13 @@ async function runModule(source, options = {}) {
   function _endCall(ctxAddr) {
     // move data from WASM memory into buffers
     const ctx = callContexts[ctxAddr];
-    for (const [ buffer, { address, len, dv, copy } ] of ctx.bufferMap) {
+    for (const [ buffer, { address, len, ptrAlign, dv, copy, shadow } ] of ctx.bufferMap) {
       const src = new DataView(wasmMemory.buffer, address, len);
       if (copy) {
         copy(dv, src);
+      }
+      if (shadow) {
+        free(ctxAddr, address, len, ptrAlign);
       }
     }
     delete callContexts[ctxAddr];
@@ -755,7 +759,7 @@ async function runModule(source, options = {}) {
     const buffer = new ArrayBuffer(len);
     const dv = new DataView(buffer);
     const copy = getMemoryCopier(len);
-    bufferMap.set(buffer, { address, len, dv, copy });
+    bufferMap.set(buffer, { address, len, ptrAlign, dv, copy, shadow: true });
     return address;
   }
 
@@ -775,23 +779,29 @@ async function runModule(source, options = {}) {
     if (!dv) {
       return 0;
     }
-    const ctx = callContexts[ctxAddr];
-    let memory = ctx.bufferMap.get(dv.buffer);
-    if (!memory) {
-      const len = dv.buffer.byteLength;
-      const address = alloc(ctxAddr, len);
-      const dest = new DataView(wasmMemory.buffer, address, len);
-      // create new dataview if the one given only covers a portion of it
-      const src = (dv.byteLength === len) ? dv : new DataView(dv.buffer);
-      const copy = getMemoryCopier(len);
-      copy(dest, src);
-      memory = { address, len, dv: src, copy };
-      ctx.bufferMap.set(dv.buffer, memory);
+    const source = dv[SOURCE];
+    if (source) {
+      return addObject(source);
+    } else {
+      const ctx = callContexts[ctxAddr];
+      let memory = ctx.bufferMap.get(dv.buffer);
+      if (!memory) {
+        const len = dv.buffer.byteLength;
+        const address = alloc(ctxAddr, len);
+        const dest = new DataView(wasmMemory.buffer, address, len);
+        // create new dataview if the one given only covers a portion of it
+        const src = (dv.byteLength === len) ? dv : new DataView(dv.buffer);
+        const copy = getMemoryCopier(len);
+        copy(dest, src);
+        // TODO: need actual alignment
+        memory = { address, len, dv: src, copy, ptrAlign: 3, shadow: true };
+        ctx.bufferMap.set(dv.buffer, memory);
+      }
+      return addObject({
+        address: memory.address + dv.byteOffset,
+        len: dv.byteLength
+      });
     }
-    return addObject({
-      address: memory.address + dv.byteOffset,
-      len: dv.byteLength
-    });
   }
 
   function _getMemoryOffset(objectIndex) {
@@ -929,7 +939,7 @@ async function runModule(source, options = {}) {
     // copy content immediately, since address is likely pointing to a stack location
     const src = new DataView(wasmMemory.buffer, address, len);
     copy(dv, src);
-    ctx.bufferMap.set(buffer, { address, len, dv, copy: null });
+    ctx.bufferMap.set(buffer, { address, len, dv, copy: null, ptrAlign: 0, shadow: false });
     return dv;
   }
 

@@ -464,7 +464,6 @@ export function addTests(importModule, options) {
       process.env.ZIGAR_KEEP_NAMES = '';
     })
   })
-  skip.
   describe('Memory allocation', function() {
     it('should return memory from internal allocator', async function() {
       this.timeout(60000);
@@ -482,7 +481,7 @@ export function addTests(importModule, options) {
         '90', '100', '110', '120',
         '130', '140', '150', '160',
       ]);
-      //expect(() => freeSlice(lines)).to.not.throw();
+      expect(() => freeSlice(slice)).to.not.throw();
     })
   })
   describe('Crypto functions', function() {

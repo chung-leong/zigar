@@ -4,13 +4,10 @@ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = gpa.allocator();
 
 pub fn createSlice(count: usize) ![]i32 {
-    const slice = try allocator.alloc(i32, count);
-    std.debug.print("Address: {x}\n", .{@intFromPtr(slice.ptr)});
-    return slice;
+    return try allocator.alloc(i32, count);
 }
 
 pub fn freeSlice(slice: []i32) void {
-    std.debug.print("Address: {x}\n", .{@intFromPtr(slice.ptr)});
     allocator.free(slice);
 }
 
