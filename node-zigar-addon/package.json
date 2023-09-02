@@ -1,6 +1,6 @@
 {
   "name": "node-zigar-addon",
-  "version": "0.12.0",
+  "version": "0.0.0",
   "description": "NodeJS C++ addon for loading compiled Zig module",
   "main": "./dist/index.js",
   "type": "module",
