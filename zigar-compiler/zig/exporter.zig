@@ -1473,28 +1473,32 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
     const Args = std.meta.ArgsTuple(@TypeOf(function));
     const S = struct {
         fn tryFunction(host: HostT, arg_obj: Value) !void {
-            var arg_ptr = try host.getMemory(arg_obj, ArgT, .One);
-            if (hasPointer(ArgT)) {
-                // make sure pointers have up-to-date values
-                try rezigStructure(host, arg_obj, arg_ptr);
-            }
             // extract arguments from argument struct
             var args: Args = undefined;
-            const fields = @typeInfo(Args).Struct.fields;
-            comptime var index = 0;
-            inline for (fields, 0..) |field, i| {
-                if (field.type == std.mem.Allocator) {
-                    args[i] = createAllocator(&host);
-                } else {
-                    const name = std.fmt.comptimePrint("{d}", .{index});
-                    args[i] = @field(arg_ptr.*, name);
-                    index += 1;
+            if (@sizeOf(ArgT) != 0) {
+                const fields = @typeInfo(Args).Struct.fields;
+                var arg_ptr = try host.getMemory(arg_obj, ArgT, .One);
+                if (hasPointer(ArgT)) {
+                    // make sure pointers have up-to-date values
+                    try rezigStructure(host, arg_obj, arg_ptr);
                 }
-            }
-            // never inline the function so its name would show up in the trace
-            arg_ptr.*.retval = @call(.never_inline, function, args);
-            if (hasPointer(ArgT)) {
-                try dezigStructure(host, arg_obj, arg_ptr);
+                comptime var index = 0;
+                inline for (fields, 0..) |field, i| {
+                    if (field.type == std.mem.Allocator) {
+                        args[i] = createAllocator(&host);
+                    } else {
+                        const name = std.fmt.comptimePrint("{d}", .{index});
+                        args[i] = @field(arg_ptr.*, name);
+                        index += 1;
+                    }
+                }
+                // never inline the function so its name would show up in the trace
+                arg_ptr.*.retval = @call(.never_inline, function, args);
+                if (hasPointer(ArgT)) {
+                    try dezigStructure(host, arg_obj, arg_ptr);
+                }
+            } else {
+                @call(.never_inline, function, args);
             }
         }
 
