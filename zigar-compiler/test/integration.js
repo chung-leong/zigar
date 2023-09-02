@@ -367,6 +367,20 @@ export function addTests(importModule, options) {
       expect([ ...c ]).to.eql([ 5, 12, 21, 32 ]);
       expect([ ...d ]).to.eql([ 6, 8, 10, 12 ]);
     })
+    it('should handle misaligned pointers', async function() {
+      this.timeout(60000);
+      const { Vector4, double, add } = await importModule(resolve('./zig-samples/basic/vector-float-pointer.zig'));
+      const a = new Vector4([ 1, 2, 3, 4 ]);
+      // unaligned buffer
+      const buffer = new ArrayBuffer(4 * 4 + 1);
+      const dv = new DataView(buffer, 1, 4 * 4);
+      const b = Vector4(dv);
+      b.$ = [ 5, 6, 7, 8 ];
+      add(a, b);
+      double(b);
+      expect([ ...a ]).to.eql([ 6, 8, 10, 12 ]);
+      expect([ ...b ]).to.eql([ 10, 12, 14, 16 ]);
+    })
     it('should return optional pointer', async function() {
       this.timeout(60000);
       const { getSentence } = await importModule(resolve('./zig-samples/basic/function-returning-optional-pointer.zig'));

@@ -1,15 +1,49 @@
 #include "addon.h"
 
-
-
 static size_t GetExtraCount(uint8_t ptr_align) {
   size_t alignment = (1 << ptr_align);
   size_t default_alignment = sizeof(size_t) * 2;
   return (alignment <= default_alignment) ? 0 : alignment;
 }
 
-static size_t GetAddressMask(size_t extra) {
-  return (extra) ? ~(extra - 1) : -1;
+static Memory GetArrayBufferMemory(Local<ArrayBuffer> buffer) {
+  auto store = buffer->GetBackingStore();
+  Memory mem = {
+    reinterpret_cast<uint8_t*>(store->Data()),
+    store->ByteLength(),
+  };
+  return mem;
+}
+
+static Memory GetDataViewMemory(Local<DataView> dv) {
+  auto buffer = dv->Buffer();
+  auto byteOffset = dv->ByteOffset();
+  auto byteLength = dv->ByteLength();
+  auto mem = GetArrayBufferMemory(buffer);
+  mem.bytes += byteOffset;
+  mem.len = byteLength;
+  return mem;
+}
+
+static bool IsMisaligned(Memory memory,
+                         uint8_t ptr_align) {
+  auto address = reinterpret_cast<size_t>(memory.bytes);
+  size_t unaligned_mask = (1 << ptr_align) - 1;
+  return (address & unaligned_mask) != 0;
+}
+
+static Memory GetAlignedBufferMemory(Local<ArrayBuffer> buffer,
+                                     uint8_t ptr_align) {
+  auto mem = GetArrayBufferMemory(buffer);
+  auto extra = GetExtraCount(ptr_align);
+  if (extra != 0) {
+    auto address = reinterpret_cast<size_t>(mem.bytes);
+    auto address_mask = ~(extra - 1);
+    auto aligned_address = (address & address_mask) + extra;
+    mem.bytes = reinterpret_cast<uint8_t*>(aligned_address);
+    mem.len -= aligned_address - address;
+  }
+  return mem;
 }
 
 static Result AllocateMemory(Call* call,
@@ -18,18 +52,13 @@ static Result AllocateMemory(Call* call,
                              Memory* dest) {
   auto isolate = call->isolate;
   auto context = call->context;
-  auto extra = GetExtraCount(ptr_align);
-  auto address_mask = GetAddressMask(extra);
   if (call->mem_pool.IsEmpty()) {
     call->mem_pool = Array::New(isolate);
   }
-  auto buffer = ArrayBuffer::New(isolate, len + extra);
+  auto buffer = ArrayBuffer::New(isolate, len + GetExtraCount(ptr_align));
+  *dest = GetAlignedBufferMemory(buffer, ptr_align);
   auto index = call->mem_pool->Length();
   call->mem_pool->Set(context, index, buffer).Check();
-  std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
-  auto address = reinterpret_cast<size_t>(store->Data());
-  dest->bytes = reinterpret_cast<uint8_t*>((address & address_mask) + extra);
-  dest->len = len;
   return Result::OK;
 }
 
@@ -41,25 +70,22 @@ static Result FreeMemory(Call* call,
   }
   auto context = call->context;
   auto extra = GetExtraCount(ptr_align);
-  auto address_mask = GetAddressMask(extra);
-  int buf_count = call->mem_pool->Length();
-  int index = -1;
-  size_t address = reinterpret_cast<size_t>(memory.bytes);
-  for (int i = 0; i < buf_count; i++) {
+  auto buf_count = call->mem_pool->Length();
+  uint32_t index = 0xFFFFFFFF;
+  for (uint32_t i = 0; i < buf_count; i++) {
     auto item = call->mem_pool->Get(context, i).ToLocalChecked();
     if (item->IsArrayBuffer()) {
-      Local<ArrayBuffer> buffer = item.As<ArrayBuffer>();
+      auto buffer = item.As<ArrayBuffer>();
       if (buffer->ByteLength() == memory.len + extra) {
-        std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
-        size_t buf_start = reinterpret_cast<size_t>(store->Data()) ;
-        if (((buf_start & address_mask) + extra) == address) {
+        auto mem = GetAlignedBufferMemory(buffer, ptr_align);
+        if (mem.bytes == memory.bytes) {
           index = i;
           break;
         }
       }
     }
   }
-  if (index == -1) {
+  if (index == 0xFFFFFFFF) {
     return Result::Failure;
   }
   call->mem_pool->Delete(context, index).Check();
@@ -68,18 +94,53 @@ static Result FreeMemory(Call* call,
 
 static Result GetMemory(Call* call,
                         Local<Object> object,
+                        uint8_t ptr_align,
                         Memory* dest) {
+  auto isolate = call->isolate;
   auto context = call->context;
   Local<Value> value;
   if (!object->Get(context, call->symbol_memory).ToLocal(&value) || !value->IsDataView()) {
     return Result::Failure;
   }
   auto dv = value.As<DataView>();
-  auto buffer = dv->Buffer();
-  auto offset = dv->ByteOffset();
-  auto content = buffer->GetBackingStore();
-  dest->bytes = reinterpret_cast<uint8_t*>(content->Data()) + offset;
-  dest->len = dv->ByteLength();
+  auto mem = GetDataViewMemory(dv);
+  if (IsMisaligned(mem, ptr_align)) {
+    // memory is misaligned, need to create a shadow buffer for it
+    if (call->shadow_map.IsEmpty()) {
+      call->shadow_map = Map::New(isolate);
+    }
+    Local<Value> existing = call->shadow_map->Get(context, dv).ToLocalChecked();
+    if (existing->IsArrayBuffer()) {
+      auto shadow_buffer = existing.As<ArrayBuffer>();
+      mem = GetAlignedBufferMemory(shadow_buffer, ptr_align);
+    } else {
+      auto shadow_buffer = ArrayBuffer::New(isolate, dv->ByteLength() + GetExtraCount(ptr_align));
+      shadow_buffer->Set(context, 0, Int32::New(isolate, ptr_align)).Check();
+      call->shadow_map->Set(context, dv, shadow_buffer).ToLocalChecked();
+      auto dest_mem = GetAlignedBufferMemory(shadow_buffer, ptr_align);
+      memcpy(dest_mem.bytes, mem.bytes, mem.len);
+      mem = dest_mem;
+    }
+  }
+  *dest = mem;
+  return Result::OK;
+}
+
+static Result ResyncShadows(Call* call) {
+  if (!call->shadow_map.IsEmpty()) {
+    auto context = call->context;
+    auto array = call->shadow_map->AsArray();
+    for (size_t i = 0; i < array->Length(); i += 2) {
+      auto key = array->Get(context, i).ToLocalChecked();
+      auto value = array->Get(context, i + 1).ToLocalChecked();
+      auto dv = key.As<DataView>();
+      auto shadow_buffer = value.As<ArrayBuffer>();
+      auto ptr_align = static_cast<uint8_t>(shadow_buffer->Get(context, 0).ToLocalChecked().As<Int32>()->Value());
+      auto mem = GetAlignedBufferMemory(shadow_buffer, ptr_align);
+      auto dest_mem = GetDataViewMemory(dv);
+      memcpy(dest_mem.bytes, mem.bytes, mem.len);
+    }
+  }
   return Result::OK;
 }
 
@@ -362,6 +423,7 @@ static Local<Function> NewThunk(Call* call,
     // which we get from FunctionCallbackInfo::Data()
     Call ctx(info);
     const char* err = ctx.function_data->thunk(&ctx, ctx.argument);
+    ResyncShadows(&ctx);
     if (err) {
       auto message = String::NewFromUtf8(ctx.isolate, err).ToLocalChecked();
       info.GetReturnValue().Set(message);

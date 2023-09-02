@@ -21,7 +21,7 @@ const Call = struct {
 
 extern fn _allocMemory(host: usize, len: usize, ptr_align: u8) usize;
 extern fn _freeMemory(host: usize, address: usize, len: usize, ptr_align: u8) void;
-extern fn _getMemory(host: usize, object: usize) usize;
+extern fn _getMemory(host: usize, object: usize, ptr_align: u8) usize;
 extern fn _getMemoryOffset(object: usize) usize;
 extern fn _getMemoryLength(object: usize) usize;
 extern fn _createDataView(host: usize, address: usize, len: usize, disposition: u32) usize;
@@ -109,8 +109,9 @@ pub const Host = struct {
         _freeMemory(self.context, @intFromPtr(memory.bytes), memory.len, ptr_align);
     }
 
-    pub fn getMemory(self: Host, container: Value, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) !exporter.PointerType(T, size) {
-        const view_index = _getMemory(self.context, index(container));
+    pub fn getMemory(self: Host, container: Value, comptime T: type, comptime size: std.builtin.Type.Pointer.Size, comptime aligning: bool) !exporter.PointerType(T, size) {
+        const ptr_align = if (aligning) std.math.log2_int(u8, @alignOf(T)) else 0;
+        const view_index = _getMemory(self.context, index(container), ptr_align);
         if (view_index == 0) {
             return Error.UnableToRetrieveMemoryLocation;
         }

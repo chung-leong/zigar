@@ -3844,7 +3844,7 @@ async function runModule(source, options = {}) {
     }
   }
 
-  function _getMemory(ctxAddr, objectIndex) {
+  function _getMemory(ctxAddr, objectIndex, ptrAlign) {
     const object = valueTable[objectIndex];
     let dv = object[MEMORY];
     if (!dv) {
@@ -3858,14 +3858,14 @@ async function runModule(source, options = {}) {
       let memory = ctx.bufferMap.get(dv.buffer);
       if (!memory) {
         const len = dv.buffer.byteLength;
-        const address = alloc(ctxAddr, len);
+        const address = alloc(ctxAddr, len, ptrAlign);
         const dest = new DataView(wasmMemory.buffer, address, len);
         // create new dataview if the one given only covers a portion of it
         const src = (dv.byteLength === len) ? dv : new DataView(dv.buffer);
         const copy = getMemoryCopier(len);
         copy(dest, src);
         // TODO: need actual alignment
-        memory = { address, len, dv: src, copy, ptrAlign: 3, shadow: true };
+        memory = { address, len, dv: src, copy, ptrAlign, shadow: true };
         ctx.bufferMap.set(dv.buffer, memory);
       }
       return addObject({

@@ -62,9 +62,10 @@ pub const Host = struct {
         }
     }
 
-    pub fn getMemory(self: Host, container: Value, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) !exporter.PointerType(T, size) {
+    pub fn getMemory(self: Host, container: Value, comptime T: type, comptime size: std.builtin.Type.Pointer.Size, comptime aligning: bool) !exporter.PointerType(T, size) {
         var memory: Memory = undefined;
-        if (callbacks.get_memory(self.context, container, &memory) != .OK) {
+        const ptr_align = if (aligning) std.math.log2_int(u8, @alignOf(T)) else 0;
+        if (callbacks.get_memory(self.context, container, ptr_align, &memory) != .OK) {
             return Error.UnableToRetrieveMemoryLocation;
         }
         return exporter.fromMemory(memory, T, size);
@@ -201,7 +202,7 @@ pub const Host = struct {
 const Callbacks = extern struct {
     allocate_memory: *const fn (Call, usize, u8, *Memory) callconv(.C) Result,
     free_memory: *const fn (Call, *const Memory, u8) callconv(.C) Result,
-    get_memory: *const fn (Call, Value, *Memory) callconv(.C) Result,
+    get_memory: *const fn (Call, Value, u8, *Memory) callconv(.C) Result,
     wrap_memory: *const fn (Call, Value, *const Memory, MemoryDisposition, *Value) callconv(.C) Result,
 
     get_pointer_status: *const fn (Call, Value, *bool) callconv(.C) Result,

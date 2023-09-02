@@ -1263,7 +1263,7 @@ fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
             }
             try host.setPointerStatus(obj, true);
             const child_obj = try host.readObjectSlot(obj, 0);
-            const current_ptr = try host.getMemory(child_obj, pt.child, pt.size);
+            const current_ptr = try host.getMemory(child_obj, pt.child, pt.size, true);
             if (!comparePointers(ptr.*, current_ptr)) {
                 const writable_ptr = @constCast(ptr);
                 writable_ptr.* = current_ptr;
@@ -1412,7 +1412,7 @@ fn obtainChildObject(host: anytype, container: Value, slot: usize, ptr: anytype,
         if (check) {
             // see if pointer is still pointing to what it was before
             const pt = @typeInfo(@TypeOf(ptr)).Pointer;
-            const current_ptr = try host.getMemory(child_obj, pt.child, pt.size);
+            const current_ptr = try host.getMemory(child_obj, pt.child, pt.size, true);
             if (!comparePointers(ptr, current_ptr)) {
                 // need to create JS wrapper object for new memory
                 return createChildObject(host, container, slot, ptr);
@@ -1477,7 +1477,7 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
             var args: Args = undefined;
             if (@sizeOf(ArgT) != 0) {
                 const fields = @typeInfo(Args).Struct.fields;
-                var arg_ptr = try host.getMemory(arg_obj, ArgT, .One);
+                var arg_ptr = try host.getMemory(arg_obj, ArgT, .One, false);
                 if (hasPointer(ArgT)) {
                     // make sure pointers have up-to-date values
                     try rezigStructure(host, arg_obj, arg_ptr);

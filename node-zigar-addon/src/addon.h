@@ -97,7 +97,7 @@ struct Module {
 struct Callbacks {
   Result (*allocate_memory)(Call*, size_t, uint8_t, Memory*);
   Result (*free_memory)(Call*, const Memory&, uint8_t);
-  Result (*get_memory)(Call*, Local<Object>, Memory*);
+  Result (*get_memory)(Call*, Local<Object>, uint8_t, Memory*);
   Result (*wrap_memory)(Call*, Local<Object>, const Memory&, MemoryDisposition, Local<Object>*);
 
   Result (*get_pointer_status)(Call*, Local<Object>, bool*);
@@ -208,6 +208,7 @@ struct Call {
   Isolate* isolate;
   Local<Context> context;
   Local<Array> mem_pool;
+  Local<Map> shadow_map;
   Local<Array> arg_buffers;
   Local<Object> js_module;
   Local<Object> argument;
