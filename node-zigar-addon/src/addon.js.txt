@@ -2910,6 +2910,7 @@ R"=====(
       type,
       name,
       size,
+      align,
       isConst,
       hasPointer,
     } = def;
@@ -2923,6 +2924,7 @@ R"=====(
       type,
       name,
       size,
+      align,
       isConst,
       hasPointer,
       instance: {

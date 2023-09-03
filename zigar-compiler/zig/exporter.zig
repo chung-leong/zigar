@@ -140,7 +140,8 @@ pub const Thunk = *const fn (ptr: *anyopaque, args: Value) callconv(.C) ?[*:0]co
 pub const Structure = extern struct {
     name: ?[*:0]const u8 = null,
     structure_type: StructureType,
-    total_size: usize = 0,
+    total_size: usize,
+    ptr_align: u8,
     is_const: bool = false,
     has_pointer: bool,
 };
@@ -537,6 +538,18 @@ test "comparePointers" {
     assert(comparePointers(j, k) == false);
 }
 
+fn getPtrAlign(comptime T: type) u8 {
+    const alignment = @alignOf(T);
+    return if (alignment != 0) std.math.log2_int(u8, @alignOf(T)) else 0;
+}
+
+test "getPtrAlign" {
+    assert(getPtrAlign(u8) == 0);
+    assert(getPtrAlign(i32) == 2);
+    assert(getPtrAlign(i64) == 3);
+    assert(getPtrAlign(f128) == 4);
+}
+
 // NOTE: error type has to be specified here since the function is called recursively
 // and https://github.com/ziglang/zig/issues/2971 has not been fully resolved yet
 fn getStructure(host: anytype, comptime T: type) Error!Value {
@@ -546,6 +559,7 @@ fn getStructure(host: anytype, comptime T: type) Error!Value {
             .name = getStructureName(T),
             .structure_type = getStructureType(T),
             .total_size = @sizeOf(T),
+            .ptr_align = getPtrAlign(T),
             .is_const = isConst(T),
             .has_pointer = hasPointer(T),
         };
@@ -776,6 +790,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                         .name = getSliceName(T),
                         .structure_type = .Slice,
                         .total_size = @sizeOf(pt.child),
+                        .ptr_align = getPtrAlign(pt.child),
                         .has_pointer = hasPointer(pt.child),
                     };
                     const slice_structure = try host.beginStructure(slice_def);

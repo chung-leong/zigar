@@ -41,6 +41,7 @@ struct Structure {
   const char* name;
   StructureType type;
   size_t total_size;
+  uint8_t ptr_align;
   bool is_const;
   bool has_pointer;
 };

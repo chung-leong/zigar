@@ -97,6 +97,7 @@ export function beginStructure(def, options = {}) {
     type,
     name,
     size,
+    align,
     isConst,
     hasPointer,
   } = def;
@@ -110,6 +111,7 @@ export function beginStructure(def, options = {}) {
     type,
     name,
     size,
+    align,
     isConst,
     hasPointer,
     instance: {

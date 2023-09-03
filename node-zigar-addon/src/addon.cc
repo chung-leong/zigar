@@ -359,10 +359,12 @@ static Local<Object> NewStructure(Call* call,
   auto def = Object::New(isolate);
   auto type = Int32::New(isolate, static_cast<int32_t>(s.type));
   auto size = Uint32::NewFromUnsigned(isolate, s.total_size);
+  auto align = Uint32::NewFromUnsigned(isolate, s.ptr_align);
   auto is_const = Boolean::New(isolate, s.is_const);
   auto has_pointer = Boolean::New(isolate, s.has_pointer);
   def->Set(context, String::NewFromUtf8Literal(isolate, "type"), type).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "size"), size).Check();
+  def->Set(context, String::NewFromUtf8Literal(isolate, "align"), align).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "isConst"), is_const).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "hasPointer"), has_pointer).Check();
   if (s.name) {

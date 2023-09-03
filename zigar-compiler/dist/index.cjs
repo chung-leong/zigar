@@ -547,6 +547,7 @@ function beginStructure(def, options = {}) {
     type,
     name,
     size,
+    align,
     isConst,
     hasPointer,
   } = def;
@@ -560,6 +561,7 @@ function beginStructure(def, options = {}) {
     type,
     name,
     size,
+    align,
     isConst,
     hasPointer,
     instance: {
@@ -1063,6 +1065,7 @@ function generateCode(structures, params) {
     type: StructureType.Primitive,
     name: undefined,
     size: 4,
+    align: 4,
     isConst: false,
     hasPointer: false,
     instance: {

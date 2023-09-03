@@ -68,6 +68,7 @@ export function generateCode(structures, params) {
     type: StructureType.Primitive,
     name: undefined,
     size: 4,
+    align: 2,
     isConst: false,
     hasPointer: false,
     instance: {
