@@ -94,7 +94,7 @@ static Result FreeMemory(Call* call,
 
 static Result GetMemory(Call* call,
                         Local<Object> object,
-                        uint8_t ptr_align,
+                        MemoryAttributes attributes,
                         Memory* dest) {
   auto isolate = call->isolate;
   auto context = call->context;
@@ -104,7 +104,7 @@ static Result GetMemory(Call* call,
   }
   auto dv = value.As<DataView>();
   auto mem = GetDataViewMemory(dv);
-  if (IsMisaligned(mem, ptr_align)) {
+  if (IsMisaligned(mem, attributes.ptr_align)) {
     // memory is misaligned, need to create a shadow buffer for it
     if (call->shadow_map.IsEmpty()) {
       call->shadow_map = Map::New(isolate);
@@ -112,12 +112,12 @@ static Result GetMemory(Call* call,
     Local<Value> existing = call->shadow_map->Get(context, dv).ToLocalChecked();
     if (existing->IsArrayBuffer()) {
       auto shadow_buffer = existing.As<ArrayBuffer>();
-      mem = GetAlignedBufferMemory(shadow_buffer, ptr_align);
+      mem = GetAlignedBufferMemory(shadow_buffer, attributes.ptr_align);
     } else {
-      auto shadow_buffer = ArrayBuffer::New(isolate, dv->ByteLength() + GetExtraCount(ptr_align));
-      shadow_buffer->Set(context, 0, Int32::New(isolate, ptr_align)).Check();
+      auto shadow_buffer = ArrayBuffer::New(isolate, dv->ByteLength() + GetExtraCount(attributes.ptr_align));
+      shadow_buffer->Set(context, 0, Int32::New(isolate, attributes.ptr_align)).Check();
       call->shadow_map->Set(context, dv, shadow_buffer).ToLocalChecked();
-      auto dest_mem = GetAlignedBufferMemory(shadow_buffer, ptr_align);
+      auto dest_mem = GetAlignedBufferMemory(shadow_buffer, attributes.ptr_align);
       memcpy(dest_mem.bytes, mem.bytes, mem.len);
       mem = dest_mem;
     }
@@ -414,18 +414,21 @@ static Local<Object> NewMember(Call* call,
 }
 
 static Local<Function> NewThunk(Call* call,
-                                Thunk thunk) {
+                                Thunk thunk,
+                                MethodAttributes attributes) {
   auto isolate = call->isolate;
   auto context = call->context;
   auto module_data = Local<External>::New(isolate, call->function_data->module_data);
-  auto fd = new FunctionData(isolate, thunk, module_data);
+  auto fd = new FunctionData(isolate, thunk, attributes, module_data);
   auto fde = Local<External>::New(isolate, fd->external);
   return Function::New(context, [](const FunctionCallbackInfo<Value>& info) {
     // Call will extract the FunctionData object created above from the External object
     // which we get from FunctionCallbackInfo::Data()
     Call ctx(info);
     const char* err = ctx.function_data->thunk(&ctx, ctx.argument);
-    ResyncShadows(&ctx);
+    if (ctx.function_data->attributes.has_pointer) {
+      ResyncShadows(&ctx);
+    }
     if (err) {
       auto message = String::NewFromUtf8(ctx.isolate, err).ToLocalChecked();
       info.GetReturnValue().Set(message);
@@ -437,7 +440,7 @@ static Local<Object> NewMethod(Call* call,
                                const Method &m) {
   auto isolate = call->isolate;
   auto context = call->context;
-  auto thunk = NewThunk(call, m.thunk);
+  auto thunk = NewThunk(call, m.thunk, m.attributes);
   auto def = Object::New(isolate);
   def->Set(context, String::NewFromUtf8Literal(isolate, "argStruct"), m.structure).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "thunk"), thunk).Check();
@@ -679,8 +682,8 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
 
   // save handle to external object, along with options and AddonData
   auto options = Object::New(isolate);
-  auto little_endian = Boolean::New(isolate, module->flags.little_endian);
-  auto runtime_safety = Boolean::New(isolate, module->flags.runtime_safety);
+  auto little_endian = Boolean::New(isolate, module->attributes.little_endian);
+  auto runtime_safety = Boolean::New(isolate, module->attributes.runtime_safety);
   options->Set(context, String::NewFromUtf8Literal(isolate, "littleEndian"), little_endian).Check();
   options->Set(context, String::NewFromUtf8Literal(isolate, "runtimeSafety"), runtime_safety).Check();
   auto md = new ModuleData(isolate, handle, options, info.Data().As<External>());
@@ -688,7 +691,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   // invoke the factory thunk through JavaScript, which will give us the
   // needed symbols and slots
   Call ctx(isolate, Local<External>::New(isolate, md->external));
-  auto factory = NewThunk(&ctx, module->factory);
+  auto factory = NewThunk(&ctx, module->factory, MethodAttributes{ .has_pointer = false });
   auto name = String::NewFromUtf8Literal(isolate, "invokeFactory");
   Local<Value> args[1] = { factory };
   Local<Value> result;

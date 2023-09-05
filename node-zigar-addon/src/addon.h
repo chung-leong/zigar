@@ -69,28 +69,38 @@ enum class MemoryDisposition : uint32_t {
   Link,
 };
 
+struct MemoryAttributes {
+  unsigned ptr_align: 8;
+  bool is_const: 1;
+  int :23;
+};
+
 struct Call;
 typedef const char* (*Thunk)(Call*, Local<Value>);
+
+struct MethodAttributes {
+  bool has_pointer: 1;
+  int :31;
+};
 
 struct Method {
   const char* name;
   Thunk thunk;
   Local<Value> structure;
+  MethodAttributes attributes;
 };
 
-union ModuleFlags {
-  struct {
-    bool little_endian: 1;
-    bool runtime_safety: 1;
-  };
-  uint32_t flags;
+union ModuleAttributes {
+  bool little_endian: 1;
+  bool runtime_safety: 1;
+  int :30;
 };
 
 struct Callbacks;
 
 struct Module {
   uint32_t version;
-  ModuleFlags flags;
+  ModuleAttributes attributes;
   Callbacks* callbacks;
   Thunk factory;
 };
@@ -98,7 +108,7 @@ struct Module {
 struct Callbacks {
   Result (*allocate_memory)(Call*, size_t, uint8_t, Memory*);
   Result (*free_memory)(Call*, const Memory&, uint8_t);
-  Result (*get_memory)(Call*, Local<Object>, uint8_t, Memory*);
+  Result (*get_memory)(Call*, Local<Object>, MemoryAttributes, Memory*);
   Result (*wrap_memory)(Call*, Local<Object>, const Memory&, MemoryDisposition, Local<Object>*);
 
   Result (*get_pointer_status)(Call*, Local<Object>, bool*);
@@ -172,13 +182,16 @@ struct ModuleData : public ExternalData {
 struct FunctionData : public ExternalData {
   static int count;
   Thunk thunk;
+  MethodAttributes attributes;
   Global<External> module_data;
 
   FunctionData(Isolate* isolate,
                Thunk thunk,
+               MethodAttributes attributes,
                Local<External> module_data) :
     ExternalData(isolate),
     thunk(thunk),
+    attributes(attributes),
     module_data(isolate, module_data) {
     count++;
   }
@@ -224,7 +237,7 @@ struct Call {
        Local<External> module_data) :
     isolate(isolate),
     context(isolate->GetCurrentContext()),
-    function_data(new FunctionData(isolate, nullptr, module_data)),
+    function_data(new FunctionData(isolate, nullptr, MethodAttributes{ .has_pointer = false }, module_data)),
     remove_function_data(true) {
   }
 

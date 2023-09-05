@@ -3698,6 +3698,10 @@ R"=====(
     }
   }
 
+  function log(...args) {
+    console.log(...args);
+  }
+
   exports.attachMember = attachMember;
   exports.attachMethod = attachMethod;
   exports.attachTemplate = attachTemplate;
@@ -3706,6 +3710,7 @@ R"=====(
   exports.flushConsole = flushConsole;
   exports.getArgumentBuffers = getArgumentBuffers;
   exports.invokeFactory = invokeFactory;
+  exports.log = log;
   exports.writeToConsole = writeToConsole;
 
   return exports;

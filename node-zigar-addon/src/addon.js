@@ -128,6 +128,10 @@ export function flushConsole() {
   }
 }
 
+export function log(...args) {
+  console.log(...args);
+}
+
 export {
   beginStructure,
   attachMember,

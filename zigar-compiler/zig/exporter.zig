@@ -171,10 +171,22 @@ pub const MemoryDisposition = enum(u32) {
     Link,
 };
 
+pub const MemoryAttributes = packed struct {
+    ptr_align: u8,
+    is_const: bool,
+    _: u23 = 0,
+};
+
+pub const MethodAttributes = packed struct {
+    has_pointer: bool,
+    _: u31 = 0,
+};
+
 pub const Method = extern struct {
     name: ?[*:0]const u8 = null,
     thunk: Thunk,
     structure: Value,
+    attributes: MethodAttributes,
 };
 
 fn NextIntType(comptime T: type) type {
@@ -363,6 +375,37 @@ test "hasPointer" {
     assert(hasPointer(D) == false);
 }
 
+fn hasPointerArguments(comptime ArgT: type) bool {
+    const st = @typeInfo(ArgT).Struct;
+    inline for (st.fields, 0..) |field, index| {
+        if (index != st.fields.len - 1 and hasPointer(field.type)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+test "hasPointerArguments" {
+    const ArgA = struct {
+        @"0": u32,
+        @"1": u32,
+        retval: u32,
+    };
+    const ArgB = struct {
+        @"0": *u32,
+        @"1": u32,
+        retval: u32,
+    };
+    const ArgC = struct {
+        @"0": u32,
+        @"1": u32,
+        retval: []u32,
+    };
+    assert(hasPointerArguments(ArgA) == false);
+    assert(hasPointerArguments(ArgB) == true);
+    assert(hasPointerArguments(ArgC) == false);
+}
+
 fn getMemberType(comptime T: type) MemberType {
     return switch (@typeInfo(T)) {
         .Bool => .Bool,
@@ -414,24 +457,16 @@ test "getStructureType" {
     assert(getStructureType(extern union {}) == .ExternUnion);
 }
 
-pub fn PointerType(comptime CT: type, comptime size: std.builtin.Type.Pointer.Size) type {
-    return switch (size) {
-        .One => *CT,
-        .Slice => []CT,
-        .Many => [*]CT,
-        .C => [*c]CT,
-    };
-}
-
-pub fn fromMemory(memory: Memory, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) PointerType(T, size) {
-    return switch (size) {
+pub fn fromMemory(memory: Memory, comptime PtrT: type) PtrT {
+    const pt = @typeInfo(PtrT).Pointer;
+    return switch (pt.size) {
         .One => @ptrCast(@alignCast(memory.bytes)),
         .Slice => slice: {
             if (memory.bytes == null) {
                 break :slice &.{};
             }
-            const count = memory.len / @sizeOf(T);
-            const many_ptr: [*]T = @ptrCast(@alignCast(memory.bytes));
+            const count = memory.len / @sizeOf(pt.child);
+            const many_ptr: [*]pt.child = @ptrCast(@alignCast(memory.bytes));
             break :slice many_ptr[0..count];
         },
         .Many => @ptrCast(@alignCast(memory.bytes)),
@@ -445,38 +480,37 @@ test "fromMemory" {
         .bytes = &array,
         .len = array.len,
     };
-    const p1 = fromMemory(memory, u8, .One);
+    const p1 = fromMemory(memory, *u8);
     assert(p1.* == 'H');
     assert(@typeInfo(@TypeOf(p1)).Pointer.size == .One);
-    const p2 = fromMemory(memory, u8, .Slice);
+    const p2 = fromMemory(memory, []u8);
     assert(p2[0] == 'H');
     assert(p2.len == 5);
     assert(@typeInfo(@TypeOf(p2)).Pointer.size == .Slice);
-    const p3 = fromMemory(memory, u8, .Many);
+    const p3 = fromMemory(memory, [*]u8);
     assert(p3[0] == 'H');
     assert(@typeInfo(@TypeOf(p3)).Pointer.size == .Many);
-    const p4 = fromMemory(memory, u8, .C);
+    const p4 = fromMemory(memory, [*c]u8);
     assert(p4[0] == 'H');
     assert(@typeInfo(@TypeOf(p4)).Pointer.size == .C);
 }
 
 pub fn toMemory(pointer: anytype) Memory {
-    const T = @TypeOf(pointer);
-    const CT = @typeInfo(T).Pointer.child;
-    const size = @typeInfo(T).Pointer.size;
-    const address = switch (size) {
+    const PtrT = @TypeOf(pointer);
+    const pt = @typeInfo(PtrT).Pointer;
+    const address = switch (pt.size) {
         .Slice => @intFromPtr(pointer.ptr),
         else => @intFromPtr(pointer),
     };
-    const len = switch (size) {
-        .One => @sizeOf(CT),
-        .Slice => @sizeOf(CT) * pointer.len,
-        .Many => if (getSentinel(T)) |sentinel| find: {
+    const len = switch (pt.size) {
+        .One => @sizeOf(pt.child),
+        .Slice => @sizeOf(pt.child) * pointer.len,
+        .Many => if (getSentinel(PtrT)) |sentinel| find: {
             var len: usize = 0;
             while (pointer[len] != sentinel) {
                 len += 1;
             }
-            break :find (len + 1) * @sizeOf(CT);
+            break :find (len + 1) * @sizeOf(pt.child);
         } else 0,
         .C => 0,
     };
@@ -1141,6 +1175,7 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
                     .name = getCString(decl.name),
                     .thunk = @ptrCast(createThunk(@TypeOf(host), function, ArgT)),
                     .structure = arg_structure,
+                    .attributes = .{ .has_pointer = hasPointerArguments(ArgT) },
                 }, is_static_only);
             },
             else => {},
@@ -1278,7 +1313,7 @@ fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
             }
             try host.setPointerStatus(obj, true);
             const child_obj = try host.readObjectSlot(obj, 0);
-            const current_ptr = try host.getMemory(child_obj, pt.child, pt.size, true);
+            const current_ptr = try host.getMemory(child_obj, T, true);
             if (!comparePointers(ptr.*, current_ptr)) {
                 const writable_ptr = @constCast(ptr);
                 writable_ptr.* = current_ptr;
@@ -1426,8 +1461,7 @@ fn obtainChildObject(host: anytype, container: Value, slot: usize, ptr: anytype,
     if (host.readObjectSlot(container, slot)) |child_obj| {
         if (check) {
             // see if pointer is still pointing to what it was before
-            const pt = @typeInfo(@TypeOf(ptr)).Pointer;
-            const current_ptr = try host.getMemory(child_obj, pt.child, pt.size, true);
+            const current_ptr = try host.getMemory(child_obj, @TypeOf(ptr), true);
             if (!comparePointers(ptr, current_ptr)) {
                 // need to create JS wrapper object for new memory
                 return createChildObject(host, container, slot, ptr);
@@ -1492,7 +1526,7 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
             var args: Args = undefined;
             if (@sizeOf(ArgT) != 0) {
                 const fields = @typeInfo(Args).Struct.fields;
-                var arg_ptr = try host.getMemory(arg_obj, ArgT, .One, false);
+                var arg_ptr = try host.getMemory(arg_obj, *ArgT, false);
                 if (hasPointer(ArgT)) {
                     // make sure pointers have up-to-date values
                     try rezigStructure(host, arg_obj, arg_ptr);

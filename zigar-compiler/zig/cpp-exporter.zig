@@ -11,6 +11,7 @@ const Member = exporter.Member;
 const Method = exporter.Method;
 const Memory = exporter.Memory;
 const MemoryDisposition = exporter.MemoryDisposition;
+const MemoryAttributes = exporter.MemoryAttributes;
 const Thunk = exporter.Thunk;
 const Error = exporter.Error;
 const missing = exporter.missing;
@@ -62,13 +63,17 @@ pub const Host = struct {
         }
     }
 
-    pub fn getMemory(self: Host, container: Value, comptime T: type, comptime size: std.builtin.Type.Pointer.Size, comptime aligning: bool) !exporter.PointerType(T, size) {
+    pub fn getMemory(self: Host, container: Value, comptime PtrT: type, comptime aligning: bool) !PtrT {
         var memory: Memory = undefined;
-        const ptr_align = if (aligning) std.math.log2_int(u8, @alignOf(T)) else 0;
-        if (callbacks.get_memory(self.context, container, ptr_align, &memory) != .OK) {
+        const pt = @typeInfo(PtrT).Pointer;
+        const attrs: MemoryAttributes = .{
+            .ptr_align = if (aligning) std.math.log2_int(u8, @alignOf(pt.child)) else 0,
+            .is_const = pt.is_const,
+        };
+        if (callbacks.get_memory(self.context, container, attrs, &memory) != .OK) {
             return Error.UnableToRetrieveMemoryLocation;
         }
-        return exporter.fromMemory(memory, T, size);
+        return exporter.fromMemory(memory, PtrT);
     }
 
     pub noinline fn onStack(self: Host, memory: Memory) bool {
@@ -202,7 +207,7 @@ pub const Host = struct {
 const Callbacks = extern struct {
     allocate_memory: *const fn (Call, usize, u8, *Memory) callconv(.C) Result,
     free_memory: *const fn (Call, *const Memory, u8) callconv(.C) Result,
-    get_memory: *const fn (Call, Value, u8, *Memory) callconv(.C) Result,
+    get_memory: *const fn (Call, Value, MemoryAttributes, *Memory) callconv(.C) Result,
     wrap_memory: *const fn (Call, Value, *const Memory, MemoryDisposition, *Value) callconv(.C) Result,
 
     get_pointer_status: *const fn (Call, Value, *bool) callconv(.C) Result,
@@ -226,7 +231,7 @@ const Callbacks = extern struct {
 
 var callbacks: Callbacks = undefined;
 
-const ModuleFlags = packed struct(u32) {
+const ModuleAttributes = packed struct(u32) {
     little_endian: bool,
     runtime_safety: bool,
     _: u30 = 0,
@@ -234,14 +239,14 @@ const ModuleFlags = packed struct(u32) {
 
 pub const Module = extern struct {
     version: u32 = 1,
-    flags: ModuleFlags,
+    attributes: ModuleAttributes,
     callbacks: *Callbacks = &callbacks,
     factory: Thunk,
 };
 
 pub fn createModule(comptime T: type) Module {
     return .{
-        .flags = .{
+        .attributes = .{
             .little_endian = builtin.target.cpu.arch.endian() == .Little,
             .runtime_safety = switch (builtin.mode) {
                 .Debug, .ReleaseSafe => true,
@@ -267,7 +272,7 @@ test "createModule" {
     };
     const module = createModule(Test);
     assert(module.version == 1);
-    assert(module.flags.little_endian == (builtin.target.cpu.arch.endian() == .Little));
+    assert(module.attributes.little_endian == (builtin.target.cpu.arch.endian() == .Little));
     switch (@typeInfo(@TypeOf(module.factory))) {
         .Pointer => |pt| {
             switch (@typeInfo(pt.child)) {
