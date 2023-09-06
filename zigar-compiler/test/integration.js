@@ -218,14 +218,11 @@ export function addTests(importModule, options) {
         printVariant(module.variant_a);
         printVariant(module.variant_b);
         printVariant(module.variant_c);
-        printVariant(module.variant_a);
-        printVariant(module.variant_b);
-        printVariant(module.variant_c);
         printVariantPtr(module.variant_a);
         printVariantPtr(module.variant_b);
         printVariantPtr(module.variant_c);
       });
-      expect(lines).to.eql([ 'apple', '123', '3.14', 'apple', '123', '3.14', 'apple', '123', '3.14' ]);
+      expect(lines).to.eql([ 'apple', '123', '3.14', 'apple', '123', '3.14' ]);
     })
     it('should import tagged union with pointers', async function() {
       this.timeout(60000);

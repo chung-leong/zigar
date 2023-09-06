@@ -745,54 +745,6 @@ test "getUnionSelectorOffset" {
     assert(getUnionSelectorOffset(i64, @typeInfo(Union).Union.fields) == 0);
 }
 
-fn getUnionCurrentIndex(ptr: anytype) usize {
-    const T = @TypeOf(ptr.*);
-    const un = @typeInfo(T).Union;
-    if (un.tag_type) |TT| {
-        const value = @intFromEnum(ptr.*);
-        inline for (@typeInfo(TT).Enum.fields, 0..) |field, index| {
-            if (value == field.value) {
-                return index;
-            }
-        }
-    } else {
-        const TT = IntType(u8, un.fields.len);
-        const offset = getUnionSelectorOffset(TT, un.fields);
-        const address = @intFromPtr(ptr) + offset / 8;
-        const offset_ptr: *TT = @ptrFromInt(address);
-        return offset_ptr.*;
-    }
-    return missing;
-}
-
-test "getUnionCurrentIndex" {
-    const Union1 = union {
-        cat: i32,
-        dog: i32,
-    };
-    var union1: Union1 = .{ .dog = 1234 };
-    assert(getUnionCurrentIndex(&union1) == 1);
-    union1 = .{ .cat = 4567 };
-    assert(getUnionCurrentIndex(&union1) == 0);
-    const Enum = enum { cat, dog };
-    const Union2 = union(Enum) {
-        cat: i32,
-        dog: i32,
-    };
-    var union2: Union2 = .{ .dog = 1234 };
-    assert(getUnionCurrentIndex(&union2) == 1);
-    union2 = .{ .cat = 4567 };
-    assert(getUnionCurrentIndex(&union2) == 0);
-    const Union3 = union {
-        cat: bool,
-        dog: bool,
-    };
-    var union3: Union3 = .{ .dog = true };
-    assert(getUnionCurrentIndex(&union3) == 1);
-    union3 = .{ .cat = true };
-    assert(getUnionCurrentIndex(&union3) == 0);
-}
-
 fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
     switch (@typeInfo(T)) {
         .Bool, .Int, .Float, .Void => {
@@ -1352,11 +1304,12 @@ fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
             }
         },
         .Union => |un| {
-            if (un.tag_type) |_| {
+            if (un.tag_type) |TT| {
+                const selected: TT = ptr.*;
+                const selected_index = @intFromEnum(selected);
                 inline for (un.fields, 0..) |field, index| {
                     if (hasPointer(field.type)) {
-                        const current_index = getUnionCurrentIndex(ptr);
-                        if (index == current_index) {
+                        if (index == selected_index) {
                             const slot = getObjectSlot(T, index);
                             const child_obj = try host.readObjectSlot(obj, slot);
                             try rezigStructure(host, child_obj, &@field(ptr.*, field.name));
@@ -1425,11 +1378,12 @@ fn dezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
             }
         },
         .Union => |un| {
-            if (un.tag_type) |_| {
+            if (un.tag_type) |TT| {
+                const selected: TT = ptr.*;
+                const selected_index = @intFromEnum(selected);
                 inline for (un.fields, 0..) |field, index| {
                     if (hasPointer(field.type)) {
-                        const current_index = getUnionCurrentIndex(ptr);
-                        if (index == current_index) {
+                        if (index == selected_index) {
                             const slot = getObjectSlot(T, index);
                             const child_ptr = &@field(ptr.*, field.name);
                             const child_obj = try obtainChildObject(host, obj, slot, child_ptr, false);
