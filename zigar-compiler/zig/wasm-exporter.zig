@@ -10,6 +10,7 @@ const Member = exporter.Member;
 const Method = exporter.Method;
 const Memory = exporter.Memory;
 const MemoryDisposition = exporter.MemoryDisposition;
+const MemoryAttributes = exporter.MemoryAttributes;
 const Template = exporter.Template;
 const Thunk = exporter.Thunk;
 const Error = exporter.Error;
@@ -21,7 +22,7 @@ const Call = struct {
 
 extern fn _allocMemory(host: usize, len: usize, ptr_align: u8) usize;
 extern fn _freeMemory(host: usize, address: usize, len: usize, ptr_align: u8) void;
-extern fn _getMemory(host: usize, object: usize, ptr_align: u8) usize;
+extern fn _getMemory(host: usize, object: usize, ptr_align: u8, is_const: i32) usize;
 extern fn _getMemoryOffset(object: usize) usize;
 extern fn _getMemoryLength(object: usize) usize;
 extern fn _createDataView(host: usize, address: usize, len: usize, disposition: u32) usize;
@@ -109,9 +110,11 @@ pub const Host = struct {
         _freeMemory(self.context, @intFromPtr(memory.bytes), memory.len, ptr_align);
     }
 
-    pub fn getMemory(self: Host, container: Value, comptime T: type, comptime size: std.builtin.Type.Pointer.Size, comptime aligning: bool) !exporter.PointerType(T, size) {
-        const ptr_align = if (aligning) std.math.log2_int(u8, @alignOf(T)) else 0;
-        const view_index = _getMemory(self.context, index(container), ptr_align);
+    pub fn getMemory(self: Host, container: Value, comptime PtrT: type, comptime aligning: bool) !PtrT {
+        const pt = @typeInfo(PtrT).Pointer;
+        const ptr_align = if (aligning) std.math.log2_int(u8, @alignOf(pt.child)) else 0;
+        const is_const = if (pt.is_const) 1 else 0;
+        const view_index = _getMemory(self.context, index(container), ptr_align, is_const);
         if (view_index == 0) {
             return Error.UnableToRetrieveMemoryLocation;
         }
@@ -121,7 +124,7 @@ pub const Host = struct {
             .bytes = @ptrFromInt(offset),
             .len = len,
         };
-        return exporter.fromMemory(memory, T, size);
+        return exporter.fromMemory(memory, PtrT);
     }
 
     pub noinline fn onStack(self: Host, memory: Memory) bool {

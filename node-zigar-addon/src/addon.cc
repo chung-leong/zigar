@@ -28,8 +28,8 @@ static Memory GetDataViewMemory(Local<DataView> dv) {
 static bool IsMisaligned(Memory memory,
                          uint8_t ptr_align) {
   auto address = reinterpret_cast<size_t>(memory.bytes);
-  size_t unaligned_mask = (1 << ptr_align) - 1;
-  return (address & unaligned_mask) != 0;
+  size_t mask = (1 << ptr_align) - 1;
+  return (address & mask) != 0;
 }
 
 static Memory GetAlignedBufferMemory(Local<ArrayBuffer> buffer,
@@ -128,7 +128,7 @@ static Result GetMemory(Call* call,
             }
             aliasing = true;
             break;
-          } else if (prev_mem.bytes >= mem.bytes + prev_mem.len || mem.bytes + mem.len <= prev_mem.bytes) {
+          } else if (prev_mem.bytes >= mem.bytes + prev_mem.len || mem.bytes >= prev_mem.bytes + prev_mem.len) {
             // no overlap
           } else {
             // overlaping

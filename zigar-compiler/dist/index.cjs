@@ -731,10 +731,10 @@ async function runModule(source, options = {}) {
   function _endCall(ctxAddr) {
     // move data from WASM memory into buffers
     const ctx = callContexts[ctxAddr];
-    for (const [ buffer, { address, len, ptrAlign, dv, copy, shadow } ] of ctx.bufferMap) {
-      const src = new DataView(wasmMemory.buffer, address, len);
+    for (const [ dest, { address, len, ptrAlign, copy, shadow } ] of ctx.bufferMap) {
       if (copy) {
-        copy(dv, src);
+        const src = new DataView(wasmMemory.buffer, address, len);
+        copy(dest, src);
       }
       if (shadow) {
         free(ctxAddr, address, len, ptrAlign);
@@ -755,26 +755,35 @@ async function runModule(source, options = {}) {
   }
 
   function _allocMemory(ctxAddr, len, ptrAlign) {
+    if (len === 0) {
+      return null;
+    }
     const address = alloc(ctxAddr, len, ptrAlign);
     const { bufferMap } = callContexts[ctxAddr];
     const buffer = new ArrayBuffer(len);
     const dv = new DataView(buffer);
     const copy = getMemoryCopier(len);
-    bufferMap.set(buffer, { address, len, ptrAlign, dv, copy, shadow: true });
+    new DataView(wasmMemory.buffer, address, len);
+    bufferMap.set(dv, { address, len, ptrAlign, copy, shadow: true });
     return address;
   }
 
   function _freeMemory(ctxAddr, address, len, ptrAlign) {
     const { bufferMap } = callContexts[ctxAddr];
-    for (const [ buffer, { address: matching } ] of bufferMap) {
+    for (const [ dv, { address: matching } ] of bufferMap) {
       if (address === matching) {
-        bufferMap.delete(buffer);
+        bufferMap.delete(dv);
         free(ctxAddr, address, len, ptrAlign);
       }
     }
   }
 
-  function _getMemory(ctxAddr, objectIndex, ptrAlign) {
+  function isMisaligned({ address }, ptrAlign) {
+    const mask = (1 << ptrAlign) - 1;
+    return (address & mask) !== 0;
+  }
+
+  function _getMemory(ctxAddr, objectIndex, ptrAlign, isConst) {
     const object = valueTable[objectIndex];
     let dv = object[MEMORY];
     if (!dv) {
@@ -785,23 +794,41 @@ async function runModule(source, options = {}) {
       return addObject(source);
     } else {
       const ctx = callContexts[ctxAddr];
-      let memory = ctx.bufferMap.get(dv.buffer);
+      let memory = ctx.bufferMap.get(dv);
       if (!memory) {
-        const len = dv.buffer.byteLength;
-        const address = alloc(ctxAddr, len, ptrAlign);
-        const dest = new DataView(wasmMemory.buffer, address, len);
-        // create new dataview if the one given only covers a portion of it
-        const src = (dv.byteLength === len) ? dv : new DataView(dv.buffer);
-        const copy = getMemoryCopier(len);
-        copy(dest, src);
-        // TODO: need actual alignment
-        memory = { address, len, dv: src, copy, ptrAlign, shadow: true };
-        ctx.bufferMap.set(dv.buffer, memory);
+        // see if memory overlaps another data view seen earlier
+        const len = dv.byteLength;
+        if (len === 0) {
+          return addObject({ address: 0, len: 0 });
+        }
+        for (const [ prevDV, prevMemory ] of ctx.bufferMap) {
+          if (dv.buffer === prevDV.buffer) {
+            if (prevDV.byteOffset <= dv.byteOffset && dv.byteOffset + len <= prevDV.byteOffset + prevDV.byteLength) {
+              const address = prevMemory.address + (dv.byteOffset - prevDV.byteOffset);
+              memory = { address, len, copy: null, ptrAlign, shadow: false };
+              break;
+            } else if (prevDV.byteOffset >= dv.byteOffset + len || dv.byteOffset >= prevDV.byteOffset + prevDV.byteLength) ; else {
+              // overlapping
+              return 0;
+            }
+          }
+        }
+        if (memory) {
+          if (isMisaligned(memory, ptrAlign)) {
+            return 0;
+          }
+        } else {
+          const address = alloc(ctxAddr, len, ptrAlign);
+          const dest = new DataView(wasmMemory.buffer, address, len);
+          // create new dataview if the one given only covers a portion of it
+          const src = (dv.byteLength === len) ? dv : new DataView(dv.buffer);
+          const copy = getMemoryCopier(len);
+          copy(dest, src);
+          memory = { address, len, copy: (isConst) ? null : copy, ptrAlign, shadow: true };
+        }
+        ctx.bufferMap.set(dv, memory);
       }
-      return addObject({
-        address: memory.address + dv.byteOffset,
-        len: dv.byteLength
-      });
+      return addObject(memory);
     }
   }
 
@@ -940,7 +967,7 @@ async function runModule(source, options = {}) {
     // copy content immediately, since address is likely pointing to a stack location
     const src = new DataView(wasmMemory.buffer, address, len);
     copy(dv, src);
-    ctx.bufferMap.set(buffer, { address, len, dv, copy: null, ptrAlign: 0, shadow: false });
+    ctx.bufferMap.set(dv, { address, len, copy: null, ptrAlign: 0, shadow: false });
     return dv;
   }
 
@@ -949,10 +976,14 @@ async function runModule(source, options = {}) {
       return createCopy(ctx, address, len);
     } else if (disposition === MemoryDisposition.Auto) {
       // look for address among existing buffers
-      for (const [ buffer, { address: start, len: count } ] of ctx.bufferMap) {
-        if (start <= address && address + len <= start + count) {
-          const offset = address - start;
-          return new DataView(buffer, offset, len);
+      for (const [ dv, { address: start, len: len2 } ] of ctx.bufferMap) {
+        if (start <= address && address + len <= start + len2) {
+          if (len === len2) {
+            return dv;
+          } else {
+            const offset = address - start;
+            return new DataView(dv.buffer, offset, len);
+          }
         }
       }
     }
@@ -1065,7 +1096,7 @@ function generateCode(structures, params) {
     type: StructureType.Primitive,
     name: undefined,
     size: 4,
-    align: 4,
+    align: 2,
     isConst: false,
     hasPointer: false,
     instance: {
