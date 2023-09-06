@@ -3,7 +3,6 @@ import { expect } from 'chai';
 import { MEMORY, SLOTS, ZIG } from '../../zigar-runtime/src/symbol.js';
 import {
   invokeFactory,
-  getArgumentBuffers,
   writeToConsole,
   flushConsole,
 } from '../src/addon.js';
@@ -37,38 +36,6 @@ describe('Addon functions', function() {
       }
       expect(() => invokeFactory(thunk)).to.throw(Error)
         .with.property('message').that.equal('Total brain fart');
-    })
-  })
-  describe('getArgumentBuffers', function() {
-    it('should recursively find all buffers in the argument struct', function() {
-      const buffer1 = new ArrayBuffer(32);
-      const buffer2 = new ArrayBuffer(32);
-      const buffer3 = new ArrayBuffer(32);
-      const buffer4 = new SharedArrayBuffer(32);
-      const argStruct = {
-        [MEMORY]: new DataView(buffer1),
-        [SLOTS]: {
-          0: {
-            [MEMORY]: new DataView(buffer2),
-            [SLOTS]: {
-              0: {
-                [MEMORY]: new DataView(buffer2, 0, 4),
-              },
-              1: {
-                [MEMORY]: new DataView(buffer3),
-              }
-            }
-          },
-          1: {
-            [MEMORY]: new DataView(buffer4),
-          },
-          2: null,
-        }
-      };
-      argStruct[SLOTS][0][SLOTS][2] = argStruct;
-      const result = getArgumentBuffers(argStruct);
-      expect(result).to.be.an('array');
-      expect(result).to.be.eql([ buffer1, buffer2, buffer3 ]);
     })
   })
   describe('writeToConsole', function() {

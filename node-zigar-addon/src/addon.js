@@ -65,33 +65,6 @@ export function invokeFactory(thunk) {
   return args[SLOTS][0].constructor;
 }
 
-export function getArgumentBuffers(args) {
-  const buffers = [];
-  const included = new WeakMap();
-  const scanned = new WeakMap();
-  const scan = (object) => {
-    if (!object || scanned.get(object)) {
-      return;
-    }
-    const memory = object[MEMORY];
-    if (memory && memory.buffer[Symbol.toStringTag] === 'ArrayBuffer') {
-      if (!included.get(memory.buffer)) {
-        buffers.push(memory.buffer);
-        included.set(memory.buffer, true);
-      }
-    }
-    scanned.set(object, true);
-    const slots = object[SLOTS];
-    if (slots) {
-      for (const child of Object.values(slots)) {
-        scan(child);
-      }
-    }
-  };
-  scan(args);
-  return buffers;
-}
-
 const decoder = new TextDecoder();
 let consolePending = '', consoleTimeout = 0;
 

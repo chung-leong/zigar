@@ -222,8 +222,7 @@ struct Call {
   Isolate* isolate;
   Local<Context> context;
   Local<Array> mem_pool;
-  Local<Map> shadow_map;
-  Local<Array> arg_buffers;
+  Local<Map> buffer_map;
   Local<Object> js_module;
   Local<Object> argument;
   Local<Object> global_slots;
@@ -251,6 +250,9 @@ struct Call {
     symbol_zig(info[3].As<Symbol>()),
     function_data(reinterpret_cast<FunctionData*>(info.Data().As<External>()->Value())),
     remove_function_data(false) {
+    if (function_data->attributes.has_pointer) {
+      buffer_map = Map::New(isolate);
+    }
   }
 
   ~Call() {
@@ -259,7 +261,5 @@ struct Call {
     }
   }
 };
-
-static Result GetArgumentBuffers(Call* call);
 
 const size_t missing = SIZE_MAX;

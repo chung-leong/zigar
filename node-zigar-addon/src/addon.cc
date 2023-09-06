@@ -103,68 +103,142 @@ static Result GetMemory(Call* call,
     return Result::Failure;
   }
   auto dv = value.As<DataView>();
-  auto mem = GetDataViewMemory(dv);
-  if (IsMisaligned(mem, attributes.ptr_align)) {
-    // memory is misaligned, need to create a shadow buffer for it
-    if (call->shadow_map.IsEmpty()) {
-      call->shadow_map = Map::New(isolate);
-    }
-    Local<Value> existing = call->shadow_map->Get(context, dv).ToLocalChecked();
-    if (existing->IsArrayBuffer()) {
-      auto shadow_buffer = existing.As<ArrayBuffer>();
-      mem = GetAlignedBufferMemory(shadow_buffer, attributes.ptr_align);
-    } else {
-      auto shadow_buffer = ArrayBuffer::New(isolate, dv->ByteLength() + GetExtraCount(attributes.ptr_align));
-      shadow_buffer->Set(context, 0, Int32::New(isolate, attributes.ptr_align)).Check();
-      call->shadow_map->Set(context, dv, shadow_buffer).ToLocalChecked();
-      auto dest_mem = GetAlignedBufferMemory(shadow_buffer, attributes.ptr_align);
-      memcpy(dest_mem.bytes, mem.bytes, mem.len);
-      mem = dest_mem;
-    }
-  }
-  *dest = mem;
-  return Result::OK;
-}
-
-static Result ResyncShadows(Call* call) {
-  if (!call->shadow_map.IsEmpty()) {
-    auto context = call->context;
-    auto array = call->shadow_map->AsArray();
-    for (size_t i = 0; i < array->Length(); i += 2) {
-      auto key = array->Get(context, i).ToLocalChecked();
-      auto value = array->Get(context, i + 1).ToLocalChecked();
-      auto dv = key.As<DataView>();
-      auto shadow_buffer = value.As<ArrayBuffer>();
-      auto ptr_align = static_cast<uint8_t>(shadow_buffer->Get(context, 0).ToLocalChecked().As<Int32>()->Value());
-      auto mem = GetAlignedBufferMemory(shadow_buffer, ptr_align);
-      auto dest_mem = GetDataViewMemory(dv);
-      memcpy(dest_mem.bytes, mem.bytes, mem.len);
-    }
-  }
-  return Result::OK;
-}
-
-static Result FindBuffer(Call* call,
-                         const Memory& memory,
-                         Local<Array> array,
-                         Local<ArrayBuffer>* dest,
-                         size_t* offset_dest) {
-  auto context = call->context;
-  auto address = reinterpret_cast<size_t>(memory.bytes);
-  int buf_count = array->Length();
-  for (int i = 0; i < buf_count; i++) {
-    auto item = array->Get(context, i).ToLocalChecked();
-    if (item->IsArrayBuffer()) {
-      auto buffer = item.As<ArrayBuffer>();
-      if (buffer->ByteLength() >= memory.len) {
-        std::shared_ptr<BackingStore> store = buffer->GetBackingStore();
-        auto buf_start = reinterpret_cast<size_t>(store->Data());
-        auto buf_end = buf_start + store->ByteLength();
-        if (buf_start <= address && address + memory.len <= buf_end) {
-          *dest = buffer;
-          *offset_dest = address - buf_start;
-          return Result::OK;
+  if (call->function_data->attributes.has_pointer) {
+    Local<Value> shadow_view;
+    bool aliasing = false;
+    auto mem = GetDataViewMemory(dv);
+    // see if the data view overlaps another that we've seen earlier
+    auto array = call->buffer_map->AsArray();
+    auto value = call->buffer_map->Get(context, dv).ToLocalChecked();
+    if (value->IsUndefined()) {
+      for (size_t i = 0; i < array->Length(); i += 2) {
+        auto prev_dv = array->Get(context, i).ToLocalChecked().As<DataView>();
+        if (prev_dv->Buffer() == dv->Buffer()) {
+          auto prev_mem = GetDataViewMemory(prev_dv);
+          if (prev_mem.bytes <= mem.bytes && mem.bytes + mem.len <= prev_mem.bytes + prev_mem.len) {
+            // previous data view contains this one
+            auto prev_value = array->Get(context, i + 1).ToLocalChecked();
+            if (prev_value->IsArrayBuffer()) {
+              // previous view is being shadowed, use memory from the shadow buffer
+              auto shadow_buffer = prev_value.As<ArrayBuffer>();
+              auto shadow_mem = GetArrayBufferMemory(shadow_buffer);
+              size_t offset = prev_mem.bytes - mem.bytes;
+              mem.bytes = shadow_mem.bytes + offset;
+              shadow_view = DataView::New(shadow_buffer, offset, mem.len);
+            }
+            aliasing = true;
+            break;
+          } else if (prev_mem.bytes >= mem.bytes + prev_mem.len || mem.bytes + mem.len <= prev_mem.bytes) {
+            // no overlap
+          } else {
+            // overlaping
+            return Result::Failure;
+          }
         }
+      }
+    } else if (value->IsArrayBuffer()) {
+      mem = GetArrayBufferMemory(value.As<ArrayBuffer>());
+    } else if (value->IsDataView()) {
+      mem = GetDataViewMemory(value.As<DataView>());
+    }
+    if (value->IsUndefined()) {
+      // add data view to map
+      if (IsMisaligned(mem, attributes.ptr_align)) {
+        // memory is misaligned, need to create a shadow buffer for it
+        if (aliasing) {
+          // can't create a shadow when another pointer is aliasing this one
+          return Result::Failure;
+        }
+        auto shadow_buffer = ArrayBuffer::New(isolate, dv->ByteLength() + GetExtraCount(attributes.ptr_align));
+        shadow_buffer->Set(context, 0, Boolean::New(isolate, attributes.is_const)).Check();
+        shadow_buffer->Set(context, 1, Int32::New(isolate, attributes.ptr_align)).Check();
+        auto dest_mem = GetAlignedBufferMemory(shadow_buffer, attributes.ptr_align);
+        memcpy(dest_mem.bytes, mem.bytes, mem.len);
+        mem = dest_mem;
+        value = shadow_buffer;
+      } else if (!shadow_view.IsEmpty()) {
+        value = shadow_view;
+      } else {
+        value = Null(isolate);
+      }
+      call->buffer_map->Set(context, dv, value).ToLocalChecked();
+    }
+    *dest = mem;
+  } else {
+    // just get the memory of argument struct
+    *dest = GetDataViewMemory(dv);
+  }
+  return Result::OK;
+}
+
+static Result UnshadowMemory(Call* call) {
+  auto context = call->context;
+  auto array = call->buffer_map->AsArray();
+  for (size_t i = 0; i < array->Length(); i += 2) {
+    auto value = array->Get(context, i + 1).ToLocalChecked();
+    if (value->IsArrayBuffer()) {
+      auto shadow_buffer = value.As<ArrayBuffer>();
+      auto is_const = static_cast<uint8_t>(shadow_buffer->Get(context, 0).ToLocalChecked().As<Boolean>()->Value());
+      if (!is_const) {
+        // need to copy data back into view
+        auto dv = array->Get(context, i).ToLocalChecked().As<DataView>();
+        auto ptr_align = static_cast<uint8_t>(shadow_buffer->Get(context, 1).ToLocalChecked().As<Int32>()->Value());
+        auto mem = GetAlignedBufferMemory(shadow_buffer, ptr_align);
+        auto dest_mem = GetDataViewMemory(dv);
+        memcpy(dest_mem.bytes, mem.bytes, mem.len);
+      }
+    }
+  }
+  return Result::OK;
+}
+
+static Result ObtainDataViewFromPool(Call* call,
+                                     const Memory& memory,
+                                     Local<DataView> *dest) {
+  if (!call->mem_pool.IsEmpty()) {
+    auto context = call->context;
+    for (uint32_t i = 0; i < call->mem_pool->Length(); i++) {
+      auto item = call->mem_pool->Get(context, i).ToLocalChecked();
+      if (item->IsArrayBuffer()) {
+        auto buffer = item.As<ArrayBuffer>();
+        if (buffer->ByteLength() >= memory.len) {
+          auto pool_mem = GetArrayBufferMemory(buffer);
+          if (pool_mem.bytes <= memory.bytes && memory.bytes + memory.len <= pool_mem.bytes + pool_mem.len) {
+            size_t offset = memory.bytes - pool_mem.bytes;
+            *dest = DataView::New(buffer, offset, memory.len);
+            return Result::OK;
+          }
+        }
+      }
+    }
+  }
+  return Result::Failure;
+}
+
+static Result ObtainDataViewFromMap(Call* call,
+                                    const Memory& memory,
+                                    Local<DataView> *dest) {
+  if (!call->buffer_map.IsEmpty()) {
+    auto context = call->context;
+    auto array = call->buffer_map->AsArray();
+    for (uint32_t i = 0; i < array->Length(); i += 2) {
+      auto dv = array->Get(context, i).ToLocalChecked().As<DataView>();
+      auto value = array->Get(context, i + 1).ToLocalChecked();
+      Memory arg_mem;
+      if (value->IsArrayBuffer()) {
+        // from shadow buffer
+        arg_mem = GetArrayBufferMemory(value.As<ArrayBuffer>());
+      } else {
+        arg_mem = GetDataViewMemory(dv);
+      }
+      if (arg_mem.bytes <= memory.bytes && memory.bytes + memory.len <= arg_mem.bytes + arg_mem.len) {
+        if (memory.len == arg_mem.len) {
+          *dest = dv;
+        } else {
+          size_t offset = dv->ByteOffset() + (memory.bytes - arg_mem.bytes);
+          *dest = DataView::New(dv->Buffer(), offset, memory.len);
+        }
+        return Result::OK;
       }
     }
   }
@@ -185,22 +259,11 @@ static Result ObtainDataView(Call* call,
     return Result::OK;
   } else if (disposition == MemoryDisposition::Auto) {
     // see if it's from the memory pool
-    Local<ArrayBuffer> buffer;
-    size_t offset;
-    if (!call->mem_pool.IsEmpty()) {
-      if (FindBuffer(call, memory, call->mem_pool, &buffer, &offset) == Result::OK) {
-        *dest = DataView::New(buffer, offset, memory.len);
-        return Result::OK;
-      }
+    if (ObtainDataViewFromPool(call, memory, dest) == Result::OK) {
+      return Result::OK;
     }
-    // see if it's from the arguments
-    if (call->arg_buffers.IsEmpty()) {
-      if (GetArgumentBuffers(call) != Result::OK) {
-        return Result::Failure;
-      }
-    }
-    if (FindBuffer(call, memory, call->arg_buffers, &buffer, &offset) == Result::OK) {
-      *dest = DataView::New(buffer, offset, memory.len);
+    // see if it's from arguments
+    if (ObtainDataViewFromMap(call, memory, dest) == Result::OK) {
       return Result::OK;
     }
   }
@@ -426,12 +489,13 @@ static Local<Function> NewThunk(Call* call,
     // which we get from FunctionCallbackInfo::Data()
     Call ctx(info);
     const char* err = ctx.function_data->thunk(&ctx, ctx.argument);
-    if (ctx.function_data->attributes.has_pointer) {
-      ResyncShadows(&ctx);
-    }
     if (err) {
       auto message = String::NewFromUtf8(ctx.isolate, err).ToLocalChecked();
       info.GetReturnValue().Set(message);
+      return;
+    }
+    if (ctx.function_data->attributes.has_pointer) {
+      UnshadowMemory(&ctx);
     }
   }, fde, 3).ToLocalChecked();
 }
@@ -595,18 +659,6 @@ static Result FinalizeStructure(Call* call,
   auto name = String::NewFromUtf8Literal(isolate, "finalizeStructure");
   Local<Value> args[] = { structure };
   return CallFunction(call, name, 1, args);
-}
-
-static Result GetArgumentBuffers(Call* call) {
-  auto isolate = call->isolate;
-  auto name = String::NewFromUtf8Literal(isolate, "getArgumentBuffers");
-  Local<Value> args[] = { call->argument };
-  Local<Value> result;
-  if (CallFunction(call, name, 1, args, &result) != Result::OK || !result->IsArray()) {
-    return Result::Failure;
-  }
-  call->arg_buffers = result.As<Array>();
-  return Result::OK;
 }
 
 static Result WriteToConsole(Call* call, const Memory& memory) {

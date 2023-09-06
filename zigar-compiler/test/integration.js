@@ -381,6 +381,40 @@ export function addTests(importModule, options) {
       expect([ ...a ]).to.eql([ 6, 8, 10, 12 ]);
       expect([ ...b ]).to.eql([ 10, 12, 14, 16 ]);
     })
+    it('should fail when misaligned pointer is aliased by another', async function() {
+      this.timeout(60000);
+      const { Vector4, hello, world } = await importModule(resolve('./zig-samples/basic/function-accepting-different-pointers.zig'));
+      // make sure functions work correctly first
+      const lines = await capture(() => {
+        const vector = new Vector4([ 1, 2, 3, 4 ]);
+        hello("Hello", vector);
+        world(vector, "World");
+      });
+      expect(lines).to.eql([
+        '{ 72, 101, 108, 108, 111 }',
+        '{ 1, 2, 3, 4 }',
+        '{ 87, 111, 114, 108, 100 }',
+        '{ 1, 2, 3, 4 }'
+      ]);
+      // unaligned buffer
+      const buffer = new ArrayBuffer(4 * 4 + 1);
+      const dv = new DataView(buffer, 1, 4 * 4);
+      const vector = Vector4(dv);
+      vector.$ = [ 5, 6, 7, 8 ];
+      expect(() => hello(buffer, vector)).to.throw(Error).with.property('message', 'Unable to retrieve memory location');
+      expect(() => world(vector, buffer)).to.throw(Error).with.property('message', 'Unable to retrieve memory location');
+      // misaligned buffer should pose no problem when not-aliased
+      const lines2 = await capture(() => {
+        hello("Hello", vector);
+        world(vector, "World");
+      });
+      expect(lines2).to.eql([
+        '{ 72, 101, 108, 108, 111 }',
+        '{ 5, 6, 7, 8 }',
+        '{ 87, 111, 114, 108, 100 }',
+        '{ 5, 6, 7, 8 }'
+      ]);
+    })
     it('should return optional pointer', async function() {
       this.timeout(60000);
       const { getSentence } = await importModule(resolve('./zig-samples/basic/function-returning-optional-pointer.zig'));
