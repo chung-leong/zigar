@@ -213,7 +213,6 @@ export function throwInaccessiblePointer() {
 }
 
 export function throwInvalidPointerTarget(structure, arg) {
-  // NOTE: not being used currently
   const name = getShortName(structure);
   let target;
   if (arg != null) {
@@ -226,6 +225,11 @@ export function throwInvalidPointerTarget(structure, arg) {
   }
   throw new TypeError(`${name} cannot point to ${target}`)
 }
+
+export function throwFixedMemoryTargetRequired(structure, arg) {
+  throw new TypeError(`Pointers in fixed memory cannot point to garbage-collected object`);
+}
+
 
 export function throwOverflow(member, value) {
   const typeName = getTypeName(member);

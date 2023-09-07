@@ -30,6 +30,7 @@ describe('Pointer functions', function() {
       usePointer();
       useSlice();
       useArray();
+      process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
     })
     it('should define a pointer for pointing to integers', function() {
       const intStructure = beginStructure({
@@ -312,15 +313,15 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '*Hello',
-        size: 8,
+        size: 4,
         isConst: true,
         hasPointer: true,
       });
       attachMember(structure, {
         type: MemberType.Object,
-        bitSize: 64,
+        bitSize: 32,
         bitOffset: 0,
-        byteSize: 8,
+        byteSize: 4,
         slot: 0,
         structure: structStructure,
       });
@@ -525,7 +526,7 @@ describe('Pointer functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]Hello',
-        size: 8,
+        size: 16,
         hasPointer: false,
       });
       attachMember(sliceStructure, {
@@ -538,7 +539,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '[]Hello',
-        size: 8,
+        size: 16,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -573,7 +574,7 @@ describe('Pointer functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]Int32',
-        size: 8,
+        size: 16,
         hasPointer: false,
       });
       attachMember(sliceStructure, {
@@ -587,7 +588,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '[]Hello',
-        size: 8,
+        size: 16,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -622,7 +623,7 @@ describe('Pointer functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]Int32',
-        size: 8,
+        size: 16,
         hasPointer: false,
       });
       attachMember(sliceStructure, {
@@ -636,7 +637,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '[]Int32',
-        size: 8,
+        size: 16,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -1173,6 +1174,177 @@ describe('Pointer functions', function() {
       const int32 = new Int32(1234);
       const intPtr = new Int32Ptr(int32);
       expect(() => intPtr.$ = int32).to.not.throw();
+    })
+    it('should throw when garbage collected object is assigned to a pointer in fixed memory', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        isConst: true,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(structure);
+      const int32 = new Int32(1234);
+      const intPtr = new Int32Ptr(int32);
+      // pretend that the pointer is in fixed memory
+      intPtr[MEMORY].buffer[MEMORY] = { address: 0xaaaaaaaa };
+      expect(() => intPtr.$ = int32).to.throw(TypeError)
+        .with.property('message').that.contains('garbage');
+    })
+    it('should throw when pointer to garbage collected object is assigned to a pointer in fixed memory', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        isConst: true,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(structure);
+      const int32 = new Int32(1234);
+      const intPtr1 = new Int32Ptr(int32);
+      const intPtr2 = new Int32Ptr(int32);
+      intPtr1[MEMORY].buffer[MEMORY] = { address: 0xaaaaaaaan };
+      expect(() => intPtr1.$ = intPtr2).to.throw(TypeError)
+        .with.property('message').that.contains('garbage');
+    })
+    it('should immediately write to a pointer in fixed memory', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        isConst: true,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(structure);
+      const int32 = new Int32(1234);
+      int32[MEMORY].buffer[MEMORY] = { address: 0xbbbbbbbbn };
+      const intPtr = new Int32Ptr(int32);
+      intPtr[MEMORY].buffer[MEMORY] = { address: 0xaaaaaaaan };
+      intPtr.$ = int32;
+      expect(intPtr[MEMORY].getBigUint64(0, true)).to.equal(0xbbbbbbbbn);
+    })
+    it('should immediately write to slice pointer in fixed memory', function() {
+      const structStructure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8,
+        hasPointer: false,
+      });
+      attachMember(structStructure, {
+        type: MemberType.Int,
+        name: 'cat',
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structStructure, {
+        type: MemberType.Int,
+        name: 'dog',
+        isSigned: false,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structStructure);
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]Hello',
+        size: 16,
+        hasPointer: false,
+      });
+      attachMember(sliceStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        byteSize: 8,
+        structure: structStructure,
+      });
+      const HelloSlice = finalizeStructure(sliceStructure);
+      const structure = beginStructure({
+        type: StructureType.Pointer,
+        name: '[]Hello',
+        size: 16,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const HelloPtr = finalizeStructure(structure);
+      const pointer1 = new HelloPtr([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
+      const pointer2 = new HelloPtr([]);
+      pointer1['*'][MEMORY].buffer[MEMORY] = { address: 0xbbbbbbbbn };
+      pointer2[MEMORY].buffer[MEMORY] = { address: 0xaaaaaaaan };
+      pointer2.$ = pointer1;
+      expect(pointer2[MEMORY].getBigUint64(0, true)).to.equal(0xbbbbbbbbn);
+      expect(pointer2[MEMORY].getBigUint64(8, true)).to.equal(3n);
     })
   })
 })

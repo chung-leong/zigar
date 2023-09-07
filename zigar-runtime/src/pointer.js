@@ -1,5 +1,6 @@
 import { StructureType } from './structure.js';
 import { requireDataView, getDataView, isCompatible, isBuffer } from './data-view.js';
+import { MemberType, getAccessors } from './member.js';
 import { MEMORY, PROXY, SLOTS, ZIG, PARENT } from './symbol.js';
 import {
   throwNoCastingToPointer,
@@ -8,6 +9,7 @@ import {
   throwAssigningToConstant,
   throwConstantConstraint,
   throwNoInitializer,
+  throwFixedMemoryTargetRequired,
   addArticle,
 } from './error.js';
 
@@ -18,10 +20,29 @@ export function finalizePointer(s) {
       members: [ member ],
     },
     isConst,
+    options,
   } = s;
   const { structure: targetStructure } = member;
   const isTargetSlice = (targetStructure.type === StructureType.Slice);
   const isTargetPointer = (targetStructure.type === StructureType.Pointer);
+  const addressSize = (isTargetSlice) ? size / 2 : size;
+  const usizeStructure = { name: 'usize', size: addressSize };
+  const setAddress = getAccessors({
+    type: MemberType.Int,
+    isSigned: false,
+    bitOffset: 0,
+    bitSize: addressSize * 8,
+    byteSize: addressSize,
+    structure: usizeStructure,
+  }, options).set;
+  const setLength = (isTargetSlice) ? getAccessors({
+    type: MemberType.Int,
+    isSigned: false,
+    bitOffset: addressSize * 8,
+    bitSize: addressSize * 8,
+    byteSize: addressSize,
+    structure: usizeStructure,
+  }, options).set : null;
   const constructor = s.constructor = function(arg) {
     const calledFromZig = (this === ZIG);
     const calledFromParent = (this === PARENT);
@@ -52,7 +73,7 @@ export function finalizePointer(s) {
       }
     }
     Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true },
+      [MEMORY]: { value: dv, configurable: true, writable: true },
       [SLOTS]: { value: { 0: null } },
       // a boolean value indicating whether Zig currently owns the pointer
       [ZIG]: { value: calledFromZig, writable: true },
@@ -64,8 +85,12 @@ export function finalizePointer(s) {
   };
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
-      // not doing memory copying since the value stored there likely isn't valid anyway
-      pointerCopier.call(this, arg);
+      if (inFixedMemory(this)) {
+        initializer.call(this, arg[SLOTS][0]);
+      } else {
+        // not doing memory copying since the value stored there likely isn't valid
+        pointerCopier.call(this, arg);
+      }
     } else {
       const Target = targetStructure.constructor;
       if (isPointerOf(arg, Target)) {
@@ -95,6 +120,17 @@ export function finalizePointer(s) {
             arg = autoObj;
           } else {
             throwInvalidPointerTarget(s, arg);
+          }
+        }
+        if (inFixedMemory(this)) {
+          if (inFixedMemory(arg)) {
+            const { address } = inFixedMemory(arg);
+            setAddress.call(this, address);
+            if (setLength) {
+              setLength.call(this, arg.length);
+            }
+          } else {
+            throwFixedMemoryTargetRequired(s, arg);
           }
         }
         this[SLOTS][0] = arg;
@@ -135,6 +171,14 @@ export function finalizePointer(s) {
 
 function isPointerOf(arg, Target) {
   return (arg?.constructor?.child === Target && arg['*']);
+}
+
+function inFixedMemory(arg) {
+  if (process.env.ZIGAR_TARGET === 'NODE-CPP-EXT') {
+    return arg?.[MEMORY]?.buffer?.[MEMORY];
+  } else {
+    return arg?.[MEMORY]?.[MEMORY];
+  }
 }
 
 function createProxy(isConst, isTargetPointer) {

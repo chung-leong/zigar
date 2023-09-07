@@ -257,19 +257,28 @@ export function addTests(importModule, options) {
       expect(module.donut_a.Chocolate).to.equal(5678);
       expect(Donut(module.donut_a)).to.equal(Donut.Chocolate);
     })
-    // this does not work yet
-    skip.permanently.
     it('should allow assignment to a pointer variable', async function() {
       this.timeout(60000);
-      const { default: module } = await importModule(resolve('./zig-samples/basic/slice-variable.zig'));
+      const { default: module,
+        printText,
+        allocText,
+        freeText,
+      } = await importModule(resolve('./zig-samples/basic/slice-variable.zig'));
+      // this shouln't work
+      expect(() => module.text = "This is a test").to.throw(TypeError);
       const lines = await capture(() => {
-        module.printText();
-        module.text = "This is a test";
-        module.printText();
+        printText();
+        const text = allocText("This is a test");
+        module.text = text;
+        printText();
+        module.text = module.alt_text;
+        printText();
+        freeText(text);
       });
       expect(lines).to.eql([
         'Hello world',
         'This is a test',
+        'Goodbye cruel world',
       ]);
     })
   })

@@ -467,7 +467,6 @@ function throwInaccessiblePointer() {
 }
 
 function throwInvalidPointerTarget(structure, arg) {
-  // NOTE: not being used currently
   const name = getShortName(structure);
   let target;
   if (arg != null) {
@@ -480,6 +479,11 @@ function throwInvalidPointerTarget(structure, arg) {
   }
   throw new TypeError(`${name} cannot point to ${target}`)
 }
+
+function throwFixedMemoryTargetRequired(structure, arg) {
+  throw new TypeError(`Pointers in fixed memory cannot point to garbage-collected object`);
+}
+
 
 function throwOverflow(member, value) {
   const typeName = getTypeName(member);
@@ -776,8 +780,13 @@ function isBuffer(arg, typedArray) {
   }
 }
 
-function getTypeName({ type, isSigned, bitSize, byteSize }) {
-  if (type === MemberType.Int) {
+function getTypeName(member) {
+  const { type, isSigned, bitSize, byteSize, structure } = member;
+  if (structure?.name === 'usize') {
+    return 'USize';
+  } else if (structure?.name === 'isize') {
+    return 'ISize';
+  } else if (type === MemberType.Int) {
     return `${bitSize <= 32 ? '' : 'Big' }${isSigned ? 'Int' : 'Uint'}${bitSize}`;
   } else if (type === MemberType.Float) {
     return `Float${bitSize}`;
@@ -1131,19 +1140,20 @@ function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
 }
 
 function cacheMethod(access, member, cb) {
-  const { type, bitOffset, bitSize, structure } = member;
+  const { type, isSigned, bitOffset, bitSize } = member;
   const bitPos = bitOffset & 0x07;
   const typeName = getTypeName(member);
   const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
   const name = `${access}${typeName}${suffix}`;
   let fn = methodCache[name];
   if (!fn) {
-    fn = cb(name);
-    if (type === MemberType.Int && bitSize === 64) {
-      const name = structure?.name;
-      if (name === 'usize' || name === 'isize') {
+    // usize and isize can return/accept number or bigint
+    if (type === MemberType.Int && (typeName === 'USize' || typeName === 'ISize')) {
+      if (bitSize === 64) {
+        const realTypeName = (isSigned) ? 'BigInt64' : 'BigUint64';
+        const realName = `${access}${realTypeName}`;
         if (access === 'get') {
-          const get = fn;
+          const get = cb(realName);
           const min = BigInt(Number.MIN_SAFE_INTEGER);
           const max = BigInt(Number.MAX_SAFE_INTEGER);
           fn = function(offset, littleEndian) {
@@ -1155,16 +1165,32 @@ function cacheMethod(access, member, cb) {
             }
           };
         } else {
-          // automatically convert number to bigint
-          const set = fn;
+          const set = cb(realName);
           fn = function(offset, value, littleEndian) {
+            // automatically convert number to bigint
             if (typeof(value) === 'number') {
               value = BigInt(value);
             }
             set.call(this, offset, value, littleEndian);
           };
         }
+      } else if (bitSize === 32) {
+        const realTypeName = (isSigned) ? 'Int32' : 'Uint32';
+        const realName = `${access}${realTypeName}`;
+        if (access === 'get') {
+          fn = cb(realName);
+        } else {
+          const set = cb(realName);
+          fn = function(offset, value, littleEndian) {
+            if (typeof(value) === 'bigint') {
+              value = Number(value);
+            }
+            set.call(this, offset, value, littleEndian);
+          };
+        }
       }
+    } else {
+      fn = cb(name);
     }
     if (fn && fn.name !== name) {
       Object.defineProperty(fn, 'name', { value: name, configurable: true, writable: false });
@@ -2902,10 +2928,29 @@ function finalizePointer(s) {
       members: [ member ],
     },
     isConst,
+    options,
   } = s;
   const { structure: targetStructure } = member;
   const isTargetSlice = (targetStructure.type === StructureType.Slice);
   const isTargetPointer = (targetStructure.type === StructureType.Pointer);
+  const addressSize = (isTargetSlice) ? size / 2 : size;
+  const usizeStructure = { name: 'usize', size: addressSize };
+  const setAddress = getAccessors({
+    type: MemberType.Int,
+    isSigned: false,
+    bitOffset: 0,
+    bitSize: addressSize * 8,
+    byteSize: addressSize,
+    structure: usizeStructure,
+  }, options).set;
+  const setLength = (isTargetSlice) ? getAccessors({
+    type: MemberType.Int,
+    isSigned: false,
+    bitOffset: addressSize * 8,
+    bitSize: addressSize * 8,
+    byteSize: addressSize,
+    structure: usizeStructure,
+  }, options).set : null;
   const constructor = s.constructor = function(arg) {
     const calledFromZig = (this === ZIG);
     const calledFromParent = (this === PARENT);
@@ -2936,7 +2981,7 @@ function finalizePointer(s) {
       }
     }
     Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true },
+      [MEMORY]: { value: dv, configurable: true, writable: true },
       [SLOTS]: { value: { 0: null } },
       // a boolean value indicating whether Zig currently owns the pointer
       [ZIG]: { value: calledFromZig, writable: true },
@@ -2948,8 +2993,12 @@ function finalizePointer(s) {
   };
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
-      // not doing memory copying since the value stored there likely isn't valid anyway
-      pointerCopier.call(this, arg);
+      if (inFixedMemory(this)) {
+        initializer.call(this, arg[SLOTS][0]);
+      } else {
+        // not doing memory copying since the value stored there likely isn't valid
+        pointerCopier.call(this, arg);
+      }
     } else {
       const Target = targetStructure.constructor;
       if (isPointerOf(arg, Target)) {
@@ -2979,6 +3028,17 @@ function finalizePointer(s) {
             arg = autoObj;
           } else {
             throwInvalidPointerTarget(s, arg);
+          }
+        }
+        if (inFixedMemory(this)) {
+          if (inFixedMemory(arg)) {
+            const { address } = inFixedMemory(arg);
+            setAddress.call(this, address);
+            if (setLength) {
+              setLength.call(this, arg.length);
+            }
+          } else {
+            throwFixedMemoryTargetRequired();
           }
         }
         this[SLOTS][0] = arg;
@@ -3019,6 +3079,12 @@ function finalizePointer(s) {
 
 function isPointerOf(arg, Target) {
   return (arg?.constructor?.child === Target && arg['*']);
+}
+
+function inFixedMemory(arg) {
+  {
+    return arg?.[MEMORY]?.[MEMORY];
+  }
 }
 
 function createProxy(isConst, isTargetPointer) {

@@ -29,6 +29,7 @@ import {
   throwMissingSentinel,
   throwInaccessiblePointer,
   throwInvalidPointerTarget,
+  throwFixedMemoryTargetRequired,
   throwOverflow,
   throwOutOfBound,
   rethrowRangeError,
@@ -529,6 +530,20 @@ describe('Error functions', function() {
         .with.property('message').that.contains('an object');
       expect(() => throwInvalidPointerTarget(structure, undefined)).to.throw(TypeError)
         .with.property('message').that.contains('undefined');
+    })
+  })
+  describe('throwFixedMemoryTargetRequired', function() {
+    it('should throw a type error', function() {
+      const structure = {
+        name: '*Hello',
+        type: StructureType.Pointer,
+        size: 8,
+        instance: {
+          members: [],
+        },
+        hasPointer: true,
+      };
+      expect(() => throwFixedMemoryTargetRequired(structure, null)).to.throw(TypeError);
     })
   })
   describe('throwOverflow', function() {

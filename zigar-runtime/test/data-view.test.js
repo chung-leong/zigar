@@ -571,6 +571,36 @@ describe('Data view functions', function() {
       set.call(dv, 0, -4567n, true);
       expect(dv.getBigInt64(0, true)).to.equal(-4567n);
     })
+    it('should return function for getting 32-bit usize', function() {
+      const member = {
+        type: MemberType.Int,
+        isSigned: false,
+        bitOffset: 0,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { name: 'usize' },
+      };
+      const get = getDataViewIntAccessor('get', member);
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setUint32(0, 1234, true);
+      expect(get.call(dv, 0, true)).to.equal(1234);
+    })
+    it('should return function for setting 32-bit isize', function() {
+      const member = {
+        type: MemberType.Int,
+        isSigned: true,
+        bitOffset: 0,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { name: 'isize' },
+      };
+      const set = getDataViewIntAccessor('set', member);
+      const dv = new DataView(new ArrayBuffer(8));
+      set.call(dv, 0, 1234, true);
+      expect(dv.getInt32(0, true)).to.equal(1234);
+      set.call(dv, 0, -1234n, true);
+      expect(dv.getInt32(0, true)).to.equal(-1234);
+    })
     it('should return undefined when type is non-standard', function() {
       const member = {
         type: MemberType.Int,

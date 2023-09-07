@@ -222,8 +222,13 @@ export function isBuffer(arg, typedArray) {
   }
 }
 
-export function getTypeName({ type, isSigned, bitSize, byteSize }) {
-  if (type === MemberType.Int) {
+export function getTypeName(member) {
+  const { type, isSigned, bitSize, byteSize, structure } = member;
+  if (structure?.name === 'usize') {
+    return 'USize';
+  } else if (structure?.name === 'isize') {
+    return 'ISize';
+  } else if (type === MemberType.Int) {
     return `${bitSize <= 32 ? '' : 'Big' }${isSigned ? 'Int' : 'Uint'}${bitSize}`;
   } else if (type === MemberType.Float) {
     return `Float${bitSize}`;
@@ -577,19 +582,20 @@ function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
 }
 
 function cacheMethod(access, member, cb) {
-  const { type, bitOffset, bitSize, structure } = member;
+  const { type, isSigned, bitOffset, bitSize } = member;
   const bitPos = bitOffset & 0x07;
   const typeName = getTypeName(member);
   const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
   const name = `${access}${typeName}${suffix}`;
   let fn = methodCache[name];
   if (!fn) {
-    fn = cb(name);
-    if (type === MemberType.Int && bitSize === 64) {
-      const name = structure?.name;
-      if (name === 'usize' || name === 'isize') {
+    // usize and isize can return/accept number or bigint
+    if (type === MemberType.Int && (typeName === 'USize' || typeName === 'ISize')) {
+      if (bitSize === 64) {
+        const realTypeName = (isSigned) ? 'BigInt64' : 'BigUint64';
+        const realName = `${access}${realTypeName}`;
         if (access === 'get') {
-          const get = fn;
+          const get = cb(realName);
           const min = BigInt(Number.MIN_SAFE_INTEGER);
           const max = BigInt(Number.MAX_SAFE_INTEGER);
           fn = function(offset, littleEndian) {
@@ -601,16 +607,32 @@ function cacheMethod(access, member, cb) {
             }
           };
         } else {
-          // automatically convert number to bigint
-          const set = fn;
+          const set = cb(realName);
           fn = function(offset, value, littleEndian) {
+            // automatically convert number to bigint
             if (typeof(value) === 'number') {
               value = BigInt(value);
             }
             set.call(this, offset, value, littleEndian);
           };
         }
+      } else if (bitSize === 32) {
+        const realTypeName = (isSigned) ? 'Int32' : 'Uint32';
+        const realName = `${access}${realTypeName}`;
+        if (access === 'get') {
+          fn = cb(realName);
+        } else {
+          const set = cb(realName);
+          fn = function(offset, value, littleEndian) {
+            if (typeof(value) === 'bigint') {
+              value = Number(value);
+            }
+            set.call(this, offset, value, littleEndian);
+          };
+        }
       }
+    } else {
+      fn = cb(name);
     }
     if (fn && fn.name !== name) {
       Object.defineProperty(fn, 'name', { value: name, configurable: true, writable: false });
