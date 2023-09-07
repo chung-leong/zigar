@@ -1,4 +1,4 @@
-import { MEMORY, SLOTS, ZIG, SOURCE, STRUCTURE } from './symbol.js';
+import { MEMORY, SLOTS, ZIG, STRUCTURE } from './symbol.js';
 import {
   StructureType,
   beginStructure,
@@ -176,7 +176,7 @@ export async function runModule(source, options = {}) {
     */
     const copy = getMemoryCopier(dv1.byteLength);
     copy(dv2, dv1);
-    dv2[SOURCE] = { memory: wasmMemory, address, len };
+    dv2[MEMORY] = { memory: wasmMemory, address, len };
     Object.defineProperty(object, MEMORY, { value: dv2, configurable: true });
     if (object.hasOwnProperty(ZIG)) {
       // a pointer--link the target too
@@ -258,7 +258,7 @@ export async function runModule(source, options = {}) {
     if (!dv) {
       return 0;
     }
-    const source = dv[SOURCE];
+    const source = dv[MEMORY];
     if (source) {
       return addObject(source);
     } else {
@@ -473,7 +473,7 @@ export async function runModule(source, options = {}) {
       // so we can recreate the view in the event of buffer deattachment
       // due to address space enlargement
       const dv = new DataView(wasmMemory.buffer, address, len);
-      dv[SOURCE] = { memory: wasmMemory, address, len };
+      dv[MEMORY] = { memory: wasmMemory, address, len };
       return dv;
     }
   }

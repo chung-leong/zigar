@@ -16,7 +16,7 @@ import {
   useFloatEx,
   useObject,
 } from '../src/member.js';
-import { MEMORY, SOURCE } from '../src/symbol.js';
+import { MEMORY } from '../src/symbol.js';
 import {
   getDataViewAccessors,
   getBase64Accessors,
@@ -73,7 +73,7 @@ describe('Special property functions', function() {
         maximum: 1024,
       });
       const dv = new DataView(memory.buffer, 0, 4);
-      dv[SOURCE] = { memory, address: 0, len: 4 };
+      dv[MEMORY] = { memory, address: 0, len: 4 };
       const object = {
         [MEMORY]: dv,
       };

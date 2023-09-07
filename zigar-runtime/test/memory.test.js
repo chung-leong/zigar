@@ -6,7 +6,7 @@ import {
   getBitAlignFunction,
   restoreMemory,
 } from '../src/memory.js';
-import { MEMORY, SOURCE } from '../src/symbol.js';
+import { MEMORY } from '../src/symbol.js';
 
 describe('Memory functions', function() {
   describe('getMemoryCopier', function() {
@@ -154,7 +154,7 @@ describe('Memory functions', function() {
         maximum: 1024,
       });
       const dv = new DataView(memory.buffer, 0, 8);
-      dv[SOURCE] = { memory, address: 0, len: 8 };
+      dv[MEMORY] = { memory, address: 0, len: 8 };
       const object = {
         [MEMORY]: dv,
       };

@@ -2,7 +2,6 @@ const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
 const ZIG = Symbol('zig');
 const PARENT = Symbol('parent');
-const SOURCE = Symbol('source');
 const ENUM_INDEX = Symbol('enumIndex');
 const ENUM_ITEMS = Symbol('enumItems');
 const ERROR_INDEX = Symbol('errorIndex');
@@ -251,13 +250,13 @@ function reset32(dest) {
 function restoreMemory() {
   {
     const dv = this[MEMORY];
-    const source = dv[SOURCE];
+    const source = dv[MEMORY];
     if (!source || dv.buffer.byteLength !== 0) {
       return false;
     }
     const { memory, address, len } = source;
     const newDV = new DataView(memory.buffer, address, len);
-    newDV[SOURCE] = source;
+    newDV[MEMORY] = source;
     this[MEMORY] = newDV;
     return true;
   }
@@ -3777,7 +3776,7 @@ async function runModule(source, options = {}) {
     */
     const copy = getMemoryCopier(dv1.byteLength);
     copy(dv2, dv1);
-    dv2[SOURCE] = { memory: wasmMemory, address, len };
+    dv2[MEMORY] = { memory: wasmMemory, address, len };
     Object.defineProperty(object, MEMORY, { value: dv2, configurable: true });
     if (object.hasOwnProperty(ZIG)) {
       // a pointer--link the target too
@@ -3859,7 +3858,7 @@ async function runModule(source, options = {}) {
     if (!dv) {
       return 0;
     }
-    const source = dv[SOURCE];
+    const source = dv[MEMORY];
     if (source) {
       return addObject(source);
     } else {
@@ -3989,7 +3988,7 @@ async function runModule(source, options = {}) {
       // so we can recreate the view in the event of buffer deattachment
       // due to address space enlargement
       const dv = new DataView(wasmMemory.buffer, address, len);
-      dv[SOURCE] = { memory: wasmMemory, address, len };
+      dv[MEMORY] = { memory: wasmMemory, address, len };
       return dv;
     }
   }

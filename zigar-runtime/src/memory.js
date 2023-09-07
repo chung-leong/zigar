@@ -1,4 +1,4 @@
-import { MEMORY, SOURCE } from './symbol.js';
+import { MEMORY } from './symbol.js';
 
 export function getBitAlignFunction(bitPos, bitSize, toAligned) {
   if (bitPos + bitSize <= 8) {
@@ -247,13 +247,13 @@ export function showBits(object) {
 export function restoreMemory() {
   if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
     const dv = this[MEMORY];
-    const source = dv[SOURCE];
+    const source = dv[MEMORY];
     if (!source || dv.buffer.byteLength !== 0) {
       return false;
     }
     const { memory, address, len } = source;
     const newDV = new DataView(memory.buffer, address, len);
-    newDV[SOURCE] = source;
+    newDV[MEMORY] = source;
     this[MEMORY] = newDV;
     return true;
   }

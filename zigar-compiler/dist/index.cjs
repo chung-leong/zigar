@@ -366,7 +366,6 @@ function absolute(relpath) {
 const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
 const ZIG = Symbol('zig');
-const SOURCE = Symbol('source');
 const STRUCTURE = Symbol('structure');
 
 function getMemoryCopier(size, multiple = false) {
@@ -789,7 +788,7 @@ async function runModule(source, options = {}) {
     if (!dv) {
       return 0;
     }
-    const source = dv[SOURCE];
+    const source = dv[MEMORY];
     if (source) {
       return addObject(source);
     } else {

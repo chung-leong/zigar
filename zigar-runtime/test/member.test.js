@@ -5,7 +5,7 @@ import {
   useStruct,
   useOptional,
 } from '../src/structure.js';
-import { MEMORY, SLOTS, SOURCE } from '../src/symbol.js';
+import { MEMORY, SLOTS } from '../src/symbol.js';
 import {
   MemberType,
   isByteAligned,
@@ -582,7 +582,7 @@ describe('Member functions', function() {
         maximum: 1024,
       });
       const dv = new DataView(memory.buffer, 0, 8);
-      dv[SOURCE] = { memory, address: 0, len: 8 };
+      dv[MEMORY] = { memory, address: 0, len: 8 };
       const object = {
         [MEMORY]: dv,
       };
@@ -611,7 +611,7 @@ describe('Member functions', function() {
         maximum: 1024,
       });
       const dv = new DataView(memory.buffer, 0, 8);
-      dv[SOURCE] = { memory, address: 0, len: 8 };
+      dv[MEMORY] = { memory, address: 0, len: 8 };
       const object = {
         [MEMORY]: dv,
       };
@@ -640,7 +640,7 @@ describe('Member functions', function() {
         maximum: 1024,
       });
       const dv = new DataView(memory.buffer, 0, 8);
-      dv[SOURCE] = { memory, address: 0, len: 8 };
+      dv[MEMORY] = { memory, address: 0, len: 8 };
       const object = {
         [MEMORY]: dv,
       };
@@ -669,7 +669,7 @@ describe('Member functions', function() {
         maximum: 1024,
       });
       const dv = new DataView(memory.buffer, 0, 8);
-      dv[SOURCE] = { memory, address: 0, len: 8 };
+      dv[MEMORY] = { memory, address: 0, len: 8 };
       const object = {
         [MEMORY]: dv,
       };
