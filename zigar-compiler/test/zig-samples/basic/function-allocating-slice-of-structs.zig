@@ -26,3 +26,19 @@ pub fn allocate(allocator: std.mem.Allocator, count: u32) ![]StructA {
     }
     return structs;
 }
+
+pub fn allocateNoError(allocator: std.mem.Allocator, count: u32) []StructA {
+    if (allocate(allocator, count)) |structs| {
+        return structs;
+    } else |_| {
+        return &([0]StructA{});
+    }
+}
+
+pub fn allocateOptional(allocator: std.mem.Allocator, count: u32) ?[]StructA {
+    if (allocate(allocator, count)) |structs| {
+        return structs;
+    } else |_| {
+        return null;
+    }
+}

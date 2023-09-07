@@ -440,10 +440,43 @@ export function addTests(importModule, options) {
     })
     it('should allocate a slice of structs', async function() {
       this.timeout(60000);
-      const { allocate } = await importModule(resolve('./zig-samples/basic/function-allocating-slice-of-structs.zig'));
+      const {
+        allocate,
+        allocateNoError,
+        allocateOptional,
+      } = await importModule(resolve('./zig-samples/basic/function-allocating-slice-of-structs.zig'));
       const structs1 = allocate(10);
+      expect(structs1).to.be.a('[_]function-allocating-slice-of-structs.StructA');
       expect(structs1).to.have.lengthOf(10);
       for (const [ index, struct ] of structs1.entries()) {
+        const { vector1, vector2 } = struct;
+        expect(vector1[0].toFixed(5)).to.equal((Math.PI * 0.25 * (index + 1)).toFixed(5));
+        expect(vector1[1].toFixed(5)).to.equal((Math.PI * 0.50 * (index + 1)).toFixed(5));
+        expect(vector1[2].toFixed(5)).to.equal((Math.PI * 0.75 * (index + 1)).toFixed(5));
+        expect(vector1[3].toFixed(5)).to.equal((Math.PI * 1.00 * (index + 1)).toFixed(5));
+        expect(vector2[0]).to.equal(Math.PI * 0.25 / (index + 1));
+        expect(vector2[1]).to.equal(Math.PI * 0.50 / (index + 1));
+        expect(vector2[2]).to.equal(Math.PI * 0.75 / (index + 1));
+        expect(vector2[3]).to.equal(Math.PI * 1.00 / (index + 1));
+      }
+      const structs2 = allocateNoError(10);
+      expect(structs2).to.be.a('[_]function-allocating-slice-of-structs.StructA');
+      expect(structs2).to.have.lengthOf(10);
+      for (const [ index, struct ] of structs2.entries()) {
+        const { vector1, vector2 } = struct;
+        expect(vector1[0].toFixed(5)).to.equal((Math.PI * 0.25 * (index + 1)).toFixed(5));
+        expect(vector1[1].toFixed(5)).to.equal((Math.PI * 0.50 * (index + 1)).toFixed(5));
+        expect(vector1[2].toFixed(5)).to.equal((Math.PI * 0.75 * (index + 1)).toFixed(5));
+        expect(vector1[3].toFixed(5)).to.equal((Math.PI * 1.00 * (index + 1)).toFixed(5));
+        expect(vector2[0]).to.equal(Math.PI * 0.25 / (index + 1));
+        expect(vector2[1]).to.equal(Math.PI * 0.50 / (index + 1));
+        expect(vector2[2]).to.equal(Math.PI * 0.75 / (index + 1));
+        expect(vector2[3]).to.equal(Math.PI * 1.00 / (index + 1));
+      }
+      const structs3 = allocateOptional(10);
+      expect(structs3).to.be.a('[_]function-allocating-slice-of-structs.StructA');
+      expect(structs3).to.have.lengthOf(10);
+      for (const [ index, struct ] of structs3.entries()) {
         const { vector1, vector2 } = struct;
         expect(vector1[0].toFixed(5)).to.equal((Math.PI * 0.25 * (index + 1)).toFixed(5));
         expect(vector1[1].toFixed(5)).to.equal((Math.PI * 0.50 * (index + 1)).toFixed(5));
