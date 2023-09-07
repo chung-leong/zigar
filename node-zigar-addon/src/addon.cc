@@ -6,7 +6,27 @@ static size_t GetExtraCount(uint8_t ptr_align) {
   return (alignment <= default_alignment) ? 0 : alignment;
 }
 
-static Memory GetArrayBufferMemory(Local<ArrayBuffer> buffer) {
+static Memory GetArrayBufferMemory(Call* call,
+                                   Local<ArrayBuffer> buffer) {
+  if (buffer->IsSharedArrayBuffer()) {
+    auto context = call->context;
+    auto isolate = call->isolate;
+    auto memory_prop = buffer->Get(context, call->symbol_memory).ToLocalChecked();
+    if (memory_prop->IsObject()) {
+      auto source = memory_prop.As<Object>();
+      auto address_name = String::NewFromUtf8Literal(isolate, "address");
+      auto len_name = String::NewFromUtf8Literal(isolate, "len");
+      auto address_value = source->Get(context, address_name).ToLocalChecked();
+      auto len_value = source->Get(context, len_name).ToLocalChecked();
+      size_t address = address_value.As<BigInt>()->Uint64Value();
+      size_t len = len_value.As<BigInt>()->Uint64Value();
+      Memory mem = {
+        reinterpret_cast<uint8_t*>(address),
+        len,
+      };
+      return mem;
+    }
+  }
   auto store = buffer->GetBackingStore();
   Memory mem = {
     reinterpret_cast<uint8_t*>(store->Data()),
@@ -15,11 +35,12 @@ static Memory GetArrayBufferMemory(Local<ArrayBuffer> buffer) {
   return mem;
 }
 
-static Memory GetDataViewMemory(Local<DataView> dv) {
+static Memory GetDataViewMemory(Call* call,
+                                Local<DataView> dv) {
   auto buffer = dv->Buffer();
   auto byteOffset = dv->ByteOffset();
   auto byteLength = dv->ByteLength();
-  auto mem = GetArrayBufferMemory(buffer);
+  auto mem = GetArrayBufferMemory(call, buffer);
   mem.bytes += byteOffset;
   mem.len = byteLength;
   return mem;
@@ -32,9 +53,10 @@ static bool IsMisaligned(Memory memory,
   return (address & mask) != 0;
 }
 
-static Memory GetAlignedBufferMemory(Local<ArrayBuffer> buffer,
+static Memory GetAlignedBufferMemory(Call* call,
+                                     Local<ArrayBuffer> buffer,
                                      uint8_t ptr_align) {
-  auto mem = GetArrayBufferMemory(buffer);
+  auto mem = GetArrayBufferMemory(call, buffer);
   auto extra = GetExtraCount(ptr_align);
   if (extra != 0) {
     auto address = reinterpret_cast<size_t>(mem.bytes);
@@ -56,7 +78,7 @@ static Result AllocateMemory(Call* call,
     call->mem_pool = Array::New(isolate);
   }
   auto buffer = ArrayBuffer::New(isolate, len + GetExtraCount(ptr_align));
-  *dest = GetAlignedBufferMemory(buffer, ptr_align);
+  *dest = GetAlignedBufferMemory(call, buffer, ptr_align);
   auto index = call->mem_pool->Length();
   call->mem_pool->Set(context, index, buffer).Check();
   return Result::OK;
@@ -77,7 +99,7 @@ static Result FreeMemory(Call* call,
     if (item->IsArrayBuffer()) {
       auto buffer = item.As<ArrayBuffer>();
       if (buffer->ByteLength() == memory.len + extra) {
-        auto mem = GetAlignedBufferMemory(buffer, ptr_align);
+        auto mem = GetAlignedBufferMemory(call, buffer, ptr_align);
         if (mem.bytes == memory.bytes) {
           index = i;
           break;
@@ -103,10 +125,10 @@ static Result GetMemory(Call* call,
     return Result::Failure;
   }
   auto dv = value.As<DataView>();
+  auto mem = GetDataViewMemory(call, dv);
   if (call->function_data->attributes.has_pointer) {
     Local<Value> shadow_view;
     bool aliasing = false;
-    auto mem = GetDataViewMemory(dv);
     // see if the data view overlaps another that we've seen earlier
     auto array = call->buffer_map->AsArray();
     auto value = call->buffer_map->Get(context, dv).ToLocalChecked();
@@ -114,14 +136,14 @@ static Result GetMemory(Call* call,
       for (size_t i = 0; i < array->Length(); i += 2) {
         auto prev_dv = array->Get(context, i).ToLocalChecked().As<DataView>();
         if (prev_dv->Buffer() == dv->Buffer()) {
-          auto prev_mem = GetDataViewMemory(prev_dv);
+          auto prev_mem = GetDataViewMemory(call, prev_dv);
           if (prev_mem.bytes <= mem.bytes && mem.bytes + mem.len <= prev_mem.bytes + prev_mem.len) {
             // previous data view contains this one
             auto prev_value = array->Get(context, i + 1).ToLocalChecked();
             if (prev_value->IsArrayBuffer()) {
               // previous view is being shadowed, use memory from the shadow buffer
               auto shadow_buffer = prev_value.As<ArrayBuffer>();
-              auto shadow_mem = GetArrayBufferMemory(shadow_buffer);
+              auto shadow_mem = GetArrayBufferMemory(call, shadow_buffer);
               size_t offset = prev_mem.bytes - mem.bytes;
               mem.bytes = shadow_mem.bytes + offset;
               shadow_view = DataView::New(shadow_buffer, offset, mem.len);
@@ -137,9 +159,9 @@ static Result GetMemory(Call* call,
         }
       }
     } else if (value->IsArrayBuffer()) {
-      mem = GetArrayBufferMemory(value.As<ArrayBuffer>());
+      mem = GetArrayBufferMemory(call, value.As<ArrayBuffer>());
     } else if (value->IsDataView()) {
-      mem = GetDataViewMemory(value.As<DataView>());
+      mem = GetDataViewMemory(call, value.As<DataView>());
     }
     if (value->IsUndefined()) {
       // add data view to map
@@ -152,7 +174,7 @@ static Result GetMemory(Call* call,
         auto shadow_buffer = ArrayBuffer::New(isolate, dv->ByteLength() + GetExtraCount(attributes.ptr_align));
         shadow_buffer->Set(context, 0, Boolean::New(isolate, attributes.is_const)).Check();
         shadow_buffer->Set(context, 1, Int32::New(isolate, attributes.ptr_align)).Check();
-        auto dest_mem = GetAlignedBufferMemory(shadow_buffer, attributes.ptr_align);
+        auto dest_mem = GetAlignedBufferMemory(call, shadow_buffer, attributes.ptr_align);
         memcpy(dest_mem.bytes, mem.bytes, mem.len);
         mem = dest_mem;
         value = shadow_buffer;
@@ -166,7 +188,7 @@ static Result GetMemory(Call* call,
     *dest = mem;
   } else {
     // just get the memory of argument struct
-    *dest = GetDataViewMemory(dv);
+    *dest = GetDataViewMemory(call, dv);
   }
   return Result::OK;
 }
@@ -183,8 +205,8 @@ static Result UnshadowMemory(Call* call) {
         // need to copy data back into view
         auto dv = array->Get(context, i).ToLocalChecked().As<DataView>();
         auto ptr_align = static_cast<uint8_t>(shadow_buffer->Get(context, 1).ToLocalChecked().As<Int32>()->Value());
-        auto mem = GetAlignedBufferMemory(shadow_buffer, ptr_align);
-        auto dest_mem = GetDataViewMemory(dv);
+        auto mem = GetAlignedBufferMemory(call, shadow_buffer, ptr_align);
+        auto dest_mem = GetDataViewMemory(call, dv);
         memcpy(dest_mem.bytes, mem.bytes, mem.len);
       }
     }
@@ -202,7 +224,7 @@ static Result ObtainDataViewFromPool(Call* call,
       if (item->IsArrayBuffer()) {
         auto buffer = item.As<ArrayBuffer>();
         if (buffer->ByteLength() >= memory.len) {
-          auto pool_mem = GetArrayBufferMemory(buffer);
+          auto pool_mem = GetArrayBufferMemory(call, buffer);
           if (pool_mem.bytes <= memory.bytes && memory.bytes + memory.len <= pool_mem.bytes + pool_mem.len) {
             size_t offset = memory.bytes - pool_mem.bytes;
             *dest = DataView::New(buffer, offset, memory.len);
@@ -227,9 +249,9 @@ static Result ObtainDataViewFromMap(Call* call,
       Memory arg_mem;
       if (value->IsArrayBuffer()) {
         // from shadow buffer
-        arg_mem = GetArrayBufferMemory(value.As<ArrayBuffer>());
+        arg_mem = GetArrayBufferMemory(call, value.As<ArrayBuffer>());
       } else {
-        arg_mem = GetDataViewMemory(dv);
+        arg_mem = GetDataViewMemory(call, dv);
       }
       if (arg_mem.bytes <= memory.bytes && memory.bytes + memory.len <= arg_mem.bytes + arg_mem.len) {
         if (memory.len == arg_mem.len) {
@@ -270,6 +292,7 @@ static Result ObtainDataView(Call* call,
   // mystery memory, create a shared buffer
   // create a reference to the module so that the shared library doesn't get unloaded
   // while the shared buffer is still around pointing to it
+  auto context = call->context;
   auto mde = Local<External>::New(isolate, call->function_data->module_data);
   auto emd = new ExternalMemoryData(isolate, mde);
   std::shared_ptr<BackingStore> store = SharedArrayBuffer::NewBackingStore(memory.bytes, memory.len,
@@ -279,6 +302,14 @@ static Result ObtainDataView(Call* call,
       delete emd;
     }, emd);
   auto shared_buffer = SharedArrayBuffer::New(isolate, store);
+  // save address and len in separate object to enable the freeing of memory
+  auto address = reinterpret_cast<size_t>(memory.bytes);
+  auto source = Object::New(isolate);
+  auto address_name = String::NewFromUtf8Literal(isolate, "address");
+  auto len_name = String::NewFromUtf8Literal(isolate, "len");
+  source->Set(context, address_name, BigInt::NewFromUnsigned(isolate, address)).Check();
+  source->Set(context, len_name, BigInt::NewFromUnsigned(isolate, memory.len)).Check();
+  shared_buffer->Set(context, call->symbol_memory, source).Check();
   *dest = DataView::New(shared_buffer, 0, memory.len);
   return Result::OK;
 }
