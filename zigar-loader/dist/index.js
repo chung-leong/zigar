@@ -60,7 +60,7 @@ const schema = {
     },
     staleTime: {
       type: 'number',
-      title: 'Time interval in milliseconds before a PID file is considered stale',
+      title: 'Time interval in milliseconds before a lock file is considered stale',
     },
   },
 };
@@ -71,6 +71,7 @@ async function loader(content, map, meta) {
   const {
     useReadFile = (this.target === 'node'),
     embedWASM = false,
+    optimize = (process.env.NODE_ENV === 'production') ? 'ReleaseSmall' : 'Debug',
     ...otherOptions
   } = options;
   const wasmLoader = async (name, dv) => {
@@ -82,7 +83,12 @@ async function loader(content, map, meta) {
       return fetchWASM(name);
     }
   };
-  const code = await transpile(path, { ...otherOptions, wasmLoader, embedWASM });
+  const code = await transpile(path, {
+    ...otherOptions,
+    optimize,
+    wasmLoader,
+    embedWASM,
+  });
   return code;
 };
 
