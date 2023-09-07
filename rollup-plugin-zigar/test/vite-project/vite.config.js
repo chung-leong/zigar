@@ -5,6 +5,6 @@ import Zigar from '../../dist/index.js';
 export default defineConfig({
   plugins: [
     React(),
-    Zigar({ optimize: 'ReleaseSmall', topLevelAwait: false }),
+    Zigar({ topLevelAwait: false }),
   ],
 })

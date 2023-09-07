@@ -2654,25 +2654,27 @@ function repackNames({ moduleName, functionNames, localNames, size }) {
 }
 
 async function transpile(path, options = {}) {
-  const { env } = process;
+  process;
   const {
     embedWASM = true,
     topLevelAwait = true,
     omitFunctions = false,
-    optimize = (env.NODE_ENV === 'production') ? 'ReleaseSmall' : 'Debug',
-    clean = (env.NODE_ENV === 'production'),
-    stripWASM = (optimize !== 'Debug'),
+    stripWASM = (options.optimize && options.optimize !== 'Debug'),
     keepNames = false,
     moduleResolver = (name) => name,
     wasmLoader,
-    ...otherOptions
+    ...compileOptions
   } = options;
   if (typeof(wasmLoader) !== 'function') {
     if (embedWASM !== true) {
       throw new Error(`wasmLoader is a required option when embedWASM is false`);
     }
   }
-  const wasmPath = await compile(path, { ...otherOptions, optimize, arch: 'wasm32', platform: 'freestanding' });
+  const wasmPath = await compile(path, { 
+    ...compileOptions, 
+    arch: 'wasm32', 
+    platform: 'freestanding' 
+  });
   const content = await readFile(wasmPath);
   const { structures, runtimeSafety } = await runModule(content, { omitFunctions });
   // all methods are static, so there's no need to check the instance methods

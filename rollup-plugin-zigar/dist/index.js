@@ -69,15 +69,22 @@ function verifyOptions(options) {
   }
 }
 
+function getOptimizationMode(isProd) {
+  return (isProd) ? 'ReleaseSmall' : 'Debug';
+}
+
 export default function createPlugin(options = {}) {
   verifyOptions(options);
   let embedWASMDefault = false;
+  let optimizeDefault = getOptimizationMode(process.env.NODE_ENV === 'production');
   return {
     name: 'Zigar',
     /* c8 ignore next 5 */
     apply(config, { command }) {
       // embed WASM by default when Vite is serving
       embedWASMDefault = (command === 'serve');
+      // set default optimization, although process.env.NODE_ENV should already give the right value
+      optimizeDefault = getOptimizationMode(config.mode === 'production');
       return true;
     },
     async load(id) {
@@ -85,7 +92,7 @@ export default function createPlugin(options = {}) {
         const {
           useReadFile = false,
           embedWASM = embedWASMDefault,
-          optimize = 'Debug',
+          optimize = optimizeDefault,
           ...otherOptions
         } = options;
         const wasmLoader = async (name, dv) => {
@@ -97,10 +104,11 @@ export default function createPlugin(options = {}) {
             return fetchWASM(refID);
           }
         };
-        return transpile(id, { 
-          ...otherOptions, 
-          wasmLoader, 
-          embedWASM, 
+        return transpile(id, {
+          ...otherOptions,
+          optimize,
+          wasmLoader,
+          embedWASM,
         });
       }
     }
