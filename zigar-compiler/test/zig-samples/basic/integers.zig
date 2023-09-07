@@ -10,4 +10,7 @@ pub var uint64: u64 = 0xFFFF_FFFF_FFFF_FFFF;
 pub var int128: i128 = 0xFFFF_FFFF_FFFF_FFFF_1234_5678;
 pub var int4: i4 = 7;
 
+pub var size1: usize = 1234;
+pub var size2: isize = -1234;
+
 var private: i32 = 8;

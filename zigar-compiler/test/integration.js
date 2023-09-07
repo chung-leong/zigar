@@ -39,6 +39,8 @@ export function addTests(importModule, options) {
       expect(module.int64).to.equal(0x1FFF_FFFF_FFFF_FFFFn);
       expect(module.uint64).to.equal(0xFFFF_FFFF_FFFF_FFFFn);
       expect(module.int128).to.equal(0xFFFF_FFFF_FFFF_FFFF_1234_5678n);
+      expect(module.size1).to.equal(1234);
+      expect(module.size2).to.equal(-1234);
       module.uint16 = 123;
       expect(module.uint16).to.equal(123);
       expect(() => module.int16 = 0).to.throw();
