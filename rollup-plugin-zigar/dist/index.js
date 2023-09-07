@@ -42,7 +42,7 @@ const schema = {
     },
     cacheDir: {
       type: 'string',
-      title: 'Directory where library files re placed',
+      title: 'Directory where compiled library files re placed',
     },
     zigCmd: {
       type: 'string',
@@ -50,7 +50,7 @@ const schema = {
     },
     staleTime: {
       type: 'number',
-      title: 'Time interval in milliseconds before a PID file is considered stale',
+      title: 'Time interval in milliseconds before a lock file is considered stale',
     },
   },
 };
@@ -85,6 +85,7 @@ export default function createPlugin(options = {}) {
         const {
           useReadFile = false,
           embedWASM = embedWASMDefault,
+          optimize = 'Debug',
           ...otherOptions
         } = options;
         const wasmLoader = async (name, dv) => {
@@ -96,7 +97,11 @@ export default function createPlugin(options = {}) {
             return fetchWASM(refID);
           }
         };
-        return transpile(id, { ...otherOptions, wasmLoader, embedWASM });
+        return transpile(id, { 
+          ...otherOptions, 
+          wasmLoader, 
+          embedWASM, 
+        });
       }
     }
   };
