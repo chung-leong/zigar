@@ -2682,11 +2682,11 @@ function finalizeErrorSet(s) {
     return errors[index];
   };
   Object.setPrototypeOf(constructor.prototype, Error.prototype);
-  const valueOf = function() { return this[ERROR_INDEX] };
+  const getIndex = function() { return this[ERROR_INDEX] };
   const toStringTag = function() { return 'Error' };
   Object.defineProperties(constructor.prototype, {
     // provide a way to retrieve the error index
-    [Symbol.toPrimitive]: { value: valueOf, configurable: true, writable: true },
+    index: { get: getIndex, configurable: true },
     // ensure that libraries that rely on the string tag for type detection will
     // correctly identify the object as an error
     [Symbol.toStringTag]: { get: toStringTag, configurable: true },
@@ -3090,7 +3090,7 @@ function inFixedMemory(arg) {
 function createProxy(isConst, isTargetPointer) {
   const descriptors = (!isTargetPointer) ? (isConst) ? constProxyHandlers : proxyHandlers : {};
   const proxy = new Proxy(this, descriptors);
-  this[PROXY] = proxy;
+  Object.defineProperty(this, PROXY, { value: proxy });
   return proxy;
 }
 
