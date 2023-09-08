@@ -10,6 +10,144 @@
 * Correct handling of pointers 
 * Automatic provisioning of memory allocator
 
+## Calling Zig functions
+
+Simply import a .zig file. All public functions contained in the file will be available:
+
+```zig
+// hello.zig
+const std = @import("std");
+
+pub fn hello() void {
+    std.debug.print("Hello world");
+}
+```
+
+```js 
+// hello.js
+import { hello } from './hello.zig';
+
+hello();
+
+// console output:
+// Hello world
+```
+
+Functions can also be called from the default export:
+
+```js
+// hello.js
+import module from './hello.zig';
+
+module.hello();
+
+// console output:
+// Hello world
+```
+
+Numeric and boolean arguments are passed normally:
+
+```zig
+// area.zig
+const std = @import("std");
+
+pub fn getArea(radius: f64) f64 {
+    return radius * radius * std.math.pi;
+}
+
+pub fn getOpposite(value: bool) bool {
+    return !value;
+}
+```
+
+```js
+// area.js
+import { getArea, getOpposite } from './area.zig';
+
+console.log(getArea(5), getOpposite(true));
+
+// console output:
+// 78.53981633974483 false
+```
+
+String can be passed into a function normally:
+
+```zig
+// hello-name.zig
+const std = @import("std");
+
+pub fn hello(name: []const u8) void {
+    std.debug.print("Hello, {s}!", .{name});
+}
+```
+
+```js
+// hello-name.js
+import { hello } from './hello-name.zig';
+
+hello('Bigus');
+
+// console output:
+// Hello, Bigus!
+```
+
+A function that returns a string would need an allocator:
+
+```zig
+// greeting.zig
+const std = @import("std");
+
+pub fn getGreeting(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(allocator, "Hello, {s}!", .{name});
+}
+```
+
+``` js
+// greeting.js
+import { getGreeting } from './greeting.zig';
+
+const greeting = getGreeting('Bigus');
+console.log(greeting);
+console.log(greeting.string);
+console.log([ ...greeting ]);
+
+// console output
+// [object []const u8]
+// Hello, Bigus!
+// [ TODO ]
+```
+
+Zigar will automatically provide the allocator. It allocates memory from the JavaScript engine in the form of `ArrayBuffer`. It should only be used for returning data to the caller and not other purposes, as it is not able to free memory (discarded blocks must await garbaged collection).
+
+The Zig slice `[]const u8` is represented by an object on the JavaScript side by an object. To get the actual text string you have to access its `string` property.
+
+Functions that returning error unions will throw when errors returned:
+
+```zig
+// add-error.zig
+const MathError = error {
+    UnexpectedSpanishInquisition,
+};
+
+pub fn add(a: i32, b: i32) !i32 {
+    if (a == 0 or b == 0) {
+        return MathError.UnexpectedSpanishInquisition;
+    }
+    return a + b;
+}
+```
+
+```js
+import { add } from './add-error.zig';
+
+console.log(add(1, 2));
+console.log(add(0, 1));
+
+// console output:
+// 3
+// TODO
+```
+
 ## Object creation
 
 
@@ -18,6 +156,7 @@
 Zigar allows you to cast a JavaScript memory buffer into a Zig structure using the following syntax:
 
 ```zig
+// struct.zig
 pub const StructA = struct {
     dog: i32,
     cat: i32,
@@ -25,7 +164,8 @@ pub const StructA = struct {
 ```
 
 ```js
-import { StructA } from './test.zig';
+// struct.js
+import { StructA } from './struct.zig';
 
 const buffer = new ArrayBuffer(8);
 const struct = StructA(buffer);
@@ -34,14 +174,13 @@ struct.cat = 456;
 const view = new DataView(buffer);
 console.log(view.getInt32(0, true), view.getInt32(4, true));
 
-// Output:
-123 456
+// console output:
+// 123 456
 ```
 
 Casting creates a object without allocating new memory for it. Note how the `new` operator is not used. 
 
 
-## Type system
 
 ### Struct
 
