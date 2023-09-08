@@ -538,6 +538,64 @@ export function addTests(importModule, options) {
       const pointer = getPointer();
       expect(pointer['*']).to.equal(1234);
     })
+    it('should correctly auto-cast compatible typed arrays and buffers', async function() {
+      this.timeout(60000);
+      const { default: module } = await importModule(resolve('./zig-samples/basic/memset.zig'));
+      const u8Array = new Uint8Array(4);
+      const i8Array = new Int8Array(4);
+      const u16Array = new Uint16Array(4);
+      const i16Array = new Int16Array(4);
+      const u32Array = new Uint32Array(4);
+      const i32Array = new Int32Array(4);
+      const u64Array = new BigUint64Array(4);
+      const i64Array = new BigInt64Array(4);
+      const f32Array = new Float32Array(4);
+      const f64Array = new Float64Array(4);
+      module.setU8(u8Array, 100);
+      expect([ ...u8Array ]).to.eql([ 100, 100, 100, 100 ]);
+      module.setU8(u8Array.buffer, 101);
+      expect([ ...u8Array ]).to.eql([ 101, 101, 101, 101 ]);
+      module.setU8(new DataView(u8Array.buffer), 102);
+      expect([ ...u8Array ]).to.eql([ 102, 102, 102, 102 ]);
+      // should issue a warning
+      const [ i8Warning ] = await captureWarning(() => {
+        module.setI8(u8Array, 19);
+      });
+      expect(i8Warning).to.equal('Implicitly creating an Int8Array from an Uint8Array');
+      module.setI8(i8Array, 8);
+      expect([ ...u8Array ]).to.eql([ 102, 102, 102, 102 ]);
+      expect([ ...i8Array ]).to.eql([ 8, 8, 8, 8 ]);
+      expect(() => module.setI8(i8Array.buffer, 9)).to.throw(TypeError);
+      // should issue a warning
+      const [ u16Warning ] = await captureWarning(() => {
+        module.setU16(i8Array, 19);
+      });
+      expect(u16Warning).to.equal('Implicitly creating an Uint16Array from an Int8Array');
+      expect([ ...i8Array ]).to.eql([ 8, 8, 8, 8 ]);
+      module.setU16(u16Array, 127);
+      expect([ ...u16Array ]).to.eql([ 127, 127, 127, 127 ]);
+      expect(() => module.setU16(u16Array.buffer, 127)).to.throw(TypeError);
+      module.setI16(i16Array, 72);
+      expect([ ...i16Array ]).to.eql([ 72, 72, 72, 72 ]);
+      module.setU32(u32Array, 88);
+      expect([ ...u32Array ]).to.eql([ 88, 88, 88, 88 ]);
+      module.setI32(i32Array, 0x7FEE7711);
+      expect([ ...i32Array ]).to.eql([ 0x7FEE7711, 0x7FEE7711, 0x7FEE7711, 0x7FEE7711 ]);
+      module.setU64(u64Array, 0xF0000000n);
+      expect([ ...u64Array ]).to.eql([ 0xF0000000n, 0xF0000000n, 0xF0000000n, 0xF0000000n ]);
+      module.setI64(i64Array, 1234567890n);
+      expect([ ...i64Array ]).to.eql([ 1234567890n, 1234567890n, 1234567890n, 1234567890n ]);
+      module.setI64(new DataView(i64Array.buffer, 0, 8 * 2), 18n);
+      expect([ ...i64Array ]).to.eql([ 18n, 18n, 1234567890n, 1234567890n ]);
+      module.setF32(f32Array, 0.25);
+      expect([ ...f32Array ]).to.eql([ 0.25, 0.25, 0.25, 0.25 ]);
+      const [ f64Warning ] = await captureWarning(() => {
+        module.setF64(f32Array, 1.25);
+      });
+      expect(f64Warning).to.equal('Implicitly creating a Float64Array from a Float32Array');
+      module.setF64(f64Array, Math.PI);
+      expect([ ...f64Array ]).to.eql([ Math.PI, Math.PI, Math.PI, Math.PI ]);
+    })
   })
   describe('Error handling', function() {
     beforeEach(function() {
@@ -791,6 +849,22 @@ async function capture(cb) {
     await cb();
   } finally {
     console.log = logFn;
+  }
+  return lines;
+}
+
+async function captureWarning(cb) {
+  const warnFn = console.warn;
+  const lines = [];
+  try {
+    console.warn =  (text) => {
+      for (const line of text.split(/\r?\n/)) {
+        lines.push(line)
+      }
+    };
+    await cb();
+  } finally {
+    console.warn = warnFn;
   }
   return lines;
 }

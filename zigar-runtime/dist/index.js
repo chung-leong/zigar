@@ -761,7 +761,7 @@ function getCompatibleTags(structure) {
   if (typedArray) {
     tags.push(typedArray.name);
     tags.push('DataView');
-    if (typedArray === Uint8Array || typedArray === Int8Array) {
+    if (typedArray === Uint8Array) {
       tags.push('ArrayBuffer');
       tags.push('SharedArrayBuffer');
     }
