@@ -3,9 +3,13 @@ import { printTag } from './print-enum.zig';
 
 printTag('Dog');
 printTag('Chicken');
-printTag('Cow');
+try {
+  printTag('Cow');
+} catch (err) {
+  console.error(err);
+}
 
 // console output:
 // Dog: 0
 // Chicken: 3
-// ERROR TODO
+// TypeError: Enum item of the type Pet expected, received Cow

@@ -7,7 +7,7 @@
 * Support for different types of unions
 * Support for optional and error union
 * Subclassing of error sets
-* Correct handling of pointers 
+* Correct handling of pointers
 * Automatic provisioning of memory allocator
 
 ## Calling Zig functions
@@ -19,10 +19,10 @@ Simply import a .zig file. All public functions contained in the file will be av
 const std = @import("std");
 
 pub fn hello() void {
-    std.debug.print("Hello world");
+    std.debug.print("Hello world", .{});
 }
 ```
-```js 
+```js
 // hello.js
 import { hello } from './hello.zig';
 
@@ -103,14 +103,18 @@ pub fn getGreeting(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
 import { getGreeting } from './greeting.zig';
 
 const greeting = getGreeting('Bigus');
-console.log(greeting);
+console.log(`${greeting}`);
 console.log(greeting.string);
 console.log([ ...greeting ]);
 
-// console output
+// console output:
 // [object []const u8]
 // Hello, Bigus!
-// [ TODO ]
+// [
+//     72, 101, 108, 108, 111,
+//     44,  32,  66, 105, 103,
+//    117, 115,  33
+// ]
 ```
 
 Zigar will automatically provide the allocator. It allocates memory from the JavaScript engine in the
@@ -124,8 +128,9 @@ Functions returning error unions will throw when errors returned:
 
 ```zig
 // add-error.zig
-const MathError = error {
+pub const MathError = error{
     UnexpectedSpanishInquisition,
+    RecordIsScratched,
 };
 
 pub fn add(a: i32, b: i32) !i32 {
@@ -136,14 +141,20 @@ pub fn add(a: i32, b: i32) !i32 {
 }
 ```
 ```js
-import { add } from './add-error.zig';
+import { add, MathError } from './add-error.zig';
 
 console.log(add(1, 2));
-console.log(add(0, 1));
+try {
+  add(0, 1);
+} catch (err) {
+  console.error(err);
+  console.log(err instanceof MathError);
+}
 
 // console output:
 // 3
-// TODO
+// [error{UnexpectedSpanishInquisition,RecordIsScratched} [Error]: Unexpected spanish inquisition]
+// true
 ```
 
 Functions returning optionals will return `null` when no value is present:
@@ -190,12 +201,16 @@ import { printTag } from './print-enum.zig';
 
 printTag('Dog');
 printTag('Chicken');
-printTag('Cow');
+try {
+  printTag('Cow');
+} catch (err) {
+  console.error(err);
+}
 
 // console output:
 // Dog: 0
 // Chicken: 3
-// ERROR TODO
+// TypeError: Enum item of the type Pet expected, received Cow
 ```
 
 You can also use items from an exported enum set:
@@ -208,10 +223,13 @@ printTag(Pet.Dog);
 printTag(Pet.Cat);
 printTag(Pet.Snake);
 
+console.log(Pet.Dog instanceof Pet);
+
 // console output:
 // Dog: 0
 // Cat: 1
 // Snake: 2
+// true
 ```
 
 Function that take structs or unions as arguments will accept object initializers:
@@ -242,7 +260,8 @@ printStruct({ a: { number1: 123, number2: 456 }, number3: 77 });
 printStruct({ a: null, number3: 77 });
 
 // console output:
-// TODO
+// print-struct.StructB{ .a = print-struct.StructA{ .number1 = 123, .number2 = 456 }, .number3 = 7.7e+01 }
+// print-struct.StructB{ .a = null, .number3 = 7.7e+01 }
 ```
 
 Fields can be omitted when they have default values:
@@ -273,24 +292,27 @@ printStruct({ a: {}, number3: 77 });
 printStruct({ number3: 77 });
 
 // console output:
-// TODO
+// print-struct-defaults.StructB{ .a = print-struct-defaults.StructA{ .number1 = 1, .number2 = 2 }, .number3 = 7.7e+01 }
+// print-struct-defaults.StructB{ .a = null, .number3 = 7.7e+01 }
 ```
 
 Functions with pointer arguments can accept certain JavaScript objects directly. The mapping goes as
 follows:
 
-| Zig pointer type | JavaScript object types                                     |
-----------------------------------------------------------------------------------
-| `[]u8`           | `ArrayBuffer`, `Uint8Array`, `Buffer`, `DataView`, `string` |
-| `[]i8`           | `Int8Array`, `DataView`                                     |
-| `[]u16`          | `Unt16Array`, `DataView`, `string`                          | 
-| `[]i16`          | `Int16Array`, `DataView`                                    |  
-| `[]u32`          | `Uint32Array`, `DataView`,                                  |
-| `[]i32`          | `Int32Array`, `DataView`,                                   |
-| `[]u64`          | `BigUint64Array`, `DataView`,                               |
-| `[]i64`          | `BigInt64Array`, `DataView`,                                |
-| `[]f32`          | `Float32Array`, `DataView`,                                 |
-| `[]f64`          | `Float64Array`, `DataView`,                                 |
+| Zig pointer type | JavaScript object types                           |
+|------------------|---------------------------------------------------|
+| `[]u8`           | `ArrayBuffer`, `Uint8Array`, `Buffer`, `DataView` |
+| `[]i8`           | `Int8Array`, `DataView`                           |
+| `[]u16`          | `Unt16Array`, `DataView`                          |
+| `[]i16`          | `Int16Array`, `DataView`                          |
+| `[]u32`          | `Uint32Array`, `DataView`,                        |
+| `[]i32`          | `Int32Array`, `DataView`,                         |
+| `[]u64`          | `BigUint64Array`, `DataView`,                     |
+| `[]i64`          | `BigInt64Array`, `DataView`,                      |
+| `[]f32`          | `Float32Array`, `DataView`,                       |
+| `[]f64`          | `Float64Array`, `DataView`,                       |
+
+``
 
 ## Object creation
 
@@ -322,7 +344,7 @@ console.log(view.getInt32(0, true), view.getInt32(4, true));
 // 123 456
 ```
 
-Casting creates a object without allocating new memory for it. Note how the `new` operator is not used. 
+Casting creates a object without allocating new memory for it. Note how the `new` operator is not used.
 
 ## Limitations
 
@@ -349,4 +371,4 @@ pub fn bad(item_ptr: *const item, list: []const Item) void {
 }
 ```
 
-* Misaligned pointers will cause errors when they're aliased by other pointers. 
+* Misaligned pointers will cause errors when they're aliased by other pointers.

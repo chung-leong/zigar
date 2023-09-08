@@ -1,6 +1,7 @@
 // add-error.zig
-const MathError = error{
+pub const MathError = error{
     UnexpectedSpanishInquisition,
+    RecordIsScratched,
 };
 
 pub fn add(a: i32, b: i32) !i32 {
