@@ -97,7 +97,7 @@ export function addTests(importModule, options) {
       this.timeout(60000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/slices-with-primitive.zig'));
       expect([ ...module.int32_array ]).to.eql([ 123, 456, 789 ]);
-      expect(module.int32_slice).to.be.an('[_]const i32');
+      expect(module.int32_slice).to.be.an('[]const i32');
       expect(module.int32_slice.get(0)).to.equal(123);
       expect([ ...module.int32_slice ]).to.eql([ 123, 456, 789 ]);
       expect(module.u8_slice).to.have.lengthOf(11);
@@ -324,7 +324,7 @@ export function addTests(importModule, options) {
         'Test string 3',
       ];
       const result = bounce(inputStrings);
-      expect(result).to.be.an('[_]const []const u8');
+      expect(result).to.be.an('[]const []const u8');
       const outputStrings = [ ...result ].map(a => a.string);
       expect(outputStrings).to.eql(inputStrings);
     })
@@ -448,7 +448,7 @@ export function addTests(importModule, options) {
         allocateOptional,
       } = await importModule(resolve('./zig-samples/basic/function-allocating-slice-of-structs.zig'));
       const structs1 = allocate(10);
-      expect(structs1).to.be.a('[_]function-allocating-slice-of-structs.StructA');
+      expect(structs1).to.be.a('[]function-allocating-slice-of-structs.StructA');
       expect(structs1).to.have.lengthOf(10);
       for (const [ index, struct ] of structs1.entries()) {
         const { vector1, vector2 } = struct;
@@ -462,7 +462,7 @@ export function addTests(importModule, options) {
         expect(vector2[3]).to.equal(Math.PI * 1.00 / (index + 1));
       }
       const structs2 = allocateNoError(10);
-      expect(structs2).to.be.a('[_]function-allocating-slice-of-structs.StructA');
+      expect(structs2).to.be.a('[]function-allocating-slice-of-structs.StructA');
       expect(structs2).to.have.lengthOf(10);
       for (const [ index, struct ] of structs2.entries()) {
         const { vector1, vector2 } = struct;
@@ -476,7 +476,7 @@ export function addTests(importModule, options) {
         expect(vector2[3]).to.equal(Math.PI * 1.00 / (index + 1));
       }
       const structs3 = allocateOptional(10);
-      expect(structs3).to.be.a('[_]function-allocating-slice-of-structs.StructA');
+      expect(structs3).to.be.a('[]function-allocating-slice-of-structs.StructA');
       expect(structs3).to.have.lengthOf(10);
       for (const [ index, struct ] of structs3.entries()) {
         const { vector1, vector2 } = struct;
@@ -530,6 +530,13 @@ export function addTests(importModule, options) {
         'Hello world',
         'Hello world',
       ]);
+    })
+    it('should import function returning a pointer to a primitive', async function() {
+      this.timeout(60000);
+      const { default: module, getPointer } = await importModule(resolve('./zig-samples/basic/function-returning-primitive-pointer.zig'));
+      expect(module.number).to.equal(1234);
+      const pointer = getPointer();
+      expect(pointer['*']).to.equal(1234);
     })
   })
   describe('Error handling', function() {

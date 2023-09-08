@@ -197,6 +197,8 @@ const proxyHandlers = {
       case ZIG:
       case SLOTS:
       case MEMORY:
+      case Symbol.toStringTag:
+      case Symbol.toPrimitive:
         return pointer[name];
       default:
         return pointer[SLOTS][0][name];
@@ -210,7 +212,9 @@ const proxyHandlers = {
       case ZIG:
       case SLOTS:
       case MEMORY:
-        pointer[name] = value;
+      case Symbol.toStringTag:
+      case Symbol.toPrimitive:
+          pointer[name] = value;
         break;
       default:
         pointer[SLOTS][0][name] = value;
@@ -225,7 +229,9 @@ const proxyHandlers = {
       case ZIG:
       case SLOTS:
       case MEMORY:
-        delete pointer[name];
+      case Symbol.toStringTag:
+      case Symbol.toPrimitive:
+          delete pointer[name];
         break;
       default:
         delete pointer[SLOTS][0][name];
@@ -236,7 +242,8 @@ const proxyHandlers = {
     return name in pointer[SLOTS][0];
   },
   ownKeys(pointer) {
-    return [ ...Object.getOwnPropertyNames(pointer[SLOTS][0]), SLOTS, ZIG, MEMORY ];
+    const targetKeys = Object.getOwnPropertyNames(pointer[SLOTS][0]);
+    return [ ...targetKeys, SLOTS, ZIG, MEMORY ];
   },
   getOwnPropertyDescriptor(pointer, name) {
     switch (name) {
