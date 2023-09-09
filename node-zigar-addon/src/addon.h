@@ -90,7 +90,7 @@ struct Method {
   MethodAttributes attributes;
 };
 
-union ModuleAttributes {
+struct ModuleAttributes {
   bool little_endian: 1;
   bool runtime_safety: 1;
   int :30;

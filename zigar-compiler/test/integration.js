@@ -13,6 +13,7 @@ export function addTests(importModule, options) {
     process.env.ZIGAR_TARGET = target;
     process.env.ZIGAR_OPTIMIZE = optimize;
   })
+  const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(optimize);
   describe('Console', function() {
     it('should output to development console', async function() {
       this.timeout(60000);
@@ -152,7 +153,7 @@ export function addTests(importModule, options) {
       expect(module.animal.dog).to.equal(123);
       module.useCat();
       expect(module.animal.cat).to.equal(777);
-      if (process.env.ZIGAR_OPTIMIZE === 'Debug' || process.env.ZIGAR_OPTIMIZE === 'ReleaseSafe') {
+      if (runtimeSafety) {
         expect(() => module.animal.dog).to.throw(TypeError);
       } else {
         expect(module.animal.dog).to.equal(777);
@@ -557,20 +558,24 @@ export function addTests(importModule, options) {
       expect([ ...u8Array ]).to.eql([ 101, 101, 101, 101 ]);
       module.setU8(new DataView(u8Array.buffer), 102);
       expect([ ...u8Array ]).to.eql([ 102, 102, 102, 102 ]);
-      // should issue a warning
-      const [ i8Warning ] = await captureWarning(() => {
-        module.setI8(u8Array, 19);
-      });
-      expect(i8Warning).to.equal('Implicitly creating an Int8Array from an Uint8Array');
+      if (runtimeSafety) {
+        // should issue a warning
+        const [ i8Warning ] = await captureWarning(() => {
+          module.setI8(u8Array, 19);
+        });
+        expect(i8Warning).to.equal('Implicitly creating an Int8Array from an Uint8Array');
+      }
       module.setI8(i8Array, 8);
       expect([ ...u8Array ]).to.eql([ 102, 102, 102, 102 ]);
       expect([ ...i8Array ]).to.eql([ 8, 8, 8, 8 ]);
       expect(() => module.setI8(i8Array.buffer, 9)).to.throw(TypeError);
-      // should issue a warning
-      const [ u16Warning ] = await captureWarning(() => {
-        module.setU16(i8Array, 19);
-      });
-      expect(u16Warning).to.equal('Implicitly creating an Uint16Array from an Int8Array');
+      if (runtimeSafety) {
+          // should issue a warning
+        const [ u16Warning ] = await captureWarning(() => {
+          module.setU16(i8Array, 19);
+        });
+        expect(u16Warning).to.equal('Implicitly creating an Uint16Array from an Int8Array');
+      }
       expect([ ...i8Array ]).to.eql([ 8, 8, 8, 8 ]);
       module.setU16(u16Array, 127);
       expect([ ...u16Array ]).to.eql([ 127, 127, 127, 127 ]);
@@ -589,10 +594,12 @@ export function addTests(importModule, options) {
       expect([ ...i64Array ]).to.eql([ 18n, 18n, 1234567890n, 1234567890n ]);
       module.setF32(f32Array, 0.25);
       expect([ ...f32Array ]).to.eql([ 0.25, 0.25, 0.25, 0.25 ]);
-      const [ f64Warning ] = await captureWarning(() => {
-        module.setF64(f32Array, 1.25);
-      });
-      expect(f64Warning).to.equal('Implicitly creating a Float64Array from a Float32Array');
+      if (runtimeSafety) {
+          const [ f64Warning ] = await captureWarning(() => {
+          module.setF64(f32Array, 1.25);
+        });
+        expect(f64Warning).to.equal('Implicitly creating a Float64Array from a Float32Array');
+      }
       module.setF64(f64Array, Math.PI);
       expect([ ...f64Array ]).to.eql([ Math.PI, Math.PI, Math.PI, Math.PI ]);
     })
@@ -605,7 +612,7 @@ export function addTests(importModule, options) {
     it('should produce an error return trace', async function() {
       this.timeout(60000);
       const { fail } = await importModule(resolve('./zig-samples/basic/error-trace.zig'));
-      if (process.env.ZIGAR_OPTIMIZE === 'Debug' || process.env.ZIGAR_OPTIMIZE === 'ReleaseSafe') {
+      if (runtimeSafety) {
         expect(fail).to.throw(WebAssembly.RuntimeError)
           .with.property('stack')
             .that.contains('error-trace.fail')

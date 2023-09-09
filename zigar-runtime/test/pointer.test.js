@@ -660,7 +660,7 @@ describe('Pointer functions', function() {
       }
       expect(message).to.be.a('string');
     })
-    it('should not show warning in production environment', function() {
+    it('should not show warning when runtime safety is off', function() {
       const intStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Int32',
@@ -693,7 +693,7 @@ describe('Pointer functions', function() {
         name: '[]Int32',
         size: 8,
         hasPointer: true,
-      });
+      }, { runtimeSafety: false });
       attachMember(structure, {
         type: MemberType.Object,
         bitSize: 64,

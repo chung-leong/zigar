@@ -22,6 +22,9 @@ export function finalizePointer(s) {
     isConst,
     options,
   } = s;
+  const {
+    runtimeSafety = true,
+  } = options;
   const { structure: targetStructure } = member;
   const isTargetSlice = (targetStructure.type === StructureType.Slice);
   const isTargetPointer = (targetStructure.type === StructureType.Pointer);
@@ -107,7 +110,7 @@ export function finalizePointer(s) {
           } else if (isTargetSlice) {
             // autovivificate target object
             const autoObj = new Target(arg);
-            if ((typeof(process) !== 'object' || process.env.NODE_ENV !== 'production') && /* c8 ignore next */ (!import.meta.env || !import.meta.env.PROD)) {
+            if (runtimeSafety) {
               // creation of a new slice using a typed array is probably
               // not what the user wants; it's more likely that the intention
               // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
@@ -243,7 +246,7 @@ const proxyHandlers = {
   },
   ownKeys(pointer) {
     const targetKeys = Object.getOwnPropertyNames(pointer[SLOTS][0]);
-    return [ ...targetKeys, SLOTS, ZIG, MEMORY ];
+    return [ ...targetKeys, SLOTS, ZIG, MEMORY, PROXY ];
   },
   getOwnPropertyDescriptor(pointer, name) {
     switch (name) {
