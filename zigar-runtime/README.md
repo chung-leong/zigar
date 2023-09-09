@@ -157,6 +157,9 @@ try {
 // true
 ```
 
+Zigar will automatically generate an error message by "decamelizing" the error name, as shown in
+the example above.
+
 Functions returning optionals will return `null` when no value is present:
 
 ```zig
@@ -312,7 +315,91 @@ follows:
 | `[]f32`          | `Float32Array`, `DataView`,                       |
 | `[]f64`          | `Float64Array`, `DataView`,                       |
 
-``
+The following example exports a number of functions, each of which set a slice to a particular
+value, using Zig's built-in function `@memset`:
+
+```zig
+// memset.zig
+fn createSetFn(comptime T: type) fn ([]T, T) void {
+    const S = struct {
+        fn set(slice: []T, value: T) void {
+            @memset(slice, value);
+        }
+    };
+    return S.set;
+}
+
+pub const setU8 = createSetFn(u8);
+pub const setI8 = createSetFn(i8);
+pub const setU16 = createSetFn(u16);
+pub const setI16 = createSetFn(i16);
+pub const setU32 = createSetFn(u32);
+pub const setI32 = createSetFn(i32);
+pub const setU64 = createSetFn(u64);
+pub const setI64 = createSetFn(i64);
+pub const setF32 = createSetFn(f32);
+pub const setF64 = createSetFn(f64);
+```
+```js
+// memset.js
+import {
+  setU8, setI8,
+  setU16, setI16,
+  setU32, setI32,
+  setU64, setI64,
+  setF32, setF64,
+} from './memset.zig';
+
+const u8Array = new Uint8Array(4);
+const i8Array = new Int8Array(4);
+const u16Array = new Uint16Array(4);
+const i16Array = new Int16Array(4);
+const u32Array = new Uint32Array(4);
+const i32Array = new Int32Array(4);
+const u64Array = new BigUint64Array(4);
+const i64Array = new BigInt64Array(4);
+const f32Array = new Float32Array(4);
+const f64Array = new Float64Array(4);
+
+setU8(u8Array, 1);
+console.log([ ...u8Array ]);
+setU8(u8Array.buffer, 2); // ArrayBuffer
+console.log([ ...u8Array ]);
+setU8(new DataView(u8Array.buffer), 3); // DataView
+console.log([ ...u8Array ]);
+setI8(i8Array, 4);
+console.log([ ...i8Array ]);
+setU16(u16Array, 5);
+console.log([ ...u16Array ]);
+setI16(i16Array, 6);
+console.log([ ...i16Array ]);
+setU32(u32Array, 7);
+console.log([ ...u32Array ]);
+setI32(i32Array, 8);
+console.log([ ...i32Array ]);
+setU64(u64Array, 9n);
+console.log([ ...u64Array ]);
+setI64(i64Array, 10n);
+console.log([ ...i64Array ]);
+setF32(f32Array, 0.25);
+console.log([ ...f32Array ]);
+setF64(f64Array, 3.14);
+console.log([ ...f64Array ]);
+
+// console output:
+// [ 1, 1, 1, 1 ]
+// [ 2, 2, 2, 2 ]
+// [ 3, 3, 3, 3 ]
+// [ 4, 4, 4, 4 ]
+// [ 5, 5, 5, 5 ]
+// [ 6, 6, 6, 6 ]
+// [ 7, 7, 7, 7 ]
+// [ 8, 8, 8, 8 ]
+// [ 9n, 9n, 9n, 9n ]
+// [ 10n, 10n, 10n, 10n ]
+// [ 0.25, 0.25, 0.25, 0.25 ]
+// [ 3.14, 3.14, 3.14, 3.14 ]
+```
 
 ## Object creation
 
