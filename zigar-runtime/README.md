@@ -299,24 +299,109 @@ printStruct({ number3: 77 });
 // print-struct-defaults.StructB{ .a = null, .number3 = 7.7e+01 }
 ```
 
+When a function returns a bare (or extern) union, only the active field can be accessed. An error 
+would be thrown when runtime safety check is active:
+
+```zig
+// bare-union-price.zig
+const Currency = enum { usd, eur, pln, mop };
+const Price = union {
+    usd: i32,
+    eur: i32,
+    pln: i32,
+    mop: i32,  
+};
+
+pub fn getPrice(currency: Currency, amount: i32) Price {
+    return switch (currency) {
+        .usd => .{ .usd = amount },
+        .eur => .{ .eur = amount },
+        .pln => .{ .pln = amount },
+        .mop => .{ .mop = amount },
+    };
+}
+```
+```js
+// bare-union-price.js
+import { getPrice } from './bare-union-price.zig';
+
+const price = getPrice('usd', 123);
+console.log(`USD = ${price.usd}`);
+try {
+  console.log(`PLN = ${price.pln}`);
+} catch (err) {
+  console.error(err);
+}
+console.log(Object.keys(price));
+
+// console output:
+// USD = 123
+// Accessing property pln when usd is active
+```
+
+Tagged union, on the other hand, allows you to read from an inactive field:
+
+```zig
+// tagged-union-price.zig
+const Currency = enum { usd, eur, pln, mop };
+const Price = union(Currency) {
+    usd: i32,
+    eur: i32,
+    pln: i32,
+    mop: i32,  
+};
+
+pub fn getPrice(currency: Currency, amount: i32) Price {
+    return switch (currency) {
+        .usd => .{ .usd = amount },
+        .eur => .{ .eur = amount },
+        .pln => .{ .pln = amount },
+        .mop => .{ .mop = amount },
+    };
+}
+```
+```js
+// tagged-union-price.js
+import { getPrice } from './tagged-union-price.zig';
+
+const price = getPrice('usd', 123);
+console.log(`USD = ${price.usd}`);
+console.log(`PLN = ${price.pln}`);
+for (const [ key, value ] of Object.entries(price)) {
+  console.log(`${key.toUpperCase()} = ${value}`);
+}
+try {
+  price.pln = 500;
+} catch (err) {
+  console.error(err);
+}
+console.log(Object.keys(price));
+
+// console output:
+// USD = 123
+// PLN = null
+// USD = 123
+// Accessing property pln when usd is active
+```
+
 Functions with pointer arguments can accept certain JavaScript objects directly. The mapping goes as
 follows:
 
 | Zig pointer type | JavaScript object types                           |
 |------------------|---------------------------------------------------|
-| `[]u8`           | `ArrayBuffer`, `Uint8Array`, `Buffer`, `DataView` |
-| `[]i8`           | `Int8Array`, `DataView`                           |
-| `[]u16`          | `Unt16Array`, `DataView`                          |
-| `[]i16`          | `Int16Array`, `DataView`                          |
-| `[]u32`          | `Uint32Array`, `DataView`,                        |
-| `[]i32`          | `Int32Array`, `DataView`,                         |
-| `[]u64`          | `BigUint64Array`, `DataView`,                     |
-| `[]i64`          | `BigInt64Array`, `DataView`,                      |
-| `[]f32`          | `Float32Array`, `DataView`,                       |
-| `[]f64`          | `Float64Array`, `DataView`,                       |
+| `[]u8`, `*u8`    | `ArrayBuffer`, `Uint8Array`, `Buffer`, `DataView` |
+| `[]i8`, `*i8`    | `Int8Array`, `DataView`                           |
+| `[]u16`, `*u16`  | `Unt16Array`, `DataView`                          |
+| `[]i16`, `*i16`  | `Int16Array`, `DataView`                          |
+| `[]u32`, `*u32`  | `Uint32Array`, `DataView`,                        |
+| `[]i32`, `*i32`  | `Int32Array`, `DataView`,                         |
+| `[]u64`, `*u64`  | `BigUint64Array`, `DataView`,                     |
+| `[]i64`, `*i64`  | `BigInt64Array`, `DataView`,                      |
+| `[]f32`, `*f32`  | `Float32Array`, `DataView`,                       |
+| `[]f64`, `*f64`  | `Float64Array`, `DataView`,                       |
 
-The following example exports a number of functions, each of which set a slice to a particular
-value, using Zig's built-in function `@memset`:
+The following example exports a number of functions, each of which sets all elements of a slice to 
+a particular value:
 
 ```zig
 // memset.zig
@@ -401,7 +486,96 @@ console.log([ ...f64Array ]);
 // [ 3.14, 3.14, 3.14, 3.14 ]
 ```
 
-## Object creation
+Functions with slice pointer arguments can also accept slice initializers in lieu of a slice object.
+We have already such usage in an earlier example:
+
+```zig
+// hello-name.zig
+const std = @import("std");
+
+pub fn hello(name: []const u8) void {
+    std.debug.print("Hello, {s}!", .{name});
+}
+```
+```js
+// hello-name.js
+import { hello } from './hello-name.zig';
+
+hello('Bigus');
+
+// console output:
+// Hello, Bigus!
+```
+
+Here's we are using a string to initialize a temporary slice of `u8`. An array of number would also
+work:
+
+```js
+// hello-name-array.js
+import { hello } from './hello-name.zig';
+
+hello([ 66, 111, 98 ]);
+
+// console output:
+// Hello, Bob!
+```
+
+A generator would work too:
+
+```js
+// hello-name-generator.js
+import { hello } from './hello-name.zig';
+
+function *alphabet() {
+  for (let c = 'A'.charCodeAt(0); c < 'Z'.charCodeAt(0) + 1; c++) {
+    yield c;
+  }
+}
+
+hello(alphabet());
+
+// console output:
+// Hello, ABCDEFGHIJKLMNOPQRSTUVWXYZ!
+```
+
+The usage above basically only make sense for const slices, where the slice pointer represents a 
+variable-length array and isn't being used to point to something. A warning will probably be 
+triggered in the future when a non-const pointer is initialized in this fashion.
+
+Single pointers do not work in the same way:
+
+```zig
+// struct-pointer.zig
+const std = @import("std");
+
+const StructA = struct {
+    dog: i32,
+    cat: i32,
+};
+
+pub fn printStruct(s: *const StructA) void {
+    std.debug.print("{any}\n", .{s.*});
+}
+```
+```js
+// struct-pointer.js
+import { printStruct } from './struct-pointer.zig';
+
+try {
+  printStruct({ dog: 123, cat: 456 });
+} catch (err) {
+  console.error(err);
+}
+
+// console output:
+// *StructA cannot point to an object
+```
+
+Unlike a slice pointer, a single pointer does not automatically create its own target. `*StructA` only
+accepts a `StructA` object. As the type is not public, the above example is actually unusable. We
+have no means to create a `StructA` or cast a memory buffer into one.
+
+## Creating objects
 
 
 ## Casting
@@ -415,7 +589,6 @@ pub const StructA = struct {
     cat: i32,
 };
 ```
-
 ```js
 // struct.js
 import { StructA } from './struct.zig';
