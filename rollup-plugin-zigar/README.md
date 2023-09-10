@@ -24,17 +24,13 @@ export default defineConfig({
 ## Options
 
 * optimize - Optimization level (default: `ReleaseSmall` when building for production, `Debug` otherwise)
-  * Debug
-  * ReleaseSmall
-  * ReleaseSafe
-  * ReleaseFast
 * topLevelAwait - Use top-level await to wait for compilation of WASM code (default: `true`)
 * embedWASM - Embed WASM binary as base64 in JavaScript code (default: `false` in build mode, `true` in server mode)
 * omitFunctions - Exclude all functions and produce no WASM code (default: `false`)
 * stripWASM - Remove extraneous code from WASM binary, including debugging information (default: false when `optimize` is `Debug`, `true` otherwise)
 * keepNames - Keep names of function in WASM binary when stripping (default: `false`)
-* useReadFile - Use Node's [`readFile`](https://nodejs.org/api/fs.html#filehandlereadfileoptions) to load WASM binary instead of fetch API (default: `false`)
-* clean - Remove temporary build folder after building (default: `false`) 
+* useReadFile - Enable the use of readFile() to Load WASM file when library is used in Node.js (default: `false`)
+* clean - Remove temporary build folder after building (default: `false`)
 * zigCmd - Zig build command (default: `zig build -Doptimize=${optimize}`)
 * cacheDir - Directory where compiled shared libraries are placed (default: `${CWD}/zigar-cache`)
 * buildDir - Root directory where temporary build folder are placed (default: `${os.tmpdir()}`)

@@ -9,7 +9,7 @@ const schema = {
   properties: {
     useReadFile: {
       type: 'boolean',
-      title: 'Load WASM file using readFile() instead of fetch()',
+      title: 'Enable the use of readFile() to Load WASM file when library is used in Node.js',
     },
     embedWASM: {
       type: 'boolean',
@@ -35,6 +35,10 @@ const schema = {
     stripWASM: {
       type: 'boolean',
       title: 'Remove unnecessary code from WASM file',
+    },
+    keepNames: {
+      type: 'boolean',
+      title: 'Keep names of function in WASM binary when stripping',
     },
     buildDir: {
       type: 'string',
@@ -124,9 +128,14 @@ function fetchWASM(refID) {
 
 function loadWASM(refID) {
   return `(async () => {
-  const { readFile } = await import('fs/promises');
-  const { fileURLToPath } = await import('url');
-  const path = fileURLToPath(import.meta.ROLLUP_FILE_URL_${refID});
-  return readFile(path);
+  const url = import.meta.ROLLUP_FILE_URL_${refID};
+  if (typeof(process) === 'object' && process[Symbol.toStringTag] === 'process') {
+    const { readFile } = await import('fs/promises');
+    const { fileURLToPath } = await import('url');
+    const path = fileURLToPath(url);
+    return readFile(path);
+  } else {
+    return fetch(url);
+  }
 })()`;
 }

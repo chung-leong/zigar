@@ -199,10 +199,15 @@ const module = s5.constructor;
 
 // initiate loading and compilation of WASM bytecodes
 const wasmPromise = (async () => {
-  const { readFile } = await import('fs/promises');
-  const { fileURLToPath } = await import('url');
-  const path = fileURLToPath(new URL('assets/sha1-e57d84bf.wasm', import.meta.url).href);
-  return readFile(path);
+  const url = new URL('assets/sha1-e57d84bf.wasm', import.meta.url).href;
+  if (typeof(process) === 'object' && process[Symbol.toStringTag] === 'process') {
+    const { readFile } = await import('fs/promises');
+    const { fileURLToPath } = await import('url');
+    const path = fileURLToPath(url);
+    return readFile(path);
+  } else {
+    return fetch(url);
+  }
 })();
 const __init = linkModule(wasmPromise, linkage);
 
