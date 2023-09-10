@@ -208,7 +208,8 @@ export function createArrayEntries() {
 
 export function createProxy() {
   const proxy = new Proxy(this, proxyHandlers);
-  this[PROXY] = proxy;
+  // hide the proxy so console wouldn't display a recursive structure
+  Object.defineProperty(this, PROXY, { value: proxy });
   return proxy;
 }
 
@@ -283,7 +284,7 @@ const proxyHandlers = {
     for (let i = 0, len = array.length; i < len; i++) {
       keys.push(`${i}`);
     }
-    keys.push('length');
+    keys.push('length', PROXY);
     return keys;
   },
   getOwnPropertyDescriptor(array, name) {

@@ -76,7 +76,7 @@ export function finalizePointer(s) {
       }
     }
     self[MEMORY] = dv;
-    self[SLOTS] = { value: { 0: null } };
+    self[SLOTS] = { 0: null };
     self[ZIG] = calledFromZig;
     if (creating) {
       initializer.call(self, arg);
@@ -186,7 +186,8 @@ function inFixedMemory(arg) {
 function createProxy(isConst, isTargetPointer) {
   const handlers = (!isTargetPointer) ? (isConst) ? constProxyHandlers : proxyHandlers : {};
   const proxy = new Proxy(this, handlers);
-  this[PROXY] = proxy;
+  // hide the proxy so console wouldn't display a recursive structure
+  Object.defineProperty(this, PROXY, { value: proxy });
   return proxy;
 }
 
@@ -245,7 +246,7 @@ const proxyHandlers = {
   },
   ownKeys(pointer) {
     const targetKeys = Object.getOwnPropertyNames(pointer[SLOTS][0]);
-    return [ ...targetKeys, SLOTS, ZIG, MEMORY, PROXY ];
+    return [ ...targetKeys, PROXY ];
   },
   getOwnPropertyDescriptor(pointer, name) {
     switch (name) {
