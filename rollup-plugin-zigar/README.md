@@ -66,3 +66,110 @@ By default, the plugin uses top-level await to wait for compilation of WASM bina
 
 There are two ways you can await WASM compilation when `topLevelAwait` is false. The first way is to await the `__init` promise that is exported by every Zig module. The second way is to use await on one of your own Zig functions. Prior to the completion of WASM compilation, every function will return a promise of its eventual result. You can therefore define your own async init function, that both waits for compilation process and set certain operational parameters at the same time.
 
+## Example app
+
+```js
+import { defineConfig } from 'vite'
+import React from '@vitejs/plugin-react-swc'
+import Zigar from 'rollup-plugin-zigar'; // <-- importing plugin
+
+export default defineConfig({
+  plugins: [
+    React(),
+    Zigar(), // <-- adding plugin
+  ],
+})
+```
+
+```js
+import { useState, useCallback } from 'react'
+import { sha1 } from './sha1.zig'; // <-- importing Zig function
+import './App.css'
+
+function App() {
+  const [ text, setText ] = useState('');
+  const [ hash, setHash ] = useState('');
+  const onChange = useCallback((evt) => {
+    const { value } = evt.target;
+    setText(value);
+    const hash = sha1(value);
+    setHash(hash.string);
+  }, []);
+
+  return (
+    <div className="App">
+      <textarea value={text} onChange={onChange} />
+      <div className="Hash">
+        SHA1: <input value={hash} readOnly={true} />
+      </div>
+    </div>
+  );
+}
+
+export default App
+```
+
+```zig
+const std = @import("std");
+
+pub fn sha1(bytes: []const u8) [std.crypto.hash.Sha1.digest_length * 2]u8 {
+    var digest: [std.crypto.hash.Sha1.digest_length]u8 = undefined;
+    std.crypto.hash.Sha1.hash(bytes, &digest, .{});
+    return std.fmt.bytesToHex(digest, .lower);
+}
+```
+
+```zig
+const std = @import("std");
+
+pub fn sha1(bytes: []const u8) [std.crypto.hash.Sha1.digest_length * 2]u8 {
+    var digest: [std.crypto.hash.Sha1.digest_length]u8 = undefined;
+    std.crypto.hash.Sha1.hash(bytes, &digest, .{});
+    return std.fmt.bytesToHex(digest, .upper); // <-- requesting uppercase letters
+}
+```
+
+```js
+import { defineConfig } from 'vite'
+import React from '@vitejs/plugin-react-swc'
+import Zigar from 'rollup-plugin-zigar';
+
+export default defineConfig({
+  plugins: [
+    React(),
+    Zigar({ topLevelAwait: false }), // <-- disabling top-level-await
+  ],
+})
+```
+
+```js
+import { useState, useCallback } from 'react'
+import { sha1 } from './sha1.zig';
+import './App.css'
+
+function App() {
+  const [ text, setText ] = useState('');
+  const [ hash, setHash ] = useState('');
+  const onChange = useCallback((evt) => {
+    const { value } = evt.target;
+    setText(value);
+    const hash = sha1(value);
+    if (hash instanceof Promise) {
+      hash.then(hash => setHash(hash.string));
+    } else {
+      setHash(hash.string);
+    }
+  }, []);
+
+  return (
+    <div className="App">
+      <textarea value={text} onChange={onChange} />
+      <div className="Hash">
+        SHA1: <input value={hash} readOnly={true} />
+      </div>
+    </div>
+  );
+}
+
+export default App
+```
