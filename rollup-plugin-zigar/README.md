@@ -1,7 +1,7 @@
 # rollup-plugin-zigar
 
 Rollup plugin that lets you use code written in [the Zig language](https://ziglang.org/) in a
-JavaScript project. 
+JavaScript project.
 
 ## Installation
 
@@ -9,9 +9,9 @@ JavaScript project.
 npm install rollup-plugin-zigar
 ```
 
-You must install the Zig compiler onto your computer separately. Follow the instructions outlined in 
-the official [Getting Started](https://ziglang.org/learn/getting-started/) guide. This library 
-assumes that the compiler is in the search path. 
+You must install the Zig compiler onto your computer separately. Follow the instructions outlined in
+the official [Getting Started](https://ziglang.org/learn/getting-started/) guide. This library
+assumes that the compiler is in the search path.
 
 ## Usage
 
