@@ -4,7 +4,7 @@ import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidInitializer, throwNoNewEnum } from './error.js';
-import { MEMORY, ENUM_INDEX, ENUM_ITEMS, ENUM_ITEM } from './symbol.js';
+import { MEMORY, ENUM_INDEX, ENUM_NAME, ENUM_ITEMS, ENUM_ITEM } from './symbol.js';
 
 export function finalizeEnumeration(s) {
   const {
@@ -96,6 +96,7 @@ export function finalizeEnumeration(s) {
     const item = Object.create(constructor.prototype);
     Object.defineProperties(item, {
       [ENUM_INDEX]: { value: index },
+      [ENUM_NAME]: { value: name },
     });
     Object.defineProperties(constructor, {
       [name]: { value: item, configurable: true, enumerable: true, writable: true },

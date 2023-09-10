@@ -299,25 +299,25 @@ printStruct({ number3: 77 });
 // print-struct-defaults.StructB{ .a = null, .number3 = 7.7e+01 }
 ```
 
-When a function returns a bare (or extern) union, only the active field can be accessed. An error 
+When a function returns a bare (or extern) union, only the active field can be accessed. An error
 would be thrown when runtime safety check is active:
 
 ```zig
 // bare-union-price.zig
-const Currency = enum { usd, eur, pln, mop };
+const Currency = enum { EUR, PLN, MOP, USD };
 const Price = union {
-    usd: i32,
-    eur: i32,
-    pln: i32,
-    mop: i32,  
+    USD: i32,
+    EUR: i32,
+    PLN: i32,
+    MOP: i32,
 };
 
 pub fn getPrice(currency: Currency, amount: i32) Price {
     return switch (currency) {
-        .usd => .{ .usd = amount },
-        .eur => .{ .eur = amount },
-        .pln => .{ .pln = amount },
-        .mop => .{ .mop = amount },
+        .USD => .{ .USD = amount },
+        .EUR => .{ .EUR = amount },
+        .PLN => .{ .PLN = amount },
+        .MOP => .{ .MOP = amount },
     };
 }
 ```
@@ -325,10 +325,10 @@ pub fn getPrice(currency: Currency, amount: i32) Price {
 // bare-union-price.js
 import { getPrice } from './bare-union-price.zig';
 
-const price = getPrice('usd', 123);
-console.log(`USD = ${price.usd}`);
+const price = getPrice('USD', 123);
+console.log(`USD = ${price.USD}`);
 try {
-  console.log(`PLN = ${price.pln}`);
+  console.log(`PLN = ${price.PLN}`);
 } catch (err) {
   console.error(err);
 }
@@ -336,7 +336,8 @@ console.log(Object.keys(price));
 
 // console output:
 // USD = 123
-// Accessing property pln when usd is active
+// TypeError: Accessing property pln when usd is active
+// [ 'USD', 'EUR', 'PLN', 'MOP' ]
 ```
 
 Tagged union, on the other hand, allows you to read from an inactive field:
@@ -348,7 +349,7 @@ const Price = union(Currency) {
     usd: i32,
     eur: i32,
     pln: i32,
-    mop: i32,  
+    mop: i32,
 };
 
 pub fn getPrice(currency: Currency, amount: i32) Price {
@@ -364,14 +365,14 @@ pub fn getPrice(currency: Currency, amount: i32) Price {
 // tagged-union-price.js
 import { getPrice } from './tagged-union-price.zig';
 
-const price = getPrice('usd', 123);
-console.log(`USD = ${price.usd}`);
-console.log(`PLN = ${price.pln}`);
+const price = getPrice('USD', 123);
+console.log(`USD = ${price.USD}`);
+console.log(`PLN = ${price.PLN}`);
 for (const [ key, value ] of Object.entries(price)) {
-  console.log(`${key.toUpperCase()} = ${value}`);
+  console.log(`${key} = ${value}`);
 }
 try {
-  price.pln = 500;
+  price.PLN = 500;
 } catch (err) {
   console.error(err);
 }
@@ -381,8 +382,14 @@ console.log(Object.keys(price));
 // USD = 123
 // PLN = null
 // USD = 123
-// Accessing property pln when usd is active
+// TypeError: Accessing property PLN when USD is active
+// [ 'USD' ]
 ```
+
+Note how a tagged union only returns the active key when `Object.keys()` is called on it, while a
+bare union returns all possible keys. This means it's possible to perform a spread operation
+(`{ ...object }`) on a tagged union whiledoing the same on a bare union would always cause an
+error to be thrown.
 
 Functions with pointer arguments can accept certain JavaScript objects directly. The mapping goes as
 follows:
@@ -400,7 +407,7 @@ follows:
 | `[]f32`, `*f32`  | `Float32Array`, `DataView`,                       |
 | `[]f64`, `*f64`  | `Float64Array`, `DataView`,                       |
 
-The following example exports a number of functions, each of which sets all elements of a slice to 
+The following example exports a number of functions, each of which sets all elements of a slice to
 a particular value:
 
 ```zig
@@ -538,8 +545,8 @@ hello(alphabet());
 // Hello, ABCDEFGHIJKLMNOPQRSTUVWXYZ!
 ```
 
-The usage above basically only make sense for const slices, where the slice pointer represents a 
-variable-length array and isn't being used to point to something. A warning will probably be 
+The usage above basically only make sense for const slices, where the slice pointer represents a
+variable-length array and isn't being used to point to something. A warning will probably be
 triggered in the future when a non-const pointer is initialized in this fashion.
 
 Single pointers do not work in the same way:

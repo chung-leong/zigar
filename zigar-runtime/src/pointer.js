@@ -185,8 +185,8 @@ function inFixedMemory(arg) {
 }
 
 function createProxy(isConst, isTargetPointer) {
-  const descriptors = (!isTargetPointer) ? (isConst) ? constProxyHandlers : proxyHandlers : {};
-  const proxy = new Proxy(this, descriptors);
+  const handlers = (!isTargetPointer) ? (isConst) ? constProxyHandlers : proxyHandlers : {};
+  const proxy = new Proxy(this, handlers);
   Object.defineProperty(this, PROXY, { value: proxy });
   return proxy;
 }

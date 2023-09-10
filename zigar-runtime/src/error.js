@@ -71,11 +71,8 @@ export function throwMultipleUnionInitializers(structure) {
   throw new TypeError(`Only one property of ${name} can be given a value`);
 }
 
-export function throwInactiveUnionProperty(structure, index, currentIndex) {
-  const { instance: { members } } = structure;
-  const { name: newName } = members[index];
-  const { name: oldName } = members[currentIndex];
-  throw new TypeError(`Accessing property ${newName} when ${oldName} is active`);
+export function throwInactiveUnionProperty(structure, name, currentName) {
+  throw new TypeError(`Accessing property ${name} when ${currentName} is active`);
 }
 
 export function throwMissingUnionInitializer(structure, arg, exclusion) {

@@ -81,6 +81,7 @@ describe('Union functions', function() {
       object.dog = 777;
       expect(object.dog).to.equal(777);
       expect(object.cat).to.equal(777);
+      expect(Object.keys(object)).to.eql([ 'dog', 'cat' ]);
     })
     it('should throw when no initializer is provided', function() {
       const structure = beginStructure({
@@ -120,6 +121,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'cat',
@@ -128,6 +130,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'selector',
@@ -150,7 +153,7 @@ describe('Union functions', function() {
       const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
       expect(object).to.be.an.instanceOf(Hello);
-      expect(Object.keys(object)).to.have.lengthOf(1);
+      expect(Object.keys(object)).to.have.lengthOf(2);
       expect(object.dog).to.equal(1234);
       expect(() => object.cat).to.throw(TypeError);
       expect(() => object.cat = 567).to.throw(TypeError);
@@ -160,6 +163,7 @@ describe('Union functions', function() {
       expect(object.cat).to.equal(567);
       expect(() => object.cat = 123).to.not.throw();
       expect(object.cat).to.equal(123);
+      expect(Object.keys(object)).to.eql([ 'dog', 'cat' ]);
     })
     it('should initialize a simple bare union', function() {
       const structure = beginStructure({
@@ -594,8 +598,36 @@ describe('Union functions', function() {
       expect(HelloType(object)).to.equal(HelloType.cat);
     })
     it('should only have a single enumerable property', function() {
+      const enumStructure = beginStructure({
+        type: StructureType.Enumeration,
+        name: 'HelloTag',
+      });
+      attachMember(enumStructure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      attachMember(enumStructure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      attachTemplate(enumStructure, {
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 100, true);
+          dv.setUint32(4, 200, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
+      });
+      const HelloType = finalizeStructure(enumStructure);
       const structure = beginStructure({
-        type: StructureType.BareUnion,
+        type: StructureType.TaggedUnion,
         name: 'Hello',
         size: 8,
       });
@@ -603,7 +635,6 @@ describe('Union functions', function() {
         name: 'dog',
         type: MemberType.Int,
         isSigned: true,
-        isRequired: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -613,7 +644,6 @@ describe('Union functions', function() {
         name: 'cat',
         type: MemberType.Int,
         isSigned: true,
-        isRequired: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -621,13 +651,15 @@ describe('Union functions', function() {
       });
       attachMember(structure, {
         name: 'selector',
-        type: MemberType.Int,
+        type: MemberType.EnumerationItem,
         isSigned: false,
-        bitSize: 16,
+        bitSize: 32,
         bitOffset: 32,
-        byteSize: 2,
+        byteSize: 4,
+        structure: enumStructure,
       });
       const Hello = finalizeStructure(structure);
+      debugger;
       const object = new Hello({ dog: 1234 });
       expect(object.dog).to.equal(1234);
       expect({ ...object }).to.eql({ dog: 1234 });
@@ -1006,7 +1038,7 @@ describe('Union functions', function() {
       expect(() => new Hello({ dog: 1234, cat: 4567 })).to.throw(TypeError);
       const object = new Hello({ dog: 1234 });
       expect(object.dog).to.equal(1234);
-      expect({ ...object }).to.eql({ dog: 1234 });
+      expect(() => { return { ...object } }).to.throw(TypeError);
     })
     it('should throw when an unknown initializer is encountered', function() {
       const structure = beginStructure({
@@ -1159,9 +1191,7 @@ describe('Union functions', function() {
       const Hello = finalizeStructure(structure);
       const object = new Hello({ dog: 1234 });
       object.$ = { cat: 4567 };
-      expect({ ...object }).to.eql({ cat: 4567 });
-      expect({ ...object }).to.eql({ cat: 4567 });
-      expect({ ...object.$ }).to.eql({ cat: 4567 });
+      expect(object.cat).to.equal(4567);
     })
   })
 })

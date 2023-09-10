@@ -14,7 +14,7 @@ import {
   throwInactiveUnionProperty,
   throwNoInitializer,
 } from './error.js';
-import { MEMORY, ENUM_INDEX, ENUM_ITEM, CLEAR_PREVIOUS, SLOTS } from './symbol.js';
+import { MEMORY, ENUM_NAME, ENUM_ITEM, CURRENT_NAME, CLEAR_PREVIOUS, SLOTS } from './symbol.js';
 
 export function finalizeUnion(s) {
   const {
@@ -32,76 +32,74 @@ export function finalizeUnion(s) {
   } = options;
   const descriptors = {};
   let getEnumItem;
-  let showDefault;
   let valueMembers;
-  const exclusion = (type === StructureType.TaggedUnion || (type === StructureType.BareUnion && runtimeSafety));
+  const isTagged = (type === StructureType.TaggedUnion);
+  const exclusion = (isTagged || (type === StructureType.BareUnion && runtimeSafety));
   if (exclusion) {
+    valueMembers = members.slice(0, -1);
     const selectorMember = members[members.length - 1];
     const { get: getSelector, set: setSelector } = getAccessors(selectorMember, options);
-    let getIndex, setIndex;
+    let getName, setName;
     if (type === StructureType.TaggedUnion) {
-      // rely on the enumeration constructor to translate the enum values into indices
       const { structure: { constructor } } = selectorMember;
       getEnumItem = getSelector;
-      getIndex = function() {
+      getName = function() {
         const item = getSelector.call(this);
-        return item[ENUM_INDEX];
+        return item[ENUM_NAME];
       };
-      setIndex = function(index) {
-        setSelector.call(this, constructor(index));
+      setName = function(name) {
+        setSelector.call(this, constructor[name]);
       };
     } else {
-      getIndex = getSelector;
-      setIndex = setSelector;
+      const names = valueMembers.map(m => m.name);
+      getName = function() {
+        const index = getSelector.call(this);
+        return names[index];
+      };
+      setName = function(name) {
+        const index = names.indexOf(name);
+        setSelector.call(this, index);
+      };
     }
-    showDefault = function() {
-      const index = getIndex.call(this);
-      const { name } = members[index];
-      Object.defineProperty(this, name, { enumerable: true });
-    };
-    valueMembers = members.slice(0, -1);
-    for (const [ index, member ] of valueMembers.entries()) {
+    for (const member of valueMembers) {
+      const { name, slot, structure: { pointerResetter } } = member;
       const { get: getValue, set: setValue } = getAccessors(member, options);
-      const isTagged = (type === StructureType.TaggedUnion);
+      const update = (isTagged) ? function(name) {
+        if (this[CURRENT_NAME] !== name) {
+          this[CLEAR_PREVIOUS]?.();
+          this[CURRENT_NAME] = name;
+          this[CLEAR_PREVIOUS] = (pointerResetter) ? () => {
+            const object = this[SLOTS][slot];
+            pointerResetter.call(object);
+          } : null;
+        }
+      } : null;
       const get = function() {
-        const currentIndex = getIndex.call(this);
-        if (index !== currentIndex) {
+        const currentName = getName.call(this);
+        if (name !== currentName) {
           if (isTagged) {
             return null;
           } else {
-            throwInactiveUnionProperty(s, index, currentIndex);
+            throwInactiveUnionProperty(s, name, currentName);
           }
         }
+        update?.call(this, name);
         return getValue.call(this);
       };
       const set = function(value) {
-        const currentIndex = getIndex.call(this);
-        if (index !== currentIndex) {
-          throwInactiveUnionProperty(s, index, currentIndex);
+        const currentName = getName.call(this);
+        if (name !== currentName) {
+          throwInactiveUnionProperty(s, name, currentName);
         }
         setValue.call(this, value);
-      };
-      const show = function() {
-        const { name, slot, structure: { pointerResetter } } = member;
-        const clear = () => {
-          Object.defineProperty(this, name, { enumerable: false });
-          if (pointerResetter) {
-            const object = this[SLOTS][slot];
-            pointerResetter.call(object);
-          }
-        };
-        Object.defineProperties(this, {
-          [name]: { enumerable: true },
-          [CLEAR_PREVIOUS]: { value: clear, configurable: true },
-        });
+        update?.call(this, name);
       };
       const init = function(value) {
-        this[CLEAR_PREVIOUS]?.call();
-        setIndex.call(this, index);
+        setName.call(this, name);
         setValue.call(this, value);
-        show.call(this);
+        update?.call(this, name);
       };
-      descriptors[member.name] = { get, set, init, configurable: true };
+      descriptors[member.name] = { get, set, init, configurable: true, enumerable: true };
     }
   } else {
     // extern union
@@ -112,7 +110,9 @@ export function finalizeUnion(s) {
     }
   }
   const objectMembers = members.filter(m => m.type === MemberType.Object);
-  const hasInaccessiblePointer = !hasPointer && !!objectMembers.find(m => m.structure.hasPointer);
+  const pointerMembers = objectMembers.filter(m => m.structure.hasPointer);
+  //
+  const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -138,8 +138,11 @@ export function finalizeUnion(s) {
     }
     if (creating) {
       initializer.call(self, arg);
+    }
+    if (isTagged) {
+      return new Proxy(self, taggedProxyHandlers);
     } else {
-      return self;
+      return (creating) ? undefined : self;
     }
   };
   const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
@@ -188,9 +191,6 @@ export function finalizeUnion(s) {
               pointerCopier.call(this, template);
             }
           }
-          if (showDefault) {
-            showDefault.call(this);
-          }
         } else {
           for (const key of keys) {
             const { init } = descriptors[key];
@@ -206,10 +206,12 @@ export function finalizeUnion(s) {
   const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
   const pointerResetter = s.pointerResetter = getPointerResetter(objectMembers);
   const pointerDisabler = getPointerDisabler(objectMembers);
-  if (type === StructureType.TaggedUnion) {
+  if (isTagged) {
     // enable casting to enum
     Object.defineProperties(constructor.prototype, {
       [ENUM_ITEM]: { get: getEnumItem, configurable: true },
+      [CURRENT_NAME]: { value: '', configurable: true, writable: true },
+      [CLEAR_PREVIOUS]: { value: null, configurable: true, writable: true },
     });
   }
   Object.defineProperties(constructor.prototype, {
@@ -219,4 +221,12 @@ export function finalizeUnion(s) {
   addStaticMembers(s);
   addMethods(s);
   return constructor;
+};
+
+const taggedProxyHandlers = {
+  ownKeys(union) {
+    const item = union[ENUM_ITEM];
+    const name = item[ENUM_NAME];
+    return [ name, MEMORY ];
+  },
 };

@@ -1,14 +1,14 @@
 // tagged-union-price.js
 import { getPrice } from './tagged-union-price.zig';
 
-const price = getPrice('usd', 123);
-console.log(`USD = ${price.usd}`);
-console.log(`PLN = ${price.pln}`);
+const price = getPrice('USD', 123);
+console.log(`USD = ${price.USD}`);
+console.log(`PLN = ${price.PLN}`);
 for (const [ key, value ] of Object.entries(price)) {
-  console.log(`${key.toUpperCase()} = ${value}`);
+  console.log(`${key} = ${value}`);
 }
 try {
-  price.pln = 500;
+  price.PLN = 500;
 } catch (err) {
   console.error(err);
 }
@@ -18,4 +18,5 @@ console.log(Object.keys(price));
 // USD = 123
 // PLN = null
 // USD = 123
-// Accessing property pln when usd is active
+// TypeError: Accessing property PLN when USD is active
+// [ 'USD' ]

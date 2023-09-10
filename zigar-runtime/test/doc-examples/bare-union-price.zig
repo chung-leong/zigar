@@ -1,17 +1,17 @@
 // bare-union-price.zig
-const Currency = enum { usd, eur, pln, mop };
+const Currency = enum { EUR, PLN, MOP, USD };
 const Price = union {
-    usd: i32,
-    eur: i32,
-    pln: i32,
-    mop: i32,
+    USD: i32,
+    EUR: i32,
+    PLN: i32,
+    MOP: i32,
 };
 
 pub fn getPrice(currency: Currency, amount: i32) Price {
     return switch (currency) {
-        .usd => .{ .usd = amount },
-        .eur => .{ .eur = amount },
-        .pln => .{ .pln = amount },
-        .mop => .{ .mop = amount },
+        .USD => .{ .USD = amount },
+        .EUR => .{ .EUR = amount },
+        .PLN => .{ .PLN = amount },
+        .MOP => .{ .MOP = amount },
     };
 }
