@@ -13,25 +13,24 @@ export function addSpecialAccessors(s) {
     },
     sentinel,
   } = s;
-  const dvAccessors = getDataViewAccessors(s);
-  const base64Acccessors = getBase64Accessors();
-  const descriptors = {
-    dataView: { ...dvAccessors, configurable: true },
-    base64: { ...base64Acccessors, configurable: true },
+  Object.defineProperties(constructor.prototype, {
+    dataView: { ...getDataViewAccessors(s), configurable: true },
+    base64: { ...getBase64Accessors(), configurable: true },
     toJSON: { value: getValueOf, configurable: true, writable: true },
     valueOf: { value: getValueOf, configurable: true, writable: true },
-  };
+  });
   if (canBeString(s)) {
     const { byteSize } = s.instance.members[0];
-    const strAccessors = getStringAccessors(byteSize, sentinel?.value);
-    descriptors.string = { ...strAccessors, configurable: true };
+    Object.defineProperty(constructor.prototype, 'string', {
+      ...getStringAccessors(byteSize, sentinel?.value), configurable: true
+    });
   }
   if (canBeTypedArray(s)) {
     const { byteSize } = s.instance.members[0];
-    const taAccessors = getTypedArrayAccessors(s.typedArray, byteSize);
-    descriptors.typedArray = { ...taAccessors, configurable: true };
+    Object.defineProperty(constructor.prototype, 'typedArray', {
+      ...getTypedArrayAccessors(s.typedArray, byteSize), configurable: true
+    });
   }
-  Object.defineProperties(constructor.prototype, descriptors);
 }
 
 function canBeString(s) {

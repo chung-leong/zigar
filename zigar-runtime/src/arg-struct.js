@@ -10,19 +10,13 @@ export function finalizeArgStruct(s) {
     },
     options,
   } = s;
-  const descriptors = {};
-  for (const member of members) {
-    descriptors[member.name] = getAccessors(member, options);
-  }
   const objectMembers = members.filter(m => m.type === MemberType.Object);
   const { slot: retvalSlot } = members[members.length - 1];
     const constructor = s.constructor = function(args) {
     const dv = new DataView(new ArrayBuffer(size));
-    Object.defineProperties(this, {
-      [MEMORY]: { value: dv },
-    });
+    this[MEMORY] = dv;
     if (objectMembers.length > 0) {
-      const slots = {};
+      const slots = this[SLOTS] = {};
       const parentOffset = dv.byteOffset;
       for (const { structure: { constructor }, bitOffset, byteSize, slot } of objectMembers) {
         const offset = parentOffset + (bitOffset >> 3);
@@ -31,9 +25,6 @@ export function finalizeArgStruct(s) {
         const recv = (slot === retvalSlot) ? ZIG : PARENT;
         slots[slot] = constructor.call(recv, childDV);
       }
-      Object.defineProperties(this, {
-        [SLOTS]: { value: slots },
-      });
     }
     initializer.call(this, args);
   };
@@ -51,7 +42,9 @@ export function finalizeArgStruct(s) {
       }
     }
   };
-
-  Object.defineProperties(constructor.prototype, descriptors);
+  for (const member of members) {
+    const accessors = getAccessors(member, options);
+    Object.defineProperty(constructor.prototype, member.name, accessors);
+  }
   return constructor;
 };

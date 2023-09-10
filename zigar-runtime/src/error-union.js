@@ -27,9 +27,7 @@ export function finalizeErrorUnion(s) {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
     }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true , writable: true },
-    });
+    self[MEMORY] = dv;
     if (objectMembers.length > 0) {
       createChildObjects.call(self, objectMembers, this, dv);
     }
@@ -56,9 +54,7 @@ export function finalizeErrorUnion(s) {
   const pointerResetter = s.pointerResetter = getPointerResetter(objectMembers);
   const pointerDisabler = s.pointerDisabler = getPointerDisabler(objectMembers);
   const { get, set, check } = getErrorUnionAccessors(members, size, options);
-  Object.defineProperties(constructor.prototype, {
-    $: { get, set, configurable: true },
-  });
+  Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
   addSpecialAccessors(s);
   return constructor;
 }
@@ -91,7 +87,7 @@ export function getErrorUnionAccessors(members, size, options) {
           throwNotInErrorSet(errorStructure);
         }
         reset(this[MEMORY]);
-        setError.call(this, Number(value));
+        setError.call(this, value.index);
         if (pointerResetter) {
           pointerResetter.call(this[SLOTS][0]);
         }

@@ -26,9 +26,7 @@ export function finalizeOptional(s) {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
     }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true, writable: true },
-    });
+    self[MEMORY] = dv;
     if (objectMembers.length > 0) {
       createChildObjects.call(self, objectMembers, this, dv);
     }
@@ -58,9 +56,7 @@ export function finalizeOptional(s) {
   const pointerResetter = s.pointerResetter = getPointerResetter(objectMembers);
   const pointerDisabler = s.pointerDisabler = getPointerDisabler(objectMembers);
   const { get, set, check } = getOptionalAccessors(members, size, options);
-  Object.defineProperties(constructor.prototype, {
-    $: { get, set, configurable: true },
-  });
+  Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
   addSpecialAccessors(s);
   return constructor;
 }

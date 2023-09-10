@@ -75,12 +75,9 @@ export function finalizePointer(s) {
         }
       }
     }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true, writable: true },
-      [SLOTS]: { value: { 0: null } },
-      // a boolean value indicating whether Zig currently owns the pointer
-      [ZIG]: { value: calledFromZig, writable: true },
-    });
+    self[MEMORY] = dv;
+    self[SLOTS] = { value: { 0: null } };
+    self[ZIG] = calledFromZig;
     if (creating) {
       initializer.call(self, arg);
     }
@@ -149,8 +146,10 @@ export function finalizePointer(s) {
     this[SLOTS][0] = null;
   };
   const pointerDisabler = s.pointerDisabler = function() {
-    Object.defineProperties(this[SLOTS], {
-      0: { get: throwInaccessiblePointer, set: throwInaccessiblePointer, configurable: true },
+    Object.defineProperty(this[SLOTS], 0, {
+      get: throwInaccessiblePointer,
+      set: throwInaccessiblePointer,
+      configurable: true
     });
   };
   const getTargetValue = function() {
@@ -187,7 +186,7 @@ function inFixedMemory(arg) {
 function createProxy(isConst, isTargetPointer) {
   const handlers = (!isTargetPointer) ? (isConst) ? constProxyHandlers : proxyHandlers : {};
   const proxy = new Proxy(this, handlers);
-  Object.defineProperty(this, PROXY, { value: proxy });
+  this[PROXY] = proxy;
   return proxy;
 }
 

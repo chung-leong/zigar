@@ -657,13 +657,13 @@ describe('Struct functions', function() {
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({});
-      expect({ ...object }).to.eql({ dog: 1234, cat: 4567 });
+      expect(object.valueOf()).to.eql({ dog: 1234, cat: 4567 });
       object.dog = 777;
-      expect({ ...object }).to.eql({ dog: 777, cat: 4567 });
+      expect(object.valueOf()).to.eql({ dog: 777, cat: 4567 });
       object.$ = { cat: 999 };
-      expect({ ...object }).to.eql({ dog: 1234, cat: 999 });
+      expect(object.valueOf()).to.eql({ dog: 1234, cat: 999 });
       object.$ = {};
-      expect({ ...object.$ }).to.eql({ dog: 1234, cat: 4567 });
+      expect(object.valueOf()).to.eql({ dog: 1234, cat: 4567 });
     })
     it('should define a struct that contains another struct', function() {
       const structureA = beginStructure({

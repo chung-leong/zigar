@@ -729,9 +729,8 @@ describe('Array functions', function() {
       dv.setInt32(0, 1234, true);
       dv.setInt32(4, 4567, true);
       const array = HelloArray(dv);
-      expect({ ...array[0] }).to.eql({ dog: 1234, cat: 4567 });
+      expect(array[0].valueOf()).to.eql({ dog: 1234, cat: 4567 });
     })
-
     it('should allow reinitialization through the dollar property', function() {
       const structure = beginStructure({
         type: StructureType.Array,

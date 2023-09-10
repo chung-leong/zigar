@@ -14,7 +14,7 @@ import {
   throwInactiveUnionProperty,
   throwNoInitializer,
 } from './error.js';
-import { MEMORY, ENUM_NAME, ENUM_ITEM, CURRENT_NAME, CLEAR_PREVIOUS, SLOTS } from './symbol.js';
+import { MEMORY, ENUM_NAME, ENUM_ITEM, TAG, SLOTS } from './symbol.js';
 
 export function finalizeUnion(s) {
   const {
@@ -65,17 +65,20 @@ export function finalizeUnion(s) {
       const { name, slot, structure: { pointerResetter } } = member;
       const { get: getValue, set: setValue } = getAccessors(member, options);
       const update = (isTagged) ? function(name) {
-        if (this[CURRENT_NAME] !== name) {
-          this[CLEAR_PREVIOUS]?.();
-          this[CURRENT_NAME] = name;
-          this[CLEAR_PREVIOUS] = (pointerResetter) ? () => {
-            const object = this[SLOTS][slot];
-            pointerResetter.call(object);
-          } : null;
+        if (this[TAG]?.name !== name) {
+          this[TAG]?.clear?.();
+          this[TAG] = { name };
+          if (pointerResetter) {
+            this[TAG].clear = () => {
+              const object = this[SLOTS][slot];
+              pointerResetter.call(object);
+            };
+          }
         }
       } : null;
       const get = function() {
         const currentName = getName.call(this);
+        update?.call(this, currentName);
         if (name !== currentName) {
           if (isTagged) {
             return null;
@@ -83,23 +86,22 @@ export function finalizeUnion(s) {
             throwInactiveUnionProperty(s, name, currentName);
           }
         }
-        update?.call(this, name);
         return getValue.call(this);
       };
       const set = function(value) {
         const currentName = getName.call(this);
+        update?.call(this, currentName);
         if (name !== currentName) {
           throwInactiveUnionProperty(s, name, currentName);
         }
         setValue.call(this, value);
-        update?.call(this, name);
       };
       const init = function(value) {
         setName.call(this, name);
         setValue.call(this, value);
         update?.call(this, name);
       };
-      descriptors[member.name] = { get, set, init, configurable: true, enumerable: true };
+      descriptors[member.name] = { get, set, init, update, configurable: true, enumerable: true };
     }
   } else {
     // extern union
@@ -126,9 +128,11 @@ export function finalizeUnion(s) {
       self = Object.create(constructor.prototype);
       dv = getDataView(s, arg);
     }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true, writable: true },
-    });
+    self[MEMORY] = dv;
+    if (isTagged) {
+      // don't know the TAG property in the console, since it's not always up-to-date
+      Object.defineProperties(self, TAG, { value: null, writable: true });
+    }
     Object.defineProperties(self, descriptors);
     if (objectMembers.length > 0) {
       createChildObjects.call(self, objectMembers, this, dv);
@@ -208,15 +212,9 @@ export function finalizeUnion(s) {
   const pointerDisabler = getPointerDisabler(objectMembers);
   if (isTagged) {
     // enable casting to enum
-    Object.defineProperties(constructor.prototype, {
-      [ENUM_ITEM]: { get: getEnumItem, configurable: true },
-      [CURRENT_NAME]: { value: '', configurable: true, writable: true },
-      [CLEAR_PREVIOUS]: { value: null, configurable: true, writable: true },
-    });
+    Object.defineProperty(constructor.prototype, ENUM_ITEM, { get: getEnumItem, configurable: true });
   }
-  Object.defineProperties(constructor.prototype, {
-    $: { get: retriever, set: initializer, configurable: true },
-  });
+  Object.defineProperty(constructor.prototype, '$', { get: retriever, set: initializer, configurable: true }),
   addSpecialAccessors(s);
   addStaticMembers(s);
   addMethods(s);

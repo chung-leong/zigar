@@ -120,7 +120,7 @@ describe('ArgStruct functions', function() {
       });
       const ArgStruct = finalizeStructure(structure);
       const object = new ArgStruct([ { dog: 1234, cat: 4567 }, 789 ]);
-      expect({ ...object.pet }).to.eql({ dog: 1234, cat: 4567 });
+      expect(object.pet.valueOf()).to.eql({ dog: 1234, cat: 4567 });
     })
     it('should throw when initialized with the wrong number of arguments', function() {
       const structure = beginStructure({

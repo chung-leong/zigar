@@ -315,7 +315,7 @@ describe('Error functions', function() {
           ]
         }
       };
-      expect(() => throwInactiveUnionProperty(structure, 0, 1)).to.throw(TypeError)
+      expect(() => throwInactiveUnionProperty(structure, 'cat', 'dog')).to.throw(TypeError)
         .with.property('message').that.contains('cat');
     })
   })

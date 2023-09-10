@@ -662,7 +662,7 @@ describe('Union functions', function() {
       debugger;
       const object = new Hello({ dog: 1234 });
       expect(object.dog).to.equal(1234);
-      expect({ ...object }).to.eql({ dog: 1234 });
+      expect(object.valueOf()).to.eql({ dog: 1234 });
     })
     it('should define a tagged union containing a pointer', function() {
       const intStructure = beginStructure({

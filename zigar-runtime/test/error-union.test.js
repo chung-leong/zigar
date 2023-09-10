@@ -132,7 +132,7 @@ describe('Error union functions', function() {
       const SomeError = finalizeStructure(setStructure);
       const structStructure = beginStructure({
         type: StructureType.Struct,
-        name: 'Aniaml',
+        name: 'Animal',
         size: 8,
       });
       attachMember(structStructure, {
@@ -151,10 +151,10 @@ describe('Error union functions', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      const Aniaml = finalizeStructure(structStructure);
+      const Animal = finalizeStructure(structStructure);
       const structure = beginStructure({
         type: StructureType.ErrorUnion,
-        name: 'Hello',
+        name: '!Animal',
         size: 10,
       });
       attachMember(structure, {
@@ -176,7 +176,8 @@ describe('Error union functions', function() {
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({ dog: 17, cat: 234 });
-      expect({ ...object.$ }).to.be.an('object');
+      expect(object).to.be.an('!Animal');
+      expect(object.$).to.be.an('Animal');
       object.$ = SomeError.UnableToCreateObject;
       expect(() => object.$).to.throw(SomeError)
         .with.property('message').that.equal('Unable to create object');
@@ -575,7 +576,7 @@ describe('Error union functions', function() {
       let errorNumber;
       const DummyErrorSet = function(arg) {
         if (this instanceof DummyErrorSet) {
-          this[Symbol.toPrimitive] = () => arg;
+          this.index = arg;
         } else {
           errorNumber = arg;
           return dummyError;
@@ -616,7 +617,7 @@ describe('Error union functions', function() {
       let errorNumber;
       const DummyErrorSet = function(arg) {
         if (this instanceof DummyErrorSet) {
-          this[Symbol.toPrimitive] = () => arg;
+          this.index = arg;
         } else {
           errorNumber = arg;
           return dummyError;
@@ -664,7 +665,7 @@ describe('Error union functions', function() {
     it('should return a function for setting int or error', function() {
       const DummyErrorSet = function(arg) {
         if (this instanceof DummyErrorSet) {
-          this[Symbol.toPrimitive] = () => arg;
+          this.index = arg;
         } else {
           return dummyError;
         }
@@ -706,14 +707,13 @@ describe('Error union functions', function() {
     it('should return a function for setting object or error', function() {
       const DummyErrorSet = function(arg) {
         if (this instanceof DummyErrorSet) {
-          this[Symbol.toPrimitive] = () => arg;
+          this.index = arg;
         } else {
           return dummyError;
         }
       };
       Object.setPrototypeOf(DummyErrorSet.prototype, Error.prototype);
       const dummyError = new DummyErrorSet(18);
-      dummyError[Symbol.toPrimitive] = () => 18;
       const DummyClass = function(value) {
         this.value = value;
       };

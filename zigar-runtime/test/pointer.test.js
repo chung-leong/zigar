@@ -553,9 +553,9 @@ describe('Pointer functions', function() {
       const HelloPtr = finalizeStructure(structure);
       const pointer = new HelloPtr([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
       expect(pointer['*']).to.be.instanceOf(HelloSlice);
-      expect({ ...pointer[0] }).to.eql({ cat: 123, dog: 456 });
-      expect({ ...pointer[1] }).to.eql({ cat: 1230, dog: 4560 });
-      expect({ ...pointer[2] }).to.eql({ cat: 12300, dog: 45600 });
+      expect(pointer[0].valueOf()).to.eql({ cat: 123, dog: 456 });
+      expect(pointer[1].valueOf()).to.eql({ cat: 1230, dog: 4560 });
+      expect(pointer[2].valueOf()).to.eql({ cat: 12300, dog: 45600 });
     })
     it('should automatically cast to slice from typed array', function() {
       const intStructure = beginStructure({
@@ -949,14 +949,14 @@ describe('Pointer functions', function() {
       expect(() => new HelloPtr(buffer)).to.throw(TypeError);
       const pointer = HelloPtr(buffer);
       expect(pointer['*']).to.be.instanceOf(HelloSlice);
-      expect({ ...pointer[0] }).to.eql({ cat: 123, dog: 456 });
-      expect({ ...pointer[1] }).to.eql({ cat: 1230, dog: 4560 });
-      expect({ ...pointer[2] }).to.eql({ cat: 12300, dog: 45600 });
+      expect(pointer[0].valueOf()).to.eql({ cat: 123, dog: 456 });
+      expect(pointer[1].valueOf()).to.eql({ cat: 1230, dog: 4560 });
+      expect(pointer[2].valueOf()).to.eql({ cat: 12300, dog: 45600 });
       const pointer2 = new HelloPtr(HelloPtr.child(buffer));
       expect(pointer2['*']).to.be.instanceOf(HelloSlice);
-      expect({ ...pointer2[0] }).to.eql({ cat: 123, dog: 456 });
-      expect({ ...pointer2[1] }).to.eql({ cat: 1230, dog: 4560 });
-      expect({ ...pointer2[2] }).to.eql({ cat: 12300, dog: 45600 });
+      expect(pointer2[0].valueOf()).to.eql({ cat: 123, dog: 456 });
+      expect(pointer2[1].valueOf()).to.eql({ cat: 1230, dog: 4560 });
+      expect(pointer2[2].valueOf()).to.eql({ cat: 12300, dog: 45600 });
     })
     it('should automatically convert non-const pointer to const pointer', function() {
       const uintStructure = beginStructure({

@@ -37,11 +37,9 @@ export function finalizeArray(s) {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
     }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true, writable: true },
-      [GETTER]: { value: null, configurable: true, writable: true },
-      [SETTER]: { value: null, configurable: true, writable: true },
-    });
+    self[MEMORY] = dv;
+    self[GETTER] = null;
+    self[SETTER] = null;
     if (objectMember) {
       createChildObjects.call(self, objectMember, this);
     }
@@ -121,13 +119,7 @@ export function finalizeArray(s) {
 
 export function createChildObjects(member, recv) {
   const dv = this[MEMORY];
-  let slots = this[SLOTS];
-  if (!slots) {
-    slots = {};
-    Object.defineProperties(this, {
-      [SLOTS]: { value: slots, configurable: true, writable: true },
-    });
-  }
+  const slots = this[SLOTS] = {};
   const { structure: { constructor }, byteSize: elementSize } = member;
   if (recv !== ZIG) {
     recv = PARENT;

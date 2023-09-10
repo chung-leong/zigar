@@ -7,7 +7,7 @@ const ENUM_INDEX = Symbol('enumIndex');
 const ENUM_ITEMS = Symbol('enumItems');
 const ERROR_INDEX = Symbol('errorIndex');
 const ENUM_ITEM = Symbol('enumItem');
-const CLEAR_PREVIOUS = Symbol('hidePrevious');
+const TAG = Symbol('TAG');
 const GETTER = Symbol('getter');
 const SETTER = Symbol('setter');
 const LENGTH = Symbol('length');
@@ -1521,25 +1521,24 @@ function addSpecialAccessors(s) {
     },
     sentinel,
   } = s;
-  const dvAccessors = getDataViewAccessors(s);
-  const base64Acccessors = getBase64Accessors();
-  const descriptors = {
-    dataView: { ...dvAccessors, configurable: true },
-    base64: { ...base64Acccessors, configurable: true },
+  Object.defineProperties(constructor.prototype, {
+    dataView: { ...getDataViewAccessors(s), configurable: true },
+    base64: { ...getBase64Accessors(), configurable: true },
     toJSON: { value: getValueOf, configurable: true, writable: true },
     valueOf: { value: getValueOf, configurable: true, writable: true },
-  };
+  });
   if (canBeString(s)) {
     const { byteSize } = s.instance.members[0];
-    const strAccessors = getStringAccessors(byteSize, sentinel?.value);
-    descriptors.string = { ...strAccessors, configurable: true };
+    Object.defineProperty(constructor.prototype, 'string', {
+      ...getStringAccessors(byteSize, sentinel?.value), configurable: true
+    });
   }
   if (canBeTypedArray(s)) {
     const { byteSize } = s.instance.members[0];
-    const taAccessors = getTypedArrayAccessors(s.typedArray, byteSize);
-    descriptors.typedArray = { ...taAccessors, configurable: true };
+    Object.defineProperty(constructor.prototype, 'typedArray', {
+      ...getTypedArrayAccessors(s.typedArray, byteSize), configurable: true
+    });
   }
-  Object.defineProperties(constructor.prototype, descriptors);
 }
 
 function canBeString(s) {
@@ -1734,9 +1733,7 @@ function finalizePrimitive(s) {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
     }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true, writable: true },
-    });
+    self[MEMORY] = dv;
     if (creating) {
       initializer.call(self, arg);
     } else {
@@ -1776,9 +1773,7 @@ function finalizePrimitive(s) {
     $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
   });
-  Object.defineProperties(constructor, {
-    [COMPAT]: { value: getCompatibleTags(s) },
-  });
+  Object.defineProperty(constructor, COMPAT, { value: getCompatibleTags(s) });
   addSpecialAccessors(s);
   return constructor;
 }
@@ -1839,11 +1834,9 @@ function finalizeArray(s) {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
     }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true, writable: true },
-      [GETTER]: { value: null, configurable: true, writable: true },
-      [SETTER]: { value: null, configurable: true, writable: true },
-    });
+    self[MEMORY] = dv;
+    self[GETTER] = null;
+    self[SETTER] = null;
     if (objectMember) {
       createChildObjects$1.call(self, objectMember, this);
     }
@@ -1923,13 +1916,7 @@ function finalizeArray(s) {
 
 function createChildObjects$1(member, recv) {
   const dv = this[MEMORY];
-  let slots = this[SLOTS];
-  if (!slots) {
-    slots = {};
-    Object.defineProperties(this, {
-      [SLOTS]: { value: slots, configurable: true, writable: true },
-    });
-  }
+  const slots = this[SLOTS] = {};
   const { structure: { constructor }, byteSize: elementSize } = member;
   if (recv !== ZIG) {
     recv = PARENT;
@@ -2115,9 +2102,8 @@ function addStaticMembers(s) {
     },
     options,
   } = s;
-  const descriptors = {};
   if (template) {
-    descriptors[SLOTS] = { value: template[SLOTS] };
+    constructor[SLOTS] = template[SLOTS];
   }
   for (const member of members) {
     // static members are either Pointer or Type
@@ -2134,8 +2120,8 @@ function addStaticMembers(s) {
         ptr['*'] = value;
       };
     }
-    descriptors[member.name] = { get, set, configurable: true, enumerable: true };
-  }  Object.defineProperties(constructor, descriptors);
+    Object.defineProperty(constructor, member.name, { get, set, configurable: true, enumerable: true });
+  }
 }
 
 function addMethods(s) {
@@ -2155,12 +2141,8 @@ function addMethods(s) {
       const a = new constructor(args);
       return invokeThunk(thunk, a);
     };
-    Object.defineProperties(f, {
-      name: { value: name, writable: false },
-    });
-    Object.defineProperties(constructor, {
-      [name]: { value: f, configurable: true, enumerable: true, writable: true },
-    });
+    Object.defineProperty(f, 'name', { value: name, writable: false });
+    Object.defineProperty(constructor, name, { value: f, configurable: true, writable: true });
   }
   for (const method of instanceMembers) {
     const {
@@ -2173,12 +2155,8 @@ function addMethods(s) {
       const a = new constructor([ this, ...args ]);
       return invokeThunk(thunk, a);
     };
-    Object.defineProperties(f, {
-      name: { value: name, writable: false },
-    });
-    Object.defineProperties(constructor.prototype, {
-      [name]: { value: f, configurable: true, writable: true },
-    });
+    Object.defineProperty(f, 'name', { value: name, writable: false });
+    Object.defineProperty(Object.prototype, name, { value: f, configurable: true, writable: true });
   }
 }
 
@@ -2228,10 +2206,8 @@ function finalizeStruct(s) {
       self = Object.create(constructor.prototype);
       dv = getDataView(s, arg);
     }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true, writable: true },
-      ...descriptors
-    });
+    self[MEMORY] = dv;
+    Object.defineProperties(self, descriptors);
     if (objectMembers.length > 0) {
       createChildObjects.call(self, objectMembers, this, dv);
     }
@@ -2298,9 +2274,7 @@ function finalizeStruct(s) {
   s.pointerDisabler = (hasPointer) ? getPointerDisabler(objectMembers) : null;
   if ((constructible)) {
     const retriever = function() { return this };
-    Object.defineProperties(constructor.prototype, {
-      $: { get: retriever, set: initializer, configurable: true },
-    });
+    Object.defineProperty(constructor.prototype, '$', { get: retriever, set: initializer, configurable: true });
     addSpecialAccessors(s);
   }
   addStaticMembers(s);
@@ -2371,7 +2345,6 @@ function finalizeUnion(s) {
   } = options;
   const descriptors = {};
   let getEnumItem;
-  let showDefault;
   let valueMembers;
   const isTagged = (type === StructureType.TaggedUnion);
   const exclusion = (isTagged || (type === StructureType.BareUnion && runtimeSafety));
@@ -2401,15 +2374,24 @@ function finalizeUnion(s) {
         setSelector.call(this, index);
       };
     }
-    showDefault = (isTagged) ? function() {
-      const name = getName.call(this);
-      Object.defineProperty(this, name, { enumerable: true });
-    } : null;
     for (const member of valueMembers) {
       const { name, slot, structure: { pointerResetter } } = member;
       const { get: getValue, set: setValue } = getAccessors(member, options);
+      const update = (isTagged) ? function(name) {
+        if (this[TAG]?.name !== name) {
+          this[TAG]?.clear?.();
+          this[TAG] = { name };
+          if (pointerResetter) {
+            this[TAG].clear = () => {
+              const object = this[SLOTS][slot];
+              pointerResetter.call(object);
+            };
+          }
+        }
+      } : null;
       const get = function() {
         const currentName = getName.call(this);
+        update?.call(this, currentName);
         if (name !== currentName) {
           if (isTagged) {
             return null;
@@ -2421,31 +2403,18 @@ function finalizeUnion(s) {
       };
       const set = function(value) {
         const currentName = getName.call(this);
+        update?.call(this, currentName);
         if (name !== currentName) {
           throwInactiveUnionProperty(s, name, currentName);
         }
         setValue.call(this, value);
       };
-      const show = (isTagged) ? function() {
-        const clear = () => {
-          Object.defineProperty(this, name, { enumerable: false });
-          if (pointerResetter) {
-            const object = this[SLOTS][slot];
-            pointerResetter.call(object);
-          }
-        };
-        Object.defineProperties(this, {
-          [name]: { enumerable: true },
-          [CLEAR_PREVIOUS]: { value: clear, configurable: true },
-        });
-      } : null;
       const init = function(value) {
-        this[CLEAR_PREVIOUS]?.call();
         setName.call(this, name);
         setValue.call(this, value);
-        show?.call(this);
+        update?.call(this, name);
       };
-      descriptors[member.name] = { get, set, init, configurable: true, enumerable: !isTagged };
+      descriptors[member.name] = { get, set, init, update, configurable: true, enumerable: true };
     }
   } else {
     // extern union
@@ -2456,7 +2425,9 @@ function finalizeUnion(s) {
     }
   }
   const objectMembers = members.filter(m => m.type === MemberType.Object);
-  const hasInaccessiblePointer = !hasPointer && !!objectMembers.find(m => m.structure.hasPointer);
+  const pointerMembers = objectMembers.filter(m => m.structure.hasPointer);
+  //
+  const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -2470,9 +2441,11 @@ function finalizeUnion(s) {
       self = Object.create(constructor.prototype);
       dv = getDataView(s, arg);
     }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true, writable: true },
-    });
+    self[MEMORY] = dv;
+    if (isTagged) {
+      // don't know the TAG property in the console, since it's not always up-to-date
+      Object.defineProperties(self, TAG, { value: null, writable: true });
+    }
     Object.defineProperties(self, descriptors);
     if (objectMembers.length > 0) {
       createChildObjects.call(self, objectMembers, this, dv);
@@ -2482,8 +2455,11 @@ function finalizeUnion(s) {
     }
     if (creating) {
       initializer.call(self, arg);
+    }
+    if (isTagged) {
+      return new Proxy(self, taggedProxyHandlers);
     } else {
-      return self;
+      return (creating) ? undefined : self;
     }
   };
   const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
@@ -2532,7 +2508,6 @@ function finalizeUnion(s) {
               pointerCopier.call(this, template);
             }
           }
-          showDefault?.call(this);
         } else {
           for (const key of keys) {
             const { init } = descriptors[key];
@@ -2548,20 +2523,23 @@ function finalizeUnion(s) {
   const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
   s.pointerResetter = getPointerResetter(objectMembers);
   const pointerDisabler = getPointerDisabler(objectMembers);
-  if (type === StructureType.TaggedUnion) {
+  if (isTagged) {
     // enable casting to enum
-    Object.defineProperties(constructor.prototype, {
-      [ENUM_ITEM]: { get: getEnumItem, configurable: true },
-    });
+    Object.defineProperty(constructor.prototype, ENUM_ITEM, { get: getEnumItem, configurable: true });
   }
-  Object.defineProperties(constructor.prototype, {
-    $: { get: retriever, set: initializer, configurable: true },
-  });
+  Object.defineProperty(constructor.prototype, '$', { get: retriever, set: initializer, configurable: true }),
   addSpecialAccessors(s);
   addStaticMembers(s);
   addMethods(s);
   return constructor;
 }
+const taggedProxyHandlers = {
+  ownKeys(union) {
+    const item = union[ENUM_ITEM];
+    const name = item[ENUM_NAME];
+    return [ name, MEMORY ];
+  },
+};
 
 function finalizeErrorUnion(s) {
   const {
@@ -2584,9 +2562,7 @@ function finalizeErrorUnion(s) {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
     }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true , writable: true },
-    });
+    self[MEMORY] = dv;
     if (objectMembers.length > 0) {
       createChildObjects.call(self, objectMembers, this, dv);
     }
@@ -2613,9 +2589,7 @@ function finalizeErrorUnion(s) {
   s.pointerResetter = getPointerResetter(objectMembers);
   s.pointerDisabler = getPointerDisabler(objectMembers);
   const { get, set, check } = getErrorUnionAccessors(members, size, options);
-  Object.defineProperties(constructor.prototype, {
-    $: { get, set, configurable: true },
-  });
+  Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
   addSpecialAccessors(s);
   return constructor;
 }
@@ -2648,7 +2622,7 @@ function getErrorUnionAccessors(members, size, options) {
           throwNotInErrorSet(errorStructure);
         }
         reset(this[MEMORY]);
-        setError.call(this, Number(value));
+        setError.call(this, value.index);
         if (pointerResetter) {
           pointerResetter.call(this[SLOTS][0]);
         }
@@ -2854,9 +2828,7 @@ function finalizeOptional(s) {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
     }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true, writable: true },
-    });
+    self[MEMORY] = dv;
     if (objectMembers.length > 0) {
       createChildObjects.call(self, objectMembers, this, dv);
     }
@@ -2886,9 +2858,7 @@ function finalizeOptional(s) {
   s.pointerResetter = getPointerResetter(objectMembers);
   s.pointerDisabler = getPointerDisabler(objectMembers);
   const { get, set, check } = getOptionalAccessors(members, size, options);
-  Object.defineProperties(constructor.prototype, {
-    $: { get, set, configurable: true },
-  });
+  Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
   addSpecialAccessors(s);
   return constructor;
 }
@@ -2985,12 +2955,9 @@ function finalizePointer(s) {
         }
       }
     }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true, writable: true },
-      [SLOTS]: { value: { 0: null } },
-      // a boolean value indicating whether Zig currently owns the pointer
-      [ZIG]: { value: calledFromZig, writable: true },
-    });
+    self[MEMORY] = dv;
+    self[SLOTS] = { value: { 0: null } };
+    self[ZIG] = calledFromZig;
     if (creating) {
       initializer.call(self, arg);
     }
@@ -3059,8 +3026,10 @@ function finalizePointer(s) {
     this[SLOTS][0] = null;
   };
   s.pointerDisabler = function() {
-    Object.defineProperties(this[SLOTS], {
-      0: { get: throwInaccessiblePointer, set: throwInaccessiblePointer, configurable: true },
+    Object.defineProperty(this[SLOTS], 0, {
+      get: throwInaccessiblePointer,
+      set: throwInaccessiblePointer,
+      configurable: true
     });
   };
   const getTargetValue = function() {
@@ -3093,9 +3062,9 @@ function inFixedMemory(arg) {
 }
 
 function createProxy(isConst, isTargetPointer) {
-  const descriptors = (!isTargetPointer) ? (isConst) ? constProxyHandlers : proxyHandlers : {};
-  const proxy = new Proxy(this, descriptors);
-  Object.defineProperty(this, PROXY, { value: proxy });
+  const handlers = (!isTargetPointer) ? (isConst) ? constProxyHandlers : proxyHandlers : {};
+  const proxy = new Proxy(this, handlers);
+  this[PROXY] = proxy;
   return proxy;
 }
 
@@ -3242,12 +3211,10 @@ function finalizeSlice(s) {
     if (!dv) {
       dv = new DataView(new ArrayBuffer(length * elementSize));
     }
-    Object.defineProperties(this, {
-      [MEMORY]: { value: dv, configurable: true, writable: true },
-      [GETTER]: { value: null, configurable: true, writable: true },
-      [SETTER]: { value: null, configurable: true, writable: true },
-      [LENGTH]: { value: length, configurable: true, writable: true },
-    });
+    this[MEMORY] = dv;
+    this[GETTER] = null;
+    this[SETTER] = null;
+    this[LENGTH] = length;
     if (objectMember) {
       createChildObjects$1.call(this, objectMember, recv);
     }
@@ -3440,9 +3407,7 @@ function finalizeVector(s) {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
     }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true, writable: true },
-    });
+    self[MEMORY] = dv;
     if (creating) {
       initializer.call(self, arg);
     } else {
@@ -3473,13 +3438,11 @@ function finalizeVector(s) {
     }
   };
   const retriever = function() { return this };
-  const elementDescriptors = {};
   for (let i = 0, bitOffset = 0; i < count; i++, bitOffset += elementSize * 8) {
     const { get, set } = getAccessors({ ...member, bitOffset }, options);
-    elementDescriptors[i] = { get, set, configurable: true };
+    Object.defineProperty(constructor.prototype, i, { get, set, configurable: true });
   }
   Object.defineProperties(constructor.prototype, {
-    ...elementDescriptors,
     length: { value: count, configurable: true },
     $: { get: retriever, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
@@ -3546,19 +3509,13 @@ function finalizeArgStruct(s) {
     },
     options,
   } = s;
-  const descriptors = {};
-  for (const member of members) {
-    descriptors[member.name] = getAccessors(member, options);
-  }
   const objectMembers = members.filter(m => m.type === MemberType.Object);
   const { slot: retvalSlot } = members[members.length - 1];
     const constructor = s.constructor = function(args) {
     const dv = new DataView(new ArrayBuffer(size));
-    Object.defineProperties(this, {
-      [MEMORY]: { value: dv },
-    });
+    this[MEMORY] = dv;
     if (objectMembers.length > 0) {
-      const slots = {};
+      const slots = this[SLOTS] = {};
       const parentOffset = dv.byteOffset;
       for (const { structure: { constructor }, bitOffset, byteSize, slot } of objectMembers) {
         const offset = parentOffset + (bitOffset >> 3);
@@ -3567,9 +3524,6 @@ function finalizeArgStruct(s) {
         const recv = (slot === retvalSlot) ? ZIG : PARENT;
         slots[slot] = constructor.call(recv, childDV);
       }
-      Object.defineProperties(this, {
-        [SLOTS]: { value: slots },
-      });
     }
     initializer.call(this, args);
   };
@@ -3587,8 +3541,10 @@ function finalizeArgStruct(s) {
       }
     }
   };
-
-  Object.defineProperties(constructor.prototype, descriptors);
+  for (const member of members) {
+    const accessors = getAccessors(member, options);
+    Object.defineProperty(constructor.prototype, member.name, accessors);
+  }
   return constructor;
 }
 

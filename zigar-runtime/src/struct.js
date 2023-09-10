@@ -37,10 +37,8 @@ export function finalizeStruct(s) {
       self = Object.create(constructor.prototype);
       dv = getDataView(s, arg);
     }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true, writable: true },
-      ...descriptors
-    });
+    self[MEMORY] = dv;
+    Object.defineProperties(self, descriptors);
     if (objectMembers.length > 0) {
       createChildObjects.call(self, objectMembers, this, dv);
     }
@@ -107,9 +105,7 @@ export function finalizeStruct(s) {
   const pointerDisabler = s.pointerDisabler = (hasPointer) ? getPointerDisabler(objectMembers) : null;
   if ((constructible)) {
     const retriever = function() { return this };
-    Object.defineProperties(constructor.prototype, {
-      $: { get: retriever, set: initializer, configurable: true },
-    });
+    Object.defineProperty(constructor.prototype, '$', { get: retriever, set: initializer, configurable: true });
     addSpecialAccessors(s);
   }
   addStaticMembers(s);

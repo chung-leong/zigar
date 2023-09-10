@@ -78,12 +78,10 @@ export function finalizeSlice(s) {
     if (!dv) {
       dv = new DataView(new ArrayBuffer(length * elementSize));
     }
-    Object.defineProperties(this, {
-      [MEMORY]: { value: dv, configurable: true, writable: true },
-      [GETTER]: { value: null, configurable: true, writable: true },
-      [SETTER]: { value: null, configurable: true, writable: true },
-      [LENGTH]: { value: length, configurable: true, writable: true },
-    });
+    this[MEMORY] = dv;
+    this[GETTER] = null;
+    this[SETTER] = null;
+    this[LENGTH] = length;
     if (objectMember) {
       createChildObjects.call(this, objectMember, recv);
     }

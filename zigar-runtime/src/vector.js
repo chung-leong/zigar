@@ -35,9 +35,7 @@ export function finalizeVector(s) {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
     }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true, writable: true },
-    });
+    self[MEMORY] = dv;
     if (creating) {
       initializer.call(self, arg);
     } else {
@@ -68,13 +66,11 @@ export function finalizeVector(s) {
     }
   };
   const retriever = function() { return this };
-  const elementDescriptors = {};
   for (let i = 0, bitOffset = 0; i < count; i++, bitOffset += elementSize * 8) {
     const { get, set } = getAccessors({ ...member, bitOffset }, options);
-    elementDescriptors[i] = { get, set, configurable: true };
+    Object.defineProperty(constructor.prototype, i, { get, set, configurable: true });
   }
   Object.defineProperties(constructor.prototype, {
-    ...elementDescriptors,
     length: { value: count, configurable: true },
     $: { get: retriever, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },

@@ -12,7 +12,7 @@ export function addStaticMembers(s) {
   } = s;
   const descriptors = {};
   if (template) {
-    descriptors[SLOTS] = { value: template[SLOTS] };
+    constructor[SLOTS] = template[SLOTS];
   }
   for (const member of members) {
     // static members are either Pointer or Type
@@ -29,7 +29,6 @@ export function addStaticMembers(s) {
         ptr['*'] = value;
       };
     }
-    descriptors[member.name] = { get, set, configurable: true, enumerable: true };
-  };
-  Object.defineProperties(constructor, descriptors);
+    Object.defineProperty(constructor, member.name, { get, set, configurable: true, enumerable: true });
+  }
 }

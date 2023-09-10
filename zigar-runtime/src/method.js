@@ -18,12 +18,8 @@ export function addMethods(s) {
       const a = new constructor(args);
       return invokeThunk(thunk, a);
     }
-    Object.defineProperties(f, {
-      name: { value: name, writable: false },
-    });
-    Object.defineProperties(constructor, {
-      [name]: { value: f, configurable: true, enumerable: true, writable: true },
-    });
+    Object.defineProperty(f, 'name', { value: name, writable: false });
+    Object.defineProperty(constructor, name, { value: f, configurable: true, writable: true });
   }
   for (const method of instanceMembers) {
     const {
@@ -36,12 +32,8 @@ export function addMethods(s) {
       const a = new constructor([ this, ...args ]);
       return invokeThunk(thunk, a);
     }
-    Object.defineProperties(f, {
-      name: { value: name, writable: false },
-    });
-    Object.defineProperties(constructor.prototype, {
-      [name]: { value: f, configurable: true, writable: true },
-    });
+    Object.defineProperty(f, 'name', { value: name, writable: false });
+    Object.defineProperty(Object.prototype, name, { value: f, configurable: true, writable: true });
   }
 }
 

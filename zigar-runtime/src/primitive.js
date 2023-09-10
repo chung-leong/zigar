@@ -26,9 +26,7 @@ export function finalizePrimitive(s) {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
     }
-    Object.defineProperties(self, {
-      [MEMORY]: { value: dv, configurable: true, writable: true },
-    });
+    self[MEMORY] = dv;
     if (creating) {
       initializer.call(self, arg);
     } else {
@@ -68,9 +66,7 @@ export function finalizePrimitive(s) {
     $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
   });
-  Object.defineProperties(constructor, {
-    [COMPAT]: { value: getCompatibleTags(s) },
-  });
+  Object.defineProperty(constructor, COMPAT, { value: getCompatibleTags(s) });
   addSpecialAccessors(s);
   return constructor;
 };
