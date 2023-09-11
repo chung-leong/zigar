@@ -6,7 +6,7 @@ JavaScript project.
 ## Installation
 
 ```sh
-npm install rollup-plugin-zigar
+npm install --save-dev rollup-plugin-zigar
 ```
 
 You must install the Zig compiler onto your computer separately. Follow the instructions outlined in
@@ -89,12 +89,12 @@ Prior to the completion of WASM compilation, every function will return a promis
 
 ## Demo app
 
-To demonstrate how to use this plugin, we'll build a simple React app that calculate the SHA-1 hash 
-of text you enter. We start by running the command `npm create vite@latest`. Select React as the 
+To demonstrate how to use this plugin, we'll build a simple React app that calculate the SHA-1 hash
+of text you enter. We start by running the command `npm create vite@latest`. Select React as the
 framework and JavaScript + SWC as the variant. Go into the directory and run `npm install`, then
 `npm install --save rollup-plugin-zigar`.
 
-Open `vite.config.js` in your code editor and add the plugin: 
+Open `vite.config.js` in your code editor and add the plugin:
 
 ```js
 import { defineConfig } from 'vite'
@@ -191,12 +191,12 @@ pub fn sha1(bytes: []const u8) [std.crypto.hash.Sha1.digest_length * 2]u8 {
 
 `sha1()` returns an array object. We access its `string` property to get a string in our `onChange` handler above.
 
-In the command line, run `npm install`, `npm run dev`, the open the link with your browser. You 
+In the command line, run `npm install`, `npm run dev`, the open the link with your browser. You
 should be greeted by the following:
 
-[SCREENSHOT]
+![Demo app](./doc/img/screenshot-1.png)
 
-Enter some text into the text box. Its SHA-1 hash should appear at the bottom of the page. 
+Enter some text into the text box. Its SHA-1 hash should appear at the bottom of the page.
 
 Now switch back to your code editor and make the following change to `src/sha1.zig`:
 
@@ -210,12 +210,15 @@ pub fn sha1(bytes: []const u8) [std.crypto.hash.Sha1.digest_length * 2]u8 {
 }
 ```
 
-When you return to the browser again, you should see that typing now produces upper-case hashes. 
+When you return to the browser again, you should see that typing now produces upper-case hashes.
 
 As of September 2023, you will encounter the following error when you run `npm run build`:
 
-```sh
-TODO
+```
+[vite:esbuild-transpile] Transform failed with 1 error:
+assets/index-!~{001}~.js:3370:0: ERROR: Top-level await is not available in the configured target environment ("chrome87", "edge88", "es2020", "firefox78", "safari14" + 2 overrides)
+
+Top-level await is not available in the configured target environment ("chrome87", "edge88", "es2020", "firefox78", "safari14" + 2 overrides)
 ```
 
 In order to build successfully, we need to go back to `src/vite.config.js` and set `topLevelAwait`
@@ -234,7 +237,7 @@ export default defineConfig({
 })
 ```
 
-Without top-level await the app will work properly most of the time. In theory the loading process could hit a hiccup and `sha1()` gets called before it's ready. To ensure that our app works right 
+Without top-level await the app will work properly most of the time. In theory the loading process could hit a hiccup and `sha1()` gets called before it's ready. To ensure that our app works right
 all the time we're going to add a check to the `onChange` handler:
 
 ```js
@@ -271,5 +274,5 @@ export default App
 
 ## Additional information
 
-Consult the [Zigar runtime](../zigar-runtime/README.md) user guide to learn more about working 
+Consult the [Zigar runtime](../zigar-runtime/README.md) user guide to learn more about working
 with Zig data structure in JavaScript.

@@ -20,9 +20,7 @@ module.exports = {
       {
         test: /\.jsx?$/,
         exclude: /node_modules/,
-        use: {
-          loader: 'babel-loader',
-        },
+        use: 'babel-loader',
       },
       {
         test: /\.css$/,
@@ -31,7 +29,7 @@ module.exports = {
       {
         test: /\.zig$/,
         exclude: /node_modules/,
-        loader: '../../dist/index.js',
+        user: '../../dist/index.js',
       },
     ],
   },
