@@ -716,7 +716,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   auto Throw = [&](const char* message) {
     Local<String> string;
     if (String::NewFromUtf8(isolate, message).ToLocal<String>(&string)) {
-      isolate->ThrowError(string);
+      isolate->ThrowException(Exception::Error(string));
     }
   };
 
