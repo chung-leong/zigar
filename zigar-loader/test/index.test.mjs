@@ -9,25 +9,32 @@ const loader = resolve('../dist/index.js');
 
 describe('Loader', function() {
   describe('Options', function() {
+    const path = resolve('../../zigar-compiler/test/zig-samples/basic/console.zig');
     it('should generate code with embedded WASM by default', async function() {
-      const path = resolve('../../zigar-compiler/test/zig-samples/basic/console.zig');
       const code = await transpile(path, { embedWASM: true });
       expect(code).to.contain('atob');
     })
     it('should generate code that uses fetch when embedWASM is false', async function() {
-      const path = resolve('../../zigar-compiler/test/zig-samples/basic/console.zig');
       const code = await transpile(path, { embedWASM: false, useReadFile: false });
       expect(code).to.contain('fetch');
     })
     it('should generate code that uses readFile when embedWASM is false and useReadFile is true', async function() {
-      const path = resolve('../../zigar-compiler/test/zig-samples/basic/console.zig');
       const code = await transpile(path, { embedWASM: false, useReadFile: true });
       expect(code).to.contain('readFile');
+    })
+    it('should default to ReleaseSmall where NODE_ENV is production', async function() {
+      const code1 = await transpile(path, { embedWASM: true });
+      process.env.NODE_ENV = 'production';
+      try {
+        const code2 = await transpile(path, { embedWASM: true });
+        expect(code2.length).to.be.below(code1.length);
+      } finally {
+        delete process.env.NODE_ENV;
+      }
     })
     it('should fail when unknown options are present', async function() {
       let error;
       try {
-        const path = resolve('../../zigar-compiler/test/zig-samples/basic/console.zig');
         const code = await transpile(path, { turkey: true });
       } catch (err) {
         error = err;
@@ -37,7 +44,6 @@ describe('Loader', function() {
     it('should fail when optimize option is incorrect', async function() {
       let error;
       try {
-        const path = resolve('../../zigar-compiler/test/zig-samples/basic/console.zig');
         const code = await transpile(path, { optimize: 'Donut' });
       } catch (err) {
         error = err;
