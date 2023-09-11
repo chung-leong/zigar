@@ -75,7 +75,7 @@ async function loader(content, map, meta) {
   const {
     useReadFile = (this.target === 'node'),
     embedWASM = false,
-    optimize = (process.env.NODE_ENV === 'production') ? 'ReleaseSmall' : 'Debug',
+    optimize = (this.mode === 'production') ? 'ReleaseSmall' : 'Debug',
     ...otherOptions
   } = options;
   const wasmLoader = async (name, dv) => {
