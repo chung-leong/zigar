@@ -293,6 +293,8 @@ const proxyHandlers = {
       if (index >= 0 && index < array.length) {
         return { value: array.get(index), enumerable: true, writable: true, configurable: true };
       }
+    } else {
+      return Object.getOwnPropertyDescriptor(array, name);
     }
   },
 };

@@ -2090,6 +2090,8 @@ const proxyHandlers$1 = {
       if (index >= 0 && index < array.length) {
         return { value: array.get(index), enumerable: true, writable: true, configurable: true };
       }
+    } else {
+      return Object.getOwnPropertyDescriptor(array, name);
     }
   },
 };
@@ -3070,71 +3072,54 @@ function createProxy(isConst, isTargetPointer) {
   return proxy;
 }
 
+const isPointerKeys = {
+  '$': true,
+  '*': true,
+  constructor: true,
+  [ZIG]: true,
+  [SLOTS]: true,
+  [MEMORY]: true,
+  [PROXY]: true,
+  [Symbol.toStringTag]: true,
+  [Symbol.toPrimitive]: true,
+};
+
 const proxyHandlers = {
   get(pointer, name) {
-    switch (name) {
-      case '$':
-      case '*':
-      case 'constructor':
-      case ZIG:
-      case SLOTS:
-      case MEMORY:
-      case Symbol.toStringTag:
-      case Symbol.toPrimitive:
-        return pointer[name];
-      default:
-        return pointer[SLOTS][0][name];
+    if (isPointerKeys[name]) {
+      return pointer[name];
+    } else {
+      return pointer[SLOTS][0][name];
     }
   },
   set(pointer, name, value) {
-    switch (name) {
-      case '$':
-      case '*':
-      case 'constructor':
-      case ZIG:
-      case SLOTS:
-      case MEMORY:
-      case Symbol.toStringTag:
-      case Symbol.toPrimitive:
-          pointer[name] = value;
-        break;
-      default:
-        pointer[SLOTS][0][name] = value;
+    if (isPointerKeys[name]) {
+      pointer[name] = value;
+    } else {
+      pointer[SLOTS][0][name] = value;
     }
     return true;
   },
   deleteProperty(pointer, name) {
-    switch (name) {
-      case '$':
-      case '*':
-      case 'constructor':
-      case ZIG:
-      case SLOTS:
-      case MEMORY:
-      case Symbol.toStringTag:
-      case Symbol.toPrimitive:
-          delete pointer[name];
-        break;
-      default:
-        delete pointer[SLOTS][0][name];
+    if (isPointerKeys[name]) {
+      delete pointer[name];
+    } else {
+      delete pointer[SLOTS][0][name];
     }
     return true;
   },
   has(pointer, name) {
-    return name in pointer[SLOTS][0];
+    return isPointerKeys[name] || name in pointer[SLOTS][0];
   },
   ownKeys(pointer) {
     const targetKeys = Object.getOwnPropertyNames(pointer[SLOTS][0]);
     return [ ...targetKeys, PROXY ];
   },
   getOwnPropertyDescriptor(pointer, name) {
-    switch (name) {
-      case ZIG:
-      case SLOTS:
-      case MEMORY:
-        return Object.getOwnPropertyDescriptor(pointer, name);
-      default:
-        return Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
+    if (isPointerKeys[name]) {
+      return Object.getOwnPropertyDescriptor(pointer, name);
+    } else {
+      return Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
     }
   },
 };
@@ -3142,31 +3127,22 @@ const proxyHandlers = {
 const constProxyHandlers = {
   ...proxyHandlers,
   set(pointer, name, value) {
-    switch (name) {
-      case '$':
-      case '*':
-      case ZIG:
-      case SLOTS:
-      case MEMORY:
-        pointer[name] = value;
-        break;
-      default:
-        throwAssigningToConstant(pointer);
+    if (isPointerKeys[name]) {
+      pointer[name] = value;
+    } else {
+      throwAssigningToConstant(pointer);
     }
     return true;
   },
   getOwnPropertyDescriptor(pointer, name) {
-    switch (name) {
-      case ZIG:
-      case SLOTS:
-      case MEMORY:
-        return Object.getOwnPropertyDescriptor(pointer, name);
-      default:
-        const descriptor = Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
-        if (descriptor?.set) {
-          descriptor.set = undefined;
-        }
-        return descriptor;
+    if (isPointerKeys[name]) {
+      return Object.getOwnPropertyDescriptor(pointer, name);
+    } else {
+      const descriptor = Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
+      if (descriptor?.set) {
+        descriptor.set = undefined;
+      }
+      return descriptor;
     }
     /* c8 ignore next -- unreachable */
   },
