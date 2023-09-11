@@ -29,7 +29,7 @@ module.exports = {
       {
         test: /\.zig$/,
         exclude: /node_modules/,
-        user: '../../dist/index.js',
+        use: '../../dist/index.js',
       },
     ],
   },
