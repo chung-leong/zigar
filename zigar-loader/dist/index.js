@@ -1,4 +1,6 @@
 const { transpile } = require('zigar-compiler/cjs');
+const { createHash } = require('crypto');
+const { parse } = require('path');
 
 module.exports = function (content, map, meta) {
   const callback = this.async();
@@ -80,11 +82,14 @@ async function loader(content, map, meta) {
   } = options;
   const wasmLoader = async (name, dv) => {
     const source = Buffer.from(new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength));
-    this.emitFile(name, source);
+    const file = parse(name);
+    const hash = md5(source);
+    const path = `${file.name}-${hash.substring(0, 8)}${file.ext}`;
+    this.emitFile(path, source);
     if (useReadFile) {
-      return loadWASM(name);
+      return loadWASM(path);
     } else {
-      return fetchWASM(name);
+      return fetchWASM(path);
     }
   };
   const code = await transpile(path, {
@@ -96,16 +101,16 @@ async function loader(content, map, meta) {
   return code;
 };
 
-function fetchWASM(name) {
+function fetchWASM(path) {
   return `(async () => {
-  const url = ${JSON.stringify(name)};
+  const url = ${JSON.stringify(path)};
   return fetch(url);
 })()`;
 }
 
-function loadWASM(name) {
+function loadWASM(path) {
   return `(async () => {
-  const url = ${JSON.stringify(name)};
+  const url = ${JSON.stringify(path)};
   if (typeof(process) === 'object' && process[Symbol.toStringTag] === 'process') {
     const { readFile } = await import('fs/promises');
     const { fileURLToPath } = await import('url');
@@ -115,4 +120,10 @@ function loadWASM(name) {
     return fetch(url);
   }
 })()`;
+}
+
+function md5(text) {
+  const hash = createHash('md5');
+  hash.update(text);
+  return hash.digest('hex');
 }
