@@ -532,6 +532,12 @@ export function addTests(importModule, options) {
         'Hello world',
       ]);
     })
+    it('should ignore function with comptime argument', async function() {
+      this.timeout(60000);
+      const { memset, nothing } = await importModule(resolve('./zig-samples/basic/function-with-comptime-arg.zig'));
+      expect(memset).to.be.undefined;
+      expect(nothing).to.be.a('function');
+    })
     it('should import function returning a pointer to a primitive', async function() {
       this.timeout(60000);
       const { default: module, getPointer } = await importModule(resolve('./zig-samples/basic/function-returning-primitive-pointer.zig'));

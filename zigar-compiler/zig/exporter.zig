@@ -1110,6 +1110,9 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
     inline for (decls) |decl| {
         switch (@typeInfo(@TypeOf(@field(T, decl.name)))) {
             .Fn => |f| {
+                if (f.is_generic or f.is_var_args) {
+                    continue;
+                }
                 const function = @field(T, decl.name);
                 const ArgT = ArgumentStruct(function);
                 const arg_structure = try getStructure(host, ArgT);
