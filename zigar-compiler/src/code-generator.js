@@ -28,6 +28,10 @@ export function generateCode(structures, params) {
         memberFeatures[ getMemberFeature(member) ] = true;
       }
     }
+    if (structure.type === StructureType.Pointer) {
+      // pointer need int support
+      memberFeatures.useInt = true;
+    }
   }
   if (memberFeatures.useIntEx) {
     delete memberFeatures.useInt;
