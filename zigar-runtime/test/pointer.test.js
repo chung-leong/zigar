@@ -65,6 +65,7 @@ describe('Pointer functions', function() {
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
       expect(intPointer['*']).to.equal(1234);
+      expect(intPointer.valueOf()).to.equal(1234);
     })
     it('should throw when no initializer is provided', function() {
       const intStructure = beginStructure({

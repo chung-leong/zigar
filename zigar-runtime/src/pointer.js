@@ -152,17 +152,22 @@ export function finalizePointer(s) {
       configurable: true
     });
   };
-  const getTargetValue = function() {
+  const getTarget = function() {
     const object = this[SLOTS][0];
     return object.$;
   };
-  const setTargetValue = (isConst) ? undefined : function(value) {
+  const setTarget = (isConst) ? undefined : function(value) {
     const object = this[SLOTS][0];
     object.$ = value;
   };
+  const getTargetValue = function() {
+    const object = this[SLOTS][0];
+    return object.$.valueOf();
+  };
   Object.defineProperties(constructor.prototype, {
-    '*': { get: getTargetValue, set: setTargetValue, configurable: true },
+    '*': { get: getTarget, set: setTarget, configurable: true },
     '$': { get: retriever, set: initializer, configurable: true, },
+    'valueOf': { value: getTargetValue, configurable: true, writable: true },
   });
   Object.defineProperties(constructor, {
     child: { get: () => targetStructure.constructor },
@@ -195,6 +200,7 @@ const isPointerKeys = {
   '$': true,
   '*': true,
   constructor: true,
+  valueOf: true,
   [ZIG]: true,
   [SLOTS]: true,
   [MEMORY]: true,
