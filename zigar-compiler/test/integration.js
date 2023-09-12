@@ -714,6 +714,24 @@ export function addTests(importModule, options) {
       union.Number = 0;
       expect(pointer3[SLOTS][0]).to.be.null;
     })
+    it('should free pointer array after Zig functions made it invalid', async function() {
+      this.timeout(60000);
+      const {
+        OptionalStrings,
+        setOptionalNull,
+      } = await importModule(resolve('./zig-samples/basic/function-freeing-pointer-array.zig'));
+      const optional = new OptionalStrings([ 'Hello world', 'This is a test' ]);
+      // get symbols from the optional object
+      const [ MEMORY, SLOTS ] = Object.getOwnPropertySymbols(optional);
+      // save the pointer array, which we can't access again through the optional once it's set to null
+      const pointers = optional.$;
+      // change the optional thru Zig
+      setOptionalNull(optional);
+      // give the optional a chance to notice that it's now null and should therefore release the pointer
+      expect(optional.$).to.be.null;
+      expect(pointers[0][SLOTS][0]).to.be.null;
+      expect(pointers[1][SLOTS][0]).to.be.null;
+    })
   })
   describe('Error handling', function() {
     beforeEach(function() {

@@ -115,7 +115,7 @@ export function finalizeStruct(s) {
 
 export function createChildObjects(members, recv) {
   const dv = this[MEMORY];
-  const slots = {};
+  const slots = this[SLOTS] = {};
   if (recv !== ZIG)  {
     recv = PARENT;
   }
@@ -125,9 +125,6 @@ export function createChildObjects(members, recv) {
     const childDV = new DataView(dv.buffer, offset, byteSize);
     slots[slot] = constructor.call(recv, childDV);
   }
-  Object.defineProperties(this, {
-    [SLOTS]: { value: slots },
-  });
 }
 
 export function getPointerCopier(members) {
