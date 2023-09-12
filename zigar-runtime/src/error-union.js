@@ -64,16 +64,18 @@ export function getErrorUnionAccessors(members, size, options) {
   const { get: getError, set: setError } = getAccessors(members[1], options);
   const { structure: valueStructure } = members[0];
   const { structure: errorStructure } = members[1];
+  const { pointerResetter } = valueStructure;
+  const { constructor: ErrorSet } = errorStructure;
   const reset = getMemoryResetter(size)
   return {
     get: function() {
       const errorNumber = getError.call(this);
       if (errorNumber !== 0) {
-        const { constructor } = errorStructure;
-        const err = constructor(errorNumber);
+        const err = ErrorSet(errorNumber);
         if (!err) {
           throwUnknownErrorNumber(errorStructure, errorNumber);
         }
+        pointerResetter?.call(this[SLOTS][0]);
         throw err;
       } else {
         return getValue.call(this);
@@ -81,16 +83,12 @@ export function getErrorUnionAccessors(members, size, options) {
     },
     set: function(value) {
       if (value instanceof Error) {
-        const { constructor } = errorStructure;
-        const { pointerResetter } = valueStructure;
-        if (!(value instanceof constructor)) {
+        if (!(value instanceof ErrorSet)) {
           throwNotInErrorSet(errorStructure);
         }
         reset(this[MEMORY]);
         setError.call(this, value.index);
-        if (pointerResetter) {
-          pointerResetter.call(this[SLOTS][0]);
-        }
+        pointerResetter?.call(this[SLOTS][0]);
       } else {
         setValue.call(this, value);
         setError.call(this, 0);
