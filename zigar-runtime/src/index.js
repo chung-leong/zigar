@@ -40,6 +40,7 @@ export async function runModule(source, options = {}) {
     slots = {},
     variables,
     methodRunner,
+    writeBack = true,
   } = options;
   let nextValueIndex = 0;
   let valueTable = null;
@@ -174,8 +175,10 @@ export async function runModule(source, options = {}) {
       console.log(`${index + 1}: ${array.join(' ')}`)
     }
     */
-    const copy = getMemoryCopier(dv1.byteLength);
-    copy(dv2, dv1);
+    if (writeBack) {
+      const copy = getMemoryCopier(dv1.byteLength);
+      copy(dv2, dv1);
+    }
     dv2[MEMORY] = { memory: wasmMemory, address, len };
     Object.defineProperty(object, MEMORY, { value: dv2, configurable: true });
     if (object.hasOwnProperty(ZIG)) {

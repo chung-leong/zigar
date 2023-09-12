@@ -527,8 +527,10 @@ describe('Code generation', function() {
       expect(code).to.contain('useStruct()');
       expect(code).to.contain('hello');
       expect(code).to.contain('await __init');
+      expect(code).to.contain('writeBack: false');
       const codeAlt = generateCode([ argStructure, structure ], { loadWASM: `loadWASM()`, topLevelAwait: false });
       expect(codeAlt).to.not.contain('await __init');
+      expect(codeAlt).to.contain('writeBack: true');
     })
     it('should generate code for exporting a struct with default values', function() {
       const memory = new DataView(new ArrayBuffer(8), 4, 4);

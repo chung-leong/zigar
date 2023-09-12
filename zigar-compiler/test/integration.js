@@ -200,14 +200,14 @@ export function addTests(importModule, options) {
       const { default: module } = await importModule(resolve('./zig-samples/basic/structs-with-complex-members.zig'));
       const { Pet, StructB, StructC, StructD } = module;
       expect(module.struct_b.pet).to.equal(Pet.Cat);
-      expect({ ...module.struct_b.a }).to.eql({ number1: 0, number2: 0 });
+      expect(module.struct_b.a.valueOf()).to.eql({ number1: 0, number2: 0 });
       expect([ ...module.struct_b.floats ]).to.eql([ 0.1, 0.2, 0.3, 0.4 ]);
       expect([ ...module.struct_b.integers ]).to.eql([ 0, 1, 2, 3 ]);
       module.struct_b.a = { number1: 123, number2: 456 };
-      expect({ ...module.struct_c.a_ptr }).to.eql({ number1: 123, number2: 456 });
+      expect(module.struct_c.a_ptr.valueOf()).to.eql({ number1: 123, number2: 456 });
       // check pointer member default value
       const objectD = new StructD({});
-      expect({ ...objectD.a_ptr }).to.eql({ number1: 123, number2: 456 });
+      expect(objectD.a_ptr.valueOf()).to.eql({ number1: 123, number2: 456 });
     })
     it('should import bare union with pointers', async function() {
       this.timeout(60000);

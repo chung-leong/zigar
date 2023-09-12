@@ -126,10 +126,10 @@ export function generateCode(structures, params) {
   if (loadWASM) {
     add('\n// initiate loading and compilation of WASM bytecodes');
     add(`const wasmPromise = ${loadWASM};`);
-    add('const __init = linkModule(wasmPromise, linkage);');
+    add(`const __init = linkModule(wasmPromise, { ...linkage, writeBack: ${!topLevelAwait} });`);
   } else {
-    add('\n// no need to use WASM binary');
-    add('const __init = Promise.resolve(true);');
+    add(`\n// no need to use WASM binary`);
+    add(`const __init = Promise.resolve(true);`);
   }
 
   add('\n// export functions, types, and constants');

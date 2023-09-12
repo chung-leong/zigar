@@ -31,18 +31,12 @@ describe('Transpilation', function() {
       const after = await transpile(pathname, { stripWASM: true });
       expect(after.length).to.be.below(before.length);
     })
-    it('should default to ReleaseSmall when NODE_ENV is production', async function() {
+    it('should default to strip WASM when optimize is not Debug', async function() {
       this.timeout(30000);
       const { pathname } = new URL('./zig-samples/basic/function-simple.zig', import.meta.url);
-      const before = await transpile(pathname);
-      const nodeEnvBefore = process.env.NODE_ENV;
-      try {
-        process.env.NODE_ENV = "production";
-        const after = await transpile(pathname);
-        expect(after.length).to.be.below(before.length);
-      } finally {
-        process.env.NODE_ENV = nodeEnvBefore;
-      }
+      const before = await transpile(pathname, { optimize: 'ReleaseSmall', stripWASM: false });
+      const after = await transpile(pathname, { optimize: 'ReleaseSmall' });
+      expect(after.length).to.be.below(before.length);
     })
     it('should call wasmLoader when embedWASM is false', async function() {
       this.timeout(30000);
