@@ -284,6 +284,15 @@ export function addTests(importModule, options) {
         'Goodbye cruel world',
       ]);
     })
+    it('should ignore variables of unsupported types', async function() {
+      this.timeout(60000);
+      const { default: module } = await importModule(resolve('./zig-samples/basic/unsupported-types.zig'));
+      expect(module.number).to.equal(77);
+      expect(module.weird).to.be.undefined;
+      expect(module.frame).to.be.undefined;
+      expect(module.fn1).to.be.undefined;
+      expect(module.fn2).to.be.undefined;
+    })
   })
   describe('Methods', function() {
     it('should import simple function', async function() {
@@ -536,6 +545,19 @@ export function addTests(importModule, options) {
       this.timeout(60000);
       const { memset, nothing } = await importModule(resolve('./zig-samples/basic/function-with-comptime-arg.zig'));
       expect(memset).to.be.undefined;
+      expect(nothing).to.be.a('function');
+    })
+    it('should ignore fuinctions with unsupported arguments', async function() {
+      this.timeout(60000);
+      const {
+        needFn,
+        needOptionalFn,
+        needFrame,
+        nothing,
+      } = await importModule(resolve('./zig-samples/basic/functions-with-unsupported-arg.zig'));
+      expect(needFn).to.be.undefined;
+      expect(needOptionalFn).to.be.undefined;
+      expect(needFrame).to.be.undefined;
       expect(nothing).to.be.a('function');
     })
     it('should import function returning a pointer to a primitive', async function() {

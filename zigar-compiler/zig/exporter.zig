@@ -424,6 +424,48 @@ test "getMemberType" {
     assert(getMemberType(type) == .Type);
 }
 
+fn isSupported(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Type, .Bool, .Int, .ComptimeInt, .Float, .ComptimeFloat, .Void, .ErrorSet, .Enum, .Opaque, .Vector => true,
+        .Struct => |st| check_fields: {
+            inline for (st.fields) |field| {
+                if (!isSupported(field.type)) {
+                    break :check_fields false;
+                }
+            }
+            break :check_fields true;
+        },
+        .Union => |un| check_fields: {
+            inline for (un.fields) |field| {
+                if (!isSupported(field.type)) {
+                    break :check_fields false;
+                }
+            }
+            break :check_fields true;
+        },
+        .ErrorUnion => |eu| isSupported(eu.payload),
+        .Optional => |op| isSupported(op.child),
+        .Array => |ar| isSupported(ar.child),
+        .Pointer => |pt| isSupported(pt.child),
+        else => false,
+    };
+}
+
+test "isSupported" {
+    const StructA = struct {
+        number: i32,
+        string: []const u8,
+    };
+    const StructB = struct {
+        thunk: Thunk,
+    };
+    assert(isSupported(StructA) == true);
+    assert(isSupported(StructB) == false);
+    assert(isSupported(Thunk) == false);
+    assert(isSupported(*StructA) == true);
+    assert(isSupported(*StructB) == false);
+}
+
 fn getStructureType(comptime T: type) StructureType {
     return switch (@typeInfo(T)) {
         .Bool, .Int, .Float, .Void, .Type => .Primitive,
@@ -981,9 +1023,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
                 .structure = try getStructure(host, ve.child),
             }, false);
         },
-        else => {
-            std.debug.print("Missing: {s}\n", .{@typeName(T)});
-        },
+        else => {},
     }
 }
 
@@ -1019,9 +1059,15 @@ fn addDefaultValues(host: anytype, structure: Value, comptime T: type) !void {
 
 fn getPointerType(comptime T: type, comptime name: []const u8) type {
     // get the pointer type (where possible)
-    return switch (@typeInfo(@TypeOf(@field(T, name)))) {
-        .Fn, .Frame, .AnyFrame, .NoReturn => void,
-        .Type => type,
+    const FT = @TypeOf(@field(T, name));
+    if (!isSupported(FT)) {
+        return void;
+    }
+    return switch (@typeInfo(FT)) {
+        .Type => switch (@field(T, name)) {
+            noreturn, void => void,
+            else => type,
+        },
         .ComptimeInt => *const IntType(i32, @field(T, name)),
         .ComptimeFloat => *const f64,
         else => @TypeOf(&@field(T, name)),
@@ -1099,6 +1145,39 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
     }
 }
 
+fn hasUnsupported(comptime params: []const std.builtin.Type.Fn.Param) bool {
+    inline for (params) |param| {
+        if (param.type) |T| {
+            if (!isSupported(T)) {
+                return true;
+            }
+        } else {
+            return true;
+        }
+    }
+    return false;
+}
+
+test "hasUnsupported" {
+    const Test = struct {
+        pub fn needFn(cb: *const fn () void) void {
+            cb();
+        }
+
+        pub fn needOptionalFn(cb: ?*const fn () void) void {
+            if (cb) |f| {
+                f();
+            }
+        }
+
+        pub fn nothing() void {}
+    };
+    assert(hasUnsupported(@typeInfo(@TypeOf(Test.needFn)).Fn.params) == true);
+    assert(hasUnsupported(@typeInfo(@TypeOf(Test.needOptionalFn)).Fn.params) == true);
+    assert(hasUnsupported(@typeInfo(@TypeOf(Test.nothing)).Fn.params) == false);
+    assert(hasUnsupported(@typeInfo(@TypeOf(std.debug.print)).Fn.params) == true);
+}
+
 fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
     const decls = switch (@typeInfo(T)) {
         .Struct => |st| st.decls,
@@ -1110,7 +1189,10 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
     inline for (decls) |decl| {
         switch (@typeInfo(@TypeOf(@field(T, decl.name)))) {
             .Fn => |f| {
-                if (f.is_generic or f.is_var_args) {
+                if (comptime f.is_generic or f.is_var_args) {
+                    continue;
+                }
+                if (comptime hasUnsupported(f.params)) {
                     continue;
                 }
                 const function = @field(T, decl.name);
@@ -1258,7 +1340,6 @@ test "getFunctionName" {
 }
 
 fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
-    //std.debug.print("rezigging {s}\n", .{@typeName(@TypeOf(ptr))});
     const T = @TypeOf(ptr.*);
     switch (@typeInfo(T)) {
         .Pointer => |pt| {
@@ -1333,14 +1414,11 @@ fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
                 try rezigStructure(host, child_obj, child_ptr);
             } else |_| {}
         },
-        else => {
-            std.debug.print("Ignoring {s}\n", .{@typeName(T)});
-        },
+        else => {},
     }
 }
 
 fn dezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
-    //std.debug.print("dezigging {s}\n", .{@typeName(@TypeOf(ptr))});
     const T = @TypeOf(ptr.*);
     switch (@typeInfo(T)) {
         .Pointer => |pt| {
@@ -1408,9 +1486,7 @@ fn dezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
                 try dezigStructure(host, child_obj, child_ptr);
             } else |_| {}
         },
-        else => {
-            std.debug.print("Ignoring {s}\n", .{@typeName(T)});
-        },
+        else => {},
     }
 }
 
