@@ -1148,7 +1148,7 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
 fn hasUnsupported(comptime params: []const std.builtin.Type.Fn.Param) bool {
     inline for (params) |param| {
         if (param.type) |T| {
-            if (!isSupported(T)) {
+            if (T != std.mem.Allocator and !isSupported(T)) {
                 return true;
             }
         } else {
@@ -1171,10 +1171,15 @@ test "hasUnsupported" {
         }
 
         pub fn nothing() void {}
+
+        pub fn allocate(allocator: std.mem.Allocator) void {
+            _ = allocator;
+        }
     };
     assert(hasUnsupported(@typeInfo(@TypeOf(Test.needFn)).Fn.params) == true);
     assert(hasUnsupported(@typeInfo(@TypeOf(Test.needOptionalFn)).Fn.params) == true);
     assert(hasUnsupported(@typeInfo(@TypeOf(Test.nothing)).Fn.params) == false);
+    assert(hasUnsupported(@typeInfo(@TypeOf(Test.allocate)).Fn.params) == false);
     assert(hasUnsupported(@typeInfo(@TypeOf(std.debug.print)).Fn.params) == true);
 }
 

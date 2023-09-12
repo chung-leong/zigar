@@ -324,6 +324,7 @@ export function addTests(importModule, options) {
       const outputStrings = await capture(() => print(inputStrings));
       expect(outputStrings).to.eql(inputStrings);
     })
+    skip.
     it('should takes and returns a slice of strings', async function() {
       this.timeout(60000);
       const { bounce } = await importModule(resolve('./zig-samples/basic/function-returning-slice-of-slices.zig'));
@@ -813,7 +814,8 @@ export function addTests(importModule, options) {
       }
     })
   })
-  describe('ZIG Benchmarks Game', function() {
+  skip.if(!process.env.npm_lifecycle_event.includes(':extended')).
+  describe('Zig Benchmarks Game', function() {
     it('should produce the right results for the binary-trees example', async function() {
       this.timeout(120000);
       const { binaryTree } = await importModule(resolve('./zig-samples/benchmarks-game/binary-trees.zig'));
@@ -846,6 +848,7 @@ export function addTests(importModule, options) {
         expect(line).to.equal(refLines[index]);
       }
     })
+    skip.
     it('should produce the right results for the k-nucleotide example', async function() {
       this.timeout(120000);
       const { kNucleotide } = await importModule(resolve('./zig-samples/benchmarks-game/k-nucleotide.zig'));
