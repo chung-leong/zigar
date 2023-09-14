@@ -474,6 +474,7 @@ const MemberType = {
   EnumerationItem: 4,
   Object: 5,
   Type: 6,
+  Comptime: 7,
 };
 
 Array(Object.values(MemberType).length);
@@ -1051,7 +1052,10 @@ function generateCode(structures, params) {
     structureFeatures[ getStructureFeature(structure) ] = true;
     for (const members of [ structure.instance.members, structure.static.members ]) {
       for (const member of members) {
-        memberFeatures[ getMemberFeature(member) ] = true;
+        const feature = getMemberFeature(member);
+        if (feature) {
+          memberFeatures[feature] = true;
+        }
       }
     }
     if (structure.type === StructureType.Pointer) {

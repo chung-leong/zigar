@@ -1208,6 +1208,7 @@ const MemberType = {
   EnumerationItem: 4,
   Object: 5,
   Type: 6,
+  Comptime: 7,
 };
 
 const factories$1 = Array(Object.values(MemberType).length);
@@ -2191,8 +2192,17 @@ function finalizeStruct(s) {
   } = s;
   const descriptors = {};
   for (const member of members) {
-    const { get, set } = getAccessors(member, options);
-    descriptors[member.name] = { get, set, configurable: true, enumerable: true };
+    if (member.type === MemberType.Comptime) {
+      // extract value of comptime field from template
+      const { slot } = member;
+      const pointer = template[SLOTS][slot];
+      const value = pointer['*'];
+      descriptors[member.name] = { value, configurable: true, enumerable: true };
+      delete template[SLOTS][slot];
+    } else {
+      const { get, set } = getAccessors(member, options);
+      descriptors[member.name] = { get, set, configurable: true, enumerable: true };
+    }
   }
   const constructible = (members.length > 0);
   const objectMembers = members.filter(m => m.type === MemberType.Object);

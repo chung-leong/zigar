@@ -313,8 +313,11 @@ export function addTests(importModule, options) {
     })
     it('should import comptime struct', async function() {
       this.timeout(60000);
-      const { default: module } = await importModule(resolve('./zig-samples/basic/comptime-struct.zig'));
-      // TODO: not working yet
+      const { kernel } = await importModule(resolve('./zig-samples/basic/comptime-struct.zig'));
+      expect(kernel.input.src.channels).to.equal(4);
+      expect(() => kernel.input.src.channels = 5).to.throw(Error);
+      expect(() => kernel.input.src = { channels: 5 }).to.throw(Error);
+      expect(() => kernel.input = { src: { channels: 5 } }).to.throw(Error);
     })
   })
   describe('Methods', function() {

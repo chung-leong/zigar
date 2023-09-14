@@ -324,7 +324,7 @@ fn hasPointer(comptime T: type) bool {
         .Array => |ar| hasPointer(ar.child),
         .Struct => |st| any: {
             inline for (st.fields) |field| {
-                if (hasPointer(field.type)) {
+                if (!field.is_comptime and hasPointer(field.type)) {
                     break :any true;
                 }
             }
@@ -364,6 +364,10 @@ test "hasPointer" {
         a: A,
         c: C,
     };
+    const E = struct {
+        number: i32,
+        comptime pointer: ?*u32 = null,
+    };
     assert(hasPointer(u8) == false);
     assert(hasPointer(*u8) == true);
     assert(hasPointer([]u8) == true);
@@ -374,6 +378,8 @@ test "hasPointer" {
     assert(hasPointer(C) == true);
     // pointers in union are inaccessible
     assert(hasPointer(D) == false);
+    // comptime fields should be ignored
+    assert(hasPointer(E) == false);
 }
 
 fn hasPointerArguments(comptime ArgT: type) bool {
@@ -937,7 +943,7 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
         // obtain byte array containing data of default values
         // for some reason Zig sometimes would refuse to allow a var with
         // comptime fields--strip them out just so we can compile
-        var values: NoComptime(T) = undefined;
+        var values: WithoutComptimeFields(T) = undefined;
         var bytes: []u8 = @constCast(std.mem.asBytes(&values));
         for (bytes) |*byte_ptr| {
             byte_ptr.* = 0;
@@ -1178,12 +1184,8 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                 // get address to variable
                 const decl_ptr = &@field(T, decl.name);
                 var value_ptr = get_ptr: {
-                    const VT = switch (@typeInfo(DT)) {
-                        .ComptimeInt => IntType(i32, decl_value),
-                        .ComptimeFloat => f64,
-                        else => DT,
-                    };
                     if (comptime isConst(@TypeOf(decl_ptr))) {
+                        const VT = RuntimeType(decl_value);
                         const const_value: VT = decl_value;
                         break :get_ptr &const_value;
                     } else {
@@ -1387,17 +1389,22 @@ test "isArgumentStruct" {
     assert(isArgumentStruct(ArgA) == true);
 }
 
-fn hasComptime(comptime T: type) bool {
-    inline for (@typeInfo(T).Struct.fields) |field| {
-        if (field.is_comptime) {
-            return true;
-        }
-    }
-    return false;
+fn hasComptimeFields(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Struct => |st| find_comptime: {
+            inline for (st.fields) |field| {
+                if (field.is_comptime) {
+                    return true;
+                }
+            }
+            break :find_comptime false;
+        },
+        else => false,
+    };
 }
 
-fn NoComptime(comptime T: type) type {
-    if (!hasComptime(T)) return T;
+fn WithoutComptimeFields(comptime T: type) type {
+    if (!hasComptimeFields(T)) return T;
     const fields = @typeInfo(T).Struct.fields;
     var new_fields: [fields.len]std.builtin.Type.StructField = undefined;
     var count = 0;
@@ -1417,6 +1424,33 @@ fn NoComptime(comptime T: type) type {
     });
 }
 
+test "WithoutComptimeFields" {
+    const S1 = struct {
+        number1: i32,
+        number2: i32,
+    };
+    const WC1 = WithoutComptimeFields(S1);
+    const S2 = struct {
+        comptime number1: i32 = 0,
+        number2: i32,
+    };
+    const WC2 = WithoutComptimeFields(S2);
+    const S3 = struct {
+        comptime number1: i32 = 0,
+        number2: i32,
+        comptime number_type: type = i32,
+    };
+    const WC3 = WithoutComptimeFields(S3);
+    const S4 = comptime_int;
+    const WC4 = WithoutComptimeFields(S4);
+    assert(WC1 == S1);
+    assert(WC2 != S2);
+    assert(@typeInfo(WC2).Struct.fields.len == 1);
+    assert(WC3 != S3);
+    assert(@typeInfo(WC3).Struct.fields.len == 1);
+    assert(WC4 == S4);
+}
+
 fn RuntimeType(comptime value: anytype) type {
     const T = @TypeOf(value);
     return switch (@typeInfo(T)) {
@@ -1424,6 +1458,17 @@ fn RuntimeType(comptime value: anytype) type {
         .ComptimeFloat => f64,
         else => T,
     };
+}
+
+test "RuntimeType" {
+    const a = 1234;
+    const b = 0x10_0000_0000;
+    const c = 3.14;
+    const d: f32 = 3.14;
+    assert(RuntimeType(a) == i32);
+    assert(RuntimeType(b) == i64);
+    assert(RuntimeType(c) == f64);
+    assert(RuntimeType(d) == f32);
 }
 
 fn getFunctionName(comptime ArgT: type) ?[]const u8 {
@@ -1495,13 +1540,15 @@ fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
         },
         .Struct => |st| {
             inline for (st.fields, 0..) |field, index| {
-                if (hasPointer(field.type)) {
-                    const is_output = comptime isArgumentStruct(T) and index == st.fields.len - 1;
-                    // retval should already be initialized as being owned by Zig on JS side
-                    if (!is_output) {
-                        const slot = getObjectSlot(T, index);
-                        const child_obj = try host.readObjectSlot(obj, slot);
-                        try rezigStructure(host, child_obj, &@field(ptr.*, field.name));
+                if (!field.is_comptime) {
+                    if (hasPointer(field.type)) {
+                        const is_output = comptime isArgumentStruct(T) and index == st.fields.len - 1;
+                        // retval should already be initialized as being owned by Zig on JS side
+                        if (!is_output) {
+                            const slot = getObjectSlot(T, index);
+                            const child_obj = try host.readObjectSlot(obj, slot);
+                            try rezigStructure(host, child_obj, &@field(ptr.*, field.name));
+                        }
                     }
                 }
             }
@@ -1568,12 +1615,14 @@ fn dezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
         },
         .Struct => |st| {
             inline for (st.fields, 0..) |field, index| {
-                if (hasPointer(field.type)) {
-                    const slot = getObjectSlot(T, index);
-                    const child_ptr = &@field(ptr.*, field.name);
-                    const is_output = comptime isArgumentStruct(T) and index == st.fields.len - 1;
-                    const child_obj = try obtainChildObject(host, obj, slot, child_ptr, is_output);
-                    try dezigStructure(host, child_obj, child_ptr);
+                if (!field.is_comptime) {
+                    if (hasPointer(field.type)) {
+                        const slot = getObjectSlot(T, index);
+                        const child_ptr = &@field(ptr.*, field.name);
+                        const is_output = comptime isArgumentStruct(T) and index == st.fields.len - 1;
+                        const child_obj = try obtainChildObject(host, obj, slot, child_ptr, is_output);
+                        try dezigStructure(host, child_obj, child_ptr);
+                    }
                 }
             }
         },

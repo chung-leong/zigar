@@ -1,3 +1,5 @@
-pub const input = .{
-    .src = .{ .channels = 4 },
+pub const kernel = struct {
+    pub const input = .{
+        .src = .{ .channels = 4 },
+    };
 };
