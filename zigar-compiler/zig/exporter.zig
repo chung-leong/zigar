@@ -800,7 +800,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
         .ErrorUnion => addErrorUnionMember(host, structure, T),
         .ErrorSet => addErrorSetMember(host, structure, T),
         .Vector => addVectorMember(host, structure, T),
-        else => .{},
+        else => void{},
     };
 }
 
@@ -922,18 +922,22 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
                 }, false);
             } else {
                 // retrieve values from pointer objects in the template's slots
+                const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+                const VT = RuntimeType(default_value_ptr.*);
                 try host.attachMember(structure, .{
                     .name = getCString(field.name),
                     .member_type = MemberType.Comptime,
                     .slot = getObjectSlot(T, index),
-                    .structure = try getStructure(host, *const field.type),
+                    .structure = try getStructure(host, *const VT),
                 }, false);
             }
         }
     }
     if (!isArgumentStruct(T)) {
-        // default data
-        var values: T = undefined;
+        // obtain byte array containing data of default values
+        // for some reason Zig sometimes would refuse to allow a var with
+        // comptime fields--strip them out just so we can compile
+        var values: NoComptime(T) = undefined;
         var bytes: []u8 = @constCast(std.mem.asBytes(&values));
         for (bytes) |*byte_ptr| {
             byte_ptr.* = 0;
@@ -961,12 +965,8 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
                 } else if (field.type != type) {
                     // comptime members are pointer objects
                     const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-                    const VT = switch (@typeInfo(field.type)) {
-                        .ComptimeInt => IntType(i32, default_value_ptr.*),
-                        .ComptimeFloat => f64,
-                        else => field.type,
-                    };
                     // copy the value
+                    const VT = RuntimeType(default_value_ptr.*);
                     const value: VT = default_value_ptr.*;
                     const value_ptr = &value;
                     const ptr_memory: Memory = .{
@@ -1385,6 +1385,45 @@ test "isArgumentStruct" {
     };
     const ArgA = ArgumentStruct(Test.A);
     assert(isArgumentStruct(ArgA) == true);
+}
+
+fn hasComptime(comptime T: type) bool {
+    inline for (@typeInfo(T).Struct.fields) |field| {
+        if (field.is_comptime) {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn NoComptime(comptime T: type) type {
+    if (!hasComptime(T)) return T;
+    const fields = @typeInfo(T).Struct.fields;
+    var new_fields: [fields.len]std.builtin.Type.StructField = undefined;
+    var count = 0;
+    for (fields) |field| {
+        if (!field.is_comptime) {
+            new_fields[count] = field;
+            count += 1;
+        }
+    }
+    return @Type(.{
+        .Struct = .{
+            .layout = .Auto,
+            .decls = &.{},
+            .fields = fields[0..count],
+            .is_tuple = false,
+        },
+    });
+}
+
+fn RuntimeType(comptime value: anytype) type {
+    const T = @TypeOf(value);
+    return switch (@typeInfo(T)) {
+        .ComptimeInt => IntType(i32, value),
+        .ComptimeFloat => f64,
+        else => T,
+    };
 }
 
 fn getFunctionName(comptime ArgT: type) ?[]const u8 {

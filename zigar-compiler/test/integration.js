@@ -297,10 +297,19 @@ export function addTests(importModule, options) {
       this.timeout(60000);
       const { StructA, StructB } = await importModule(resolve('./zig-samples/basic/structs-with-comptime-fields.zig'));
       const object = new StructA({ number1: 123 });
-      expect(object.valueOf()).to.eql({ number1: 123, number2: 77 });
+      expect(object.number1).to.eql(123);
+      expect(object.number2).to.eql(77);
+      expect(object.number3).to.eql(0x1000000000000n);
+      expect(object.string.string).to.equal('Hello');
+      expect(object.number_type).to.be.an('function');
+      expect(new object.number_type(0)).to.be.an('i32');
       expect(() => object.number2 = 0).to.throw(Error);
       expect(() => object.$ = { number1: 88 }).to.not.throw();
       expect(() => object.$ = { number1: 88, number2: 1 }).to.throw();
+      const object2 = new StructB({});
+      expect(object2.number1).to.eql(77);
+      expect(object2.number2).to.eql(123);
+      expect(object2.number_type).to.be.an('function');
     })
     it('should import comptime struct', async function() {
       this.timeout(60000);
