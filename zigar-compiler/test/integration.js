@@ -293,6 +293,20 @@ export function addTests(importModule, options) {
       expect(module.fn1).to.be.undefined;
       expect(module.fn2).to.be.undefined;
     })
+    it('should import struct with comptime fields', async function() {
+      this.timeout(60000);
+      const { StructA, StructB } = await importModule(resolve('./zig-samples/basic/structs-with-comptime-fields.zig'));
+      const object = new StructA({ number1: 123 });
+      expect(object.valueOf()).to.eql({ number1: 123, number2: 77 });
+      expect(() => object.number2 = 0).to.throw(Error);
+      expect(() => object.$ = { number1: 88 }).to.not.throw();
+      expect(() => object.$ = { number1: 88, number2: 1 }).to.throw();
+    })
+    it('should import comptime struct', async function() {
+      this.timeout(60000);
+      const { default: module } = await importModule(resolve('./zig-samples/basic/comptime-struct.zig'));
+      // TODO: not working yet
+    })
   })
   describe('Methods', function() {
     it('should import simple function', async function() {

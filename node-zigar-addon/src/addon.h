@@ -35,6 +35,7 @@ enum class MemberType : uint32_t {
   Enum,
   Object,
   Type,
+  Comptime,
 };
 
 struct Structure {

@@ -132,6 +132,7 @@ pub const MemberType = enum(u32) {
     EnumerationItem,
     Object,
     Type,
+    Comptime,
 };
 
 pub const Value = *opaque {};
@@ -788,273 +789,340 @@ test "getUnionSelectorOffset" {
 }
 
 fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
-    switch (@typeInfo(T)) {
-        .Bool, .Int, .Float, .Void => {
-            try host.attachMember(structure, .{
-                .member_type = getMemberType(T),
-                .is_signed = isSigned(T),
-                .bit_size = @bitSizeOf(T),
-                .bit_offset = 0,
-                .byte_size = @sizeOf(T),
-                .structure = try getStructure(host, T),
-            }, false);
-        },
-        .Array => |ar| {
-            try host.attachMember(structure, .{
-                .member_type = getMemberType(ar.child),
-                .is_signed = isSigned(ar.child),
-                .bit_size = @bitSizeOf(ar.child),
-                .byte_size = @sizeOf(ar.child),
-                .structure = try getStructure(host, ar.child),
-            }, false);
-        },
-        .Pointer => |pt| {
-            const child_structure = try getStructure(host, pt.child);
-            const target_structure = switch (pt.size) {
-                .One => child_structure,
-                else => slice: {
-                    const slice_slot = getStructureSlot(pt.child, pt.size);
-                    const slice_def: Structure = .{
-                        .name = getSliceName(T),
-                        .structure_type = .Slice,
-                        .total_size = @sizeOf(pt.child),
-                        .ptr_align = getPtrAlign(pt.child),
-                        .has_pointer = hasPointer(pt.child),
-                    };
-                    const slice_structure = try host.beginStructure(slice_def);
-                    try host.writeGlobalSlot(slice_slot, slice_structure);
-                    try host.attachMember(slice_structure, .{
-                        .member_type = getMemberType(pt.child),
-                        .is_signed = isSigned(pt.child),
-                        .bit_size = @bitSizeOf(pt.child),
-                        .byte_size = @sizeOf(pt.child),
-                        .structure = child_structure,
-                    }, false);
-                    if (getSentinel(T)) |sentinel| {
-                        try host.attachMember(slice_structure, .{
-                            .name = "sentinel",
-                            .member_type = getMemberType(pt.child),
-                            .is_signed = isSigned(pt.child),
-                            .bit_offset = 0,
-                            .bit_size = @bitSizeOf(pt.child),
-                            .byte_size = @sizeOf(pt.child),
-                            .structure = child_structure,
-                        }, false);
-                        var bytes: []u8 = @constCast(std.mem.asBytes(&sentinel));
-                        const template = try host.createTemplate(bytes);
-                        try host.attachTemplate(slice_structure, template, false);
-                    }
-                    try host.finalizeStructure(slice_structure);
-                    break :slice slice_structure;
-                },
+    return switch (@typeInfo(T)) {
+        .Bool, .Int, .Float, .Void => addPrimitiveMember(host, structure, T),
+        .Array => addArrayMember(host, structure, T),
+        .Pointer => addPointerMember(host, structure, T),
+        .Struct => addStructMember(host, structure, T),
+        .Union => addUnionMember(host, structure, T),
+        .Enum => addEnumMember(host, structure, T),
+        .Optional => addOptionalMember(host, structure, T),
+        .ErrorUnion => addErrorUnionMember(host, structure, T),
+        .ErrorSet => addErrorSetMember(host, structure, T),
+        .Vector => addVectorMember(host, structure, T),
+        else => .{},
+    };
+}
+
+fn addPrimitiveMember(host: anytype, structure: Value, comptime T: type) !void {
+    try host.attachMember(structure, .{
+        .member_type = getMemberType(T),
+        .is_signed = isSigned(T),
+        .bit_size = @bitSizeOf(T),
+        .bit_offset = 0,
+        .byte_size = @sizeOf(T),
+        .structure = try getStructure(host, T),
+    }, false);
+}
+
+fn addArrayMember(host: anytype, structure: Value, comptime T: type) !void {
+    const ar = @typeInfo(T).Array;
+    try host.attachMember(structure, .{
+        .member_type = getMemberType(ar.child),
+        .is_signed = isSigned(ar.child),
+        .bit_size = @bitSizeOf(ar.child),
+        .byte_size = @sizeOf(ar.child),
+        .structure = try getStructure(host, ar.child),
+    }, false);
+}
+
+fn addVectorMember(host: anytype, structure: Value, comptime T: type) !void {
+    const ve = @typeInfo(T).Vector;
+    try host.attachMember(structure, .{
+        .member_type = getMemberType(ve.child),
+        .is_signed = isSigned(ve.child),
+        .bit_size = @bitSizeOf(ve.child),
+        .byte_size = @sizeOf(ve.child),
+        .structure = try getStructure(host, ve.child),
+    }, false);
+}
+
+fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
+    const pt = @typeInfo(T).Pointer;
+    const child_structure = try getStructure(host, pt.child);
+    const target_structure = switch (pt.size) {
+        .One => child_structure,
+        else => slice: {
+            const slice_slot = getStructureSlot(pt.child, pt.size);
+            const slice_def: Structure = .{
+                .name = getSliceName(T),
+                .structure_type = .Slice,
+                .total_size = @sizeOf(pt.child),
+                .ptr_align = getPtrAlign(pt.child),
+                .has_pointer = hasPointer(pt.child),
             };
-            try host.attachMember(structure, .{
-                .member_type = getMemberType(T),
-                .bit_size = @bitSizeOf(T),
-                .byte_size = @sizeOf(T),
-                .slot = 0,
-                .structure = target_structure,
+            const slice_structure = try host.beginStructure(slice_def);
+            try host.writeGlobalSlot(slice_slot, slice_structure);
+            try host.attachMember(slice_structure, .{
+                .member_type = getMemberType(pt.child),
+                .is_signed = isSigned(pt.child),
+                .bit_size = @bitSizeOf(pt.child),
+                .byte_size = @sizeOf(pt.child),
+                .structure = child_structure,
             }, false);
+            if (getSentinel(T)) |sentinel| {
+                try host.attachMember(slice_structure, .{
+                    .name = "sentinel",
+                    .member_type = getMemberType(pt.child),
+                    .is_signed = isSigned(pt.child),
+                    .bit_offset = 0,
+                    .bit_size = @bitSizeOf(pt.child),
+                    .byte_size = @sizeOf(pt.child),
+                    .structure = child_structure,
+                }, false);
+                var bytes: []u8 = @constCast(std.mem.asBytes(&sentinel));
+                const template = try host.createTemplate(bytes);
+                try host.attachTemplate(slice_structure, template, false);
+            }
+            try host.finalizeStructure(slice_structure);
+            break :slice slice_structure;
         },
-        .Struct => |st| {
-            // pre-allocate relocatable slots for fields that always need them
-            inline for (st.fields, 0..) |field, index| {
-                if (!field.is_comptime) {
-                    switch (getMemberType(field.type)) {
-                        .Object => _ = getObjectSlot(T, index),
-                        else => {},
-                    }
-                }
+    };
+    try host.attachMember(structure, .{
+        .member_type = getMemberType(T),
+        .bit_size = @bitSizeOf(T),
+        .byte_size = @sizeOf(T),
+        .slot = 0,
+        .structure = target_structure,
+    }, false);
+}
+
+fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
+    const st = @typeInfo(T).Struct;
+    // pre-allocate relocatable slots for fields that always need them
+    inline for (st.fields, 0..) |field, index| {
+        if (!field.is_comptime) {
+            switch (getMemberType(field.type)) {
+                .Object => _ = getObjectSlot(T, index),
+                else => {},
             }
-            inline for (st.fields, 0..) |field, index| {
-                if (!field.is_comptime) {
-                    try host.attachMember(structure, .{
-                        .name = getCString(field.name),
-                        .member_type = getMemberType(field.type),
-                        .is_signed = isSigned(field.type),
-                        .is_required = field.default_value == null,
-                        .bit_offset = @bitOffsetOf(T, field.name),
-                        .bit_size = @bitSizeOf(field.type),
-                        .byte_size = if (isPacked(T)) missing else @sizeOf(field.type),
-                        .slot = getObjectSlot(T, index),
-                        .structure = try getStructure(host, field.type),
-                    }, false);
-                }
-            }
-            if (!isArgumentStruct(T)) {
-                try addDefaultValues(host, structure, T);
-            }
-        },
-        .Union => |un| {
-            inline for (un.fields, 0..) |field, index| {
-                switch (getMemberType(field.type)) {
-                    .Object => _ = getObjectSlot(T, index),
-                    else => {},
-                }
-            }
-            const TT = un.tag_type orelse IntType(u8, un.fields.len);
-            const has_selector = if (un.tag_type) |_|
-                true
-            else if (runtime_safety and un.layout != .Extern)
-                true
-            else
-                false;
-            const tag_offset = if (has_selector) getUnionSelectorOffset(TT, un.fields) else missing;
-            const value_offset = if (tag_offset == 0) @sizeOf(TT) * 8 else 0;
-            inline for (un.fields, 0..) |field, index| {
+        }
+    }
+    inline for (st.fields, 0..) |field, index| {
+        if (!field.is_comptime) {
+            try host.attachMember(structure, .{
+                .name = getCString(field.name),
+                .member_type = getMemberType(field.type),
+                .is_signed = isSigned(field.type),
+                .is_required = field.default_value == null,
+                .bit_offset = @bitOffsetOf(T, field.name),
+                .bit_size = @bitSizeOf(field.type),
+                .byte_size = if (isPacked(T)) missing else @sizeOf(field.type),
+                .slot = getObjectSlot(T, index),
+                .structure = try getStructure(host, field.type),
+            }, false);
+        } else if (field.default_value) |opaque_ptr| {
+            if (field.type == type) {
+                // place the type directly into the member
+                const MT = @as(*const type, @ptrCast(@alignCast(opaque_ptr))).*;
                 try host.attachMember(structure, .{
                     .name = getCString(field.name),
-                    .member_type = getMemberType(field.type),
-                    .is_signed = isSigned(field.type),
-                    .bit_offset = value_offset,
-                    .bit_size = @bitSizeOf(field.type),
-                    .byte_size = if (isPacked(T)) missing else @sizeOf(field.type),
+                    .member_type = MemberType.Type,
+                    .structure = try getStructure(host, MT),
+                }, false);
+            } else {
+                // retrieve values from pointer objects in the template's slots
+                try host.attachMember(structure, .{
+                    .name = getCString(field.name),
+                    .member_type = MemberType.Comptime,
                     .slot = getObjectSlot(T, index),
-                    .structure = try getStructure(host, field.type),
+                    .structure = try getStructure(host, *const field.type),
                 }, false);
             }
-            if (has_selector) {
-                try host.attachMember(structure, .{
-                    .name = "selector",
-                    .member_type = getMemberType(TT),
-                    .is_signed = isSigned(TT),
-                    .bit_offset = tag_offset,
-                    .bit_size = @bitSizeOf(TT),
-                    .byte_size = if (isPacked(T)) missing else @sizeOf(TT),
-                    .structure = if (un.tag_type) |_| try getStructure(host, TT) else null,
-                }, false);
-            }
-        },
-        .Enum => |en| {
-            // find a type that fit all values
-            const IT = EnumType(T);
-            var values: [en.fields.len]IT = undefined;
-            inline for (en.fields, 0..) |field, index| {
-                values[index] = field.value;
-                try host.attachMember(structure, .{
-                    .name = getCString(field.name),
-                    .member_type = getMemberType(IT),
-                    .is_signed = isSigned(IT),
-                    .bit_size = @bitSizeOf(IT),
-                    .byte_size = @sizeOf(IT),
-                    .structure = try getStructure(host, IT),
-                }, false);
-            }
-            var bytes: []u8 = @constCast(std.mem.asBytes(&values));
-            const template = try host.createTemplate(bytes);
-            try host.attachTemplate(structure, template, false);
-        },
-        .Optional => |op| {
-            // value always comes first
-            try host.attachMember(structure, .{
-                .name = "value",
-                .member_type = getMemberType(op.child),
-                .is_signed = isSigned(op.child),
-                .bit_offset = 0,
-                .bit_size = @bitSizeOf(op.child),
-                .byte_size = @sizeOf(op.child),
-                .slot = 0,
-                .structure = try getStructure(host, op.child),
-            }, false);
-            const present_offset = switch (@typeInfo(op.child)) {
-                // present overlaps value (i.e. null pointer means false)
-                .Pointer => 0,
-                else => @sizeOf(op.child) * 8,
-            };
-            const present_byte_size = switch (@typeInfo(op.child)) {
-                // use pointer itself as boolean (null => false), returning the size of a
-                // generic pointer here since op.child could be a slice (pointer + length)
-                .Pointer => @sizeOf(*anyopaque),
-                else => @sizeOf(bool),
-            };
-            try host.attachMember(structure, .{
-                .name = "present",
-                .member_type = .Bool,
-                .bit_offset = present_offset,
-                .bit_size = @bitSizeOf(bool),
-                .byte_size = present_byte_size,
-                .structure = try getStructure(host, bool),
-            }, false);
-        },
-        .ErrorUnion => |eu| {
-            // value is placed after the error number if its alignment is smaller than that of anyerror
-            const error_offset = if (@alignOf(anyerror) > @alignOf(eu.payload)) 0 else @sizeOf(eu.payload) * 8;
-            const value_offset = if (error_offset == 0) @sizeOf(anyerror) * 8 else 0;
-            try host.attachMember(structure, .{
-                .name = "value",
-                .member_type = getMemberType(eu.payload),
-                .is_signed = isSigned(eu.payload),
-                .bit_offset = value_offset,
-                .bit_size = @bitSizeOf(eu.payload),
-                .byte_size = @sizeOf(eu.payload),
-                .slot = 0,
-                .structure = try getStructure(host, eu.payload),
-            }, false);
-            try host.attachMember(structure, .{
-                .name = "error",
-                .member_type = .Int,
-                .is_signed = false,
-                .bit_offset = error_offset,
-                .bit_size = @bitSizeOf(anyerror),
-                .byte_size = @sizeOf(anyerror),
-                .structure = try getStructure(host, eu.error_set),
-            }, false);
-        },
-        .ErrorSet => |es| {
-            if (es) |errors| {
-                inline for (errors) |err_rec| {
-                    // get error from global set
-                    const err = @field(anyerror, err_rec.name);
-                    try host.attachMember(structure, .{
-                        .name = getCString(err_rec.name),
-                        .member_type = .Object,
-                        .slot = @intFromError(err),
-                        .structure = null,
-                    }, false);
+        }
+    }
+    if (!isArgumentStruct(T)) {
+        // default data
+        var values: T = undefined;
+        var bytes: []u8 = @constCast(std.mem.asBytes(&values));
+        for (bytes) |*byte_ptr| {
+            byte_ptr.* = 0;
+        }
+        inline for (st.fields) |field| {
+            if (field.default_value) |opaque_ptr| {
+                const typed_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+                if (!field.is_comptime) {
+                    // set default value
+                    @field(values, field.name) = typed_ptr.*;
                 }
             }
-        },
-        .Vector => |ve| {
-            try host.attachMember(structure, .{
-                .member_type = getMemberType(ve.child),
-                .is_signed = isSigned(ve.child),
-                .bit_size = @bitSizeOf(ve.child),
-                .byte_size = @sizeOf(ve.child),
-                .structure = try getStructure(host, ve.child),
-            }, false);
-        },
-        else => {},
+        }
+        const template = try host.createTemplate(bytes);
+        // dezig members that has (or are) pointers
+        inline for (st.fields, 0..) |field, index| {
+            if (field.default_value) |opaque_ptr| {
+                if (!field.is_comptime) {
+                    if (hasPointer(field.type)) {
+                        const slot = getObjectSlot(T, index);
+                        const child_ptr = &@field(values, field.name);
+                        const child_obj = try obtainChildObject(host, template, slot, child_ptr, false);
+                        try dezigStructure(host, child_obj, child_ptr);
+                    }
+                } else if (field.type != type) {
+                    // comptime members are pointer objects
+                    const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+                    const VT = switch (@typeInfo(field.type)) {
+                        .ComptimeInt => IntType(i32, default_value_ptr.*),
+                        .ComptimeFloat => f64,
+                        else => field.type,
+                    };
+                    // copy the value
+                    const value: VT = default_value_ptr.*;
+                    const value_ptr = &value;
+                    const ptr_memory: Memory = .{
+                        .bytes = @ptrCast(@constCast(&value_ptr)),
+                        .len = @sizeOf(@TypeOf(value_ptr)),
+                    };
+                    const ptr_obj = try host.wrapMemory(ptr_memory, .Copy, @TypeOf(value_ptr), .One);
+                    // dezig it, creating SharedArrayBuffer or ArrayBuffer
+                    try dezigStructure(host, ptr_obj, &value_ptr);
+                    // place the pointer into the member's slot in the template
+                    const slot = getObjectSlot(T, index);
+                    try host.writeObjectSlot(template, slot, ptr_obj);
+                }
+            }
+        }
+        try host.attachTemplate(structure, template, false);
     }
 }
 
-fn addDefaultValues(host: anytype, structure: Value, comptime T: type) !void {
-    // default data
-    const fields = std.meta.fields(T);
-    var values: T = undefined;
+fn addUnionMember(host: anytype, structure: Value, comptime T: type) !void {
+    const un = @typeInfo(T).Union;
+    inline for (un.fields, 0..) |field, index| {
+        switch (getMemberType(field.type)) {
+            .Object => _ = getObjectSlot(T, index),
+            else => {},
+        }
+    }
+    const TT = un.tag_type orelse IntType(u8, un.fields.len);
+    const has_selector = if (un.tag_type) |_|
+        true
+    else if (runtime_safety and un.layout != .Extern)
+        true
+    else
+        false;
+    const tag_offset = if (has_selector) getUnionSelectorOffset(TT, un.fields) else missing;
+    const value_offset = if (tag_offset == 0) @sizeOf(TT) * 8 else 0;
+    inline for (un.fields, 0..) |field, index| {
+        try host.attachMember(structure, .{
+            .name = getCString(field.name),
+            .member_type = getMemberType(field.type),
+            .is_signed = isSigned(field.type),
+            .bit_offset = value_offset,
+            .bit_size = @bitSizeOf(field.type),
+            .byte_size = if (isPacked(T)) missing else @sizeOf(field.type),
+            .slot = getObjectSlot(T, index),
+            .structure = try getStructure(host, field.type),
+        }, false);
+    }
+    if (has_selector) {
+        try host.attachMember(structure, .{
+            .name = "selector",
+            .member_type = getMemberType(TT),
+            .is_signed = isSigned(TT),
+            .bit_offset = tag_offset,
+            .bit_size = @bitSizeOf(TT),
+            .byte_size = if (isPacked(T)) missing else @sizeOf(TT),
+            .structure = if (un.tag_type) |_| try getStructure(host, TT) else null,
+        }, false);
+    }
+}
+
+fn addEnumMember(host: anytype, structure: Value, comptime T: type) !void {
+    const en = @typeInfo(T).Enum;
+    // find a type that fit all values
+    const IT = EnumType(T);
+    var values: [en.fields.len]IT = undefined;
+    inline for (en.fields, 0..) |field, index| {
+        values[index] = field.value;
+        try host.attachMember(structure, .{
+            .name = getCString(field.name),
+            .member_type = getMemberType(IT),
+            .is_signed = isSigned(IT),
+            .bit_size = @bitSizeOf(IT),
+            .byte_size = @sizeOf(IT),
+            .structure = try getStructure(host, IT),
+        }, false);
+    }
     var bytes: []u8 = @constCast(std.mem.asBytes(&values));
-    for (bytes) |*byte_ptr| {
-        byte_ptr.* = 0;
-    }
-    inline for (fields) |field| {
-        if (field.default_value) |opaque_ptr| {
-            // set default value
-            const typed_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-            @field(values, field.name) = typed_ptr.*;
-        }
-    }
     const template = try host.createTemplate(bytes);
-    // dezig members that has (or are) pointers
-    inline for (fields, 0..) |field, index| {
-        if (field.default_value) |_| {
-            if (hasPointer(field.type)) {
-                const slot = getObjectSlot(T, index);
-                const child_ptr = &@field(values, field.name);
-                const child_obj = try obtainChildObject(host, template, slot, child_ptr, false);
-                try dezigStructure(host, child_obj, child_ptr);
-            }
+    try host.attachTemplate(structure, template, false);
+}
+
+fn addOptionalMember(host: anytype, structure: Value, comptime T: type) !void {
+    const op = @typeInfo(T).Optional;
+    // value always comes first
+    try host.attachMember(structure, .{
+        .name = "value",
+        .member_type = getMemberType(op.child),
+        .is_signed = isSigned(op.child),
+        .bit_offset = 0,
+        .bit_size = @bitSizeOf(op.child),
+        .byte_size = @sizeOf(op.child),
+        .slot = 0,
+        .structure = try getStructure(host, op.child),
+    }, false);
+    const present_offset = switch (@typeInfo(op.child)) {
+        // present overlaps value (i.e. null pointer means false)
+        .Pointer => 0,
+        else => @sizeOf(op.child) * 8,
+    };
+    const present_byte_size = switch (@typeInfo(op.child)) {
+        // use pointer itself as boolean (null => false), returning the size of a
+        // generic pointer here since op.child could be a slice (pointer + length)
+        .Pointer => @sizeOf(*anyopaque),
+        else => @sizeOf(bool),
+    };
+    try host.attachMember(structure, .{
+        .name = "present",
+        .member_type = .Bool,
+        .bit_offset = present_offset,
+        .bit_size = @bitSizeOf(bool),
+        .byte_size = present_byte_size,
+        .structure = try getStructure(host, bool),
+    }, false);
+}
+
+fn addErrorUnionMember(host: anytype, structure: Value, comptime T: type) !void {
+    const eu = @typeInfo(T).ErrorUnion;
+    // value is placed after the error number if its alignment is smaller than that of anyerror
+    const error_offset = if (@alignOf(anyerror) > @alignOf(eu.payload)) 0 else @sizeOf(eu.payload) * 8;
+    const value_offset = if (error_offset == 0) @sizeOf(anyerror) * 8 else 0;
+    try host.attachMember(structure, .{
+        .name = "value",
+        .member_type = getMemberType(eu.payload),
+        .is_signed = isSigned(eu.payload),
+        .bit_offset = value_offset,
+        .bit_size = @bitSizeOf(eu.payload),
+        .byte_size = @sizeOf(eu.payload),
+        .slot = 0,
+        .structure = try getStructure(host, eu.payload),
+    }, false);
+    try host.attachMember(structure, .{
+        .name = "error",
+        .member_type = .Int,
+        .is_signed = false,
+        .bit_offset = error_offset,
+        .bit_size = @bitSizeOf(anyerror),
+        .byte_size = @sizeOf(anyerror),
+        .structure = try getStructure(host, eu.error_set),
+    }, false);
+}
+
+fn addErrorSetMember(host: anytype, structure: Value, comptime T: type) !void {
+    const es = @typeInfo(T).ErrorSet;
+    if (es) |errors| {
+        inline for (errors) |err_rec| {
+            // get error from global set
+            const err = @field(anyerror, err_rec.name);
+            try host.attachMember(structure, .{
+                .name = getCString(err_rec.name),
+                .member_type = .Object,
+                .slot = @intFromError(err),
+                .structure = null,
+            }, false);
         }
     }
-    try host.attachTemplate(structure, template, false);
 }
 
 fn getPointerType(comptime T: type, comptime name: []const u8) type {
@@ -1082,62 +1150,69 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
         .Opaque => |op| op.decls,
         else => return,
     };
-    const S = opaque {};
+    if (decls.len == 0) {
+        return;
+    }
     var template_maybe: ?Value = null;
+    // a bookmark type for getObjectSlot
+    const Static = opaque {};
     inline for (decls, 0..) |decl, index| {
-        // get the pointer type (where possible)
-        const PT = getPointerType(T, decl.name);
-        if (PT == void) {
+        const decl_value = @field(T, decl.name);
+        const DT = @TypeOf(decl_value);
+        if (comptime !isSupported(DT)) {
             continue;
-        } else if (PT == type) {
-            try host.attachMember(structure, .{
-                .name = getCString(decl.name),
-                .member_type = .Type,
-                .slot = getObjectSlot(S, index),
-                .structure = try getStructure(host, @field(T, decl.name)),
-            }, true);
-        } else {
-            const slot = getObjectSlot(S, index);
-            try host.attachMember(structure, .{
-                .name = getCString(decl.name),
-                .member_type = .Object,
-                .slot = slot,
-                .structure = try getStructure(host, PT),
-            }, true);
-            // get address to variable
-            const FT = @TypeOf(@field(T, decl.name));
-            var typed_ptr = switch (@typeInfo(FT)) {
-                .ComptimeInt, .ComptimeFloat => ptr: {
-                    // need to create variable in memory for comptime value
-                    const CT = @typeInfo(PT).Pointer.child;
-                    var value: CT = @field(T, decl.name);
-                    break :ptr &value;
-                },
-                else => ptr: {
-                    if (@typeInfo(PT).Pointer.is_const) {
-                        // put a copy on the stack so it gets copied and we don't end
-                        // up pointing to pointing to read-only memory
-                        var stack_value = @field(T, decl.name);
-                        break :ptr &stack_value;
+        }
+        switch (@typeInfo(DT)) {
+            .Type => {
+                // export type if it's supported
+                if (comptime !isSupported(decl_value)) {
+                    continue;
+                }
+                try host.attachMember(structure, .{
+                    .name = getCString(decl.name),
+                    .member_type = .Type,
+                    .structure = try getStructure(host, decl_value),
+                }, true);
+            },
+            else => {
+                // get address to variable
+                const decl_ptr = &@field(T, decl.name);
+                var value_ptr = get_ptr: {
+                    const VT = switch (@typeInfo(DT)) {
+                        .ComptimeInt => IntType(i32, decl_value),
+                        .ComptimeFloat => f64,
+                        else => DT,
+                    };
+                    if (comptime isConst(@TypeOf(decl_ptr))) {
+                        const const_value: VT = decl_value;
+                        break :get_ptr &const_value;
                     } else {
-                        break :ptr &@field(T, decl.name);
+                        break :get_ptr decl_ptr;
                     }
-                },
-            };
-            // create the pointer object
-            const memory: Memory = .{
-                .bytes = @ptrCast(&typed_ptr),
-                .len = @sizeOf(PT),
-            };
-            const ptr_obj = try host.wrapMemory(memory, .Copy, PT, .One);
-            // dezig it, creating SharedArrayBuffer or ArrayBuffer
-            try dezigStructure(host, ptr_obj, &typed_ptr);
-            const template = template_maybe orelse create: {
-                const obj = try host.createTemplate(&.{});
-                template_maybe = obj;
-                break :create obj;
-            };
-            try host.writeObjectSlot(template, slot, ptr_obj);
+                };
+                // export variable as pointer
+                const slot = getObjectSlot(Static, index);
+                try host.attachMember(structure, .{
+                    .name = getCString(decl.name),
+                    .member_type = .Object,
+                    .slot = slot,
+                    .structure = try getStructure(host, @TypeOf(value_ptr)),
+                }, true);
+                // create the pointer object
+                const ptr_memory: Memory = .{
+                    .bytes = @ptrCast(&value_ptr),
+                    .len = @sizeOf(@TypeOf(value_ptr)),
+                };
+                const ptr_obj = try host.wrapMemory(ptr_memory, .Copy, @TypeOf(value_ptr), .One);
+                // dezig it, creating SharedArrayBuffer or ArrayBuffer
+                try dezigStructure(host, ptr_obj, &value_ptr);
+                const template = template_maybe orelse create: {
+                    const obj = try host.createTemplate(&.{});
+                    template_maybe = obj;
+                    break :create obj;
+                };
+                try host.writeObjectSlot(template, slot, ptr_obj);
+            },
         }
     }
     if (template_maybe) |template| {

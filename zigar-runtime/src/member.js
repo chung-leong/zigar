@@ -26,6 +26,7 @@ export const MemberType = {
   EnumerationItem: 4,
   Object: 5,
   Type: 6,
+  Comptime: 7,
 };
 
 const factories = Array(Object.values(MemberType).length);
