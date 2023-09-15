@@ -194,6 +194,11 @@ function addRuntimeCheck(options, getDataViewAccessor) {
       runtimeSafety = true,
     } = options;
     const accessor = getDataViewAccessor(access, member);
+    if (process.env.ZIGAR_DEV) {
+      if (!accessor) {
+        return;
+      }
+    }
     if (runtimeSafety && access === 'set') {
       const { min, max } = getIntRange(member);
       return function(offset, value, littleEndian) {
@@ -228,6 +233,11 @@ export function getEnumerationItemAccessorEx(access, member, options) {
 function addEnumerationLookup(getDataViewIntAccessor) {
   return function(access, member) {
     const accessor = getDataViewIntAccessor(access, { ...member, type: MemberType.Int });
+    if (process.env.ZIGAR_DEV) {
+      if (!accessor) {
+        return;
+      }
+    }
     const { structure } = member;
     if (access === 'get') {
       return function(offset, littleEndian) {
@@ -338,6 +348,11 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
   } = options;
   const { bitOffset, byteSize } = member;
   const accessor = getDataViewAccessor(access, member);
+  if (process.env.ZIGAR_DEV) {
+    if (!accessor) {
+      return;
+    }
+  }
   if (bitOffset !== undefined) {
     const offset = bitOffset >> 3;
     if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {

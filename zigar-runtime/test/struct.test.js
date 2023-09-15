@@ -4,6 +4,7 @@ import {
   MemberType,
   useBoolEx,
   useIntEx,
+  useUintEx,
   useObject,
 } from '../src/member.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
@@ -26,6 +27,7 @@ describe('Struct functions', function() {
       usePointer();
       useBoolEx();
       useIntEx();
+      useUintEx();
       useObject();
     })
     it('should define a simple struct', function() {
@@ -739,6 +741,73 @@ describe('Struct functions', function() {
       expect(object.dog['*']).to.equal(7788);
       const object2 = new Hello(object);
       expect(object2.dog['*']).to.equal(7788);
+    })
+    it('should not when default values are not available for all pointers', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        hasPointer: true
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(ptrStructure);
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        size: 8 * 2,
+        hasPointer: true
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Object,
+        isRequired: true,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 64,
+        byteSize: 8,
+        slot: 1,
+        structure: ptrStructure,
+      })
+      const int1 = new Int32(1234);
+      const int2 = new Int32(4567);
+      const intPtr2 = new Int32Ptr(int2);
+      attachTemplate(structure, {
+        [MEMORY]: new DataView(new ArrayBuffer(8 * 2)),
+        [SLOTS]: {
+          1: intPtr2,
+        }
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello({ dog: int1 });
+      expect(object.dog['*']).to.equal(1234);
+      expect(object.cat['*']).to.equal(4567);
     })
     it('should have correct string tag', function() {
       const structure = beginStructure({

@@ -15,6 +15,8 @@ import {
   useBoolEx,
   useInt,
   useIntEx,
+  useUint,
+  useUintEx,
   useFloat,
   useFloatEx,
   useEnumerationItem,
@@ -23,13 +25,15 @@ import {
   useType,
   getMemberFeature,
 } from '../src/member.js';
+import { clearMethodCache } from '../src/data-view.js';
 
 describe('Member functions', function() {
   beforeEach(function() {
     process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
     useVoid();
-    useBoolEx();
+    useBoolEx()
     useIntEx();
+    useUintEx();
     useFloatEx();
     useEnumerationItemEx();
     useObject();
@@ -60,7 +64,6 @@ describe('Member functions', function() {
   })
   describe('getAccessors', function() {
     it('should return void accessors', function() {
-      useVoid();
       const member = {
         type: MemberType.Void,
         bitSize: 0,
@@ -76,7 +79,6 @@ describe('Member functions', function() {
       expect(() => setNoCheck.call(object, null)).to.not.throw();
     })
     it('should return bool accessors', function() {
-      useBool();
       const object = {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
@@ -86,7 +88,6 @@ describe('Member functions', function() {
       };
       const member = {
         type: MemberType.Bool,
-        signed: false,
         bitSize: 1,
         bitOffset: 32,
         byteSize: 1,
@@ -97,13 +98,11 @@ describe('Member functions', function() {
       expect(get.call(object)).to.equal(false);
     })
     it('should return bitfield accessors', function() {
-      useBoolEx();
       const dv = new DataView(new ArrayBuffer(8));
       dv.setUint32(4, 3, true);
       const object = { [MEMORY]: dv };
       const member = {
         type: MemberType.Bool,
-        signed: false,
         bitSize: 1,
         bitOffset: 33,
       };
@@ -113,7 +112,58 @@ describe('Member functions', function() {
       expect(get.call(object)).to.equal(false);
       expect(dv.getUint32(4, true)).to.equal(1);
     })
+    it('should not return bitfield accessors when useBoolEx is not active', function() {
+      clearMethodCache();
+      useBool();
+      const member = {
+        type: MemberType.Bool,
+        bitSize: 1,
+        bitOffset: 33,
+      };
+      const { get, set } = getAccessors(member, {});
+      expect(get).to.be.undefined;
+      expect(set).to.be.undefined;
+    })
     it('should return int accessors', function() {
+      const object = {
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(8));
+          dv.setUint32(4, 1234, true);
+          return dv;
+        })(),
+      };
+      const member = {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      };
+      const { get, set } = getAccessors(member, {});
+      expect(get.call(object)).to.equal(1234);
+      set.call(object, 3456);
+      expect(get.call(object)).to.equal(3456);
+    })
+    it('should return uint accessors', function() {
+      const object = {
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(8));
+          dv.setUint32(4, 1234, true);
+          return dv;
+        })(),
+      };
+      const member = {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      };
+      const { get, set } = getAccessors(member, {});
+      expect(get.call(object)).to.equal(1234);
+      set.call(object, 3456);
+      expect(get.call(object)).to.equal(3456);
+    })
+    it('should return standard int accessors when only useIntEx is not set', function() {
+      clearMethodCache();
       useInt();
       const object = {
         [MEMORY]: (() => {
@@ -124,7 +174,27 @@ describe('Member functions', function() {
       };
       const member = {
         type: MemberType.Int,
-        signed: false,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      };
+      const { get, set } = getAccessors(member, {});
+      expect(get.call(object)).to.equal(1234);
+      set.call(object, 3456);
+      expect(get.call(object)).to.equal(3456);
+    })
+    it('should return standard int accessors when only useUintEx is not active', function() {
+      clearMethodCache();
+      useUint();
+      const object = {
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(8));
+          dv.setUint32(4, 1234, true);
+          return dv;
+        })(),
+      };
+      const member = {
+        type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -135,13 +205,28 @@ describe('Member functions', function() {
       expect(get.call(object)).to.equal(3456);
     })
     it('should return small int accessors', function() {
-      useIntEx();
       const dv = new DataView(new ArrayBuffer(8));
-      dv.setUint32(4, 0x07, true);
+      dv.setInt32(4, 0x07, true);
+      const object = { [MEMORY]: dv };
+      const member = {
+        type: MemberType.Int,
+        bitSize: 4,
+        bitOffset: 33,
+      };
+      const { get, set } = getAccessors(member, { runtimeSafety: true });
+      expect(get.call(object)).to.equal(3);
+      set.call(object, -6);
+      expect(get.call(object)).to.equal(-6);
+      expect(() => set.call(object, 15)).to.throw();
+      const { set: setNoCheck } = getAccessors(member, { runtimeSafety: false });
+      expect(() => setNoCheck.call(object, 15)).to.not.throw();
+    })
+    it('should return small uint accessors', function() {
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setInt32(4, 0x07, true);
       const object = { [MEMORY]: dv };
       const member = {
         type: MemberType.Uint,
-        signed: false,
         bitSize: 4,
         bitOffset: 33,
       };
@@ -149,13 +234,35 @@ describe('Member functions', function() {
       expect(get.call(object)).to.equal(3);
       set.call(object, 15);
       expect(get.call(object)).to.equal(15);
-      expect(dv.getUint32(4, true), 31);
       expect(() => set.call(object, 32)).to.throw();
       const { set: setNoCheck } = getAccessors(member, { runtimeSafety: false });
       expect(() => setNoCheck.call(object, 32)).to.not.throw();
     })
+    it('should not return small int accessors when useIntEx is not active', function() {
+      clearMethodCache();
+      useInt();
+      const member = {
+        type: MemberType.Int,
+        bitSize: 4,
+        bitOffset: 33,
+      };
+      const { get, set } = getAccessors(member, { runtimeSafety: true });
+      expect(get).to.be.undefined;
+      expect(set).to.be.undefined;
+    })
+    it('should not return small uint accessors when useUintEx is not active', function() {
+      clearMethodCache();
+      useUint();
+      const member = {
+        type: MemberType.Uint,
+        bitSize: 4,
+        bitOffset: 33,
+      };
+      const { get, set } = getAccessors(member, { runtimeSafety: true });
+      expect(get).to.be.undefined;
+      expect(set).to.be.undefined;
+    })
     it('should return float accessors', function() {
-      useFloat();
       const object = {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
@@ -165,7 +272,6 @@ describe('Member functions', function() {
       };
       const member = {
         type: MemberType.Float,
-        signed: false,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -176,7 +282,6 @@ describe('Member functions', function() {
       expect(get.call(object)).to.equal(1234.5678);
     })
     it('should return small float accessors', function() {
-      useFloatEx();
       const object = {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
@@ -185,7 +290,6 @@ describe('Member functions', function() {
       };
       const member = {
         type: MemberType.Float,
-        signed: false,
         bitSize: 16,
         bitOffset: 4,
         byteSize: 8,
@@ -195,8 +299,20 @@ describe('Member functions', function() {
       set.call(object, 3.5);
       expect(get.call(object)).to.equal(3.5);
     })
-    it('should return enum item accessor', function() {
-      useEnumerationItem();
+    it('should not return small float accessors when useFloatEx is not active', function() {
+      clearMethodCache();
+      useFloat();
+      const member = {
+        type: MemberType.Float,
+        bitSize: 16,
+        bitOffset: 4,
+        byteSize: 8,
+      };
+      const { get, set } = getAccessors(member, {});
+      expect(get).to.be.undefined;
+      expect(set).to.be.undefined;
+    })
+    it('should return enum item accessors', function() {
       const DummyValue1 = {
         valueOf() { return 1 }
       };
@@ -217,7 +333,6 @@ describe('Member functions', function() {
       const object = { [MEMORY]: dv };
       const member = {
         type: MemberType.EnumerationItem,
-        signed: false,
         bitSize: 8,
         bitOffset: 32,
         byteSize: 1,
@@ -237,8 +352,7 @@ describe('Member functions', function() {
       dv.setUint32(4, 3, true);
       expect(() => get.call(object)).to.throw();
     })
-    it('should return small enum item accessor', function() {
-      useEnumerationItemEx();
+    it('should return small enum item accessors', function() {
       const DummyValue1 = {
         valueOf() { return 1 }
       };
@@ -259,7 +373,6 @@ describe('Member functions', function() {
       const object = { [MEMORY]: dv };
       const member = {
         type: MemberType.EnumerationItem,
-        signed: false,
         bitSize: 4,
         bitOffset: 32,
         structure: { type: StructureType.Enumeration, constructor: DummyEnum },
@@ -269,6 +382,19 @@ describe('Member functions', function() {
       set.call(object, DummyEnum(2));
       expect(dv.getUint32(4, true)).to.equal(2);
       expect(get.call(object)).to.equal(DummyValue2);
+    })
+    it('should not return small enum item accessors when useEnumerationItemEx is not active', function() {
+      clearMethodCache();
+      useEnumerationItem();
+      const member = {
+        type: MemberType.EnumerationItem,
+        bitSize: 4,
+        bitOffset: 32,
+        structure: {},
+      };
+      const { get, set } = getAccessors(member, {});
+      expect(get).to.be.undefined;
+      expect(set).to.be.undefined;
     })
     it('should return object accessors (Struct)', function() {
       const DummyClass = function(arg) {
@@ -584,7 +710,6 @@ describe('Member functions', function() {
       };
       const member = {
         type: MemberType.Int,
-        signed: false,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -613,7 +738,6 @@ describe('Member functions', function() {
       };
       const member = {
         type: MemberType.Int,
-        signed: false,
         bitSize: 32,
         byteSize: 4,
       };
@@ -642,7 +766,6 @@ describe('Member functions', function() {
       };
       const member = {
         type: MemberType.Int,
-        signed: false,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -671,7 +794,6 @@ describe('Member functions', function() {
       };
       const member = {
         type: MemberType.Int,
-        signed: false,
         bitSize: 32,
         byteSize: 4,
       };
@@ -692,7 +814,6 @@ describe('Member functions', function() {
       };
       const member = {
         type: MemberType.Int,
-        signed: false,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,

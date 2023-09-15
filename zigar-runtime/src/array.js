@@ -130,15 +130,13 @@ export function createChildObjects(member, recv) {
   }
 }
 
-const empty = { [SLOTS]: {} };
-
 export function getPointerCopier(member) {
   return function(src) {
     const { structure: { pointerCopier } } = member;
     const destSlots = this[SLOTS];
     const srcSlots = src[SLOTS];
     for (let i = 0, len = this.length; i < len; i++) {
-      pointerCopier.call(destSlots[i], srcSlots[i] ?? empty);
+      pointerCopier.call(destSlots[i], srcSlots[i]);
     }
   };
 }
