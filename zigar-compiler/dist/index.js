@@ -470,11 +470,12 @@ const MemberType = {
   Void: 0,
   Bool: 1,
   Int: 2,
-  Float: 3,
-  EnumerationItem: 4,
-  Object: 5,
-  Type: 6,
-  Comptime: 7,
+  Uint: 3,
+  Float: 4,
+  EnumerationItem: 5,
+  Object: 6,
+  Type: 7,
+  Comptime: 8,
 };
 
 Array(Object.values(MemberType).length);
@@ -1065,6 +1066,9 @@ function generateCode(structures, params) {
   }
   if (memberFeatures.useIntEx) {
     delete memberFeatures.useInt;
+  }
+  if (memberFeatures.useUintEx) {
+    delete memberFeatures.useUint;
   }
   if (memberFeatures.useEnumerationItemEx) {
     delete memberFeatures.useEnumerationItem;

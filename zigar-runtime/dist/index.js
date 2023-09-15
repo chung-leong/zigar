@@ -633,6 +633,23 @@ function getDataViewIntAccessorEx(access, member) {
   });
 }
 
+function getDataViewUintAccessor(access, member) {
+  return getDataViewBuiltInAccessor(access, member);
+}
+
+function getDataViewUintAccessorEx(access, member) {
+  return cacheMethod(access, member, (name) => {
+    if (DataView.prototype[name]) {
+      return DataView.prototype[name];
+    }
+    if (isByteAligned(member)) {
+      return defineAlignedUintAccessor(access, member)
+    } else {
+      return defineUnalignedUintAccessor(access, member);
+    }
+  });
+}
+
 function getDataViewFloatAccessor(access, member) {
   return getDataViewBuiltInAccessor(access, member);
 }
@@ -891,6 +908,43 @@ function defineAlignedIntAccessor(access, member) {
   }
 }
 
+function defineAlignedUintAccessor(access, member) {
+  const { bitSize, byteSize } = member;
+  if (bitSize < 64) {
+    // actual number of bits needed when stored aligned
+    const typeName = getTypeName({ ...member, bitSize: byteSize * 8 });
+    const get = DataView.prototype[`get${typeName}`];
+    const set = DataView.prototype[`set${typeName}`];
+    const valueMask = (bitSize <= 32) ? (2 ** bitSize) - 1 : (2n ** BigInt(bitSize)) - 1n;
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const n = get.call(this, offset, littleEndian);
+        return n & valueMask;
+      };
+    } else {
+      return function(offset, value, littleEndian) {
+        const n = value & valueMask;
+        set.call(this, offset, n, littleEndian);
+      };
+    }
+  } else {
+    // larger than 64 bits
+    const { get, set } = getBigIntAccessors(bitSize);
+    const valueMask = (2n ** BigInt(bitSize)) - 1n;
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const n = get.call(this, offset, littleEndian);
+        return n & valueMask;
+      };
+    } else {
+      return function(offset, value, littleEndian) {
+        const n = value & valueMask;
+        set.call(this, offset, n, littleEndian);
+      };
+    }
+  }
+}
+
 function defineUnalignedIntAccessor(access, member) {
   const { bitSize, bitOffset } = member;
   const bitPos = bitOffset & 0x07;
@@ -917,6 +971,31 @@ function defineUnalignedIntAccessor(access, member) {
     }
   }
   return defineUnalignedAccessorUsing(access, member, getDataViewIntAccessorEx);
+}
+
+function defineUnalignedUintAccessor(access, member) {
+  const { bitSize, bitOffset } = member;
+  const bitPos = bitOffset & 0x07;
+  if (bitPos + bitSize <= 8) {
+    const set = DataView.prototype.setUint8;
+    const get = DataView.prototype.getUint8;
+    const valueMask = (2 ** bitSize - 1);
+    if (access === 'get') {
+      return function(offset) {
+        const n = get.call(this, offset);
+        const s = n >>> bitPos;
+        return s & valueMask;
+      };
+    } else {
+      const outsideMask = 0xFF ^ (valueMask << bitPos);
+      return function(offset, value) {
+        const n = get.call(this, offset);
+        const b = (n & outsideMask) | ((value & valueMask) << bitPos);
+        set.call(this, offset, b);
+      };
+    }
+  }
+  return defineUnalignedAccessorUsing(access, member, getDataViewUintAccessorEx);
 }
 
 function defineAlignedFloatAccessor(access, member) {
@@ -1308,12 +1387,12 @@ function getFloatAccessorEx(access, member, options) {
 }
 
 function getEnumerationItemAccessor(access, member, options) {
-  const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessor);
+  const getDataViewAccessor = addEnumerationLookup(getDataViewUintAccessor);
   return getAccessorUsing(access, member, options, getDataViewAccessor) ;
 }
 
 function getEnumerationItemAccessorEx(access, member, options) {
-  const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessorEx);
+  const getDataViewAccessor = addEnumerationLookup(getDataViewUintAccessorEx);
   return getAccessorUsing(access, member, options, getDataViewAccessor) ;
 }
 
@@ -1328,7 +1407,7 @@ function addEnumerationLookup(getDataViewIntAccessor) {
         // the enumeration constructor returns the object for the int value
         const object = constructor(value);
         if (!object) {
-          throwInvalidEnum(value);
+          throwInvalidEnum(structure, value);
         }
         return object;
       };

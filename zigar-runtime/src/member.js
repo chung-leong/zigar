@@ -216,12 +216,12 @@ export function getFloatAccessorEx(access, member, options) {
 }
 
 export function getEnumerationItemAccessor(access, member, options) {
-  const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessor);
+  const getDataViewAccessor = addEnumerationLookup(getDataViewUintAccessor);
   return getAccessorUsing(access, member, options, getDataViewAccessor) ;
 }
 
 export function getEnumerationItemAccessorEx(access, member, options) {
-  const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessorEx);
+  const getDataViewAccessor = addEnumerationLookup(getDataViewUintAccessorEx);
   return getAccessorUsing(access, member, options, getDataViewAccessor) ;
 }
 
@@ -236,7 +236,7 @@ function addEnumerationLookup(getDataViewIntAccessor) {
         // the enumeration constructor returns the object for the int value
         const object = constructor(value);
         if (!object) {
-          throwInvalidEnum(value)
+          throwInvalidEnum(structure, value)
         }
         return object;
       };
