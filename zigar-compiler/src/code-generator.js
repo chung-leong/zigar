@@ -39,6 +39,9 @@ export function generateCode(structures, params) {
   if (memberFeatures.useIntEx) {
     delete memberFeatures.useInt;
   }
+  if (memberFeatures.useUintEx) {
+    delete memberFeatures.useUint;
+  }
   if (memberFeatures.useEnumerationItemEx) {
     delete memberFeatures.useEnumerationItem;
   }

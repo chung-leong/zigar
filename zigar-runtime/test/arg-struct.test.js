@@ -3,6 +3,7 @@ import { expect } from 'chai';
 import {
   MemberType,
   useIntEx,
+  useUintEx,
   useObject,
 } from '../src/member.js';
 import { ZIG } from '../src/symbol.js';
@@ -24,6 +25,7 @@ describe('ArgStruct functions', function() {
       usePointer();
       usePrimitive();
       useIntEx();
+      useUintEx();
       useStruct();
       useObject();
     })
@@ -36,7 +38,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -44,7 +45,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -52,7 +52,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'retval',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 64,
         byteSize: 4,
@@ -74,7 +73,6 @@ describe('ArgStruct functions', function() {
       attachMember(childStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -82,7 +80,6 @@ describe('ArgStruct functions', function() {
       attachMember(childStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -105,7 +102,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: childStructure.size * 8,
         byteSize: 4,
@@ -113,7 +109,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'retval',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 64,
         byteSize: 4,
@@ -131,7 +126,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -139,7 +133,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -147,7 +140,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'retval',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 64,
         byteSize: 4,
@@ -163,8 +155,7 @@ describe('ArgStruct functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -194,7 +185,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: '0',
         type: MemberType.Object,
-        isSigned: true,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -204,7 +194,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'retval',
         type: MemberType.Object,
-        isSigned: true,
         bitSize: 64,
         bitOffset: 64,
         byteSize: 8,
@@ -225,7 +214,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: '0',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -233,7 +221,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: '1',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -241,7 +228,6 @@ describe('ArgStruct functions', function() {
       attachMember(structure, {
         name: 'retval',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 64,
         byteSize: 4,

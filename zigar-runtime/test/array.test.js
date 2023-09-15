@@ -3,6 +3,7 @@ import { expect } from 'chai';
 import {
   MemberType,
   useIntEx,
+  useUintEx,
   useObject,
   getAccessors,
 } from '../src/member.js';
@@ -33,6 +34,7 @@ describe('Array functions', function() {
       usePointer();
       useStruct();
       useIntEx();
+      useUintEx();
       useObject();
     })
     it('should define structure for holding an int array', function() {
@@ -43,8 +45,7 @@ describe('Array functions', function() {
       });
       const constructor = function() {};
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array }
@@ -67,8 +68,7 @@ describe('Array functions', function() {
         size: 4 * 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
@@ -102,8 +102,7 @@ describe('Array functions', function() {
         size: 4 * 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
@@ -120,8 +119,7 @@ describe('Array functions', function() {
         size: 4 * 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
@@ -143,8 +141,7 @@ describe('Array functions', function() {
         size: 4 * 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
@@ -167,8 +164,7 @@ describe('Array functions', function() {
         size: 4 * 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
@@ -194,8 +190,7 @@ describe('Array functions', function() {
         size: 4 * 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
@@ -211,8 +206,7 @@ describe('Array functions', function() {
         size: 4 * 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
@@ -230,8 +224,7 @@ describe('Array functions', function() {
         size: 4 * 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
@@ -248,8 +241,7 @@ describe('Array functions', function() {
         size: 8 * 4,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 64,
         byteSize: 8,
         structure: { constructor: function() {}, typedArray: BigUint64Array }
@@ -267,8 +259,7 @@ describe('Array functions', function() {
         size: 11,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -288,8 +279,7 @@ describe('Array functions', function() {
         size: 22,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
@@ -309,8 +299,7 @@ describe('Array functions', function() {
         size: 22,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
@@ -331,8 +320,7 @@ describe('Array functions', function() {
         size: 2,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
@@ -349,8 +337,7 @@ describe('Array functions', function() {
         size: 22,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
@@ -370,8 +357,7 @@ describe('Array functions', function() {
         size: 22,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
@@ -388,8 +374,7 @@ describe('Array functions', function() {
         size: 22,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
@@ -404,8 +389,7 @@ describe('Array functions', function() {
         size: 22,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
@@ -420,8 +404,7 @@ describe('Array functions', function() {
         size: 11,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -442,8 +425,7 @@ describe('Array functions', function() {
         size: 11,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -463,8 +445,7 @@ describe('Array functions', function() {
         size: 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -486,8 +467,7 @@ describe('Array functions', function() {
         size: 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -507,8 +487,7 @@ describe('Array functions', function() {
         size: 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -525,8 +504,7 @@ describe('Array functions', function() {
         size: 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -549,8 +527,7 @@ describe('Array functions', function() {
         size: 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -572,8 +549,7 @@ describe('Array functions', function() {
         size: 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -593,8 +569,7 @@ describe('Array functions', function() {
         size: 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -620,8 +595,7 @@ describe('Array functions', function() {
         size: 4 * 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
@@ -636,8 +610,7 @@ describe('Array functions', function() {
         size: 4 * 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
@@ -654,7 +627,6 @@ describe('Array functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         byteSize: 4,
         bitOffset: 0,
@@ -663,7 +635,6 @@ describe('Array functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         byteSize: 4,
         bitOffset: 32,
@@ -678,7 +649,6 @@ describe('Array functions', function() {
       });
       attachMember(ptrStructure, {
         type: MemberType.Object,
-        isSigned: true,
         isRequired: true,
         byteSize: 8,
         bitOffset: 0,
@@ -718,7 +688,6 @@ describe('Array functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         byteSize: 4,
         bitOffset: 0,
@@ -727,7 +696,6 @@ describe('Array functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         byteSize: 4,
         bitOffset: 32,
@@ -761,8 +729,7 @@ describe('Array functions', function() {
         size: 8 * 4,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 64,
         byteSize: 8,
         structure: { constructor: function() {}, typedArray: BigUint64Array }
@@ -784,8 +751,7 @@ describe('Array functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -834,8 +800,7 @@ describe('Array functions', function() {
         size: 8,
       });
       attachMember(sliceStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 64,
         byteSize: 8,
         structure: { constructor: Int64, typedArray: BigUint64Array },
@@ -847,8 +812,7 @@ describe('Array functions', function() {
         size: 8 * 4,
       });
       attachMember(arrayStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 64,
         byteSize: 8,
         structure: { constructor: Int64, typedArray: BigUint64Array },
@@ -865,8 +829,7 @@ describe('Array functions', function() {
         size: 4 * 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
@@ -892,8 +855,7 @@ describe('Array functions', function() {
         size: 4 * 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
@@ -923,7 +885,6 @@ describe('Array functions', function() {
     it('should return a iterator', function() {
       const member = {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       };
@@ -960,7 +921,6 @@ describe('Array functions', function() {
     it('should return a iterator', function() {
       const member = {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       };
@@ -999,7 +959,6 @@ describe('Array functions', function() {
     it('should create an entries object from an array', function() {
       const member = {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       };

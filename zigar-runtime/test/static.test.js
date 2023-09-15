@@ -39,7 +39,6 @@ describe('Static variable functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -84,16 +83,14 @@ describe('Static variable functions', function() {
       });
       attachMember(structure, {
         name: 'dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
       attachMember(structure, {
         name: 'cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -148,7 +145,6 @@ describe('Static variable functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -175,15 +171,13 @@ describe('Static variable functions', function() {
       });
       attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
       attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });

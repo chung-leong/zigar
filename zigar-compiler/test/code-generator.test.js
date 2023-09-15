@@ -27,7 +27,6 @@ describe('Code generation', function() {
           members: [
             {
               type: MemberType.Int,
-              isSigned: true,
               bitOffset: 0,
               bitSize: 32,
               byteSize: 4,
@@ -62,7 +61,6 @@ describe('Code generation', function() {
           members: [
             {
               type: MemberType.Int,
-              isSigned: true,
               bitOffset: 0,
               bitSize: 31,
               byteSize: 4,
@@ -445,7 +443,6 @@ describe('Code generation', function() {
             {
               type: MemberType.Object,
               name: "panda",
-              isSigned: true,
               bitOffset: 0,
               bitSize: 32,
               byteSize: 4,
@@ -617,7 +614,6 @@ describe('Code generation', function() {
           members: [
             {
               type: MemberType.Int,
-              isSigned: true,
               isConst: false,
               bitOffset: 0,
               bitSize: 32,
@@ -655,7 +651,6 @@ describe('Code generation', function() {
             members: [
               {
                 type: MemberType.Int,
-                isSigned: true,
                 bitOffset: 0,
                 bitSize,
                 byteSize: 8,

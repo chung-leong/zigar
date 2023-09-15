@@ -163,7 +163,6 @@ describe('Optional functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -171,7 +170,6 @@ describe('Optional functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -213,8 +211,7 @@ describe('Optional functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -271,8 +268,7 @@ describe('Optional functions', function() {
         size: 1,
       })
       attachMember(sliceStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array },
@@ -333,8 +329,7 @@ describe('Optional functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -431,8 +426,7 @@ describe('Optional functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -518,7 +512,6 @@ describe('Optional functions', function() {
         },
         {
           type: MemberType.Bool,
-          isSigned: false,
           bitOffset: 64,
           bitSize: 1,
           byteSize: 1,
@@ -585,7 +578,6 @@ describe('Optional functions', function() {
         },
         {
           type: MemberType.Bool,
-          isSigned: false,
           bitOffset: 64,
           bitSize: 1,
           byteSize: 1,

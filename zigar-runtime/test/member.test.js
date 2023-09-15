@@ -140,7 +140,7 @@ describe('Member functions', function() {
       dv.setUint32(4, 0x07, true);
       const object = { [MEMORY]: dv };
       const member = {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         signed: false,
         bitSize: 4,
         bitOffset: 33,
@@ -394,7 +394,6 @@ describe('Member functions', function() {
       useInt();
       const member = {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       };
@@ -421,7 +420,6 @@ describe('Member functions', function() {
       useInt();
       const member = {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 64,
         byteSize: 8,
       };
@@ -537,7 +535,6 @@ describe('Member functions', function() {
     it('should throw when index is out-of-bound', function() {
       const member = {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       };
@@ -555,7 +552,6 @@ describe('Member functions', function() {
     it('should return functions employing the correct endianness', function() {
       const member = {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       };
@@ -711,7 +707,6 @@ describe('Member functions', function() {
     it('should return name of function for handling standard int', function() {
       const member = {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       };
@@ -721,7 +716,6 @@ describe('Member functions', function() {
     it('should return name of function for handling unaligned int', function() {
       const member = {
         type: MemberType.Int,
-        isSigned: true,
         bitOffset: 2,
         bitSize: 32,
       };
@@ -731,7 +725,6 @@ describe('Member functions', function() {
     it('should return name of function for handling non-standard int', function() {
       const member = {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 35,
         byteSize: 8,
       };
@@ -741,7 +734,6 @@ describe('Member functions', function() {
     it('should return name of function for handling standard float', function() {
       const member = {
         type: MemberType.Float,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       };
@@ -751,7 +743,6 @@ describe('Member functions', function() {
     it('should return name of function for handling unaligned float', function() {
       const member = {
         type: MemberType.Float,
-        isSigned: true,
         bitOffset: 2,
         bitSize: 32,
       };
@@ -761,7 +752,6 @@ describe('Member functions', function() {
     it('should return name of function for handling non-standard float', function() {
       const member = {
         type: MemberType.Float,
-        isSigned: true,
         bitSize: 128,
         byteSize: 8,
       };
@@ -789,7 +779,6 @@ describe('Member functions', function() {
     it('should return name of function for handling standard enum', function() {
       const member = {
         type: MemberType.EnumerationItem,
-        isSigned: false,
         bitSize: 8,
         byteSize: 1,
       };
@@ -799,7 +788,6 @@ describe('Member functions', function() {
     it('should return name of function for handling unaligned enum', function() {
       const member = {
         type: MemberType.EnumerationItem,
-        isSigned: false,
         bitOffset: 2,
         bitSize: 8,
       };
@@ -809,7 +797,6 @@ describe('Member functions', function() {
     it('should return name of function for handling non-standard enum', function() {
       const member = {
         type: MemberType.EnumerationItem,
-        isSigned: false,
         bitSize: 4,
         byteSize: 1,
       };

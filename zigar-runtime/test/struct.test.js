@@ -37,7 +37,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -45,7 +44,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -86,7 +84,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -94,7 +91,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -111,7 +107,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -119,7 +114,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -151,7 +145,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -159,7 +152,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -191,7 +183,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -199,7 +190,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -226,7 +216,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -234,7 +223,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -261,7 +249,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -269,7 +256,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -331,15 +317,13 @@ describe('Struct functions', function() {
       });
       attachMember(structure, {
         name: 'dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 2,
         bitOffset: 0,
       });
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 3,
         bitOffset: 2,
       });
@@ -371,15 +355,13 @@ describe('Struct functions', function() {
       });
       attachMember(structure, {
         name: 'dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 2,
         bitOffset: 0,
       });
       attachMember(structure, {
         name: 'cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 2,
       });
@@ -404,16 +386,14 @@ describe('Struct functions', function() {
       });
       attachMember(structure, {
         name: 'dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
       });
       attachMember(structure, {
         name: 'cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 32,
@@ -435,16 +415,14 @@ describe('Struct functions', function() {
       });
       attachMember(structure, {
         name: 'dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
       });
       attachMember(structure, {
         name: 'cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 32,
@@ -461,16 +439,14 @@ describe('Struct functions', function() {
       });
       attachMember(structure, {
         name: 'dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
       });
       attachMember(structure, {
         name: 'cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 32,
@@ -487,15 +463,13 @@ describe('Struct functions', function() {
       });
       attachMember(structure, {
         name: 'dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
       });
       attachMember(structure, {
         name: 'cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 32,
@@ -519,16 +493,14 @@ describe('Struct functions', function() {
       });
       attachMember(structure, {
         name: 'dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
       });
       attachMember(structure, {
         name: 'cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 32,
@@ -548,16 +520,14 @@ describe('Struct functions', function() {
       });
       attachMember(structure, {
         name: 'dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
       });
       attachMember(structure, {
         name: 'cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 32,
@@ -577,16 +547,14 @@ describe('Struct functions', function() {
       });
       attachMember(structure, {
         name: 'dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
       });
       attachMember(structure, {
         name: 'cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 32,
@@ -606,16 +574,14 @@ describe('Struct functions', function() {
       });
       attachMember(structure, {
         name: 'dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
       });
       attachMember(structure, {
         name: 'cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 32,
@@ -635,16 +601,14 @@ describe('Struct functions', function() {
       });
       attachMember(structure, {
         name: 'dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: false,
         bitSize: 32,
         bitOffset: 0,
       });
       attachMember(structure, {
         name: 'cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         isRequired: false,
         bitSize: 32,
         bitOffset: 32,
@@ -674,7 +638,6 @@ describe('Struct functions', function() {
       attachMember(structureA, {
         type: MemberType.Int,
         name: 'number',
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -707,8 +670,7 @@ describe('Struct functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -787,7 +749,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -795,7 +756,6 @@ describe('Struct functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,

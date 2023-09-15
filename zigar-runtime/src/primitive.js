@@ -71,21 +71,24 @@ export function finalizePrimitive(s) {
   return constructor;
 };
 
-export function getIntRange({ isSigned, bitSize }) {
+export function getIntRange(member) {
+  const { type, bitSize } = member;
+  const signed = (type === MemberType.Int);
+  let magBits = (signed) ? bitSize - 1 : bitSize;
   if (bitSize <= 32) {
-    const max = 2 ** (isSigned ? bitSize - 1 : bitSize) - 1;
-    const min = (isSigned) ? -(2 ** (bitSize - 1)) : 0;
+    const max = 2 ** magBits - 1;
+    const min = (signed) ? -(2 ** magBits) : 0;
     return { min, max };
   } else {
-    bitSize = BigInt(bitSize);
-    const max = 2n ** (isSigned ? bitSize - 1n : bitSize) - 1n;
-    const min = (isSigned) ? -(2n ** (bitSize - 1n)) : 0n;
+    magBits = BigInt(magBits);
+    const max = 2n ** magBits - 1n;
+    const min = (signed) ? -(2n ** magBits) : 0n;
     return { min, max };
   }
 }
 
 export function getPrimitiveClass({ type, bitSize }) {
-  if (type === MemberType.Int) {
+  if (type === MemberType.Int || type === MemberType.Uint) {
     if (bitSize <= 32) {
       return Number;
     } else {

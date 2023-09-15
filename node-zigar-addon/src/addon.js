@@ -1,9 +1,10 @@
-import { MEMORY, SLOTS } from '../../zigar-runtime/src/symbol.js';
+import { SLOTS } from '../../zigar-runtime/src/symbol.js';
 import { invokeThunk } from '../../zigar-runtime/src/method.js';
 import {
   useVoid,
   useBoolEx,
   useIntEx,
+  useUintEx,
   useFloatEx,
   useEnumerationItemEx,
   useObject,
@@ -34,6 +35,7 @@ import {
 useVoid();
 useBoolEx();
 useIntEx();
+useUintEx();
 useFloatEx();
 useEnumerationItemEx();
 useObject();

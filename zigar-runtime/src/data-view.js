@@ -10,7 +10,7 @@ export function getDataViewBoolAccessor(access, member) {
     if (byteSize === undefined) {
       return undefined;
     }
-    const typeName = getTypeName({ type: MemberType.Int, isSigned: true, bitSize: byteSize * 8 });
+    const typeName = getTypeName({ type: MemberType.Int, bitSize: byteSize * 8 });
     const f = DataView.prototype[typeName];
     if (access === 'get') {
       const get = DataView.prototype[`get${typeName}`];
@@ -53,10 +53,15 @@ export function getDataViewBoolAccessorEx(access, member) {
   });
 }
 
-export function getDataViewIntAccessor(access, member) {
+function getDataViewBuiltInAccessor(access, member) {
   return cacheMethod(access, member, (name) => {
     return DataView.prototype[name];
   });
+}
+
+
+export function getDataViewIntAccessor(access, member) {
+  return getDataViewBuiltInAccessor(access, member);
 }
 
 export function getDataViewIntAccessorEx(access, member) {
@@ -72,10 +77,25 @@ export function getDataViewIntAccessorEx(access, member) {
   });
 }
 
-export function getDataViewFloatAccessor(access, member) {
+export function getDataViewUintAccessor(access, member) {
+  return getDataViewBuiltInAccessor(access, member);
+}
+
+export function getDataViewUintAccessorEx(access, member) {
   return cacheMethod(access, member, (name) => {
-    return DataView.prototype[name];
+    if (DataView.prototype[name]) {
+      return DataView.prototype[name];
+    }
+    if (isByteAligned(member)) {
+      return defineAlignedUintAccessor(access, member)
+    } else {
+      return defineUnalignedUintAccessor(access, member);
+    }
   });
+}
+
+export function getDataViewFloatAccessor(access, member) {
+  return getDataViewBuiltInAccessor(access, member);
 }
 
 export function getDataViewFloatAccessorEx(access, member) {
@@ -153,22 +173,20 @@ export function requireDataView(structure, arg) {
 function getTypedArrayClass(structure) {
   const { type, instance: { members } } = structure;
   if (type === StructureType.Primitive) {
-    const { type: memberType, isSigned, byteSize } = members[0];
+    const { type: memberType, byteSize } = members[0];
     if (memberType === MemberType.Int) {
-      if (isSigned) {
-        switch (byteSize) {
-          case 1: return Int8Array;
-          case 2: return Int16Array;
-          case 4: return Int32Array;
-          case 8: return BigInt64Array;
-        }
-      } else {
-        switch (byteSize) {
-          case 1: return Uint8Array;
-          case 2: return Uint16Array;
-          case 4: return Uint32Array;
-          case 8: return BigUint64Array;
-        }
+      switch (byteSize) {
+        case 1: return Int8Array;
+        case 2: return Int16Array;
+        case 4: return Int32Array;
+        case 8: return BigInt64Array;
+      }
+    } else if (memberType === MemberType.Uint) {
+      switch (byteSize) {
+        case 1: return Uint8Array;
+        case 2: return Uint16Array;
+        case 4: return Uint32Array;
+        case 8: return BigUint64Array;
       }
     } else if (memberType === MemberType.Float) {
       switch (byteSize) {
@@ -234,13 +252,15 @@ export function isBuffer(arg, typedArray) {
 }
 
 export function getTypeName(member) {
-  const { type, isSigned, bitSize, byteSize, structure } = member;
+  const { type, bitSize, byteSize, structure } = member;
   if (structure?.name === 'usize') {
     return 'USize';
   } else if (structure?.name === 'isize') {
     return 'ISize';
   } else if (type === MemberType.Int) {
-    return `${bitSize <= 32 ? '' : 'Big' }${isSigned ? 'Int' : 'Uint'}${bitSize}`;
+    return `${bitSize <= 32 ? '' : 'Big' }Int${bitSize}`;
+  } else if (type === MemberType.Uint) {
+    return `${bitSize <= 32 ? '' : 'Big' }Uint${bitSize}`;
   } else if (type === MemberType.Float) {
     return `Float${bitSize}`;
   } else if (type === MemberType.Bool) {
@@ -251,47 +271,12 @@ export function getTypeName(member) {
   }
 }
 
-function defineAlignedIntAccessor(access, member) {
-  const { isSigned, bitSize, byteSize } = member;
-  if (bitSize < 64) {
-    // actual number of bits needed when stored aligned
-    const typeName = getTypeName({ ...member, bitSize: byteSize * 8 });
-    const get = DataView.prototype[`get${typeName}`];
-    const set = DataView.prototype[`set${typeName}`];
-    if (isSigned) {
-      const signMask = (bitSize <= 32) ? 2 ** (bitSize - 1) : 2n ** BigInt(bitSize - 1);
-      const valueMask = (bitSize <= 32) ? signMask - 1 : signMask - 1n;
-      if (access === 'get') {
-        return function(offset, littleEndian) {
-          const n = get.call(this, offset, littleEndian);
-          return (n & valueMask) - (n & signMask);
-        };
-      } else {
-        return function(offset, value, littleEndian) {
-          const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
-          set.call(this, offset, n, littleEndian);
-        };
-      }
-    } else {
-      const valueMask = (bitSize <= 32) ? (2 ** bitSize) - 1 : (2n ** BigInt(bitSize)) - 1n;
-      if (access === 'get') {
-        return function(offset, littleEndian) {
-          const n = get.call(this, offset, littleEndian);
-          return n & valueMask;
-        };
-      } else {
-        return function(offset, value, littleEndian) {
-          const n = value & valueMask;
-          set.call(this, offset, n, littleEndian);
-        };
-      }
-    }
-  } else {
-    // larger than 64 bits
-    const getWord = DataView.prototype.getBigUint64;
-    const setWord = DataView.prototype.setBigUint64;
-    const wordCount = Math.ceil(bitSize / 64);
-    const get = function(offset, littleEndian) {
+function getBigIntAccessors(bitSize) {
+  const getWord = DataView.prototype.getBigUint64;
+  const setWord = DataView.prototype.setBigUint64;
+  const wordCount = Math.ceil(bitSize / 64);
+  return {
+    get: function(offset, littleEndian) {
       let n = 0n;
       if (littleEndian) {
         for (let i = 0, j = offset + (wordCount - 1) * 8; i < wordCount; i++, j -= 8) {
@@ -305,8 +290,8 @@ function defineAlignedIntAccessor(access, member) {
         }
       }
       return n;
-    };
-    const set = function(offset, value, littleEndian) {
+    },
+    set: function(offset, value, littleEndian) {
       let n = value;
       const mask = 0xFFFFFFFFFFFFFFFFn;
       if (littleEndian) {
@@ -324,82 +309,137 @@ function defineAlignedIntAccessor(access, member) {
         }
       }
       return n;
-    };
-    if (isSigned) {
-      const signMask = 2n ** BigInt(bitSize - 1);
-      const valueMask = signMask - 1n;
-      if (access === 'get') {
-        return function(offset, littleEndian) {
-          const n = get.call(this, offset, littleEndian);
-          return (n & valueMask) - (n & signMask);
-        };
-      } else {
-        return function(offset, value, littleEndian) {
-          const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
-          set.call(this, offset, n, littleEndian);
-        };
-      }
+    },
+  };
+}
+
+function defineAlignedIntAccessor(access, member) {
+  const { bitSize, byteSize } = member;
+  if (bitSize < 64) {
+    // actual number of bits needed when stored aligned
+    const typeName = getTypeName({ ...member, bitSize: byteSize * 8 });
+    const get = DataView.prototype[`get${typeName}`];
+    const set = DataView.prototype[`set${typeName}`];
+    const signMask = (bitSize <= 32) ? 2 ** (bitSize - 1) : 2n ** BigInt(bitSize - 1);
+    const valueMask = (bitSize <= 32) ? signMask - 1 : signMask - 1n;
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const n = get.call(this, offset, littleEndian);
+        return (n & valueMask) - (n & signMask);
+      };
     } else {
-      const valueMask = (2n ** BigInt(bitSize)) - 1n;
-      if (access === 'get') {
-        return function(offset, littleEndian) {
-          const n = get.call(this, offset, littleEndian);
-          return n & valueMask;
-        };
-      } else {
-        return function(offset, value, littleEndian) {
-          const n = value & valueMask;
-          set.call(this, offset, n, littleEndian);
-        };
-      }
+      return function(offset, value, littleEndian) {
+        const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
+        set.call(this, offset, n, littleEndian);
+      };
+    }
+  } else {
+    // larger than 64 bits
+    const { get, set } = getBigIntAccessors(bitSize);
+    const signMask = 2n ** BigInt(bitSize - 1);
+    const valueMask = signMask - 1n;
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const n = get.call(this, offset, littleEndian);
+        return (n & valueMask) - (n & signMask);
+      };
+    } else {
+      return function(offset, value, littleEndian) {
+        const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
+        set.call(this, offset, n, littleEndian);
+      };
+    }
+  }
+}
+
+function defineAlignedUintAccessor(access, member) {
+  const { bitSize, byteSize } = member;
+  if (bitSize < 64) {
+    // actual number of bits needed when stored aligned
+    const typeName = getTypeName({ ...member, bitSize: byteSize * 8 });
+    const get = DataView.prototype[`get${typeName}`];
+    const set = DataView.prototype[`set${typeName}`];
+    const valueMask = (bitSize <= 32) ? (2 ** bitSize) - 1 : (2n ** BigInt(bitSize)) - 1n;
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const n = get.call(this, offset, littleEndian);
+        return n & valueMask;
+      };
+    } else {
+      return function(offset, value, littleEndian) {
+        const n = value & valueMask;
+        set.call(this, offset, n, littleEndian);
+      };
+    }
+  } else {
+    // larger than 64 bits
+    const { get, set } = getBigIntAccessors(bitSize);
+    const valueMask = (2n ** BigInt(bitSize)) - 1n;
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const n = get.call(this, offset, littleEndian);
+        return n & valueMask;
+      };
+    } else {
+      return function(offset, value, littleEndian) {
+        const n = value & valueMask;
+        set.call(this, offset, n, littleEndian);
+      };
     }
   }
 }
 
 function defineUnalignedIntAccessor(access, member) {
-  const { isSigned, bitSize, bitOffset } = member;
+  const { bitSize, bitOffset } = member;
   const bitPos = bitOffset & 0x07;
   if (bitPos + bitSize <= 8) {
     const set = DataView.prototype.setUint8;
     const get = DataView.prototype.getUint8;
     // sub-8-bit numbers have real use cases
-    if (isSigned) {
-      const signMask = 2 ** (bitSize - 1);
-      const valueMask = signMask - 1;
-      if (access === 'get') {
-        return function(offset) {
-          const n = get.call(this, offset);
-          const s = n >>> bitPos;
-          return (s & valueMask) - (s & signMask);
-        };
-      } else {
-        const outsideMask = 0xFF ^ ((valueMask | signMask) << bitPos);
-        return function(offset, value) {
-          let b = get.call(this, offset);
-          const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
-          b = (b & outsideMask) | (n << bitPos);
-          set.call(this, offset, b);
-        };
-      }
+    const signMask = 2 ** (bitSize - 1);
+    const valueMask = signMask - 1;
+    if (access === 'get') {
+      return function(offset) {
+        const n = get.call(this, offset);
+        const s = n >>> bitPos;
+        return (s & valueMask) - (s & signMask);
+      };
     } else {
-      const valueMask = (2 ** bitSize - 1);
-      if (access === 'get') {
-        return function(offset) {
-          const n = get.call(this, offset);
-          const s = n >>> bitPos;
-          return s & valueMask;
-        };
-      } else {
-        const outsideMask = 0xFF ^ (valueMask << bitPos);
-        return function(offset, value) {
-          const n = get.call(this, offset);
-          const b = (n & outsideMask) | ((value & valueMask) << bitPos);
-          set.call(this, offset, b);
-        };
-      }
+      const outsideMask = 0xFF ^ ((valueMask | signMask) << bitPos);
+      return function(offset, value) {
+        let b = get.call(this, offset);
+        const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
+        b = (b & outsideMask) | (n << bitPos);
+        set.call(this, offset, b);
+      };
     }
   }
   return defineUnalignedAccessorUsing(access, member, getDataViewIntAccessorEx);
+}
+
+function defineUnalignedUintAccessor(access, member) {
+  const { bitSize, bitOffset } = member;
+  const bitPos = bitOffset & 0x07;
+  if (bitPos + bitSize <= 8) {
+    const set = DataView.prototype.setUint8;
+    const get = DataView.prototype.getUint8;
+    const valueMask = (2 ** bitSize - 1);
+    if (access === 'get') {
+      return function(offset) {
+        const n = get.call(this, offset);
+        const s = n >>> bitPos;
+        return s & valueMask;
+      };
+    } else {
+      const outsideMask = 0xFF ^ (valueMask << bitPos);
+      return function(offset, value) {
+        const n = get.call(this, offset);
+        const b = (n & outsideMask) | ((value & valueMask) << bitPos);
+        set.call(this, offset, b);
+      };
+    }
+  }
+  return defineUnalignedAccessorUsing(access, member, getDataViewUintAccessorEx);
 }
 
 function defineAlignedFloatAccessor(access, member) {
@@ -593,7 +633,7 @@ function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
 }
 
 function cacheMethod(access, member, cb) {
-  const { type, isSigned, bitOffset, bitSize } = member;
+  const { type, bitOffset, bitSize } = member;
   const bitPos = bitOffset & 0x07;
   const typeName = getTypeName(member);
   const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
@@ -601,9 +641,10 @@ function cacheMethod(access, member, cb) {
   let fn = methodCache[name];
   if (!fn) {
     // usize and isize can return/accept number or bigint
-    if (type === MemberType.Int && (typeName === 'USize' || typeName === 'ISize')) {
+    if ((type === MemberType.Int && typeName === 'ISize')
+     || (type === MemberType.Uint && typeName === 'USize')) {
       if (bitSize === 64) {
-        const realTypeName = (isSigned) ? 'BigInt64' : 'BigUint64';
+        const realTypeName = (type === MemberType.Int) ? 'BigInt64' : 'BigUint64';
         const realName = `${access}${realTypeName}`;
         if (access === 'get') {
           const get = cb(realName);
@@ -628,7 +669,7 @@ function cacheMethod(access, member, cb) {
           };
         }
       } else if (bitSize === 32) {
-        const realTypeName = (isSigned) ? 'Int32' : 'Uint32';
+        const realTypeName = (type === MemberType.Int) ? 'Int32' : 'Uint32';
         const realName = `${access}${realTypeName}`;
         if (access === 'get') {
           fn = cb(realName);

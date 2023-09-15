@@ -39,8 +39,7 @@ describe('Pointer functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -74,8 +73,7 @@ describe('Pointer functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -106,17 +104,15 @@ describe('Pointer functions', function() {
         hasPointer: false,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'cat',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'dog',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -154,17 +150,15 @@ describe('Pointer functions', function() {
         hasPointer: false,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'cat',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'dog',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -200,17 +194,15 @@ describe('Pointer functions', function() {
         hasPointer: false,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'cat',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'dog',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -246,17 +238,15 @@ describe('Pointer functions', function() {
         hasPointer: false,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'cat',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'dog',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -295,17 +285,15 @@ describe('Pointer functions', function() {
         hasPointer: false,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'cat',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'dog',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -343,17 +331,15 @@ describe('Pointer functions', function() {
         hasPointer: false,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'cat',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'dog',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -403,8 +389,7 @@ describe('Pointer functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -438,8 +423,7 @@ describe('Pointer functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -475,8 +459,7 @@ describe('Pointer functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -508,17 +491,15 @@ describe('Pointer functions', function() {
         hasPointer: false,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'cat',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'dog',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -567,7 +548,6 @@ describe('Pointer functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       });
@@ -580,7 +560,6 @@ describe('Pointer functions', function() {
       });
       attachMember(sliceStructure, {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
         structure: intStructure,
@@ -616,7 +595,6 @@ describe('Pointer functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       });
@@ -629,7 +607,6 @@ describe('Pointer functions', function() {
       });
       attachMember(sliceStructure, {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
         structure: intStructure,
@@ -670,7 +647,6 @@ describe('Pointer functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       });
@@ -683,7 +659,6 @@ describe('Pointer functions', function() {
       });
       attachMember(sliceStructure, {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
         structure: intStructure,
@@ -730,7 +705,6 @@ describe('Pointer functions', function() {
       });
       attachMember(boolStructure, {
         type: MemberType.Bool,
-        isSigned: true,
         bitSize: 1,
         byteSize: 8,
       });
@@ -783,7 +757,6 @@ describe('Pointer functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
       });
@@ -796,7 +769,6 @@ describe('Pointer functions', function() {
       });
       attachMember(sliceStructure, {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
         structure: intStructure,
@@ -810,7 +782,6 @@ describe('Pointer functions', function() {
       });
       attachMember(arrayStructure, {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         byteSize: 4,
         structure: intStructure,
@@ -845,8 +816,7 @@ describe('Pointer functions', function() {
         hasPointer: false,
       });
       attachMember(uintStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         bitOffset: 0,
         byteSize: 1,
@@ -897,17 +867,15 @@ describe('Pointer functions', function() {
         hasPointer: false,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'cat',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'dog',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -967,8 +935,7 @@ describe('Pointer functions', function() {
         hasPointer: false,
       });
       attachMember(uintStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         bitOffset: 0,
         byteSize: 1,
@@ -1041,8 +1008,7 @@ describe('Pointer functions', function() {
         hasPointer: false,
       });
       attachMember(uintStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         bitOffset: 0,
         byteSize: 1,
@@ -1109,8 +1075,7 @@ describe('Pointer functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -1149,8 +1114,7 @@ describe('Pointer functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -1183,8 +1147,7 @@ describe('Pointer functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -1220,8 +1183,7 @@ describe('Pointer functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -1257,8 +1219,7 @@ describe('Pointer functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -1295,17 +1256,15 @@ describe('Pointer functions', function() {
         hasPointer: false,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'cat',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
       attachMember(structStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         name: 'dog',
-        isSigned: false,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,

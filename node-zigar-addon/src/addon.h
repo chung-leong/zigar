@@ -31,6 +31,7 @@ enum class MemberType : uint32_t {
   Void,
   Bool,
   Int,
+  Uint,
   Float,
   Enum,
   Object,

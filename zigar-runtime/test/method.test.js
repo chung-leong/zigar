@@ -129,7 +129,6 @@ describe('Method functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -137,7 +136,6 @@ describe('Method functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -159,7 +157,6 @@ describe('Method functions', function() {
       attachMember(argStruct, {
         name: 'retval',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 64,
         byteSize: 4,
@@ -195,15 +192,13 @@ describe('Method functions', function() {
       });
       attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
       attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
@@ -232,7 +227,6 @@ describe('Method functions', function() {
       attachMember(argStruct, {
         name: '1',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,

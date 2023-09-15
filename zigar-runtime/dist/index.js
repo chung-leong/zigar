@@ -567,7 +567,7 @@ function getDataViewBoolAccessor(access, member) {
     if (byteSize === undefined) {
       return undefined;
     }
-    const typeName = getTypeName({ type: MemberType.Int, isSigned: true, bitSize: byteSize * 8 });
+    const typeName = getTypeName({ type: MemberType.Int, bitSize: byteSize * 8 });
     if (access === 'get') {
       const get = DataView.prototype[`get${typeName}`];
       return function(offset, littleEndian) {
@@ -609,10 +609,15 @@ function getDataViewBoolAccessorEx(access, member) {
   });
 }
 
-function getDataViewIntAccessor(access, member) {
+function getDataViewBuiltInAccessor(access, member) {
   return cacheMethod(access, member, (name) => {
     return DataView.prototype[name];
   });
+}
+
+
+function getDataViewIntAccessor(access, member) {
+  return getDataViewBuiltInAccessor(access, member);
 }
 
 function getDataViewIntAccessorEx(access, member) {
@@ -629,9 +634,7 @@ function getDataViewIntAccessorEx(access, member) {
 }
 
 function getDataViewFloatAccessor(access, member) {
-  return cacheMethod(access, member, (name) => {
-    return DataView.prototype[name];
-  });
+  return getDataViewBuiltInAccessor(access, member);
 }
 
 function getDataViewFloatAccessorEx(access, member) {
@@ -706,30 +709,39 @@ function requireDataView(structure, arg) {
   return dv;
 }
 
-function getTypedArrayClass(member) {
-  const { type, isSigned, byteSize } = member;
-  if (type === MemberType.Int) {
-    if (isSigned) {
+function getTypedArrayClass(structure) {
+  const { type, instance: { members } } = structure;
+  if (type === StructureType.Primitive) {
+    const { type: memberType, byteSize } = members[0];
+    if (memberType === MemberType.Int) {
       switch (byteSize) {
         case 1: return Int8Array;
         case 2: return Int16Array;
         case 4: return Int32Array;
         case 8: return BigInt64Array;
       }
-    } else {
+    } else if (memberType === MemberType.Uint) {
       switch (byteSize) {
         case 1: return Uint8Array;
         case 2: return Uint16Array;
         case 4: return Uint32Array;
         case 8: return BigUint64Array;
       }
+    } else if (memberType === MemberType.Float) {
+      switch (byteSize) {
+        case 4: return Float32Array;
+        case 8: return Float64Array;
+      }
     }
-  } else if (type === MemberType.Float) {
-    switch (byteSize) {
-      case 4: return Float32Array;
-      case 8: return Float64Array;
-    }
+  } else if (type === StructureType.Array || type === StructureType.Slice || type === StructureType.Vector) {
+    const { structure: { typedArray } } = members[0];
+    return typedArray;
   }
+  return null;
+}
+
+function addTypedArray(structure) {
+  return structure.typedArray = getTypedArrayClass(structure);
 }
 
 function isTypedArray(arg, TypedArray) {
@@ -779,13 +791,15 @@ function isBuffer(arg, typedArray) {
 }
 
 function getTypeName(member) {
-  const { type, isSigned, bitSize, byteSize, structure } = member;
+  const { type, bitSize, byteSize, structure } = member;
   if (structure?.name === 'usize') {
     return 'USize';
   } else if (structure?.name === 'isize') {
     return 'ISize';
   } else if (type === MemberType.Int) {
-    return `${bitSize <= 32 ? '' : 'Big' }${isSigned ? 'Int' : 'Uint'}${bitSize}`;
+    return `${bitSize <= 32 ? '' : 'Big' }Int${bitSize}`;
+  } else if (type === MemberType.Uint) {
+    return `${bitSize <= 32 ? '' : 'Big' }Uint${bitSize}`;
   } else if (type === MemberType.Float) {
     return `Float${bitSize}`;
   } else if (type === MemberType.Bool) {
@@ -796,47 +810,12 @@ function getTypeName(member) {
   }
 }
 
-function defineAlignedIntAccessor(access, member) {
-  const { isSigned, bitSize, byteSize } = member;
-  if (bitSize < 64) {
-    // actual number of bits needed when stored aligned
-    const typeName = getTypeName({ ...member, bitSize: byteSize * 8 });
-    const get = DataView.prototype[`get${typeName}`];
-    const set = DataView.prototype[`set${typeName}`];
-    if (isSigned) {
-      const signMask = (bitSize <= 32) ? 2 ** (bitSize - 1) : 2n ** BigInt(bitSize - 1);
-      const valueMask = (bitSize <= 32) ? signMask - 1 : signMask - 1n;
-      if (access === 'get') {
-        return function(offset, littleEndian) {
-          const n = get.call(this, offset, littleEndian);
-          return (n & valueMask) - (n & signMask);
-        };
-      } else {
-        return function(offset, value, littleEndian) {
-          const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
-          set.call(this, offset, n, littleEndian);
-        };
-      }
-    } else {
-      const valueMask = (bitSize <= 32) ? (2 ** bitSize) - 1 : (2n ** BigInt(bitSize)) - 1n;
-      if (access === 'get') {
-        return function(offset, littleEndian) {
-          const n = get.call(this, offset, littleEndian);
-          return n & valueMask;
-        };
-      } else {
-        return function(offset, value, littleEndian) {
-          const n = value & valueMask;
-          set.call(this, offset, n, littleEndian);
-        };
-      }
-    }
-  } else {
-    // larger than 64 bits
-    const getWord = DataView.prototype.getBigUint64;
-    const setWord = DataView.prototype.setBigUint64;
-    const wordCount = Math.ceil(bitSize / 64);
-    const get = function(offset, littleEndian) {
+function getBigIntAccessors(bitSize) {
+  const getWord = DataView.prototype.getBigUint64;
+  const setWord = DataView.prototype.setBigUint64;
+  const wordCount = Math.ceil(bitSize / 64);
+  return {
+    get: function(offset, littleEndian) {
       let n = 0n;
       if (littleEndian) {
         for (let i = 0, j = offset + (wordCount - 1) * 8; i < wordCount; i++, j -= 8) {
@@ -850,8 +829,8 @@ function defineAlignedIntAccessor(access, member) {
         }
       }
       return n;
-    };
-    const set = function(offset, value, littleEndian) {
+    },
+    set: function(offset, value, littleEndian) {
       let n = value;
       const mask = 0xFFFFFFFFFFFFFFFFn;
       if (littleEndian) {
@@ -869,79 +848,72 @@ function defineAlignedIntAccessor(access, member) {
         }
       }
       return n;
-    };
-    if (isSigned) {
-      const signMask = 2n ** BigInt(bitSize - 1);
-      const valueMask = signMask - 1n;
-      if (access === 'get') {
-        return function(offset, littleEndian) {
-          const n = get.call(this, offset, littleEndian);
-          return (n & valueMask) - (n & signMask);
-        };
-      } else {
-        return function(offset, value, littleEndian) {
-          const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
-          set.call(this, offset, n, littleEndian);
-        };
-      }
+    },
+  };
+}
+
+function defineAlignedIntAccessor(access, member) {
+  const { bitSize, byteSize } = member;
+  if (bitSize < 64) {
+    // actual number of bits needed when stored aligned
+    const typeName = getTypeName({ ...member, bitSize: byteSize * 8 });
+    const get = DataView.prototype[`get${typeName}`];
+    const set = DataView.prototype[`set${typeName}`];
+    const signMask = (bitSize <= 32) ? 2 ** (bitSize - 1) : 2n ** BigInt(bitSize - 1);
+    const valueMask = (bitSize <= 32) ? signMask - 1 : signMask - 1n;
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const n = get.call(this, offset, littleEndian);
+        return (n & valueMask) - (n & signMask);
+      };
     } else {
-      const valueMask = (2n ** BigInt(bitSize)) - 1n;
-      if (access === 'get') {
-        return function(offset, littleEndian) {
-          const n = get.call(this, offset, littleEndian);
-          return n & valueMask;
-        };
-      } else {
-        return function(offset, value, littleEndian) {
-          const n = value & valueMask;
-          set.call(this, offset, n, littleEndian);
-        };
-      }
+      return function(offset, value, littleEndian) {
+        const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
+        set.call(this, offset, n, littleEndian);
+      };
+    }
+  } else {
+    // larger than 64 bits
+    const { get, set } = getBigIntAccessors(bitSize);
+    const signMask = 2n ** BigInt(bitSize - 1);
+    const valueMask = signMask - 1n;
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const n = get.call(this, offset, littleEndian);
+        return (n & valueMask) - (n & signMask);
+      };
+    } else {
+      return function(offset, value, littleEndian) {
+        const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
+        set.call(this, offset, n, littleEndian);
+      };
     }
   }
 }
 
 function defineUnalignedIntAccessor(access, member) {
-  const { isSigned, bitSize, bitOffset } = member;
+  const { bitSize, bitOffset } = member;
   const bitPos = bitOffset & 0x07;
   if (bitPos + bitSize <= 8) {
     const set = DataView.prototype.setUint8;
     const get = DataView.prototype.getUint8;
     // sub-8-bit numbers have real use cases
-    if (isSigned) {
-      const signMask = 2 ** (bitSize - 1);
-      const valueMask = signMask - 1;
-      if (access === 'get') {
-        return function(offset) {
-          const n = get.call(this, offset);
-          const s = n >>> bitPos;
-          return (s & valueMask) - (s & signMask);
-        };
-      } else {
-        const outsideMask = 0xFF ^ ((valueMask | signMask) << bitPos);
-        return function(offset, value) {
-          let b = get.call(this, offset);
-          const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
-          b = (b & outsideMask) | (n << bitPos);
-          set.call(this, offset, b);
-        };
-      }
+    const signMask = 2 ** (bitSize - 1);
+    const valueMask = signMask - 1;
+    if (access === 'get') {
+      return function(offset) {
+        const n = get.call(this, offset);
+        const s = n >>> bitPos;
+        return (s & valueMask) - (s & signMask);
+      };
     } else {
-      const valueMask = (2 ** bitSize - 1);
-      if (access === 'get') {
-        return function(offset) {
-          const n = get.call(this, offset);
-          const s = n >>> bitPos;
-          return s & valueMask;
-        };
-      } else {
-        const outsideMask = 0xFF ^ (valueMask << bitPos);
-        return function(offset, value) {
-          const n = get.call(this, offset);
-          const b = (n & outsideMask) | ((value & valueMask) << bitPos);
-          set.call(this, offset, b);
-        };
-      }
+      const outsideMask = 0xFF ^ ((valueMask | signMask) << bitPos);
+      return function(offset, value) {
+        let b = get.call(this, offset);
+        const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
+        b = (b & outsideMask) | (n << bitPos);
+        set.call(this, offset, b);
+      };
     }
   }
   return defineUnalignedAccessorUsing(access, member, getDataViewIntAccessorEx);
@@ -1138,7 +1110,7 @@ function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
 }
 
 function cacheMethod(access, member, cb) {
-  const { type, isSigned, bitOffset, bitSize } = member;
+  const { type, bitOffset, bitSize } = member;
   const bitPos = bitOffset & 0x07;
   const typeName = getTypeName(member);
   const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
@@ -1146,9 +1118,10 @@ function cacheMethod(access, member, cb) {
   let fn = methodCache[name];
   if (!fn) {
     // usize and isize can return/accept number or bigint
-    if (type === MemberType.Int && (typeName === 'USize' || typeName === 'ISize')) {
+    if ((type === MemberType.Int && typeName === 'ISize')
+     || (type === MemberType.Uint && typeName === 'USize')) {
       if (bitSize === 64) {
-        const realTypeName = (isSigned) ? 'BigInt64' : 'BigUint64';
+        const realTypeName = (type === MemberType.Int) ? 'BigInt64' : 'BigUint64';
         const realName = `${access}${realTypeName}`;
         if (access === 'get') {
           const get = cb(realName);
@@ -1173,7 +1146,7 @@ function cacheMethod(access, member, cb) {
           };
         }
       } else if (bitSize === 32) {
-        const realTypeName = (isSigned) ? 'Int32' : 'Uint32';
+        const realTypeName = (type === MemberType.Int) ? 'Int32' : 'Uint32';
         const realName = `${access}${realTypeName}`;
         if (access === 'get') {
           fn = cb(realName);
@@ -1204,11 +1177,12 @@ const MemberType = {
   Void: 0,
   Bool: 1,
   Int: 2,
-  Float: 3,
-  EnumerationItem: 4,
-  Object: 5,
-  Type: 6,
-  Comptime: 7,
+  Uint: 3,
+  Float: 4,
+  EnumerationItem: 5,
+  Object: 6,
+  Type: 7,
+  Comptime: 8,
 };
 
 const factories$1 = Array(Object.values(MemberType).length);
@@ -1544,8 +1518,8 @@ function addSpecialAccessors(s) {
 
 function canBeString(s) {
   if (s.type === StructureType.Array || s.type === StructureType.Slice) {
-    const { type, isSigned, bitSize } = s.instance.members[0];
-    if (type === MemberType.Int && !isSigned && (bitSize === 8 || bitSize === 16)) {
+    const { type, bitSize } = s.instance.members[0];
+    if (type === MemberType.Uint && (bitSize === 8 || bitSize === 16)) {
       return true;
     }
   }
@@ -1721,6 +1695,7 @@ function finalizePrimitive(s) {
     },
     options,
   } = s;
+  addTypedArray(s);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -1742,7 +1717,6 @@ function finalizePrimitive(s) {
     }
   };
   const copy = getMemoryCopier(size);
-  s.typedArray = getTypedArrayClass(member);
   const specialKeys = getSpecialKeys(s);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -1778,21 +1752,24 @@ function finalizePrimitive(s) {
   addSpecialAccessors(s);
   return constructor;
 }
-function getIntRange({ isSigned, bitSize }) {
+function getIntRange(member) {
+  const { type, bitSize } = member;
+  const signed = (type === MemberType.Int);
+  let magBits = (signed) ? bitSize - 1 : bitSize;
   if (bitSize <= 32) {
-    const max = 2 ** (isSigned ? bitSize - 1 : bitSize) - 1;
-    const min = (isSigned) ? -(2 ** (bitSize - 1)) : 0;
+    const max = 2 ** magBits - 1;
+    const min = (signed) ? -(2 ** magBits) : 0;
     return { min, max };
   } else {
-    bitSize = BigInt(bitSize);
-    const max = 2n ** (isSigned ? bitSize - 1n : bitSize) - 1n;
-    const min = (isSigned) ? -(2n ** (bitSize - 1n)) : 0n;
+    magBits = BigInt(magBits);
+    const max = 2n ** magBits - 1n;
+    const min = (signed) ? -(2n ** magBits) : 0n;
     return { min, max };
   }
 }
 
 function getPrimitiveClass({ type, bitSize }) {
-  if (type === MemberType.Int) {
+  if (type === MemberType.Int || type === MemberType.Uint) {
     if (bitSize <= 32) {
       return Number;
     } else {
@@ -1821,6 +1798,7 @@ function finalizeArray(s) {
     hasPointer,
     options,
   } = s;
+  addTypedArray(s);
   const objectMember = (member.type === MemberType.Object) ? member : null;
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
@@ -1849,7 +1827,6 @@ function finalizeArray(s) {
   const { byteSize: elementSize, structure: elementStructure } = member;
   const length = size / elementSize;
   const copy = getMemoryCopier(size);
-  s.typedArray = getTypedArrayClass(member);
   const specialKeys = getSpecialKeys(s);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -1928,13 +1905,15 @@ function createChildObjects$1(member, recv) {
   }
 }
 
+const empty$1 = { [SLOTS]: {} };
+
 function getPointerCopier$1(member) {
   return function(src) {
     const { structure: { pointerCopier } } = member;
     const destSlots = this[SLOTS];
     const srcSlots = src[SLOTS];
     for (let i = 0, len = this.length; i < len; i++) {
-      pointerCopier.call(destSlots[i], srcSlots[i]);
+      pointerCopier.call(destSlots[i], srcSlots[i] ?? empty$1);
     }
   };
 }
@@ -2271,6 +2250,7 @@ function finalizeStruct(s) {
         if (template && !specialInit && found < members.length) {
           copy(this[MEMORY], template[MEMORY]);
           if (pointerCopier) {
+            //console.log({ name, template });
             pointerCopier.call(this, template);
           }
         }
@@ -2308,13 +2288,15 @@ function createChildObjects(members, recv) {
   }
 }
 
+const empty = { [SLOTS]: {} };
+
 function getPointerCopier(members) {
   const pointerMembers = members.filter(m => m.structure.hasPointer);
   return function(src) {
     const destSlots = this[SLOTS];
     const srcSlots = src[SLOTS];
     for (const { slot, structure: { pointerCopier } } of pointerMembers) {
-      pointerCopier.call(destSlots[slot], srcSlots[slot]);
+      pointerCopier.call(destSlots[slot], srcSlots[slot] ?? empty);
     }
   };
 }
@@ -2917,16 +2899,14 @@ function finalizePointer(s) {
   const addressSize = (isTargetSlice) ? size / 2 : size;
   const usizeStructure = { name: 'usize', size: addressSize };
   const setAddress = getAccessors({
-    type: MemberType.Int,
-    isSigned: false,
+    type: MemberType.Uint,
     bitOffset: 0,
     bitSize: addressSize * 8,
     byteSize: addressSize,
     structure: usizeStructure,
   }, options).set;
   const setLength = (isTargetSlice) ? getAccessors({
-    type: MemberType.Int,
-    isSigned: false,
+    type: MemberType.Uint,
     bitOffset: addressSize * 8,
     bitSize: addressSize * 8,
     byteSize: addressSize,
@@ -3165,9 +3145,9 @@ function finalizeSlice(s) {
     hasPointer,
     options,
   } = s;
+  const typedArray = addTypedArray(s);
   const objectMember = (member.type === MemberType.Object) ? member : null;
   const { byteSize: elementSize, structure: elementStructure } = member;
-  const typedArray = s.typedArray = getTypedArrayClass(member);
   const sentinel = getSentinel(s, options);
   if (sentinel) {
     // zero-terminated strings aren't expected to be commonly used
@@ -3381,6 +3361,7 @@ function finalizeVector(s) {
     },
     options,
   } = s;
+  addTypedArray(s);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -3402,22 +3383,26 @@ function finalizeVector(s) {
     }
   };
   const { byteSize: elementSize, structure: elementStructure } = member;
-  const count = size / elementSize;
+  const length = size / elementSize;
   const copy = getMemoryCopier(size);
-  const typedArray = s.typedArray = getTypedArrayClass(member);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
     } else {
-      if (Array.isArray(arg) || isTypedArray(arg, typedArray)) {
-        const len = arg.length;
-        if (len !== count) {
+      if (arg?.[Symbol.iterator]) {
+        let argLen = arg.length;
+        if (typeof(argLen) !== 'number') {
+          arg = [ ...arg ];
+          argLen = arg.length;
+        }
+        if (argLen !== length) {
           throwArrayLengthMismatch(s, this, arg);
         }
-        for (let i = 0; i < len; i++) {
-          this[i] = arg[i];
+        let i = 0;
+        for (const value of arg) {
+          this[i++] = value;
         }
       } else {
         throwInvalidArrayInitializer(s, arg);
@@ -3425,12 +3410,12 @@ function finalizeVector(s) {
     }
   };
   const retriever = function() { return this };
-  for (let i = 0, bitOffset = 0; i < count; i++, bitOffset += elementSize * 8) {
+  for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementSize * 8) {
     const { get, set } = getAccessors({ ...member, bitOffset }, options);
     Object.defineProperty(constructor.prototype, i, { get, set, configurable: true });
   }
   Object.defineProperties(constructor.prototype, {
-    length: { value: count, configurable: true },
+    length: { value: length, configurable: true },
     $: { get: retriever, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
     entries: { value: createVectorEntries, configurable: true, writable: true },
@@ -3617,8 +3602,11 @@ function useArgStruct() {
 }
 
 function getShortName(s) {
-  const { name } = s;
-  return name.replace(/[^. ]*?\./g, '');
+  let r = s.name;
+  r = r.replace(/\(.*\)/, '');
+  r = r.replace(/{.*}/, '');
+  r = r.replace(/[^. ]*?\./g, '');
+  return r;
 }
 
 function finalizeStructure(s) {

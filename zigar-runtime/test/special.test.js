@@ -217,7 +217,6 @@ describe('Special property functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         byteSize: 4,
         bitOffset: 0,
@@ -226,7 +225,6 @@ describe('Special property functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         byteSize: 4,
         bitOffset: 32,
@@ -299,8 +297,7 @@ describe('Special property functions', function() {
         size: 4,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array },
@@ -317,7 +314,6 @@ describe('Special property functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Int8Array },
@@ -333,8 +329,7 @@ describe('Special property functions', function() {
         size: 1,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array },
@@ -350,8 +345,7 @@ describe('Special property functions', function() {
         size: 2,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array },
@@ -367,8 +361,7 @@ describe('Special property functions', function() {
         size: 2,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 15,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array },

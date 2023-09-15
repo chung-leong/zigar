@@ -31,16 +31,14 @@ export function finalizePointer(s) {
   const addressSize = (isTargetSlice) ? size / 2 : size;
   const usizeStructure = { name: 'usize', size: addressSize };
   const setAddress = getAccessors({
-    type: MemberType.Int,
-    isSigned: false,
+    type: MemberType.Uint,
     bitOffset: 0,
     bitSize: addressSize * 8,
     byteSize: addressSize,
     structure: usizeStructure,
   }, options).set;
   const setLength = (isTargetSlice) ? getAccessors({
-    type: MemberType.Int,
-    isSigned: false,
+    type: MemberType.Uint,
     bitOffset: addressSize * 8,
     bitSize: addressSize * 8,
     byteSize: addressSize,

@@ -250,9 +250,6 @@ pub const Host = struct {
         _ = self;
         const def = createObject();
         setObjectProperty(def, "type", member.member_type);
-        if (member.member_type == MemberType.Int) {
-            setObjectProperty(def, "isSigned", member.is_signed);
-        }
         setObjectProperty(def, "isRequired", member.is_required);
         if (member.bit_offset != missing) {
             setObjectProperty(def, "bitOffset", member.bit_offset);

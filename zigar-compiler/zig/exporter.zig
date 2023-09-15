@@ -128,6 +128,7 @@ pub const MemberType = enum(u32) {
     Void = 0,
     Bool,
     Int,
+    Uint,
     Float,
     EnumerationItem,
     Object,
@@ -153,7 +154,6 @@ pub const Member = extern struct {
     name: ?[*:0]const u8 = null,
     member_type: MemberType,
     is_required: bool = false,
-    is_signed: bool = false,
     bit_offset: usize = missing,
     bit_size: usize = missing,
     byte_size: usize = missing,
@@ -416,7 +416,7 @@ test "hasPointerArguments" {
 fn getMemberType(comptime T: type) MemberType {
     return switch (@typeInfo(T)) {
         .Bool => .Bool,
-        .Int => .Int,
+        .Int => |int| if (int.signedness == .signed) .Int else .Uint,
         .Float => .Float,
         .Enum => .EnumerationItem,
         .Struct, .Union, .Array, .ErrorUnion, .Optional, .Pointer, .Vector => .Object,
@@ -813,7 +813,6 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
 fn addPrimitiveMember(host: anytype, structure: Value, comptime T: type) !void {
     try host.attachMember(structure, .{
         .member_type = getMemberType(T),
-        .is_signed = isSigned(T),
         .bit_size = @bitSizeOf(T),
         .bit_offset = 0,
         .byte_size = @sizeOf(T),
@@ -825,7 +824,6 @@ fn addArrayMember(host: anytype, structure: Value, comptime T: type) !void {
     const ar = @typeInfo(T).Array;
     try host.attachMember(structure, .{
         .member_type = getMemberType(ar.child),
-        .is_signed = isSigned(ar.child),
         .bit_size = @bitSizeOf(ar.child),
         .byte_size = @sizeOf(ar.child),
         .structure = try getStructure(host, ar.child),
@@ -836,7 +834,6 @@ fn addVectorMember(host: anytype, structure: Value, comptime T: type) !void {
     const ve = @typeInfo(T).Vector;
     try host.attachMember(structure, .{
         .member_type = getMemberType(ve.child),
-        .is_signed = isSigned(ve.child),
         .bit_size = @bitSizeOf(ve.child),
         .byte_size = @sizeOf(ve.child),
         .structure = try getStructure(host, ve.child),
@@ -861,7 +858,6 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
             try host.writeGlobalSlot(slice_slot, slice_structure);
             try host.attachMember(slice_structure, .{
                 .member_type = getMemberType(pt.child),
-                .is_signed = isSigned(pt.child),
                 .bit_size = @bitSizeOf(pt.child),
                 .byte_size = @sizeOf(pt.child),
                 .structure = child_structure,
@@ -870,7 +866,6 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
                 try host.attachMember(slice_structure, .{
                     .name = "sentinel",
                     .member_type = getMemberType(pt.child),
-                    .is_signed = isSigned(pt.child),
                     .bit_offset = 0,
                     .bit_size = @bitSizeOf(pt.child),
                     .byte_size = @sizeOf(pt.child),
@@ -909,7 +904,6 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
             try host.attachMember(structure, .{
                 .name = getCString(field.name),
                 .member_type = getMemberType(field.type),
-                .is_signed = isSigned(field.type),
                 .is_required = field.default_value == null,
                 .bit_offset = @bitOffsetOf(T, field.name),
                 .bit_size = @bitSizeOf(field.type),
@@ -1013,7 +1007,6 @@ fn addUnionMember(host: anytype, structure: Value, comptime T: type) !void {
         try host.attachMember(structure, .{
             .name = getCString(field.name),
             .member_type = getMemberType(field.type),
-            .is_signed = isSigned(field.type),
             .bit_offset = value_offset,
             .bit_size = @bitSizeOf(field.type),
             .byte_size = if (isPacked(T)) missing else @sizeOf(field.type),
@@ -1025,7 +1018,6 @@ fn addUnionMember(host: anytype, structure: Value, comptime T: type) !void {
         try host.attachMember(structure, .{
             .name = "selector",
             .member_type = getMemberType(TT),
-            .is_signed = isSigned(TT),
             .bit_offset = tag_offset,
             .bit_size = @bitSizeOf(TT),
             .byte_size = if (isPacked(T)) missing else @sizeOf(TT),
@@ -1044,7 +1036,6 @@ fn addEnumMember(host: anytype, structure: Value, comptime T: type) !void {
         try host.attachMember(structure, .{
             .name = getCString(field.name),
             .member_type = getMemberType(IT),
-            .is_signed = isSigned(IT),
             .bit_size = @bitSizeOf(IT),
             .byte_size = @sizeOf(IT),
             .structure = try getStructure(host, IT),
@@ -1061,7 +1052,6 @@ fn addOptionalMember(host: anytype, structure: Value, comptime T: type) !void {
     try host.attachMember(structure, .{
         .name = "value",
         .member_type = getMemberType(op.child),
-        .is_signed = isSigned(op.child),
         .bit_offset = 0,
         .bit_size = @bitSizeOf(op.child),
         .byte_size = @sizeOf(op.child),
@@ -1097,7 +1087,6 @@ fn addErrorUnionMember(host: anytype, structure: Value, comptime T: type) !void 
     try host.attachMember(structure, .{
         .name = "value",
         .member_type = getMemberType(eu.payload),
-        .is_signed = isSigned(eu.payload),
         .bit_offset = value_offset,
         .bit_size = @bitSizeOf(eu.payload),
         .byte_size = @sizeOf(eu.payload),
@@ -1106,8 +1095,7 @@ fn addErrorUnionMember(host: anytype, structure: Value, comptime T: type) !void 
     }, false);
     try host.attachMember(structure, .{
         .name = "error",
-        .member_type = .Int,
-        .is_signed = false,
+        .member_type = .Uint,
         .bit_offset = error_offset,
         .bit_size = @bitSizeOf(anyerror),
         .byte_size = @sizeOf(anyerror),

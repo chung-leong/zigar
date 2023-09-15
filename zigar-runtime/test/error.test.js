@@ -551,7 +551,6 @@ describe('Error functions', function() {
       const member = {
         name: 'hello',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 8,
       };
       expect(() => throwOverflow(member, 1024)).to.throw(TypeError)
@@ -563,7 +562,6 @@ describe('Error functions', function() {
       const member1 = {
         name: 'hello',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 8,
         bitOffset: 0,
       };
@@ -571,7 +569,6 @@ describe('Error functions', function() {
         .with.property('message').that.contains('hello');
       const member2 = {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 8,
       };
       expect(() => throwOutOfBound(member2, 16)).to.throw(RangeError)
@@ -584,7 +581,6 @@ describe('Error functions', function() {
       const member = {
         name: 'hello',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 8,
       };
       expect(() => rethrowRangeError(member, 5, new RangeError)).to.throw(RangeError);
@@ -596,7 +592,6 @@ describe('Error functions', function() {
       const member = {
         name: 'hello',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 8,
       };
       expect(() => throwNotNull(member)).to.throw(RangeError)

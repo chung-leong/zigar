@@ -15,6 +15,8 @@ import {
   getDataViewBoolAccessorEx,
   getDataViewIntAccessor,
   getDataViewIntAccessorEx,
+  getDataViewUintAccessor,
+  getDataViewUintAccessorEx,
   getDataViewFloatAccessor,
   getDataViewFloatAccessorEx,
   clearMethodCache,
@@ -73,14 +75,13 @@ describe('Data view functions', function() {
         BigUint64Array,
       ];
       for (const byteSize of [ 1, 2, 4, 8 ]) {
-        for (const isSigned of [ true, false ]) {
+        for (const type of [ MemberType.Int, MemberType.Uint ]) {
           const structure = {
             type: StructureType.Primitive,
             instance: {
               members: [
                 {
-                  type: MemberType.Int,
-                  isSigned,
+                  type,
                   bitSize: byteSize * 8,
                   byteSize,
                 },
@@ -100,8 +101,7 @@ describe('Data view functions', function() {
         instance: {
           members: [
             {
-              type: MemberType.Int,
-              isSigned: false,
+              type: MemberType.Uint,
               bitSize: 36,
               byteSize: 8,
             },
@@ -126,7 +126,6 @@ describe('Data view functions', function() {
             members: [
               {
                 type: MemberType.Float,
-                isSigned: false,
                 bitSize: byteSize * 8,
                 byteSize,
               },
@@ -144,7 +143,6 @@ describe('Data view functions', function() {
           members: [
             {
               type: MemberType.Float,
-              isSigned: false,
               bitSize: 64,
               byteSize: 8,
               structure: {
@@ -164,7 +162,6 @@ describe('Data view functions', function() {
           members: [
             {
               type: MemberType.Float,
-              isSigned: false,
               bitSize: 64,
               byteSize: 8,
               structure: {
@@ -184,7 +181,6 @@ describe('Data view functions', function() {
           members: [
             {
               type: MemberType.Float,
-              isSigned: false,
               bitSize: 64,
               byteSize: 8,
               structure: {
@@ -402,9 +398,9 @@ describe('Data view functions', function() {
   describe('getTypeName', function() {
     it('should return the name for a integer type', function() {
       const members = [
-        { type: MemberType.Int, isSigned: true, bitSize: 32 },
-        { type: MemberType.Int, isSigned: true, bitSize: 64 },
-        { type: MemberType.Int, isSigned: true, bitSize: 33 },
+        { type: MemberType.Int, bitSize: 32 },
+        { type: MemberType.Int, bitSize: 64 },
+        { type: MemberType.Int, bitSize: 33 },
       ];
       expect(getTypeName(members[0])).to.equal('Int32');
       expect(getTypeName(members[1])).to.equal('BigInt64');
@@ -412,9 +408,9 @@ describe('Data view functions', function() {
     })
     it('should return the correct name for unsigned integers', function() {
       const members = [
-        { type: MemberType.Int, isSigned: false, bitSize: 32 },
-        { type: MemberType.Int, isSigned: false, bitSize: 64 },
-        { type: MemberType.Int, isSigned: false, bitSize: 33 },
+        { type: MemberType.Uint, bitSize: 32 },
+        { type: MemberType.Uint, bitSize: 64 },
+        { type: MemberType.Uint, bitSize: 33 },
       ];
       expect(getTypeName(members[0])).to.equal('Uint32');
       expect(getTypeName(members[1])).to.equal('BigUint64');
@@ -546,87 +542,39 @@ describe('Data view functions', function() {
     it('should return function for getting standard int types', function() {
       const dv = new DataView(new ArrayBuffer(16));
       dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn, true);
-      for (const isSigned of [ false, true ]) {
-        for (const bitSize of [ 8, 16, 32, 64 ]) {
-          const { max } = getIntRange({ isSigned, bitSize });
-          const member = {
-            type: MemberType.Int,
-            isSigned,
-            bitSize,
-            bitOffset: 64,
-            byteSize: bitSize / 8
-          }
-          const get = getDataViewIntAccessor('get', member);
-          const res = get.call(dv, 8, true);
-          if (isSigned) {
-            expect(Number(res)).to.equal(-1);
-          } else {
-            expect(res).to.equal(max);
-          }
+      for (const bitSize of [ 8, 16, 32, 64 ]) {
+        const member = {
+          type: MemberType.Int,
+          bitSize,
+          bitOffset: 64,
+          byteSize: bitSize / 8
         }
+        const get = getDataViewIntAccessor('get', member);
+        const res = get.call(dv, 8, true);
+        expect(Number(res)).to.equal(-1);
       }
     })
     it('should return function for setting standard int types', function() {
       const dv = new DataView(new ArrayBuffer(16));
       dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn, true);
-      for (const isSigned of [ false, true ]) {
-        for (const bitSize of [ 8, 16, 32, 64 ]) {
-          const { max } = getIntRange({ isSigned, bitSize });
-          const member = {
-            type: MemberType.Int,
-            isSigned,
-            bitSize,
-            bitOffset: 64,
-            byteSize: bitSize / 8
-          }
-          const set = getDataViewIntAccessor('set', member);
-          if (isSigned) {
-            const neg1 = (typeof(max) === 'bigint') ? -1n : -1;
-            set.call(dv, 8, neg1, true);
-          } else {
-            set.call(dv, 8, max, true);
-          }
-          expect(dv.getBigUint64(8, true)).equal(0xFFFFFFFFFFFFFFFFn);
-          expect(dv.getBigUint64(0, true)).equal(0n);
+      for (const bitSize of [ 8, 16, 32, 64 ]) {
+        const { max } = getIntRange({ type: MemberType.Int, bitSize });
+        const member = {
+          type: MemberType.Int,
+          bitSize,
+          bitOffset: 64,
+          byteSize: bitSize / 8
         }
+        const set = getDataViewIntAccessor('set', member);
+        const neg1 = (typeof(max) === 'bigint') ? -1n : -1;
+        set.call(dv, 8, neg1, true);
+        expect(dv.getBigUint64(8, true)).equal(0xFFFFFFFFFFFFFFFFn);
+        expect(dv.getBigUint64(0, true)).equal(0n);
       }
-    })
-    it('should return function for getting usize', function() {
-      const member = {
-        type: MemberType.Int,
-        isSigned: false,
-        bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
-        structure: { name: 'usize' },
-      };
-      const get = getDataViewIntAccessor('get', member);
-      const dv = new DataView(new ArrayBuffer(8));
-      dv.setBigUint64(0, BigInt(Number.MAX_SAFE_INTEGER), true);
-      expect(get.call(dv, 0, true)).to.equal(Number.MAX_SAFE_INTEGER);
-      dv.setBigUint64(0, BigInt(Number.MAX_SAFE_INTEGER) + 1n, true);
-      expect(get.call(dv, 0, true)).to.equal(BigInt(Number.MAX_SAFE_INTEGER) + 1n);
-    })
-    it('should return function for setting usize', function() {
-      const member = {
-        type: MemberType.Int,
-        isSigned: false,
-        bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
-        structure: { name: 'usize' },
-      };
-      const set = getDataViewIntAccessor('set', member);
-      const dv = new DataView(new ArrayBuffer(8));
-      set.call(dv, 0, 1234, true);
-      expect(dv.getBigUint64(0, true)).to.equal(1234n);
-      set.call(dv, 0, 4567n, true);
-      expect(dv.getBigUint64(0, true)).to.equal(4567n);
     })
     it('should return function for getting isize', function() {
       const member = {
         type: MemberType.Int,
-        isSigned: true,
         bitOffset: 0,
         bitSize: 64,
         byteSize: 8,
@@ -642,7 +590,6 @@ describe('Data view functions', function() {
     it('should return function for setting isize', function() {
       const member = {
         type: MemberType.Int,
-        isSigned: true,
         bitOffset: 0,
         bitSize: 64,
         byteSize: 8,
@@ -655,24 +602,9 @@ describe('Data view functions', function() {
       set.call(dv, 0, -4567n, true);
       expect(dv.getBigInt64(0, true)).to.equal(-4567n);
     })
-    it('should return function for getting 32-bit usize', function() {
-      const member = {
-        type: MemberType.Int,
-        isSigned: false,
-        bitOffset: 0,
-        bitSize: 32,
-        byteSize: 4,
-        structure: { name: 'usize' },
-      };
-      const get = getDataViewIntAccessor('get', member);
-      const dv = new DataView(new ArrayBuffer(8));
-      dv.setUint32(0, 1234, true);
-      expect(get.call(dv, 0, true)).to.equal(1234);
-    })
     it('should return function for setting 32-bit isize', function() {
       const member = {
         type: MemberType.Int,
-        isSigned: true,
         bitOffset: 0,
         bitSize: 32,
         byteSize: 4,
@@ -687,8 +619,7 @@ describe('Data view functions', function() {
     })
     it('should return undefined when type is non-standard', function() {
       const member = {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 66,
         bitOffset: 0,
         byteSize: 16,
@@ -697,173 +628,151 @@ describe('Data view functions', function() {
       expect(get).to.be.undefined;
     })
   })
+  describe('getDataViewUintAccessor', function() {
+    it('should return function for getting standard uint types', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn, true);
+      for (const bitSize of [ 8, 16, 32, 64 ]) {
+        const { max } = getIntRange({ type: MemberType.Uint, bitSize });
+        const member = {
+          type: MemberType.Uint,
+          bitSize,
+          bitOffset: 64,
+          byteSize: bitSize / 8
+        }
+        const get = getDataViewUintAccessor('get', member);
+        const res = get.call(dv, 8, true);
+        expect(res).to.equal(max);
+      }
+    })
+    it('should return function for setting standard uint types', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn, true);
+      for (const bitSize of [ 8, 16, 32, 64 ]) {
+        const { max } = getIntRange({ type: MemberType.Uint, bitSize });
+        const member = {
+          type: MemberType.Uint,
+          bitSize,
+          bitOffset: 64,
+          byteSize: bitSize / 8
+        }
+        const set = getDataViewUintAccessor('set', member);
+        set.call(dv, 8, max, true);
+        expect(dv.getBigUint64(8, true)).equal(0xFFFFFFFFFFFFFFFFn);
+        expect(dv.getBigUint64(0, true)).equal(0n);
+      }
+    })
+    it('should return function for getting usize', function() {
+      const member = {
+        type: MemberType.Uint,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        structure: { name: 'usize' },
+      };
+      const get = getDataViewUintAccessor('get', member);
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setBigUint64(0, BigInt(Number.MAX_SAFE_INTEGER), true);
+      expect(get.call(dv, 0, true)).to.equal(Number.MAX_SAFE_INTEGER);
+      dv.setBigUint64(0, BigInt(Number.MAX_SAFE_INTEGER) + 1n, true);
+      expect(get.call(dv, 0, true)).to.equal(BigInt(Number.MAX_SAFE_INTEGER) + 1n);
+    })
+    it('should return function for setting usize', function() {
+      const member = {
+        type: MemberType.Uint,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        structure: { name: 'usize' },
+      };
+      const set = getDataViewUintAccessor('set', member);
+      const dv = new DataView(new ArrayBuffer(8));
+      set.call(dv, 0, 1234, true);
+      expect(dv.getBigUint64(0, true)).to.equal(1234n);
+      set.call(dv, 0, 4567n, true);
+      expect(dv.getBigUint64(0, true)).to.equal(4567n);
+    })
+    it('should return function for getting 32-bit usize', function() {
+      const member = {
+        type: MemberType.Uint,
+        bitOffset: 0,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { name: 'usize' },
+      };
+      const get = getDataViewUintAccessor('get', member);
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setUint32(0, 1234, true);
+      expect(get.call(dv, 0, true)).to.equal(1234);
+    })
+    it('should return undefined when type is non-standard', function() {
+      const member = {
+        type: MemberType.Uint,
+        bitSize: 66,
+        bitOffset: 0,
+        byteSize: 16,
+      };
+      const get = getDataViewUintAccessor('get', member);
+      expect(get).to.be.undefined;
+    })
+  })
   describe('getDataViewIntAccessorEx', function() {
     it('should return the same function as getDataViewIntAccessor when type is standard', function() {
-      for (const isSigned of [ false, true ]) {
-        for (const bitSize of [ 8, 16, 32, 64 ]) {
-          const member = {
-            type: MemberType.Int,
-            isSigned,
-            bitSize,
-            bitOffset: 64,
-            byteSize: bitSize / 8
-          }
-          // setter for i64 would be different
-          const f = getDataViewIntAccessorEx('get', member);
-          const g = getDataViewIntAccessor('get', member);
-          expect(f).equal(g);
+      for (const bitSize of [ 8, 16, 32, 64 ]) {
+        const member = {
+          type: MemberType.Int,
+          bitSize,
+          bitOffset: 64,
+          byteSize: bitSize / 8
         }
+        // setter for i64 would be different
+        const f = getDataViewIntAccessorEx('get', member);
+        const g = getDataViewIntAccessor('get', member);
+        expect(f).equal(g);
       }
     })
     it('should return functions for getting non-standard int types (aligned, < 64-bit)', function() {
       const dv = new DataView(new ArrayBuffer(16));
       dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn);
-      for (const isSigned of [ false, true ]) {
-        const standard = [ 8, 16, 32, 64 ];
-        for (let bitSize = 2; bitSize < 64; bitSize++) {
-          if (standard.includes(bitSize)) {
-            continue;
-          }
-          const { max } = getIntRange({ isSigned, bitSize });
-          const member = {
-            type: MemberType.Int,
-            isSigned,
-            bitSize,
-            bitOffset: 64,
-            byteSize: [ 1, 2, 4, 8 ].find(b => b * 8 > bitSize),
-          };
-          const get = getDataViewIntAccessorEx('get', member);
-          const res = get.call(dv, 8, true);
-          if (isSigned) {
-            expect(Number(res)).to.equal(-1);
-          } else {
-            expect(res).to.equal(max);
-          }
+      const standard = [ 8, 16, 32, 64 ];
+      for (let bitSize = 2; bitSize < 64; bitSize++) {
+        if (standard.includes(bitSize)) {
+          continue;
         }
+        const member = {
+          type: MemberType.Int,
+          bitSize,
+          bitOffset: 64,
+          byteSize: [ 1, 2, 4, 8 ].find(b => b * 8 > bitSize),
+        };
+        const get = getDataViewIntAccessorEx('get', member);
+        const res = get.call(dv, 8, true);
+        expect(Number(res)).to.equal(-1);
       }
     })
     it('should return functions for setting non-standard int types (aligned, < 64-bit)', function() {
-      for (const isSigned of [ false, true ]) {
-        const standard = [ 8, 16, 32, 64 ];
-        for (let bitSize = 2; bitSize < 64; bitSize++) {
-          const dv = new DataView(new ArrayBuffer(16));
-          if (standard.includes(bitSize)) {
-            continue;
-          }
-          const { min, max } = getIntRange({ isSigned, bitSize });
-          const member = {
-            type: MemberType.Int,
-            isSigned,
-            bitSize,
-            bitOffset: 64,
-            byteSize: [ 1, 2, 4, 8 ].find(b => b * 8 > bitSize),
-          };
-          const set = getDataViewIntAccessorEx('set', member);
-          set.call(dv, 0, min, true);
-          set.call(dv, 8, max, true);
-          // assuming that the getter works properly here
-          const get = getDataViewIntAccessorEx('get', member);
-          expect(get.call(dv, 0, true)).to.equal(min);
-          expect(get.call(dv, 8, true)).to.equal(max);
+      const standard = [ 8, 16, 32, 64 ];
+      for (let bitSize = 2; bitSize < 64; bitSize++) {
+        const dv = new DataView(new ArrayBuffer(16));
+        if (standard.includes(bitSize)) {
+          continue;
         }
+        const { min, max } = getIntRange({ type: MemberType.Int, bitSize });
+        const member = {
+          type: MemberType.Int,
+          bitSize,
+          bitOffset: 64,
+          byteSize: [ 1, 2, 4, 8 ].find(b => b * 8 > bitSize),
+        };
+        const set = getDataViewIntAccessorEx('set', member);
+        set.call(dv, 0, min, true);
+        set.call(dv, 8, max, true);
+        // assuming that the getter works properly here
+        const get = getDataViewIntAccessorEx('get', member);
+        expect(get.call(dv, 0, true)).to.equal(min);
+        expect(get.call(dv, 8, true)).to.equal(max);
       }
     })
-    it('should return functions for getting non-standard int types (128-bit)', function() {
-      const dv = new DataView(new ArrayBuffer(16));
-      // from struct-bytes: BigInt1
-      const bytes = [ 255, 255, 255, 255, 255, 255, 255, 31, 0, 0, 0, 0, 0, 0, 0, 0, ];
-      for (const [ i, b ] of bytes.entries()) {
-        dv.setUint8(i, b);
-      }
-      const member = {
-        type: MemberType.Int,
-        isSigned: false,
-        bitSize: 128,
-        bitOffset: 0,
-        byteSize: 16,
-      };
-      const get = getDataViewIntAccessorEx('get', member);
-      const res1 = get.call(dv, 0, true);
-      expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
-      // from struct-bytes: BigInt2
-      const bytesBE = [ 0, 0, 0, 0, 0, 0, 0, 0, 31, 255, 255, 255, 255, 255, 255, 255, ];
-      for (const [ i, b ] of bytes.entries()) {
-        dv.setUint8(i, b);
-      }
-      const res2 = get.call(dv, 0, false);
-      expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
-    })
-    it('should return functions for setting non-standard int types (128-bit)', function() {
-      const dv = new DataView(new ArrayBuffer(16));
-      // from struct-bytes: BigInt1
-      const bytes = [ 255, 255, 255, 255, 255, 255, 255, 31, 0, 0, 0, 0, 0, 0, 0, 0, ];
-      const member = {
-        type: MemberType.Int,
-        isSigned: false,
-        bitSize: 128,
-        bitOffset: 0,
-        byteSize: 16,
-      };
-      const set = getDataViewIntAccessorEx('set', member);
-      set.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, true);
-      for (const [ i, b ] of bytes.entries()) {
-        expect(dv.getUint8(i)).to.equal(b);
-      }
-      // from struct-bytes: BigInt2
-      const bytesBE = [ 0, 0, 0, 0, 0, 0, 0, 0, 31, 255, 255, 255, 255, 255, 255, 255, ];
-      set.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, false);
-      for (const [ i, b ] of bytesBE.entries()) {
-        expect(dv.getUint8(i)).to.equal(b);
-      }
-    });
-    it('should return functions for getting non-standard int types (72-bit)', function() {
-      const dv = new DataView(new ArrayBuffer(16));
-      // from struct-bytes: BigInt3
-      const bytes = [ 255, 255, 255, 255, 255, 255, 255, 31, 0, 0, 0, 0, 0, 0, 0, 0, ];
-      for (const [ i, b ] of bytes.entries()) {
-        dv.setUint8(i, b);
-      }
-      const member = {
-        type: MemberType.Int,
-        bitSize: 72,
-        bitOffset: 0,
-        byteSize: 16,
-        isSigned: false,
-      };
-      const get = getDataViewIntAccessorEx('get', member);
-      const res1 = get.call(dv, 0, true);
-      expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
-      // from struct-bytes: BigInt4
-      const bytesBE = [ 0, 31, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, ];
-      for (const [ i, b ] of bytes.entries()) {
-        dv.setUint8(i, b);
-      }
-      const res2 = get.call(dv, 0, false);
-      expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
-    })
-    it('should return functions for setting non-standard int types (72-bit)', function() {
-      const dv = new DataView(new ArrayBuffer(16));
-      // from struct-bytes: BigInt3
-      const bytes = [ 255, 255, 255, 255, 255, 255, 255, 31, 0, 0, 0, 0, 0, 0, 0, 0, ];
-      const member = {
-        type: MemberType.Int,
-        isSigned: false,
-        bitSize: 72,
-        bitOffset: 0,
-        byteSize: 16,
-      };
-      const set = getDataViewIntAccessorEx('set', member);
-      set.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, true);
-      for (const [ i, b ] of bytes.entries()) {
-        expect(dv.getUint8(i)).to.equal(b);
-      }
-      // from struct-bytes: BigInt4
-      const bytesBE = [ 0, 31, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, ];
-      set.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, false);
-      for (const [ i, b ] of bytesBE.entries()) {
-        expect(dv.getUint8(i)).to.equal(b);
-      }
-    });
     it('should return functions for getting non-standard int types (65-bit)', function() {
       const dv = new DataView(new ArrayBuffer(16));
       // from struct-bytes: BigInt5
@@ -875,7 +784,6 @@ describe('Data view functions', function() {
         type: MemberType.Int,
         bitSize: 65,
         bitOffset: 0,
-        isSigned: true,
         byteSize: 16,
       };
       const get = getDataViewIntAccessorEx('get', member);
@@ -888,7 +796,6 @@ describe('Data view functions', function() {
       const bytes = [ 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, ];
       const member = {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 65,
         bitOffset: 0,
         byteSize: 16,
@@ -900,93 +807,320 @@ describe('Data view functions', function() {
       }
     })
     it('should return functions for setting non-standard int types (> 64-bit)', function() {
-      for (const isSigned of [ false, true ]) {
-        for (let bitSize = 65; bitSize < 1024; bitSize += 33) {
-          const dv = new DataView(new ArrayBuffer(256));
-          const { min, max } = getIntRange({ isSigned, bitSize });
-          const member = {
-            type: MemberType.Int,
-            isSigned,
-            bitSize,
-            bitOffset: 0,
-            byteSize: Math.ceil(bitSize / 64) * 8,
-          };
-          const set = getDataViewIntAccessorEx('set', member);
-          set.call(dv, 0, min, true);
-          set.call(dv, 128, max, true);
-          // assuming that the getter works properly here
-          const get = getDataViewIntAccessorEx('get', member);
-          expect(get.call(dv, 0, true)).to.equal(min);
-          expect(get.call(dv, 128, true)).to.equal(max);
-        }
+      for (let bitSize = 65; bitSize < 1024; bitSize += 33) {
+        const dv = new DataView(new ArrayBuffer(256));
+        const { min, max } = getIntRange({ type: MemberType.Int, bitSize });
+        const member = {
+          type: MemberType.Int,
+          bitSize,
+          bitOffset: 0,
+          byteSize: Math.ceil(bitSize / 64) * 8,
+        };
+        const set = getDataViewIntAccessorEx('set', member);
+        set.call(dv, 0, min, true);
+        set.call(dv, 128, max, true);
+        // assuming that the getter works properly here
+        const get = getDataViewIntAccessorEx('get', member);
+        expect(get.call(dv, 0, true)).to.equal(min);
+        expect(get.call(dv, 128, true)).to.equal(max);
       }
     })
     it('should return functions for setting non-aligned integers', function() {
       this.timeout(10000);
-      const isSigned = true;
-      for (const isSigned of [ true, false ]) {
-        for (let bitSize = 2; bitSize <= 64; bitSize++) {
-          for (let bitOffset = 1; bitOffset <= 7; bitOffset++) {
-            const guard1 = {
-              type: MemberType.Int,
-              isSigned: false,
-              bitSize : bitOffset,
-              bitOffset: 0,
-            };
-            const member = {
-              type: MemberType.Int,
-              isSigned,
-              bitSize,
-              bitOffset,
-            };
-            const guard2 = {
-              type: MemberType.Int,
-              isSigned: false,
-              bitSize: 3,
-              bitOffset: bitOffset + bitSize,
-            };
-            const offsetG1 = Math.floor(guard1.bitOffset / 8);
-            const offsetG2 = Math.floor(guard2.bitOffset / 8);
-            const offset = Math.floor(member.bitOffset / 8);
-            const dv = new DataView(new ArrayBuffer(16));
-            const getG1 = getDataViewIntAccessorEx('get', guard1);
-            const setG1 = getDataViewIntAccessorEx('set', guard1);
-            const getG2 = getDataViewIntAccessorEx('get', guard2);
-            const setG2 = getDataViewIntAccessorEx('set', guard2);
-            const get = getDataViewIntAccessorEx('get', member);
-            const set = getDataViewIntAccessorEx('set', member);
-            const { min, max } = getIntRange({ isSigned, bitSize });
-            const { max: maxG1 } = getIntRange({ isSigned: false, bitSize: guard1.bitSize });
-            const { max: maxG2 } = getIntRange({ isSigned: false, bitSize: guard2.bitSize });
-            let step;
-            if (bitSize <= 8) {
-              step = 1;
-            } else if (bitSize <= 16) {
-              step = 2 ** (bitSize - 8) + 1;
-            } else if (bitSize <= 32) {
-              step = 2 ** (bitSize - 6) + 1;
-            } else {
-              step = (2n ** BigInt(bitSize - 3)) + 1n;
-            }
-            for (let i = min; i <= max; i += step) {
-              // clear guard bits and set the value
-              setG1.call(dv, offsetG1, 0);
-              setG2.call(dv, offsetG2, 0);
-              set.call(dv, offset, i, true);
-              // check if setter set the correct value
-              const value1 = get.call(dv, offset, true);
-              expect(value1).to.equal(i);
-              // ensure setter doesn't write outside of the bit range
-              const g1 = getG1.call(dv, offsetG1);
-              const g2 = getG2.call(dv, offsetG2);
-              expect(g1).to.equal(0);
-              expect(g2).to.equal(0);
-              // make sure getter isn't reading outside of its bit range
-              setG1.call(dv, offsetG1, maxG1);
-              setG2.call(dv, offsetG2, maxG2);
-              const value2 = get.call(dv, offset, true);
-              expect(value2).to.equal(i);
-            }
+      const type = MemberType.Int;
+      for (let bitSize = 2; bitSize <= 64; bitSize++) {
+        for (let bitOffset = 1; bitOffset <= 7; bitOffset++) {
+          const guard1 = {
+            type: MemberType.Uint,
+            bitSize : bitOffset,
+            bitOffset: 0,
+          };
+          const member = {
+            type,
+            bitSize,
+            bitOffset,
+          };
+          const guard2 = {
+            type: MemberType.Uint,
+            bitSize: 3,
+            bitOffset: bitOffset + bitSize,
+          };
+          const offsetG1 = Math.floor(guard1.bitOffset / 8);
+          const offsetG2 = Math.floor(guard2.bitOffset / 8);
+          const offset = Math.floor(member.bitOffset / 8);
+          const dv = new DataView(new ArrayBuffer(16));
+          const getG1 = getDataViewUintAccessorEx('get', guard1);
+          const setG1 = getDataViewUintAccessorEx('set', guard1);
+          const getG2 = getDataViewUintAccessorEx('get', guard2);
+          const setG2 = getDataViewUintAccessorEx('set', guard2);
+          const get = getDataViewIntAccessorEx('get', member);
+          const set = getDataViewIntAccessorEx('set', member);
+          const { min, max } = getIntRange({ type, bitSize });
+          const { max: maxG1 } = getIntRange({ type: MemberType.Uint, bitSize: guard1.bitSize });
+          const { max: maxG2 } = getIntRange({ type: MemberType.Uint, bitSize: guard2.bitSize });
+          let step;
+          if (bitSize <= 8) {
+            step = 1;
+          } else if (bitSize <= 16) {
+            step = 2 ** (bitSize - 8) + 1;
+          } else if (bitSize <= 32) {
+            step = 2 ** (bitSize - 6) + 1;
+          } else {
+            step = (2n ** BigInt(bitSize - 3)) + 1n;
+          }
+          for (let i = min; i <= max; i += step) {
+            // clear guard bits and set the value
+            setG1.call(dv, offsetG1, 0);
+            setG2.call(dv, offsetG2, 0);
+            set.call(dv, offset, i, true);
+            // check if setter set the correct value
+            const value1 = get.call(dv, offset, true);
+            expect(value1).to.equal(i);
+            // ensure setter doesn't write outside of the bit range
+            const g1 = getG1.call(dv, offsetG1);
+            const g2 = getG2.call(dv, offsetG2);
+            expect(g1).to.equal(0);
+            expect(g2).to.equal(0);
+            // make sure getter isn't reading outside of its bit range
+            setG1.call(dv, offsetG1, maxG1);
+            setG2.call(dv, offsetG2, maxG2);
+            const value2 = get.call(dv, offset, true);
+            expect(value2).to.equal(i);
+          }
+        }
+      }
+    })
+  })
+  describe('getDataViewUintAccessorEx', function() {
+    it('should return the same function as getDataViewUintAccessor when type is standard', function() {
+      for (const bitSize of [ 8, 16, 32, 64 ]) {
+        const member = {
+          type: MemberType.Uint,
+          bitSize,
+          bitOffset: 64,
+          byteSize: bitSize / 8
+        }
+        // setter for i64 would be different
+        const f = getDataViewUintAccessorEx('get', member);
+        const g = getDataViewUintAccessor('get', member);
+        expect(f).equal(g);
+      }
+    })
+    it('should return functions for getting non-standard int types (aligned, < 64-bit)', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      dv.setBigUint64(8, 0xFFFFFFFFFFFFFFFFn);
+      const standard = [ 8, 16, 32, 64 ];
+      for (let bitSize = 2; bitSize < 64; bitSize++) {
+        if (standard.includes(bitSize)) {
+          continue;
+        }
+        const { max } = getIntRange({ type: MemberType.Uint, bitSize });
+        const member = {
+          type: MemberType.Uint,
+          bitSize,
+          bitOffset: 64,
+          byteSize: [ 1, 2, 4, 8 ].find(b => b * 8 > bitSize),
+        };
+        const get = getDataViewUintAccessorEx('get', member);
+        const res = get.call(dv, 8, true);
+        expect(res).to.equal(max);
+      }
+    })
+    it('should return functions for setting non-standard int types (aligned, < 64-bit)', function() {
+      const standard = [ 8, 16, 32, 64 ];
+      for (let bitSize = 2; bitSize < 64; bitSize++) {
+        const dv = new DataView(new ArrayBuffer(16));
+        if (standard.includes(bitSize)) {
+          continue;
+        }
+        const { min, max } = getIntRange({ type: MemberType.Uint, bitSize });
+        const member = {
+          type: MemberType.Uint,
+          bitSize,
+          bitOffset: 64,
+          byteSize: [ 1, 2, 4, 8 ].find(b => b * 8 > bitSize),
+        };
+        const set = getDataViewUintAccessorEx('set', member);
+        set.call(dv, 0, min, true);
+        set.call(dv, 8, max, true);
+        // assuming that the getter works properly here
+        const get = getDataViewUintAccessorEx('get', member);
+        expect(get.call(dv, 0, true)).to.equal(min);
+        expect(get.call(dv, 8, true)).to.equal(max);
+      }
+    })
+    it('should return functions for getting non-standard uint types (128-bit)', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      // from struct-bytes: BigInt1
+      const bytes = [ 255, 255, 255, 255, 255, 255, 255, 31, 0, 0, 0, 0, 0, 0, 0, 0, ];
+      for (const [ i, b ] of bytes.entries()) {
+        dv.setUint8(i, b);
+      }
+      const member = {
+        type: MemberType.Uint,
+        bitSize: 128,
+        bitOffset: 0,
+        byteSize: 16,
+      };
+      const get = getDataViewUintAccessorEx('get', member);
+      const res1 = get.call(dv, 0, true);
+      expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
+      // from struct-bytes: BigInt2
+      const bytesBE = [ 0, 0, 0, 0, 0, 0, 0, 0, 31, 255, 255, 255, 255, 255, 255, 255, ];
+      for (const [ i, b ] of bytes.entries()) {
+        dv.setUint8(i, b);
+      }
+      const res2 = get.call(dv, 0, false);
+      expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
+    })
+    it('should return functions for setting non-standard uint types (128-bit)', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      // from struct-bytes: BigInt1
+      const bytes = [ 255, 255, 255, 255, 255, 255, 255, 31, 0, 0, 0, 0, 0, 0, 0, 0, ];
+      const member = {
+        type: MemberType.Uint,
+        bitSize: 128,
+        bitOffset: 0,
+        byteSize: 16,
+      };
+      const set = getDataViewUintAccessorEx('set', member);
+      set.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, true);
+      for (const [ i, b ] of bytes.entries()) {
+        expect(dv.getUint8(i)).to.equal(b);
+      }
+      // from struct-bytes: BigInt2
+      const bytesBE = [ 0, 0, 0, 0, 0, 0, 0, 0, 31, 255, 255, 255, 255, 255, 255, 255, ];
+      set.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, false);
+      for (const [ i, b ] of bytesBE.entries()) {
+        expect(dv.getUint8(i)).to.equal(b);
+      }
+    });
+    it('should return functions for getting non-standard uint types (72-bit)', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      // from struct-bytes: BigInt3
+      const bytes = [ 255, 255, 255, 255, 255, 255, 255, 31, 0, 0, 0, 0, 0, 0, 0, 0, ];
+      for (const [ i, b ] of bytes.entries()) {
+        dv.setUint8(i, b);
+      }
+      const member = {
+        type: MemberType.Uint,
+        bitSize: 72,
+        bitOffset: 0,
+        byteSize: 16,
+      };
+      const get = getDataViewUintAccessorEx('get', member);
+      const res1 = get.call(dv, 0, true);
+      expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
+      // from struct-bytes: BigInt4
+      const bytesBE = [ 0, 31, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, ];
+      for (const [ i, b ] of bytes.entries()) {
+        dv.setUint8(i, b);
+      }
+      const res2 = get.call(dv, 0, false);
+      expect(res1).to.equal(0x01FFFFFFFFFFFFFFFn);
+    })
+    it('should return functions for setting non-standard uint types (72-bit)', function() {
+      const dv = new DataView(new ArrayBuffer(16));
+      // from struct-bytes: BigInt3
+      const bytes = [ 255, 255, 255, 255, 255, 255, 255, 31, 0, 0, 0, 0, 0, 0, 0, 0, ];
+      const member = {
+        type: MemberType.Uint,
+        bitSize: 72,
+        bitOffset: 0,
+        byteSize: 16,
+      };
+      const set = getDataViewUintAccessorEx('set', member);
+      set.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, true);
+      for (const [ i, b ] of bytes.entries()) {
+        expect(dv.getUint8(i)).to.equal(b);
+      }
+      // from struct-bytes: BigInt4
+      const bytesBE = [ 0, 31, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, ];
+      set.call(dv, 0, 0x01FFFFFFFFFFFFFFFn, false);
+      for (const [ i, b ] of bytesBE.entries()) {
+        expect(dv.getUint8(i)).to.equal(b);
+      }
+    });
+    it('should return functions for setting non-standard int types (> 64-bit)', function() {
+      for (let bitSize = 65; bitSize < 1024; bitSize += 33) {
+        const dv = new DataView(new ArrayBuffer(256));
+        const { min, max } = getIntRange({ type: MemberType.Uint, bitSize });
+        const member = {
+          type: MemberType.Uint,
+          bitSize,
+          bitOffset: 0,
+          byteSize: Math.ceil(bitSize / 64) * 8,
+        };
+        const set = getDataViewUintAccessorEx('set', member);
+        set.call(dv, 0, min, true);
+        set.call(dv, 128, max, true);
+        // assuming that the getter works properly here
+        const get = getDataViewUintAccessorEx('get', member);
+        expect(get.call(dv, 0, true)).to.equal(min);
+        expect(get.call(dv, 128, true)).to.equal(max);
+      }
+    })
+    it('should return functions for setting non-aligned integers', function() {
+      this.timeout(10000);
+      const type = MemberType.Uint;
+      for (let bitSize = 2; bitSize <= 64; bitSize++) {
+        for (let bitOffset = 1; bitOffset <= 7; bitOffset++) {
+          const guard1 = {
+            type: MemberType.Uint,
+            bitSize : bitOffset,
+            bitOffset: 0,
+          };
+          const member = {
+            type,
+            bitSize,
+            bitOffset,
+          };
+          const guard2 = {
+            type: MemberType.Uint,
+            bitSize: 3,
+            bitOffset: bitOffset + bitSize,
+          };
+          const offsetG1 = Math.floor(guard1.bitOffset / 8);
+          const offsetG2 = Math.floor(guard2.bitOffset / 8);
+          const offset = Math.floor(member.bitOffset / 8);
+          const dv = new DataView(new ArrayBuffer(16));
+          const getG1 = getDataViewUintAccessorEx('get', guard1);
+          const setG1 = getDataViewUintAccessorEx('set', guard1);
+          const getG2 = getDataViewUintAccessorEx('get', guard2);
+          const setG2 = getDataViewUintAccessorEx('set', guard2);
+          const get = getDataViewUintAccessorEx('get', member);
+          const set = getDataViewUintAccessorEx('set', member);
+          const { min, max } = getIntRange({ type, bitSize });
+          const { max: maxG1 } = getIntRange({ type: MemberType.Uint, bitSize: guard1.bitSize });
+          const { max: maxG2 } = getIntRange({ type: MemberType.Uint, bitSize: guard2.bitSize });
+          let step;
+          if (bitSize <= 8) {
+            step = 1;
+          } else if (bitSize <= 16) {
+            step = 2 ** (bitSize - 8) + 1;
+          } else if (bitSize <= 32) {
+            step = 2 ** (bitSize - 6) + 1;
+          } else {
+            step = (2n ** BigInt(bitSize - 3)) + 1n;
+          }
+          for (let i = min; i <= max; i += step) {
+            // clear guard bits and set the value
+            setG1.call(dv, offsetG1, 0);
+            setG2.call(dv, offsetG2, 0);
+            set.call(dv, offset, i, true);
+            // check if setter set the correct value
+            const value1 = get.call(dv, offset, true);
+            expect(value1).to.equal(i);
+            // ensure setter doesn't write outside of the bit range
+            const g1 = getG1.call(dv, offsetG1);
+            const g2 = getG2.call(dv, offsetG2);
+            expect(g1).to.equal(0);
+            expect(g2).to.equal(0);
+            // make sure getter isn't reading outside of its bit range
+            setG1.call(dv, offsetG1, maxG1);
+            setG2.call(dv, offsetG2, maxG2);
+            const value2 = get.call(dv, offset, true);
+            expect(value2).to.equal(i);
           }
         }
       }
@@ -1000,7 +1134,6 @@ describe('Data view functions', function() {
       for (const bitSize of [ 32, 64 ]) {
         const member = {
           type: MemberType.Float,
-          isSigned: true,
           bitSize,
           bitOffset: (bitSize === 32) ? 0 : 64,
           byteSize: bitSize / 8
@@ -1015,7 +1148,6 @@ describe('Data view functions', function() {
       for (const bitSize of [ 32, 64 ]) {
         const member = {
           type: MemberType.Float,
-          isSigned: true,
           bitSize,
           bitOffset: (bitSize === 32) ? 0 : 64,
           byteSize: bitSize / 8
@@ -1050,7 +1182,6 @@ describe('Data view functions', function() {
       }
       const member = {
         type: MemberType.Float,
-        isSigned: true,
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
@@ -1075,7 +1206,6 @@ describe('Data view functions', function() {
       const bytes = [ 72, 66, 0, 0, 0, 128, 0, 124, 0, 252, 1, 124, ];
       const member = {
         type: MemberType.Float,
-        isSigned: true,
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
@@ -1110,7 +1240,6 @@ describe('Data view functions', function() {
       const dv = new DataView(new ArrayBuffer(2));
       const member = {
         type: MemberType.Float,
-        isSigned: true,
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
@@ -1133,7 +1262,6 @@ describe('Data view functions', function() {
       }
       const member = {
         type: MemberType.Float,
-        isSigned: true,
         bitSize: 80,
         bitOffset: 0,
         byteSize: 16,
@@ -1168,7 +1296,6 @@ describe('Data view functions', function() {
       }
       const member = {
         type: MemberType.Float,
-        isSigned: true,
         bitSize: 80,
         bitOffset: 0,
         byteSize: 16,
@@ -1193,7 +1320,6 @@ describe('Data view functions', function() {
       const bytes = [ 53, 194, 104, 33, 162, 218, 15, 201, 0, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 255, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 160, 255, 127, 0, 0, 0, 0, 0, 0, ];
       const member = {
         type: MemberType.Float,
-        isSigned: true,
         bitSize: 80,
         bitOffset: 0,
         byteSize: 16,
@@ -1239,7 +1365,6 @@ describe('Data view functions', function() {
       }
       const member = {
         type: MemberType.Float,
-        isSigned: true,
         bitSize: 80,
         bitOffset: 0,
         byteSize: 16,
@@ -1280,7 +1405,6 @@ describe('Data view functions', function() {
       }
       const member = {
         type: MemberType.Float,
-        isSigned: true,
         bitSize: 80,
         bitOffset: 0,
         byteSize: 16,
@@ -1302,7 +1426,6 @@ describe('Data view functions', function() {
       }
       const member = {
         type: MemberType.Float,
-        isSigned: true,
         bitSize: 128,
         bitOffset: 0,
         byteSize: 16,
@@ -1337,7 +1460,6 @@ describe('Data view functions', function() {
       }
       const member = {
         type: MemberType.Float,
-        isSigned: true,
         bitSize: 128,
         bitOffset: 0,
         byteSize: 16,
@@ -1362,7 +1484,6 @@ describe('Data view functions', function() {
       const bytes = [ 184, 1, 23, 197, 140, 137, 105, 132, 209, 66, 68, 181, 31, 146, 0, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 127, ];
       const member = {
         type: MemberType.Float,
-        isSigned: true,
         bitSize: 128,
         bitOffset: 0,
         byteSize: 16,
@@ -1407,7 +1528,6 @@ describe('Data view functions', function() {
       }
       const member = {
         type: MemberType.Float,
-        isSigned: true,
         bitSize: 128,
         bitOffset: 0,
         byteSize: 16,
@@ -1448,7 +1568,6 @@ describe('Data view functions', function() {
       }
       const member = {
         type: MemberType.Float,
-        isSigned: true,
         bitSize: 128,
         bitOffset: 0,
         byteSize: 16,
@@ -1470,20 +1589,17 @@ describe('Data view functions', function() {
       for (const bitSize of [ 16, 32, 64, 80, 128 ]) {
         for (let bitOffset = 1; bitOffset <= 7; bitOffset++) {
           const guard1 = {
-            type: MemberType.Int,
-            isSigned: false,
+            type: MemberType.Uint,
             bitSize : bitOffset,
             bitOffset: 0,
           };
           const member = {
             type: MemberType.Float,
-            isSigned: false,
             bitSize,
             bitOffset,
           };
           const guard2 = {
-            type: MemberType.Int,
-            isSigned: false,
+            type: MemberType.Uint,
             bitSize: 3,
             bitOffset: bitOffset + bitSize,
           };
@@ -1497,8 +1613,8 @@ describe('Data view functions', function() {
           const setG2 = getDataViewIntAccessorEx('set', guard2);
           const get = getDataViewFloatAccessorEx('get', member);
           const set = getDataViewFloatAccessorEx('set', member);
-          const { max: maxG1 } = getIntRange({ isSigned: false, bitSize: guard1.bitSize });
-          const { max: maxG2 } = getIntRange({ isSigned: false, bitSize: guard2.bitSize });
+          const { max: maxG1 } = getIntRange({ type: MemberType.Uint, bitSize: guard1.bitSize });
+          const { max: maxG2 } = getIntRange({ type: MemberType.Uint, bitSize: guard2.bitSize });
           const generator = new MersenneTwister(bitSize + bitOffset);
           for (let i = 0; i < 1000; i++) {
             const nom = generator.random_int();

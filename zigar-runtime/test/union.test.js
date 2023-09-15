@@ -49,7 +49,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -57,7 +56,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -92,7 +90,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -100,7 +97,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -117,7 +113,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -126,7 +121,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -134,8 +128,7 @@ describe('Union functions', function() {
       });
       attachMember(structure, {
         name: 'selector',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
@@ -174,7 +167,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -183,7 +175,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -191,8 +182,7 @@ describe('Union functions', function() {
       });
       attachMember(structure, {
         name: 'selector',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
@@ -219,7 +209,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -228,7 +217,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -236,8 +224,7 @@ describe('Union functions', function() {
       });
       attachMember(structure, {
         name: 'selector',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
@@ -259,7 +246,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -268,7 +254,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -276,8 +261,7 @@ describe('Union functions', function() {
       });
       attachMember(structure, {
         name: 'selector',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
@@ -299,7 +283,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -308,7 +291,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -316,8 +298,7 @@ describe('Union functions', function() {
       });
       attachMember(structure, {
         name: 'selector',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
@@ -339,7 +320,6 @@ describe('Union functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -348,7 +328,6 @@ describe('Union functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -363,7 +342,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'pets',
         type: MemberType.Object,
-        isSigned: true,
         bitSize: structStructure.size * 8,
         bitOffset: 0,
         byteSize: structStructure.size,
@@ -373,7 +351,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'money',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -381,8 +358,7 @@ describe('Union functions', function() {
       });
       attachMember(structure, {
         name: 'selector',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: structStructure.size * 8,
         byteSize: 2,
@@ -401,8 +377,7 @@ describe('Union functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -461,7 +436,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'pointer',
         type: MemberType.Object,
-        isSigned: true,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -471,7 +445,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'struct',
         type: MemberType.Object,
-        isSigned: true,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -481,7 +454,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'array',
         type: MemberType.Object,
-        isSigned: true,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8 * 4,
@@ -491,7 +463,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -519,15 +490,13 @@ describe('Union functions', function() {
       });
       attachMember(enumStructure, {
         name: 'dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
       attachMember(enumStructure, {
         name: 'cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
@@ -549,7 +518,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -558,7 +526,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -567,7 +534,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.EnumerationItem,
-        isSigned: false,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -604,15 +570,13 @@ describe('Union functions', function() {
       });
       attachMember(enumStructure, {
         name: 'dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
       attachMember(enumStructure, {
         name: 'cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
@@ -634,7 +598,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -643,7 +606,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -652,7 +614,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.EnumerationItem,
-        isSigned: false,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -671,8 +632,7 @@ describe('Union functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -700,15 +660,13 @@ describe('Union functions', function() {
       });
       attachMember(enumStructure, {
         name: 'pointer',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
       });
       attachMember(enumStructure, {
         name: 'number',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
       });
@@ -731,7 +689,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'pointer',
         type: MemberType.Object,
-        isSigned: true,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -741,7 +698,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -750,7 +706,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.EnumerationItem,
-        isSigned: false,
         bitSize: 16,
         bitOffset: 64,
         byteSize: 2,
@@ -770,8 +725,7 @@ describe('Union functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -799,15 +753,13 @@ describe('Union functions', function() {
       });
       attachMember(enumStructure, {
         name: 'pointer',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
       });
       attachMember(enumStructure, {
         name: 'number',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
       });
@@ -830,7 +782,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'pointer',
         type: MemberType.Object,
-        isSigned: true,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -840,7 +791,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -849,7 +799,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.EnumerationItem,
-        isSigned: false,
         bitSize: 16,
         bitOffset: 64,
         byteSize: 2,
@@ -869,8 +818,7 @@ describe('Union functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -898,15 +846,13 @@ describe('Union functions', function() {
       });
       attachMember(enumStructure, {
         name: 'pointer',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
       });
       attachMember(enumStructure, {
         name: 'number',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
       });
@@ -929,7 +875,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'pointer',
         type: MemberType.Object,
-        isSigned: true,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
@@ -939,7 +884,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -948,7 +892,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'selector',
         type: MemberType.EnumerationItem,
-        isSigned: false,
         bitSize: 16,
         bitOffset: 64,
         byteSize: 2,
@@ -969,7 +912,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
@@ -979,7 +921,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
@@ -988,8 +929,7 @@ describe('Union functions', function() {
       });
       attachMember(structure, {
         name: 'selector',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
@@ -1009,7 +949,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
@@ -1019,7 +958,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
@@ -1028,8 +966,7 @@ describe('Union functions', function() {
       });
       attachMember(structure, {
         name: 'selector',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
@@ -1049,7 +986,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
@@ -1059,7 +995,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
@@ -1068,8 +1003,7 @@ describe('Union functions', function() {
       });
       attachMember(structure, {
         name: 'selector',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
@@ -1087,7 +1021,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
@@ -1097,7 +1030,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
@@ -1106,8 +1038,7 @@ describe('Union functions', function() {
       });
       attachMember(structure, {
         name: 'selector',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
@@ -1124,7 +1055,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
@@ -1134,7 +1064,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
@@ -1143,8 +1072,7 @@ describe('Union functions', function() {
       });
       attachMember(structure, {
         name: 'selector',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
@@ -1163,7 +1091,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
@@ -1173,7 +1100,6 @@ describe('Union functions', function() {
       attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
@@ -1182,8 +1108,7 @@ describe('Union functions', function() {
       });
       attachMember(structure, {
         name: 'selector',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,

@@ -4,6 +4,8 @@ import {
   getDataViewBoolAccessorEx,
   getDataViewIntAccessor,
   getDataViewIntAccessorEx,
+  getDataViewUintAccessor,
+  getDataViewUintAccessorEx,
   getDataViewFloatAccessor,
   getDataViewFloatAccessorEx,
 } from './data-view.js';
@@ -22,11 +24,12 @@ export const MemberType = {
   Void: 0,
   Bool: 1,
   Int: 2,
-  Float: 3,
-  EnumerationItem: 4,
-  Object: 5,
-  Type: 6,
-  Comptime: 7,
+  Uint: 3,
+  Float: 4,
+  EnumerationItem: 5,
+  Object: 6,
+  Type: 7,
+  Comptime: 8,
 };
 
 const factories = Array(Object.values(MemberType).length);
@@ -49,6 +52,14 @@ export function useInt() {
 
 export function useIntEx() {
   factories[MemberType.Int] = getIntAccessorEx;
+}
+
+export function useUint() {
+  factories[MemberType.Uint] = getUintAccessor;
+}
+
+export function useUintEx() {
+  factories[MemberType.Uint] = getUintAccessorEx;
 }
 
 export function useFloat() {
@@ -164,6 +175,16 @@ export function getIntAccessor(access, member, options) {
 
 export function getIntAccessorEx(access, member, options) {
   const getDataViewAccessor = addRuntimeCheck(options, getDataViewIntAccessorEx);
+  return getAccessorUsing(access, member, options, getDataViewAccessor)
+}
+
+export function getUintAccessor(access, member, options) {
+  const getDataViewAccessor = addRuntimeCheck(options, getDataViewUintAccessor);
+  return getAccessorUsing(access, member, options, getDataViewAccessor)
+}
+
+export function getUintAccessorEx(access, member, options) {
+  const getDataViewAccessor = addRuntimeCheck(options, getDataViewUintAccessorEx);
   return getAccessorUsing(access, member, options, getDataViewAccessor)
 }
 

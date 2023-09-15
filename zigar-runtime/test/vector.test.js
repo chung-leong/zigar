@@ -30,8 +30,7 @@ describe('Vector functions', function() {
       });
       const constructor = function() {};
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array },
@@ -56,8 +55,7 @@ describe('Vector functions', function() {
       });
       const constructor = function() {};
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array },
@@ -72,8 +70,7 @@ describe('Vector functions', function() {
         size: 4 * 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array },
@@ -96,8 +93,7 @@ describe('Vector functions', function() {
         size: 4 * 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array },
@@ -124,8 +120,7 @@ describe('Vector functions', function() {
       });
       const constructor = function() {};
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array },
@@ -146,7 +141,6 @@ describe('Vector functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Float,
-        isSigned: false,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor, typedArray: Float32Array },
@@ -170,7 +164,6 @@ describe('Vector functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 64,
         byteSize: 8,
         structure: { constructor, typedArray: BigInt64Array },
@@ -188,7 +181,6 @@ describe('Vector functions', function() {
       });
       attachMember(structure, {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 128,
         byteSize: 16,
         structure: { constructor, typedArray: null },
@@ -205,8 +197,7 @@ describe('Vector functions', function() {
         size: 4 * 4,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array },
@@ -227,8 +218,7 @@ describe('Vector functions', function() {
         size: 4 * 4,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array },
@@ -245,8 +235,7 @@ describe('Vector functions', function() {
         size: 4 * 4,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array },
@@ -269,8 +258,7 @@ describe('Vector functions', function() {
         size: 4 * 4,
       });
       attachMember(vectorStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: Uint32, typedArray: Uint32Array },
@@ -282,8 +270,7 @@ describe('Vector functions', function() {
         size: 4 * 4,
       });
       attachMember(arrayStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: Uint32 },
@@ -300,8 +287,7 @@ describe('Vector functions', function() {
         size: 4 * 4,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: {
@@ -320,8 +306,7 @@ describe('Vector functions', function() {
         size: 4 * 4,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: {

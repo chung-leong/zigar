@@ -40,8 +40,7 @@ describe('Slice functions', function() {
       });
       const constructor = function() {};
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array }
@@ -62,8 +61,7 @@ describe('Slice functions', function() {
       });
       const constructor = function() {};
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array }
@@ -79,8 +77,7 @@ describe('Slice functions', function() {
       });
       const constructor = function() {};
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array }
@@ -102,8 +99,7 @@ describe('Slice functions', function() {
       });
       const constructor = function() {};
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array }
@@ -127,8 +123,7 @@ describe('Slice functions', function() {
         size: 4,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -150,8 +145,7 @@ describe('Slice functions', function() {
         size: 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
@@ -173,8 +167,7 @@ describe('Slice functions', function() {
         size: 4,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
@@ -193,8 +186,7 @@ describe('Slice functions', function() {
         size: 4,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
@@ -210,8 +202,7 @@ describe('Slice functions', function() {
         size: 4,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
@@ -228,8 +219,7 @@ describe('Slice functions', function() {
         size: 1,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -249,8 +239,7 @@ describe('Slice functions', function() {
         size: 2,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
@@ -270,8 +259,7 @@ describe('Slice functions', function() {
         size: 2,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
@@ -292,8 +280,7 @@ describe('Slice functions', function() {
         size: 2,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
@@ -311,8 +298,7 @@ describe('Slice functions', function() {
         size: 2,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
@@ -332,8 +318,7 @@ describe('Slice functions', function() {
         size: 2,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
@@ -350,8 +335,7 @@ describe('Slice functions', function() {
         size: 2,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
@@ -366,8 +350,7 @@ describe('Slice functions', function() {
         size: 2,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
@@ -382,8 +365,7 @@ describe('Slice functions', function() {
         size: 1,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -404,8 +386,7 @@ describe('Slice functions', function() {
         size: 1,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -425,8 +406,7 @@ describe('Slice functions', function() {
         size: 1,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -448,8 +428,7 @@ describe('Slice functions', function() {
         size: 1,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -469,8 +448,7 @@ describe('Slice functions', function() {
         size: 1,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -487,8 +465,7 @@ describe('Slice functions', function() {
         size: 1,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -511,8 +488,7 @@ describe('Slice functions', function() {
         size: 1,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -534,8 +510,7 @@ describe('Slice functions', function() {
         size: 1,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -555,8 +530,7 @@ describe('Slice functions', function() {
         size: 1,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -582,8 +556,7 @@ describe('Slice functions', function() {
         size: 1,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
@@ -616,7 +589,6 @@ describe('Slice functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         byteSize: 4,
         bitOffset: 0,
@@ -625,7 +597,6 @@ describe('Slice functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         byteSize: 4,
         bitOffset: 32,
@@ -666,7 +637,6 @@ describe('Slice functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: false,
         byteSize: 4,
         bitOffset: 0,
@@ -675,7 +645,6 @@ describe('Slice functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: false,
         byteSize: 4,
         bitOffset: 32,
@@ -716,8 +685,7 @@ describe('Slice functions', function() {
         size: 8,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 64,
         byteSize: 8,
         structure: { constructor: function() {}, typedArray: BigUint64Array }
@@ -742,8 +710,7 @@ describe('Slice functions', function() {
         size: 8,
       });
       attachMember(sliceStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 64,
         byteSize: 8,
         structure: { constructor: Int64, typedArray: BigUint64Array }
@@ -755,8 +722,7 @@ describe('Slice functions', function() {
         size: 8 * 4,
       });
       attachMember(arrayStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 64,
         byteSize: 8,
         structure: { constructor: Int64 },
@@ -774,8 +740,7 @@ describe('Slice functions', function() {
         size: 8,
       });
       attachMember(sliceStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 64,
         byteSize: 8,
         structure: { constructor: Int64, typedArray: BigUint64Array }
@@ -787,8 +752,7 @@ describe('Slice functions', function() {
         size: 8 * 4,
       });
       attachMember(vectorStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 64,
         byteSize: 8,
         structure: { constructor: Int64 },
@@ -807,8 +771,7 @@ describe('Slice functions', function() {
         size: 8,
       });
       attachMember(sliceStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 64,
         byteSize: 8,
         structure: { constructor: Int64, typedArray: BigUint64Array }
@@ -820,8 +783,7 @@ describe('Slice functions', function() {
         size: 8 * 4,
       });
       attachMember(arrayStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 64,
         byteSize: 8,
         structure: { constructor: Uint64 },
@@ -839,7 +801,6 @@ describe('Slice functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         byteSize: 4,
         bitOffset: 0,
@@ -848,7 +809,6 @@ describe('Slice functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         byteSize: 4,
         bitOffset: 32,
@@ -890,7 +850,6 @@ describe('Slice functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         byteSize: 4,
         bitOffset: 0,
@@ -899,7 +858,6 @@ describe('Slice functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         isRequired: true,
         byteSize: 4,
         bitOffset: 32,
@@ -927,8 +885,7 @@ describe('Slice functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -975,15 +932,13 @@ describe('Slice functions', function() {
         size: 1,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,
@@ -1005,15 +960,13 @@ describe('Slice functions', function() {
         size: 1,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,
@@ -1033,15 +986,13 @@ describe('Slice functions', function() {
         size: 1,
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,
@@ -1060,15 +1011,13 @@ describe('Slice functions', function() {
         size: 1,
       }, { runtimeSafety: true });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,
@@ -1091,15 +1040,13 @@ describe('Slice functions', function() {
         size: 1,
       }, { runtimeSafety: true });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,
@@ -1123,15 +1070,13 @@ describe('Slice functions', function() {
         size: 1,
       }, { runtimeSafety: false });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       attachMember(structure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,

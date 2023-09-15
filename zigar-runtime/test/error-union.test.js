@@ -140,7 +140,6 @@ describe('Error union functions', function() {
       attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -148,7 +147,6 @@ describe('Error union functions', function() {
       attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -207,7 +205,6 @@ describe('Error union functions', function() {
       });
       attachMember(intStructure, {
         type: MemberType.Int,
-        isSigned: true,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -281,8 +278,7 @@ describe('Error union functions', function() {
         size: 1,
       })
       attachMember(sliceStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array },
@@ -356,8 +352,7 @@ describe('Error union functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -429,8 +424,7 @@ describe('Error union functions', function() {
         size: 4,
       });
       attachMember(intStructure, {
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -597,8 +591,7 @@ describe('Error union functions', function() {
           structure: {},
         },
         {
-          type: MemberType.Int,
-          isSigned: false,
+          type: MemberType.Uint,
           bitOffset: 64,
           bitSize: 16,
           byteSize: 2,
@@ -644,8 +637,7 @@ describe('Error union functions', function() {
           }
         },
         {
-          type: MemberType.Int,
-          isSigned: false,
+          type: MemberType.Uint,
           bitOffset: 64,
           bitSize: 16,
           byteSize: 2,
@@ -688,8 +680,7 @@ describe('Error union functions', function() {
           }
         },
         {
-          type: MemberType.Int,
-          isSigned: false,
+          type: MemberType.Uint,
           bitOffset: 64,
           bitSize: 16,
           byteSize: 2,
@@ -750,8 +741,7 @@ describe('Error union functions', function() {
           }
         },
         {
-          type: MemberType.Int,
-          isSigned: false,
+          type: MemberType.Uint,
           bitOffset: 64,
           bitSize: 16,
           byteSize: 2,

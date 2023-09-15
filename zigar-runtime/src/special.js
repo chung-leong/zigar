@@ -35,8 +35,8 @@ export function addSpecialAccessors(s) {
 
 function canBeString(s) {
   if (s.type === StructureType.Array || s.type === StructureType.Slice) {
-    const { type, isSigned, bitSize } = s.instance.members[0];
-    if (type === MemberType.Int && !isSigned && (bitSize === 8 || bitSize === 16)) {
+    const { type, bitSize } = s.instance.members[0];
+    if (type === MemberType.Uint && (bitSize === 8 || bitSize === 16)) {
       return true;
     }
   }

@@ -477,10 +477,6 @@ static Local<Object> NewMember(Call* call,
   auto is_required = Boolean::New(isolate, m.is_required);
   def->Set(context, String::NewFromUtf8Literal(isolate, "type"), type).Check();
   def->Set(context, String::NewFromUtf8Literal(isolate, "isRequired"), is_required).Check();
-  if (m.type == MemberType::Int) {
-    auto is_signed = Boolean::New(isolate, m.is_signed);
-    def->Set(context, String::NewFromUtf8Literal(isolate, "isSigned"), is_signed).Check();
-  }
   if (m.bit_size != missing) {
     auto bit_size = Uint32::NewFromUnsigned(isolate, m.bit_size);
     def->Set(context, String::NewFromUtf8Literal(isolate, "bitSize"), bit_size).Check();

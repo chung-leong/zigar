@@ -27,15 +27,13 @@ describe('Enumeration functions', function() {
       });
       attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
       attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
@@ -61,15 +59,13 @@ describe('Enumeration functions', function() {
       });
       attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
       attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
@@ -93,15 +89,13 @@ describe('Enumeration functions', function() {
       });
       attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
       attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
@@ -125,15 +119,13 @@ describe('Enumeration functions', function() {
       });
       attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
       attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
@@ -158,15 +150,13 @@ describe('Enumeration functions', function() {
       });
       attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
       attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
@@ -192,15 +182,13 @@ describe('Enumeration functions', function() {
       });
       attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 64,
         byteSize: 8,
       });
       attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 64,
         byteSize: 8,
       });
@@ -225,15 +213,13 @@ describe('Enumeration functions', function() {
       });
       attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
       attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
@@ -257,15 +243,13 @@ describe('Enumeration functions', function() {
       });
       attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
       attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
@@ -288,15 +272,13 @@ describe('Enumeration functions', function() {
       });
       attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
       attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
@@ -320,15 +302,13 @@ describe('Enumeration functions', function() {
       });
       attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
       attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
@@ -352,15 +332,13 @@ describe('Enumeration functions', function() {
       });
       attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
       attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Int,
-        isSigned: false,
+        type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
