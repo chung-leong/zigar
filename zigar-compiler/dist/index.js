@@ -489,6 +489,12 @@ function getMemberFeature(member) {
       } else {
         return 'useIntEx';
       }
+    case MemberType.Uint:
+      if(isByteAligned(member) && (bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64)) {
+        return 'useUint';
+      } else {
+        return 'useUintEx';
+      }
     case MemberType.EnumerationItem:
       if(isByteAligned(member) && (bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64)) {
         return 'useEnumerationItem';

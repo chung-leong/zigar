@@ -1,4 +1,4 @@
-import { usePrimitive, useSlice, usePointer, useArray, useArgStruct, useStruct, useInt, useObject, finalizeStructures, linkModule } from 'zigar-runtime';
+import { usePrimitive, useSlice, usePointer, useArray, useArgStruct, useStruct, useUint, useObject, useInt, finalizeStructures, linkModule } from 'zigar-runtime';
 
 // activate features
 usePrimitive();
@@ -7,16 +7,13 @@ usePointer();
 useArray();
 useArgStruct();
 useStruct();
-useInt();
+useUint();
 useObject();
+useInt();
 
 // define structures
 const s = {
   constructor: null,
-  initializer: null,
-  pointerCopier: null,
-  pointerResetter: null,
-  pointerDisabler: null,
   typedArray: null,
   type: 0,
   name: undefined,
@@ -51,8 +48,7 @@ const s0 = {
     members: [
       {
         ...m,
-        type: 2,
-        isSigned: false,
+        type: 3,
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,
@@ -74,8 +70,7 @@ const s1 = {
     members: [
       {
         ...m,
-        type: 2,
-        isSigned: false,
+        type: 3,
         bitSize: 8,
         byteSize: 1,
         structure: s0,
@@ -97,7 +92,7 @@ const s2 = {
     members: [
       {
         ...m,
-        type: 5,
+        type: 6,
         bitSize: 64,
         byteSize: 8,
         slot: 0,
@@ -119,8 +114,7 @@ const s3 = {
     members: [
       {
         ...m,
-        type: 2,
-        isSigned: false,
+        type: 3,
         bitSize: 8,
         byteSize: 1,
         structure: s0,
@@ -141,7 +135,7 @@ const s4 = {
     members: [
       {
         ...m,
-        type: 5,
+        type: 6,
         isRequired: true,
         bitOffset: 0,
         bitSize: 64,
@@ -152,7 +146,7 @@ const s4 = {
       },
       {
         ...m,
-        type: 5,
+        type: 6,
         isRequired: true,
         bitOffset: 64,
         bitSize: 320,
@@ -199,7 +193,7 @@ const module = s5.constructor;
 
 // initiate loading and compilation of WASM bytecodes
 const wasmPromise = (async () => {
-  const url = new URL('assets/sha1-e57d84bf.wasm', import.meta.url).href;
+  const url = new URL('assets/sha1-e8371cbb.wasm', import.meta.url).href;
   if (typeof(process) === 'object' && process[Symbol.toStringTag] === 'process') {
     const { readFile } = await import('fs/promises');
     const { fileURLToPath } = await import('url');
@@ -209,7 +203,7 @@ const wasmPromise = (async () => {
     return fetch(url);
   }
 })();
-const __init = linkModule(wasmPromise, linkage);
+const __init = linkModule(wasmPromise, { ...linkage, writeBack: true });
 
 // export functions, types, and constants
 const {

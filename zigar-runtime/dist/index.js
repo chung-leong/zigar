@@ -1934,7 +1934,7 @@ function finalizePointer(s) {
         initializer.call(this, arg[SLOTS][0]);
       } else {
         // not doing memory copying since the value stored there likely isn't valid
-        copyPointer$1.call(this, arg);
+        copyPointer.call(this, arg);
       }
     } else {
       const Target = targetStructure.constructor;
@@ -1942,7 +1942,7 @@ function finalizePointer(s) {
         if (!isConst && arg.constructor.const) {
           throwConstantConstraint(s, arg);
         }
-        copyPointer$1.call(this, arg);
+        copyPointer.call(this, arg);
       } else {
         if (!(arg instanceof Target)) {
           if (isCompatible(arg, Target)) {
@@ -2000,7 +2000,7 @@ function getProxy() {
   return this[PROXY];
 }
 
-function copyPointer$1(src) {
+function copyPointer(src) {
   this[SLOTS][0] = src[SLOTS][0];
 }
 
@@ -2176,7 +2176,7 @@ function finalizeArray(s) {
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (hasPointer) {
-        this[POINTER_VISITOR](true, arg, copyPointer$1);
+        this[POINTER_VISITOR](true, arg, copyPointer);
       }
     } else {
       if (typeof(arg) === 'string' && specialKeys.includes('string')) {
@@ -2258,13 +2258,8 @@ function addPointerVisitor$1(s) {
   const { constructor: { prototype } } = s;
   const visitor = function visitPointers(vivificating, src, fn) {
     for (let i = 0, len = this.length; i < len; i++) {
-      let srcChild;
-      if (src) {
-        srcChild = src[SLOTS][i];
-        if (!srcChild) {
-          continue;
-        }
-      }
+      // no need to check for empty slots, since that isn't possible
+      const srcChild = src?.[SLOTS][i];
       const child = (vivificating) ? this[CHILD_VIVIFICATOR](i) : this[SLOTS][i];
       if (child) {
         child[POINTER_VISITOR](vivificating, srcChild, fn);
@@ -2560,7 +2555,7 @@ function finalizeStruct(s) {
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (hasPointer) {
-        this[POINTER_VISITOR](true, template, copyPointer$1);
+        this[POINTER_VISITOR](true, template, copyPointer);
       }
     } else {
       if (arg && typeof(arg) === 'object') {
@@ -2587,7 +2582,7 @@ function finalizeStruct(s) {
         if (template && !specialInit && found < members.length) {
           copy(this[MEMORY], template[MEMORY]);
           if (hasPointer) {
-            this[POINTER_VISITOR](true, template, copyPointer$1);
+            this[POINTER_VISITOR](true, template, copyPointer);
           }
         }
         for (const key of keys) {
@@ -2645,6 +2640,8 @@ function addPointerVisitor(s) {
     for (const { slot } of pointerMembers) {
       let srcChild;
       if (src) {
+        // when src is a the struct's template, most slots will likely be empty,
+        // since point fields aren't likely to have default values
         srcChild = src[SLOTS][slot];
         if (!srcChild) {
           continue;
@@ -2705,7 +2702,7 @@ function finalizeUnion(s) {
       };
     }
     for (const member of valueMembers) {
-      const { name, slot } = member;
+      const { name, slot, structure: { hasPointer } } = member;
       const { get: getValue, set: setValue } = getAccessors(member, options);
       const update = (isTagged) ? function(name) {
         if (this[TAG]?.name !== name) {
@@ -2803,7 +2800,7 @@ function finalizeUnion(s) {
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (hasPointer) {
-        this[POINTER_VISITOR](true, arg, copyPointer$1);
+        this[POINTER_VISITOR](true, arg, copyPointer);
       }
     } else {
       if (arg && typeof(arg) === 'object') {
@@ -2837,7 +2834,7 @@ function finalizeUnion(s) {
             restoreMemory.call(this);
             copy(this[MEMORY], template[MEMORY]);
             if (hasPointer) {
-              this[POINTER_VISITOR](true, template, copyPointer$1);
+              this[POINTER_VISITOR](true, template, copyPointer);
             }
           }
         } else {
@@ -2912,7 +2909,7 @@ function finalizeErrorUnion(s) {
       copy(this[MEMORY], arg[MEMORY]);
       if (hasPointer) {
         if (check.call(this)) {
-          this[POINTER_VISITOR](true, arg, copyPointer$1);
+          this[POINTER_VISITOR](true, arg, copyPointer);
         }
       }
     } else {
@@ -3299,7 +3296,7 @@ function finalizeSlice(s) {
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (hasPointer) {
-        this[POINTER_VISITOR](true, arg, copyPointer$1);
+        this[POINTER_VISITOR](true, arg, copyPointer);
       }
     } else {
       if (typeof(arg) === 'string' && specialKeys.includes('string')) {
