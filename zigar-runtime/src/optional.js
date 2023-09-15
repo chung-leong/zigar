@@ -5,7 +5,7 @@ import { addChildVivificators, addPointerVisitor } from './struct.js';
 import { addSpecialAccessors } from './special.js';
 import { MEMORY, POINTER_VISITOR, SLOTS } from './symbol.js';
 import { throwNoInitializer } from './error.js';
-import { resetPointer } from './pointer.js';
+import { copyPointer, resetPointer } from './pointer.js';
 
 export function finalizeOptional(s) {
   const {

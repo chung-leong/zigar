@@ -914,9 +914,110 @@ describe('Union functions', function() {
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({ pointer: new Int32(1234) });
-      const pointer = object.$.pointer;
+      const pointer = object.pointer;
       object.$ = { number: 4567 };
       expect(pointer[SLOTS][0]).to.be.null;
+    })
+    it('should reapply pointer when initialized with no initializer', function() {
+      const intStructure = beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        size: 4,
+      });
+      attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      const Int32 = finalizeStructure(intStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        size: 8,
+        hasPointer: true,
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = finalizeStructure(ptrStructure);
+      const enumStructure = beginStructure({
+        type: StructureType.Enumeration,
+        name: 'HelloTag',
+        size: 2,
+      });
+      attachMember(enumStructure, {
+        name: 'pointer',
+        type: MemberType.Uint,
+        bitSize: 16,
+        byteSize: 2,
+      });
+      attachMember(enumStructure, {
+        name: 'number',
+        type: MemberType.Uint,
+        bitSize: 16,
+        byteSize: 2,
+      });
+      attachTemplate(enumStructure, {
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(2 * 2));
+          dv.setUint16(0, 0, true);
+          dv.setUint16(2, 1, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
+      });
+      const HelloTag = finalizeStructure(enumStructure);
+      const structure = beginStructure({
+        type: StructureType.TaggedUnion,
+        name: 'Hello',
+        size: 10,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        name: 'pointer',
+        type: MemberType.Object,
+        isRequired: false,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      attachMember(structure, {
+        name: 'number',
+        type: MemberType.Int,
+        isRequired: true,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.EnumerationItem,
+        bitSize: 16,
+        bitOffset: 64,
+        byteSize: 2,
+        structure: enumStructure,
+      });
+      attachTemplate(structure, {
+        [MEMORY]: new DataView(new ArrayBuffer(10)),
+        [SLOTS]: { 0: new Int32Ptr(new Int32(1234)) },
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello({});
+      const pointer = object.pointer;
+      expect(object.pointer['*']).to.equal(1234);
+      object.$ = { number: 4567 };
+      expect(object.pointer).to.be.null;
+      object.$ = {};
+      expect(object.pointer['*']).to.equal(1234);
     })
     it('should complain about missing union initializer', function() {
       const structure = beginStructure({

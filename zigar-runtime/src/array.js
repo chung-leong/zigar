@@ -142,13 +142,8 @@ export function addPointerVisitor(s) {
   const { constructor: { prototype } } = s;
   const visitor = function visitPointers(vivificating, src, fn) {
     for (let i = 0, len = this.length; i < len; i++) {
-      let srcChild;
-      if (src) {
-        srcChild = src[SLOTS][i];
-        if (!srcChild) {
-          continue;
-        }
-      }
+      // no need to check for empty slots, since that isn't possible
+      const srcChild = src?.[SLOTS][i];
       const child = (vivificating) ? this[CHILD_VIVIFICATOR](i) : this[SLOTS][i];
       if (child) {
         child[POINTER_VISITOR](vivificating, srcChild, fn);

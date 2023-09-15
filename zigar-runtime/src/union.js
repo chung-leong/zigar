@@ -63,7 +63,7 @@ export function finalizeUnion(s) {
       };
     }
     for (const member of valueMembers) {
-      const { name, slot } = member;
+      const { name, slot, structure: { hasPointer } } = member;
       const { get: getValue, set: setValue } = getAccessors(member, options);
       const update = (isTagged) ? function(name) {
         if (this[TAG]?.name !== name) {

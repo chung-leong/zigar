@@ -325,6 +325,64 @@ describe('Optional functions', function() {
       const object2 = new Hello(null);
       expect(object2.$).to.be.null;
     })
+    it('should copy pointers where initialized from an optional of the same type', function() {
+      const sliceStructure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]Uint8',
+        size: 1,
+      })
+      attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array },
+      });
+      const Uint8Slice = finalizeStructure(sliceStructure);
+      const ptrStructure = beginStructure({
+        type: StructureType.Pointer,
+        name: '[]Uint8',
+        size: 16,
+        hasPointer: true,
+      });
+      attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 128,
+        bitOffset: 0,
+        byteSize: 16,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const Uint8SlicePtr = finalizeStructure(ptrStructure);
+      const structure = beginStructure({
+        type: StructureType.Optional,
+        name: 'Hello',
+        size: 16,
+        hasPointer: true,
+      });
+      attachMember(structure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 128,
+        byteSize: 16,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      attachMember(structure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: 0,
+        bitSize: 1,
+        byteSize: 8,
+        structure: {},
+      });
+      const Hello = finalizeStructure(structure);
+      const encoder = new TextEncoder();
+      const array = encoder.encode('This is a test');
+      const object = new Hello(array);
+      const object2 = new Hello(object);
+      expect(object2.$.string).to.equal('This is a test');
+    })
     it('should release pointers in struct when it is set to null', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
