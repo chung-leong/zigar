@@ -1,6 +1,6 @@
 import { getAccessors } from './member.js';
 import { getMemoryCopier, restoreMemory } from './memory.js';
-import { requireDataView, getTypedArrayClass, isTypedArray, getCompatibleTags } from './data-view.js';
+import { requireDataView, addTypedArray, isTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
 import { MEMORY, COMPAT } from './symbol.js';
@@ -13,6 +13,7 @@ export function finalizeVector(s) {
     },
     options,
   } = s;
+  addTypedArray(s);
   if (process.env.ZIGAR_DEV) {
     /* c8 ignore next 6 */
     if (member.bitOffset !== undefined) {
@@ -43,22 +44,26 @@ export function finalizeVector(s) {
     }
   };
   const { byteSize: elementSize, structure: elementStructure } = member;
-  const count = size / elementSize;
+  const length = size / elementSize;
   const copy = getMemoryCopier(size);
-  const typedArray = s.typedArray = getTypedArrayClass(member);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
     } else {
-      if (Array.isArray(arg) || isTypedArray(arg, typedArray)) {
-        const len = arg.length;
-        if (len !== count) {
+      if (arg?.[Symbol.iterator]) {
+        let argLen = arg.length;
+        if (typeof(argLen) !== 'number') {
+          arg = [ ...arg ];
+          argLen = arg.length;
+        }
+        if (argLen !== length) {
           throwArrayLengthMismatch(s, this, arg);
         }
-        for (let i = 0; i < len; i++) {
-          this[i] = arg[i];
+        let i = 0;
+        for (const value of arg) {
+          this[i++] = value;
         }
       } else {
         throwInvalidArrayInitializer(s, arg);
@@ -66,12 +71,12 @@ export function finalizeVector(s) {
     }
   };
   const retriever = function() { return this };
-  for (let i = 0, bitOffset = 0; i < count; i++, bitOffset += elementSize * 8) {
+  for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementSize * 8) {
     const { get, set } = getAccessors({ ...member, bitOffset }, options);
     Object.defineProperty(constructor.prototype, i, { get, set, configurable: true });
   }
   Object.defineProperties(constructor.prototype, {
-    length: { value: count, configurable: true },
+    length: { value: length, configurable: true },
     $: { get: retriever, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
     entries: { value: createVectorEntries, configurable: true, writable: true },

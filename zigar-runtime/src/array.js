@@ -1,6 +1,6 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier, restoreMemory } from './memory.js';
-import { requireDataView, getTypedArrayClass, getCompatibleTags } from './data-view.js';
+import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
 import { MEMORY, SLOTS, ZIG, PARENT, GETTER, SETTER, PROXY, COMPAT } from './symbol.js';
@@ -23,6 +23,7 @@ export function finalizeArray(s) {
       throw new Error(`slot must be undefined for array member`);
     }
   }
+  addTypedArray(s);
   const objectMember = (member.type === MemberType.Object) ? member : null;
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
@@ -51,7 +52,6 @@ export function finalizeArray(s) {
   const { byteSize: elementSize, structure: elementStructure } = member;
   const length = size / elementSize;
   const copy = getMemoryCopier(size);
-  const typedArray = s.typedArray = getTypedArrayClass(member);
   const specialKeys = getSpecialKeys(s);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -130,13 +130,15 @@ export function createChildObjects(member, recv) {
   }
 }
 
+const empty = { [SLOTS]: {} };
+
 export function getPointerCopier(member) {
   return function(src) {
     const { structure: { pointerCopier } } = member;
     const destSlots = this[SLOTS];
     const srcSlots = src[SLOTS];
     for (let i = 0, len = this.length; i < len; i++) {
-      pointerCopier.call(destSlots[i], srcSlots[i]);
+      pointerCopier.call(destSlots[i], srcSlots[i] ?? empty);
     }
   };
 }

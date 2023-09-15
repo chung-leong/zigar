@@ -34,7 +34,7 @@ describe('Vector functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
-        structure: { constructor },
+        structure: { constructor, typedArray: Uint32Array },
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
@@ -60,7 +60,7 @@ describe('Vector functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
-        structure: { constructor },
+        structure: { constructor, typedArray: Uint32Array },
       });
       const Hello = finalizeStructure(structure);
       expect(() => new Hello).to.throw(TypeError);
@@ -76,6 +76,7 @@ describe('Vector functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor, typedArray: Uint32Array },
       });
       const Hello = finalizeStructure(structure);
       const dv = new DataView(new ArrayBuffer(4 * 8));
@@ -99,6 +100,7 @@ describe('Vector functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor, typedArray: Uint32Array },
       });
       const Hello = finalizeStructure(structure);
       const dv = new DataView(new ArrayBuffer(4 * 8));
@@ -126,7 +128,7 @@ describe('Vector functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
-        structure: { constructor },
+        structure: { constructor, typedArray: Uint32Array },
       });
       const Hello = finalizeStructure(structure);
       const buffer = new ArrayBuffer(32);
@@ -147,6 +149,7 @@ describe('Vector functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor, typedArray: Float32Array },
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
@@ -170,6 +173,7 @@ describe('Vector functions', function() {
         isSigned: true,
         bitSize: 64,
         byteSize: 8,
+        structure: { constructor, typedArray: BigInt64Array },
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello([ 12345n, 12345n, 12345n ]);
@@ -187,6 +191,7 @@ describe('Vector functions', function() {
         isSigned: true,
         bitSize: 128,
         byteSize: 16,
+        structure: { constructor, typedArray: null },
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello([ 12345n, 12345n, 12345n ]);
@@ -204,6 +209,7 @@ describe('Vector functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor, typedArray: Uint32Array },
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
@@ -225,12 +231,36 @@ describe('Vector functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor, typedArray: Uint32Array },
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello([ 1, 2, 3, 4 ]);
       const object2 = new Hello(object);
       expect([ ...object2 ]).to.eql([ 1, 2, 3, 4 ]);
     })
+    it('should initialize vector with generator', function() {
+      const structure = beginStructure({
+        type: StructureType.Vector,
+        name: 'Hello',
+        size: 4 * 4,
+      });
+      attachMember(structure, {
+        type: MemberType.Int,
+        isSigned: false,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { constructor, typedArray: Uint32Array },
+      });
+      const Hello = finalizeStructure(structure);
+      const generate = function*() {
+        for (let i = 0; i < 4; i++) {
+          yield i + 1;
+        }
+      };
+      const object = new Hello(generate());
+      expect([ ...object ]).to.eql([ 1, 2, 3, 4 ]);
+    })
+
     it('should allow casting from an array', function() {
       const Uint32 = function() {};
       const vectorStructure = beginStructure({
@@ -243,7 +273,7 @@ describe('Vector functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
-        structure: { constructor: Uint32 },
+        structure: { constructor: Uint32, typedArray: Uint32Array },
       });
       const Vector = finalizeStructure(vectorStructure);
       const arrayStructure = beginStructure({
@@ -296,6 +326,7 @@ describe('Vector functions', function() {
         byteSize: 4,
         structure: {
           constructor: function() {},
+          typedArray: Uint32Array,
         },
       });
       const Hello = finalizeStructure(structure);

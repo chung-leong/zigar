@@ -560,7 +560,7 @@ describe('Pointer functions', function() {
     })
     it('should automatically cast to slice from typed array', function() {
       const intStructure = beginStructure({
-        type: StructureType.Struct,
+        type: StructureType.Primitive,
         name: 'Int32',
         size: 4,
         hasPointer: false,
@@ -609,7 +609,7 @@ describe('Pointer functions', function() {
     })
     it('should show a warning when given a typed array is of the incorrect type', function() {
       const intStructure = beginStructure({
-        type: StructureType.Struct,
+        type: StructureType.Primitive,
         name: 'Int32',
         size: 4,
         hasPointer: false,

@@ -98,6 +98,7 @@ export function finalizeStruct(s) {
         if (template && !specialInit && found < members.length) {
           copy(this[MEMORY], template[MEMORY]);
           if (pointerCopier) {
+            //console.log({ name, template });
             pointerCopier.call(this, template);
           }
         }
@@ -136,13 +137,15 @@ export function createChildObjects(members, recv) {
   }
 }
 
+const empty = { [SLOTS]: {} };
+
 export function getPointerCopier(members) {
   const pointerMembers = members.filter(m => m.structure.hasPointer);
   return function(src) {
     const destSlots = this[SLOTS];
     const srcSlots = src[SLOTS];
     for (const { slot, structure: { pointerCopier } } of pointerMembers) {
-      pointerCopier.call(destSlots[slot], srcSlots[slot]);
+      pointerCopier.call(destSlots[slot], srcSlots[slot] ?? empty);
     }
   };
 }

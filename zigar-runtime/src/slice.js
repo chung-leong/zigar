@@ -1,6 +1,6 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier, restoreMemory } from './memory.js';
-import { requireDataView, getTypedArrayClass, checkDataViewSize, getCompatibleTags } from './data-view.js';
+import { requireDataView, addTypedArray, checkDataViewSize, getCompatibleTags } from './data-view.js';
 import {
   createChildObjects,
   getPointerCopier,
@@ -36,6 +36,7 @@ export function finalizeSlice(s) {
     hasPointer,
     options,
   } = s;
+  const typedArray = addTypedArray(s);
   if (process.env.ZIGAR_DEV) {
     /* c8 ignore next 6 */
     if (member.bitOffset !== undefined) {
@@ -47,7 +48,6 @@ export function finalizeSlice(s) {
   }
   const objectMember = (member.type === MemberType.Object) ? member : null;
   const { byteSize: elementSize, structure: elementStructure } = member;
-  const typedArray = s.typedArray = getTypedArrayClass(member);
   const sentinel = getSentinel(s, options);
   if (sentinel) {
     // zero-terminated strings aren't expected to be commonly used
@@ -67,7 +67,7 @@ export function finalizeSlice(s) {
       initializer.call(self, arg);
     } else {
       self = Object.create(constructor.prototype);
-      const dv = requireDataView(s, arg, typedArray);
+      const dv = requireDataView(s, arg);
       shapeDefiner.call(self, dv, dv.byteLength / elementSize, this);
     }
     return createProxy.call(self);

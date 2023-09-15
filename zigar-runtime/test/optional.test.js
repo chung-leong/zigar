@@ -275,7 +275,7 @@ describe('Optional functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
-        structure: { constructor: function() {} },
+        structure: { constructor: function() {}, typedArray: Uint8Array },
       });
       const Uint8Slice = finalizeStructure(sliceStructure);
       const ptrStructure = beginStructure({

@@ -303,6 +303,7 @@ describe('Special property functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array },
       });
       finalizeStructure(structure);
       const keys = getSpecialKeys(structure);
@@ -319,6 +320,7 @@ describe('Special property functions', function() {
         isSigned: true,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Int8Array },
       });
       finalizeStructure(structure);
       const keys = getSpecialKeys(structure);
@@ -335,6 +337,7 @@ describe('Special property functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array },
       });
       finalizeStructure(structure);
       const keys = getSpecialKeys(structure);
@@ -351,6 +354,7 @@ describe('Special property functions', function() {
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
+        structure: { constructor: function() {}, typedArray: Uint16Array },
       });
       finalizeStructure(structure);
       const keys = getSpecialKeys(structure);
@@ -367,6 +371,7 @@ describe('Special property functions', function() {
         isSigned: false,
         bitSize: 15,
         byteSize: 2,
+        structure: { constructor: function() {}, typedArray: Uint16Array },
       });
       finalizeStructure(structure);
       const keys = getSpecialKeys(structure);

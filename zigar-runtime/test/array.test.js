@@ -47,7 +47,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
-        structure: { constructor }
+        structure: { constructor, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
@@ -71,6 +71,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello(new Uint32Array(8));
@@ -105,6 +106,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello(new Uint32Array(8));
@@ -122,6 +124,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello(new Uint32Array(8));
@@ -144,6 +147,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       const dv = new DataView(new ArrayBuffer(4 * 8));
@@ -167,6 +171,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       const dv = new DataView(new ArrayBuffer(4 * 8));
@@ -193,6 +198,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       expect(() => new Hello).to.throw(TypeError);
@@ -209,6 +215,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
@@ -227,6 +234,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
@@ -244,6 +252,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
+        structure: { constructor: function() {}, typedArray: BigUint64Array }
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello([ 100n, 200n, 300n, 400n ]);
@@ -262,6 +271,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Array = finalizeStructure(structure);
       const str = 'Hello world';
@@ -282,6 +292,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
+        structure: { constructor: function() {}, typedArray: Uint16Array }
       });
       const U8Array = finalizeStructure(structure);
       const str = 'Hello world';
@@ -302,6 +313,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
+        structure: { constructor: function() {}, typedArray: Uint16Array }
       });
       const U16Array = finalizeStructure(structure);
       const str = 'Hello world';
@@ -323,7 +335,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
-        structure: { constructor: function() {} },
+        structure: { constructor: function() {}, typedArray: Uint16Array }
       });
       const U16Slice = finalizeStructure(structure);
       const str = 'Hello world';
@@ -341,6 +353,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
+        structure: { constructor: function() {}, typedArray: Uint16Array }
       });
       const U16Array = finalizeStructure(structure);
       const array = new U16Array(undefined);
@@ -361,7 +374,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
-        structure: {}
+        structure: { constructor: function() {}, typedArray: Uint16Array }
       });
       const U16Array = finalizeStructure(structure);
       const array = new U16Array(undefined);
@@ -379,7 +392,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
-        structure: {}
+        structure: { constructor: function() {}, typedArray: Uint16Array }
       });
       const U16Array = finalizeStructure(structure);
       expect(() => new U16Array({ dogmeat: 5 })).to.throw();
@@ -395,7 +408,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
-        structure: {}
+        structure: { constructor: function() {}, typedArray: Uint16Array }
       });
       const U16Array = finalizeStructure(structure);
       expect(() => new U16Array(() => {})).to.throw();
@@ -411,6 +424,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Array = finalizeStructure(structure);
       const str = 'Hello world';
@@ -432,6 +446,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Array = finalizeStructure(structure);
       const array = new U8Array('Hello world');
@@ -452,6 +467,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Array = finalizeStructure(structure);
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
@@ -474,6 +490,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Array = finalizeStructure(structure);
       const array = new U8Array(new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]));
@@ -494,6 +511,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Array = finalizeStructure(structure);
       const array = new U8Array(new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]));
@@ -511,6 +529,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Array = finalizeStructure(structure);
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
@@ -534,6 +553,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Array = finalizeStructure(structure);
       const array = new U8Array(undefined);
@@ -556,6 +576,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Array = finalizeStructure(structure);
       const typedArray = new Float32Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
@@ -576,7 +597,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
-        structure: {},
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Array = finalizeStructure(structure);
       const f = function*() {
@@ -603,6 +624,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       expect(() => new Hello([ 1, 2, 3, 4, 5, 6, 7, 8, 9 ])).to.throw();
@@ -618,6 +640,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       expect(() => new Hello({})).to.throw();
@@ -742,6 +765,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
+        structure: { constructor: function() {}, typedArray: BigUint64Array }
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello([ 100n, 200n, 300n, 400n ]);
@@ -814,7 +838,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
-        structure: { constructor: Int64 },
+        structure: { constructor: Int64, typedArray: BigUint64Array },
       });
       const Int64Slice = finalizeStructure(sliceStructure);
       const arrayStructure = beginStructure({
@@ -827,7 +851,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
-        structure: { constructor: Int64 },
+        structure: { constructor: Int64, typedArray: BigUint64Array },
       });
       const Int64Array = finalizeStructure(arrayStructure);
       const slice = new Int64Slice([ 100n, 200n, 300n, 400n ]);
@@ -845,6 +869,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
@@ -871,6 +896,7 @@ describe('Array functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello([ 1, 2, 3, 4, 5, 6, 7, 8 ]);

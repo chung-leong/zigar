@@ -7,7 +7,7 @@ import { getIntRange } from '../src/primitive.js';
 import {
   isBuffer,
   isTypedArray,
-  getTypedArrayClass,
+  addTypedArray,
   getTypeName,
   getDataView,
   requireDataView,
@@ -59,8 +59,8 @@ describe('Data view functions', function() {
       expect(isTypedArray(ta)).to.be.false;
     })
   })
-  describe('getTypedArrayClass', function() {
-    it('should a typed array class when element type is standard', function() {
+  describe('addTypedArray', function() {
+    it('should add typed array to integer primitive', function() {
       let index = 0;
       const types = [
         Int8Array,
@@ -74,44 +74,128 @@ describe('Data view functions', function() {
       ];
       for (const byteSize of [ 1, 2, 4, 8 ]) {
         for (const isSigned of [ true, false ]) {
-          const member = {
-            type: MemberType.Int,
-            isSigned,
-            bitSize: byteSize * 8,
-            byteSize,
-          };
-          const f = getTypedArrayClass(member);
+          const structure = {
+            type: StructureType.Primitive,
+            instance: {
+              members: [
+                {
+                  type: MemberType.Int,
+                  isSigned,
+                  bitSize: byteSize * 8,
+                  byteSize,
+                },
+              ],
+            },
+          }
+          const f = addTypedArray(structure);
+          expect(f).to.equal(structure.typedArray);
           expect(f).to.be.a('function');
           expect(f).to.equal(types[index++]);
         }
       }
     })
-    it('should a typed array class that fits the non-standard type', function() {
-      const member = {
-        type: MemberType.Int,
-        isSigned: false,
-        bitSize: 36,
-        byteSize: 8,
+    it('should add typed array to non-standard integer when byte size match', function() {
+      const structure = {
+        type: StructureType.Primitive,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              isSigned: false,
+              bitSize: 36,
+              byteSize: 8,
+            },
+          ],
+        },
       };
-      const f = getTypedArrayClass(member);
+      const f = addTypedArray(structure);
       expect(f).to.equal(BigUint64Array);
     })
-    it('should a typed array class for floating point numbers', function() {
+    it('should add typed array to floating point primitive', function() {
       let index = 0;
       const types = [
+        null,
         Float32Array,
         Float64Array,
+        null,
       ];
-      for (const byteSize of [ 4, 8 ]) {
-        const member = {
-          type: MemberType.Float,
-          isSigned: false,
-          bitSize: byteSize * 8,
-          byteSize,
+      for (const byteSize of [ 2, 4, 8, 16 ]) {
+        const structure = {
+          type: StructureType.Primitive,
+          instance: {
+            members: [
+              {
+                type: MemberType.Float,
+                isSigned: false,
+                bitSize: byteSize * 8,
+                byteSize,
+              },
+            ],
+          },
         };
-        const f = getTypedArrayClass(member);
+        const f = addTypedArray(structure);
         expect(f).to.equal(types[index++]);
       }
+    })
+    it('should add typed array of child element to array', function() {
+      const structure = {
+        type: StructureType.Array,
+        instance: {
+          members: [
+            {
+              type: MemberType.Float,
+              isSigned: false,
+              bitSize: 64,
+              byteSize: 8,
+              structure: {
+                typedArray: Float64Array,
+              },
+            },
+          ],
+        }
+      };
+      const f = addTypedArray(structure);
+      expect(f).to.equal(Float64Array);
+    })
+    it('should add typed array of child element to slice', function() {
+      const structure = {
+        type: StructureType.Slice,
+        instance: {
+          members: [
+            {
+              type: MemberType.Float,
+              isSigned: false,
+              bitSize: 64,
+              byteSize: 8,
+              structure: {
+                typedArray: Float64Array,
+              },
+            },
+          ],
+        }
+      };
+      const f = addTypedArray(structure);
+      expect(f).to.equal(Float64Array);
+    })
+    it('should add typed array of child element to vector', function() {
+      const structure = {
+        type: StructureType.Vector,
+        instance: {
+          members: [
+            {
+              type: MemberType.Float,
+              isSigned: false,
+              bitSize: 64,
+              byteSize: 8,
+              structure: {
+                typedArray: Float64Array,
+              },
+            },
+          ],
+        }
+      };
+      const f = addTypedArray(structure);
+      expect(f).to.equal(Float64Array);
     })
   })
   describe('getDataView', function() {

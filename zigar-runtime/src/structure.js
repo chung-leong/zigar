@@ -149,8 +149,8 @@ export function getShortName(s) {
   let r = s.name;
   r = r.replace(/\(.*\)/, '');
   r = r.replace(/{.*}/, '');
-  const dotIndex = r.lastIndexOf('.');
-  return r.substring(dotIndex + 1);
+  r = r.replace(/[^. ]*?\./g, '');
+  return r;
 }
 
 export function finalizeStructure(s) {
@@ -165,7 +165,6 @@ export function finalizeStructure(s) {
     }
     const constructor = f(s);
     if (typeof(constructor) === 'function') {
-      console.log(getShortName(s));
       Object.defineProperties(constructor, {
         name: { value: getShortName(s), writable: false }
       });

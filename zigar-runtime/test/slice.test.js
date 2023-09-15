@@ -44,7 +44,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
-        structure: { constructor },
+        structure: { constructor, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.a('function');
@@ -66,7 +66,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
-        structure: { constructor },
+        structure: { constructor, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       expect(() => new Hello).to.throw(TypeError);
@@ -83,7 +83,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
-        structure: { constructor },
+        structure: { constructor, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       const object = Hello(new ArrayBuffer(32));
@@ -106,7 +106,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
-        structure: { constructor },
+        structure: { constructor, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       const object = Hello(new ArrayBuffer(32));
@@ -131,6 +131,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const Hello = finalizeStructure(structure);
       const dv = new DataView(new ArrayBuffer(4));
@@ -153,6 +154,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
+        structure: { constructor: function() {}, typedArray: Uint16Array }
       });
       const Hello = finalizeStructure(structure);
       const dv = new DataView(new ArrayBuffer(8));
@@ -175,6 +177,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
@@ -194,6 +197,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello(8);
@@ -210,6 +214,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 32,
         byteSize: 4,
+        structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Hello = finalizeStructure(structure);
       expect(() => new Hello(-123)).to.throw();
@@ -227,6 +232,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Slice = finalizeStructure(structure);
       const str = 'Hello world';
@@ -247,6 +253,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
+        structure: { constructor: function() {}, typedArray: Uint16Array }
       });
       const U8Slice = finalizeStructure(structure);
       const str = 'Hello world';
@@ -267,6 +274,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
+        structure: { constructor: function() {}, typedArray: Uint16Array }
       });
       const U16Slice = finalizeStructure(structure);
       const str = 'Hello world';
@@ -288,7 +296,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
-        structure: { constructor: function() {} },
+        structure: { constructor: function() {}, typedArray: Uint16Array }
       });
       const U16Slice = finalizeStructure(structure);
       const str = 'Hello world';
@@ -307,6 +315,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
+        structure: { constructor: function() {}, typedArray: Uint16Array }
       });
       const U16Slice = finalizeStructure(structure);
       const slice = new U16Slice(11);
@@ -327,7 +336,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
-        structure: {}
+        structure: { constructor: function() {}, typedArray: Uint16Array }
       });
       const U16Slice = finalizeStructure(structure);
       const slice = new U16Slice(11);
@@ -345,7 +354,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
-        structure: {}
+        structure: { constructor: function() {}, typedArray: Uint16Array }
       });
       const U16Slice = finalizeStructure(structure);
       expect(() => new U16Slice({ dogmeat: 5 })).to.throw();
@@ -361,7 +370,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 16,
         byteSize: 2,
-        structure: {}
+        structure: { constructor: function() {}, typedArray: Uint16Array }
       });
       const U16Slice = finalizeStructure(structure);
       expect(() => new U16Slice(() => {})).to.throw();
@@ -377,6 +386,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Slice = finalizeStructure(structure);
       const str = 'Hello world';
@@ -398,6 +408,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Slice = finalizeStructure(structure);
       const slice = new U8Slice('Hello world');
@@ -418,6 +429,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Slice = finalizeStructure(structure);
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
@@ -440,6 +452,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Slice = finalizeStructure(structure);
       const slice = new U8Slice(new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]));
@@ -460,6 +473,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Slice = finalizeStructure(structure);
       const slice = new U8Slice(new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]));
@@ -477,6 +491,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Slice = finalizeStructure(structure);
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
@@ -500,6 +515,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Slice = finalizeStructure(structure);
       const slice = new U8Slice(8);
@@ -522,6 +538,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Slice = finalizeStructure(structure);
       const typedArray = new Float32Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
@@ -542,6 +559,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Slice = finalizeStructure(structure);
       const f = function*() {
@@ -568,6 +586,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       const U8Slice = finalizeStructure(structure);
       const f = function*() {
@@ -701,6 +720,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
+        structure: { constructor: function() {}, typedArray: BigUint64Array }
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello([ 100n, 200n, 300n, 400n ]);
@@ -726,7 +746,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
-        structure: { constructor: Int64 },
+        structure: { constructor: Int64, typedArray: BigUint64Array }
       });
       const Int64Slice = finalizeStructure(sliceStructure);
       const arrayStructure = beginStructure({
@@ -758,7 +778,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
-        structure: { constructor: Int64 },
+        structure: { constructor: Int64, typedArray: BigUint64Array }
       });
       const Int64Slice = finalizeStructure(sliceStructure);
       const vectorStructure = beginStructure({
@@ -791,7 +811,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 64,
         byteSize: 8,
-        structure: { constructor: Int64 },
+        structure: { constructor: Int64, typedArray: BigUint64Array }
       });
       const Int64Slice = finalizeStructure(sliceStructure);
       const arrayStructure = beginStructure({
@@ -959,6 +979,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -988,6 +1009,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -1015,6 +1037,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -1041,6 +1064,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -1071,6 +1095,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -1102,6 +1127,7 @@ describe('Slice functions', function() {
         isSigned: false,
         bitSize: 8,
         byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
       });
       attachMember(structure, {
         type: MemberType.Int,

@@ -388,30 +388,41 @@ R"=====(
     return dv;
   }
 
-  function getTypedArrayClass(member) {
-    const { type, isSigned, byteSize } = member;
-    if (type === MemberType.Int) {
-      if (isSigned) {
-        switch (byteSize) {
-          case 1: return Int8Array;
-          case 2: return Int16Array;
-          case 4: return Int32Array;
-          case 8: return BigInt64Array;
+  function getTypedArrayClass(structure) {
+    const { type, instance: { members } } = structure;
+    if (type === StructureType.Primitive) {
+      const { type: memberType, isSigned, byteSize } = members[0];
+      if (memberType === MemberType.Int) {
+        if (isSigned) {
+          switch (byteSize) {
+            case 1: return Int8Array;
+            case 2: return Int16Array;
+            case 4: return Int32Array;
+            case 8: return BigInt64Array;
+          }
+        } else {
+          switch (byteSize) {
+            case 1: return Uint8Array;
+            case 2: return Uint16Array;
+            case 4: return Uint32Array;
+            case 8: return BigUint64Array;
+          }
         }
-      } else {
+      } else if (memberType === MemberType.Float) {
         switch (byteSize) {
-          case 1: return Uint8Array;
-          case 2: return Uint16Array;
-          case 4: return Uint32Array;
-          case 8: return BigUint64Array;
+          case 4: return Float32Array;
+          case 8: return Float64Array;
         }
       }
-    } else if (type === MemberType.Float) {
-      switch (byteSize) {
-        case 4: return Float32Array;
-        case 8: return Float64Array;
-      }
+    } else if (type === StructureType.Array || type === StructureType.Slice || type === StructureType.Vector) {
+      const { structure: { typedArray } } = members[0];
+      return typedArray;
     }
+    return null;
+  }
+
+  function addTypedArray(structure) {
+    return structure.typedArray = getTypedArrayClass(structure);
   }
 
   function isTypedArray(arg, TypedArray) {
@@ -1089,6 +1100,7 @@ R"=====(
       },
       options,
     } = s;
+    addTypedArray(s);
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
       let self, dv;
@@ -1110,7 +1122,6 @@ R"=====(
       }
     };
     const copy = getMemoryCopier(size);
-    s.typedArray = getTypedArrayClass(member);
     const specialKeys = getSpecialKeys(s);
     const initializer = s.initializer = function(arg) {
       if (arg instanceof constructor) {
@@ -1189,6 +1200,7 @@ R"=====(
       hasPointer,
       options,
     } = s;
+    addTypedArray(s);
     const objectMember = (member.type === MemberType.Object) ? member : null;
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
@@ -1217,7 +1229,6 @@ R"=====(
     const { byteSize: elementSize, structure: elementStructure } = member;
     const length = size / elementSize;
     const copy = getMemoryCopier(size);
-    s.typedArray = getTypedArrayClass(member);
     const specialKeys = getSpecialKeys(s);
     const initializer = s.initializer = function(arg) {
       if (arg instanceof constructor) {
@@ -1296,13 +1307,15 @@ R"=====(
     }
   }
 
+  const empty$1 = { [SLOTS]: {} };
+
   function getPointerCopier$1(member) {
     return function(src) {
       const { structure: { pointerCopier } } = member;
       const destSlots = this[SLOTS];
       const srcSlots = src[SLOTS];
       for (let i = 0, len = this.length; i < len; i++) {
-        pointerCopier.call(destSlots[i], srcSlots[i]);
+        pointerCopier.call(destSlots[i], srcSlots[i] ?? empty$1);
       }
     };
   }
@@ -1587,6 +1600,7 @@ R"=====(
           if (template && !specialInit && found < members.length) {
             copy(this[MEMORY], template[MEMORY]);
             if (pointerCopier) {
+              //console.log({ name, template });
               pointerCopier.call(this, template);
             }
           }
@@ -1624,13 +1638,15 @@ R"=====(
     }
   }
 
+  const empty = { [SLOTS]: {} };
+
   function getPointerCopier(members) {
     const pointerMembers = members.filter(m => m.structure.hasPointer);
     return function(src) {
       const destSlots = this[SLOTS];
       const srcSlots = src[SLOTS];
       for (const { slot, structure: { pointerCopier } } of pointerMembers) {
-        pointerCopier.call(destSlots[slot], srcSlots[slot]);
+        pointerCopier.call(destSlots[slot], srcSlots[slot] ?? empty);
       }
     };
   }
@@ -2481,9 +2497,9 @@ R"=====(
       hasPointer,
       options,
     } = s;
+    const typedArray = addTypedArray(s);
     const objectMember = (member.type === MemberType.Object) ? member : null;
     const { byteSize: elementSize, structure: elementStructure } = member;
-    const typedArray = s.typedArray = getTypedArrayClass(member);
     const sentinel = getSentinel(s, options);
     if (sentinel) {
       // zero-terminated strings aren't expected to be commonly used
@@ -2697,6 +2713,7 @@ R"=====(
       },
       options,
     } = s;
+    addTypedArray(s);
     const constructor = s.constructor = function(arg) {
       const creating = this instanceof constructor;
       let self, dv;
@@ -2718,22 +2735,26 @@ R"=====(
       }
     };
     const { byteSize: elementSize, structure: elementStructure } = member;
-    const count = size / elementSize;
+    const length = size / elementSize;
     const copy = getMemoryCopier(size);
-    const typedArray = s.typedArray = getTypedArrayClass(member);
     const initializer = s.initializer = function(arg) {
       if (arg instanceof constructor) {
         restoreMemory.call(this);
         restoreMemory.call(arg);
         copy(this[MEMORY], arg[MEMORY]);
       } else {
-        if (Array.isArray(arg) || isTypedArray(arg, typedArray)) {
-          const len = arg.length;
-          if (len !== count) {
+        if (arg?.[Symbol.iterator]) {
+          let argLen = arg.length;
+          if (typeof(argLen) !== 'number') {
+            arg = [ ...arg ];
+            argLen = arg.length;
+          }
+          if (argLen !== length) {
             throwArrayLengthMismatch(s, this, arg);
           }
-          for (let i = 0; i < len; i++) {
-            this[i] = arg[i];
+          let i = 0;
+          for (const value of arg) {
+            this[i++] = value;
           }
         } else {
           throwInvalidArrayInitializer(s, arg);
@@ -2741,12 +2762,12 @@ R"=====(
       }
     };
     const retriever = function() { return this };
-    for (let i = 0, bitOffset = 0; i < count; i++, bitOffset += elementSize * 8) {
+    for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementSize * 8) {
       const { get, set } = getAccessors({ ...member, bitOffset }, options);
       Object.defineProperty(constructor.prototype, i, { get, set, configurable: true });
     }
     Object.defineProperties(constructor.prototype, {
-      length: { value: count, configurable: true },
+      length: { value: length, configurable: true },
       $: { get: retriever, set: initializer, configurable: true },
       [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
       entries: { value: createVectorEntries, configurable: true, writable: true },
@@ -2986,8 +3007,11 @@ R"=====(
   }
 
   function getShortName(s) {
-    const { name } = s;
-    return name.replace(/[^. ]*?\./g, '');
+    let r = s.name;
+    r = r.replace(/\(.*\)/, '');
+    r = r.replace(/{.*}/, '');
+    r = r.replace(/[^. ]*?\./g, '');
+    return r;
   }
 
   function finalizeStructure(s) {

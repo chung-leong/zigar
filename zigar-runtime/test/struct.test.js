@@ -815,5 +815,32 @@ describe('Struct functions', function() {
       const desc = Object.prototype.toString.call(object);
       expect(desc).to.equal('[object zig.super.Hello]');
     })
+    it('should handle comptime fields', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'zig.super.Hello',
+        size: 0,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Comptime,
+        slot: 0,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Comptime,
+        slot: 1,
+      });
+      attachTemplate(structure, {
+        [SLOTS]: {
+          0: { '*': 123  },
+          1: { '*': 456  },
+        },
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello({});
+      expect(object.dog).to.equal(123);
+      expect(object.cat).to.equal(456);
+    })
   })
 })

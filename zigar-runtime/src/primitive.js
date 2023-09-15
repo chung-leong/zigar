@@ -1,6 +1,6 @@
 import { MemberType, isByteAligned, getAccessors } from './member.js';
 import { getMemoryCopier, restoreMemory } from './memory.js';
-import { getCompatibleTags, getTypedArrayClass, requireDataView } from './data-view.js';
+import { getCompatibleTags, addTypedArray, requireDataView } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { MEMORY, COMPAT } from './symbol.js';
 import { throwInvalidInitializer, throwNoInitializer, throwNoProperty } from './error.js';
@@ -13,6 +13,7 @@ export function finalizePrimitive(s) {
     },
     options,
   } = s;
+  addTypedArray(s);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -34,7 +35,6 @@ export function finalizePrimitive(s) {
     }
   };
   const copy = getMemoryCopier(size);
-  const typedArray = s.typedArray = getTypedArrayClass(member);
   const specialKeys = getSpecialKeys(s);
   const initializer = s.initializer = function(arg) {
     if (arg instanceof constructor) {

@@ -150,30 +150,41 @@ export function requireDataView(structure, arg) {
   return dv;
 }
 
-export function getTypedArrayClass(member) {
-  const { type, isSigned, byteSize } = member;
-  if (type === MemberType.Int) {
-    if (isSigned) {
-      switch (byteSize) {
-        case 1: return Int8Array;
-        case 2: return Int16Array;
-        case 4: return Int32Array;
-        case 8: return BigInt64Array;
+function getTypedArrayClass(structure) {
+  const { type, instance: { members } } = structure;
+  if (type === StructureType.Primitive) {
+    const { type: memberType, isSigned, byteSize } = members[0];
+    if (memberType === MemberType.Int) {
+      if (isSigned) {
+        switch (byteSize) {
+          case 1: return Int8Array;
+          case 2: return Int16Array;
+          case 4: return Int32Array;
+          case 8: return BigInt64Array;
+        }
+      } else {
+        switch (byteSize) {
+          case 1: return Uint8Array;
+          case 2: return Uint16Array;
+          case 4: return Uint32Array;
+          case 8: return BigUint64Array;
+        }
       }
-    } else {
+    } else if (memberType === MemberType.Float) {
       switch (byteSize) {
-        case 1: return Uint8Array;
-        case 2: return Uint16Array;
-        case 4: return Uint32Array;
-        case 8: return BigUint64Array;
+        case 4: return Float32Array;
+        case 8: return Float64Array;
       }
     }
-  } else if (type === MemberType.Float) {
-    switch (byteSize) {
-      case 4: return Float32Array;
-      case 8: return Float64Array;
-    }
+  } else if (type === StructureType.Array || type === StructureType.Slice || type === StructureType.Vector) {
+    const { structure: { typedArray } } = members[0];
+    return typedArray;
   }
+  return null;
+}
+
+export function addTypedArray(structure) {
+  return structure.typedArray = getTypedArrayClass(structure);
 }
 
 export function isTypedArray(arg, TypedArray) {
