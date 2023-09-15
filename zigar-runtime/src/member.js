@@ -18,7 +18,7 @@ import {
   rethrowRangeError,
 } from './error.js';
 import { restoreMemory } from './memory.js';
-import { MEMORY, SLOTS } from './symbol.js';
+import { MEMORY, CHILD_VIVIFICATOR } from './symbol.js';
 
 export const MemberType = {
   Void: 0,
@@ -270,62 +270,51 @@ function addEnumerationLookup(getDataViewIntAccessor) {
 
 export function getObjectAccessor(access, member, options) {
   const { structure, slot } = member;
+  let returnValue = false;
   switch (structure.type) {
     case StructureType.ErrorUnion:
-    case StructureType.Optional: {
-      if (slot !== undefined) {
-        if (access === 'get') {
-          return function() {
-            const object = this[SLOTS][slot];
-            return object.$;
-          };
-        } else {
-          return function(value) {
-            const object = this[SLOTS][slot];
-            return object.$ = value;
-          };
-        }
+    case StructureType.Optional:
+      returnValue = true;
+      break;
+  }
+  if (slot !== undefined) {
+    if (access === 'get') {
+      if (returnValue) {
+        return function getValue() {
+          const object = this[CHILD_VIVIFICATOR][slot].call(this);
+          return object.$;
+        };
       } else {
-        if (access === 'get') {
-          return function(index) {
-            const object = this[SLOTS][index];
-            return object.$;
-          };
-        } else {
-          return function(index, value) {
-            const object = this[SLOTS][index];
-            return object.$ = value;
-          };
-        }
+        return function getObject() {
+          const object = this[CHILD_VIVIFICATOR][slot].call(this);
+          return object;
+        };
       }
+    } else {
+      return function setValue(value) {
+        const object = this[CHILD_VIVIFICATOR][slot].call(this);
+        object.$ = value;
+      };
     }
-    default: {
-      if (slot !== undefined) {
-        if (access === 'get') {
-          return function() {
-            const object = this[SLOTS][slot];
-            return object;
-          };
-        } else {
-          return function(value) {
-            const object = this[SLOTS][slot];
-            object.$ = value;
-          };
-        }
+  } else {
+    // array accessors
+    if (access === 'get') {
+      if (returnValue) {
+        return function getValue(index) {
+          const object = this[CHILD_VIVIFICATOR](index);
+          return object.$;
+        };
       } else {
-        // array accessors
-        if (access === 'get') {
-          return function(index) {
-            const object = this[SLOTS][index];
-            return object;
-          };
-        } else {
-          return function(index, value) {
-            const object = this[SLOTS][index];
-            object.$ = value;
-          };
-        }
+        return function getObject(index) {
+          const object = this[CHILD_VIVIFICATOR](index);
+          return object;
+        };
       }
+    } else {
+      return function setValue(index, value) {
+        const object = this[CHILD_VIVIFICATOR](index);
+        object.$ = value;
+      };
     }
   }
 }

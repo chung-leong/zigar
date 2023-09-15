@@ -1,18 +1,20 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier, getMemoryResetter, restoreMemory } from './memory.js';
 import { requireDataView }  from './data-view.js';
-import { createChildObjects, getPointerCopier, getPointerResetter, getPointerDisabler } from './struct.js';
+import { addChildVivificators, addPointerVisitor } from './struct.js';
 import { addSpecialAccessors } from './special.js';
-import { MEMORY, SLOTS } from './symbol.js';
+import { MEMORY, POINTER_VISITOR, SLOTS } from './symbol.js';
 import { throwNoInitializer } from './error.js';
+import { resetPointer } from './pointer.js';
 
 export function finalizeOptional(s) {
   const {
     size,
     instance: { members },
     options,
+    hasPointer,
   } = s;
-  const objectMembers = members.filter(m => m.type === MemberType.Object);
+  const hasObject = !!members.find(m => m.type === MemberType.Object);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -27,8 +29,8 @@ export function finalizeOptional(s) {
       dv = requireDataView(s, arg);
     }
     self[MEMORY] = dv;
-    if (objectMembers.length > 0) {
-      createChildObjects.call(self, objectMembers, this, dv);
+    if (hasObject) {
+      self[SLOTS] = {};
     }
     if (creating) {
       initializer.call(self, arg);
@@ -37,26 +39,29 @@ export function finalizeOptional(s) {
     }
   };
   const copy = getMemoryCopier(size);
-  const initializer = s.initializer = function(arg) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
-      if (pointerCopier) {
+      if (hasPointer) {
         // don't bother copying pointers when it's empty
         if (check.call(this)) {
-          pointerCopier.call(this, arg);
+          this[POINTER_VISITOR](true, arg, copyPointer);
         }
       }
     } else {
       this.$ = arg;
     }
   };
-  const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
-  const pointerResetter = s.pointerResetter = getPointerResetter(objectMembers);
-  const pointerDisabler = s.pointerDisabler = getPointerDisabler(objectMembers);
   const { get, set, check } = getOptionalAccessors(members, size, options);
   Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
+  if (hasObject) {
+    addChildVivificators(s);
+    if (hasPointer) {
+      addPointerVisitor(s);
+    }
+  }
   addSpecialAccessors(s);
   return constructor;
 }
@@ -64,7 +69,6 @@ export function finalizeOptional(s) {
 export function getOptionalAccessors(members, size, options) {
   const { get: getValue, set: setValue } = getAccessors(members[0], options);
   const { get: getPresent, set: setPresent } = getAccessors(members[1], options);
-  const { structure: { pointerResetter} } = members[0];
   const reset = getMemoryResetter(size);
   return {
     get: function() {
@@ -72,7 +76,8 @@ export function getOptionalAccessors(members, size, options) {
       if (present) {
         return getValue.call(this);
       } else {
-        pointerResetter?.call(this[SLOTS][0]);
+        debugger;
+        this[POINTER_VISITOR]?.(false, null, resetPointer);
         return null;
       }
     },
@@ -82,7 +87,8 @@ export function getOptionalAccessors(members, size, options) {
         setValue.call(this, value);
       } else {
         reset(this[MEMORY]);
-        pointerResetter?.call(this[SLOTS][0]);
+        debugger;
+        this[POINTER_VISITOR]?.(false, null, resetPointer);
       }
     },
     check: getPresent

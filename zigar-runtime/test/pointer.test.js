@@ -3,6 +3,7 @@ import { expect } from 'chai';
 import {
   MemberType,
   useIntEx,
+  useUintEx,
   useObject,
   useBool,
 } from '../src/member.js';
@@ -23,6 +24,7 @@ describe('Pointer functions', function() {
   describe('finalizePointer', function() {
     beforeEach(function() {
       useIntEx();
+      useUintEx();
       useBool();
       useObject();
       useStruct();

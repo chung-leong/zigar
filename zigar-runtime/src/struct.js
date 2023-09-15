@@ -5,7 +5,8 @@ import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer, throwNoProperty } from './error.js';
-import { MEMORY, SLOTS, ZIG, PARENT } from './symbol.js';
+import { MEMORY, SLOTS, ZIG, PARENT, CHILD_VIVIFICATOR, POINTER_VISITOR } from './symbol.js';
+import { copyPointer } from './pointer.js';
 
 export function finalizeStruct(s) {
   const {
@@ -32,7 +33,7 @@ export function finalizeStruct(s) {
     }
   }
   const constructible = (members.length > 0);
-  const objectMembers = members.filter(m => m.type === MemberType.Object);
+  const hasObject = !!members.find(m => m.type === MemberType.Object);
   const constructor = s.constructor = (constructible) ? function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -48,8 +49,8 @@ export function finalizeStruct(s) {
     }
     self[MEMORY] = dv;
     Object.defineProperties(self, descriptors);
-    if (objectMembers.length > 0) {
-      createChildObjects.call(self, objectMembers, this, dv);
+    if (hasObject) {
+      self[SLOTS] = {};
     }
     if (creating) {
       initializer.call(self, arg);
@@ -65,13 +66,13 @@ export function finalizeStruct(s) {
   const copy = getMemoryCopier(size);
   const specialKeys = getSpecialKeys(s);
   const requiredKeys = members.filter(m => m.isRequired).map(m => m.name);
-  const initializer = s.initializer = (constructible) ? function(arg) {
+  const initializer = (constructible) ? function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
-      if (pointerCopier) {
-        pointerCopier.call(this, arg);
+      if (hasPointer) {
+        this[POINTER_VISITOR](true, template, copyPointer);
       }
     } else {
       if (arg && typeof(arg) === 'object') {
@@ -97,9 +98,8 @@ export function finalizeStruct(s) {
         // apply default values unless all properties are initialized
         if (template && !specialInit && found < members.length) {
           copy(this[MEMORY], template[MEMORY]);
-          if (pointerCopier) {
-            //console.log({ name, template });
-            pointerCopier.call(this, template);
+          if (hasPointer) {
+            this[POINTER_VISITOR](true, template, copyPointer);
           }
         }
         for (const key of keys) {
@@ -110,62 +110,63 @@ export function finalizeStruct(s) {
       }
     }
   } : null;
-  const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMembers) : null;
-  const pointerResetter = s.pointerResetter = (hasPointer) ? getPointerResetter(objectMembers) : null;
-  const pointerDisabler = s.pointerDisabler = (hasPointer) ? getPointerDisabler(objectMembers) : null;
-  if ((constructible)) {
-    const retriever = function() { return this };
-    Object.defineProperty(constructor.prototype, '$', { get: retriever, set: initializer, configurable: true });
+  if (constructible) {
+    Object.defineProperty(constructor.prototype, '$', { get: getSelf, set: initializer, configurable: true });
     addSpecialAccessors(s);
+    if (hasObject) {
+      addChildVivificators(s);
+      if (hasPointer) {
+        addPointerVisitor(s);
+      }
+    }
   }
   addStaticMembers(s);
   addMethods(s);
   return constructor;
-};
+}
 
-export function createChildObjects(members, recv) {
-  const dv = this[MEMORY];
-  const slots = this[SLOTS] = {};
-  if (recv !== ZIG)  {
-    recv = PARENT;
+export function getSelf() {
+  return this;
+}
+
+export function addChildVivificators(s) {
+  const { constructor: { prototype }, instance: { members } } = s;
+  const objectMembers = members.filter(m => m.type === MemberType.Object);
+  const vivificators = {};
+  for (const { slot, bitOffset, byteSize, structure } of objectMembers) {
+    vivificators[slot] = function getChild() {
+      let object = this[SLOTS][slot];
+      if (!object) {
+        const { constructor } = structure;
+        const dv = this[MEMORY];
+        const parentOffset = dv.byteOffset;
+        const offset = parentOffset + (bitOffset >> 3);
+        const childDV = new DataView(dv.buffer, offset, byteSize);
+        object = this[SLOTS][slot] = constructor.call(PARENT, childDV);
+      }
+      return object;
+    };
   }
-  const parentOffset = dv.byteOffset;
-  for (const { structure: { constructor }, bitOffset, byteSize, slot } of members) {
-    const offset = parentOffset + (bitOffset >> 3);
-    const childDV = new DataView(dv.buffer, offset, byteSize);
-    slots[slot] = constructor.call(recv, childDV);
-  }
+  Object.defineProperty(prototype, CHILD_VIVIFICATOR, { value: vivificators });
 }
 
-const empty = { [SLOTS]: {} };
-
-export function getPointerCopier(members) {
+export function addPointerVisitor(s) {
+  const { constructor: { prototype }, instance: { members } } = s;
   const pointerMembers = members.filter(m => m.structure.hasPointer);
-  return function(src) {
-    const destSlots = this[SLOTS];
-    const srcSlots = src[SLOTS];
-    for (const { slot, structure: { pointerCopier } } of pointerMembers) {
-      pointerCopier.call(destSlots[slot], srcSlots[slot] ?? empty);
+  const visitor = function visitPointers(vivificating, src, fn) {
+    for (const { slot } of pointerMembers) {
+      let srcChild;
+      if (src) {
+        srcChild = src[SLOTS][slot];
+        if (!srcChild) {
+          continue;
+        }
+      }
+      const child = (vivificating) ? this[CHILD_VIVIFICATOR][slot].call(this) : this[SLOTS][slot];
+      if (child) {
+        child[POINTER_VISITOR](vivificating, srcChild, fn);
+      }
     }
   };
-}
-
-export function getPointerResetter(members) {
-  const pointerMembers = members.filter(m => m.structure.hasPointer);
-  return function() {
-    const destSlots = this[SLOTS];
-    for (const { slot, structure: { pointerResetter } } of pointerMembers) {
-      pointerResetter.call(destSlots[slot]);
-    }
-  };
-}
-
-export function getPointerDisabler(members) {
-  const pointerMembers = members.filter(m => m.structure.hasPointer);
-  return function() {
-    const destSlots = this[SLOTS];
-    for (const { slot, structure: { pointerDisabler } } of pointerMembers) {
-      pointerDisabler.call(destSlots[slot]);
-    }
-  };
+  Object.defineProperty(prototype, POINTER_VISITOR, { value: visitor });
 }

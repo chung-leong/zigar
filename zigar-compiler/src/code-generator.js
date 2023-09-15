@@ -70,10 +70,6 @@ export function generateCode(structures, params) {
 
   const defaultStructure = {
     constructor: null,
-    initializer: null,
-    pointerCopier: null,
-    pointerResetter: null,
-    pointerDisabler: null,
     typedArray: null,
     type: StructureType.Primitive,
     name: undefined,

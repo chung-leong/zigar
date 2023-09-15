@@ -3,6 +3,7 @@ import { expect } from 'chai';
 import {
   MemberType,
   useIntEx,
+  useUintEx,
   useObject,
 } from '../src/member.js';
 import {
@@ -30,6 +31,7 @@ describe('Slice functions', function() {
       usePointer();
       useVector();
       useIntEx();
+      useUintEx();
       useObject();
     })
     it('should define structure for holding an int slice', function() {

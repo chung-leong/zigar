@@ -36,7 +36,7 @@ export function finalizePrimitive(s) {
   };
   const copy = getMemoryCopier(size);
   const specialKeys = getSpecialKeys(s);
-  const initializer = s.initializer = function(arg) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);
       restoreMemory.call(arg);

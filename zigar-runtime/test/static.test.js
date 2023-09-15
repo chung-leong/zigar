@@ -4,6 +4,7 @@ import {
   MemberType,
   useBoolEx,
   useIntEx,
+  useUintEx,
   useObject,
 } from '../src/member.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
@@ -27,6 +28,7 @@ describe('Static variable functions', function() {
     useEnumeration();
     useBoolEx();
     useIntEx();
+    useUintEx();
     useObject();
   })
   describe('Static variables', function() {

@@ -1,15 +1,7 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier, restoreMemory } from './memory.js';
 import { requireDataView, addTypedArray, checkDataViewSize, getCompatibleTags } from './data-view.js';
-import {
-  createChildObjects,
-  getPointerCopier,
-  getPointerResetter,
-  getPointerDisabler,
-  getArrayIterator,
-  createProxy,
-  createArrayEntries,
-} from './array.js';
+import { getArrayIterator, createProxy, createArrayEntries, addChildVivificator, addPointerVisitor } from './array.js';
 import {
   addSpecialAccessors,
   checkDataView,
@@ -26,7 +18,9 @@ import {
   throwMissingSentinel,
   throwNoInitializer,
 } from './error.js';
-import { LENGTH, MEMORY, GETTER, SETTER, COMPAT } from './symbol.js';
+import { LENGTH, MEMORY, SLOTS, GETTER, SETTER, COMPAT, POINTER_VISITOR } from './symbol.js';
+import { copyPointer } from './pointer.js';
+import { getSelf } from './struct.js';
 
 export function finalizeSlice(s) {
   const {
@@ -46,7 +40,7 @@ export function finalizeSlice(s) {
       throw new Error(`slot must be undefined for slice member`);
     }
   }
-  const objectMember = (member.type === MemberType.Object) ? member : null;
+  const hasObject = (member.type === MemberType.Object);
   const { byteSize: elementSize, structure: elementStructure } = member;
   const sentinel = getSentinel(s, options);
   if (sentinel) {
@@ -82,8 +76,8 @@ export function finalizeSlice(s) {
     this[GETTER] = null;
     this[SETTER] = null;
     this[LENGTH] = length;
-    if (objectMember) {
-      createChildObjects.call(this, objectMember, recv);
+    if (hasObject) {
+      this[SLOTS] = {};
     }
   };
   const shapeChecker = function(arg, length) {
@@ -93,7 +87,7 @@ export function finalizeSlice(s) {
   };
   // the initializer behave differently depending on whether it's called  by the
   // constructor or by a member setter (i.e. after object's shape has been established)
-  const initializer = s.initializer = function(arg) {
+  const initializer = function(arg) {
     let shapeless = !this.hasOwnProperty(MEMORY);
     if (arg instanceof constructor) {
       if (shapeless) {
@@ -104,8 +98,8 @@ export function finalizeSlice(s) {
       restoreMemory.call(this);
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
-      if (pointerCopier) {
-        pointerCopier.call(this, arg);
+      if (hasPointer) {
+        this[POINTER_VISITOR](true, arg, copyPointer);
       }
     } else {
       if (typeof(arg) === 'string' && specialKeys.includes('string')) {
@@ -184,17 +178,12 @@ export function finalizeSlice(s) {
       }
     }
   };
-  const retriever = function() { return this };
-  const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMember) : null;
-  const pointerResetter = s.pointerResetter = (hasPointer) ? getPointerResetter(objectMember) : null;
-  const pointerDisabler = s.pointerDisabler = (hasPointer) ? getPointerDisabler(objectMember) : null;
   const { get, set } = getAccessors(member, options);
-  const getLength = function() { return this[LENGTH] };
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { get: getLength, configurable: true },
-    $: { get: retriever, set: initializer, configurable: true },
+    $: { get: getSelf, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     entries: { value: createArrayEntries, configurable: true, writable: true },
   });
@@ -202,8 +191,18 @@ export function finalizeSlice(s) {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(s) },
   });
+  if (hasObject) {
+    addChildVivificator(s);
+    if (hasPointer) {
+      addPointerVisitor(s);
+    }
+  }
   addSpecialAccessors(s);
   return constructor;
+}
+
+function getLength() {
+  return this[LENGTH];
 }
 
 export function getSentinel(structure, options) {

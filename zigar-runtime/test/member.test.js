@@ -5,7 +5,7 @@ import {
   useStruct,
   useOptional,
 } from '../src/structure.js';
-import { MEMORY, SLOTS } from '../src/symbol.js';
+import { CHILD_VIVIFICATOR, MEMORY, SLOTS } from '../src/symbol.js';
 import {
   MemberType,
   isByteAligned,
@@ -423,9 +423,8 @@ describe('Member functions', function() {
           initializer,
         },
       };
-      const slots = { 4: dummyObject };
       const object = {
-        [SLOTS]: slots
+        [CHILD_VIVIFICATOR]: { 4: () => dummyObject },
       };
       const { get, set } = getAccessors(member, {});
       expect(get.call(object)).to.equal(dummyObject);
@@ -455,9 +454,8 @@ describe('Member functions', function() {
           constructor: DummyClass,
         },
       };
-      const slots = { 4: dummyObject };
       const object = {
-        [SLOTS]: slots
+        [CHILD_VIVIFICATOR]: { 4: () => dummyObject },
       };
       const { get, set } = getAccessors(member, {});
       expect(get.call(object)).to.equal(123);
@@ -492,9 +490,8 @@ describe('Member functions', function() {
           constructor: DummyClass,
         },
       };
-      const slots = { 4: dummyObject };
       const object = {
-        [SLOTS]: slots
+        [CHILD_VIVIFICATOR]: { 4: () => dummyObject },
       };
       const { get, set } = getAccessors(member, {});
       expect(get.call(object)).to.equal(123);
@@ -601,7 +598,7 @@ describe('Member functions', function() {
         2: dummyObject3,
       };
       const object = {
-        [SLOTS]: slots
+        [CHILD_VIVIFICATOR]: index => slots[index],
       };
       const { get, set } = getAccessors(member, {});
       expect(get.call(object, 0)).to.equal(dummyObject1);
@@ -645,7 +642,7 @@ describe('Member functions', function() {
         2: dummyObject3,
       };
       const object = {
-        [SLOTS]: slots
+        [CHILD_VIVIFICATOR]: index => slots[index],
       };
       const { get, set } = getAccessors(member, {});
       expect(get.call(object, 0)).to.equal(123);

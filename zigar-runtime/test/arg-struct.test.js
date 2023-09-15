@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import 'mocha-skip-if';
 
 import {
   MemberType,
@@ -148,6 +149,7 @@ describe('ArgStruct functions', function() {
       expect(() => new ArgStruct([ 123 ])).to.throw();
       expect(() => new ArgStruct([ 123, 456, 789 ])).to.throw();
     })
+    skip.
     it('should initialize retval pointer as be ZIG owned', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,

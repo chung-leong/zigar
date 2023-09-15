@@ -14,6 +14,9 @@ const LENGTH = Symbol('length');
 const PROXY = Symbol('proxy');
 const COMPAT = Symbol('compat');
 
+const CHILD_VIVIFICATOR = Symbol('childVivificator');
+const POINTER_VISITOR = Symbol('pointerVisitor');
+
 function getBitAlignFunction(bitPos, bitSize, toAligned) {
   if (bitPos + bitSize <= 8) {
     const mask = (2 ** bitSize) - 1;
@@ -1431,62 +1434,51 @@ function addEnumerationLookup(getDataViewIntAccessor) {
 
 function getObjectAccessor(access, member, options) {
   const { structure, slot } = member;
+  let returnValue = false;
   switch (structure.type) {
     case StructureType.ErrorUnion:
-    case StructureType.Optional: {
-      if (slot !== undefined) {
-        if (access === 'get') {
-          return function() {
-            const object = this[SLOTS][slot];
-            return object.$;
-          };
-        } else {
-          return function(value) {
-            const object = this[SLOTS][slot];
-            return object.$ = value;
-          };
-        }
+    case StructureType.Optional:
+      returnValue = true;
+      break;
+  }
+  if (slot !== undefined) {
+    if (access === 'get') {
+      if (returnValue) {
+        return function getValue() {
+          const object = this[CHILD_VIVIFICATOR][slot].call(this);
+          return object.$;
+        };
       } else {
-        if (access === 'get') {
-          return function(index) {
-            const object = this[SLOTS][index];
-            return object.$;
-          };
-        } else {
-          return function(index, value) {
-            const object = this[SLOTS][index];
-            return object.$ = value;
-          };
-        }
+        return function getObject() {
+          const object = this[CHILD_VIVIFICATOR][slot].call(this);
+          return object;
+        };
       }
+    } else {
+      return function setValue(value) {
+        const object = this[CHILD_VIVIFICATOR][slot].call(this);
+        object.$ = value;
+      };
     }
-    default: {
-      if (slot !== undefined) {
-        if (access === 'get') {
-          return function() {
-            const object = this[SLOTS][slot];
-            return object;
-          };
-        } else {
-          return function(value) {
-            const object = this[SLOTS][slot];
-            object.$ = value;
-          };
-        }
+  } else {
+    // array accessors
+    if (access === 'get') {
+      if (returnValue) {
+        return function getValue(index) {
+          const object = this[CHILD_VIVIFICATOR](index);
+          return object.$;
+        };
       } else {
-        // array accessors
-        if (access === 'get') {
-          return function(index) {
-            const object = this[SLOTS][index];
-            return object;
-          };
-        } else {
-          return function(index, value) {
-            const object = this[SLOTS][index];
-            object.$ = value;
-          };
-        }
+        return function getObject(index) {
+          const object = this[CHILD_VIVIFICATOR](index);
+          return object;
+        };
       }
+    } else {
+      return function setValue(index, value) {
+        const object = this[CHILD_VIVIFICATOR](index);
+        object.$ = value;
+      };
     }
   }
 }
@@ -1797,7 +1789,7 @@ function finalizePrimitive(s) {
   };
   const copy = getMemoryCopier(size);
   const specialKeys = getSpecialKeys(s);
-  const initializer = s.initializer = function(arg) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);
       restoreMemory.call(arg);
@@ -1868,6 +1860,277 @@ function getPrimitiveType(member) {
   }
 }
 
+function finalizePointer(s) {
+  const {
+    size,
+    instance: {
+      members: [ member ],
+    },
+    isConst,
+    options,
+  } = s;
+  const {
+    runtimeSafety = true,
+  } = options;
+  const { structure: targetStructure } = member;
+  const isTargetSlice = (targetStructure.type === StructureType.Slice);
+  const isTargetPointer = (targetStructure.type === StructureType.Pointer);
+  const addressSize = (isTargetSlice) ? size / 2 : size;
+  const usizeStructure = { name: 'usize', size: addressSize };
+  const setAddress = getAccessors({
+    type: MemberType.Uint,
+    bitOffset: 0,
+    bitSize: addressSize * 8,
+    byteSize: addressSize,
+    structure: usizeStructure,
+  }, options).set;
+  const setLength = (isTargetSlice) ? getAccessors({
+    type: MemberType.Uint,
+    bitOffset: addressSize * 8,
+    bitSize: addressSize * 8,
+    byteSize: addressSize,
+    structure: usizeStructure,
+  }, options).set : null;
+  const constructor = s.constructor = function(arg) {
+    const calledFromZig = (this === ZIG);
+    const calledFromParent = (this === PARENT);
+    let creating = this instanceof constructor;
+    let self, dv;
+    if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer(s);
+      }
+      self = this;
+      dv = new DataView(new ArrayBuffer(size));
+    } else {
+      self = Object.create(constructor.prototype);
+      if (calledFromZig || calledFromParent) {
+        dv = requireDataView(s, arg);
+      } else {
+        const Target = targetStructure.constructor;
+        if (isPointerOf(arg, Target)) {
+          creating = true;
+          arg = arg['*'];
+        } else if (isTargetSlice) {
+          // allow casting to slice through constructor of its pointer
+          creating = true;
+          arg = Target(arg);
+        } else {
+          throwNoCastingToPointer();
+        }
+      }
+    }
+    self[MEMORY] = dv;
+    self[SLOTS] = { 0: null };
+    self[ZIG] = calledFromZig;
+    if (creating) {
+      initializer.call(self, arg);
+    }
+    return createProxy$1.call(self, isConst, isTargetPointer);
+  };
+  const initializer = function(arg) {
+    if (arg instanceof constructor) {
+      if (inFixedMemory(this)) {
+        initializer.call(this, arg[SLOTS][0]);
+      } else {
+        // not doing memory copying since the value stored there likely isn't valid
+        copyPointer$1.call(this, arg);
+      }
+    } else {
+      const Target = targetStructure.constructor;
+      if (isPointerOf(arg, Target)) {
+        if (!isConst && arg.constructor.const) {
+          throwConstantConstraint(s, arg);
+        }
+        copyPointer$1.call(this, arg);
+      } else {
+        if (!(arg instanceof Target)) {
+          if (isCompatible(arg, Target)) {
+            // autocast to target type
+            const dv = getDataView(targetStructure, arg);
+            arg = Target(dv);
+          } else if (isTargetSlice) {
+            // autovivificate target object
+            const autoObj = new Target(arg);
+            if (runtimeSafety) {
+              // creation of a new slice using a typed array is probably
+              // not what the user wants; it's more likely that the intention
+              // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
+              if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
+                const created = addArticle(targetStructure.typedArray.name);
+                const source = addArticle(arg.constructor.name);
+                console.warn(`Implicitly creating ${created} from ${source}`);
+              }
+            }
+            arg = autoObj;
+          } else {
+            throwInvalidPointerTarget(s, arg);
+          }
+        }
+        if (inFixedMemory(this)) {
+          if (inFixedMemory(arg)) {
+            const { address } = inFixedMemory(arg);
+            setAddress.call(this, address);
+            if (setLength) {
+              setLength.call(this, arg.length);
+            }
+          } else {
+            throwFixedMemoryTargetRequired();
+          }
+        }
+        this[SLOTS][0] = arg;
+      }
+    }
+  };
+  // return the proxy object if one is used
+  Object.defineProperties(constructor.prototype, {
+    '*': { get: getTarget, set: (isConst) ? undefined : setTarget, configurable: true },
+    '$': { get: getProxy, set: initializer, configurable: true, },
+    'valueOf': { value: getTargetValue, configurable: true, writable: true },
+    [POINTER_VISITOR]: { value: visitPointer },
+  });
+  Object.defineProperties(constructor, {
+    child: { get: () => targetStructure.constructor },
+    const: { value: isConst },
+  });
+  return constructor;
+}
+
+function getProxy() {
+  return this[PROXY];
+}
+
+function copyPointer$1(src) {
+  this[SLOTS][0] = src[SLOTS][0];
+}
+
+function resetPointer() {
+  this[SLOTS][0] = null;
+}
+
+function disablePointer() {
+  Object.defineProperty(this[SLOTS], 0, {
+    get: throwInaccessiblePointer,
+    set: throwInaccessiblePointer,
+    configurable: true
+  });
+}
+
+function getTarget() {
+  const object = this[SLOTS][0];
+  return object.$;
+}
+
+function setTarget(value) {
+  const object = this[SLOTS][0];
+  object.$ = value;
+}
+
+function getTargetValue() {
+  const object = this[SLOTS][0];
+  return object.$.valueOf();
+}
+
+function visitPointer(_, src, fn) {
+  fn.call(this, src);
+}
+
+function isPointerOf(arg, Target) {
+  return (arg?.constructor?.child === Target && arg['*']);
+}
+
+function inFixedMemory(arg) {
+  {
+    return arg?.[MEMORY]?.[MEMORY];
+  }
+}
+
+function createProxy$1(isConst, isTargetPointer) {
+  const handlers = (!isTargetPointer) ? (isConst) ? constProxyHandlers : proxyHandlers$1 : {};
+  const proxy = new Proxy(this, handlers);
+  // hide the proxy so console wouldn't display a recursive structure
+  Object.defineProperty(this, PROXY, { value: proxy });
+  return proxy;
+}
+
+const isPointerKeys = {
+  '$': true,
+  '*': true,
+  constructor: true,
+  valueOf: true,
+  [ZIG]: true,
+  [SLOTS]: true,
+  [MEMORY]: true,
+  [PROXY]: true,
+  [POINTER_VISITOR]: true,
+  [Symbol.toStringTag]: true,
+  [Symbol.toPrimitive]: true,
+};
+
+const proxyHandlers$1 = {
+  get(pointer, name) {
+    if (isPointerKeys[name]) {
+      return pointer[name];
+    } else {
+      return pointer[SLOTS][0][name];
+    }
+  },
+  set(pointer, name, value) {
+    if (isPointerKeys[name]) {
+      pointer[name] = value;
+    } else {
+      pointer[SLOTS][0][name] = value;
+    }
+    return true;
+  },
+  deleteProperty(pointer, name) {
+    if (isPointerKeys[name]) {
+      delete pointer[name];
+    } else {
+      delete pointer[SLOTS][0][name];
+    }
+    return true;
+  },
+  has(pointer, name) {
+    return isPointerKeys[name] || name in pointer[SLOTS][0];
+  },
+  ownKeys(pointer) {
+    const targetKeys = Object.getOwnPropertyNames(pointer[SLOTS][0]);
+    return [ ...targetKeys, PROXY, POINTER_VISITOR ];
+  },
+  getOwnPropertyDescriptor(pointer, name) {
+    if (isPointerKeys[name]) {
+      return Object.getOwnPropertyDescriptor(pointer, name);
+    } else {
+      return Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
+    }
+  },
+};
+
+const constProxyHandlers = {
+  ...proxyHandlers$1,
+  set(pointer, name, value) {
+    if (isPointerKeys[name]) {
+      pointer[name] = value;
+    } else {
+      throwAssigningToConstant(pointer);
+    }
+    return true;
+  },
+  getOwnPropertyDescriptor(pointer, name) {
+    if (isPointerKeys[name]) {
+      return Object.getOwnPropertyDescriptor(pointer, name);
+    } else {
+      const descriptor = Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
+      if (descriptor?.set) {
+        descriptor.set = undefined;
+      }
+      return descriptor;
+    }
+    /* c8 ignore next -- unreachable */
+  },
+};
+
 function finalizeArray(s) {
   const {
     size,
@@ -1878,7 +2141,7 @@ function finalizeArray(s) {
     options,
   } = s;
   addTypedArray(s);
-  const objectMember = (member.type === MemberType.Object) ? member : null;
+  const hasObject = (member.type === MemberType.Object);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -1895,25 +2158,25 @@ function finalizeArray(s) {
     self[MEMORY] = dv;
     self[GETTER] = null;
     self[SETTER] = null;
-    if (objectMember) {
-      createChildObjects$1.call(self, objectMember, this);
+    if (hasObject) {
+      self[SLOTS] = {};
     }
     if (creating) {
       initializer.call(self, arg);
     }
-    return createProxy$1.call(self);
+    return createProxy.call(self);
   };
   const { byteSize: elementSize, structure: elementStructure } = member;
   const length = size / elementSize;
   const copy = getMemoryCopier(size);
   const specialKeys = getSpecialKeys(s);
-  const initializer = s.initializer = function(arg) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
-      if (pointerCopier) {
-        pointerCopier.call(this, arg);
+      if (hasPointer) {
+        this[POINTER_VISITOR](true, arg, copyPointer$1);
       }
     } else {
       if (typeof(arg) === 'string' && specialKeys.includes('string')) {
@@ -1950,16 +2213,12 @@ function finalizeArray(s) {
       }
     }
   };
-  const retriever = function() { return this[PROXY] };
-  const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier$1(objectMember) : null;
-  s.pointerResetter = (hasPointer) ? getPointerResetter$1(objectMember) : null;
-  s.pointerDisabler = (hasPointer) ? getPointerDisabler$1(objectMember) : null;
   const { get, set } = getAccessors(member, options);
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { value: length, configurable: true },
-    $: { get: retriever, set: initializer, configurable: true },
+    $: { get: getProxy, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     entries: { value: createArrayEntries, configurable: true, writable: true }
   });
@@ -1967,54 +2226,52 @@ function finalizeArray(s) {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(s) },
   });
+  if (hasObject) {
+    addChildVivificator(s);
+    if (hasPointer) {
+      addPointerVisitor$1(s);
+    }
+  }
   addSpecialAccessors(s);
   return constructor;
 }
 
-function createChildObjects$1(member, recv) {
-  const dv = this[MEMORY];
-  const slots = this[SLOTS] = {};
-  const { structure: { constructor }, byteSize: elementSize } = member;
-  if (recv !== ZIG) {
-    recv = PARENT;
-  }
-  for (let i = 0, offset = dv.byteOffset, len = this.length; i < len; i++, offset += elementSize) {
-    const childDV = new DataView(dv.buffer, offset, elementSize);
-    slots[i] = constructor.call(recv, childDV);
-  }
+function addChildVivificator(s) {
+  const { constructor: { prototype }, instance: { members: [ member ]} } = s;
+  const { byteSize, structure } = member;
+  const vivificator = function getChild(index) {
+    let object = this[SLOTS][index];
+    if (!object) {
+      const { constructor } = structure;
+      const dv = this[MEMORY];
+      const parentOffset = dv.byteOffset;
+      const offset = parentOffset + byteSize * index;
+      const childDV = new DataView(dv.buffer, offset, byteSize);
+      object = this[SLOTS][index] = constructor.call(PARENT, childDV);
+    }
+    return object;
+  };
+  Object.defineProperty(prototype, CHILD_VIVIFICATOR, { value: vivificator });
 }
 
-const empty$1 = { [SLOTS]: {} };
-
-function getPointerCopier$1(member) {
-  return function(src) {
-    const { structure: { pointerCopier } } = member;
-    const destSlots = this[SLOTS];
-    const srcSlots = src[SLOTS];
+function addPointerVisitor$1(s) {
+  const { constructor: { prototype } } = s;
+  const visitor = function visitPointers(vivificating, src, fn) {
     for (let i = 0, len = this.length; i < len; i++) {
-      pointerCopier.call(destSlots[i], srcSlots[i] ?? empty$1);
+      let srcChild;
+      if (src) {
+        srcChild = src[SLOTS][i];
+        if (!srcChild) {
+          continue;
+        }
+      }
+      const child = (vivificating) ? this[CHILD_VIVIFICATOR](i) : this[SLOTS][i];
+      if (child) {
+        child[POINTER_VISITOR](vivificating, srcChild, fn);
+      }
     }
   };
-}
-
-function getPointerResetter$1(member) {
-  return function(src) {
-    const { structure: { pointerResetter } } = member;
-    const destSlots = this[SLOTS];
-    for (let i = 0, len = this.length; i < len; i++) {
-      pointerResetter.call(destSlots[i]);
-    }
-  };
-}
-
-function getPointerDisabler$1(member) {
-  return function(src) {
-    const { structure: { pointerDisabler } } = member;
-    const destSlots = this[SLOTS];
-    for (let i = 0, len = this.length; i < len; i++) {
-      pointerDisabler.call(destSlots[i]);
-    }
-  };
+  Object.defineProperty(prototype, POINTER_VISITOR, { value: visitor });
 }
 
 function getArrayIterator() {
@@ -2062,14 +2319,14 @@ function createArrayEntries() {
   };
 }
 
-function createProxy$1() {
-  const proxy = new Proxy(this, proxyHandlers$1);
+function createProxy() {
+  const proxy = new Proxy(this, proxyHandlers);
   // hide the proxy so console wouldn't display a recursive structure
   Object.defineProperty(this, PROXY, { value: proxy });
   return proxy;
 }
 
-const proxyHandlers$1 = {
+const proxyHandlers = {
   get(array, name) {
     const index = (typeof(name) === 'symbol') ? 0 : name|0;
     if (index !== 0 || index == name) {
@@ -2164,26 +2421,27 @@ function addStaticMembers(s) {
     },
     options,
   } = s;
-  if (template) {
-    constructor[SLOTS] = template[SLOTS];
-  }
+  const vivificators = {};
   for (const member of members) {
     // static members are either Pointer or Type
     let { get, set } = getAccessors(member, options);
-    if (member.type === MemberType.Object) {
+    const { type, slot, structure: { isConst } } = member;
+    if (type === MemberType.Object) {
       const getPtr = get;
       get = function() {
         // dereference pointer
         const ptr = getPtr.call(this);
         return ptr['*'];
       };
-      set = (member.structure.isConst) ? undefined : function(value) {
+      set = (isConst) ? undefined : function(value) {
         const ptr = getPtr.call(this);
         ptr['*'] = value;
       };
+      vivificators[slot] = () => template[SLOTS][slot];
     }
     Object.defineProperty(constructor, member.name, { get, set, configurable: true, enumerable: true });
   }
+  Object.defineProperty(constructor, CHILD_VIVIFICATOR, { value: vivificators });
 }
 
 function addMethods(s) {
@@ -2263,7 +2521,7 @@ function finalizeStruct(s) {
     }
   }
   const constructible = (members.length > 0);
-  const objectMembers = members.filter(m => m.type === MemberType.Object);
+  const hasObject = !!members.find(m => m.type === MemberType.Object);
   const constructor = s.constructor = (constructible) ? function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -2279,8 +2537,8 @@ function finalizeStruct(s) {
     }
     self[MEMORY] = dv;
     Object.defineProperties(self, descriptors);
-    if (objectMembers.length > 0) {
-      createChildObjects.call(self, objectMembers, this, dv);
+    if (hasObject) {
+      self[SLOTS] = {};
     }
     if (creating) {
       initializer.call(self, arg);
@@ -2296,13 +2554,13 @@ function finalizeStruct(s) {
   const copy = getMemoryCopier(size);
   const specialKeys = getSpecialKeys(s);
   const requiredKeys = members.filter(m => m.isRequired).map(m => m.name);
-  const initializer = s.initializer = (constructible) ? function(arg) {
+  const initializer = (constructible) ? function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
-      if (pointerCopier) {
-        pointerCopier.call(this, arg);
+      if (hasPointer) {
+        this[POINTER_VISITOR](true, template, copyPointer$1);
       }
     } else {
       if (arg && typeof(arg) === 'object') {
@@ -2328,9 +2586,8 @@ function finalizeStruct(s) {
         // apply default values unless all properties are initialized
         if (template && !specialInit && found < members.length) {
           copy(this[MEMORY], template[MEMORY]);
-          if (pointerCopier) {
-            //console.log({ name, template });
-            pointerCopier.call(this, template);
+          if (hasPointer) {
+            this[POINTER_VISITOR](true, template, copyPointer$1);
           }
         }
         for (const key of keys) {
@@ -2341,63 +2598,65 @@ function finalizeStruct(s) {
       }
     }
   } : null;
-  const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMembers) : null;
-  s.pointerResetter = (hasPointer) ? getPointerResetter(objectMembers) : null;
-  s.pointerDisabler = (hasPointer) ? getPointerDisabler(objectMembers) : null;
-  if ((constructible)) {
-    const retriever = function() { return this };
-    Object.defineProperty(constructor.prototype, '$', { get: retriever, set: initializer, configurable: true });
+  if (constructible) {
+    Object.defineProperty(constructor.prototype, '$', { get: getSelf, set: initializer, configurable: true });
     addSpecialAccessors(s);
+    if (hasObject) {
+      addChildVivificators(s);
+      if (hasPointer) {
+        addPointerVisitor(s);
+      }
+    }
   }
   addStaticMembers(s);
   addMethods(s);
   return constructor;
 }
-function createChildObjects(members, recv) {
-  const dv = this[MEMORY];
-  const slots = this[SLOTS] = {};
-  if (recv !== ZIG)  {
-    recv = PARENT;
+
+function getSelf() {
+  return this;
+}
+
+function addChildVivificators(s) {
+  const { constructor: { prototype }, instance: { members } } = s;
+  const objectMembers = members.filter(m => m.type === MemberType.Object);
+  const vivificators = {};
+  for (const { slot, bitOffset, byteSize, structure } of objectMembers) {
+    vivificators[slot] = function getChild() {
+      let object = this[SLOTS][slot];
+      if (!object) {
+        const { constructor } = structure;
+        const dv = this[MEMORY];
+        const parentOffset = dv.byteOffset;
+        const offset = parentOffset + (bitOffset >> 3);
+        const childDV = new DataView(dv.buffer, offset, byteSize);
+        object = this[SLOTS][slot] = constructor.call(PARENT, childDV);
+      }
+      return object;
+    };
   }
-  const parentOffset = dv.byteOffset;
-  for (const { structure: { constructor }, bitOffset, byteSize, slot } of members) {
-    const offset = parentOffset + (bitOffset >> 3);
-    const childDV = new DataView(dv.buffer, offset, byteSize);
-    slots[slot] = constructor.call(recv, childDV);
-  }
+  Object.defineProperty(prototype, CHILD_VIVIFICATOR, { value: vivificators });
 }
 
-const empty = { [SLOTS]: {} };
-
-function getPointerCopier(members) {
+function addPointerVisitor(s) {
+  const { constructor: { prototype }, instance: { members } } = s;
   const pointerMembers = members.filter(m => m.structure.hasPointer);
-  return function(src) {
-    const destSlots = this[SLOTS];
-    const srcSlots = src[SLOTS];
-    for (const { slot, structure: { pointerCopier } } of pointerMembers) {
-      pointerCopier.call(destSlots[slot], srcSlots[slot] ?? empty);
+  const visitor = function visitPointers(vivificating, src, fn) {
+    for (const { slot } of pointerMembers) {
+      let srcChild;
+      if (src) {
+        srcChild = src[SLOTS][slot];
+        if (!srcChild) {
+          continue;
+        }
+      }
+      const child = (vivificating) ? this[CHILD_VIVIFICATOR][slot].call(this) : this[SLOTS][slot];
+      if (child) {
+        child[POINTER_VISITOR](vivificating, srcChild, fn);
+      }
     }
   };
-}
-
-function getPointerResetter(members) {
-  const pointerMembers = members.filter(m => m.structure.hasPointer);
-  return function() {
-    const destSlots = this[SLOTS];
-    for (const { slot, structure: { pointerResetter } } of pointerMembers) {
-      pointerResetter.call(destSlots[slot]);
-    }
-  };
-}
-
-function getPointerDisabler(members) {
-  const pointerMembers = members.filter(m => m.structure.hasPointer);
-  return function() {
-    const destSlots = this[SLOTS];
-    for (const { slot, structure: { pointerDisabler } } of pointerMembers) {
-      pointerDisabler.call(destSlots[slot]);
-    }
-  };
+  Object.defineProperty(prototype, POINTER_VISITOR, { value: visitor });
 }
 
 function finalizeUnion(s) {
@@ -2446,16 +2705,16 @@ function finalizeUnion(s) {
       };
     }
     for (const member of valueMembers) {
-      const { name, slot, structure: { pointerResetter } } = member;
+      const { name, slot } = member;
       const { get: getValue, set: setValue } = getAccessors(member, options);
       const update = (isTagged) ? function(name) {
         if (this[TAG]?.name !== name) {
           this[TAG]?.clear?.();
           this[TAG] = { name };
-          if (pointerResetter) {
+          if (hasPointer) {
             this[TAG].clear = () => {
               const object = this[SLOTS][slot];
-              pointerResetter.call(object);
+              object[POINTER_VISITOR](false, null, resetPointer);
             };
           }
         }
@@ -2495,9 +2754,10 @@ function finalizeUnion(s) {
       descriptors[member.name] = { get, set, init: set, configurable: true, enumerable: true };
     }
   }
-  const objectMembers = members.filter(m => m.type === MemberType.Object);
-  const pointerMembers = objectMembers.filter(m => m.structure.hasPointer);
-  //
+  const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const pointerMembers = members.filter(m => m.structure.hasPointer);
+  // non-tagged union as marked as not having pointers--if there're actually
+  // members with pointers, we need to disable them
   const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
@@ -2518,10 +2778,11 @@ function finalizeUnion(s) {
       Object.defineProperties(self, TAG, { value: null, writable: true });
     }
     Object.defineProperties(self, descriptors);
-    if (objectMembers.length > 0) {
-      createChildObjects.call(self, objectMembers, this, dv);
+    if (hasObject) {
+      self[SLOTS] = {};
       if (hasInaccessiblePointer) {
-        pointerDisabler.call(self);
+        // make pointer access throw
+        self[POINTER_VISITOR](true, null, disablePointer);
       }
     }
     if (creating) {
@@ -2536,13 +2797,13 @@ function finalizeUnion(s) {
   const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
   const copy = getMemoryCopier(size);
   const specialKeys = getSpecialKeys(s);
-  const initializer = s.initializer = function(arg) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
-      if (pointerCopier) {
-        pointerCopier.call(this, arg);
+      if (hasPointer) {
+        this[POINTER_VISITOR](true, arg, copyPointer$1);
       }
     } else {
       if (arg && typeof(arg) === 'object') {
@@ -2575,8 +2836,8 @@ function finalizeUnion(s) {
           if (template) {
             restoreMemory.call(this);
             copy(this[MEMORY], template[MEMORY]);
-            if (pointerCopier) {
-              pointerCopier.call(this, template);
+            if (hasPointer) {
+              this[POINTER_VISITOR](true, template, copyPointer$1);
             }
           }
         } else {
@@ -2590,15 +2851,17 @@ function finalizeUnion(s) {
       }
     }
   };
-  const retriever = function() { return this };
-  const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
-  s.pointerResetter = getPointerResetter(objectMembers);
-  const pointerDisabler = getPointerDisabler(objectMembers);
   if (isTagged) {
     // enable casting to enum
     Object.defineProperty(constructor.prototype, ENUM_ITEM, { get: getEnumItem, configurable: true });
   }
-  Object.defineProperty(constructor.prototype, '$', { get: retriever, set: initializer, configurable: true }),
+  Object.defineProperty(constructor.prototype, '$', { get: getSelf, set: initializer, configurable: true });
+  if (hasObject) {
+    addChildVivificators(s);
+    if (hasPointer || hasInaccessiblePointer) {
+      addPointerVisitor(s);
+    }
+  }
   addSpecialAccessors(s);
   addStaticMembers(s);
   addMethods(s);
@@ -2614,12 +2877,12 @@ const taggedProxyHandlers = {
 
 function finalizeErrorUnion(s) {
   const {
-    name,
     size,
     instance: { members },
     options,
+    hasPointer,
   } = s;
-  const objectMembers = members.filter(m => m.type === MemberType.Object);
+  const hasObject = !!members.find(m => m.type === MemberType.Object);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -2634,8 +2897,8 @@ function finalizeErrorUnion(s) {
       dv = requireDataView(s, arg);
     }
     self[MEMORY] = dv;
-    if (objectMembers.length > 0) {
-      createChildObjects.call(self, objectMembers, this, dv);
+    if (hasObject) {
+      self[SLOTS] = {};
     }
     if (creating) {
       initializer.call(this, arg);
@@ -2644,23 +2907,27 @@ function finalizeErrorUnion(s) {
     }
   };
   const copy = getMemoryCopier(size);
-  const initializer = s.initializer = function(arg) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       copy(this[MEMORY], arg[MEMORY]);
-      if (pointerCopier) {
+      if (hasPointer) {
         if (check.call(this)) {
-          pointerCopier.call(this, arg);
+          this[POINTER_VISITOR](true, arg, copyPointer$1);
         }
       }
     } else {
       this.$ = arg;
     }
   };
-  const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
-  s.pointerResetter = getPointerResetter(objectMembers);
-  s.pointerDisabler = getPointerDisabler(objectMembers);
   const { get, set, check } = getErrorUnionAccessors(members, size, options);
   Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
+  if (hasObject) {
+    addChildVivificators(s);
+    if (hasPointer) {
+      debugger;
+      addPointerVisitor(s);
+    }
+  }
   addSpecialAccessors(s);
   return constructor;
 }
@@ -2668,9 +2935,7 @@ function finalizeErrorUnion(s) {
 function getErrorUnionAccessors(members, size, options) {
   const { get: getValue, set: setValue } = getAccessors(members[0], options);
   const { get: getError, set: setError } = getAccessors(members[1], options);
-  const { structure: valueStructure } = members[0];
   const { structure: errorStructure } = members[1];
-  const { pointerResetter } = valueStructure;
   const { constructor: ErrorSet } = errorStructure;
   const reset = getMemoryResetter(size);
   return {
@@ -2681,7 +2946,8 @@ function getErrorUnionAccessors(members, size, options) {
         if (!err) {
           throwUnknownErrorNumber(errorStructure, errorNumber);
         }
-        pointerResetter?.call(this[SLOTS][0]);
+        debugger;
+        this[POINTER_VISITOR]?.(false, null, resetPointer);
         throw err;
       } else {
         return getValue.call(this);
@@ -2694,7 +2960,7 @@ function getErrorUnionAccessors(members, size, options) {
         }
         reset(this[MEMORY]);
         setError.call(this, value.index);
-        pointerResetter?.call(this[SLOTS][0]);
+        this[POINTER_VISITOR]?.(false, null, resetPointer);
       } else {
         setValue.call(this, value);
         setError.call(this, 0);
@@ -2882,8 +3148,9 @@ function finalizeOptional(s) {
     size,
     instance: { members },
     options,
+    hasPointer,
   } = s;
-  const objectMembers = members.filter(m => m.type === MemberType.Object);
+  const hasObject = !!members.find(m => m.type === MemberType.Object);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -2898,8 +3165,8 @@ function finalizeOptional(s) {
       dv = requireDataView(s, arg);
     }
     self[MEMORY] = dv;
-    if (objectMembers.length > 0) {
-      createChildObjects.call(self, objectMembers, this, dv);
+    if (hasObject) {
+      self[SLOTS] = {};
     }
     if (creating) {
       initializer.call(self, arg);
@@ -2908,26 +3175,29 @@ function finalizeOptional(s) {
     }
   };
   const copy = getMemoryCopier(size);
-  const initializer = s.initializer = function(arg) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
-      if (pointerCopier) {
+      if (hasPointer) {
         // don't bother copying pointers when it's empty
         if (check.call(this)) {
-          pointerCopier.call(this, arg);
+          this[POINTER_VISITOR](true, arg, copyPointer);
         }
       }
     } else {
       this.$ = arg;
     }
   };
-  const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
-  s.pointerResetter = getPointerResetter(objectMembers);
-  s.pointerDisabler = getPointerDisabler(objectMembers);
   const { get, set, check } = getOptionalAccessors(members, size, options);
   Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
+  if (hasObject) {
+    addChildVivificators(s);
+    if (hasPointer) {
+      addPointerVisitor(s);
+    }
+  }
   addSpecialAccessors(s);
   return constructor;
 }
@@ -2935,7 +3205,6 @@ function finalizeOptional(s) {
 function getOptionalAccessors(members, size, options) {
   const { get: getValue, set: setValue } = getAccessors(members[0], options);
   const { get: getPresent, set: setPresent } = getAccessors(members[1], options);
-  const { structure: { pointerResetter} } = members[0];
   const reset = getMemoryResetter(size);
   return {
     get: function() {
@@ -2943,7 +3212,8 @@ function getOptionalAccessors(members, size, options) {
       if (present) {
         return getValue.call(this);
       } else {
-        pointerResetter?.call(this[SLOTS][0]);
+        debugger;
+        this[POINTER_VISITOR]?.(false, null, resetPointer);
         return null;
       }
     },
@@ -2953,268 +3223,13 @@ function getOptionalAccessors(members, size, options) {
         setValue.call(this, value);
       } else {
         reset(this[MEMORY]);
-        pointerResetter?.call(this[SLOTS][0]);
+        debugger;
+        this[POINTER_VISITOR]?.(false, null, resetPointer);
       }
     },
     check: getPresent
   };
 }
-
-function finalizePointer(s) {
-  const {
-    size,
-    instance: {
-      members: [ member ],
-    },
-    isConst,
-    options,
-  } = s;
-  const {
-    runtimeSafety = true,
-  } = options;
-  const { structure: targetStructure } = member;
-  const isTargetSlice = (targetStructure.type === StructureType.Slice);
-  const isTargetPointer = (targetStructure.type === StructureType.Pointer);
-  const addressSize = (isTargetSlice) ? size / 2 : size;
-  const usizeStructure = { name: 'usize', size: addressSize };
-  const setAddress = getAccessors({
-    type: MemberType.Uint,
-    bitOffset: 0,
-    bitSize: addressSize * 8,
-    byteSize: addressSize,
-    structure: usizeStructure,
-  }, options).set;
-  const setLength = (isTargetSlice) ? getAccessors({
-    type: MemberType.Uint,
-    bitOffset: addressSize * 8,
-    bitSize: addressSize * 8,
-    byteSize: addressSize,
-    structure: usizeStructure,
-  }, options).set : null;
-  const constructor = s.constructor = function(arg) {
-    const calledFromZig = (this === ZIG);
-    const calledFromParent = (this === PARENT);
-    let creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = this;
-      dv = new DataView(new ArrayBuffer(size));
-    } else {
-      self = Object.create(constructor.prototype);
-      if (calledFromZig || calledFromParent) {
-        dv = requireDataView(s, arg);
-      } else {
-        const Target = targetStructure.constructor;
-        if (isPointerOf(arg, Target)) {
-          creating = true;
-          arg = arg['*'];
-        } else if (isTargetSlice) {
-          // allow casting to slice through constructor of its pointer
-          creating = true;
-          arg = Target(arg);
-        } else {
-          throwNoCastingToPointer();
-        }
-      }
-    }
-    self[MEMORY] = dv;
-    self[SLOTS] = { 0: null };
-    self[ZIG] = calledFromZig;
-    if (creating) {
-      initializer.call(self, arg);
-    }
-    return createProxy.call(self, isConst, isTargetPointer);
-  };
-  const initializer = s.initializer = function(arg) {
-    if (arg instanceof constructor) {
-      if (inFixedMemory(this)) {
-        initializer.call(this, arg[SLOTS][0]);
-      } else {
-        // not doing memory copying since the value stored there likely isn't valid
-        pointerCopier.call(this, arg);
-      }
-    } else {
-      const Target = targetStructure.constructor;
-      if (isPointerOf(arg, Target)) {
-        if (!isConst && arg.constructor.const) {
-          throwConstantConstraint(s, arg);
-        }
-        pointerCopier.call(this, arg);
-      } else {
-        if (!(arg instanceof Target)) {
-          if (isCompatible(arg, Target)) {
-            // autocast to target type
-            const dv = getDataView(targetStructure, arg);
-            arg = Target(dv);
-          } else if (isTargetSlice) {
-            // autovivificate target object
-            const autoObj = new Target(arg);
-            if (runtimeSafety) {
-              // creation of a new slice using a typed array is probably
-              // not what the user wants; it's more likely that the intention
-              // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
-              if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
-                const created = addArticle(targetStructure.typedArray.name);
-                const source = addArticle(arg.constructor.name);
-                console.warn(`Implicitly creating ${created} from ${source}`);
-              }
-            }
-            arg = autoObj;
-          } else {
-            throwInvalidPointerTarget(s, arg);
-          }
-        }
-        if (inFixedMemory(this)) {
-          if (inFixedMemory(arg)) {
-            const { address } = inFixedMemory(arg);
-            setAddress.call(this, address);
-            if (setLength) {
-              setLength.call(this, arg.length);
-            }
-          } else {
-            throwFixedMemoryTargetRequired();
-          }
-        }
-        this[SLOTS][0] = arg;
-      }
-    }
-  };
-  // return the proxy object if one is used
-  const retriever = function() { return this[PROXY] };
-  const pointerCopier = s.pointerCopier = function(arg) {
-    this[SLOTS][0] = arg[SLOTS][0];
-  };
-  s.pointerResetter = function() {
-    this[SLOTS][0] = null;
-  };
-  s.pointerDisabler = function() {
-    Object.defineProperty(this[SLOTS], 0, {
-      get: throwInaccessiblePointer,
-      set: throwInaccessiblePointer,
-      configurable: true
-    });
-  };
-  const getTarget = function() {
-    const object = this[SLOTS][0];
-    return object.$;
-  };
-  const setTarget = (isConst) ? undefined : function(value) {
-    const object = this[SLOTS][0];
-    object.$ = value;
-  };
-  const getTargetValue = function() {
-    const object = this[SLOTS][0];
-    return object.$.valueOf();
-  };
-  Object.defineProperties(constructor.prototype, {
-    '*': { get: getTarget, set: setTarget, configurable: true },
-    '$': { get: retriever, set: initializer, configurable: true, },
-    'valueOf': { value: getTargetValue, configurable: true, writable: true },
-  });
-  Object.defineProperties(constructor, {
-    child: { get: () => targetStructure.constructor },
-    const: { value: isConst },
-  });
-  return constructor;
-}
-
-function isPointerOf(arg, Target) {
-  return (arg?.constructor?.child === Target && arg['*']);
-}
-
-function inFixedMemory(arg) {
-  {
-    return arg?.[MEMORY]?.[MEMORY];
-  }
-}
-
-function createProxy(isConst, isTargetPointer) {
-  const handlers = (!isTargetPointer) ? (isConst) ? constProxyHandlers : proxyHandlers : {};
-  const proxy = new Proxy(this, handlers);
-  // hide the proxy so console wouldn't display a recursive structure
-  Object.defineProperty(this, PROXY, { value: proxy });
-  return proxy;
-}
-
-const isPointerKeys = {
-  '$': true,
-  '*': true,
-  constructor: true,
-  valueOf: true,
-  [ZIG]: true,
-  [SLOTS]: true,
-  [MEMORY]: true,
-  [PROXY]: true,
-  [Symbol.toStringTag]: true,
-  [Symbol.toPrimitive]: true,
-};
-
-const proxyHandlers = {
-  get(pointer, name) {
-    if (isPointerKeys[name]) {
-      return pointer[name];
-    } else {
-      return pointer[SLOTS][0][name];
-    }
-  },
-  set(pointer, name, value) {
-    if (isPointerKeys[name]) {
-      pointer[name] = value;
-    } else {
-      pointer[SLOTS][0][name] = value;
-    }
-    return true;
-  },
-  deleteProperty(pointer, name) {
-    if (isPointerKeys[name]) {
-      delete pointer[name];
-    } else {
-      delete pointer[SLOTS][0][name];
-    }
-    return true;
-  },
-  has(pointer, name) {
-    return isPointerKeys[name] || name in pointer[SLOTS][0];
-  },
-  ownKeys(pointer) {
-    const targetKeys = Object.getOwnPropertyNames(pointer[SLOTS][0]);
-    return [ ...targetKeys, PROXY ];
-  },
-  getOwnPropertyDescriptor(pointer, name) {
-    if (isPointerKeys[name]) {
-      return Object.getOwnPropertyDescriptor(pointer, name);
-    } else {
-      return Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
-    }
-  },
-};
-
-const constProxyHandlers = {
-  ...proxyHandlers,
-  set(pointer, name, value) {
-    if (isPointerKeys[name]) {
-      pointer[name] = value;
-    } else {
-      throwAssigningToConstant(pointer);
-    }
-    return true;
-  },
-  getOwnPropertyDescriptor(pointer, name) {
-    if (isPointerKeys[name]) {
-      return Object.getOwnPropertyDescriptor(pointer, name);
-    } else {
-      const descriptor = Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
-      if (descriptor?.set) {
-        descriptor.set = undefined;
-      }
-      return descriptor;
-    }
-    /* c8 ignore next -- unreachable */
-  },
-};
 
 function finalizeSlice(s) {
   const {
@@ -3225,7 +3240,7 @@ function finalizeSlice(s) {
     options,
   } = s;
   const typedArray = addTypedArray(s);
-  const objectMember = (member.type === MemberType.Object) ? member : null;
+  const hasObject = (member.type === MemberType.Object);
   const { byteSize: elementSize, structure: elementStructure } = member;
   const sentinel = getSentinel(s, options);
   if (sentinel) {
@@ -3249,7 +3264,7 @@ function finalizeSlice(s) {
       const dv = requireDataView(s, arg);
       shapeDefiner.call(self, dv, dv.byteLength / elementSize, this);
     }
-    return createProxy$1.call(self);
+    return createProxy.call(self);
   };
   const copy = getMemoryCopier(elementSize, true);
   const specialKeys = getSpecialKeys(s);
@@ -3261,8 +3276,8 @@ function finalizeSlice(s) {
     this[GETTER] = null;
     this[SETTER] = null;
     this[LENGTH] = length;
-    if (objectMember) {
-      createChildObjects$1.call(this, objectMember, recv);
+    if (hasObject) {
+      this[SLOTS] = {};
     }
   };
   const shapeChecker = function(arg, length) {
@@ -3272,7 +3287,7 @@ function finalizeSlice(s) {
   };
   // the initializer behave differently depending on whether it's called  by the
   // constructor or by a member setter (i.e. after object's shape has been established)
-  const initializer = s.initializer = function(arg) {
+  const initializer = function(arg) {
     let shapeless = !this.hasOwnProperty(MEMORY);
     if (arg instanceof constructor) {
       if (shapeless) {
@@ -3283,8 +3298,8 @@ function finalizeSlice(s) {
       restoreMemory.call(this);
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
-      if (pointerCopier) {
-        pointerCopier.call(this, arg);
+      if (hasPointer) {
+        this[POINTER_VISITOR](true, arg, copyPointer$1);
       }
     } else {
       if (typeof(arg) === 'string' && specialKeys.includes('string')) {
@@ -3363,17 +3378,12 @@ function finalizeSlice(s) {
       }
     }
   };
-  const retriever = function() { return this };
-  const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier$1(objectMember) : null;
-  s.pointerResetter = (hasPointer) ? getPointerResetter$1(objectMember) : null;
-  s.pointerDisabler = (hasPointer) ? getPointerDisabler$1(objectMember) : null;
   const { get, set } = getAccessors(member, options);
-  const getLength = function() { return this[LENGTH] };
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { get: getLength, configurable: true },
-    $: { get: retriever, set: initializer, configurable: true },
+    $: { get: getSelf, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     entries: { value: createArrayEntries, configurable: true, writable: true },
   });
@@ -3381,8 +3391,18 @@ function finalizeSlice(s) {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(s) },
   });
+  if (hasObject) {
+    addChildVivificator(s);
+    if (hasPointer) {
+      addPointerVisitor$1(s);
+    }
+  }
   addSpecialAccessors(s);
   return constructor;
+}
+
+function getLength() {
+  return this[LENGTH];
 }
 
 function getSentinel(structure, options) {
@@ -3464,7 +3484,7 @@ function finalizeVector(s) {
   const { byteSize: elementSize, structure: elementStructure } = member;
   const length = size / elementSize;
   const copy = getMemoryCopier(size);
-  const initializer = s.initializer = function(arg) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);
       restoreMemory.call(arg);
@@ -3488,14 +3508,13 @@ function finalizeVector(s) {
       }
     }
   };
-  const retriever = function() { return this };
   for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementSize * 8) {
     const { get, set } = getAccessors({ ...member, bitOffset }, options);
     Object.defineProperty(constructor.prototype, i, { get, set, configurable: true });
   }
   Object.defineProperties(constructor.prototype, {
     length: { value: length, configurable: true },
-    $: { get: retriever, set: initializer, configurable: true },
+    $: { get: getSelf, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
     entries: { value: createVectorEntries, configurable: true, writable: true },
   });
@@ -3560,27 +3579,18 @@ function finalizeArgStruct(s) {
     },
     options,
   } = s;
-  const objectMembers = members.filter(m => m.type === MemberType.Object);
-  const { slot: retvalSlot } = members[members.length - 1];
-    const constructor = s.constructor = function(args) {
+  const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const constructor = s.constructor = function(args) {
     const dv = new DataView(new ArrayBuffer(size));
     this[MEMORY] = dv;
-    if (objectMembers.length > 0) {
-      const slots = this[SLOTS] = {};
-      const parentOffset = dv.byteOffset;
-      for (const { structure: { constructor }, bitOffset, byteSize, slot } of objectMembers) {
-        const offset = parentOffset + (bitOffset >> 3);
-        const childDV = new DataView(dv.buffer, offset, byteSize);
-        // use ZIG as receiver for retval, so pointers will already be owned by ZIG
-        const recv = (slot === retvalSlot) ? ZIG : PARENT;
-        slots[slot] = constructor.call(recv, childDV);
-      }
+    if (hasObject) {
+      this[SLOTS] = {};
     }
     initializer.call(this, args);
   };
   const argNames = members.slice(0, -1).map(m => m.name);
   const argCount = argNames.length;
-  const initializer = s.initializer = function(args) {
+  const initializer = function(args) {
     if (args.length !== argCount) {
       throwArgumentCountMismatch(s, args.length);
     }
@@ -3595,6 +3605,9 @@ function finalizeArgStruct(s) {
   for (const member of members) {
     const accessors = getAccessors(member, options);
     Object.defineProperty(constructor.prototype, member.name, accessors);
+  }
+  if (hasObject) {
+    addChildVivificators(s);
   }
   return constructor;
 }

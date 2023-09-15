@@ -4,6 +4,7 @@ import {
   MemberType,
   useBoolEx,
   useIntEx,
+  useUintEx,
   useObject,
   useEnumerationItem,
 } from '../src/member.js';
@@ -37,6 +38,7 @@ describe('Union functions', function() {
       useArray();
       useBoolEx();
       useIntEx();
+      useUintEx();
       useEnumerationItem();
       useObject();
     })
@@ -52,6 +54,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'cat',
@@ -59,6 +62,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachTemplate(structure, {
         [MEMORY]: (() => {
@@ -93,6 +97,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       attachMember(structure, {
         name: 'cat',
@@ -100,6 +105,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       const Hello = finalizeStructure(structure);
       expect(() => new Hello).to.throw(TypeError);
@@ -132,6 +138,7 @@ describe('Union functions', function() {
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
+        structure: {},
       });
       attachTemplate(structure, {
         [MEMORY]: (() => {
@@ -186,6 +193,7 @@ describe('Union functions', function() {
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
+        structure: {},
       });
       attachTemplate(structure, {
         [MEMORY]: (() => {
@@ -228,6 +236,7 @@ describe('Union functions', function() {
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
+        structure: {},
       });
       const Hello = finalizeStructure(structure);
       const dv = new DataView(new ArrayBuffer(8));
@@ -265,6 +274,7 @@ describe('Union functions', function() {
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
+        structure: {},
       });
       const Hello = finalizeStructure(structure);
       const str = '\u0001\u0000\u0000\u0000\u0000\u0000';
@@ -302,6 +312,7 @@ describe('Union functions', function() {
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
+        structure: {},
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({ cat: 5 });
@@ -362,6 +373,7 @@ describe('Union functions', function() {
         bitSize: 16,
         bitOffset: structStructure.size * 8,
         byteSize: 2,
+        structure: {},
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({ pets: { cat: 7, dog: 9 } });
@@ -466,6 +478,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       const Hello = finalizeStructure(structure, { runtimeSafety: false });
       // initializer will call pointer setter which will throw
@@ -636,6 +649,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       const Int32 = finalizeStructure(intStructure);
       const ptrStructure = beginStructure({
@@ -729,6 +743,7 @@ describe('Union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       const Int32 = finalizeStructure(intStructure);
       const ptrStructure = beginStructure({
@@ -933,6 +948,7 @@ describe('Union functions', function() {
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
+        structure: {},
       });
       const Hello = finalizeStructure(structure);
       expect(() => new Hello({})).to.throw(TypeError)
@@ -970,6 +986,7 @@ describe('Union functions', function() {
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
+        structure: {},
       });
       const Hello = finalizeStructure(structure);
       expect(() => new Hello({ dog: 1234, cat: 4567 })).to.throw(TypeError);
@@ -1007,6 +1024,7 @@ describe('Union functions', function() {
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
+        structure: {},
       });
       const Hello = finalizeStructure(structure);
       expect(() => new Hello({ dogg: 1234 })).to.throw(TypeError)
@@ -1042,6 +1060,7 @@ describe('Union functions', function() {
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
+        structure: {},
       });
       const Hello = finalizeStructure(structure);
       expect(() => new Hello(5)).to.throw(TypeError);
@@ -1076,6 +1095,7 @@ describe('Union functions', function() {
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
+        structure: {},
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({ dog: 1234 });
@@ -1112,6 +1132,7 @@ describe('Union functions', function() {
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
+        structure: {},
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({ dog: 1234 });

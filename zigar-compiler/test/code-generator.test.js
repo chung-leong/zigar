@@ -15,9 +15,6 @@ describe('Code generation', function() {
     it('should generate code for defining a standard int type', function() {
       const structure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Primitive,
         name: "i32",
         size: 4,
@@ -49,9 +46,6 @@ describe('Code generation', function() {
     it('should generate code for defining a non-standard int type', function() {
       const structure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Primitive,
         name: "i31",
         size: 4,
@@ -84,9 +78,6 @@ describe('Code generation', function() {
     it('should generate code for defining a standard float type', function() {
       const structure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Primitive,
         name: "f32",
         size: 4,
@@ -118,9 +109,6 @@ describe('Code generation', function() {
     it('should generate code for defining a non-standard float type', function() {
       const structure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Primitive,
         name: "f80",
         size: 16,
@@ -153,9 +141,6 @@ describe('Code generation', function() {
     it('should generate code for defining a standard boolean type', function() {
       const structure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Primitive,
         name: "bool",
         size: 1,
@@ -187,9 +172,6 @@ describe('Code generation', function() {
     it('should generate code for defining bitfields', function() {
       const structure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Struct,
         name: "flags",
         size: 1,
@@ -228,9 +210,6 @@ describe('Code generation', function() {
     it('should generate code for defining a standard enum type', function() {
       const enumSetStructure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Enumeration,
         name: "enum {}",
         size: 2,
@@ -249,9 +228,6 @@ describe('Code generation', function() {
       };
       const structure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Primitive,
         name: "enumItem",
         size: 2,
@@ -285,9 +261,6 @@ describe('Code generation', function() {
     it('should generate code for defining a non-standard enum type', function() {
       const enumSetStructure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Enumeration,
         name: "enum {}",
         size: 2,
@@ -306,9 +279,6 @@ describe('Code generation', function() {
       };
       const structure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Primitive,
         name: "enumItem",
         size: 2,
@@ -341,9 +311,6 @@ describe('Code generation', function() {
     it('should generate code for exporting types', function() {
       const enumSetStructure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Enumeration,
         name: "enum {}",
         size: 2,
@@ -362,9 +329,6 @@ describe('Code generation', function() {
       };
       const structure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Struct,
         name: "package",
         size: 0,
@@ -396,9 +360,6 @@ describe('Code generation', function() {
     it('should generate code for exporting a constant', function() {
       const ptrStructure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Pointer,
         name: "*int32",
         size: 0,
@@ -426,9 +387,6 @@ describe('Code generation', function() {
       };
       const structure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Struct,
         name: "package",
         size: 0,
@@ -466,9 +424,6 @@ describe('Code generation', function() {
     it('should generate code for exporting a function', function() {
       const argStructure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Pointer,
         name: "hello",
         size: 0,
@@ -494,9 +449,6 @@ describe('Code generation', function() {
       };
       const structure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Struct,
         name: "package",
         size: 0,
@@ -534,9 +486,6 @@ describe('Code generation', function() {
       memory.address = 0x12341234;
       const structStructure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Struct,
         name: "struct {}",
         size: 4,
@@ -570,9 +519,6 @@ describe('Code generation', function() {
       };
       const structure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Struct,
         name: "package",
         size: 0,
@@ -603,9 +549,6 @@ describe('Code generation', function() {
     it('should import linkModule when loadWASM is truthy', function() {
       const structure = {
         constructor: null,
-        initializer: null,
-        pointerCopier: null,
-        pointerResetter: null,
         type: StructureType.Primitive,
         name: "i32",
         size: 4,
@@ -639,9 +582,6 @@ describe('Code generation', function() {
       for (let bitSize = 2; bitSize <= 64; bitSize++) {
         structures.push({
           constructor: null,
-          initializer: null,
-          pointerCopier: null,
-          pointerResetter: null,
           type: StructureType.Primitive,
           name: `i${bitSize}`,
           size: 8,

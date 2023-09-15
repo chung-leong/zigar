@@ -1021,7 +1021,7 @@ fn addUnionMember(host: anytype, structure: Value, comptime T: type) !void {
             .bit_offset = tag_offset,
             .bit_size = @bitSizeOf(TT),
             .byte_size = if (isPacked(T)) missing else @sizeOf(TT),
-            .structure = if (un.tag_type) |_| try getStructure(host, TT) else null,
+            .structure = try getStructure(host, TT),
         }, false);
     }
 }

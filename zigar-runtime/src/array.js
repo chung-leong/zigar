@@ -3,7 +3,8 @@ import { getMemoryCopier, restoreMemory } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
-import { MEMORY, SLOTS, ZIG, PARENT, GETTER, SETTER, PROXY, COMPAT } from './symbol.js';
+import { MEMORY, SLOTS, PARENT, GETTER, SETTER, PROXY, COMPAT, CHILD_VIVIFICATOR, POINTER_VISITOR } from './symbol.js';
+import { copyPointer, getProxy } from './pointer.js';
 
 export function finalizeArray(s) {
   const {
@@ -24,7 +25,7 @@ export function finalizeArray(s) {
     }
   }
   addTypedArray(s);
-  const objectMember = (member.type === MemberType.Object) ? member : null;
+  const hasObject = (member.type === MemberType.Object);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -41,8 +42,8 @@ export function finalizeArray(s) {
     self[MEMORY] = dv;
     self[GETTER] = null;
     self[SETTER] = null;
-    if (objectMember) {
-      createChildObjects.call(self, objectMember, this);
+    if (hasObject) {
+      self[SLOTS] = {};
     }
     if (creating) {
       initializer.call(self, arg);
@@ -53,13 +54,13 @@ export function finalizeArray(s) {
   const length = size / elementSize;
   const copy = getMemoryCopier(size);
   const specialKeys = getSpecialKeys(s);
-  const initializer = s.initializer = function(arg) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
-      if (pointerCopier) {
-        pointerCopier.call(this, arg);
+      if (hasPointer) {
+        this[POINTER_VISITOR](true, arg, copyPointer);
       }
     } else {
       if (typeof(arg) === 'string' && specialKeys.includes('string')) {
@@ -96,16 +97,12 @@ export function finalizeArray(s) {
       }
     }
   };
-  const retriever = function() { return this[PROXY] };
-  const pointerCopier = s.pointerCopier = (hasPointer) ? getPointerCopier(objectMember) : null;
-  const pointerResetter = s.pointerResetter = (hasPointer) ? getPointerResetter(objectMember) : null;
-  const pointerDisabler = s.pointerDisabler = (hasPointer) ? getPointerDisabler(objectMember) : null;
   const { get, set } = getAccessors(member, options);
   Object.defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { value: length, configurable: true },
-    $: { get: retriever, set: initializer, configurable: true },
+    $: { get: getProxy, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     entries: { value: createArrayEntries, configurable: true, writable: true }
   });
@@ -113,52 +110,52 @@ export function finalizeArray(s) {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(s) },
   });
+  if (hasObject) {
+    addChildVivificator(s);
+    if (hasPointer) {
+      addPointerVisitor(s);
+    }
+  }
   addSpecialAccessors(s);
   return constructor;
 }
 
-export function createChildObjects(member, recv) {
-  const dv = this[MEMORY];
-  const slots = this[SLOTS] = {};
-  const { structure: { constructor }, byteSize: elementSize } = member;
-  if (recv !== ZIG) {
-    recv = PARENT;
-  }
-  for (let i = 0, offset = dv.byteOffset, len = this.length; i < len; i++, offset += elementSize) {
-    const childDV = new DataView(dv.buffer, offset, elementSize);
-    slots[i] = constructor.call(recv, childDV);
-  }
+export function addChildVivificator(s) {
+  const { constructor: { prototype }, instance: { members: [ member ]} } = s;
+  const { byteSize, structure } = member;
+  const vivificator = function getChild(index) {
+    let object = this[SLOTS][index];
+    if (!object) {
+      const { constructor } = structure;
+      const dv = this[MEMORY];
+      const parentOffset = dv.byteOffset;
+      const offset = parentOffset + byteSize * index;
+      const childDV = new DataView(dv.buffer, offset, byteSize);
+      object = this[SLOTS][index] = constructor.call(PARENT, childDV);
+    }
+    return object;
+  };
+  Object.defineProperty(prototype, CHILD_VIVIFICATOR, { value: vivificator });
 }
 
-export function getPointerCopier(member) {
-  return function(src) {
-    const { structure: { pointerCopier } } = member;
-    const destSlots = this[SLOTS];
-    const srcSlots = src[SLOTS];
+export function addPointerVisitor(s) {
+  const { constructor: { prototype } } = s;
+  const visitor = function visitPointers(vivificating, src, fn) {
     for (let i = 0, len = this.length; i < len; i++) {
-      pointerCopier.call(destSlots[i], srcSlots[i]);
+      let srcChild;
+      if (src) {
+        srcChild = src[SLOTS][i];
+        if (!srcChild) {
+          continue;
+        }
+      }
+      const child = (vivificating) ? this[CHILD_VIVIFICATOR](i) : this[SLOTS][i];
+      if (child) {
+        child[POINTER_VISITOR](vivificating, srcChild, fn);
+      }
     }
   };
-}
-
-export function getPointerResetter(member) {
-  return function(src) {
-    const { structure: { pointerResetter } } = member;
-    const destSlots = this[SLOTS];
-    for (let i = 0, len = this.length; i < len; i++) {
-      pointerResetter.call(destSlots[i]);
-    }
-  };
-}
-
-export function getPointerDisabler(member) {
-  return function(src) {
-    const { structure: { pointerDisabler } } = member;
-    const destSlots = this[SLOTS];
-    for (let i = 0, len = this.length; i < len; i++) {
-      pointerDisabler.call(destSlots[i]);
-    }
-  };
+  Object.defineProperty(prototype, POINTER_VISITOR, { value: visitor });
 }
 
 export function getArrayIterator() {

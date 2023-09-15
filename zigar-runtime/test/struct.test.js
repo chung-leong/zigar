@@ -656,6 +656,7 @@ describe('Struct functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        slot: 0,
         structure: structureA,
       });
       const StructB = finalizeStructure(structureB);
@@ -689,7 +690,6 @@ describe('Struct functions', function() {
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
-        slot: 0,
         structure: intStructure,
       });
       const Int32Ptr = finalizeStructure(ptrStructure);

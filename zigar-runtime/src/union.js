@@ -5,7 +5,7 @@ import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
-import { createChildObjects, getPointerCopier, getPointerResetter, getPointerDisabler } from './struct.js';
+import { addChildVivificators, addPointerVisitor, getSelf } from './struct.js';
 import {
   throwInvalidInitializer,
   throwMissingUnionInitializer,
@@ -14,7 +14,8 @@ import {
   throwInactiveUnionProperty,
   throwNoInitializer,
 } from './error.js';
-import { MEMORY, ENUM_NAME, ENUM_ITEM, TAG, SLOTS } from './symbol.js';
+import { copyPointer, disablePointer, resetPointer } from './pointer.js';
+import { MEMORY, ENUM_NAME, ENUM_ITEM, TAG, SLOTS, POINTER_VISITOR } from './symbol.js';
 
 export function finalizeUnion(s) {
   const {
@@ -62,16 +63,16 @@ export function finalizeUnion(s) {
       };
     }
     for (const member of valueMembers) {
-      const { name, slot, structure: { pointerResetter } } = member;
+      const { name, slot } = member;
       const { get: getValue, set: setValue } = getAccessors(member, options);
       const update = (isTagged) ? function(name) {
         if (this[TAG]?.name !== name) {
           this[TAG]?.clear?.();
           this[TAG] = { name };
-          if (pointerResetter) {
+          if (hasPointer) {
             this[TAG].clear = () => {
               const object = this[SLOTS][slot];
-              pointerResetter.call(object);
+              object[POINTER_VISITOR](false, null, resetPointer);
             };
           }
         }
@@ -111,9 +112,10 @@ export function finalizeUnion(s) {
       descriptors[member.name] = { get, set, init: set, configurable: true, enumerable: true };
     }
   }
-  const objectMembers = members.filter(m => m.type === MemberType.Object);
-  const pointerMembers = objectMembers.filter(m => m.structure.hasPointer);
-  //
+  const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const pointerMembers = members.filter(m => m.structure.hasPointer);
+  // non-tagged union as marked as not having pointers--if there're actually
+  // members with pointers, we need to disable them
   const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
@@ -134,10 +136,11 @@ export function finalizeUnion(s) {
       Object.defineProperties(self, TAG, { value: null, writable: true });
     }
     Object.defineProperties(self, descriptors);
-    if (objectMembers.length > 0) {
-      createChildObjects.call(self, objectMembers, this, dv);
+    if (hasObject) {
+      self[SLOTS] = {};
       if (hasInaccessiblePointer) {
-        pointerDisabler.call(self);
+        // make pointer access throw
+        self[POINTER_VISITOR](true, null, disablePointer);
       }
     }
     if (creating) {
@@ -152,13 +155,13 @@ export function finalizeUnion(s) {
   const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
   const copy = getMemoryCopier(size);
   const specialKeys = getSpecialKeys(s);
-  const initializer = s.initializer = function(arg) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
-      if (pointerCopier) {
-        pointerCopier.call(this, arg);
+      if (hasPointer) {
+        this[POINTER_VISITOR](true, arg, copyPointer);
       }
     } else {
       if (arg && typeof(arg) === 'object') {
@@ -191,8 +194,8 @@ export function finalizeUnion(s) {
           if (template) {
             restoreMemory.call(this);
             copy(this[MEMORY], template[MEMORY]);
-            if (pointerCopier) {
-              pointerCopier.call(this, template);
+            if (hasPointer) {
+              this[POINTER_VISITOR](true, template, copyPointer);
             }
           }
         } else {
@@ -206,15 +209,17 @@ export function finalizeUnion(s) {
       }
     }
   };
-  const retriever = function() { return this };
-  const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
-  const pointerResetter = s.pointerResetter = getPointerResetter(objectMembers);
-  const pointerDisabler = getPointerDisabler(objectMembers);
   if (isTagged) {
     // enable casting to enum
     Object.defineProperty(constructor.prototype, ENUM_ITEM, { get: getEnumItem, configurable: true });
   }
-  Object.defineProperty(constructor.prototype, '$', { get: retriever, set: initializer, configurable: true }),
+  Object.defineProperty(constructor.prototype, '$', { get: getSelf, set: initializer, configurable: true });
+  if (hasObject) {
+    addChildVivificators(s);
+    if (hasPointer || hasInaccessiblePointer) {
+      addPointerVisitor(s);
+    }
+  }
   addSpecialAccessors(s);
   addStaticMembers(s);
   addMethods(s);

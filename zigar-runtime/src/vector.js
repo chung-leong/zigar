@@ -1,9 +1,10 @@
 import { getAccessors } from './member.js';
 import { getMemoryCopier, restoreMemory } from './memory.js';
-import { requireDataView, addTypedArray, isTypedArray, getCompatibleTags } from './data-view.js';
+import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
 import { MEMORY, COMPAT } from './symbol.js';
+import { getSelf } from './struct.js';
 
 export function finalizeVector(s) {
   const {
@@ -46,7 +47,7 @@ export function finalizeVector(s) {
   const { byteSize: elementSize, structure: elementStructure } = member;
   const length = size / elementSize;
   const copy = getMemoryCopier(size);
-  const initializer = s.initializer = function(arg) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);
       restoreMemory.call(arg);
@@ -70,14 +71,13 @@ export function finalizeVector(s) {
       }
     }
   };
-  const retriever = function() { return this };
   for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementSize * 8) {
     const { get, set } = getAccessors({ ...member, bitOffset }, options);
     Object.defineProperty(constructor.prototype, i, { get, set, configurable: true });
   }
   Object.defineProperties(constructor.prototype, {
     length: { value: length, configurable: true },
-    $: { get: retriever, set: initializer, configurable: true },
+    $: { get: getSelf, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
     entries: { value: createVectorEntries, configurable: true, writable: true },
   });

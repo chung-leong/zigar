@@ -3,6 +3,7 @@ import { expect } from 'chai';
 import {
   MemberType,
   useIntEx,
+  useUintEx,
   useFloatEx,
   useObject,
 } from '../src/member.js';
@@ -19,7 +20,7 @@ import {
   finalizeStructure,
 } from '../src/structure.js';
 import { initializeErrorSets } from '../src/error-set.js';
-import { MEMORY, SLOTS } from '../src/symbol.js';
+import { CHILD_VIVIFICATOR, MEMORY, SLOTS } from '../src/symbol.js';
 import {
   getErrorUnionAccessors,
 } from '../src/error-union.js';
@@ -34,6 +35,7 @@ describe('Error union functions', function() {
       usePointer();
       useSlice();
       useIntEx();
+      useUintEx();
       useObject();
       initializeErrorSets();
     })
@@ -648,14 +650,13 @@ describe('Error union functions', function() {
       dv.setUint16(8, 18, true);
       const object = {
         [MEMORY]: dv,
-        [SLOTS]: { 0: null },
+        [CHILD_VIVIFICATOR]: { 0: () => dummyObject },
       };
       const dummyObject = new DummyClass();
       const { get } = getErrorUnionAccessors(members, dv.byteLength, {});
       expect(() => get.call(object)).to.throw().equal(dummyError);
       expect(errorNumber).to.equal(18);
       dv.setUint16(8, 0, true);
-      object[SLOTS][0] = dummyObject;
       const result = get.call(object);
       expect(result).to.equal(dummyObject);
     })
@@ -699,68 +700,6 @@ describe('Error union functions', function() {
       set.call(object, 1234.5678);
       expect(dv.getUint16(8, true)).to.equal(0);
       expect(dv.getFloat64(0, true)).to.equal(1234.5678);
-    })
-    it('should return a function for setting object or error', function() {
-      const DummyErrorSet = function(arg) {
-        if (this instanceof DummyErrorSet) {
-          this.index = arg;
-        } else {
-          return dummyError;
-        }
-      };
-      Object.setPrototypeOf(DummyErrorSet.prototype, Error.prototype);
-      const dummyError = new DummyErrorSet(18);
-      const DummyClass = function(value) {
-        this.value = value;
-      };
-      const initializer = function(arg) {
-        if (arg instanceof DummyClass) {
-          this.value = arg.value;
-        } else {
-          this.value = arg;
-        }
-      };
-      Object.defineProperties(DummyClass.prototype, {
-        $: { set: initializer },
-      });
-      const members = [
-        {
-          type: MemberType.Object,
-          bitOffset: 0,
-          bitSize: 64,
-          byteSize: 8,
-          slot: 0,
-          structure: {
-            type: StructureType.Struct,
-            hasPointer: true,
-            constructor: DummyClass,
-            initializer,
-            pointerResetter: function() {
-              this.value = null;
-            },
-          }
-        },
-        {
-          type: MemberType.Uint,
-          bitOffset: 64,
-          bitSize: 16,
-          byteSize: 2,
-          structure: { constructor: DummyErrorSet }
-        },
-      ];
-      const dummyObject = new DummyClass(123);
-      const dv = new DataView(new ArrayBuffer(10));
-      const object = {
-        [MEMORY]: dv,
-        [SLOTS]: { 0: dummyObject },
-      };
-      const { set } = getErrorUnionAccessors(members, dv.byteLength, {});
-      set.call(object, dummyError);
-      expect(dv.getUint16(8, true)).to.equal(18);
-      expect(object[SLOTS][0].value).to.be.null;
-      set.call(object, 456);
-      expect(dv.getUint16(8, true)).to.equal(0);
-      expect(object[SLOTS][0].value).to.equal(456);
     })
   })
 })

@@ -1,7 +1,7 @@
 import { StructureType } from './structure.js';
 import { requireDataView, getDataView, isCompatible, isBuffer } from './data-view.js';
 import { MemberType, getAccessors } from './member.js';
-import { MEMORY, PROXY, SLOTS, ZIG, PARENT } from './symbol.js';
+import { MEMORY, PROXY, SLOTS, ZIG, PARENT, POINTER_VISITOR } from './symbol.js';
 import {
   throwNoCastingToPointer,
   throwInaccessiblePointer,
@@ -81,13 +81,13 @@ export function finalizePointer(s) {
     }
     return createProxy.call(self, isConst, isTargetPointer);
   };
-  const initializer = s.initializer = function(arg) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       if (inFixedMemory(this)) {
         initializer.call(this, arg[SLOTS][0]);
       } else {
         // not doing memory copying since the value stored there likely isn't valid
-        pointerCopier.call(this, arg);
+        copyPointer.call(this, arg);
       }
     } else {
       const Target = targetStructure.constructor;
@@ -95,7 +95,7 @@ export function finalizePointer(s) {
         if (!isConst && arg.constructor.const) {
           throwConstantConstraint(s, arg);
         }
-        pointerCopier.call(this, arg);
+        copyPointer.call(this, arg);
       } else {
         if (!(arg instanceof Target)) {
           if (isCompatible(arg, Target)) {
@@ -136,42 +136,56 @@ export function finalizePointer(s) {
     }
   };
   // return the proxy object if one is used
-  const retriever = function() { return this[PROXY] };
-  const pointerCopier = s.pointerCopier = function(arg) {
-    this[SLOTS][0] = arg[SLOTS][0];
-  };
-  const pointerResetter = s.pointerResetter = function() {
-    this[SLOTS][0] = null;
-  };
-  const pointerDisabler = s.pointerDisabler = function() {
-    Object.defineProperty(this[SLOTS], 0, {
-      get: throwInaccessiblePointer,
-      set: throwInaccessiblePointer,
-      configurable: true
-    });
-  };
-  const getTarget = function() {
-    const object = this[SLOTS][0];
-    return object.$;
-  };
-  const setTarget = (isConst) ? undefined : function(value) {
-    const object = this[SLOTS][0];
-    object.$ = value;
-  };
-  const getTargetValue = function() {
-    const object = this[SLOTS][0];
-    return object.$.valueOf();
-  };
   Object.defineProperties(constructor.prototype, {
-    '*': { get: getTarget, set: setTarget, configurable: true },
-    '$': { get: retriever, set: initializer, configurable: true, },
+    '*': { get: getTarget, set: (isConst) ? undefined : setTarget, configurable: true },
+    '$': { get: getProxy, set: initializer, configurable: true, },
     'valueOf': { value: getTargetValue, configurable: true, writable: true },
+    [POINTER_VISITOR]: { value: visitPointer },
   });
   Object.defineProperties(constructor, {
     child: { get: () => targetStructure.constructor },
     const: { value: isConst },
   });
   return constructor;
+}
+
+export function getProxy() {
+  return this[PROXY];
+}
+
+export function copyPointer(src) {
+  this[SLOTS][0] = src[SLOTS][0];
+}
+
+export function resetPointer() {
+  this[SLOTS][0] = null;
+}
+
+export function disablePointer() {
+  Object.defineProperty(this[SLOTS], 0, {
+    get: throwInaccessiblePointer,
+    set: throwInaccessiblePointer,
+    configurable: true
+  });
+}
+
+function getTarget() {
+  const object = this[SLOTS][0];
+  return object.$;
+}
+
+function setTarget(value) {
+  const object = this[SLOTS][0];
+  object.$ = value;
+}
+
+function getTargetValue() {
+  const object = this[SLOTS][0];
+  return object.$.valueOf();
+}
+
+function visitPointer(_, src, fn) {
+  fn.call(this, src);
 }
 
 function isPointerOf(arg, Target) {
@@ -203,6 +217,7 @@ const isPointerKeys = {
   [SLOTS]: true,
   [MEMORY]: true,
   [PROXY]: true,
+  [POINTER_VISITOR]: true,
   [Symbol.toStringTag]: true,
   [Symbol.toPrimitive]: true,
 };
@@ -236,7 +251,7 @@ const proxyHandlers = {
   },
   ownKeys(pointer) {
     const targetKeys = Object.getOwnPropertyNames(pointer[SLOTS][0]);
-    return [ ...targetKeys, PROXY ];
+    return [ ...targetKeys, PROXY, POINTER_VISITOR ];
   },
   getOwnPropertyDescriptor(pointer, name) {
     if (isPointerKeys[name]) {

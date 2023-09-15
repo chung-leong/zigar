@@ -1,19 +1,20 @@
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView } from './data-view.js';
-import { createChildObjects, getPointerCopier, getPointerResetter, getPointerDisabler } from './struct.js';
 import { addSpecialAccessors } from './special.js';
 import { throwNoInitializer, throwNotInErrorSet, throwUnknownErrorNumber } from './error.js';
-import { MEMORY, SLOTS } from './symbol.js';
+import { MEMORY, POINTER_VISITOR, SLOTS } from './symbol.js';
+import { copyPointer, resetPointer } from './pointer.js';
+import { addChildVivificators, addPointerVisitor } from './struct.js';
 
 export function finalizeErrorUnion(s) {
   const {
-    name,
     size,
     instance: { members },
     options,
+    hasPointer,
   } = s;
-  const objectMembers = members.filter(m => m.type === MemberType.Object);
+  const hasObject = !!members.find(m => m.type === MemberType.Object);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -28,8 +29,8 @@ export function finalizeErrorUnion(s) {
       dv = requireDataView(s, arg);
     }
     self[MEMORY] = dv;
-    if (objectMembers.length > 0) {
-      createChildObjects.call(self, objectMembers, this, dv);
+    if (hasObject) {
+      self[SLOTS] = {};
     }
     if (creating) {
       initializer.call(this, arg);
@@ -38,23 +39,27 @@ export function finalizeErrorUnion(s) {
     }
   };
   const copy = getMemoryCopier(size);
-  const initializer = s.initializer = function(arg) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       copy(this[MEMORY], arg[MEMORY]);
-      if (pointerCopier) {
+      if (hasPointer) {
         if (check.call(this)) {
-          pointerCopier.call(this, arg);
+          this[POINTER_VISITOR](true, arg, copyPointer);
         }
       }
     } else {
       this.$ = arg;
     }
   };
-  const pointerCopier = s.pointerCopier = getPointerCopier(objectMembers);
-  const pointerResetter = s.pointerResetter = getPointerResetter(objectMembers);
-  const pointerDisabler = s.pointerDisabler = getPointerDisabler(objectMembers);
   const { get, set, check } = getErrorUnionAccessors(members, size, options);
   Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
+  if (hasObject) {
+    addChildVivificators(s);
+    if (hasPointer) {
+      debugger;
+      addPointerVisitor(s);
+    }
+  }
   addSpecialAccessors(s);
   return constructor;
 }
@@ -62,9 +67,7 @@ export function finalizeErrorUnion(s) {
 export function getErrorUnionAccessors(members, size, options) {
   const { get: getValue, set: setValue } = getAccessors(members[0], options);
   const { get: getError, set: setError } = getAccessors(members[1], options);
-  const { structure: valueStructure } = members[0];
   const { structure: errorStructure } = members[1];
-  const { pointerResetter } = valueStructure;
   const { constructor: ErrorSet } = errorStructure;
   const reset = getMemoryResetter(size)
   return {
@@ -75,7 +78,8 @@ export function getErrorUnionAccessors(members, size, options) {
         if (!err) {
           throwUnknownErrorNumber(errorStructure, errorNumber);
         }
-        pointerResetter?.call(this[SLOTS][0]);
+        debugger;
+        this[POINTER_VISITOR]?.(false, null, resetPointer);
         throw err;
       } else {
         return getValue.call(this);
@@ -88,7 +92,7 @@ export function getErrorUnionAccessors(members, size, options) {
         }
         reset(this[MEMORY]);
         setError.call(this, value.index);
-        pointerResetter?.call(this[SLOTS][0]);
+        this[POINTER_VISITOR]?.(false, null, resetPointer);
       } else {
         setValue.call(this, value);
         setError.call(this, 0);

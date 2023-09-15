@@ -4,6 +4,7 @@ import {
   MemberType,
   useBool,
   useIntEx,
+  useUintEx,
   useFloatEx,
   useObject,
 } from '../src/member.js';
@@ -20,7 +21,7 @@ import {
   finalizeStructure,
   useArray,
 } from '../src/structure.js';
-import { MEMORY, SLOTS } from '../src/symbol.js';
+import { CHILD_VIVIFICATOR, MEMORY, SLOTS } from '../src/symbol.js';
 import {
   getOptionalAccessors,
 } from '../src/optional.js';
@@ -36,6 +37,7 @@ describe('Optional functions', function() {
       useSlice();
       useBool();
       useIntEx();
+      useUintEx();
       useFloatEx();
       useObject();
     })
@@ -253,6 +255,7 @@ describe('Optional functions', function() {
         bitOffset: 0,
         bitSize: 1,
         byteSize: 8,
+        structure: {},
       });
       const Hello = finalizeStructure(structure);
       const object = Hello(new ArrayBuffer(8));
@@ -395,6 +398,7 @@ describe('Optional functions', function() {
         type: StructureType.Optional,
         name: 'Hello',
         size: structStructure.size + 32,
+        hasPointer: true,
       });
       attachMember(structure, {
         name: 'value',
@@ -411,6 +415,7 @@ describe('Optional functions', function() {
         bitOffset: structStructure.size * 8,
         bitSize: 1,
         byteSize: 8,
+        structure: {},
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello({});
@@ -464,6 +469,7 @@ describe('Optional functions', function() {
         type: StructureType.Optional,
         name: 'Hello',
         size: arrayStructure.size + 32,
+        hasPointer: true,
       });
       attachMember(structure, {
         name: 'value',
@@ -480,6 +486,7 @@ describe('Optional functions', function() {
         bitOffset: arrayStructure.size * 8,
         bitSize: 1,
         byteSize: 8,
+        structure: {},
       });
       const Hello = finalizeStructure(structure);
       const object = new Hello([ new Int32(1234), new Int32(4567), new Int32(7890), new Int32(12345) ]);
@@ -554,14 +561,13 @@ describe('Optional functions', function() {
       const dv = new DataView(new ArrayBuffer(10));
       const object = {
         [MEMORY]: dv,
-        [SLOTS]: { 0: null },
+        [CHILD_VIVIFICATOR]: { 0: () => dummyObject },
       };
       const dummyObject = new DummyClass();
       const { get } = getOptionalAccessors(members, dv.byteLength, {});
       const result1 = get.call(object);
       expect(result1).to.equal(null);
       dv.setUint8(8, 1, true);
-      object[SLOTS][0] = dummyObject;
       const result2 = get.call(object);
       expect(result2).to.equal(dummyObject);
     })
@@ -597,57 +603,6 @@ describe('Optional functions', function() {
       set.call(object, 1234.5678);
       expect(dv.getUint8(8, true)).to.equal(1);
       expect(dv.getFloat64(0, true)).to.equal(1234.5678);
-    })
-    it('should return a function for setting object or error', function() {
-      const DummyClass = function(value) {
-        this.value = value;
-      };
-      const initializer = function(arg) {
-        if (arg instanceof DummyClass) {
-          this.value = arg.value;
-        } else {
-          this.value = arg;
-        }
-      };
-      Object.defineProperties(DummyClass.prototype, {
-        $: { set: initializer },
-      });
-      const members = [
-        {
-          type: MemberType.Object,
-          bitOffset: 0,
-          bitSize: 64,
-          byteSize: 8,
-          slot: 0,
-          structure: {
-            type: StructureType.Struct,
-            constructor: DummyClass,
-            initializer,
-            pointerResetter: function() {
-              this.value = null;
-            }
-          }
-        },
-        {
-          type: MemberType.Bool,
-          bitOffset: 64,
-          bitSize: 1,
-          byteSize: 1,
-        },
-      ];
-      const dummyObject = new DummyClass(123);
-      const dv = new DataView(new ArrayBuffer(10));
-      const object = {
-        [MEMORY]: dv,
-        [SLOTS]: { 0: dummyObject },
-      };
-      const { get, set } = getOptionalAccessors(members, dv.byteLength, {});
-      set.call(object, null);
-      expect(dv.getUint8(8, true)).to.equal(0);
-      expect(object[SLOTS][0].value).to.be.null;
-      set.call(object, 456);
-      expect(dv.getUint8(8, true)).to.equal(1);
-      expect(object[SLOTS][0].value).to.equal(456);
     })
   })
 })
