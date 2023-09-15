@@ -146,8 +146,11 @@ export function attachTemplate(s, template, isStatic = false) {
 }
 
 export function getShortName(s) {
-  const { name } = s;
-  return name.replace(/[^. ]*?\./g, '');
+  let r = s.name;
+  r = r.replace(/\(.*\)/, '');
+  r = r.replace(/{.*}/, '');
+  const dotIndex = r.lastIndexOf('.');
+  return r.substring(dotIndex + 1);
 }
 
 export function finalizeStructure(s) {
@@ -162,6 +165,7 @@ export function finalizeStructure(s) {
     }
     const constructor = f(s);
     if (typeof(constructor) === 'function') {
+      console.log(getShortName(s));
       Object.defineProperties(constructor, {
         name: { value: getShortName(s), writable: false }
       });
