@@ -163,7 +163,7 @@ describe('Special property functions', function() {
   })
   describe('getTypedArrayAccessors', function() {
     it('should return getter and setter for typed array', function() {
-      const { get, set } = getTypedArrayAccessors(Int32Array, 4);
+      const { get, set } = getTypedArrayAccessors(Int32Array);
       expect(get).to.be.a('function');
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(16));

@@ -1580,9 +1580,8 @@ function addSpecialAccessors(s) {
     });
   }
   if (canBeTypedArray(s)) {
-    const { byteSize } = s.instance.members[0];
     Object.defineProperty(constructor.prototype, 'typedArray', {
-      ...getTypedArrayAccessors(s.typedArray, byteSize), configurable: true
+      ...getTypedArrayAccessors(s.typedArray), configurable: true
     });
   }
 }
@@ -1714,11 +1713,12 @@ function getDataViewFromUTF8(str, byteSize, sentinelValue) {
   return new DataView(ta.buffer);
 }
 
-function getTypedArrayAccessors(TypedArray, byteSize) {
+function getTypedArrayAccessors(TypedArray) {
   return {
     get() {
       const dv = this.dataView;
-      return new TypedArray(dv.buffer, dv.byteOffset, dv.byteLength / byteSize);
+      const length = dv.byteLength / TypedArray.BYTES_PER_ELEMENT;
+      return new TypedArray(dv.buffer, dv.byteOffset, length);
     },
     set(ta) {
       this.dataView = getDataViewFromTypedArray(ta, TypedArray);
