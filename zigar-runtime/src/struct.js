@@ -72,7 +72,7 @@ export function finalizeStruct(s) {
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (hasPointer) {
-        this[POINTER_VISITOR](true, template, copyPointer);
+        this[POINTER_VISITOR](true, arg, copyPointer);
       }
     } else {
       if (arg && typeof(arg) === 'object') {
