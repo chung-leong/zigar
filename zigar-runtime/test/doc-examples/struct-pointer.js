@@ -1,11 +1,20 @@
 // struct-pointer.js
-import { printStruct } from './struct-pointer.zig';
+import { StructA, StructAPtr, StructAConstPtr } from './struct-pointer.zig';
 
+const object = new StructA({ dog: 123, cat: 456 });
+const ptr = new StructAPtr(object);
+console.log(ptr.dog, ptr.cat);
+ptr.dog = 1111;
+ptr.cat = 3333;
+const constPtr = new StructAConstPtr(object);
+console.log(constPtr.dog, constPtr.cat);
 try {
-  printStruct({ dog: 123, cat: 456 });
+  constPtr.dog = 0;
 } catch (err) {
   console.error(err);
 }
 
 // console output:
-// *StructA cannot point to an object
+// 123 456
+// 1111 3333
+// [TODO]

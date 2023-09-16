@@ -118,8 +118,7 @@ console.log([ ...greeting ]);
 ```
 
 Zigar will automatically provide the allocator. It allocates memory from the JavaScript engine in the
-form of `ArrayBuffer`. It should only be used for returning data to the caller and not other
-purposes, as it is not able to free memory (discarded blocks must await garbaged collection).
+form of `ArrayBuffer`. The allocator should only be used for returning data to the caller and not other purposes, as it is not able to free memory (discarded blocks must await garbaged collection).
 
 The Zig slice `[]const u8` is represented by an object on the JavaScript side by an object. To get
 the actual text string you have to access its `string` property.
@@ -298,98 +297,6 @@ printStruct({ number3: 77 });
 // print-struct-defaults.StructB{ .a = print-struct-defaults.StructA{ .number1 = 1, .number2 = 2 }, .number3 = 7.7e+01 }
 // print-struct-defaults.StructB{ .a = null, .number3 = 7.7e+01 }
 ```
-
-When a function returns a bare (or extern) union, only the active field can be accessed. An error
-would be thrown when runtime safety check is active:
-
-```zig
-// bare-union-price.zig
-const Currency = enum { EUR, PLN, MOP, USD };
-const Price = union {
-    USD: i32,
-    EUR: i32,
-    PLN: i32,
-    MOP: i32,
-};
-
-pub fn getPrice(currency: Currency, amount: i32) Price {
-    return switch (currency) {
-        .USD => .{ .USD = amount },
-        .EUR => .{ .EUR = amount },
-        .PLN => .{ .PLN = amount },
-        .MOP => .{ .MOP = amount },
-    };
-}
-```
-```js
-// bare-union-price.js
-import { getPrice } from './bare-union-price.zig';
-
-const price = getPrice('USD', 123);
-console.log(`USD = ${price.USD}`);
-try {
-  console.log(`PLN = ${price.PLN}`);
-} catch (err) {
-  console.error(err);
-}
-console.log(Object.keys(price));
-
-// console output:
-// USD = 123
-// TypeError: Accessing property pln when usd is active
-// [ 'USD', 'EUR', 'PLN', 'MOP' ]
-```
-
-Tagged union, on the other hand, allows you to read from an inactive field:
-
-```zig
-// tagged-union-price.zig
-const Currency = enum { usd, eur, pln, mop };
-const Price = union(Currency) {
-    usd: i32,
-    eur: i32,
-    pln: i32,
-    mop: i32,
-};
-
-pub fn getPrice(currency: Currency, amount: i32) Price {
-    return switch (currency) {
-        .usd => .{ .usd = amount },
-        .eur => .{ .eur = amount },
-        .pln => .{ .pln = amount },
-        .mop => .{ .mop = amount },
-    };
-}
-```
-```js
-// tagged-union-price.js
-import { getPrice } from './tagged-union-price.zig';
-
-const price = getPrice('USD', 123);
-console.log(`USD = ${price.USD}`);
-console.log(`PLN = ${price.PLN}`);
-for (const [ key, value ] of Object.entries(price)) {
-  console.log(`${key} = ${value}`);
-}
-try {
-  price.PLN = 500;
-} catch (err) {
-  console.error(err);
-}
-console.log(Object.keys(price));
-
-// console output:
-// USD = 123
-// PLN = null
-// USD = 123
-// TypeError: Accessing property PLN when USD is active
-// [ 'USD' ]
-```
-
-Note how a tagged union only returns the active key when `Object.keys()` is called on it, while a
-bare union returns all possible keys. This means it's possible to perform a spread operation
-(`{ ...object }`) on a tagged union whiledoing the same on a bare union would always cause an
-error to be thrown.
 
 Functions with pointer arguments can accept certain JavaScript objects directly. The mapping goes as
 follows:
@@ -582,8 +489,70 @@ Unlike a slice pointer, a single pointer does not automatically create its own t
 accepts a `StructA` object. As the type is not public, the above example is actually unusable. We
 have no means to create a `StructA` or cast a memory buffer into one.
 
-## Creating objects
+## Calling methods
 
+As in Zig, a function attached to a struct can be invoked as an instance method if it first argument 
+is itself:
+
+```zig
+// person-print.zig
+const std = @import("std");
+
+const Gender = enum { Male, Female, Other };
+
+pub const Person = struct {
+    name: []const u8,
+    gender: Gender,
+    age: i32,
+    psycho: bool = false,
+
+    fn print(self: Person) void {
+        std.debug.print("Name: {s}\n", .{self.name});
+        std.debug.print("Gender: {s}\n", .{@tagName(self.gender)});
+        std.debug.print("Age: {d}\n", .{self.age});
+        std.debug.print("Psycho: {s}\n", .{if (self.psycho) "Yes" else "No"});
+    }
+};
+```
+```
+// person-print.js
+import { Person } from './person.zig';
+
+const person = new Person({ 
+  name: 'Amber',
+  gender: 'Female',
+  age: 37,
+  psycho: true,
+});
+person.print();
+
+// console output:
+// Name: Amber
+// Gender: Female
+// Age: 37,
+// Psycho: Yes
+```
+
+It call also be called like a regular function:
+
+```
+// person-print-not-method.js
+import { Person } from './person.zig';
+
+const person = new Person({ 
+  name: 'Amber',
+  gender: 'Female',
+  age: 37,
+  psycho: true,
+});
+Person.print(person);
+
+// console output:
+// Name: Amber
+// Gender: Female
+// Age: 37,
+// Psycho: Yes
+```
 
 ## Casting
 
@@ -613,6 +582,347 @@ console.log(view.getInt32(0, true), view.getInt32(4, true));
 
 Casting creates a object without allocating new memory for it. Note how the `new` operator is not used.
 
+## Working with pointers
+
+Pointers are represented in JavaScript by pointer objects. As in Zig, they provide one-level of 
+automatic dereferencing:
+
+```zig
+// struct-pointer.zig
+pub const StructA = struct {
+    dog: i32,
+    cat: i32,
+};
+
+pub const StructAPtr = *StructA;
+pub const StructAConstPtr = *const StructA;
+```
+```js
+// struct-pointer.js
+import { StructA, StructAPtr, StructAConstPtr } from './struct-pointer.zig';
+
+const object = new StructA({ dog: 123, cat: 456 });
+const ptr = new StructAPtr(object);
+console.log(ptr.dog, ptr.cat);
+ptr.dog = 1111;
+ptr.cat = 3333;
+const constPtr = new StructAConstPtr(object);
+console.log(constPtr.dog, constPtr.cat);
+try {
+  constPtr.dog = 0;
+} catch (err) {
+  console.error(err);
+}
+
+// console output:
+// 123 456
+// 1111 3333
+// [TODO]
+```
+
+You can get the object that a pointer points to by accessing its '*' property:
+
+```js
+// struct-pointer-deref.js
+import { StructA, StructAPtr } from './struct-pointer.zig';
+
+const object = new StructA({ dog: 123, cat: 456 });
+const ptr = new StructAPtr(object);
+const target = ptr['*'];
+
+console.log(object === target);
+
+// console output:
+// true
+```
+
+Assignment to the '*' property alters the pointer's target:
+
+```js
+// struct-pointer-assignment.js
+import { StructA, StructAPtr } from './struct-pointer.zig';
+
+const object = new StructA({ dog: 123, cat: 456 });
+const ptr = new StructAPtr(object);
+ptr['*'] = { dog: 1111, cat: 3333 };
+console.log(object.dog, object.cat);
+
+// console output:
+// 1111 3333
+```
+
+## Working with slices
+
+Zigar uses a pair of classes to handle slice pointers, one representing the pointer itself, and the 
+other representing the variable-length array it points to:
+
+```zig
+// slice-u16.zig
+pub const Uint16Slice = []u16;
+```
+```js
+// slice-u16.js
+import { Uint16Slice } from './slice-u16.zig';
+
+console.log(Uint16Slice.name, Uint16Slice.child);
+
+// console output:
+// []u16 [_]u16
+```
+
+`[_]u16` is not a real type in Zig. It's just a name used by Zigar. 
+
+While the constructor of a single pointer only accepts an object of the type it points to, the 
+constructor of a slice pointer also accepts slice initializers:
+
+```js
+// slice-u16-init.js
+import { Uint16Slice } from './slice-u16.zig';
+
+const slice1 = new Uint16Slice('Hello');
+// this performs the same action more verbosely
+const slice2 = new Uint16Slice(new Uint16Slice.child('Hello'));
+console.log(slice1.string, slice2.string);
+
+// console output:
+// Hello Hello
+```
+
+Assign to the '*' property of the slice point to alter the slice:
+
+```js
+// slice-u16-assignment.js
+import { Uint16Slice } from './slice-u16.zig';
+
+const slice = new Uint16Slice('Hello');
+slice['*'] = 'World';
+console.log(slice.string);
+try {
+  slice['*'] = 'World!!!';
+} catch (err) {
+  console.error(err);
+}
+
+// console output:
+// World
+// [TODO]
+```
+
+Note how you cannot change the length of a slice once it's been created. A new slice would need to 
+be created:
+
+```js
+// slice-u16-reinit.js
+import { Uint16Slice } from './slice-u16.zig';
+
+const slice = new Uint16Slice('Hello');
+const oldTarget = slice['*'];
+console.log(slice.string);
+slice.$ = 'World!!!';
+const newTarget = slice['*'];
+console.log(slice.string);
+console.log(oldTarget === newTarget);
+
+// console output:
+// Hello
+// World!!! 
+// false
+```
+
+The dollar sign property represents an object's value. Assignment to it reinitialize an object. We 
+need to use '$' here because the slice is in a standalone variable. When the slice is in a struct, 
+we can assign to it directly:
+
+```zig
+// struct-with-slice.zig
+pub const StructB = struct {
+    text: []16,
+};
+```
+```js
+// struct-with-slice.js
+import { StructB } from './struct-with-slice.zig';
+
+const object = new StructB({ text: 'Hello' });
+console.log(object.text.string);
+object.text = 'World';
+console.log(object.text.string);
+
+// console output:
+// Hello
+// World
+```
+
+Zigar uses [JavaScript proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy) 
+to enable the use of the bracket operator on arrays and slices. Proxy is notoriously slow. 
+In general, accessing the elements of a slice through its iterator is much more performant:
+
+```js
+// slice-u16-loop.js
+import { Uint16Slice } from './slice-u16.zig';
+
+const slice = new Uint16Slice('Привет!');
+
+console.time('iterator');
+for (let i = 0; i < 100000; i++) {
+  for (const cp of slice) {
+    if (i === 0) {
+      console.log(cp.toString(16));
+    }
+  }
+}
+console.timeEnd('iterator');
+
+console.time('bracket');
+for (let i = 0; i < 100000; i++) {
+  for (let j = 0; j < slice.length; j++) {
+    const cp = slice[j];
+    if (i === 0) {
+      console.log(cp.toString(16));
+    }
+  }
+}
+console.timeEnd('bracket');
+
+// console output:
+// [TODO]
+```
+
+If you need to access a large slice non-sequentially, you can use its `get` and `set` methods:
+
+```js
+// slice-u16-loop-reverse.js
+import { Uint16Slice } from './slice-u16.zig';
+
+const slice = new Uint16Slice('Привет!');
+
+console.time('get');
+const { length, get, set } = slice;
+for (let i = 0; i < 100000; i++) {
+  for (let j = length - 1; j >= 0; j--) {
+    const cp = get(j);
+    if (i === 0) {
+      console.log(cp.toString(16));
+    }
+  }
+}
+console.timeEnd('get');
+
+console.time('bracket');
+for (let i = 0; i < 100000; i++) {
+  for (let j = slice.length - 1; j >= 0; j--) {
+    const cp = slice[j];
+    if (i === 0) {
+      console.log(cp.toString(16));
+    }
+  }
+}
+console.timeEnd('bracket');
+
+// console output:
+// [TODO]
+```
+
+## Working with unions
+
+When a function returns a bare (or extern) union, only the active field can be accessed. An error
+would be thrown when runtime safety check is active:
+
+```zig
+// bare-union-price.zig
+const Currency = enum { EUR, PLN, MOP, USD };
+const Price = union {
+    USD: i32,
+    EUR: i32,
+    PLN: i32,
+    MOP: i32,
+};
+
+pub fn getPrice(currency: Currency, amount: i32) Price {
+    return switch (currency) {
+        .USD => .{ .USD = amount },
+        .EUR => .{ .EUR = amount },
+        .PLN => .{ .PLN = amount },
+        .MOP => .{ .MOP = amount },
+    };
+}
+```
+```js
+// bare-union-price.js
+import { getPrice } from './bare-union-price.zig';
+
+const price = getPrice('USD', 123);
+console.log(`USD = ${price.USD}`);
+try {
+  console.log(`PLN = ${price.PLN}`);
+} catch (err) {
+  console.error(err);
+}
+console.log(Object.keys(price));
+
+// console output:
+// USD = 123
+// TypeError: Accessing property pln when usd is active
+// [ 'USD', 'EUR', 'PLN', 'MOP' ]
+```
+
+Tagged union, on the other hand, allows you to read from an inactive field:
+
+```zig
+// tagged-union-price.zig
+const Currency = enum { usd, eur, pln, mop };
+const Price = union(Currency) {
+    usd: i32,
+    eur: i32,
+    pln: i32,
+    mop: i32,
+};
+
+pub fn getPrice(currency: Currency, amount: i32) Price {
+    return switch (currency) {
+        .usd => .{ .usd = amount },
+        .eur => .{ .eur = amount },
+        .pln => .{ .pln = amount },
+        .mop => .{ .mop = amount },
+    };
+}
+```
+```js
+// tagged-union-price.js
+import { getPrice } from './tagged-union-price.zig';
+
+const price = getPrice('USD', 123);
+console.log(`USD = ${price.USD}`);
+console.log(`PLN = ${price.PLN}`);
+for (const [ key, value ] of Object.entries(price)) {
+  console.log(`${key} = ${value}`);
+}
+try {
+  price.PLN = 500;
+} catch (err) {
+  console.error(err);
+}
+console.log(Object.keys(price));
+
+// console output:
+// USD = 123
+// PLN = null
+// USD = 123
+// TypeError: Accessing property PLN when USD is active
+// [ 'USD' ]
+```
+
+Note how a tagged union only returns the active key when `Object.keys()` is called on it, while a
+bare union returns all possible keys. This means it's possible to perform a spread operation
+(`{ ...object }`) on a tagged union whiledoing the same on a bare union would always cause an
+error to be thrown.
+
+## Special properties
+
+## Getting regular JavaScript objects
+
+## Stringifying to JSON
+
 ## Limitations
 
 * No support for function pointers
@@ -620,10 +930,11 @@ Casting creates a object without allocating new memory for it. Note how the `new
 * No support for functions with variadic arguments
 * No support for functions with comptime arguments
 * Pointers with no length or terminator are not accessible - Zigar only exposes memory when it knows the extent. Pointers that points to a single object (`*T`) or slices (`[]T`), and those with sentinel value (`[*:0]T`) are OK. Pointers that can pointer to arbitrary numbers of objects (`[*]T` and `[*c]T`) are not.
-* Pointers within bare and extern (i.e. C-compatible) unions are not accessible - Zigar simply cannot figure out if these pointers are pointing to valid memory regions. Pointers are only accessible inside tagged unions.
+* Pointers within bare and extern (i.e. C-compatible) unions are not accessible - Zigar simply cannot figure out whether these pointers are pointing to valid memory regions. Pointers are only accessible inside tagged unions.
 * Pointers cannot point to partially overlapping memory regions. Pointers pointing to an item within a slice must come after the slice when passed as arguments. E.g.:
 
 ```zig
+// overlapping-pointers.zig
 const Item = struct {
     id: u64,
     price: f64,
