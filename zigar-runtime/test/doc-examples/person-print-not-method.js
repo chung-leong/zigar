@@ -1,7 +1,7 @@
 // person-print-not-method.js
-import { Person } from './person.zig';
+import { Person } from './person-print.zig';
 
-const person = new Person({ 
+const person = new Person({
   name: 'Amber',
   gender: 'Female',
   age: 37,

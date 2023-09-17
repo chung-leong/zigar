@@ -491,7 +491,7 @@ have no means to create a `StructA` or cast a memory buffer into one.
 
 ## Calling methods
 
-As in Zig, a function attached to a struct can be invoked as an instance method if it first argument 
+As in Zig, a function attached to a struct can be invoked as an instance method if it first argument
 is itself:
 
 ```zig
@@ -506,7 +506,7 @@ pub const Person = struct {
     age: i32,
     psycho: bool = false,
 
-    fn print(self: Person) void {
+    pub fn print(self: Person) void {
         std.debug.print("Name: {s}\n", .{self.name});
         std.debug.print("Gender: {s}\n", .{@tagName(self.gender)});
         std.debug.print("Age: {d}\n", .{self.age});
@@ -516,9 +516,9 @@ pub const Person = struct {
 ```
 ```
 // person-print.js
-import { Person } from './person.zig';
+import { Person } from './person-print.zig';
 
-const person = new Person({ 
+const person = new Person({
   name: 'Amber',
   gender: 'Female',
   age: 37,
@@ -537,9 +537,9 @@ It call also be called like a regular function:
 
 ```
 // person-print-not-method.js
-import { Person } from './person.zig';
+import { Person } from './person-print.zig';
 
-const person = new Person({ 
+const person = new Person({
   name: 'Amber',
   gender: 'Female',
   age: 37,
@@ -584,7 +584,7 @@ Casting creates a object without allocating new memory for it. Note how the `new
 
 ## Working with pointers
 
-Pointers are represented in JavaScript by pointer objects. As in Zig, they provide one-level of 
+Pointers are represented in JavaScript by pointer objects. As in Zig, they provide one-level of
 automatic dereferencing:
 
 ```zig
@@ -653,7 +653,7 @@ console.log(object.dog, object.cat);
 
 ## Working with slices
 
-Zigar uses a pair of classes to handle slice pointers, one representing the pointer itself, and the 
+Zigar uses a pair of classes to handle slice pointers, one representing the pointer itself, and the
 other representing the variable-length array it points to:
 
 ```zig
@@ -664,15 +664,15 @@ pub const Uint16Slice = []u16;
 // slice-u16.js
 import { Uint16Slice } from './slice-u16.zig';
 
-console.log(Uint16Slice.name, Uint16Slice.child);
+console.log(Uint16Slice.name, Uint16Slice.child.name);
 
 // console output:
 // []u16 [_]u16
 ```
 
-`[_]u16` is not a real type in Zig. It's just a name used by Zigar. 
+`[_]u16` is not a real type in Zig. It's just a name used by Zigar.
 
-While the constructor of a single pointer only accepts an object of the type it points to, the 
+While the constructor of a single pointer only accepts an object of the type it points to, the
 constructor of a slice pointer also accepts slice initializers:
 
 ```js
@@ -705,10 +705,10 @@ try {
 
 // console output:
 // World
-// [TODO]
+// TypeError: [_]u16 has 10 bytes, received 16
 ```
 
-Note how you cannot change the length of a slice once it's been created. A new slice would need to 
+Note how you cannot change the length of a slice once it's been created. A new slice would need to
 be created:
 
 ```js
@@ -725,18 +725,18 @@ console.log(oldTarget === newTarget);
 
 // console output:
 // Hello
-// World!!! 
+// World!!!
 // false
 ```
 
-The dollar sign property represents an object's value. Assignment to it reinitialize an object. We 
-need to use '$' here because the slice is in a standalone variable. When the slice is in a struct, 
+The dollar sign property represents an object's value. Assignment to it reinitialize an object. We
+need to use '$' here because the slice is in a standalone variable. When the slice is in a struct,
 we can assign to it directly:
 
 ```zig
 // struct-with-slice.zig
 pub const StructB = struct {
-    text: []16,
+    text: []u16,
 };
 ```
 ```js
@@ -753,8 +753,8 @@ console.log(object.text.string);
 // World
 ```
 
-Zigar uses [JavaScript proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy) 
-to enable the use of the bracket operator on arrays and slices. Proxy is notoriously slow. 
+Zigar uses [JavaScript proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy)
+to enable the use of the bracket operator on arrays and slices. Proxy is notoriously slow.
 In general, accessing the elements of a slice through its iterator is much more performant:
 
 ```js
@@ -764,7 +764,7 @@ import { Uint16Slice } from './slice-u16.zig';
 const slice = new Uint16Slice('Привет!');
 
 console.time('iterator');
-for (let i = 0; i < 100000; i++) {
+for (let i = 0; i < 1000000; i++) {
   for (const cp of slice) {
     if (i === 0) {
       console.log(cp.toString(16));
@@ -774,7 +774,7 @@ for (let i = 0; i < 100000; i++) {
 console.timeEnd('iterator');
 
 console.time('bracket');
-for (let i = 0; i < 100000; i++) {
+for (let i = 0; i < 1000000; i++) {
   for (let j = 0; j < slice.length; j++) {
     const cp = slice[j];
     if (i === 0) {

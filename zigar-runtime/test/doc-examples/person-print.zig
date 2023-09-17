@@ -9,7 +9,7 @@ pub const Person = struct {
     age: i32,
     psycho: bool = false,
 
-    fn print(self: Person) void {
+    pub fn print(self: Person) void {
         std.debug.print("Name: {s}\n", .{self.name});
         std.debug.print("Gender: {s}\n", .{@tagName(self.gender)});
         std.debug.print("Age: {d}\n", .{self.age});

@@ -25,4 +25,19 @@ for (let i = 0; i < 100000; i++) {
 console.timeEnd('bracket');
 
 // console output:
-// [TODO]
+// 41f
+// 440
+// 438
+// 432
+// 435
+// 442
+// 21
+// iterator: 2.457s
+// 41f
+// 440
+// 438
+// 432
+// 435
+// 442
+// 21
+// bracket: 9.546s

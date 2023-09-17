@@ -3684,7 +3684,6 @@ R"=====(
     {
       // pass the argument object as the this/recv variable
       // while the slots and symbols are passed as arguments
-      console.log({ arg0: args[SLOTS][0] });
       const err = thunk.call(args, globalSlots, SLOTS, MEMORY, ZIG);
       // errors returned by exported Zig functions are normally written into the
       // argument object and get thrown when we access its retval property (a zig error union)

@@ -17,4 +17,4 @@ try {
 // console output:
 // 123 456
 // 1111 3333
-// [TODO]
+// TypeError: *const StructA cannot be modified

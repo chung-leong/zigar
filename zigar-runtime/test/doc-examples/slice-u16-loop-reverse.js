@@ -27,4 +27,19 @@ for (let i = 0; i < 100000; i++) {
 console.timeEnd('bracket');
 
 // console output:
-// [TODO]
+// 21
+// 442
+// 435
+// 432
+// 438
+// 440
+// 41f
+// get: 9.02ms
+// 21
+// 442
+// 435
+// 432
+// 438
+// 440
+// 41f
+// bracket: 539.534ms

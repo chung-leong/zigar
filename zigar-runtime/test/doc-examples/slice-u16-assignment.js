@@ -12,4 +12,4 @@ try {
 
 // console output:
 // World
-// [TODO]
+// TypeError: [_]u16 has 10 bytes, received 16
