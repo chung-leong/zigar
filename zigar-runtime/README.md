@@ -764,7 +764,7 @@ import { Uint16Slice } from './slice-u16.zig';
 const slice = new Uint16Slice('Привет!');
 
 console.time('iterator');
-for (let i = 0; i < 1000000; i++) {
+for (let i = 0; i < 100000; i++) {
   for (const cp of slice) {
     if (i === 0) {
       console.log(cp.toString(16));
@@ -774,7 +774,7 @@ for (let i = 0; i < 1000000; i++) {
 console.timeEnd('iterator');
 
 console.time('bracket');
-for (let i = 0; i < 1000000; i++) {
+for (let i = 0; i < 100000; i++) {
   for (let j = 0; j < slice.length; j++) {
     const cp = slice[j];
     if (i === 0) {
@@ -785,7 +785,22 @@ for (let i = 0; i < 1000000; i++) {
 console.timeEnd('bracket');
 
 // console output:
-// [TODO]
+// 41f
+// 440
+// 438
+// 432
+// 435
+// 442
+// 21
+// iterator: 103.059ms
+// 41f
+// 440
+// 438
+// 432
+// 435
+// 442
+// 21
+// bracket: 840.617ms
 ```
 
 If you need to access a large slice non-sequentially, you can use its `get` and `set` methods:
@@ -820,8 +835,25 @@ for (let i = 0; i < 100000; i++) {
 console.timeEnd('bracket');
 
 // console output:
-// [TODO]
+// 21
+// 442
+// 435
+// 432
+// 438
+// 440
+// 41f
+// get: 9.02ms
+// 21
+// 442
+// 435
+// 432
+// 438
+// 440
+// 41f
+// bracket: 539.534ms
 ```
+
+is fast.
 
 ## Working with unions
 
