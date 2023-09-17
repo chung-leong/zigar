@@ -32,7 +32,7 @@ console.timeEnd('bracket');
 // 435
 // 442
 // 21
-// iterator: 2.457s
+// iterator: 103.059ms
 // 41f
 // 440
 // 438
@@ -40,4 +40,5 @@ console.timeEnd('bracket');
 // 435
 // 442
 // 21
-// bracket: 9.546s
+// bracket: 840.617ms
+

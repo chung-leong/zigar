@@ -3,7 +3,7 @@ import { getMemoryCopier, restoreMemory } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
-import { MEMORY, SLOTS, PARENT, GETTER, SETTER, PROXY, COMPAT, CHILD_VIVIFICATOR, POINTER_VISITOR } from './symbol.js';
+import { MEMORY, SLOTS, PARENT, GETTER, SETTER, PROXY, COMPAT, CHILD_VIVIFICATOR, POINTER_VISITOR, SELF } from './symbol.js';
 import { copyPointer, getProxy } from './pointer.js';
 
 export function finalizeArray(s) {
@@ -154,7 +154,7 @@ export function addPointerVisitor(s) {
 }
 
 export function getArrayIterator() {
-  const self = this;
+  const self = this[SELF];
   const length = this.length;
   let index = 0;
   return {
@@ -173,7 +173,7 @@ export function getArrayIterator() {
 }
 
 export function getArrayEntriesIterator() {
-  const self = this;
+  const self = this[SELF];
   const length = this.length;
   let index = 0;
   return {
@@ -222,6 +222,8 @@ const proxyHandlers = {
             array[SETTER] = array.set.bind(array);
           }
           return array[SETTER];
+        case SELF:
+          return array;
         default:
           return array[name];
       }

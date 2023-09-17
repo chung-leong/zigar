@@ -14,6 +14,6 @@ export const SETTER = Symbol('setter');
 export const LENGTH = Symbol('length');
 export const PROXY = Symbol('proxy');
 export const COMPAT = Symbol('compat');
-
+export const SELF = Symbol('self');
 export const CHILD_VIVIFICATOR = Symbol('childVivificator');
 export const POINTER_VISITOR = Symbol('pointerVisitor');

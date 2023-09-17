@@ -17,7 +17,7 @@ R"=====(
   const LENGTH = Symbol('length');
   const PROXY = Symbol('proxy');
   const COMPAT = Symbol('compat');
-
+  const SELF = Symbol('self');
   const CHILD_VIVIFICATOR = Symbol('childVivificator');
   const POINTER_VISITOR = Symbol('pointerVisitor');
 
@@ -1641,7 +1641,7 @@ R"=====(
   }
 
   function getArrayIterator() {
-    const self = this;
+    const self = this[SELF];
     const length = this.length;
     let index = 0;
     return {
@@ -1660,7 +1660,7 @@ R"=====(
   }
 
   function getArrayEntriesIterator() {
-    const self = this;
+    const self = this[SELF];
     const length = this.length;
     let index = 0;
     return {
@@ -1709,6 +1709,8 @@ R"=====(
               array[SETTER] = array.set.bind(array);
             }
             return array[SETTER];
+          case SELF:
+            return array;
           default:
             return array[name];
         }
