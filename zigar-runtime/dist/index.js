@@ -279,7 +279,7 @@ function throwBufferSizeMismatch(structure, dv, target = null) {
   if (type === StructureType.Slice && !target) {
     throw new TypeError(`${name} has elements that are ${size} byte${s} in length, received ${actual}`);
   } else {
-    const length = (type === StructureType.Slice) ? target.length : size;
+    const length = (type === StructureType.Slice) ? target.length * size : size;
     throw new TypeError(`${name} has ${length} byte${s}, received ${actual}`);
   }
 }
