@@ -759,6 +759,15 @@ export function addTests(importModule, options) {
       expect(pointers[0][SLOTS][0]).to.be.null;
       expect(pointers[1][SLOTS][0]).to.be.null;
     })
+    it('should not export function with illegal name', async function() {
+      this.timeout(60000);
+      const { default: module } = await importModule(resolve('./zig-samples/basic/function-with-illegal-name.zig'));
+      const lines = await capture(() => {
+        const name = ' \nthis is a totally weird function name!! :-)';
+        module[name]();
+      })
+      expect(lines[0]).to.equal('Hello world');
+    })
   })
   describe('Error handling', function() {
     beforeEach(function() {

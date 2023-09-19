@@ -141,7 +141,9 @@ export function generateCode(structures, params) {
   add('\n// export functions, types, and constants');
   const exportables = [];
   for (const method of root.static.methods) {
-    exportables.push(method.name);
+    if (/^[$\w]+$/.test(method.name)) {
+      exportables.push(method.name);
+    }
   }
   for (const member of root.static.members) {
     // only read-only properties are exportable
@@ -153,7 +155,7 @@ export function generateCode(structures, params) {
         readOnly = true;
       }
     }
-    if (readOnly) {
+    if (readOnly && /^[$\w]+$/.test(method.name)) {
       exportables.push(member.name);
     }
   }

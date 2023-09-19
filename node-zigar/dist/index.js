@@ -29,9 +29,11 @@ async function loadZig(url) {
   const descriptors = Object.getOwnPropertyDescriptors(module);
   const names = [];
   for (const [ name, { get, set } ] of Object.entries(descriptors)) {
-    // any prop with a setter needs to be involved through the object
-    if (!set) {
-      names.push(name);
+    if (/^[$\w]+$/.test(name)) {
+      // any prop with a setter needs to be involved through the object
+      if (!set) {
+        names.push(name);
+      }
     }
   }
   // temporarily save the object in global
@@ -75,8 +77,8 @@ export async function load(url, context, nextLoad) {
 // called by Node 14x
 export async function getFormat(url, context, defaultGetFormat) {
   if (isZig(url)) {
-    return { 
-      format: 'module' 
+    return {
+      format: 'module'
     };
   }
   return defaultGetFormat(url, context, defaultGetFormat);
