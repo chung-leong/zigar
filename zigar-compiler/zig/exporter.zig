@@ -91,7 +91,7 @@ test "getObjectSlot" {
 
 fn getCString(comptime s: []const u8) [*:0]const u8 {
     comptime var cs: [s.len + 1]u8 = undefined;
-    inline for (s, 0..) |c, index| {
+    for (s, 0..) |c, index| {
         cs[index] = c;
     }
     cs[s.len] = 0;
