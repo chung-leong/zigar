@@ -10,7 +10,7 @@ import { copyPointer } from './pointer.js';
 
 export function finalizeStruct(s) {
   const {
-    size,
+    byteSize,
     instance: {
       members,
       template,
@@ -42,7 +42,7 @@ export function finalizeStruct(s) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = new DataView(new ArrayBuffer(size));
+      dv = new DataView(new ArrayBuffer(byteSize));
     } else {
       self = Object.create(constructor.prototype);
       dv = getDataView(s, arg);
@@ -63,7 +63,7 @@ export function finalizeStruct(s) {
       return self;
     }
   } : Object.create(null);
-  const copy = getMemoryCopier(size);
+  const copy = getMemoryCopier(byteSize);
   const specialKeys = getSpecialKeys(s);
   const requiredKeys = members.filter(m => m.isRequired).map(m => m.name);
   const initializer = (constructible) ? function(arg) {

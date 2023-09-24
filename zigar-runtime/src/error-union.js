@@ -9,7 +9,7 @@ import { addChildVivificators, addPointerVisitor } from './struct.js';
 
 export function finalizeErrorUnion(s) {
   const {
-    size,
+    byteSize,
     instance: { members },
     options,
     hasPointer,
@@ -23,7 +23,7 @@ export function finalizeErrorUnion(s) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = new DataView(new ArrayBuffer(size));
+      dv = new DataView(new ArrayBuffer(byteSize));
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
@@ -38,7 +38,7 @@ export function finalizeErrorUnion(s) {
       return self;
     }
   };
-  const copy = getMemoryCopier(size);
+  const copy = getMemoryCopier(byteSize);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       copy(this[MEMORY], arg[MEMORY]);
@@ -51,7 +51,7 @@ export function finalizeErrorUnion(s) {
       this.$ = arg;
     }
   };
-  const { get, set, check } = getErrorUnionAccessors(members, size, options);
+  const { get, set, check } = getErrorUnionAccessors(members, byteSize, options);
   Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
   if (hasObject) {
     addChildVivificators(s);
@@ -64,12 +64,12 @@ export function finalizeErrorUnion(s) {
   return constructor;
 }
 
-export function getErrorUnionAccessors(members, size, options) {
+export function getErrorUnionAccessors(members, byteSize, options) {
   const { get: getValue, set: setValue } = getAccessors(members[0], options);
   const { get: getError, set: setError } = getAccessors(members[1], options);
   const { structure: errorStructure } = members[1];
   const { constructor: ErrorSet } = errorStructure;
-  const reset = getMemoryResetter(size)
+  const reset = getMemoryResetter(byteSize)
   return {
     get: function() {
       const errorNumber = getError.call(this);

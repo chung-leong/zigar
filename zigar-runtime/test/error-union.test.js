@@ -56,7 +56,7 @@ describe('Error union functions', function() {
       const structure = beginStructure({
         type: StructureType.ErrorUnion,
         name: 'Hello',
-        size: 10,
+        byteSize: 10,
       });
       attachMember(structure, {
         name: 'value',
@@ -97,7 +97,7 @@ describe('Error union functions', function() {
       const structure = beginStructure({
         type: StructureType.ErrorUnion,
         name: 'Hello',
-        size: 10,
+        byteSize: 10,
       });
       attachMember(structure, {
         name: 'value',
@@ -137,7 +137,7 @@ describe('Error union functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Animal',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structStructure, {
         name: 'dog',
@@ -157,7 +157,7 @@ describe('Error union functions', function() {
       const structure = beginStructure({
         type: StructureType.ErrorUnion,
         name: '!Animal',
-        size: 10,
+        byteSize: 10,
       });
       attachMember(structure, {
         name: 'value',
@@ -203,7 +203,7 @@ describe('Error union functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Int,
@@ -215,7 +215,7 @@ describe('Error union functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(ptrStructure, {
@@ -230,7 +230,7 @@ describe('Error union functions', function() {
       const structure = beginStructure({
         type: StructureType.ErrorUnion,
         name: 'Hello',
-        size: 16,
+        byteSize: 16,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -277,7 +277,7 @@ describe('Error union functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]Uint8',
-        size: 1,
+        byteSize: 1,
       })
       attachMember(sliceStructure, {
         type: MemberType.Uint,
@@ -289,7 +289,7 @@ describe('Error union functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '[]Uint8',
-        size: 16,
+        byteSize: 16,
         hasPointer: true,
       });
       attachMember(ptrStructure, {
@@ -304,7 +304,7 @@ describe('Error union functions', function() {
       const structure = beginStructure({
         type: StructureType.ErrorUnion,
         name: 'Hello',
-        size: 18,
+        byteSize: 18,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -351,7 +351,7 @@ describe('Error union functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -363,7 +363,7 @@ describe('Error union functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(ptrStructure, {
@@ -378,7 +378,7 @@ describe('Error union functions', function() {
       const structure = beginStructure({
         type: StructureType.ErrorUnion,
         name: 'Hello',
-        size: 16,
+        byteSize: 16,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -423,7 +423,7 @@ describe('Error union functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -435,7 +435,7 @@ describe('Error union functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(ptrStructure, {
@@ -450,7 +450,7 @@ describe('Error union functions', function() {
       const structure = beginStructure({
         type: StructureType.ErrorUnion,
         name: 'Hello',
-        size: 16,
+        byteSize: 16,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -495,7 +495,7 @@ describe('Error union functions', function() {
       const structure = beginStructure({
         type: StructureType.ErrorUnion,
         name: 'Hello',
-        size: 10,
+        byteSize: 10,
       });
       attachMember(structure, {
         name: 'value',
@@ -539,7 +539,7 @@ describe('Error union functions', function() {
       const structure = beginStructure({
         type: StructureType.ErrorUnion,
         name: 'Hello',
-        size: 10,
+        byteSize: 10,
       });
       attachMember(structure, {
         name: 'value',

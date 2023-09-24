@@ -840,6 +840,24 @@ describe('Member functions', function() {
       const name = getMemberFeature(member);
       expect(name).to.equal('useIntEx');
     })
+    it('should return name of function for handling standard uint', function() {
+      const member = {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useUint');
+    })
+    it('should return name of function for handling unaligned uint', function() {
+      const member = {
+        type: MemberType.Uint,
+        bitOffset: 2,
+        bitSize: 32,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useUintEx');
+    })
     it('should return name of function for handling non-standard int', function() {
       const member = {
         type: MemberType.Int,
@@ -848,6 +866,15 @@ describe('Member functions', function() {
       };
       const name = getMemberFeature(member);
       expect(name).to.equal('useIntEx');
+    })
+    it('should return name of function for handling non-standard uint', function() {
+      const member = {
+        type: MemberType.Uint,
+        bitSize: 80,
+        byteSize: 16,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useUintEx');
     })
     it('should return name of function for handling standard float', function() {
       const member = {

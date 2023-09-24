@@ -17,7 +17,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Primitive,
         name: "i32",
-        size: 4,
+        byteSize: 4,
         isConst: false,
         hasPointer: false,
         instance: {
@@ -48,7 +48,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Primitive,
         name: "i31",
-        size: 4,
+        byteSize: 4,
         isConst: false,
         hasPointer: false,
         instance: {
@@ -80,7 +80,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Primitive,
         name: "f32",
-        size: 4,
+        byteSize: 4,
         isConst: false,
         hasPointer: false,
         instance: {
@@ -111,7 +111,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Primitive,
         name: "f80",
-        size: 16,
+        byteSize: 16,
         isConst: false,
         hasPointer: false,
         instance: {
@@ -143,7 +143,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Primitive,
         name: "bool",
-        size: 1,
+        byteSize: 1,
         isConst: false,
         hasPointer: false,
         instance: {
@@ -174,7 +174,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Struct,
         name: "flags",
-        size: 1,
+        byteSize: 1,
         isConst: false,
         hasPointer: false,
         instance: {
@@ -212,7 +212,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Enumeration,
         name: "enum {}",
-        size: 2,
+        byteSize: 2,
         hasPointer: false,
         instance: {
           members: [],
@@ -230,7 +230,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Primitive,
         name: "enumItem",
-        size: 2,
+        byteSize: 2,
         isConst: false,
         hasPointer: false,
         instance: {
@@ -263,7 +263,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Enumeration,
         name: "enum {}",
-        size: 2,
+        byteSize: 2,
         hasPointer: false,
         instance: {
           members: [],
@@ -281,7 +281,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Primitive,
         name: "enumItem",
-        size: 2,
+        byteSize: 2,
         isConst: false,
         hasPointer: false,
         instance: {
@@ -313,7 +313,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Enumeration,
         name: "enum {}",
-        size: 2,
+        byteSize: 2,
         hasPointer: false,
         instance: {
           members: [],
@@ -331,7 +331,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Struct,
         name: "package",
-        size: 0,
+        byteSize: 0,
         isConst: false,
         hasPointer: false,
         instance: {
@@ -362,7 +362,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Pointer,
         name: "*int32",
-        size: 0,
+        byteSize: 0,
         isConst: true,
         hasPointer: true,
         instance: {
@@ -389,7 +389,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Struct,
         name: "package",
-        size: 0,
+        byteSize: 0,
         hasPointer: false,
         instance: {
           members: [],
@@ -426,7 +426,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Pointer,
         name: "hello",
-        size: 0,
+        byteSize: 0,
         hasPointer: true,
         instance: {
           members: [
@@ -451,7 +451,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Struct,
         name: "package",
-        size: 0,
+        byteSize: 0,
         hasPointer: false,
         instance: {
           members: [],
@@ -488,7 +488,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Struct,
         name: "struct {}",
-        size: 4,
+        byteSize: 4,
         hasPointer: true,
         instance: {
           members: [
@@ -521,7 +521,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Struct,
         name: "package",
-        size: 0,
+        byteSize: 0,
         hasPointer: false,
         instance: {
           members: [
@@ -551,7 +551,7 @@ describe('Code generation', function() {
         constructor: null,
         type: StructureType.Primitive,
         name: "i32",
-        size: 4,
+        byteSize: 4,
         hasPointer: false,
         instance: {
           members: [
@@ -584,7 +584,7 @@ describe('Code generation', function() {
           constructor: null,
           type: StructureType.Primitive,
           name: `i${bitSize}`,
-          size: 8,
+          byteSize: 8,
           isConst: false,
           hasPointer: false,
           instance: {

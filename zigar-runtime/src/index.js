@@ -559,8 +559,8 @@ export function finalizeStructures(structures) {
       const { array, offset, length } = placeholder.memory;
       dv = new DataView(array.buffer, offset, length);
     } else {
-      const { size } = placeholder.structure;
-      dv = new DataView(new ArrayBuffer(size));
+      const { byteSize } = placeholder.structure;
+      dv = new DataView(new ArrayBuffer(byteSize));
     }
     const { constructor } = placeholder.structure;
     const object = constructor.call(ZIG, dv);

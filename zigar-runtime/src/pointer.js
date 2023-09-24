@@ -15,7 +15,7 @@ import {
 
 export function finalizePointer(s) {
   const {
-    size,
+    byteSize,
     instance: {
       members: [ member ],
     },
@@ -28,8 +28,8 @@ export function finalizePointer(s) {
   const { structure: targetStructure } = member;
   const isTargetSlice = (targetStructure.type === StructureType.Slice);
   const isTargetPointer = (targetStructure.type === StructureType.Pointer);
-  const addressSize = (isTargetSlice) ? size / 2 : size;
-  const usizeStructure = { name: 'usize', size: addressSize };
+  const addressSize = (isTargetSlice) ? byteSize / 2 : byteSize;
+  const usizeStructure = { name: 'usize', byteSize: addressSize };
   const setAddress = getAccessors({
     type: MemberType.Uint,
     bitOffset: 0,
@@ -54,7 +54,7 @@ export function finalizePointer(s) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = new DataView(new ArrayBuffer(size));
+      dv = new DataView(new ArrayBuffer(byteSize));
     } else {
       self = Object.create(constructor.prototype);
       if (calledFromZig || calledFromParent) {

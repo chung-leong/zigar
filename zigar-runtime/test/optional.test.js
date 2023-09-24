@@ -45,7 +45,7 @@ describe('Optional functions', function() {
       const structure = beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
-        size: 18,
+        byteSize: 18,
       });
       attachMember(structure, {
         name: 'value',
@@ -76,7 +76,7 @@ describe('Optional functions', function() {
       const structure = beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
-        size: 18,
+        byteSize: 18,
       });
       attachMember(structure, {
         name: 'value',
@@ -102,7 +102,7 @@ describe('Optional functions', function() {
       const structure = beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
-        size: 18,
+        byteSize: 18,
       });
       attachMember(structure, {
         name: 'value',
@@ -131,7 +131,7 @@ describe('Optional functions', function() {
       const structure = beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
-        size: 18,
+        byteSize: 18,
       });
       attachMember(structure, {
         name: 'value',
@@ -160,7 +160,7 @@ describe('Optional functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Animal',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structStructure, {
         name: 'dog',
@@ -180,7 +180,7 @@ describe('Optional functions', function() {
       const structure = beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
-        size: 18,
+        byteSize: 18,
       });
       attachMember(structure, {
         name: 'value',
@@ -210,7 +210,7 @@ describe('Optional functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -222,7 +222,7 @@ describe('Optional functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(ptrStructure, {
@@ -237,7 +237,7 @@ describe('Optional functions', function() {
       const structure = beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -268,7 +268,7 @@ describe('Optional functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]Uint8',
-        size: 1,
+        byteSize: 1,
       })
       attachMember(sliceStructure, {
         type: MemberType.Uint,
@@ -280,7 +280,7 @@ describe('Optional functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '[]Uint8',
-        size: 16,
+        byteSize: 16,
         hasPointer: true,
       });
       attachMember(ptrStructure, {
@@ -295,7 +295,7 @@ describe('Optional functions', function() {
       const structure = beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
-        size: 16,
+        byteSize: 16,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -329,7 +329,7 @@ describe('Optional functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]Uint8',
-        size: 1,
+        byteSize: 1,
       })
       attachMember(sliceStructure, {
         type: MemberType.Uint,
@@ -341,7 +341,7 @@ describe('Optional functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '[]Uint8',
-        size: 16,
+        byteSize: 16,
         hasPointer: true,
       });
       attachMember(ptrStructure, {
@@ -356,7 +356,7 @@ describe('Optional functions', function() {
       const structure = beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
-        size: 16,
+        byteSize: 16,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -387,7 +387,7 @@ describe('Optional functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -399,7 +399,7 @@ describe('Optional functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true
       });
       attachMember(ptrStructure, {
@@ -414,7 +414,7 @@ describe('Optional functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8 * 2,
+        byteSize: 8 * 2,
         hasPointer: true
       });
       attachMember(structStructure, {
@@ -455,22 +455,22 @@ describe('Optional functions', function() {
       const structure = beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
-        size: structStructure.size + 32,
+        byteSize: structStructure.byteSize + 32,
         hasPointer: true,
       });
       attachMember(structure, {
         name: 'value',
         type: MemberType.Object,
         bitOffset: 0,
-        bitSize: structStructure.size * 8,
-        byteSize: structStructure.size,
+        bitSize: structStructure.byteSize * 8,
+        byteSize: structStructure.byteSize,
         slot: 0,
         structure: structStructure,
       });
       attachMember(structure, {
         name: 'present',
         type: MemberType.Bool,
-        bitOffset: structStructure.size * 8,
+        bitOffset: structStructure.byteSize * 8,
         bitSize: 1,
         byteSize: 8,
         structure: {},
@@ -486,7 +486,7 @@ describe('Optional functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -498,7 +498,7 @@ describe('Optional functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(ptrStructure, {
@@ -513,7 +513,8 @@ describe('Optional functions', function() {
       const arrayStructure = beginStructure({
         type: StructureType.Array,
         name: 'Hello',
-        size: 8 * 4,
+        length: 4,
+        byteSize: 8 * 4,
         hasPointer: true,
       });
       attachMember(arrayStructure, {
@@ -526,22 +527,22 @@ describe('Optional functions', function() {
       const structure = beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
-        size: arrayStructure.size + 32,
+        byteSize: arrayStructure.byteSize + 32,
         hasPointer: true,
       });
       attachMember(structure, {
         name: 'value',
         type: MemberType.Object,
         bitOffset: 0,
-        bitSize: arrayStructure.size * 8,
-        byteSize: arrayStructure.size,
+        bitSize: arrayStructure.byteSize * 8,
+        byteSize: arrayStructure.byteSize,
         slot: 0,
         structure: arrayStructure,
       });
       attachMember(structure, {
         name: 'present',
         type: MemberType.Bool,
-        bitOffset: arrayStructure.size * 8,
+        bitOffset: arrayStructure.byteSize * 8,
         bitSize: 1,
         byteSize: 8,
         structure: {},

@@ -46,7 +46,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.ExternUnion,
         name: 'Hello',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(structure, {
         name: 'dog',
@@ -89,7 +89,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.ExternUnion,
         name: 'Hello',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(structure, {
         name: 'dog',
@@ -114,7 +114,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -169,7 +169,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -212,7 +212,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -250,7 +250,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
-        size: 6,
+        byteSize: 6,
       });
       attachMember(structure, {
         name: 'dog',
@@ -288,7 +288,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
-        size: 6,
+        byteSize: 6,
       });
       attachMember(structure, {
         name: 'dog',
@@ -326,7 +326,7 @@ describe('Union functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Aniaml',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structStructure, {
         name: 'dog',
@@ -348,14 +348,14 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
-        size: structStructure.size * 8 + 32,
+        byteSize: structStructure.byteSize * 8 + 32,
       });
       attachMember(structure, {
         name: 'pets',
         type: MemberType.Object,
-        bitSize: structStructure.size * 8,
+        bitSize: structStructure.byteSize * 8,
         bitOffset: 0,
-        byteSize: structStructure.size,
+        byteSize: structStructure.byteSize,
         slot: 1,
         structure: structStructure,
       });
@@ -371,7 +371,7 @@ describe('Union functions', function() {
         name: 'selector',
         type: MemberType.Uint,
         bitSize: 16,
-        bitOffset: structStructure.size * 8,
+        bitOffset: structStructure.byteSize * 8,
         byteSize: 2,
         structure: {},
       });
@@ -386,7 +386,7 @@ describe('Union functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -398,7 +398,7 @@ describe('Union functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(ptrStructure, {
@@ -413,7 +413,7 @@ describe('Union functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'SomeStruct',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structStructure, {
@@ -429,7 +429,8 @@ describe('Union functions', function() {
       const arrayStructure = beginStructure({
         type: StructureType.Array,
         name: '[4]*Int32',
-        size: 8 * 4,
+        length: 4,
+        byteSize: 8 * 4,
         hasPointer: true,
       });
       attachMember(arrayStructure, {
@@ -442,7 +443,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
-        size: 8 * 4,
+        byteSize: 8 * 4,
         hasPointer: false,
       });
       attachMember(structure, {
@@ -526,7 +527,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.TaggedUnion,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -606,7 +607,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.TaggedUnion,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -642,7 +643,7 @@ describe('Union functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -655,7 +656,7 @@ describe('Union functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(ptrStructure, {
@@ -670,7 +671,7 @@ describe('Union functions', function() {
       const enumStructure = beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',
-        size: 2,
+        byteSize: 2,
       });
       attachMember(enumStructure, {
         name: 'pointer',
@@ -697,7 +698,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.TaggedUnion,
         name: 'Hello',
-        size: 10,
+        byteSize: 10,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -736,7 +737,7 @@ describe('Union functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -749,7 +750,7 @@ describe('Union functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(ptrStructure, {
@@ -764,7 +765,7 @@ describe('Union functions', function() {
       const enumStructure = beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',
-        size: 2,
+        byteSize: 2,
       });
       attachMember(enumStructure, {
         name: 'pointer',
@@ -791,7 +792,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.TaggedUnion,
         name: 'Hello',
-        size: 10,
+        byteSize: 10,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -830,7 +831,7 @@ describe('Union functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -842,7 +843,7 @@ describe('Union functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(ptrStructure, {
@@ -857,7 +858,7 @@ describe('Union functions', function() {
       const enumStructure = beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',
-        size: 2,
+        byteSize: 2,
       });
       attachMember(enumStructure, {
         name: 'pointer',
@@ -884,7 +885,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.TaggedUnion,
         name: 'Hello',
-        size: 10,
+        byteSize: 10,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -922,7 +923,7 @@ describe('Union functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -934,7 +935,7 @@ describe('Union functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(ptrStructure, {
@@ -949,7 +950,7 @@ describe('Union functions', function() {
       const enumStructure = beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',
-        size: 2,
+        byteSize: 2,
       });
       attachMember(enumStructure, {
         name: 'pointer',
@@ -976,7 +977,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.TaggedUnion,
         name: 'Hello',
-        size: 10,
+        byteSize: 10,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -1023,7 +1024,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -1061,7 +1062,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -1099,7 +1100,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -1135,7 +1136,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -1170,7 +1171,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -1207,7 +1208,7 @@ describe('Union functions', function() {
       const structure = beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',

@@ -112,7 +112,7 @@ export function getDataViewFloatAccessorEx(access, member) {
 }
 
 export function getDataView(structure, arg) {
-  const { type, size, typedArray } = structure;
+  const { type, byteSize, typedArray } = structure;
   let dv;
   // not using instanceof just in case we're getting objects created in other contexts
   const tag = arg?.[Symbol.toStringTag];
@@ -129,7 +129,7 @@ export function getDataView(structure, arg) {
       const { byteSize: elementSize, structure: { constructor: Child } } = member;
       const number = findElements(arg, Child);
       if (number !== undefined) {
-        if (type === StructureType.Slice || number * elementSize === size) {
+        if (type === StructureType.Slice || number * elementSize === byteSize) {
           return memory;
         } else {
           throwArrayLengthMismatch(structure, null, arg);
@@ -144,8 +144,8 @@ export function getDataView(structure, arg) {
 }
 
 export function checkDataViewSize(structure, dv) {
-  const { type, size } = structure;
-  if (type === StructureType.Slice ? dv.byteLength % size !== 0 : dv.byteLength !== size) {
+  const { type, byteSize } = structure;
+  if (type === StructureType.Slice ? dv.byteLength % byteSize !== 0 : dv.byteLength !== byteSize) {
     throwBufferSizeMismatch(structure, dv);
   }
 }

@@ -37,7 +37,7 @@ describe('Static variable functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Int,
@@ -49,7 +49,7 @@ describe('Static variable functions', function() {
       const intPtrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         isConst: false,
         hasPointer: true,
       });
@@ -65,7 +65,7 @@ describe('Static variable functions', function() {
       const constIntPtrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         isConst: true,
         hasPointer: true,
       });
@@ -81,7 +81,7 @@ describe('Static variable functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8 * 2,
+        byteSize: 8 * 2,
       });
       attachMember(structure, {
         name: 'dog',
@@ -143,7 +143,7 @@ describe('Static variable functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Int,
@@ -155,7 +155,7 @@ describe('Static variable functions', function() {
       const intPtrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(intPtrStructure, {

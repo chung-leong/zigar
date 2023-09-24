@@ -4,6 +4,7 @@ import {
   MemberType,
   useFloatEx,
   useIntEx,
+  useUintEx,
 } from '../src/member.js';
 import {
   StructureType,
@@ -20,13 +21,15 @@ describe('Vector functions', function() {
       useVector();
       useArray();
       useIntEx();
+      useUintEx();
       useFloatEx();
     })
     it('should define structure for holding an int vector', function() {
       const structure = beginStructure({
         type: StructureType.Vector,
         name: 'Hello',
-        size: 4 * 4,
+        length: 4,
+        byteSize: 4 * 4,
       });
       const constructor = function() {};
       attachMember(structure, {
@@ -51,7 +54,8 @@ describe('Vector functions', function() {
       const structure = beginStructure({
         type: StructureType.Vector,
         name: 'Hello',
-        size: 4 * 4,
+        length: 4,
+        byteSize: 4 * 4,
       });
       const constructor = function() {};
       attachMember(structure, {
@@ -67,7 +71,8 @@ describe('Vector functions', function() {
       const structure = beginStructure({
         type: StructureType.Vector,
         name: 'Hello',
-        size: 4 * 8,
+        length: 8,
+        byteSize: 4 * 8,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -90,7 +95,8 @@ describe('Vector functions', function() {
       const structure = beginStructure({
         type: StructureType.Vector,
         name: 'Hello',
-        size: 4 * 8,
+        length: 8,
+        byteSize: 4 * 8,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -116,7 +122,8 @@ describe('Vector functions', function() {
       const structure = beginStructure({
         type: StructureType.Vector,
         name: 'Hello',
-        size: 4 * 4,
+        length: 4,
+        byteSize: 4 * 4,
       });
       const constructor = function() {};
       attachMember(structure, {
@@ -137,7 +144,8 @@ describe('Vector functions', function() {
       const structure = beginStructure({
         type: StructureType.Vector,
         name: 'Hello',
-        size: 4 * 4,
+        length: 4,
+        byteSize: 4 * 4,
       });
       attachMember(structure, {
         type: MemberType.Float,
@@ -160,7 +168,8 @@ describe('Vector functions', function() {
       const structure = beginStructure({
         type: StructureType.Vector,
         name: 'Hello',
-        size: 8 * 3,
+        length: 3,
+        byteSize: 8 * 3,
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -177,7 +186,8 @@ describe('Vector functions', function() {
       const structure = beginStructure({
         type: StructureType.Vector,
         name: 'Hello',
-        size: 16 * 3,
+        length: 3,
+        byteSize: 16 * 3,
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -194,7 +204,8 @@ describe('Vector functions', function() {
       const structure = beginStructure({
         type: StructureType.Vector,
         name: 'Hello',
-        size: 4 * 4,
+        length: 4,
+        byteSize: 4 * 4,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -215,7 +226,8 @@ describe('Vector functions', function() {
       const structure = beginStructure({
         type: StructureType.Vector,
         name: 'Hello',
-        size: 4 * 4,
+        length: 4,
+        byteSize: 4 * 4,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -232,7 +244,8 @@ describe('Vector functions', function() {
       const structure = beginStructure({
         type: StructureType.Vector,
         name: 'Hello',
-        size: 4 * 4,
+        length: 4,
+        byteSize: 4 * 4,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -255,7 +268,8 @@ describe('Vector functions', function() {
       const vectorStructure = beginStructure({
         type: StructureType.Vector,
         name: 'Vector',
-        size: 4 * 4,
+        length: 4,
+        byteSize: 4 * 4,
       });
       attachMember(vectorStructure, {
         type: MemberType.Uint,
@@ -267,7 +281,8 @@ describe('Vector functions', function() {
       const arrayStructure = beginStructure({
         type: StructureType.Array,
         name: 'Array',
-        size: 4 * 4,
+        length: 4,
+        byteSize: 4 * 4,
       });
       attachMember(arrayStructure, {
         type: MemberType.Uint,
@@ -284,7 +299,8 @@ describe('Vector functions', function() {
       const structure = beginStructure({
         type: StructureType.Vector,
         name: 'Hello',
-        size: 4 * 4,
+        length: 4,
+        byteSize: 4 * 4,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -303,7 +319,8 @@ describe('Vector functions', function() {
       const structure = beginStructure({
         type: StructureType.Vector,
         name: 'Hello',
-        size: 4 * 4,
+        length: 4,
+        byteSize: 4 * 4,
       });
       attachMember(structure, {
         type: MemberType.Uint,

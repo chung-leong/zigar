@@ -58,8 +58,8 @@ export function getSpecialKeys(s) {
 }
 
 export function getDataViewAccessors(structure) {
-  const { type, size, sentinel } = structure;
-  const copy = getMemoryCopier(size, type === StructureType.Slice);
+  const { type, byteSize, sentinel } = structure;
+  const copy = getMemoryCopier(byteSize, type === StructureType.Slice);
   return {
     get() {
       restoreMemory.call(this);

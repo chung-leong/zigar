@@ -34,7 +34,7 @@ describe('ArgStruct functions', function() {
       const structure = beginStructure({
         type: StructureType.ArgStruct,
         name: 'Hello',
-        size: 4 * 3,
+        byteSize: 4 * 3,
       });
       attachMember(structure, {
         name: 'cat',
@@ -69,7 +69,7 @@ describe('ArgStruct functions', function() {
       const childStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 4 * 2,
+        byteSize: 4 * 2,
       });
       attachMember(childStructure, {
         name: 'dog',
@@ -89,14 +89,14 @@ describe('ArgStruct functions', function() {
       const structure = beginStructure({
         type: StructureType.ArgStruct,
         name: 'Hello',
-        size: childStructure.size + 4 + 4,
+        byteSize: childStructure.byteSize + 4 + 4,
       });
       attachMember(structure, {
         name: 'pet',
         type: MemberType.Object,
-        bitSize: childStructure.size * 8,
+        bitSize: childStructure.byteSize * 8,
         bitOffset: 0,
-        byteSize: childStructure.size,
+        byteSize: childStructure.byteSize,
         slot: 0,
         structure: childStructure,
       });
@@ -104,7 +104,7 @@ describe('ArgStruct functions', function() {
         name: 'number',
         type: MemberType.Int,
         bitSize: 32,
-        bitOffset: childStructure.size * 8,
+        bitOffset: childStructure.byteSize * 8,
         byteSize: 4,
       });
       attachMember(structure, {
@@ -122,7 +122,7 @@ describe('ArgStruct functions', function() {
       const structure = beginStructure({
         type: StructureType.ArgStruct,
         name: 'Hello',
-        size: 4 * 3,
+        byteSize: 4 * 3,
       });
       attachMember(structure, {
         name: 'cat',
@@ -153,7 +153,7 @@ describe('ArgStruct functions', function() {
       const structure = beginStructure({
         type: StructureType.ArgStruct,
         name: 'Hello',
-        size: 4 * 3,
+        byteSize: 4 * 3,
       });
       attachMember(structure, {
         name: '0',

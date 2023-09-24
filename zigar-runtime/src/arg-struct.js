@@ -5,7 +5,7 @@ import { addChildVivificators } from './struct.js';
 
 export function finalizeArgStruct(s) {
   const {
-    size,
+    byteSize,
     instance: {
       members,
     },
@@ -13,7 +13,7 @@ export function finalizeArgStruct(s) {
   } = s;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const constructor = s.constructor = function(args) {
-    const dv = new DataView(new ArrayBuffer(size));
+    const dv = new DataView(new ArrayBuffer(byteSize));
     this[MEMORY] = dv;
     if (hasObject) {
       this[SLOTS] = {};

@@ -199,7 +199,7 @@ describe('Data view functions', function() {
       const structure = {
         type: StructureType.Array,
         name: 'Test',
-        size: 8
+        byteSize: 8
       };
       const arg = new ArrayBuffer(8);
       const dv = getDataView(structure, arg);
@@ -209,7 +209,7 @@ describe('Data view functions', function() {
       const structure = {
         type: StructureType.Array,
         name: 'Test',
-        size: 8
+        byteSize: 8
       };
       const arg = new SharedArrayBuffer(8);
       const dv = getDataView(structure, arg);
@@ -219,7 +219,7 @@ describe('Data view functions', function() {
       const structure = {
         type: StructureType.Array,
         name: 'Test',
-        size: 8
+        byteSize: 8
       };
       const arg = new DataView(new ArrayBuffer(8));
       const dv = getDataView(structure, arg);
@@ -229,7 +229,7 @@ describe('Data view functions', function() {
       const structure = {
         type: StructureType.Slice,
         name: 'Test',
-        size: 8
+        byteSize: 8
       };
       const arg = new DataView(new ArrayBuffer(64));
       const dv = getDataView(structure, arg);
@@ -239,7 +239,7 @@ describe('Data view functions', function() {
       const structure = {
         type: StructureType.Slice,
         name: 'Test',
-        size: 8
+        byteSize: 8
       };
       const arg = new DataView(new ArrayBuffer(0));
       const dv = getDataView(structure, arg);
@@ -249,7 +249,7 @@ describe('Data view functions', function() {
       const structure = {
         type: StructureType.Slice,
         name: 'Test',
-        size: 8
+        byteSize: 8
       };
       const arg = {};
       const dv = getDataView(structure, arg);
@@ -259,12 +259,12 @@ describe('Data view functions', function() {
       const structure1 = {
         type: StructureType.Array,
         name: 'Test',
-        size: 17
+        byteSize: 17
       };
       const structure2 = {
         type: StructureType.Slice,
         name: 'Test',
-        size: 3
+        byteSize: 3
       };
       const arg = new DataView(new ArrayBuffer(8));
       expect(() => getDataView(structure1, arg)).to.throw(TypeError)
@@ -276,7 +276,7 @@ describe('Data view functions', function() {
       const structure = {
         type: StructureType.Slice,
         name: 'Test',
-        size: 3,
+        byteSize: 3,
         typedArray: Uint32Array
       };
       const ta1 = new Uint32Array([ 1, 2, 3 ]);
@@ -291,7 +291,7 @@ describe('Data view functions', function() {
       const structure = {
         type: StructureType.Slice,
         name: 'Test',
-        size: 2,
+        byteSize: 2,
         instance: {
           members: [
             {
@@ -316,7 +316,7 @@ describe('Data view functions', function() {
       const structure = {
         type: StructureType.Array,
         name: 'Test',
-        size: 6,
+        byteSize: 6,
         instance: {
           members: [
             {
@@ -341,7 +341,7 @@ describe('Data view functions', function() {
       const structure = {
         type: StructureType.Slice,
         name: 'Test',
-        size: 2,
+        byteSize: 2,
         instance: {
           members: [
             {
@@ -363,7 +363,7 @@ describe('Data view functions', function() {
       const structure = {
         type: StructureType.Array,
         name: 'Test',
-        size: 6,
+        byteSize: 6,
         instance: {
           members: [
             {
@@ -388,7 +388,7 @@ describe('Data view functions', function() {
       const structure = {
         type: StructureType.Slice,
         name: 'Test',
-        size: 8
+        byteSize: 8
       };
       const arg = {};
       expect(() => requireDataView(structure, arg)).to.throw(TypeError)

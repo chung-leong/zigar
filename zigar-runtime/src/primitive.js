@@ -7,7 +7,7 @@ import { throwInvalidInitializer, throwNoInitializer, throwNoProperty } from './
 
 export function finalizePrimitive(s) {
   const {
-    size,
+    byteSize,
     instance: {
       members: [ member ],
     },
@@ -22,7 +22,7 @@ export function finalizePrimitive(s) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = new DataView(new ArrayBuffer(size));
+      dv = new DataView(new ArrayBuffer(byteSize));
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
@@ -34,7 +34,7 @@ export function finalizePrimitive(s) {
       return self;
     }
   };
-  const copy = getMemoryCopier(size);
+  const copy = getMemoryCopier(byteSize);
   const specialKeys = getSpecialKeys(s);
   const initializer = function(arg) {
     if (arg instanceof constructor) {

@@ -9,26 +9,26 @@ export function throwNoInitializer(structure) {
 }
 
 export function throwBufferSizeMismatch(structure, dv, target = null) {
-  const { type, size } = structure;
+  const { type, byteSize } = structure;
   const name = getShortName(structure);
   const actual = dv.byteLength;
-  const s = (size > 1) ? 's' : '';
+  const s = (byteSize > 1) ? 's' : '';
   if (type === StructureType.Slice && !target) {
-    throw new TypeError(`${name} has elements that are ${size} byte${s} in length, received ${actual}`);
+    throw new TypeError(`${name} has elements that are ${byteSize} byte${s} in length, received ${actual}`);
   } else {
-    const length = (type === StructureType.Slice) ? target.length * size : size;
-    throw new TypeError(`${name} has ${length} byte${s}, received ${actual}`);
+    const total = (type === StructureType.Slice) ? target.length * byteSize : byteSize;
+    throw new TypeError(`${name} has ${total} byte${s}, received ${actual}`);
   }
 }
 
 export function throwBufferExpected(structure) {
-  const { size, typedArray } = structure;
-  const s = (size > 1) ? 's' : '';
+  const { byteSize, typedArray } = structure;
+  const s = (byteSize > 1) ? 's' : '';
   const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle);
   if (typedArray) {
     acceptable.push(addArticle(typedArray.name));
   }
-  throw new TypeError(`Expecting ${formatList(acceptable)} ${size} byte${s} in length`);
+  throw new TypeError(`Expecting ${formatList(acceptable)} ${byteSize} byte${s} in length`);
 }
 
 export function throwInvalidEnum(structure, value) {
@@ -117,12 +117,13 @@ export function throwInvalidArrayInitializer(structure, arg, shapeless = false) 
 }
 
 export function throwArrayLengthMismatch(structure, target, arg) {
-  const { size, instance: { members: [ member ] } } = structure;
+  const { length, instance: { members: [ member ] } } = structure;
   const name = getShortName(structure);
-  const { byteSize, structure: { constructor: elementConstructor} } = member;
-  const length = target?.length ?? size / byteSize;
+  const { structure: { constructor: elementConstructor} } = member;
   const { length: argLength, constructor: argConstructor } = arg;
-  const s = (length > 1) ? 's' : '';
+  // get length from object whech it's a slice
+  const actualLength = target?.length ?? length;
+  const s = (actualLength > 1) ? 's' : '';
   let received;
   if (argConstructor === elementConstructor) {
     received = `only a single one`;
@@ -131,7 +132,7 @@ export function throwArrayLengthMismatch(structure, target, arg) {
   } else {
     received = `${argLength} initializer${argLength > 1 ? 's' : ''}`;
   }
-  throw new TypeError(`${name} has ${length} element${s}, received ${received}`);
+  throw new TypeError(`${name} has ${actualLength} element${s}, received ${received}`);
 }
 
 export function throwMissingInitializers(structure, arg) {

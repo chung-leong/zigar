@@ -34,7 +34,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 4 * 2,
+        byteSize: 4 * 2,
       });
       attachMember(structure, {
         name: 'dog',
@@ -72,7 +72,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 0,
+        byteSize: 0,
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.not.be.a('function');
@@ -81,7 +81,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 4 * 2,
+        byteSize: 4 * 2,
       });
       attachMember(structure, {
         name: 'dog',
@@ -104,7 +104,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 4 * 2,
+        byteSize: 4 * 2,
       }, { littleEndian: false });
       attachMember(structure, {
         name: 'dog',
@@ -142,7 +142,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 4 * 2,
+        byteSize: 4 * 2,
       });
       attachMember(structure, {
         name: 'dog',
@@ -180,7 +180,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 4 * 2,
+        byteSize: 4 * 2,
       });
       attachMember(structure, {
         name: 'dog',
@@ -213,7 +213,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 4 * 2,
+        byteSize: 4 * 2,
       });
       attachMember(structure, {
         name: 'dog',
@@ -246,7 +246,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 4 * 2,
+        byteSize: 4 * 2,
       }, { runtimeSafety: false });
       attachMember(structure, {
         name: 'dog',
@@ -279,7 +279,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         name: 'dog',
@@ -315,7 +315,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         name: 'dog',
@@ -353,7 +353,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 5,
+        byteSize: 5,
       });
       attachMember(structure, {
         name: 'dog',
@@ -384,7 +384,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -413,7 +413,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -437,7 +437,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -461,7 +461,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -491,7 +491,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -518,7 +518,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -545,7 +545,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -572,7 +572,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -599,7 +599,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -635,7 +635,7 @@ describe('Struct functions', function() {
       const structureA = beginStructure({
         type: StructureType.Struct,
         name: 'StructA',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(structureA, {
         type: MemberType.Int,
@@ -648,7 +648,7 @@ describe('Struct functions', function() {
       const structureB = beginStructure({
         type: StructureType.Struct,
         name: 'StructB',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(structureB, {
         type: MemberType.Object,
@@ -670,7 +670,7 @@ describe('Struct functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -682,7 +682,7 @@ describe('Struct functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true
       });
       attachMember(ptrStructure, {
@@ -696,7 +696,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8 * 2,
+        byteSize: 8 * 2,
         hasPointer: true
       });
       attachMember(structure, {
@@ -746,7 +746,7 @@ describe('Struct functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -758,7 +758,7 @@ describe('Struct functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true
       });
       attachMember(ptrStructure, {
@@ -773,7 +773,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8 * 2,
+        byteSize: 8 * 2,
         hasPointer: true
       });
       attachMember(structure, {
@@ -813,7 +813,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'zig.super.Hello',
-        size: 4 * 2,
+        byteSize: 4 * 2,
       });
       attachMember(structure, {
         name: 'dog',
@@ -848,7 +848,7 @@ describe('Struct functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'zig.super.Hello',
-        size: 0,
+        byteSize: 0,
       });
       attachMember(structure, {
         name: 'dog',

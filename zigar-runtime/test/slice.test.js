@@ -38,7 +38,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        size: 4,
+        byteSize: 4,
       });
       const constructor = function() {};
       attachMember(structure, {
@@ -59,7 +59,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        size: 4,
+        byteSize: 4,
       });
       const constructor = function() {};
       attachMember(structure, {
@@ -75,7 +75,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        size: 4,
+        byteSize: 4,
       });
       const constructor = function() {};
       attachMember(structure, {
@@ -97,7 +97,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        size: 4,
+        byteSize: 4,
       });
       const constructor = function() {};
       attachMember(structure, {
@@ -122,7 +122,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -144,7 +144,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -166,7 +166,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -185,7 +185,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -201,7 +201,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -218,7 +218,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -238,7 +238,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        size: 2,
+        byteSize: 2,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -258,7 +258,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u16',
-        size: 2,
+        byteSize: 2,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -279,7 +279,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u16',
-        size: 2,
+        byteSize: 2,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -297,7 +297,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u16',
-        size: 2,
+        byteSize: 2,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -317,7 +317,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u16',
-        size: 2,
+        byteSize: 2,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -334,7 +334,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u16',
-        size: 2,
+        byteSize: 2,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -349,7 +349,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u16',
-        size: 2,
+        byteSize: 2,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -364,7 +364,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -385,7 +385,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -405,7 +405,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -427,7 +427,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -447,7 +447,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -464,7 +464,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -487,7 +487,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -509,7 +509,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -529,7 +529,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -555,7 +555,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -586,7 +586,7 @@ describe('Slice functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 4 * 2,
+        byteSize: 4 * 2,
       });
       attachMember(structStructure, {
         name: 'dog',
@@ -608,7 +608,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Object,
@@ -634,7 +634,7 @@ describe('Slice functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 4 * 2,
+        byteSize: 4 * 2,
       });
       attachMember(structStructure, {
         name: 'dog',
@@ -664,7 +664,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Object,
@@ -684,7 +684,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -709,7 +709,7 @@ describe('Slice functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: 'Int64Slice',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(sliceStructure, {
         type: MemberType.Uint,
@@ -721,7 +721,8 @@ describe('Slice functions', function() {
       const arrayStructure = beginStructure({
         type: StructureType.Array,
         name: 'Int64Array',
-        size: 8 * 4,
+        length: 4,
+        byteSize: 8 * 4,
       });
       attachMember(arrayStructure, {
         type: MemberType.Uint,
@@ -739,7 +740,7 @@ describe('Slice functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: 'Int64Slice',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(sliceStructure, {
         type: MemberType.Uint,
@@ -751,7 +752,8 @@ describe('Slice functions', function() {
       const vectorStructure = beginStructure({
         type: StructureType.Vector,
         name: 'Int64Vector',
-        size: 8 * 4,
+        length: 4,
+        byteSize: 8 * 4,
       });
       attachMember(vectorStructure, {
         type: MemberType.Uint,
@@ -770,7 +772,7 @@ describe('Slice functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: 'Int64Slice',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(sliceStructure, {
         type: MemberType.Uint,
@@ -782,7 +784,8 @@ describe('Slice functions', function() {
       const arrayStructure = beginStructure({
         type: StructureType.Array,
         name: 'Uint64Array',
-        size: 8 * 4,
+        length: 4,
+        byteSize: 8 * 4,
       });
       attachMember(arrayStructure, {
         type: MemberType.Uint,
@@ -798,7 +801,7 @@ describe('Slice functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 4 * 2,
+        byteSize: 4 * 2,
       });
       attachMember(structStructure, {
         name: 'dog',
@@ -820,7 +823,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Object,
@@ -847,7 +850,7 @@ describe('Slice functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 4 * 2,
+        byteSize: 4 * 2,
       });
       attachMember(structStructure, {
         name: 'dog',
@@ -869,7 +872,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Object,
@@ -884,7 +887,7 @@ describe('Slice functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -896,7 +899,7 @@ describe('Slice functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(ptrStructure, {
@@ -911,7 +914,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -931,7 +934,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_:0]u8',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -959,7 +962,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_:0]u8',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -985,7 +988,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_:0]u8',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -1010,7 +1013,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_:0]u8',
-        size: 1,
+        byteSize: 1,
       }, { runtimeSafety: true });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -1039,7 +1042,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_:0]u8',
-        size: 1,
+        byteSize: 1,
       }, { runtimeSafety: true });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -1069,7 +1072,7 @@ describe('Slice functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_:0]u8',
-        size: 1,
+        byteSize: 1,
       }, { runtimeSafety: false });
       attachMember(structure, {
         type: MemberType.Uint,

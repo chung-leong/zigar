@@ -20,7 +20,7 @@ import { MEMORY, ENUM_NAME, ENUM_ITEM, TAG, SLOTS, POINTER_VISITOR } from './sym
 export function finalizeUnion(s) {
   const {
     type,
-    size,
+    byteSize,
     instance: {
       members,
       template,
@@ -125,7 +125,7 @@ export function finalizeUnion(s) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = new DataView(new ArrayBuffer(size));
+      dv = new DataView(new ArrayBuffer(byteSize));
     } else {
       self = Object.create(constructor.prototype);
       dv = getDataView(s, arg);
@@ -153,7 +153,7 @@ export function finalizeUnion(s) {
     }
   };
   const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
-  const copy = getMemoryCopier(size);
+  const copy = getMemoryCopier(byteSize);
   const specialKeys = getSpecialKeys(s);
   const initializer = function(arg) {
     if (arg instanceof constructor) {

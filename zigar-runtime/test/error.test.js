@@ -46,7 +46,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Struct,
-        size: 8,
+        byteSize: 8,
       };
       expect(() => throwNoInitializer(structure)).to.throw(TypeError)
         .with.property('message').that.contains('undefined');
@@ -58,7 +58,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Struct,
-        size: 8,
+        byteSize: 8,
       };
       expect(() => throwBufferSizeMismatch(structure, 16)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
@@ -67,7 +67,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Slice,
-        size: 8,
+        byteSize: 8,
       };
       expect(() => throwBufferSizeMismatch(structure, 16)).to.throw(TypeError)
         .with.property('message').that.contains('elements');
@@ -76,7 +76,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Slice,
-        size: 8,
+        byteSize: 8,
       };
       expect(() => throwBufferSizeMismatch(structure, 16, { length: 5 })).to.throw(TypeError)
         .with.property('message').that.does.not.contains('elements');
@@ -85,7 +85,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Slice,
-        size: 1,
+        byteSize: 1,
       };
       expect(() => throwBufferSizeMismatch(structure, 16)).to.throw(TypeError)
         .with.property('message').that.does.not.contains('bytes');
@@ -96,7 +96,7 @@ describe('Error functions', function() {
       const structure1 = {
         name: 'Hello',
         type: StructureType.Struct,
-        size: 88,
+        byteSize: 88,
       };
       expect(() => throwBufferExpected(structure1)).to.throw(TypeError)
         .with.property('message').that.contains('88')
@@ -104,7 +104,7 @@ describe('Error functions', function() {
       const structure2 = {
         name: 'Hello',
         type: StructureType.Struct,
-        size: 88,
+        byteSize: 88,
         typedArray: Uint16Array,
       };
       expect(() => throwBufferExpected(structure2)).to.throw(TypeError)
@@ -115,7 +115,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Struct,
-        size: 1,
+        byteSize: 1,
       };
       expect(() => throwBufferExpected(structure)).to.throw(TypeError)
         .with.property('message').that.does.not.contains('bytes');
@@ -127,7 +127,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Enumeration,
-        size: 8,
+        byteSize: 8,
       };
       expect(() => throwInvalidEnum(structure, 16)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
@@ -138,7 +138,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Enumeration,
-        size: 8,
+        byteSize: 8,
       };
       expect(() => throwEnumExpected(structure, 16)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
@@ -149,7 +149,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Enumeration,
-        size: 8,
+        byteSize: 8,
       };
       expect(() => throwNoNewEnum(structure, 16)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
@@ -160,7 +160,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.ErrorSet,
-        size: 8,
+        byteSize: 8,
       };
       expect(() => throwNoNewError(structure, 16)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
@@ -171,7 +171,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.ErrorSet,
-        size: 8,
+        byteSize: 8,
       };
       expect(() => throwNotInErrorSet(structure)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
@@ -182,7 +182,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.ErrorSet,
-        size: 8,
+        byteSize: 8,
       };
       expect(() => throwUnknownErrorNumber(structure)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
@@ -193,7 +193,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Struct,
-        size: 8,
+        byteSize: 8,
       };
       expect(() => throwInvalidType(structure, 16)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
@@ -204,7 +204,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.BareUnion,
-        size: 8,
+        byteSize: 8,
       };
       expect(() => throwMultipleUnionInitializers(structure, 16)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
@@ -215,7 +215,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Array,
-        size: 8,
+        byteSize: 8,
         instance: {
           members: [
             {
@@ -233,7 +233,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Array,
-        size: 8,
+        byteSize: 8,
         instance: {
           members: [
             {
@@ -251,7 +251,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Array,
-        size: 8,
+        byteSize: 8,
         instance: {
           members: [
             {
@@ -274,7 +274,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Array,
-        size: 8,
+        byteSize: 8,
         instance: {
           members: [
             {
@@ -307,7 +307,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.BareUnion,
-        size: 8,
+        byteSize: 8,
         instance: {
           members: [
             { name: 'cat' },
@@ -324,7 +324,7 @@ describe('Error functions', function() {
       const structure1 = {
         name: 'Hello',
         type: StructureType.BareUnion,
-        size: 8,
+        byteSize: 8,
         instance: {
           members: [
             { name: 'cat' },
@@ -337,7 +337,7 @@ describe('Error functions', function() {
       const structure2 = {
         name: 'Hello',
         type: StructureType.BareUnion,
-        size: 8,
+        byteSize: 8,
         instance: {
           members: [
             { name: 'cat' },
@@ -355,7 +355,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.BareUnion,
-        size: 8,
+        byteSize: 8,
       };
       expect(() => throwInvalidInitializer(structure, 'object', 16)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
@@ -366,7 +366,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.BareUnion,
-        size: 8,
+        byteSize: 8,
         instance: {
           members: [
             { name: 'dog', isRequired: true },
@@ -383,7 +383,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.BareUnion,
-        size: 8,
+        byteSize: 8,
       };
       expect(() => throwNoProperty(structure, 'cow')).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
@@ -394,7 +394,7 @@ describe('Error functions', function() {
       const structure1 = {
         name: 'Hello',
         type: StructureType.BareUnion,
-        size: 8,
+        byteSize: 8,
         instance: {
           members: [
             { name: 'dog' },
@@ -407,7 +407,7 @@ describe('Error functions', function() {
       const structure2 = {
         name: 'Hello',
         type: StructureType.BareUnion,
-        size: 8,
+        byteSize: 8,
         instance: {
           members: [
             { name: 'dog' },
@@ -426,7 +426,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.BareUnion,
-        size: 8,
+        byteSize: 8,
         instance: {
           members: [
             { name: '0' },
@@ -450,7 +450,7 @@ describe('Error functions', function() {
       const structure = {
         name: '*Hello',
         type: StructureType.Pointer,
-        size: 8,
+        byteSize: 8,
         instance: {
           members: [],
         },
@@ -464,7 +464,7 @@ describe('Error functions', function() {
       const structure = {
         name: '[]const u8',
         type: StructureType.Pointer,
-        size: 1,
+        byteSize: 1,
         instance: {
           members: [],
         },
@@ -479,7 +479,7 @@ describe('Error functions', function() {
       const structure = {
         name: '[_:0]u8',
         type: StructureType.Slice,
-        size: 1,
+        byteSize: 1,
         instance: {
           members: [],
         },
@@ -493,7 +493,7 @@ describe('Error functions', function() {
       const structure = {
         name: '[_:0]u8',
         type: StructureType.Slice,
-        size: 1,
+        byteSize: 1,
         instance: {
           members: [],
         },
@@ -512,7 +512,7 @@ describe('Error functions', function() {
       const structure = {
         name: '*Hello',
         type: StructureType.Pointer,
-        size: 8,
+        byteSize: 8,
         instance: {
           members: [],
         },
@@ -537,7 +537,7 @@ describe('Error functions', function() {
       const structure = {
         name: '*Hello',
         type: StructureType.Pointer,
-        size: 8,
+        byteSize: 8,
         instance: {
           members: [],
         },

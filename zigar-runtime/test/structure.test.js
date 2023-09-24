@@ -16,7 +16,7 @@ describe('Structure functions', function() {
       const structure = beginStructure({
         type: StructureType.Opaque,
         name: 'Hello',
-        size: 0
+        byteSize: 0
       });
       const Hello = finalizeStructure(structure);
       expect(Hello).to.be.an('object');
@@ -27,7 +27,7 @@ describe('Structure functions', function() {
       const structure = beginStructure({
         type: StructureType.Opaque,
         name: 'Hello',
-        size: 0
+        byteSize: 0
       });
       const name = getStructureFeature(structure);
       expect(name).to.equal('useOpaque');

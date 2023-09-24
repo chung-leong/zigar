@@ -346,7 +346,7 @@ R"=====(
   }
 
   function getDataView(structure, arg) {
-    const { type, size, typedArray } = structure;
+    const { type, byteSize, typedArray } = structure;
     let dv;
     // not using instanceof just in case we're getting objects created in other contexts
     const tag = arg?.[Symbol.toStringTag];
@@ -363,7 +363,7 @@ R"=====(
         const { byteSize: elementSize, structure: { constructor: Child } } = member;
         const number = findElements(arg, Child);
         if (number !== undefined) {
-          if (type === StructureType.Slice || number * elementSize === size) {
+          if (type === StructureType.Slice || number * elementSize === byteSize) {
             return memory;
           } else {
             throwArrayLengthMismatch(structure, null, arg);
@@ -378,8 +378,8 @@ R"=====(
   }
 
   function checkDataViewSize(structure, dv) {
-    const { type, size } = structure;
-    if (type === StructureType.Slice ? dv.byteLength % size !== 0 : dv.byteLength !== size) {
+    const { type, byteSize } = structure;
+    if (type === StructureType.Slice ? dv.byteLength % byteSize !== 0 : dv.byteLength !== byteSize) {
       throwBufferSizeMismatch(structure, dv);
     }
   }
@@ -983,8 +983,8 @@ R"=====(
   }
 
   function getDataViewAccessors(structure) {
-    const { type, size, sentinel } = structure;
-    const copy = getMemoryCopier(size, type === StructureType.Slice);
+    const { type, byteSize, sentinel } = structure;
+    const copy = getMemoryCopier(byteSize, type === StructureType.Slice);
     return {
       get() {
         restoreMemory.call(this);
@@ -1131,7 +1131,7 @@ R"=====(
 
   function finalizePrimitive(s) {
     const {
-      size,
+      byteSize,
       instance: {
         members: [ member ],
       },
@@ -1146,7 +1146,7 @@ R"=====(
           throwNoInitializer(s);
         }
         self = this;
-        dv = new DataView(new ArrayBuffer(size));
+        dv = new DataView(new ArrayBuffer(byteSize));
       } else {
         self = Object.create(constructor.prototype);
         dv = requireDataView(s, arg);
@@ -1158,7 +1158,7 @@ R"=====(
         return self;
       }
     };
-    const copy = getMemoryCopier(size);
+    const copy = getMemoryCopier(byteSize);
     const specialKeys = getSpecialKeys(s);
     const initializer = function(arg) {
       if (arg instanceof constructor) {
@@ -1233,7 +1233,7 @@ R"=====(
 
   function finalizePointer(s) {
     const {
-      size,
+      byteSize,
       instance: {
         members: [ member ],
       },
@@ -1246,8 +1246,8 @@ R"=====(
     const { structure: targetStructure } = member;
     const isTargetSlice = (targetStructure.type === StructureType.Slice);
     const isTargetPointer = (targetStructure.type === StructureType.Pointer);
-    const addressSize = (isTargetSlice) ? size / 2 : size;
-    const usizeStructure = { name: 'usize', size: addressSize };
+    const addressSize = (isTargetSlice) ? byteSize / 2 : byteSize;
+    const usizeStructure = { name: 'usize', byteSize: addressSize };
     const setAddress = getAccessors({
       type: MemberType.Uint,
       bitOffset: 0,
@@ -1272,7 +1272,7 @@ R"=====(
           throwNoInitializer(s);
         }
         self = this;
-        dv = new DataView(new ArrayBuffer(size));
+        dv = new DataView(new ArrayBuffer(byteSize));
       } else {
         self = Object.create(constructor.prototype);
         if (calledFromZig || calledFromParent) {
@@ -1504,7 +1504,8 @@ R"=====(
 
   function finalizeArray(s) {
     const {
-      size,
+      length,
+      byteSize,
       instance: {
         members: [ member ],
       },
@@ -1521,7 +1522,7 @@ R"=====(
           throwNoInitializer(s);
         }
         self = this;
-        dv = new DataView(new ArrayBuffer(size));
+        dv = new DataView(new ArrayBuffer(byteSize));
       } else {
         self = Object.create(constructor.prototype);
         dv = requireDataView(s, arg);
@@ -1537,9 +1538,8 @@ R"=====(
       }
       return createProxy.call(self);
     };
-    const { byteSize: elementSize, structure: elementStructure } = member;
-    const length = size / elementSize;
-    const copy = getMemoryCopier(size);
+    const { structure: elementStructure } = member;
+    const copy = getMemoryCopier(byteSize);
     const specialKeys = getSpecialKeys(s);
     const initializer = function(arg) {
       if (arg instanceof constructor) {
@@ -1641,7 +1641,7 @@ R"=====(
   }
 
   function getArrayIterator() {
-    const self = this[SELF];
+    const self = this[SELF] ?? this;
     const length = this.length;
     let index = 0;
     return {
@@ -1660,7 +1660,7 @@ R"=====(
   }
 
   function getArrayEntriesIterator() {
-    const self = this[SELF];
+    const self = this[SELF] ?? this;
     const length = this.length;
     let index = 0;
     return {
@@ -1814,7 +1814,7 @@ R"=====(
 
   function finalizeStruct(s) {
     const {
-      size,
+      byteSize,
       instance: {
         members,
         template,
@@ -1846,7 +1846,7 @@ R"=====(
           throwNoInitializer(s);
         }
         self = this;
-        dv = new DataView(new ArrayBuffer(size));
+        dv = new DataView(new ArrayBuffer(byteSize));
       } else {
         self = Object.create(constructor.prototype);
         dv = getDataView(s, arg);
@@ -1867,7 +1867,7 @@ R"=====(
         return self;
       }
     } : Object.create(null);
-    const copy = getMemoryCopier(size);
+    const copy = getMemoryCopier(byteSize);
     const specialKeys = getSpecialKeys(s);
     const requiredKeys = members.filter(m => m.isRequired).map(m => m.name);
     const initializer = (constructible) ? function(arg) {
@@ -1980,7 +1980,7 @@ R"=====(
   function finalizeUnion(s) {
     const {
       type,
-      size,
+      byteSize,
       instance: {
         members,
         template,
@@ -2085,7 +2085,7 @@ R"=====(
           throwNoInitializer(s);
         }
         self = this;
-        dv = new DataView(new ArrayBuffer(size));
+        dv = new DataView(new ArrayBuffer(byteSize));
       } else {
         self = Object.create(constructor.prototype);
         dv = getDataView(s, arg);
@@ -2113,7 +2113,7 @@ R"=====(
       }
     };
     const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
-    const copy = getMemoryCopier(size);
+    const copy = getMemoryCopier(byteSize);
     const specialKeys = getSpecialKeys(s);
     const initializer = function(arg) {
       if (arg instanceof constructor) {
@@ -2195,7 +2195,7 @@ R"=====(
 
   function finalizeErrorUnion(s) {
     const {
-      size,
+      byteSize,
       instance: { members },
       options,
       hasPointer,
@@ -2209,7 +2209,7 @@ R"=====(
           throwNoInitializer(s);
         }
         self = this;
-        dv = new DataView(new ArrayBuffer(size));
+        dv = new DataView(new ArrayBuffer(byteSize));
       } else {
         self = Object.create(constructor.prototype);
         dv = requireDataView(s, arg);
@@ -2224,7 +2224,7 @@ R"=====(
         return self;
       }
     };
-    const copy = getMemoryCopier(size);
+    const copy = getMemoryCopier(byteSize);
     const initializer = function(arg) {
       if (arg instanceof constructor) {
         copy(this[MEMORY], arg[MEMORY]);
@@ -2237,7 +2237,7 @@ R"=====(
         this.$ = arg;
       }
     };
-    const { get, set, check } = getErrorUnionAccessors(members, size, options);
+    const { get, set, check } = getErrorUnionAccessors(members, byteSize, options);
     Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
     if (hasObject) {
       addChildVivificators(s);
@@ -2250,12 +2250,12 @@ R"=====(
     return constructor;
   }
 
-  function getErrorUnionAccessors(members, size, options) {
+  function getErrorUnionAccessors(members, byteSize, options) {
     const { get: getValue, set: setValue } = getAccessors(members[0], options);
     const { get: getError, set: setError } = getAccessors(members[1], options);
     const { structure: errorStructure } = members[1];
     const { constructor: ErrorSet } = errorStructure;
-    const reset = getMemoryResetter(size);
+    const reset = getMemoryResetter(byteSize);
     return {
       get: function() {
         const errorNumber = getError.call(this);
@@ -2463,7 +2463,7 @@ R"=====(
 
   function finalizeOptional(s) {
     const {
-      size,
+      byteSize,
       instance: { members },
       options,
       hasPointer,
@@ -2477,7 +2477,7 @@ R"=====(
           throwNoInitializer(s);
         }
         self = this;
-        dv = new DataView(new ArrayBuffer(size));
+        dv = new DataView(new ArrayBuffer(byteSize));
       } else {
         self = Object.create(constructor.prototype);
         dv = requireDataView(s, arg);
@@ -2492,7 +2492,7 @@ R"=====(
         return self;
       }
     };
-    const copy = getMemoryCopier(size);
+    const copy = getMemoryCopier(byteSize);
     const initializer = function(arg) {
       if (arg instanceof constructor) {
         restoreMemory.call(this);
@@ -2508,7 +2508,7 @@ R"=====(
         this.$ = arg;
       }
     };
-    const { get, set, check } = getOptionalAccessors(members, size, options);
+    const { get, set, check } = getOptionalAccessors(members, byteSize, options);
     Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
     if (hasObject) {
       addChildVivificators(s);
@@ -2520,10 +2520,10 @@ R"=====(
     return constructor;
   }
 
-  function getOptionalAccessors(members, size, options) {
+  function getOptionalAccessors(members, byteSize, options) {
     const { get: getValue, set: setValue } = getAccessors(members[0], options);
     const { get: getPresent, set: setPresent } = getAccessors(members[1], options);
-    const reset = getMemoryResetter(size);
+    const reset = getMemoryResetter(byteSize);
     return {
       get: function() {
         const present = getPresent.call(this);
@@ -2772,7 +2772,8 @@ R"=====(
 
   function finalizeVector(s) {
     const {
-      size,
+      length,
+      byteSize,
       instance: {
         members: [ member ],
       },
@@ -2787,7 +2788,7 @@ R"=====(
           throwNoInitializer(s);
         }
         self = this;
-        dv = new DataView(new ArrayBuffer(size));
+        dv = new DataView(new ArrayBuffer(byteSize));
       } else {
         self = Object.create(constructor.prototype);
         dv = requireDataView(s, arg);
@@ -2800,8 +2801,7 @@ R"=====(
       }
     };
     const { byteSize: elementSize, structure: elementStructure } = member;
-    const length = size / elementSize;
-    const copy = getMemoryCopier(size);
+    const copy = getMemoryCopier(byteSize);
     const initializer = function(arg) {
       if (arg instanceof constructor) {
         restoreMemory.call(this);
@@ -2891,7 +2891,7 @@ R"=====(
 
   function finalizeArgStruct(s) {
     const {
-      size,
+      byteSize,
       instance: {
         members,
       },
@@ -2899,7 +2899,7 @@ R"=====(
     } = s;
     const hasObject = !!members.find(m => m.type === MemberType.Object);
     const constructor = s.constructor = function(args) {
-      const dv = new DataView(new ArrayBuffer(size));
+      const dv = new DataView(new ArrayBuffer(byteSize));
       this[MEMORY] = dv;
       if (hasObject) {
         this[SLOTS] = {};
@@ -3015,7 +3015,8 @@ R"=====(
     const {
       type,
       name,
-      size,
+      length,
+      byteSize,
       align,
       isConst,
       hasPointer,
@@ -3025,7 +3026,8 @@ R"=====(
       typedArray: null,
       type,
       name,
-      size,
+      length,
+      byteSize,
       align,
       isConst,
       hasPointer,
@@ -3352,26 +3354,26 @@ R"=====(
   }
 
   function throwBufferSizeMismatch(structure, dv, target = null) {
-    const { type, size } = structure;
+    const { type, byteSize } = structure;
     const name = getShortName(structure);
     const actual = dv.byteLength;
-    const s = (size > 1) ? 's' : '';
+    const s = (byteSize > 1) ? 's' : '';
     if (type === StructureType.Slice && !target) {
-      throw new TypeError(`${name} has elements that are ${size} byte${s} in length, received ${actual}`);
+      throw new TypeError(`${name} has elements that are ${byteSize} byte${s} in length, received ${actual}`);
     } else {
-      const length = (type === StructureType.Slice) ? target.length * size : size;
-      throw new TypeError(`${name} has ${length} byte${s}, received ${actual}`);
+      const total = (type === StructureType.Slice) ? target.length * byteSize : byteSize;
+      throw new TypeError(`${name} has ${total} byte${s}, received ${actual}`);
     }
   }
 
   function throwBufferExpected(structure) {
-    const { size, typedArray } = structure;
-    const s = (size > 1) ? 's' : '';
+    const { byteSize, typedArray } = structure;
+    const s = (byteSize > 1) ? 's' : '';
     const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle);
     if (typedArray) {
       acceptable.push(addArticle(typedArray.name));
     }
-    throw new TypeError(`Expecting ${formatList(acceptable)} ${size} byte${s} in length`);
+    throw new TypeError(`Expecting ${formatList(acceptable)} ${byteSize} byte${s} in length`);
   }
 
   function throwInvalidEnum(structure, value) {
@@ -3455,12 +3457,13 @@ R"=====(
   }
 
   function throwArrayLengthMismatch(structure, target, arg) {
-    const { size, instance: { members: [ member ] } } = structure;
+    const { length, instance: { members: [ member ] } } = structure;
     const name = getShortName(structure);
-    const { byteSize, structure: { constructor: elementConstructor} } = member;
-    const length = target?.length ?? size / byteSize;
+    const { structure: { constructor: elementConstructor} } = member;
     const { length: argLength, constructor: argConstructor } = arg;
-    const s = (length > 1) ? 's' : '';
+    // get length from object whech it's a slice
+    const actualLength = target?.length ?? length;
+    const s = (actualLength > 1) ? 's' : '';
     let received;
     if (argConstructor === elementConstructor) {
       received = `only a single one`;
@@ -3469,7 +3472,7 @@ R"=====(
     } else {
       received = `${argLength} initializer${argLength > 1 ? 's' : ''}`;
     }
-    throw new TypeError(`${name} has ${length} element${s}, received ${received}`);
+    throw new TypeError(`${name} has ${actualLength} element${s}, received ${received}`);
   }
 
   function throwMissingInitializers(structure, arg) {

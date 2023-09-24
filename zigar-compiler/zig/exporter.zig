@@ -143,7 +143,8 @@ pub const Thunk = *const fn (ptr: *anyopaque, args: Value) callconv(.C) ?[*:0]co
 pub const Structure = extern struct {
     name: ?[*:0]const u8 = null,
     structure_type: StructureType,
-    total_size: usize,
+    length: usize,
+    byte_size: usize,
     ptr_align: u8,
     is_const: bool = false,
     has_pointer: bool,
@@ -427,7 +428,8 @@ fn getMemberType(comptime T: type) MemberType {
 }
 
 test "getMemberType" {
-    assert(getMemberType(u32) == .Int);
+    assert(getMemberType(i32) == .Int);
+    assert(getMemberType(u32) == .Uint);
     assert(getMemberType(*u32) == .Object);
     assert(getMemberType(type) == .Type);
 }
@@ -505,6 +507,20 @@ test "getStructureType" {
     assert(getStructureType(union {}) == .BareUnion);
     assert(getStructureType(TaggedUnion) == .TaggedUnion);
     assert(getStructureType(extern union {}) == .ExternUnion);
+}
+
+fn getStructureLength(comptime T: type) usize {
+    return switch (@typeInfo(T)) {
+        .Array => |ar| ar.len,
+        .Vector => |ve| ve.len,
+        else => 1,
+    };
+}
+
+test "getStructureLength" {
+    assert(getStructureLength([5]u8) == 5);
+    assert(getStructureLength(u8) == 1);
+    assert(getStructureLength(@Vector(3, f32)) == 3);
 }
 
 pub fn fromMemory(memory: Memory, comptime PtrT: type) PtrT {
@@ -642,7 +658,8 @@ fn getStructure(host: anytype, comptime T: type) Error!Value {
         const def: Structure = .{
             .name = getStructureName(T),
             .structure_type = getStructureType(T),
-            .total_size = @sizeOf(T),
+            .length = getStructureLength(T),
+            .byte_size = @sizeOf(T),
             .ptr_align = getPtrAlign(T),
             .is_const = isConst(T),
             .has_pointer = hasPointer(T),
@@ -851,7 +868,8 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
             const slice_def: Structure = .{
                 .name = getSliceName(T),
                 .structure_type = .Slice,
-                .total_size = @sizeOf(pt.child),
+                .length = 0,
+                .byte_size = @sizeOf(pt.child),
                 .ptr_align = getPtrAlign(pt.child),
                 .has_pointer = hasPointer(pt.child),
             };

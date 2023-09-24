@@ -8,7 +8,8 @@ import { getSelf } from './struct.js';
 
 export function finalizeVector(s) {
   const {
-    size,
+    length,
+    byteSize,
     instance: {
       members: [ member ],
     },
@@ -32,7 +33,7 @@ export function finalizeVector(s) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = new DataView(new ArrayBuffer(size));
+      dv = new DataView(new ArrayBuffer(byteSize));
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
@@ -45,8 +46,7 @@ export function finalizeVector(s) {
     }
   };
   const { byteSize: elementSize, structure: elementStructure } = member;
-  const length = size / elementSize;
-  const copy = getMemoryCopier(size);
+  const copy = getMemoryCopier(byteSize);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);

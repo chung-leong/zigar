@@ -45,7 +45,7 @@ describe('Special property functions', function() {
       const structure = {
         type: StructureType.Primitive,
         name: 'i32',
-        size: 4,
+        byteSize: 4,
       };
       const { get, set } = getDataViewAccessors(structure);
       expect(get).to.be.a('function');
@@ -65,7 +65,7 @@ describe('Special property functions', function() {
       const structure = {
         type: StructureType.Primitive,
         name: 'i32',
-        size: 4,
+        byteSize: 4,
       };
       const { get, set } = getDataViewAccessors(structure);
       const memory = new WebAssembly.Memory({
@@ -90,7 +90,7 @@ describe('Special property functions', function() {
       const structure = {
         type: StructureType.Primitive,
         name: 'i32',
-        size: 4,
+        byteSize: 4,
       };
       const { set } = getDataViewAccessors(structure);
       const dv = new DataView(new ArrayBuffer(4));
@@ -212,7 +212,7 @@ describe('Special property functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 4 * 2,
+        byteSize: 4 * 2,
       });
       attachMember(structStructure, {
         name: 'dog',
@@ -234,7 +234,8 @@ describe('Special property functions', function() {
       const arrayStructure = beginStructure({
         type: StructureType.Array,
         name: 'HelloArray',
-        size: structStructure.size * 4,
+        length: 4,
+        byteSize: structStructure.byteSize * 4,
       });
       attachMember(arrayStructure, {
         type: MemberType.Object,
@@ -246,14 +247,14 @@ describe('Special property functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Complex',
-        size: arrayStructure.size + 8 * 2,
+        byteSize: arrayStructure.byteSize + 8 * 2,
       });
       attachMember(structure, {
         name: 'animals',
         type: MemberType.Object,
-        bitSize: arrayStructure.size * 8,
+        bitSize: arrayStructure.byteSize * 8,
         bitOffset: 0,
-        byteSize: arrayStructure.size,
+        byteSize: arrayStructure.byteSize,
         structure: arrayStructure,
         slot: 0,
         isRequired: true,
@@ -262,7 +263,7 @@ describe('Special property functions', function() {
         name: 'donut',
         type: MemberType.Float,
         bitSize: 64,
-        bitOffset: arrayStructure.size * 8,
+        bitOffset: arrayStructure.byteSize * 8,
         byteSize: 8,
         isRequired: true,
       })
@@ -270,7 +271,7 @@ describe('Special property functions', function() {
         name: 'turkey',
         type: MemberType.Float,
         bitSize: 64,
-        bitOffset: (arrayStructure.size + 8) * 8,
+        bitOffset: (arrayStructure.byteSize + 8) * 8,
         byteSize: 8,
         isRequired: true,
       });
@@ -294,7 +295,7 @@ describe('Special property functions', function() {
       const structure = beginStructure({
         type: StructureType.Array,
         name: '[4]u8',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -310,7 +311,7 @@ describe('Special property functions', function() {
       const structure = beginStructure({
         type: StructureType.Array,
         name: '[4]i8',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -326,7 +327,7 @@ describe('Special property functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        size: 1,
+        byteSize: 1,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -342,7 +343,7 @@ describe('Special property functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u16',
-        size: 2,
+        byteSize: 2,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -358,7 +359,7 @@ describe('Special property functions', function() {
       const structure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u15',
-        size: 2,
+        byteSize: 2,
       });
       attachMember(structure, {
         type: MemberType.Uint,

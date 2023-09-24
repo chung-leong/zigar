@@ -38,7 +38,7 @@ describe('Pointer functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -50,7 +50,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -72,7 +72,7 @@ describe('Pointer functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -84,7 +84,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -102,7 +102,7 @@ describe('Pointer functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: false,
       });
       attachMember(structStructure, {
@@ -123,7 +123,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '*Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -148,7 +148,7 @@ describe('Pointer functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: false,
       });
       attachMember(structStructure, {
@@ -169,7 +169,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '*Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -192,7 +192,7 @@ describe('Pointer functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: false,
       });
       attachMember(structStructure, {
@@ -213,7 +213,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '*Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -236,7 +236,7 @@ describe('Pointer functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: false,
       });
       attachMember(structStructure, {
@@ -257,7 +257,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '*Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -283,7 +283,7 @@ describe('Pointer functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: false,
       });
       attachMember(structStructure, {
@@ -304,7 +304,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '*Hello',
-        size: 4,
+        byteSize: 4,
         isConst: true,
         hasPointer: true,
       });
@@ -329,7 +329,7 @@ describe('Pointer functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: false,
       });
       attachMember(structStructure, {
@@ -350,7 +350,7 @@ describe('Pointer functions', function() {
       const ptrStructure = beginStructure({
         type: StructureType.Pointer,
         name: '*Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(ptrStructure, {
@@ -365,7 +365,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '**Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -388,7 +388,7 @@ describe('Pointer functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -400,7 +400,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         isConst: true,
         hasPointer: true,
       });
@@ -422,7 +422,7 @@ describe('Pointer functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -434,7 +434,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -458,7 +458,7 @@ describe('Pointer functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -470,7 +470,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -489,7 +489,7 @@ describe('Pointer functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: false,
       });
       attachMember(structStructure, {
@@ -510,7 +510,7 @@ describe('Pointer functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]Hello',
-        size: 16,
+        byteSize: 16,
         hasPointer: false,
       });
       attachMember(sliceStructure, {
@@ -523,7 +523,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '[]Hello',
-        size: 16,
+        byteSize: 16,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -545,7 +545,7 @@ describe('Pointer functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
         hasPointer: false,
       });
       attachMember(intStructure, {
@@ -557,7 +557,7 @@ describe('Pointer functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]Int32',
-        size: 16,
+        byteSize: 16,
         hasPointer: false,
       });
       attachMember(sliceStructure, {
@@ -570,7 +570,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '[]Hello',
-        size: 16,
+        byteSize: 16,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -592,7 +592,7 @@ describe('Pointer functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
         hasPointer: false,
       });
       attachMember(intStructure, {
@@ -604,7 +604,7 @@ describe('Pointer functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]Int32',
-        size: 16,
+        byteSize: 16,
         hasPointer: false,
       });
       attachMember(sliceStructure, {
@@ -617,7 +617,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '[]Int32',
-        size: 16,
+        byteSize: 16,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -644,7 +644,7 @@ describe('Pointer functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
         hasPointer: false,
       });
       attachMember(intStructure, {
@@ -656,7 +656,7 @@ describe('Pointer functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: false,
       });
       attachMember(sliceStructure, {
@@ -669,7 +669,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '[]Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       }, { runtimeSafety: false });
       attachMember(structure, {
@@ -702,7 +702,7 @@ describe('Pointer functions', function() {
       const boolStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Bool',
-        size: 1,
+        byteSize: 1,
         hasPointer: false,
       });
       attachMember(boolStructure, {
@@ -714,7 +714,7 @@ describe('Pointer functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]Bool',
-        size: 1,
+        byteSize: 1,
         hasPointer: false,
       });
       attachMember(sliceStructure, {
@@ -727,7 +727,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '[]Bool',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -754,7 +754,7 @@ describe('Pointer functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
         hasPointer: false,
       });
       attachMember(intStructure, {
@@ -766,7 +766,7 @@ describe('Pointer functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: false,
       });
       attachMember(sliceStructure, {
@@ -779,7 +779,8 @@ describe('Pointer functions', function() {
       const arrayStructure = beginStructure({
         type: StructureType.Array,
         name: '[8]Int32',
-        size: 8 * 4,
+        length: 8,
+        byteSize: 8 * 4,
         hasPointer: false,
       });
       attachMember(arrayStructure, {
@@ -792,7 +793,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '[]Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -814,7 +815,7 @@ describe('Pointer functions', function() {
       const uintStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'u8',
-        size: 1,
+        byteSize: 1,
         hasPointer: false,
       });
       attachMember(uintStructure, {
@@ -827,7 +828,7 @@ describe('Pointer functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        size: 8,
+        byteSize: 8,
         hasPointer: false,
       });
       attachMember(sliceStructure, {
@@ -840,7 +841,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '[]u8',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -865,7 +866,7 @@ describe('Pointer functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: false,
       });
       attachMember(structStructure, {
@@ -886,7 +887,7 @@ describe('Pointer functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: false,
       });
       attachMember(sliceStructure, {
@@ -899,7 +900,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '[]Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -933,7 +934,7 @@ describe('Pointer functions', function() {
       const uintStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'u8',
-        size: 1,
+        byteSize: 1,
         hasPointer: false,
       });
       attachMember(uintStructure, {
@@ -946,7 +947,7 @@ describe('Pointer functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        size: 8,
+        byteSize: 8,
         hasPointer: false,
       });
       attachMember(sliceStructure, {
@@ -959,7 +960,7 @@ describe('Pointer functions', function() {
       const constStructure = beginStructure({
         type: StructureType.Pointer,
         name: '[]const u8',
-        size: 8,
+        byteSize: 8,
         isConst: true,
         hasPointer: true,
       });
@@ -975,7 +976,7 @@ describe('Pointer functions', function() {
       const nonConstStructure = beginStructure({
         type: StructureType.Pointer,
         name: '[]u8',
-        size: 8,
+        byteSize: 8,
         isConst: false,
         hasPointer: true,
       });
@@ -1006,7 +1007,7 @@ describe('Pointer functions', function() {
       const uintStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'u8',
-        size: 1,
+        byteSize: 1,
         hasPointer: false,
       });
       attachMember(uintStructure, {
@@ -1019,7 +1020,7 @@ describe('Pointer functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        size: 8,
+        byteSize: 8,
         hasPointer: false,
       });
       attachMember(sliceStructure, {
@@ -1032,7 +1033,7 @@ describe('Pointer functions', function() {
       const constStructure = beginStructure({
         type: StructureType.Pointer,
         name: '[]const u8',
-        size: 8,
+        byteSize: 8,
         isConst: true,
         hasPointer: true,
       });
@@ -1048,7 +1049,7 @@ describe('Pointer functions', function() {
       const nonConstStructure = beginStructure({
         type: StructureType.Pointer,
         name: '[]u8',
-        size: 8,
+        byteSize: 8,
         isConst: false,
         hasPointer: true,
       });
@@ -1074,7 +1075,7 @@ describe('Pointer functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -1086,7 +1087,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         hasPointer: true,
       });
       attachMember(structure, {
@@ -1113,7 +1114,7 @@ describe('Pointer functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -1125,7 +1126,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         isConst: true,
         hasPointer: true,
       });
@@ -1146,7 +1147,7 @@ describe('Pointer functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -1158,7 +1159,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         isConst: true,
         hasPointer: true,
       });
@@ -1182,7 +1183,7 @@ describe('Pointer functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -1194,7 +1195,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         isConst: true,
         hasPointer: true,
       });
@@ -1218,7 +1219,7 @@ describe('Pointer functions', function() {
       const intStructure = beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(intStructure, {
         type: MemberType.Uint,
@@ -1230,7 +1231,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
-        size: 8,
+        byteSize: 8,
         isConst: true,
         hasPointer: true,
       });
@@ -1254,7 +1255,7 @@ describe('Pointer functions', function() {
       const structStructure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
         hasPointer: false,
       });
       attachMember(structStructure, {
@@ -1275,7 +1276,7 @@ describe('Pointer functions', function() {
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
         name: '[_]Hello',
-        size: 16,
+        byteSize: 16,
         hasPointer: false,
       });
       attachMember(sliceStructure, {
@@ -1288,7 +1289,7 @@ describe('Pointer functions', function() {
       const structure = beginStructure({
         type: StructureType.Pointer,
         name: '[]Hello',
-        size: 16,
+        byteSize: 16,
         hasPointer: true,
       });
       attachMember(structure, {

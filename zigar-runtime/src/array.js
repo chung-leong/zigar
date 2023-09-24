@@ -8,7 +8,8 @@ import { copyPointer, getProxy } from './pointer.js';
 
 export function finalizeArray(s) {
   const {
-    size,
+    length,
+    byteSize,
     instance: {
       members: [ member ],
     },
@@ -34,7 +35,7 @@ export function finalizeArray(s) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = new DataView(new ArrayBuffer(size));
+      dv = new DataView(new ArrayBuffer(byteSize));
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
@@ -50,9 +51,8 @@ export function finalizeArray(s) {
     }
     return createProxy.call(self);
   };
-  const { byteSize: elementSize, structure: elementStructure } = member;
-  const length = size / elementSize;
-  const copy = getMemoryCopier(size);
+  const { structure: elementStructure } = member;
+  const copy = getMemoryCopier(byteSize);
   const specialKeys = getSpecialKeys(s);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -154,7 +154,7 @@ export function addPointerVisitor(s) {
 }
 
 export function getArrayIterator() {
-  const self = this[SELF];
+  const self = this[SELF] ?? this;
   const length = this.length;
   let index = 0;
   return {
@@ -173,7 +173,7 @@ export function getArrayIterator() {
 }
 
 export function getArrayEntriesIterator() {
-  const self = this[SELF];
+  const self = this[SELF] ?? this;
   const length = this.length;
   let index = 0;
   return {

@@ -27,7 +27,7 @@ describe('Primitive functions', function() {
       const structure = beginStructure({
         type: StructureType.Primitive,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -47,7 +47,7 @@ describe('Primitive functions', function() {
       const structure = beginStructure({
         type: StructureType.Primitive,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Uint,
@@ -62,7 +62,7 @@ describe('Primitive functions', function() {
       const structure = beginStructure({
         type: StructureType.Primitive,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -80,7 +80,7 @@ describe('Primitive functions', function() {
       const structure = beginStructure({
         type: StructureType.Primitive,
         name: 'i64',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -97,7 +97,7 @@ describe('Primitive functions', function() {
       const structure = beginStructure({
         type: StructureType.Primitive,
         name: 'i128',
-        size: 16,
+        byteSize: 16,
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -114,7 +114,7 @@ describe('Primitive functions', function() {
       const structure = beginStructure({
         type: StructureType.Primitive,
         name: 'i64',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -132,7 +132,7 @@ describe('Primitive functions', function() {
       const structure = beginStructure({
         type: StructureType.Primitive,
         name: 'i64',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -150,7 +150,7 @@ describe('Primitive functions', function() {
       const structure = beginStructure({
         type: StructureType.Primitive,
         name: 'i64',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -169,7 +169,7 @@ describe('Primitive functions', function() {
       const structure = beginStructure({
         type: StructureType.Primitive,
         name: 'i64',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -187,7 +187,7 @@ describe('Primitive functions', function() {
       const structure = beginStructure({
         type: StructureType.Primitive,
         name: 'i64',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -206,7 +206,7 @@ describe('Primitive functions', function() {
       const structure = beginStructure({
         type: StructureType.Primitive,
         name: 'i64',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Int,
@@ -221,7 +221,7 @@ describe('Primitive functions', function() {
       const structure = beginStructure({
         type: StructureType.Primitive,
         name: 'i64',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         type: MemberType.Int,

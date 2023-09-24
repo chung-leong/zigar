@@ -9,7 +9,7 @@ import { copyPointer, resetPointer } from './pointer.js';
 
 export function finalizeOptional(s) {
   const {
-    size,
+    byteSize,
     instance: { members },
     options,
     hasPointer,
@@ -23,7 +23,7 @@ export function finalizeOptional(s) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = new DataView(new ArrayBuffer(size));
+      dv = new DataView(new ArrayBuffer(byteSize));
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
@@ -38,7 +38,7 @@ export function finalizeOptional(s) {
       return self;
     }
   };
-  const copy = getMemoryCopier(size);
+  const copy = getMemoryCopier(byteSize);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);
@@ -54,7 +54,7 @@ export function finalizeOptional(s) {
       this.$ = arg;
     }
   };
-  const { get, set, check } = getOptionalAccessors(members, size, options);
+  const { get, set, check } = getOptionalAccessors(members, byteSize, options);
   Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
   if (hasObject) {
     addChildVivificators(s);
@@ -66,10 +66,10 @@ export function finalizeOptional(s) {
   return constructor;
 }
 
-export function getOptionalAccessors(members, size, options) {
+export function getOptionalAccessors(members, byteSize, options) {
   const { get: getValue, set: setValue } = getAccessors(members[0], options);
   const { get: getPresent, set: setPresent } = getAccessors(members[1], options);
-  const reset = getMemoryResetter(size);
+  const reset = getMemoryResetter(byteSize);
   return {
     get: function() {
       const present = getPresent.call(this);

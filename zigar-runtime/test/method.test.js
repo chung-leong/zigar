@@ -124,7 +124,7 @@ describe('Method functions', function() {
       const structure = beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
-        size: 8,
+        byteSize: 8,
       });
       attachMember(structure, {
         name: 'dog',
@@ -143,14 +143,14 @@ describe('Method functions', function() {
       const argStruct = beginStructure({
         type: StructureType.Struct,
         name: 'Argument',
-        size: 12,
+        byteSize: 12,
       });
       attachMember(argStruct, {
         name: '0',
         type: MemberType.Object,
-        bitSize: structure.size * 8,
+        bitSize: structure.byteSize * 8,
         bitOffset: 0,
-        byteSize: structure.size,
+        byteSize: structure.byteSize,
         structure,
         slot: 0,
       });
@@ -188,7 +188,7 @@ describe('Method functions', function() {
       const structure = beginStructure({
         type: StructureType.Enumeration,
         name: 'Hello',
-        size: 4,
+        byteSize: 4,
       });
       attachMember(structure, {
         name: 'Dog',
@@ -214,7 +214,7 @@ describe('Method functions', function() {
       const argStruct = beginStructure({
         type: StructureType.Struct,
         name: 'Arguments',
-        size: 12,
+        byteSize: 12,
       });
       attachMember(argStruct, {
         name: '0',
