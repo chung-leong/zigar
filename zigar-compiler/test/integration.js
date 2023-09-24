@@ -319,6 +319,12 @@ export function addTests(importModule, options) {
       expect(() => kernel.input.src = { channels: 5 }).to.throw(Error);
       expect(() => kernel.input = { src: { channels: 5 } }).to.throw(Error);
     })
+    it('should account for padding bytes of vector', async function() {
+      this.timeout(60000);
+      const { Vector3 } = await importModule(resolve('./zig-samples/basic/vector-three-wide.zig'));
+      const object = new Vector3(undefined);
+      expect(object.length).to.equal(3);
+    })
   })
   describe('Methods', function() {
     it('should import simple function', async function() {

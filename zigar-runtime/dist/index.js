@@ -13,7 +13,7 @@ const SETTER = Symbol('setter');
 const LENGTH = Symbol('length');
 const PROXY = Symbol('proxy');
 const COMPAT = Symbol('compat');
-
+const SELF = Symbol('self');
 const CHILD_VIVIFICATOR = Symbol('childVivificator');
 const POINTER_VISITOR = Symbol('pointerVisitor');
 
@@ -2270,7 +2270,7 @@ function addPointerVisitor$1(s) {
 }
 
 function getArrayIterator() {
-  const self = this;
+  const self = this[SELF];
   const length = this.length;
   let index = 0;
   return {
@@ -2289,7 +2289,7 @@ function getArrayIterator() {
 }
 
 function getArrayEntriesIterator() {
-  const self = this;
+  const self = this[SELF];
   const length = this.length;
   let index = 0;
   return {
@@ -2338,6 +2338,8 @@ const proxyHandlers = {
             array[SETTER] = array.set.bind(array);
           }
           return array[SETTER];
+        case SELF:
+          return array;
         default:
           return array[name];
       }
@@ -3500,7 +3502,7 @@ function finalizeVector(s) {
         for (const value of arg) {
           this[i++] = value;
         }
-      } else {
+      } else if (arg !== undefined) {
         throwInvalidArrayInitializer(s, arg);
       }
     }

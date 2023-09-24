@@ -66,7 +66,7 @@ export function finalizeVector(s) {
         for (const value of arg) {
           this[i++] = value;
         }
-      } else {
+      } else if (arg !== undefined) {
         throwInvalidArrayInitializer(s, arg);
       }
     }
