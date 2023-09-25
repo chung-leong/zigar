@@ -2518,9 +2518,8 @@ function finalizeStruct(s) {
       descriptors[member.name] = { get, set, configurable: true, enumerable: true };
     }
   }
-  const constructible = (members.length > 0);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const constructor = s.constructor = (constructible) ? function(arg) {
+  const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
@@ -2548,11 +2547,11 @@ function finalizeStruct(s) {
     } else {
       return self;
     }
-  } : Object.create(null);
+  };
   const copy = getMemoryCopier(byteSize);
   const specialKeys = getSpecialKeys(s);
   const requiredKeys = members.filter(m => m.isRequired).map(m => m.name);
-  const initializer = (constructible) ? function(arg) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       restoreMemory.call(this);
       restoreMemory.call(arg);
@@ -2595,15 +2594,13 @@ function finalizeStruct(s) {
         throwInvalidInitializer(s, 'object', arg);
       }
     }
-  } : null;
-  if (constructible) {
-    Object.defineProperty(constructor.prototype, '$', { get: getSelf, set: initializer, configurable: true });
-    addSpecialAccessors(s);
-    if (hasObject) {
-      addChildVivificators(s);
-      if (hasPointer) {
-        addPointerVisitor(s);
-      }
+  };
+  Object.defineProperty(constructor.prototype, '$', { get: getSelf, set: initializer, configurable: true });
+  addSpecialAccessors(s);
+  if (hasObject) {
+    addChildVivificators(s);
+    if (hasPointer) {
+      addPointerVisitor(s);
     }
   }
   addStaticMembers(s);
