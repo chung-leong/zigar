@@ -1290,6 +1290,14 @@ function useIntEx() {
   factories$1[MemberType.Int] = getIntAccessorEx;
 }
 
+function useUint() {
+  factories$1[MemberType.Uint] = getUintAccessor;
+}
+
+function useUintEx() {
+  factories$1[MemberType.Uint] = getUintAccessorEx;
+}
+
 function useFloat() {
   factories$1[MemberType.Float] = getFloatAccessor;
 }
@@ -1360,6 +1368,16 @@ function getIntAccessor(access, member, options) {
 
 function getIntAccessorEx(access, member, options) {
   const getDataViewAccessor = addRuntimeCheck(options, getDataViewIntAccessorEx);
+  return getAccessorUsing(access, member, options, getDataViewAccessor)
+}
+
+function getUintAccessor(access, member, options) {
+  const getDataViewAccessor = addRuntimeCheck(options, getDataViewUintAccessor);
+  return getAccessorUsing(access, member, options, getDataViewAccessor)
+}
+
+function getUintAccessorEx(access, member, options) {
+  const getDataViewAccessor = addRuntimeCheck(options, getDataViewUintAccessorEx);
   return getAccessorUsing(access, member, options, getDataViewAccessor)
 }
 
@@ -4059,11 +4077,13 @@ async function runModule(source, options = {}) {
 
   function createCopy(ctx, address, len) {
     const buffer = new ArrayBuffer(len);
-    const copy = getMemoryCopier(len);
     const dv = new DataView(buffer);
-    // copy content immediately, since address is likely pointing to a stack location
-    const src = new DataView(wasmMemory.buffer, address, len);
-    copy(dv, src);
+    if (len > 0) {
+      // copy content immediately, since address is likely pointing to a stack location
+      const copy = getMemoryCopier(len);
+      const src = new DataView(wasmMemory.buffer, address, len);
+      copy(dv, src);
+    }
     ctx.bufferMap.set(dv, { address, len, copy: null, ptrAlign: 0, shadow: false });
     return dv;
   }
@@ -4201,4 +4221,4 @@ function finalizeStructures(structures) {
   return { promise, resolve, reject, slots, variables, methodRunner };
 }
 
-export { finalizeStructures, linkModule, runModule, useArgStruct, useArray, useBareUnion, useBool, useBoolEx, useEnumeration, useEnumerationItem, useEnumerationItemEx, useErrorSet, useErrorUnion, useExternUnion, useFloat, useFloatEx, useInt, useIntEx, useObject, useOpaque, useOptional, usePointer, usePrimitive, useSlice, useStruct, useTaggedUnion, useType, useVector, useVoid };
+export { finalizeStructures, linkModule, runModule, useArgStruct, useArray, useBareUnion, useBool, useBoolEx, useEnumeration, useEnumerationItem, useEnumerationItemEx, useErrorSet, useErrorUnion, useExternUnion, useFloat, useFloatEx, useInt, useIntEx, useObject, useOpaque, useOptional, usePointer, usePrimitive, useSlice, useStruct, useTaggedUnion, useType, useUint, useUintEx, useVector, useVoid };

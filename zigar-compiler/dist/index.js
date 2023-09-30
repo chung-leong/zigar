@@ -966,11 +966,13 @@ async function runModule(source, options = {}) {
 
   function createCopy(ctx, address, len) {
     const buffer = new ArrayBuffer(len);
-    const copy = getMemoryCopier(len);
     const dv = new DataView(buffer);
-    // copy content immediately, since address is likely pointing to a stack location
-    const src = new DataView(wasmMemory.buffer, address, len);
-    copy(dv, src);
+    if (len > 0) {
+      // copy content immediately, since address is likely pointing to a stack location
+      const copy = getMemoryCopier(len);
+      const src = new DataView(wasmMemory.buffer, address, len);
+      copy(dv, src);
+    }
     ctx.bufferMap.set(dv, { address, len, copy: null, ptrAlign: 0, shadow: false });
     return dv;
   }
@@ -1064,8 +1066,8 @@ function generateCode(structures, params) {
       }
     }
     if (structure.type === StructureType.Pointer) {
-      // pointer need int support
-      memberFeatures.useInt = true;
+      // pointer need uint support
+      memberFeatures.useUint = true;
     }
   }
   if (memberFeatures.useIntEx) {
@@ -1187,7 +1189,7 @@ function generateCode(structures, params) {
         readOnly = true;
       }
     }
-    if (readOnly && /^[$\w]+$/.test(method.name)) {
+    if (readOnly && /^[$\w]+$/.test(member.name)) {
       exportables.push(member.name);
     }
   }

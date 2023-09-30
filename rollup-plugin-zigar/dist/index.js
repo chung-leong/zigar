@@ -1,9 +1,9 @@
 import { transpile } from 'zigar-compiler';
 
-const schema = {
+export const schema = {
   type: 'object',
   default: {},
-  title: 'Zigar-loader Options Schema',
+  title: 'Rollup-plugin-zigar Options Schema',
   required: [],
   additionalProperties: false,
   properties: {
@@ -59,7 +59,7 @@ const schema = {
   },
 };
 
-function verifyOptions(options) {
+export function verifyOptions(options, schema) {
   for (const [ name, value ] of Object.entries(options)) {
     const descriptor = schema.properties[name];
     if (!descriptor) {
@@ -73,12 +73,12 @@ function verifyOptions(options) {
   }
 }
 
-function getOptimizationMode(isProd) {
+export function getOptimizationMode(isProd) {
   return (isProd) ? 'ReleaseSmall' : 'Debug';
 }
 
 export default function createPlugin(options = {}) {
-  verifyOptions(options);
+  verifyOptions(options, schema);
   let embedWASMDefault = false;
   let optimizeDefault = getOptimizationMode(process.env.NODE_ENV === 'production');
   return {

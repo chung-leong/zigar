@@ -439,11 +439,13 @@ export async function runModule(source, options = {}) {
 
   function createCopy(ctx, address, len) {
     const buffer = new ArrayBuffer(len);
-    const copy = getMemoryCopier(len);
     const dv = new DataView(buffer);
-    // copy content immediately, since address is likely pointing to a stack location
-    const src = new DataView(wasmMemory.buffer, address, len);
-    copy(dv, src);
+    if (len > 0) {
+      // copy content immediately, since address is likely pointing to a stack location
+      const copy = getMemoryCopier(len);
+      const src = new DataView(wasmMemory.buffer, address, len);
+      copy(dv, src);
+    }
     ctx.bufferMap.set(dv, { address, len, copy: null, ptrAlign: 0, shadow: false });
     return dv;
   }
@@ -619,6 +621,8 @@ export {
   useBoolEx,
   useInt,
   useIntEx,
+  useUint,
+  useUintEx,
   useFloat,
   useFloatEx,
   useEnumerationItem,

@@ -239,7 +239,8 @@ pub const Host = struct {
         const structure = createObject();
         setObjectProperty(structure, "name", def.name);
         setObjectProperty(structure, "type", def.structure_type);
-        setObjectProperty(structure, "size", def.total_size);
+        setObjectProperty(structure, "length", def.length);
+        setObjectProperty(structure, "byteSize", def.byte_size);
         setObjectProperty(structure, "align", def.ptr_align);
         setObjectProperty(structure, "isConst", def.is_const);
         setObjectProperty(structure, "hasPointer", def.has_pointer);

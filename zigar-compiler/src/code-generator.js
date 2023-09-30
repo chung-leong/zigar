@@ -32,8 +32,8 @@ export function generateCode(structures, params) {
       }
     }
     if (structure.type === StructureType.Pointer) {
-      // pointer need int support
-      memberFeatures.useInt = true;
+      // pointer need uint support
+      memberFeatures.useUint = true;
     }
   }
   if (memberFeatures.useIntEx) {
@@ -155,7 +155,7 @@ export function generateCode(structures, params) {
         readOnly = true;
       }
     }
-    if (readOnly && /^[$\w]+$/.test(method.name)) {
+    if (readOnly && /^[$\w]+$/.test(member.name)) {
       exportables.push(member.name);
     }
   }
