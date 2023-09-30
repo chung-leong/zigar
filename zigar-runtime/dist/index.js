@@ -3938,6 +3938,9 @@ async function runModule(source, options = {}) {
   function linkObject(object, address) {
     const dv1 = object[MEMORY];
     const len = dv1.byteLength;
+    if (len === 0) {
+      return;
+    }
     const dv2 = new DataView(wasmMemory.buffer, address, len);
     /*
     console.log({ address });

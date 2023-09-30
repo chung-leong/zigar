@@ -138,7 +138,8 @@ pub const Host = struct {
     }
 
     fn createDataView(self: Host, memory: Memory, disposition: MemoryDisposition) ?Value {
-        const bytes = memory.bytes orelse return null;
+        // null pointer is possible here--JavaScript code will create an empty ArrayBuffer when len is 0
+        const bytes = memory.bytes;
         const len = memory.len;
         const address = @intFromPtr(bytes);
         const dv_index = _createDataView(self.context, address, len, @intFromEnum(disposition));

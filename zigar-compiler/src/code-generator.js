@@ -105,14 +105,25 @@ export function generateCode(structures, params) {
   const arrayBufferNames = new Map();
   let arrayBufferCount = 0;
   let methodCount = 0;
+
+  // create empty objects first, to allow structs to reference themselves
   for (const [ index, structure ] of structures.entries()) {
     const varname = `s${index}`;
-    addStructure(varname, structure);
     structureNames.set(structure, varname);
+  }
+  const varnames = [ ...structureNames.values() ];
+  const initializations = varnames.map(n => `${n} = {}`);
+  for (let i = 0; i < initializations.length; i += 10) {
+    const slice = initializations.slice(i, i + 10);
+    add(`const ${slice.join(', ')};`);
+  }
+
+  for (const [ index, structure ] of structures.entries()) {
+    const varname = structureNames.get(structure);
+    addStructure(varname, structure);
   }
 
   add(`\n// finalize structures`);
-  const varnames = [ ...structureNames.values() ];
   if (varnames.length <= 10) {
     add(`const structures = [ ${varnames.join(', ') } ];`);
   } else {
@@ -198,7 +209,7 @@ export function generateCode(structures, params) {
     addBuffers(structure.static.template);
     // instance methods are also static methods, so no need to add them separately
     addMethods(structure.static.methods);
-    add(`const ${varname} = {`);
+    add(`Object.assign(${varname}, {`);
     add(`...s,`);
     for (const [ name, value ] of Object.entries(structure)) {
       if (name !== 'options' && isDifferent(value, defaultStructure[name])) {
@@ -212,7 +223,7 @@ export function generateCode(structures, params) {
         }
       }
     }
-    add(`};`);
+    add(`});`);
   }
 
   function addStructureContent(name, { members, methods, template }) {
