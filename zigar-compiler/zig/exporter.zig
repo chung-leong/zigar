@@ -1745,7 +1745,10 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
                         args[i] = createAllocator(&host);
                     } else {
                         const name = std.fmt.comptimePrint("{d}", .{index});
-                        args[i] = @field(arg_ptr.*, name);
+                        // get the argument only if it isn't empty
+                        if (comptime @sizeOf(@TypeOf(@field(arg_ptr.*, name))) > 0) {
+                            args[i] = @field(arg_ptr.*, name);
+                        }
                         index += 1;
                     }
                 }
