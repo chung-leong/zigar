@@ -102,7 +102,7 @@ export function getMemberFeature(member) {
         return 'useUintEx';
       }
     case MemberType.EnumerationItem:
-      if(isByteAligned(member) && (bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64)) {
+      if(isByteAligned(member) && bitSize <= 64) {
         return 'useEnumerationItem';
       } else {
         return 'useEnumerationItemEx';
@@ -227,18 +227,24 @@ export function getFloatAccessorEx(access, member, options) {
 }
 
 export function getEnumerationItemAccessor(access, member, options) {
-  const getDataViewAccessor = addEnumerationLookup(getDataViewUintAccessor);
+  const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessor);
   return getAccessorUsing(access, member, options, getDataViewAccessor) ;
 }
 
 export function getEnumerationItemAccessorEx(access, member, options) {
-  const getDataViewAccessor = addEnumerationLookup(getDataViewUintAccessorEx);
+  const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessorEx);
   return getAccessorUsing(access, member, options, getDataViewAccessor) ;
 }
 
 function addEnumerationLookup(getDataViewIntAccessor) {
   return function(access, member) {
-    const accessor = getDataViewIntAccessor(access, { ...member, type: MemberType.Int });
+    // no point in using non-standard int accessor to read enum values unless they aren't byte-aligned
+    let { bitSize, byteSize } = member;
+    if (byteSize) {
+      bitSize = byteSize * 8;
+    }
+    const intMember = { type: MemberType.Int, bitSize, byteSize };
+    const accessor = getDataViewIntAccessor(access, intMember);
     if (process.env.ZIGAR_DEV) {
       if (!accessor) {
         return;

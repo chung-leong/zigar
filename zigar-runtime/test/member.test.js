@@ -939,11 +939,28 @@ describe('Member functions', function() {
       const name = getMemberFeature(member);
       expect(name).to.equal('useEnumerationItemEx');
     })
-    it('should return name of function for handling non-standard enum', function() {
+    it('should return name of function for handling byte-aligned enum', function() {
       const member = {
         type: MemberType.EnumerationItem,
         bitSize: 4,
         byteSize: 1,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useEnumerationItem');
+    })
+    it('should return name of function for handling unaligned enum', function() {
+      const member = {
+        type: MemberType.EnumerationItem,
+        bitSize: 4,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useEnumerationItemEx');
+    })
+    it('should return name of function for handling aligned but oversized enum', function() {
+      const member = {
+        type: MemberType.EnumerationItem,
+        bitSize: 80,
+        byteSize: 16,
       };
       const name = getMemberFeature(member);
       expect(name).to.equal('useEnumerationItemEx');

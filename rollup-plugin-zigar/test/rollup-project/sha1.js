@@ -38,7 +38,8 @@ const m = {
   bitSize: 32,
   byteSize: 4,
 };
-const s0 = {
+const s0 = {}, s1 = {}, s2 = {}, s3 = {}, s4 = {}, s5 = {};
+Object.assign(s0, {
   ...s,
   name: "u8",
   length: 1,
@@ -52,15 +53,15 @@ const s0 = {
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,
-        structure: undefined,
+        structure: s0,
       },
     ],
     methods: [],
     template: null
   },
   slot: 5,
-};
-const s1 = {
+});
+Object.assign(s1, {
   ...s,
   type: 12,
   name: "[_]const u8",
@@ -81,8 +82,8 @@ const s1 = {
     template: null
   },
   slot: 3,
-};
-const s2 = {
+});
+Object.assign(s2, {
   ...s,
   type: 11,
   name: "[]const u8",
@@ -105,8 +106,8 @@ const s2 = {
     template: null
   },
   slot: 2,
-};
-const s3 = {
+});
+Object.assign(s3, {
   ...s,
   type: 1,
   name: "[40]u8",
@@ -127,8 +128,8 @@ const s3 = {
     template: null
   },
   slot: 4,
-};
-const s4 = {
+});
+Object.assign(s4, {
   ...s,
   type: 3,
   name: "sha1",
@@ -164,13 +165,14 @@ const s4 = {
     template: null
   },
   slot: 1,
-};
+});
+const a0 = new Uint8Array([  ]);
 const f0 = {
   argStruct: s4,
   thunk: 3,
   name: "sha1",
 };
-const s5 = {
+Object.assign(s5, {
   ...s,
   type: 2,
   name: "sha1",
@@ -181,6 +183,7 @@ const s5 = {
     members: [],
     methods: [],
     template: {
+      memory: { array: a0 },
     },
   },
   static: {
@@ -189,7 +192,7 @@ const s5 = {
     template: null
   },
   slot: 0,
-};
+});
 
 // finalize structures
 const structures = [ s0, s1, s2, s3, s4, s5 ];
@@ -198,7 +201,7 @@ const module = s5.constructor;
 
 // initiate loading and compilation of WASM bytecodes
 const wasmPromise = (async () => {
-  const url = new URL('assets/sha1-095be62d.wasm', import.meta.url).href;
+  const url = new URL('assets/sha1-5e9c0b52.wasm', import.meta.url).href;
   if (typeof(process) === 'object' && process[Symbol.toStringTag] === 'process') {
     const { readFile } = await import('fs/promises');
     const { fileURLToPath } = await import('url');
