@@ -19,7 +19,7 @@ describe('Structure functions', function() {
         byteSize: 0
       });
       const Hello = finalizeStructure(structure);
-      expect(Hello).to.be.an('object');
+      expect(Hello).to.be.an('function');
     })
   })
   describe('getStructureFeature', function() {

@@ -704,7 +704,62 @@ describe('Slice functions', function() {
         expect(object.get(i)).to.equal(BigInt(i + 1) * 1000n);
       }
     })
-    it('should allow casting to slice from an array with same element type', function() {
+    it('should allow casting from a buffer', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]u32',
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { constructor: function() {}, typedArray: Uint32Array }
+      });
+      const U32Slice = finalizeStructure(structure);
+      const buffer = new Buffer(16);
+      const slice = U32Slice(buffer);
+      slice[0] = 0xf0f0f0f0;
+      expect(slice).to.have.lengthOf(4);
+      expect(buffer[0]).to.equal(0xf0);
+    })
+    it('should allow casting from a typed array', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]u8',
+        byteSize: 1,
+      });
+      attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
+      });
+      const U8Slice = finalizeStructure(structure);
+      const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
+      const slice = U8Slice(typedArray);
+      slice[0] = 123;
+      expect(typedArray[123]).to.not.equal(123);
+    })
+    it('should allow casting from an Uint8ClampedArray', function() {
+      const structure = beginStructure({
+        type: StructureType.Slice,
+        name: '[_]u8',
+        byteSize: 1,
+      });
+      attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
+      });
+      const U8Slice = finalizeStructure(structure);
+      const typedArray = new Uint8ClampedArray([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
+      const slice = U8Slice(typedArray);
+      slice[0] = 123;
+      expect(typedArray[123]).to.not.equal(123);
+    })
+    it('should allow casting from an array with same element type', function() {
       const Int64 = function() {};
       const sliceStructure = beginStructure({
         type: StructureType.Slice,
@@ -735,7 +790,7 @@ describe('Slice functions', function() {
       const slice = Int64Slice(array);
       expect(slice[MEMORY]).to.equal(array[MEMORY]);
     })
-    it('should allow casting to slice from an vector with same element type', function() {
+    it('should allow casting from an vector with same element type', function() {
       const Int64 = function() {};
       const sliceStructure = beginStructure({
         type: StructureType.Slice,

@@ -304,15 +304,15 @@ follows:
 | Zig pointer type | JavaScript object types                           |
 |------------------|---------------------------------------------------|
 | `[]u8`, `*u8`    | `ArrayBuffer`, `Uint8Array`, `Buffer`, `DataView` |
-| `[]i8`, `*i8`    | `Int8Array`, `DataView`                           |
-| `[]u16`, `*u16`  | `Unt16Array`, `DataView`                          |
-| `[]i16`, `*i16`  | `Int16Array`, `DataView`                          |
-| `[]u32`, `*u32`  | `Uint32Array`, `DataView`,                        |
-| `[]i32`, `*i32`  | `Int32Array`, `DataView`,                         |
-| `[]u64`, `*u64`  | `BigUint64Array`, `DataView`,                     |
-| `[]i64`, `*i64`  | `BigInt64Array`, `DataView`,                      |
-| `[]f32`, `*f32`  | `Float32Array`, `DataView`,                       |
-| `[]f64`, `*f64`  | `Float64Array`, `DataView`,                       |
+| `[]i8`, `*i8`    | `Int8Array`, `Buffer`, `DataView`                 |
+| `[]u16`, `*u16`  | `Unt16Array`, `Buffer`, `DataView`                |
+| `[]i16`, `*i16`  | `Int16Array`, `Buffer`, `DataView`                |
+| `[]u32`, `*u32`  | `Uint32Array`, `Buffer`, `DataView`,              |
+| `[]i32`, `*i32`  | `Int32Array`, `Buffer`, `DataView`,               |
+| `[]u64`, `*u64`  | `BigUint64Array`, `Buffer`, `DataView`,           |
+| `[]i64`, `*i64`  | `BigInt64Array`, `Buffer`, `DataView`,            |
+| `[]f32`, `*f32`  | `Float32Array`, `Buffer`, `DataView`,             |
+| `[]f64`, `*f64`  | `Float64Array`, `Buffer`, `DataView`,             |
 
 The following example exports a number of functions, each of which sets all elements of a slice to
 a particular value:

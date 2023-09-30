@@ -120,7 +120,9 @@ export function getDataView(structure, arg) {
     dv = arg;
   } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
     dv = new DataView(arg);
-  } else if (tag === 'Uint8Array' || (typedArray && tag === typedArray.name)) {
+  } else if (typedArray && tag === typedArray.name || (tag === 'Uint8ClampedArray' && typedArray === Uint8Array)) {
+    dv = new DataView(arg.buffer, arg.byteOffset, arg.byteLength);
+  } else if (tag === 'Uint8Array' && typeof(Buffer) === 'function' && arg instanceof Buffer) {
     dv = new DataView(arg.buffer, arg.byteOffset, arg.byteLength);
   } else {
     const memory = arg?.[MEMORY];
@@ -233,6 +235,7 @@ export function getCompatibleTags(structure) {
     tags.push(typedArray.name);
     tags.push('DataView');
     if (typedArray === Uint8Array) {
+      tags.push('Uint8ClampedArray');
       tags.push('ArrayBuffer');
       tags.push('SharedArrayBuffer');
     }
