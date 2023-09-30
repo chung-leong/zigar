@@ -112,6 +112,7 @@ export function finalizeUnion(s) {
       descriptors[member.name] = { get, set, init: set, configurable: true, enumerable: true };
     }
   }
+  const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const pointerMembers = members.filter(m => m.structure.hasPointer);
   // non-tagged union as marked as not having pointers--if there're actually
@@ -165,30 +166,41 @@ export function finalizeUnion(s) {
       }
     } else {
       if (arg && typeof(arg) === 'object') {
-        const keys = Object.keys(arg);
+        // checking each name so that we would see inenumerable initializers as well
         let found = 0;
-        let specialInit = false;
         for (const key of keys) {
-          if (descriptors.hasOwnProperty(key)) {
+          if (key in arg) {
             found++;
-          } else if (specialKeys.includes(key)) {
-            specialInit = true;
-          } else {
+          }
+        }
+        let specialFound = 0;
+        if (!arg[MEMORY]) {
+          for (const key of specialKeys) {
+            if (key in arg) {
+              specialFound++;
+            }
+          }
+        }
+        // don't accept unknown enumerable props
+        for (const key of Object.keys(arg)) {
+          if (!(key in this)) {
             throwNoProperty(s, key);
           }
         }
         if (found !== 1) {
           if (found === 0) {
-            if (!specialInit && !hasDefaultMember) {
+            if (specialFound === 0 && !hasDefaultMember) {
               throwMissingUnionInitializer(s, arg, exclusion);
             }
           } else {
             throwMultipleUnionInitializers(s);
           }
         }
-        if (specialInit) {
-          for (const key of keys) {
-            this[key] = arg[keys];
+        if (specialFound > 0) {
+          for (const key of specialKeys) {
+            if (key in arg) {
+              this[key] = arg[key];
+            }
           }
         } else if (found === 0) {
           if (template) {
@@ -200,8 +212,12 @@ export function finalizeUnion(s) {
           }
         } else {
           for (const key of keys) {
-            const { init } = descriptors[key];
-            init.call(this, arg[key]);
+            if (key in arg) {
+              // can't just set the property, since it would throw when a field other than the
+              // active one is being set
+              const { init } = descriptors[key];
+              init.call(this, arg[key]);
+            }
           }
         }
       } else if (arg !== undefined) {

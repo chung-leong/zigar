@@ -43,18 +43,25 @@ export function finalizePrimitive(s) {
       copy(this[MEMORY], arg[MEMORY]);
     } else {
       if (arg && typeof(arg) === 'object') {
-        const keys = Object.keys(arg);
-        for (const key of keys) {
-          if (!specialKeys.includes(key)) {
+        for (const key of Object.keys(arg)) {
+          if (!(key in this)) {
             throwNoProperty(s, key);
           }
         }
-        if (!keys.some(k => specialKeys.includes(k))) {
+        let specialFound = 0;
+        for (const key of specialKeys) {
+          if (key in arg) {
+            specialFound++;
+          }
+        }
+        if (specialFound === 0) {
           const type = getPrimitiveType(member);
           throwInvalidInitializer(s, type, arg);
         }
-        for (const key of keys) {
-          this[key] = arg[key];
+        for (const key of specialKeys) {
+          if (key in arg) {
+            this[key] = arg[key];
+          }
         }
       } else if (arg !== undefined) {
         this.$ = arg;

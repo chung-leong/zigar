@@ -68,6 +68,60 @@ describe('Struct functions', function() {
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(4567);
     })
+    it('should initialize fields from object', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 4 * 2,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      const object = new Hello({ dog: 5, cat: 6 });
+      expect(object.dog).to.equal(5);
+      expect(object.cat).to.equal(6);
+    })
+    it('should initialize fields from object whose fields are not enumerable', function() {
+      const structure = beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 4 * 2,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      const Hello = finalizeStructure(structure);
+      const initObj = Object.create({ dog: 5 });
+      Object.defineProperty(initObj, 'cat', { value: 6 });
+      const object = new Hello(initObj);
+      expect('dog' in initObj).to.be.true;
+      expect('cat' in initObj).to.be.true;
+      expect(object.dog).to.equal(5);
+      expect(object.cat).to.equal(6);
+    })
     it('should throw when no initializer is provided', function() {
       const structure = beginStructure({
         type: StructureType.Struct,

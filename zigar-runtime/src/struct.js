@@ -32,6 +32,7 @@ export function finalizeStruct(s) {
       descriptors[member.name] = { get, set, configurable: true, enumerable: true };
     }
   }
+  const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
@@ -53,11 +54,6 @@ export function finalizeStruct(s) {
     }
     if (creating) {
       initializer.call(self, arg);
-      if (arg) {
-        for (const [ key, value ] of Object.entries(arg)) {
-          this[key] = value;
-        }
-      }
     } else {
       return self;
     }
@@ -75,34 +71,56 @@ export function finalizeStruct(s) {
       }
     } else {
       if (arg && typeof(arg) === 'object') {
-        const keys = Object.keys(arg);
+        // checking each name so that we would see inenumerable initializers as well
         let found = 0;
-        let requiredFound = 0;
-        let specialInit = false;
         for (const key of keys) {
-          if (descriptors.hasOwnProperty(key)) {
+          if (key in arg) {
             found++;
-            if (requiredKeys.includes(key)) {
-              requiredFound++;
+          }
+        }
+        let requiredFound = 0;
+        for (const key of requiredKeys) {
+          if (key in arg) {
+            requiredFound++;
+          }
+        }
+        let specialFound = 0;
+        if (!arg[MEMORY]) {
+          // only look for special keys in non-zigar objects
+          for (const key of specialKeys) {
+            if (key in arg) {
+              specialFound++;
             }
-          } else if (specialKeys.includes(key)) {
-            specialInit = true;
-          } else {
+          }
+        }
+        // don't accept unknown enumerable props
+        for (const key of Object.keys(arg)) {
+          if (!(key in this)) {
             throwNoProperty(s, key);
           }
         }
-        if (!specialInit && requiredFound < requiredKeys.length) {
+        if (specialFound === 0 && requiredFound < requiredKeys.length) {
           throwMissingInitializers(s, arg);
         }
         // apply default values unless all properties are initialized
-        if (template && !specialInit && found < members.length) {
+        if (template && specialFound === 0 && found < keys.length) {
           copy(this[MEMORY], template[MEMORY]);
           if (hasPointer) {
             this[POINTER_VISITOR](true, template, copyPointer);
           }
         }
-        for (const key of keys) {
-          this[key] = arg[key];
+        if (specialFound > 0) {
+          for (const key of specialKeys) {
+            if (key in arg) {
+              this[key] = arg[key];
+            }
+          }
+        } else if (found > 0) {
+          for (const key of keys) {
+            if (key in arg) {
+              this[key] = arg[key];
+            }
+          }
         }
       } else if (arg !== undefined) {
         throwInvalidInitializer(s, 'object', arg);

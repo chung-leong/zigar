@@ -208,6 +208,49 @@ describe('Union functions', function() {
       expect(object.cat).to.equal(123);
       expect(() => object.dog).to.throw(TypeError);
     })
+    it('should initialize a simple bare union using inenumerable property', function() {
+      const structure = beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        byteSize: 8,
+      });
+      attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      attachMember(structure, {
+        name: 'selector',
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 32,
+        byteSize: 2,
+        structure: {},
+      });
+      attachTemplate(structure, {
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(8));
+          dv.setInt32(0, 1234, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
+      })
+      const Hello = finalizeStructure(structure);
+      const initObj = Object.create({ cat: 123 })
+      const object = new Hello(initObj);
+      expect(object.cat).to.equal(123);
+    })
     it('should allow casting to a simple bare union', function() {
       const structure = beginStructure({
         type: StructureType.BareUnion,

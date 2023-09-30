@@ -80,17 +80,24 @@ export function finalizeArray(s) {
           set.call(this, i++, value);
         }
       } else if (arg && typeof(arg) === 'object') {
-        const keys = Object.keys(arg);
-        for (const key of keys) {
-          if (!specialKeys.includes(key)) {
+        for (const key of Object.keys(arg)) {
+          if (!(key in this)) {
             throwNoProperty(s, key);
           }
         }
-        if (!keys.some(k => specialKeys.includes(k))) {
+        let specialFound = 0;
+        for (const key of specialKeys) {
+          if (key in arg) {
+            specialFound++;
+          }
+        }
+        if (specialFound === 0) {
           throwInvalidArrayInitializer(s, arg);
         }
-        for (const key of keys) {
-          this[key] = arg[key];
+        for (const key of specialKeys) {
+          if (key in arg) {
+            this[key] = arg[key];
+          }
         }
       } else if (arg !== undefined) {
         throwInvalidArrayInitializer(s, arg);

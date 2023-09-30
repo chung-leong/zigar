@@ -128,49 +128,56 @@ export function finalizeSlice(s) {
           throwInvalidArrayInitializer(s, arg, shapeless);
         }
       } else if (arg && typeof(arg) === 'object') {
-        const keys = Object.keys(arg);
-        for (const key of keys) {
-          if (!specialKeys.includes(key)) {
+        for (const key of Object.keys(arg)) {
+          if (!(key in this)) {
             throwNoProperty(s, key);
           }
         }
-        if (!keys.some(k => specialKeys.includes(k))) {
+        let specialFound = 0;
+        for (const key of specialKeys) {
+          if (key in arg) {
+            specialFound++;
+          }
+        }
+        if (specialFound === 0) {
           throwInvalidArrayInitializer(s, arg);
         }
-        for (const key of keys) {
-          if (shapeless) {
-            // can't use accessors since the object has no memory yet
-            let dv, dup = true;
-            switch (key) {
-              case 'dataView':
-                dv = arg[key];
-                checkDataView(dv);
-                break;
-              case 'typedArray':
-                dv = getDataViewFromTypedArray(arg[key], typedArray);
-                break;
-              case 'string':
-                dv = getDataViewFromUTF8(arg[key], elementSize, sentinel?.value);
-                dup = false;
-                break;
-              case 'base64':
-                dv = getDataViewFromBase64(arg[key]);
-                dup = false;
-                break;
-            }
-            checkDataViewSize(s, dv);
-            const length = dv.byteLength / elementSize;
-            sentinel?.validateData(dv, length);
-            if (dup) {
-              shapeDefiner.call(this, null, length);
-              copy(this[MEMORY], dv);
+        for (const key of specialKeys) {
+          if (key in arg) {
+            if (shapeless) {
+              // can't use accessors since the object has no memory yet
+              let dv, dup = true;
+              switch (key) {
+                case 'dataView':
+                  dv = arg[key];
+                  checkDataView(dv);
+                  break;
+                case 'typedArray':
+                  dv = getDataViewFromTypedArray(arg[key], typedArray);
+                  break;
+                case 'string':
+                  dv = getDataViewFromUTF8(arg[key], elementSize, sentinel?.value);
+                  dup = false;
+                  break;
+                case 'base64':
+                  dv = getDataViewFromBase64(arg[key]);
+                  dup = false;
+                  break;
+              }
+              checkDataViewSize(s, dv);
+              const length = dv.byteLength / elementSize;
+              sentinel?.validateData(dv, length);
+              if (dup) {
+                shapeDefiner.call(this, null, length);
+                copy(this[MEMORY], dv);
+              } else {
+                // reuse memory from string decoding
+                shapeDefiner.call(this, dv, length);
+              }
+              shapeless = false;
             } else {
-              // reuse memory from string decoding
-              shapeDefiner.call(this, dv, length);
+              this[key] = arg[key];
             }
-            shapeless = false;
-          } else {
-            this[key] = arg[key];
           }
         }
       } else if (arg !== undefined) {
