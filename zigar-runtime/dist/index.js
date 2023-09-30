@@ -2996,7 +2996,6 @@ function finalizeErrorUnion(s) {
   if (hasObject) {
     addChildVivificators(s);
     if (hasPointer) {
-      debugger;
       addPointerVisitor(s);
     }
   }
@@ -3018,7 +3017,6 @@ function getErrorUnionAccessors(members, byteSize, options) {
         if (!err) {
           throwUnknownErrorNumber(errorStructure, errorNumber);
         }
-        debugger;
         this[POINTER_VISITOR]?.(false, null, resetPointer);
         throw err;
       } else {
@@ -3284,7 +3282,6 @@ function getOptionalAccessors(members, byteSize, options) {
       if (present) {
         return getValue.call(this);
       } else {
-        debugger;
         this[POINTER_VISITOR]?.(false, null, resetPointer);
         return null;
       }
@@ -3295,7 +3292,6 @@ function getOptionalAccessors(members, byteSize, options) {
         setValue.call(this, value);
       } else {
         reset(this[MEMORY]);
-        debugger;
         this[POINTER_VISITOR]?.(false, null, resetPointer);
       }
     },

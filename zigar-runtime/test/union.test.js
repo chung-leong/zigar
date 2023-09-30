@@ -677,7 +677,6 @@ describe('Union functions', function() {
         structure: enumStructure,
       });
       const Hello = finalizeStructure(structure);
-      debugger;
       const object = new Hello({ dog: 1234 });
       expect(object.dog).to.equal(1234);
       expect(object.valueOf()).to.eql({ dog: 1234 });

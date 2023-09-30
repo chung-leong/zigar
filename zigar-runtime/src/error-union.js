@@ -56,7 +56,6 @@ export function finalizeErrorUnion(s) {
   if (hasObject) {
     addChildVivificators(s);
     if (hasPointer) {
-      debugger;
       addPointerVisitor(s);
     }
   }
@@ -78,7 +77,6 @@ export function getErrorUnionAccessors(members, byteSize, options) {
         if (!err) {
           throwUnknownErrorNumber(errorStructure, errorNumber);
         }
-        debugger;
         this[POINTER_VISITOR]?.(false, null, resetPointer);
         throw err;
       } else {

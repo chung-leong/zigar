@@ -76,7 +76,6 @@ export function getOptionalAccessors(members, byteSize, options) {
       if (present) {
         return getValue.call(this);
       } else {
-        debugger;
         this[POINTER_VISITOR]?.(false, null, resetPointer);
         return null;
       }
@@ -87,7 +86,6 @@ export function getOptionalAccessors(members, byteSize, options) {
         setValue.call(this, value);
       } else {
         reset(this[MEMORY]);
-        debugger;
         this[POINTER_VISITOR]?.(false, null, resetPointer);
       }
     },
