@@ -680,7 +680,9 @@ function getDataView(structure, arg) {
     dv = arg;
   } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
     dv = new DataView(arg);
-  } else if (tag === 'Uint8Array' || (typedArray && tag === typedArray.name)) {
+  } else if (typedArray && tag === typedArray.name || (tag === 'Uint8ClampedArray' && typedArray === Uint8Array)) {
+    dv = new DataView(arg.buffer, arg.byteOffset, arg.byteLength);
+  } else if (tag === 'Uint8Array' && typeof(Buffer) === 'function' && arg instanceof Buffer) {
     dv = new DataView(arg.buffer, arg.byteOffset, arg.byteLength);
   } else {
     const memory = arg?.[MEMORY];
@@ -793,6 +795,7 @@ function getCompatibleTags(structure) {
     tags.push(typedArray.name);
     tags.push('DataView');
     if (typedArray === Uint8Array) {
+      tags.push('Uint8ClampedArray');
       tags.push('ArrayBuffer');
       tags.push('SharedArrayBuffer');
     }
@@ -1815,18 +1818,25 @@ function finalizePrimitive(s) {
       copy(this[MEMORY], arg[MEMORY]);
     } else {
       if (arg && typeof(arg) === 'object') {
-        const keys = Object.keys(arg);
-        for (const key of keys) {
-          if (!specialKeys.includes(key)) {
+        for (const key of Object.keys(arg)) {
+          if (!(key in this)) {
             throwNoProperty$1(s, key);
           }
         }
-        if (!keys.some(k => specialKeys.includes(k))) {
+        let specialFound = 0;
+        for (const key of specialKeys) {
+          if (key in arg) {
+            specialFound++;
+          }
+        }
+        if (specialFound === 0) {
           const type = getPrimitiveType(member);
           throwInvalidInitializer(s, type, arg);
         }
-        for (const key of keys) {
-          this[key] = arg[key];
+        for (const key of specialKeys) {
+          if (key in arg) {
+            this[key] = arg[key];
+          }
         }
       } else if (arg !== undefined) {
         this.$ = arg;
@@ -2215,17 +2225,24 @@ function finalizeArray(s) {
           set.call(this, i++, value);
         }
       } else if (arg && typeof(arg) === 'object') {
-        const keys = Object.keys(arg);
-        for (const key of keys) {
-          if (!specialKeys.includes(key)) {
+        for (const key of Object.keys(arg)) {
+          if (!(key in this)) {
             throwNoProperty(s, key);
           }
         }
-        if (!keys.some(k => specialKeys.includes(k))) {
+        let specialFound = 0;
+        for (const key of specialKeys) {
+          if (key in arg) {
+            specialFound++;
+          }
+        }
+        if (specialFound === 0) {
           throwInvalidArrayInitializer(s, arg);
         }
-        for (const key of keys) {
-          this[key] = arg[key];
+        for (const key of specialKeys) {
+          if (key in arg) {
+            this[key] = arg[key];
+          }
         }
       } else if (arg !== undefined) {
         throwInvalidArrayInitializer(s, arg);
@@ -2536,6 +2553,7 @@ function finalizeStruct(s) {
       descriptors[member.name] = { get, set, configurable: true, enumerable: true };
     }
   }
+  const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
@@ -2557,11 +2575,6 @@ function finalizeStruct(s) {
     }
     if (creating) {
       initializer.call(self, arg);
-      if (arg) {
-        for (const [ key, value ] of Object.entries(arg)) {
-          this[key] = value;
-        }
-      }
     } else {
       return self;
     }
@@ -2579,34 +2592,56 @@ function finalizeStruct(s) {
       }
     } else {
       if (arg && typeof(arg) === 'object') {
-        const keys = Object.keys(arg);
+        // checking each name so that we would see inenumerable initializers as well
         let found = 0;
-        let requiredFound = 0;
-        let specialInit = false;
         for (const key of keys) {
-          if (descriptors.hasOwnProperty(key)) {
+          if (key in arg) {
             found++;
-            if (requiredKeys.includes(key)) {
-              requiredFound++;
+          }
+        }
+        let requiredFound = 0;
+        for (const key of requiredKeys) {
+          if (key in arg) {
+            requiredFound++;
+          }
+        }
+        let specialFound = 0;
+        if (!arg[MEMORY]) {
+          // only look for special keys in non-zigar objects
+          for (const key of specialKeys) {
+            if (key in arg) {
+              specialFound++;
             }
-          } else if (specialKeys.includes(key)) {
-            specialInit = true;
-          } else {
+          }
+        }
+        // don't accept unknown enumerable props
+        for (const key of Object.keys(arg)) {
+          if (!(key in this)) {
             throwNoProperty$1(s, key);
           }
         }
-        if (!specialInit && requiredFound < requiredKeys.length) {
+        if (specialFound === 0 && requiredFound < requiredKeys.length) {
           throwMissingInitializers(s, arg);
         }
         // apply default values unless all properties are initialized
-        if (template && !specialInit && found < members.length) {
+        if (template && specialFound === 0 && found < keys.length) {
           copy(this[MEMORY], template[MEMORY]);
           if (hasPointer) {
             this[POINTER_VISITOR](true, template, copyPointer);
           }
         }
-        for (const key of keys) {
-          this[key] = arg[key];
+        if (specialFound > 0) {
+          for (const key of specialKeys) {
+            if (key in arg) {
+              this[key] = arg[key];
+            }
+          }
+        } else if (found > 0) {
+          for (const key of keys) {
+            if (key in arg) {
+              this[key] = arg[key];
+            }
+          }
         }
       } else if (arg !== undefined) {
         throwInvalidInitializer(s, 'object', arg);
@@ -2769,6 +2804,7 @@ function finalizeUnion(s) {
       descriptors[member.name] = { get, set, init: set, configurable: true, enumerable: true };
     }
   }
+  const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const pointerMembers = members.filter(m => m.structure.hasPointer);
   // non-tagged union as marked as not having pointers--if there're actually
@@ -2822,30 +2858,41 @@ function finalizeUnion(s) {
       }
     } else {
       if (arg && typeof(arg) === 'object') {
-        const keys = Object.keys(arg);
+        // checking each name so that we would see inenumerable initializers as well
         let found = 0;
-        let specialInit = false;
         for (const key of keys) {
-          if (descriptors.hasOwnProperty(key)) {
+          if (key in arg) {
             found++;
-          } else if (specialKeys.includes(key)) {
-            specialInit = true;
-          } else {
+          }
+        }
+        let specialFound = 0;
+        if (!arg[MEMORY]) {
+          for (const key of specialKeys) {
+            if (key in arg) {
+              specialFound++;
+            }
+          }
+        }
+        // don't accept unknown enumerable props
+        for (const key of Object.keys(arg)) {
+          if (!(key in this)) {
             throwNoProperty$1(s, key);
           }
         }
         if (found !== 1) {
           if (found === 0) {
-            if (!specialInit && !hasDefaultMember) {
+            if (specialFound === 0 && !hasDefaultMember) {
               throwMissingUnionInitializer(s, arg, exclusion);
             }
           } else {
             throwMultipleUnionInitializers(s);
           }
         }
-        if (specialInit) {
-          for (const key of keys) {
-            this[key] = arg[keys];
+        if (specialFound > 0) {
+          for (const key of specialKeys) {
+            if (key in arg) {
+              this[key] = arg[key];
+            }
           }
         } else if (found === 0) {
           if (template) {
@@ -2857,8 +2904,12 @@ function finalizeUnion(s) {
           }
         } else {
           for (const key of keys) {
-            const { init } = descriptors[key];
-            init.call(this, arg[key]);
+            if (key in arg) {
+              // can't just set the property, since it would throw when a field other than the
+              // active one is being set
+              const { init } = descriptors[key];
+              init.call(this, arg[key]);
+            }
           }
         }
       } else if (arg !== undefined) {
@@ -3343,49 +3394,56 @@ function finalizeSlice(s) {
           throwInvalidArrayInitializer(s, arg, shapeless);
         }
       } else if (arg && typeof(arg) === 'object') {
-        const keys = Object.keys(arg);
-        for (const key of keys) {
-          if (!specialKeys.includes(key)) {
+        for (const key of Object.keys(arg)) {
+          if (!(key in this)) {
             throwNoProperty$1(s, key);
           }
         }
-        if (!keys.some(k => specialKeys.includes(k))) {
+        let specialFound = 0;
+        for (const key of specialKeys) {
+          if (key in arg) {
+            specialFound++;
+          }
+        }
+        if (specialFound === 0) {
           throwInvalidArrayInitializer(s, arg);
         }
-        for (const key of keys) {
-          if (shapeless) {
-            // can't use accessors since the object has no memory yet
-            let dv, dup = true;
-            switch (key) {
-              case 'dataView':
-                dv = arg[key];
-                checkDataView(dv);
-                break;
-              case 'typedArray':
-                dv = getDataViewFromTypedArray(arg[key], typedArray);
-                break;
-              case 'string':
-                dv = getDataViewFromUTF8(arg[key], elementSize, sentinel?.value);
-                dup = false;
-                break;
-              case 'base64':
-                dv = getDataViewFromBase64(arg[key]);
-                dup = false;
-                break;
-            }
-            checkDataViewSize(s, dv);
-            const length = dv.byteLength / elementSize;
-            sentinel?.validateData(dv, length);
-            if (dup) {
-              shapeDefiner.call(this, null, length);
-              copy(this[MEMORY], dv);
+        for (const key of specialKeys) {
+          if (key in arg) {
+            if (shapeless) {
+              // can't use accessors since the object has no memory yet
+              let dv, dup = true;
+              switch (key) {
+                case 'dataView':
+                  dv = arg[key];
+                  checkDataView(dv);
+                  break;
+                case 'typedArray':
+                  dv = getDataViewFromTypedArray(arg[key], typedArray);
+                  break;
+                case 'string':
+                  dv = getDataViewFromUTF8(arg[key], elementSize, sentinel?.value);
+                  dup = false;
+                  break;
+                case 'base64':
+                  dv = getDataViewFromBase64(arg[key]);
+                  dup = false;
+                  break;
+              }
+              checkDataViewSize(s, dv);
+              const length = dv.byteLength / elementSize;
+              sentinel?.validateData(dv, length);
+              if (dup) {
+                shapeDefiner.call(this, null, length);
+                copy(this[MEMORY], dv);
+              } else {
+                // reuse memory from string decoding
+                shapeDefiner.call(this, dv, length);
+              }
+              shapeless = false;
             } else {
-              // reuse memory from string decoding
-              shapeDefiner.call(this, dv, length);
+              this[key] = arg[key];
             }
-            shapeless = false;
-          } else {
-            this[key] = arg[key];
           }
         }
       } else if (arg !== undefined) {

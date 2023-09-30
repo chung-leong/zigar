@@ -174,6 +174,9 @@ export function generateCode(structures, params) {
     add(`await __init`);
   }
   add(``);
+  const exports = [ 'default', ...exportables, '__init' ];
+  const code = lines.join('\n');
+  return { code, exports, structures };
 
   function addDefaultStructure() {
     add(`const s = {`);
@@ -340,9 +343,7 @@ export function generateCode(structures, params) {
     }
     add(`};`);
   }
-
-  const code = lines.join('\n');
-  return code;
+  // return occurs higher up, before the definition of addDefaultStructure
 }
 
 function isDifferent(value, def) {

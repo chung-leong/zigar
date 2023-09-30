@@ -1208,6 +1208,9 @@ function generateCode(structures, params) {
     add(`await __init`);
   }
   add(``);
+  const exports = [ 'default', ...exportables, '__init' ];
+  const code = lines.join('\n');
+  return { code, exports, structures };
 
   function addDefaultStructure() {
     add(`const s = {`);
@@ -1374,9 +1377,7 @@ function generateCode(structures, params) {
     }
     add(`};`);
   }
-
-  const code = lines.join('\n');
-  return code;
+  // return occurs higher up, before the definition of addDefaultStructure
 }
 
 function isDifferent(value, def) {
@@ -2687,10 +2688,10 @@ async function transpile(path, options = {}) {
       throw new Error(`wasmLoader is a required option when embedWASM is false`);
     }
   }
-  const wasmPath = await compile(path, { 
-    ...compileOptions, 
-    arch: 'wasm32', 
-    platform: 'freestanding' 
+  const wasmPath = await compile(path, {
+    ...compileOptions,
+    arch: 'wasm32',
+    platform: 'freestanding'
   });
   const content = await readFile(wasmPath);
   const { structures, runtimeSafety } = await runModule(content, { omitFunctions });

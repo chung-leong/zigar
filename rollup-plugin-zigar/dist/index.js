@@ -82,7 +82,7 @@ export default function createPlugin(options = {}) {
   let embedWASMDefault = false;
   let optimizeDefault = getOptimizationMode(process.env.NODE_ENV === 'production');
   return {
-    name: 'Zigar',
+    name: 'zigar',
     /* c8 ignore next 7 */
     apply(config, { command }) {
       // embed WASM by default when Vite is serving
@@ -108,12 +108,16 @@ export default function createPlugin(options = {}) {
             return fetchWASM(refID);
           }
         };
-        return transpile(id, {
+        const { code, exports, structures } = await transpile(id, {
           ...otherOptions,
           optimize,
           wasmLoader,
           embedWASM,
         });
+        const meta = {
+          zigar: { exports, structures },
+        };
+        return { code, meta };
       }
     }
   };

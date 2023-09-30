@@ -22,10 +22,10 @@ export async function transpile(path, options = {}) {
       throw new Error(`wasmLoader is a required option when embedWASM is false`);
     }
   }
-  const wasmPath = await compile(path, { 
-    ...compileOptions, 
-    arch: 'wasm32', 
-    platform: 'freestanding' 
+  const wasmPath = await compile(path, {
+    ...compileOptions,
+    arch: 'wasm32',
+    platform: 'freestanding'
   });
   const content = await readFile(wasmPath);
   const { structures, runtimeSafety } = await runModule(content, { omitFunctions });

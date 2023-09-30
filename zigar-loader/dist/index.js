@@ -92,7 +92,7 @@ async function loader(content, map, meta) {
       return fetchWASM(path);
     }
   };
-  const code = await transpile(path, {
+  const { code } = await transpile(path, {
     ...otherOptions,
     optimize,
     wasmLoader,

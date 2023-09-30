@@ -1,4 +1,4 @@
-import { usePrimitive, useSlice, usePointer, useArray, useArgStruct, useStruct, useUint, useObject, useInt, finalizeStructures, linkModule } from 'zigar-runtime';
+import { usePrimitive, useSlice, usePointer, useArray, useArgStruct, useStruct, useUint, useObject, finalizeStructures, linkModule } from 'zigar-runtime';
 
 // activate features
 usePrimitive();
@@ -9,7 +9,6 @@ useArgStruct();
 useStruct();
 useUint();
 useObject();
-useInt();
 
 // define structures
 const s = {
@@ -17,7 +16,7 @@ const s = {
   typedArray: null,
   type: 0,
   name: undefined,
-  size: 4,
+  byteSize: 4,
   align: 2,
   isConst: false,
   hasPointer: false,
@@ -42,7 +41,8 @@ const m = {
 const s0 = {
   ...s,
   name: "u8",
-  size: 1,
+  length: 1,
+  byteSize: 1,
   align: 0,
   instance: {
     members: [
@@ -64,7 +64,8 @@ const s1 = {
   ...s,
   type: 12,
   name: "[_]const u8",
-  size: 1,
+  length: 0,
+  byteSize: 1,
   align: 0,
   instance: {
     members: [
@@ -85,7 +86,8 @@ const s2 = {
   ...s,
   type: 11,
   name: "[]const u8",
-  size: 8,
+  length: 1,
+  byteSize: 8,
   isConst: true,
   hasPointer: true,
   instance: {
@@ -108,7 +110,8 @@ const s3 = {
   ...s,
   type: 1,
   name: "[40]u8",
-  size: 40,
+  length: 40,
+  byteSize: 40,
   align: 0,
   instance: {
     members: [
@@ -129,7 +132,8 @@ const s4 = {
   ...s,
   type: 3,
   name: "sha1",
-  size: 48,
+  length: 1,
+  byteSize: 48,
   hasPointer: true,
   instance: {
     members: [
@@ -170,7 +174,8 @@ const s5 = {
   ...s,
   type: 2,
   name: "sha1",
-  size: 0,
+  length: 1,
+  byteSize: 0,
   align: 0,
   instance: {
     members: [],
@@ -193,7 +198,7 @@ const module = s5.constructor;
 
 // initiate loading and compilation of WASM bytecodes
 const wasmPromise = (async () => {
-  const url = new URL('assets/sha1-e8371cbb.wasm', import.meta.url).href;
+  const url = new URL('assets/sha1-095be62d.wasm', import.meta.url).href;
   if (typeof(process) === 'object' && process[Symbol.toStringTag] === 'process') {
     const { readFile } = await import('fs/promises');
     const { fileURLToPath } = await import('url');
