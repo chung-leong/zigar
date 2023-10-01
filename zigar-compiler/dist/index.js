@@ -1041,6 +1041,7 @@ function generateCode(structures, params) {
     runtimeURL,
     loadWASM,
     topLevelAwait,
+    omitExports,
     runtimeSafety,
   } = params;
   const lines = [];
@@ -1209,11 +1210,13 @@ function generateCode(structures, params) {
     add(`${name},`);
   }
   add(`} = module;`);
-  add(`export {`);
-  for (const name of [ 'module as default', ...exportables, '__init' ]) {
-    add(`${name},`);
+  if (!omitExports) {
+    add(`export {`);
+    for (const name of [ 'module as default', ...exportables, '__init' ]) {
+      add(`${name},`);
+    }
+    add(`};`);
   }
-  add(`};`);
   if (topLevelAwait && loadWASM) {
     add(`\n// await initialization`);
     add(`await __init`);
@@ -2688,6 +2691,7 @@ async function transpile(path, options = {}) {
     embedWASM = true,
     topLevelAwait = true,
     omitFunctions = false,
+    omitExports = false,
     stripWASM = (options.optimize && options.optimize !== 'Debug'),
     keepNames = false,
     moduleResolver = (name) => name,
@@ -2721,7 +2725,13 @@ async function transpile(path, options = {}) {
       loadWASM = await wasmLoader(path, dv);
     }
   }
-  return generateCode(structures, { runtimeURL, loadWASM, runtimeSafety, topLevelAwait });
+  return generateCode(structures, {
+    runtimeURL,
+    loadWASM,
+    runtimeSafety,
+    topLevelAwait,
+    omitExports,
+  });
 }
 
 function embed(path, dv) {

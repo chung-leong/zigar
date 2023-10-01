@@ -25,6 +25,10 @@ export const schema = {
       type: 'boolean',
       title: 'Omit all Zig functions',
     },
+    omitExports: {
+      type: 'boolean',
+      title: 'Omit export statements',
+    },
     optimize: {
       type: 'string',
       enum: [ 'Debug', 'ReleaseSmall', 'ReleaseFast', 'ReleaseSafe' ],
