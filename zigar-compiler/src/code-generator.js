@@ -7,6 +7,7 @@ export function generateCode(structures, params) {
     runtimeURL,
     loadWASM,
     topLevelAwait,
+    omitExports,
     runtimeSafety,
   } = params;
   const lines = [];
@@ -175,11 +176,13 @@ export function generateCode(structures, params) {
     add(`${name},`);
   }
   add(`} = module;`);
-  add(`export {`);
-  for (const name of [ 'module as default', ...exportables, '__init' ]) {
-    add(`${name},`);
+  if (!omitExports) {
+    add(`export {`);
+    for (const name of [ 'module as default', ...exportables, '__init' ]) {
+      add(`${name},`);
+    }
+    add(`};`);
   }
-  add(`};`);
   if (topLevelAwait && loadWASM) {
     add(`\n// await initialization`);
     add(`await __init`);

@@ -39,7 +39,7 @@ describe('Code generation', function() {
         },
         options: {},
       };
-      const code = generateCode([ structure ], {});
+      const { code } = generateCode([ structure ], {});
       expect(code).to.contain('useInt()');
       expect(code).to.contain('i32');
     })
@@ -70,7 +70,7 @@ describe('Code generation', function() {
         },
         options: {},
       };
-      const code = generateCode([ structure ], {});
+      const { code } = generateCode([ structure ], {});
       expect(code).to.contain('useIntEx()');
       expect(code).to.not.contain('useInt()');
       expect(code).to.contain('i31');
@@ -102,7 +102,7 @@ describe('Code generation', function() {
         },
         options: {},
       };
-      const code = generateCode([ structure ], {});
+      const { code } = generateCode([ structure ], {});
       expect(code).to.contain('useFloat()');
       expect(code).to.contain('f32');
     })
@@ -133,7 +133,7 @@ describe('Code generation', function() {
         },
         options: {},
       };
-      const code = generateCode([ structure ], {});
+      const { code } = generateCode([ structure ], {});
       expect(code).to.contain('useFloatEx()');
       expect(code).to.not.contain('useFloat()');
       expect(code).to.contain('f80');
@@ -165,7 +165,7 @@ describe('Code generation', function() {
         },
         options: {},
       };
-      const code = generateCode([ structure ], {});
+      const { code } = generateCode([ structure ], {});
       expect(code).to.contain('useBool()');
       expect(code).to.contain('bool');
     })
@@ -202,7 +202,7 @@ describe('Code generation', function() {
         },
         options: {},
       };
-      const code = generateCode([ structure ], {});
+      const { code } = generateCode([ structure ], {});
       expect(code).to.contain('useBoolEx()');
       expect(code).to.not.contain('useBool()');
       expect(code).to.contain('flags');
@@ -253,7 +253,7 @@ describe('Code generation', function() {
         },
         options: {},
       };
-      const code = generateCode([ enumSetStructure, structure ], {});
+      const { code } = generateCode([ enumSetStructure, structure ], {});
       expect(code).to.contain('useEnumerationItem()');
       expect(code).to.contain('enumItem');
       expect(code).to.contain('enum {}');
@@ -303,7 +303,7 @@ describe('Code generation', function() {
         },
         options: {},
       };
-      const code = generateCode([ enumSetStructure, structure ], {});
+      const { code } = generateCode([ enumSetStructure, structure ], {});
       expect(code).to.contain('useEnumerationItemEx()');
       expect(code).to.contain('enumItem');
       expect(code).to.contain('enum {}');
@@ -352,7 +352,7 @@ describe('Code generation', function() {
         },
         options: {},
       };
-      const code = generateCode([ enumSetStructure, structure ], {});
+      const { code } = generateCode([ enumSetStructure, structure ], {});
       expect(code).to.contain('useType()');
       expect(code).to.contain('package');
       expect(code).to.contain('Enum');
@@ -412,7 +412,7 @@ describe('Code generation', function() {
         },
         options: {},
       };
-      const code = generateCode([ ptrStructure, structure ], {});
+      const { code } = generateCode([ ptrStructure, structure ], {});
       expect(code).to.contain('package');
       expect(code).to.contain('useStruct()');
       expect(code).to.contain('usePointer()');
@@ -471,13 +471,13 @@ describe('Code generation', function() {
         },
         options: {},
       };
-      const code = generateCode([ argStructure, structure ], { loadWASM: `loadWASM()`, topLevelAwait: true });
+      const { code } = generateCode([ argStructure, structure ], { loadWASM: `loadWASM()`, topLevelAwait: true });
       expect(code).to.contain('package');
       expect(code).to.contain('useStruct()');
       expect(code).to.contain('hello');
       expect(code).to.contain('await __init');
       expect(code).to.contain('writeBack: false');
-      const codeAlt = generateCode([ argStructure, structure ], { loadWASM: `loadWASM()`, topLevelAwait: false });
+      const { code: codeAlt } = generateCode([ argStructure, structure ], { loadWASM: `loadWASM()`, topLevelAwait: false });
       expect(codeAlt).to.not.contain('await __init');
       expect(codeAlt).to.contain('writeBack: true');
     })
@@ -524,6 +524,11 @@ describe('Code generation', function() {
         byteSize: 0,
         hasPointer: false,
         instance: {
+          members: [],
+          methods: [],
+          template: null,
+        },
+        static: {
           members: [
             {
               type: MemberType.Type,
@@ -534,14 +539,9 @@ describe('Code generation', function() {
           methods: [],
           template: null,
         },
-        static: {
-          members: [],
-          methods: [],
-          template: null,
-        },
         options: {},
       };
-      const code = generateCode([ structStructure, structure ], { loadWASM: `loadWASM()`, topLevelAwait: true });
+      const { code } = generateCode([ structStructure, structure ], { loadWASM: `loadWASM()`, topLevelAwait: true });
       expect(code).to.contain('package');
       expect(code).to.contain('useStruct()');
       expect(code).to.contain('Hello');
@@ -573,9 +573,66 @@ describe('Code generation', function() {
         },
         options: {},
       };
-      const code = generateCode([ structure ], { loadWASM: 'loadWASM()'});
+      const { code } = generateCode([ structure ], { loadWASM: 'loadWASM()'});
       expect(code).to.contain('linkModule');
       expect(code).to.contain('loadWASM()');
+    })
+    it('should omit exports when omitExports is true', function() {
+      const structStructure = {
+        constructor: null,
+        type: StructureType.Struct,
+        name: "struct {}",
+        byteSize: 4,
+        hasPointer: true,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              name: "number",
+              bitOffset: 0,
+              bitSize: 32,
+              byteSize: 4,
+            },
+          ],
+          methods: [],
+          template: {
+            [SLOTS]: {},
+          },
+        },
+        static: {
+          members: [],
+          methods: [],
+          template: null,
+        },
+        options: {},
+      };
+      const structure = {
+        constructor: null,
+        type: StructureType.Struct,
+        name: "package",
+        byteSize: 0,
+        hasPointer: false,
+        instance: {
+          members: [],
+          methods: [],
+          template: null,
+        },
+        static: {
+          members: [
+            {
+              type: MemberType.Type,
+              name: 'Hello',
+              structure: structStructure,
+            }
+          ],
+          methods: [],
+          template: null,
+        },
+        options: {},
+      };
+      const { code, exports } = generateCode([ structure ], { omitExports: true });
+      expect(code).to.not.contain('export {');
+      expect(exports).to.contain('default').and.contain('Hello');
     })
     it('should break initializer into multiple lines when the number of structures is large', function() {
       const structures = [];
@@ -607,7 +664,7 @@ describe('Code generation', function() {
           options: {},
         });
        }
-      const code = generateCode(structures, {});
+      const { code } = generateCode(structures, {});
       expect(code).to.contain('i32');
       expect(code).to.contain('i64');
     })

@@ -11,6 +11,7 @@ export async function transpile(path, options = {}) {
     embedWASM = true,
     topLevelAwait = true,
     omitFunctions = false,
+    omitExports = false,
     stripWASM = (options.optimize && options.optimize !== 'Debug'),
     keepNames = false,
     moduleResolver = (name) => name,
@@ -44,7 +45,13 @@ export async function transpile(path, options = {}) {
       loadWASM = await wasmLoader(path, dv);
     }
   }
-  return generateCode(structures, { runtimeURL, loadWASM, runtimeSafety, topLevelAwait });
+  return generateCode(structures, {
+    runtimeURL,
+    loadWASM,
+    runtimeSafety,
+    topLevelAwait,
+    omitExports,
+  });
 }
 
 function embed(path, dv) {
