@@ -2701,7 +2701,7 @@ function addPointerVisitor(s) {
       if (src) {
         // when src is a the struct's template, most slots will likely be empty,
         // since point fields aren't likely to have default values
-        srcChild = src[SLOTS][slot];
+        srcChild = src[SLOTS]?.[slot];
         if (!srcChild) {
           continue;
         }

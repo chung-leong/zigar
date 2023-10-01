@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'fs/promises';
+import { readFile } from 'fs/promises';
 import { basename } from 'path';
 import { compile } from './compiler.js';
 import { runModule } from '../../zigar-runtime/src/index.js';
@@ -32,27 +32,25 @@ export async function transpile(path, options = {}) {
   // all methods are static, so there's no need to check the instance methods
   const hasMethods = !!structures.find(s => s.static.methods.length > 0);
   const runtimeURL = moduleResolver('zigar-runtime');
-  const name = basename(wasmPath);
   let loadWASM;
   if (hasMethods) {
     let dv = new DataView(content.buffer);
     if (stripWASM) {
       dv = stripUnused(dv, { keepNames });
-      //await writeFile(wasmPath.replace('.wasm', '.min.wasm'), dv);
     }
     if (embedWASM) {
-      loadWASM = embed(name, dv);
+      loadWASM = embed(path, dv);
     } else {
-      loadWASM = await wasmLoader(name, dv);
+      loadWASM = await wasmLoader(path, dv);
     }
   }
   return generateCode(structures, { runtimeURL, loadWASM, runtimeSafety, topLevelAwait });
 }
 
-function embed(name, dv) {
+function embed(path, dv) {
   const base64 = Buffer.from(dv.buffer, dv.byteOffset, dv.byteLength).toString('base64');
   return `(async () => {
-  // ${name}
+  // ${basename(path)}
   const binaryString = atob(${JSON.stringify(base64)});
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {

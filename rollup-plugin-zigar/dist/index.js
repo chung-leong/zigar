@@ -1,3 +1,5 @@
+import { parse } from 'path';
+import { createHash } from 'crypto';
 import { transpile } from 'zigar-compiler';
 
 export const schema = {
@@ -79,33 +81,53 @@ export function getOptimizationMode(isProd) {
 
 export default function createPlugin(options = {}) {
   verifyOptions(options, schema);
-  let embedWASMDefault = false;
+  let serving = false;
   let optimizeDefault = getOptimizationMode(process.env.NODE_ENV === 'production');
+  const wasmBinaries = {};
   return {
     name: 'zigar',
     /* c8 ignore next 7 */
-    apply(config, { command }) {
-      // embed WASM by default when Vite is serving
-      embedWASMDefault = (command === 'serve');
+    configResolved(config) {
       // set default optimization, although process.env.NODE_ENV should already give the right value
       optimizeDefault = getOptimizationMode(config.mode === 'production');
       return true;
+    },
+    configureServer(server) {
+      serving = true;
+      server.middlewares.use((req, res, next) => {
+        const binary = wasmBinaries[req._parsedUrl.pathname];
+        if (binary) {
+          res.setHeader('Content-Type', 'application/wasm');
+          res.write(binary);
+          res.end();
+        } else {
+          next();
+        }
+      })
     },
     async load(id) {
       if (id.endsWith('.zig')) {
         const {
           useReadFile = false,
-          embedWASM = embedWASMDefault,
+          embedWASM = false,
           optimize = optimizeDefault,
           ...otherOptions
         } = options;
-        const wasmLoader = async (name, dv) => {
+        const wasmLoader = async (path, dv) => {
           const source = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
-          const refID = this.emitFile({ type: 'asset', name, source });
-          if (useReadFile) {
-            return loadWASM(refID);
+          const name = parse(path).name + '.wasm';
+          if (serving) {
+            const virtualPath = `/zigar/${md5(path).slice(0, 8)}/${name}`;
+            const url = virtualPath + `?hash=${md5(source).slice(0, 8)}`;
+            wasmBinaries[virtualPath] = source;
+            return fetchVirtualWASM(url);
           } else {
-            return fetchWASM(refID);
+            const refID = this.emitFile({ type: 'asset', name, source });
+            if (useReadFile) {
+              return loadWASM(refID);
+            } else {
+              return fetchWASM(refID);
+            }
           }
         };
         const { code, exports, structures } = await transpile(id, {
@@ -130,6 +152,13 @@ function fetchWASM(refID) {
 })()`;
 }
 
+function fetchVirtualWASM(url) {
+  return `(async () => {
+  const url = ${JSON.stringify(url)};
+  return fetch(url);
+})()`;
+}
+
 function loadWASM(refID) {
   return `(async () => {
   const url = import.meta.ROLLUP_FILE_URL_${refID};
@@ -142,4 +171,10 @@ function loadWASM(refID) {
     return fetch(url);
   }
 })()`;
+}
+
+function md5(text) {
+  const hash = createHash('md5');
+  hash.update(text);
+  return hash.digest('hex');
 }

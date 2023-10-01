@@ -80,16 +80,16 @@ async function loader(content, map, meta) {
     optimize = (this.mode === 'production') ? 'ReleaseSmall' : 'Debug',
     ...otherOptions
   } = options;
-  const wasmLoader = async (name, dv) => {
+  const wasmLoader = async (path, dv) => {
     const source = Buffer.from(new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength));
-    const file = parse(name);
+    const file = parse(path);
     const hash = md5(source);
-    const path = `${file.name}-${hash.substring(0, 8)}${file.ext}`;
-    this.emitFile(path, source);
+    const outputPath = `${file.name}-${hash.slice(0, 8)}.wasm`;
+    this.emitFile(outputPath, source);
     if (useReadFile) {
-      return loadWASM(path);
+      return loadWASM(outputPath);
     } else {
-      return fetchWASM(path);
+      return fetchWASM(outputPath);
     }
   };
   const { code } = await transpile(path, {

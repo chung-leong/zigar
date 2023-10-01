@@ -2684,7 +2684,7 @@ function repackNames({ moduleName, functionNames, localNames, size }) {
   return finalize();
 }
 
-async function transpile(path$1, options = {}) {
+async function transpile(path, options = {}) {
   process;
   const {
     embedWASM = true,
@@ -2701,7 +2701,7 @@ async function transpile(path$1, options = {}) {
       throw new Error(`wasmLoader is a required option when embedWASM is false`);
     }
   }
-  const wasmPath = await compile(path$1, {
+  const wasmPath = await compile(path, {
     ...compileOptions,
     arch: 'wasm32',
     platform: 'freestanding'
@@ -2711,27 +2711,25 @@ async function transpile(path$1, options = {}) {
   // all methods are static, so there's no need to check the instance methods
   const hasMethods = !!structures.find(s => s.static.methods.length > 0);
   const runtimeURL = moduleResolver('zigar-runtime');
-  const name = path.basename(wasmPath);
   let loadWASM;
   if (hasMethods) {
     let dv = new DataView(content.buffer);
     if (stripWASM) {
       dv = stripUnused(dv, { keepNames });
-      //await writeFile(wasmPath.replace('.wasm', '.min.wasm'), dv);
     }
     if (embedWASM) {
-      loadWASM = embed(name, dv);
+      loadWASM = embed(path, dv);
     } else {
-      loadWASM = await wasmLoader(name, dv);
+      loadWASM = await wasmLoader(path, dv);
     }
   }
   return generateCode(structures, { runtimeURL, loadWASM, runtimeSafety, topLevelAwait });
 }
 
-function embed(name, dv) {
+function embed(path$1, dv) {
   const base64 = Buffer.from(dv.buffer, dv.byteOffset, dv.byteLength).toString('base64');
   return `(async () => {
-  // ${name}
+  // ${path.basename(path$1)}
   const binaryString = atob(${JSON.stringify(base64)});
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
