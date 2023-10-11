@@ -122,7 +122,7 @@ export function getStringAccessors(byteSize, sentinelValue) {
       }
       const dv = this.dataView;
       const TypedArray = (byteSize === 1) ? Int8Array : Int16Array;
-      const ta = new TypedArray(dv.buffer, dv.byteOffset, dv.byteLength / byteSize);
+      const ta = new TypedArray(dv.buffer, dv.byteOffset, this.length);
       const s = decoder.decode(ta);
       return (sentinelValue === undefined) ? s : s.slice(0, -1);
     },
@@ -163,8 +163,7 @@ export function getTypedArrayAccessors(TypedArray) {
   return {
     get() {
       const dv = this.dataView;
-      const length = dv.byteLength / TypedArray.BYTES_PER_ELEMENT;
-      return new TypedArray(dv.buffer, dv.byteOffset, length);
+      return new TypedArray(dv.buffer, dv.byteOffset, this.length);
     },
     set(ta) {
       this.dataView = getDataViewFromTypedArray(ta, TypedArray);

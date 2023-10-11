@@ -1050,7 +1050,7 @@ R"=====(
         }
         const dv = this.dataView;
         const TypedArray = (byteSize === 1) ? Int8Array : Int16Array;
-        const ta = new TypedArray(dv.buffer, dv.byteOffset, dv.byteLength / byteSize);
+        const ta = new TypedArray(dv.buffer, dv.byteOffset, this.length);
         const s = decoder.decode(ta);
         return (sentinelValue === undefined) ? s : s.slice(0, -1);
       },
@@ -1091,8 +1091,7 @@ R"=====(
     return {
       get() {
         const dv = this.dataView;
-        const length = dv.byteLength / TypedArray.BYTES_PER_ELEMENT;
-        return new TypedArray(dv.buffer, dv.byteOffset, length);
+        return new TypedArray(dv.buffer, dv.byteOffset, this.length);
       },
       set(ta) {
         this.dataView = getDataViewFromTypedArray(ta, TypedArray);
@@ -1995,7 +1994,7 @@ R"=====(
         if (src) {
           // when src is a the struct's template, most slots will likely be empty,
           // since point fields aren't likely to have default values
-          srcChild = src[SLOTS][slot];
+          srcChild = src[SLOTS]?.[slot];
           if (!srcChild) {
             continue;
           }
@@ -2290,7 +2289,6 @@ R"=====(
     if (hasObject) {
       addChildVivificators(s);
       if (hasPointer) {
-        debugger;
         addPointerVisitor(s);
       }
     }
@@ -2312,7 +2310,6 @@ R"=====(
           if (!err) {
             throwUnknownErrorNumber(errorStructure, errorNumber);
           }
-          debugger;
           this[POINTER_VISITOR]?.(false, null, resetPointer);
           throw err;
         } else {
@@ -2578,7 +2575,6 @@ R"=====(
         if (present) {
           return getValue.call(this);
         } else {
-          debugger;
           this[POINTER_VISITOR]?.(false, null, resetPointer);
           return null;
         }
@@ -2589,7 +2585,6 @@ R"=====(
           setValue.call(this, value);
         } else {
           reset(this[MEMORY]);
-          debugger;
           this[POINTER_VISITOR]?.(false, null, resetPointer);
         }
       },
