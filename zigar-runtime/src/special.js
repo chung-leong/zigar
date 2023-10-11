@@ -11,7 +11,6 @@ export function addSpecialAccessors(s) {
     instance: {
       members,
     },
-    sentinel,
   } = s;
   Object.defineProperties(constructor.prototype, {
     dataView: { ...getDataViewAccessors(s), configurable: true },
@@ -20,14 +19,13 @@ export function addSpecialAccessors(s) {
     valueOf: { value: getValueOf, configurable: true, writable: true },
   });
   if (canBeString(s)) {
-    const { byteSize } = s.instance.members[0];
     Object.defineProperty(constructor.prototype, 'string', {
-      ...getStringAccessors(byteSize, sentinel?.value), configurable: true
+      ...getStringAccessors(s), configurable: true
     });
   }
   if (canBeTypedArray(s)) {
     Object.defineProperty(constructor.prototype, 'typedArray', {
-      ...getTypedArrayAccessors(s.typedArray), configurable: true
+      ...getTypedArrayAccessors(s), configurable: true
     });
   }
 }
@@ -113,7 +111,9 @@ export function getDataViewFromBase64(str) {
 
 const decoders = {};
 
-export function getStringAccessors(byteSize, sentinelValue) {
+export function getStringAccessors(structure) {
+  const { sentinel, instance: { members: [ member ] } } = structure;
+  const { byteSize } = member;
   return {
     get() {
       let decoder = decoders[byteSize];
@@ -124,10 +124,10 @@ export function getStringAccessors(byteSize, sentinelValue) {
       const TypedArray = (byteSize === 1) ? Int8Array : Int16Array;
       const ta = new TypedArray(dv.buffer, dv.byteOffset, this.length);
       const s = decoder.decode(ta);
-      return (sentinelValue === undefined) ? s : s.slice(0, -1);
+      return (sentinel?.value === undefined) ? s : s.slice(0, -1);
     },
     set(src) {
-      this.dataView = getDataViewFromUTF8(src, byteSize, sentinelValue);
+      this.dataView = getDataViewFromUTF8(src, byteSize, sentinel?.value);
     },
   };
 }
@@ -159,14 +159,16 @@ export function getDataViewFromUTF8(str, byteSize, sentinelValue) {
   return new DataView(ta.buffer);
 }
 
-export function getTypedArrayAccessors(TypedArray) {
+export function getTypedArrayAccessors(structure) {
+  const { typedArray } = structure;
   return {
     get() {
       const dv = this.dataView;
-      return new TypedArray(dv.buffer, dv.byteOffset, this.length);
+      const length = dv.byteLength / typedArray.BYTES_PER_ELEMENT;
+      return new typedArray(dv.buffer, dv.byteOffset, length);
     },
     set(ta) {
-      this.dataView = getDataViewFromTypedArray(ta, TypedArray);
+      this.dataView = getDataViewFromTypedArray(ta, typedArray);
     },
   };
 }

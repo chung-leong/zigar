@@ -13,6 +13,7 @@ import {
 import {
   MemberType,
   useIntEx,
+  useUintEx,
   useFloatEx,
   useObject,
 } from '../src/member.js';
@@ -37,6 +38,7 @@ describe('Special property functions', function() {
     useSlice();
     useStruct();
     useIntEx();
+    useUintEx();
     useFloatEx();
     useObject();
   })
@@ -125,7 +127,18 @@ describe('Special property functions', function() {
   })
   describe('getStringAccessors', function() {
     it('should return getter and setter for UTF-8 string', function() {
-      const { get, set } = getStringAccessors(1);
+      const structure = {
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+            }
+          ]
+        }
+      };
+      const { get, set } = getStringAccessors(structure);
       expect(get).to.be.a('function');
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(4));
@@ -138,12 +151,24 @@ describe('Special property functions', function() {
       dv.setUint8(3, 'D'.charCodeAt(0));
       expect(get.call(object)).to.equal('ABCD');
       set.call(object, '1234');
+      const dv2 = object.dataView;
       for (let i = 0; i < 4; i++) {
-        expect(dv.getUint8(i, `${i}`.charCodeAt(0)));
+        expect(dv2.getUint8(i)).to.equal(`1234`.charCodeAt(i));
       }
     })
     it('should return getter and setter for UTF-16 string', function() {
-      const { get, set } = getStringAccessors(2);
+      const structure = {
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+            }
+          ]
+        }
+      };
+      const { get, set } = getStringAccessors(structure);
       expect(get).to.be.a('function');
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(8));
@@ -156,14 +181,54 @@ describe('Special property functions', function() {
       dv.setUint16(6, 'D'.charCodeAt(0), true);
       expect(get.call(object)).to.equal('ABCD');
       set.call(object, '1234');
+      const dv2 = object.dataView;
       for (let i = 0; i < 4; i++) {
-        expect(dv.getUint16(i, `${i}`.charCodeAt(0)));
+        expect(dv2.getUint16(i * 2, true)).to.equal(`1234`.charCodeAt(i));
       }
     })
+    it('should return getter and setter for array with sentinel value', function() {
+      const structure = {
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+            }
+          ]
+        },
+        sentinel: {
+          value: 0,
+          validateValue: () => {},
+          validateData: () => {},
+        },
+      };
+      const { get, set } = getStringAccessors(structure);
+      expect(get).to.be.a('function');
+      expect(set).to.be.a('function');
+      const dv = new DataView(new ArrayBuffer(5));
+      const object = {
+        dataView: dv
+      };
+      dv.setUint8(0, 'A'.charCodeAt(0));
+      dv.setUint8(1, 'B'.charCodeAt(0));
+      dv.setUint8(2, 'C'.charCodeAt(0));
+      dv.setUint8(3, 'D'.charCodeAt(0));
+      dv.setUint8(4, 0);
+      expect(get.call(object)).to.equal('ABCD');
+      set.call(object, '1234');
+      const dv2 = object.dataView;
+      for (let i = 0; i < 4; i++) {
+        expect(dv2.getUint8(i)).to.equal(`1234`.charCodeAt(i));
+      }
+      expect(dv2.getUint8(4)).to.equal(0);
+    })
+
   })
   describe('getTypedArrayAccessors', function() {
     it('should return getter and setter for typed array', function() {
-      const { get, set } = getTypedArrayAccessors(Int32Array);
+      const structure = { typedArray: Int32Array };
+      const { get, set } = getTypedArrayAccessors(structure);
       expect(get).to.be.a('function');
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(16));
