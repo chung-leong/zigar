@@ -83,7 +83,7 @@ pub const Host = struct {
         const bytes = memory.bytes orelse return false;
         const len = memory.len;
         const stack_top = @intFromPtr(self.context);
-        const stack_bottom = @intFromPtr(&bytes);
+        const stack_bottom = @intFromPtr(&memory);
         const address = @intFromPtr(bytes);
         return (stack_bottom <= address and address + len <= stack_top);
     }

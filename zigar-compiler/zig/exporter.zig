@@ -1193,8 +1193,10 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                 const decl_ptr = &@field(T, decl.name);
                 var value_ptr = get_ptr: {
                     if (comptime isConst(@TypeOf(decl_ptr))) {
+                        // place constant values on the stack so they get copied
                         const VT = RuntimeType(decl_value);
-                        const const_value: VT = decl_value;
+                        // the following must be a var declaration
+                        var const_value: VT = decl_value;
                         break :get_ptr &const_value;
                     } else {
                         break :get_ptr decl_ptr;
