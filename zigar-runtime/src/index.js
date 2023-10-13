@@ -90,8 +90,8 @@ export async function runModule(source, options = {}) {
   const promise = (source[Symbol.toStringTag] === 'Response')
     ? WebAssembly.instantiateStreaming(source, importObject)
     : WebAssembly.instantiate(source, importObject);
-  const { instance } = await promise;
-  const { memory: wasmMemory, define, run, alloc, free, safe } = instance.exports;
+  let { instance } = await promise;
+  let { memory: wasmMemory, define, run, alloc, free, safe } = instance.exports;
   let consolePending = '', consoleTimeout = 0;
   resetTables();
 
@@ -117,6 +117,20 @@ export async function runModule(source, options = {}) {
         throwError(errorIndex);
       }
     };
+    const weakRef = new WeakRef(instance);
+    const abandon = () => {
+      instance = wasmMemory = define = alloc = free = safe = null;
+      run = function() {
+        throw new Error('WebAssembly instance was abandoned');
+      };
+      for (const object of Object.values(variables)) {
+        unlinkObject(object);
+      }
+    };
+    const released = () => {
+      return !weakRef.deref();
+    };
+    return { abandon, released };
   } else {
     throw new Error(`The environment variable ZIGAR_TARGET must be "WASM-COMPTIME" or "WASM-RUNTIME"`);
   }
@@ -168,27 +182,34 @@ export async function runModule(source, options = {}) {
       return;
     }
     const dv2 = new DataView(wasmMemory.buffer, address, len);
-    /*
-    console.log({ address });
-    for (const [ index, dv ] of [ dv1, dv2 ].entries()) {
-      const array = [];
-      for (let i = 0; i < dv.byteLength; i++) {
-        array.push(dv.getUint8(i));
-      }
-      console.log(`${index + 1}: ${array.join(' ')}`)
-    }
-    */
     if (writeBack) {
       const copy = getMemoryCopier(dv1.byteLength);
       copy(dv2, dv1);
     }
     dv2[MEMORY] = { memory: wasmMemory, address, len };
-    Object.defineProperty(object, MEMORY, { value: dv2, configurable: true });
+    object[MEMORY] = dv2;
     if (object.hasOwnProperty(ZIG)) {
       // a pointer--link the target too
       const targetObject = object[SLOTS][0];
       const targetAddress = dv2.getUint32(0, true);
       linkObject(targetObject, targetAddress);
+    }
+  }
+
+  function unlinkObject(object) {
+    const dv1 = object[MEMORY];
+    const len = dv1.byteLength;
+    if (len === 0 || !dv1[MEMORY]) {
+      return;
+    }
+    const dv2 = new DataView(new ArrayBuffer(len));
+    const copy = getMemoryCopier(dv1.byteLength);
+    copy(dv2, dv1);
+    object[MEMORY] = dv2;
+    if (object.hasOwnProperty(ZIG)) {
+      // a pointer--unlink the target too
+      const targetObject = object[SLOTS][0];
+      unlinkObject(targetObject);
     }
   }
 

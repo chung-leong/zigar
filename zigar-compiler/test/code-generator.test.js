@@ -475,10 +475,10 @@ describe('Code generation', function() {
       expect(code).to.contain('package');
       expect(code).to.contain('useStruct()');
       expect(code).to.contain('hello');
-      expect(code).to.contain('await __init');
+      expect(code).to.contain('await initPromise');
       expect(code).to.contain('writeBack: false');
       const { code: codeAlt } = generateCode([ argStructure, structure ], { loadWASM: `loadWASM()`, topLevelAwait: false });
-      expect(codeAlt).to.not.contain('await __init');
+      expect(codeAlt).to.not.contain('await initPromise');
       expect(codeAlt).to.contain('writeBack: true');
     })
     it('should generate code for exporting a struct with default values', function() {

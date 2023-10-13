@@ -93,9 +93,7 @@ export function generateCode(structures, params) {
 
   const defaultMember = {
     type: MemberType.Void,
-    isRequired: false,
-    bitSize: 32,
-    byteSize: 4,
+    isRequired: true,
   };
 
   add(`\n// define structures`);
@@ -142,15 +140,20 @@ export function generateCode(structures, params) {
   add(`const module = ${structureNames.get(root)}.constructor;`);
 
   if (loadWASM) {
-    add('\n// initiate loading and compilation of WASM bytecodes');
+    add(`\n// initiate loading and compilation of WASM bytecodes`);
     add(`const wasmPromise = ${loadWASM};`);
-    add(`const __init = linkModule(wasmPromise, { ...linkage, writeBack: ${!topLevelAwait} });`);
+    add(`const initPromise = linkModule(wasmPromise, { ...linkage, writeBack: ${!topLevelAwait} });`);
   } else {
     add(`\n// no need to use WASM binary`);
-    add(`const __init = Promise.resolve(true);`);
+    add(`const initPromise = Promise.resolve(true);`);
   }
+  add(`const __zigar = {`);
+  add(`init: () => initPromise,`);
+  add(`abandon: () => initPromise.then(res => res?.abandon()),`);
+  add(`released: () => initPromise.then(res => res?.released() ?? false),`);
+  add(`};`)
 
-  add('\n// export functions, types, and constants');
+  add(`\n// export functions, types, and constants`);
   const exportables = [];
   for (const method of root.static.methods) {
     if (/^[$\w]+$/.test(method.name)) {
@@ -178,17 +181,17 @@ export function generateCode(structures, params) {
   add(`} = module;`);
   if (!omitExports) {
     add(`export {`);
-    for (const name of [ 'module as default', ...exportables, '__init' ]) {
+    for (const name of [ 'module as default', ...exportables, '__zigar' ]) {
       add(`${name},`);
     }
     add(`};`);
   }
   if (topLevelAwait && loadWASM) {
     add(`\n// await initialization`);
-    add(`await __init`);
+    add(`await initPromise`);
   }
   add(``);
-  const exports = [ 'default', ...exportables, '__init' ];
+  const exports = [ 'default', ...exportables, '__zigar' ];
   const code = lines.join('\n');
   return { code, exports, structures };
 

@@ -16,7 +16,20 @@ for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]
   })
 }
 
+let currentModule;
+
 async function importModule(path) {
+  if (currentModule) {
+    await currentModule.__zigar?.abandon();
+    if (global.gc) {
+      global.gc();
+      const released = await currentModule.__zigar?.released();
+      if (released === false) {
+        console.warn(`WebAssembly instance has not been released`);
+      }
+    }
+    currentModule = null;
+  }
   const optimize = process.env.ZIGAR_OPTIMIZE;
   const loader = resolve('../dist/index.js');
   const hash = await md5(path);
@@ -66,7 +79,8 @@ async function importModule(path) {
       }
     });
   });
-  return import(jsPath);
+  currentModule = await import(jsPath);
+  return currentModule;
 }
 
 function md5(text) {
