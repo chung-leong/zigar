@@ -18,11 +18,11 @@ describe('Module loading', function() {
   const platform = os.platform();
   const ext = getLibraryExt(platform);
   it('should load module', async function() {
-    const { pathname } = new URL(`./samples/${platform}/${arch}/libintegers.${ext}`, import.meta.url);
+    const { pathname } = new URL(`./so-samples/${platform}/${arch}/libintegers.${ext}`, import.meta.url);
     const module = await load(pathname);
   })
   it('should throw when module is missing', async function() {
-    const { pathname } = new URL(`./samples/${platform}/${arch}/missing.${ext}`, import.meta.url);
+    const { pathname } = new URL(`./so-samples/${platform}/${arch}/missing.${ext}`, import.meta.url);
     let error;
     try {
       await load(pathname);

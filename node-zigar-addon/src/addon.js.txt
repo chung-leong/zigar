@@ -20,6 +20,7 @@ R"=====(
   const SELF = Symbol('self');
   const CHILD_VIVIFICATOR = Symbol('childVivificator');
   const POINTER_VISITOR = Symbol('pointerVisitor');
+  const RELEASE_THUNK = Symbol('releaseThunk');
 
   function getBitAlignFunction(bitPos, bitSize, toAligned) {
     if (bitPos + bitSize <= 8) {
@@ -3714,21 +3715,25 @@ R"=====(
       static: { methods: staticMethods },
     } = s;
     for (const method of staticMethods) {
-      const {
+      let {
         name,
         argStruct,
-        thunk,
+        thunk
       } = method;
       const f = function(...args) {
         const { constructor } = argStruct;
         const a = new constructor(args);
         return invokeThunk(thunk, a);
       };
+      {
+        // need to set the local variables as well as the property of the method object
+        f[RELEASE_THUNK] = r => thunk = argStruct = method.thunk = r;
+      }
       Object.defineProperty(f, 'name', { value: name, writable: false });
       Object.defineProperty(constructor, name, { value: f, configurable: true, writable: true });
     }
     for (const method of instanceMembers) {
-      const {
+      let {
         name,
         argStruct,
         thunk,
@@ -3738,6 +3743,9 @@ R"=====(
         const a = new constructor([ this, ...args ]);
         return invokeThunk(thunk, a);
       };
+      {
+        f[RELEASE_THUNK] = r => thunk = argStruct = method.thunk = r;
+      }
       Object.defineProperty(f, 'name', { value: name, writable: false });
       Object.defineProperty(Object.prototype, name, { value: f, configurable: true, writable: true });
     }
@@ -3794,7 +3802,92 @@ R"=====(
     // yet and therefore cannot create (or read from) the argument object
     const args = { [SLOTS]: {} };
     invokeThunk(thunk, args);
-    return args[SLOTS][0].constructor;
+    let module = args[SLOTS][0].constructor;
+    // attach __zigar object
+    const initPromise = Promise.resolve();
+    module.__zigar = {
+      init: () => initPromise,
+      abandon: () => initPromise.then(() => {
+        if (module) {
+          releaseModule(module);
+        }
+        module = null;
+      }),
+      released: () => initPromise.then(() => !module),
+    };
+    return module;
+  }
+
+  function releaseModule(module) {
+    const released = new Map();
+    const replacement = function() {
+      throw new Error(`Shared library was abandoned`);
+    };
+    const releaseClass = (cls) => {
+      if (!cls || released.get(cls)) {
+        return;
+      }
+      released.set(cls, true);
+      // release static variables--vivificators return pointers
+      const vivificators = cls[CHILD_VIVIFICATOR];
+      if (vivificators) {
+        for (const vivificator of Object.values(vivificators)) {
+          const ptr = vivificator.call(cls);
+          if (ptr) {
+            releaseObject(ptr);
+          }
+        }
+      }
+      for (const [ name, { value, get, set }  ] of Object.entries(Object.getOwnPropertyDescriptors(cls))) {
+        if (typeof(value) === 'function') {
+          // release thunk of static function
+          value[RELEASE_THUNK]?.(replacement);
+        } else if (get && !set) {
+          // the getter might return a type/class/constuctor
+          const child = cls[name];
+          if (typeof(child) === 'function') {
+            releaseClass(child);
+          }
+        }
+      }
+      for (const [ name, { value } ] of Object.entries(Object.getOwnPropertyDescriptors(cls.prototype))) {
+        if (typeof(value) === 'function') {
+          // release thunk of instance function
+          value[RELEASE_THUNK]?.(replacement);
+        }
+      }
+    };
+    const releaseObject = (obj) => {
+      if (!obj || released.get(obj)) {
+        return;
+      }
+      released.set(obj, true);
+      const dv = obj[MEMORY];
+      if (dv.buffer instanceof SharedArrayBuffer) {
+        // create new buffer and copy content from shared memory
+        const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+        const ta2 = new Uint8Array(ta);
+        const dv2 = new DataView(ta2.buffer);
+        obj[MEMORY] = dv2;
+      }
+      const slots = obj[SLOTS];
+      if (slots) {
+        for (const child of Object.values(slots)) {
+          // deal with pointers in structs
+          if (child.hasOwnProperty(ZIG)) {
+            releaseObject(child);
+          }
+        }
+        if (obj.hasOwnProperty(ZIG)) {
+          // a pointer--release what it's pointing to
+          releaseObject(obj[SLOTS][0]);
+        } else {
+          // force recreation of child objects so they'll use non-shared memory
+          obj[SLOTS] = {};
+        }
+      }
+    };
+    releaseClass(module);
   }
 
   const decoder = new TextDecoder();

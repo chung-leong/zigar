@@ -39,14 +39,13 @@ describe('Loader', function() {
     })
     it('should load Zig file', async function() {
       this.timeout(60000);
-      const { href: url } = new URL('./zig-samples/simple.zig', import.meta.url);
+      const { href: url } = new URL('./zig-samples/function-simple.zig', import.meta.url);
       const result = await load(url, {}, () => {});
       const { source, format, shortCircuit } = result;
       expect(format).to.equal('module');
       expect(shortCircuit).to.be.true;
       const m = /export \{([\s\S]*)\}/.exec(source);
-      expect(m[1]).to.contain('hello');
-      expect(m[1]).to.contain('constant');
+      expect(m[1]).to.contain('add');
     })
     it('should ignore URL without the extension zig', async function() {
       let called = false;
@@ -59,7 +58,7 @@ describe('Loader', function() {
       // for coverage purpose
       this.timeout(60000);
       process.env.NODE_ENV = 'production';
-      const { href: url } = new URL('./zig-samples/simple.zig', import.meta.url);
+      const { href: url } = new URL('./zig-samples/function-simple.zig', import.meta.url);
       const result = await load(url, {}, () => {});
     })
     it('should use environment variables', async function() {
@@ -68,7 +67,7 @@ describe('Loader', function() {
       process.env.ZIGAR_OPTIMIZE = 'ReleaseSmall';
       process.env.ZIGAR_CLEAN = '0';
       process.env.NODE_ENV = 'development';
-      const { href: url } = new URL('./zig-samples/simple.zig', import.meta.url);
+      const { href: url } = new URL('./zig-samples/function-simple.zig', import.meta.url);
       const result = await load(url, {}, () => {});
     })
   })

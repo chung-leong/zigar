@@ -1,5 +1,5 @@
 import { throwZigError } from './error.js';
-import { MEMORY, SLOTS, ZIG } from './symbol.js';
+import { MEMORY, SLOTS, ZIG, RELEASE_THUNK } from './symbol.js';
 
 export function addMethods(s) {
   const {
@@ -8,21 +8,25 @@ export function addMethods(s) {
     static: { methods: staticMethods },
   } = s;
   for (const method of staticMethods) {
-    const {
+    let {
       name,
       argStruct,
-      thunk,
+      thunk
     } = method;
     const f = function(...args) {
       const { constructor } = argStruct;
       const a = new constructor(args);
       return invokeThunk(thunk, a);
+    };
+    if (process.env.ZIGAR_TARGET === 'NODE-CPP-EXT') {
+      // need to set the local variables as well as the property of the method object
+      f[RELEASE_THUNK] = r => thunk = argStruct = method.thunk = r;
     }
     Object.defineProperty(f, 'name', { value: name, writable: false });
     Object.defineProperty(constructor, name, { value: f, configurable: true, writable: true });
   }
   for (const method of instanceMembers) {
-    const {
+    let {
       name,
       argStruct,
       thunk,
@@ -31,6 +35,9 @@ export function addMethods(s) {
       const { constructor } = argStruct;
       const a = new constructor([ this, ...args ]);
       return invokeThunk(thunk, a);
+    };
+    if (process.env.ZIGAR_TARGET === 'NODE-CPP-EXT') {
+      f[RELEASE_THUNK] = r => thunk = argStruct = method.thunk = r;
     }
     Object.defineProperty(f, 'name', { value: name, writable: false });
     Object.defineProperty(Object.prototype, name, { value: f, configurable: true, writable: true });

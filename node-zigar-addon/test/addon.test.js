@@ -28,6 +28,7 @@ describe('Addon functions', function() {
       expect(symbol2).to.equal(MEMORY);
       expect(symbol3).to.equal(ZIG);
       expect(result).to.equal(constructor);
+      expect(result).to.have.property('__zigar');
     })
     it('should throw if the thunk function returns a string', function() {
       const constructor = function() {};

@@ -17,3 +17,4 @@ export const COMPAT = Symbol('compat');
 export const SELF = Symbol('self');
 export const CHILD_VIVIFICATOR = Symbol('childVivificator');
 export const POINTER_VISITOR = Symbol('pointerVisitor');
+export const RELEASE_THUNK = Symbol('releaseThunk');
