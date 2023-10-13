@@ -1181,7 +1181,7 @@ function generateCode(structures, params) {
     add(`const initPromise = linkModule(wasmPromise, { ...linkage, writeBack: ${!topLevelAwait} });`);
   } else {
     add(`\n// no need to use WASM binary`);
-    add(`const initPromise = Promise.resolve(true);`);
+    add(`const initPromise = Promise.resolve();`);
   }
   add(`const __zigar = {`);
   add(`init: () => initPromise,`);

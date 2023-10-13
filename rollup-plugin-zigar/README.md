@@ -9,8 +9,8 @@ JavaScript project.
 npm install --save-dev rollup-plugin-zigar
 ```
 
-You must install the Zig compiler onto your computer separately. Follow the instructions outlined in
-the official [Getting Started](https://ziglang.org/learn/getting-started/) guide. This library
+You must install the Zig compiler onto your computer separately. Follow the instructions outlined
+in the official [Getting Started](https://ziglang.org/learn/getting-started/) guide. This library
 assumes that the compiler is in the search path.
 
 ## Usage
@@ -47,13 +47,17 @@ export default defineConfig({
 
 ## Options
 
-* `optimize` - Optimization level (default: `ReleaseSmall` when building for production, `Debug` otherwise)
+* `optimize` - Optimization level (default: `ReleaseSmall` when building for production, `Debug`
+otherwise)
 * `topLevelAwait` - Use top-level await to wait for compilation of WASM code (default: `true`)
-* `embedWASM` - Embed WASM binary as base64 in JavaScript code (default: `false` in build mode, `true` in server mode)
+* `embedWASM` - Embed WASM binary as base64 in JavaScript code (default: `false` in build mode,
+`true` in server mode)
 * `omitFunctions` - Exclude all functions and produce no WASM code (default: `false`)
-* `stripWASM` - Remove extraneous code from WASM binary, including debugging information (default: false when `optimize` is `Debug`, `true` otherwise)
+* `stripWASM` - Remove extraneous code from WASM binary, including debugging information (default:
+false when `optimize` is `Debug`, `true` otherwise)
 * `keepNames` - Keep names of function in WASM binary when stripping (default: `false`)
-* `useReadFile` - Enable the use of readFile() to Load WASM file when library is used in Node.js (default: `false`)
+* `useReadFile` - Enable the use of readFile() to Load WASM file when library is used in Node.js
+(default: `false`)
 * `clean` - Remove temporary build folder after building (default: `false`)
 * `zigCmd` - Zig build command (default: `zig build -Doptimize=${optimize}`)
 * `cacheDir` - Directory where compiled shared libraries are placed (default: `${CWD}/zigar-cache`)
@@ -62,14 +66,17 @@ export default defineConfig({
 
 ## Awaiting WASM compilation
 
-By default, the plugin uses top-level await to wait for compilation of WASM binary. As of writing, this JavaSCript feature is not yet universally available. To produce a production build, you might need to set `topLevelAwait` to false.
+By default, the plugin uses top-level await to wait for compilation of WASM binary. As of writing,
+this JavaSCript feature is not yet universally available. To produce a production build, you might
+need to set `topLevelAwait` to false.
 
-There are two ways you can await WASM compilation when the feature is turned off. The first way is to await the `__init` promise that comes with every module exported by Zigar:
+There are two ways you can await WASM compilation when the feature is turned off. The first way is
+to await the promise return by `init()` of `__zigar`, an object that comes with every module:
 
 ```js
 async function performTask(input) {
-  const { calculate, __init } = await import('calculation.zig');
-  await __init;
+  const { calculate, __zigar } = await import('calculation.zig');
+  await __zigar.init();
   const result = calculate(input);
   displayResult(result);
 }
@@ -85,7 +92,8 @@ async function performTask(input) {
 }
 ```
 
-Prior to the completion of WASM compilation, every function will return a promise of its eventual result.
+Prior to the completion of WASM compilation, every function will return a promise of its eventual
+result.
 
 ## Demo app
 
@@ -189,7 +197,8 @@ pub fn sha1(bytes: []const u8) [std.crypto.hash.Sha1.digest_length * 2]u8 {
 }
 ```
 
-`sha1()` returns an array object. We access its `string` property to get a string in our `onChange` handler above.
+`sha1()` returns an array object. We access its `string` property to get a string in our `onChange`
+handler above.
 
 In the command line, run `npm install`, `npm run dev`, the open the link with your browser. You
 should be greeted by the following:
@@ -216,9 +225,11 @@ As of September 2023, you will encounter the following error when you run `npm r
 
 ```
 [vite:esbuild-transpile] Transform failed with 1 error:
-assets/index-!~{001}~.js:3370:0: ERROR: Top-level await is not available in the configured target environment ("chrome87", "edge88", "es2020", "firefox78", "safari14" + 2 overrides)
+assets/index-!~{001}~.js:3370:0: ERROR: Top-level await is not available in the configured target
+environment ("chrome87", "edge88", "es2020", "firefox78", "safari14" + 2 overrides)
 
-Top-level await is not available in the configured target environment ("chrome87", "edge88", "es2020", "firefox78", "safari14" + 2 overrides)
+Top-level await is not available in the configured target environment ("chrome87", "edge88",
+"es2020", "firefox78", "safari14" + 2 overrides)
 ```
 
 In order to build successfully, we need to go back to `src/vite.config.js` and set `topLevelAwait`
@@ -237,7 +248,8 @@ export default defineConfig({
 })
 ```
 
-Without top-level await the app will work properly most of the time. In theory the loading process could hit a hiccup and `sha1()` gets called before it's ready. To ensure that our app works right
+Without top-level await the app will work properly most of the time. In theory the loading process
+could hit a hiccup and `sha1()` gets called before it's ready. To ensure that our app works right
 all the time we're going to add a check to the `onChange` handler:
 
 ```js

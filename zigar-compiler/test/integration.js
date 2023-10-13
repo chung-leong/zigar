@@ -398,15 +398,16 @@ export function addTests(importModule, options) {
       expect(slice.dataView.buffer).to.equal(dv.buffer);
     })
     it('should accept a compatible TypedArray', async function() {
-      const { getSlice } = await importModule(resolve('./zig-samples/basic/function-returning-slice.zig'));
-      const ta = new Int32Array(12);
+      this.timeout(60000);
+      const { fifth, setFifth } = await importModule(resolve('./zig-samples/basic/function-accepting-typed-array.zig'));
+      const ta = new Uint32Array(12);
       for (let i = 0, len = ta.length; i < len; i++) {
         ta[i] = i + 1;
       }
-      const slice = getSlice(ta, 2, 5);
-      expect([ ...slice ]).to.eql([ 3, 4, 5 ]);
-      expect(slice.dataView.byteOffset).to.equal(8);
-      expect(slice.dataView.buffer).to.equal(ta.buffer);
+      const result = fifth(ta);
+      expect(result).to.equal(5);
+      setFifth(ta, 50);
+      expect(ta[4]).to.equal(50);
     })
     it('should return correctly result from vector functions', async function() {
       this.timeout(60000);
@@ -901,7 +902,6 @@ export function addTests(importModule, options) {
         expect(line).to.equal(refLines[index]);
       }
     })
-    skip.
     it('should produce the right results for the k-nucleotide example', async function() {
       this.timeout(120000);
       const { kNucleotide } = await importModule(resolve('./zig-samples/benchmarks-game/k-nucleotide.zig'));
