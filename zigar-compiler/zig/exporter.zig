@@ -853,7 +853,8 @@ fn addVectorMember(host: anytype, structure: Value, comptime T: type) !void {
     try host.attachMember(structure, .{
         .member_type = getMemberType(ve.child),
         .bit_size = @bitSizeOf(ve.child),
-        .byte_size = @sizeOf(ve.child),
+        // byte_size is missing when it's a vector of bools (i.e. bits)
+        .byte_size = if (@sizeOf(T) >= @sizeOf(ve.child) * ve.len) @sizeOf(ve.child) else missing,
         .structure = try getStructure(host, ve.child),
     }, false);
 }

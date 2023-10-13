@@ -418,6 +418,18 @@ export function addTests(importModule, options) {
       expect([ ...c ]).to.eql([ 5, 12, 21, 32 ]);
       expect([ ...d ]).to.eql([ 6, 8, 10, 12 ]);
     })
+    it('should return correctly result from boolean vector functions', async function() {
+      this.timeout(60000);
+      const { any, all } = await importModule(resolve('./zig-samples/basic/vector-bool.zig'));
+      const a = [ true, true, true, true ];
+      const b = [ true, true, false, true ];
+      const c = [ false, false, false, false ];
+      expect(all(a)).to.be.true;
+      expect(all(b)).to.be.false;
+      expect(any(a)).to.be.true;
+      expect(any(b)).to.be.true;
+      expect(any(c)).to.be.false;
+    })
     it('should handle misaligned pointers', async function() {
       this.timeout(60000);
       const { Vector4, double, add } = await importModule(resolve('./zig-samples/basic/vector-float-pointer.zig'));

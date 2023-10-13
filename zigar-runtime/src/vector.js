@@ -45,7 +45,7 @@ export function finalizeVector(s) {
       return self;
     }
   };
-  const { byteSize: elementSize, structure: elementStructure } = member;
+  const { bitSize: elementBitSize, structure: elementStructure } = member;
   const copy = getMemoryCopier(byteSize);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -71,7 +71,7 @@ export function finalizeVector(s) {
       }
     }
   };
-  for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementSize * 8) {
+  for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
     const { get, set } = getAccessors({ ...member, bitOffset }, options);
     Object.defineProperty(constructor.prototype, i, { get, set, configurable: true });
   }
