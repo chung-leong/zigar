@@ -145,7 +145,6 @@ export function attachTemplate(s, template, isStatic = false) {
 
 export function getShortName(s) {
   let r = s.name;
-  r = r.replace(/\(.*\)/, '');
   r = r.replace(/{.*}/, '');
   r = r.replace(/[^. ]*?\./g, '');
   return r;

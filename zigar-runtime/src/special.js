@@ -190,13 +190,16 @@ export function getValueOf() {
         array.push(extract(element));
       }
       return array;
-    } else if (object && typeof(object) === 'object') {
+    } else if (object && (typeof(object) === 'object' || typeof(object) === 'function')) {
       let result = map.get(object);
       if (!result) {
         result = {};
         map.set(object, result);
         for (const [ name, child ] of Object.entries(object)) {
-          result[name] = extract(child);
+          const childResult = extract(child);
+          if (childResult !== undefined) {
+            result[name] = childResult;
+          }
         }
         return result;
       }
