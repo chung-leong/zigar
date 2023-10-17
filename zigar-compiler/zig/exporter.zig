@@ -568,6 +568,13 @@ pub fn toMemory(pointer: anytype) Memory {
         .Slice => @intFromPtr(pointer.ptr),
         else => @intFromPtr(pointer),
     };
+    const invalid_address = create: {
+        var invalid_ptr: *u8 = undefined;
+        break :create @intFromPtr(invalid_ptr);
+    };
+    if (address == invalid_address) {
+        return .{};
+    }
     const len = switch (pt.size) {
         .One => @sizeOf(pt.child),
         .Slice => @sizeOf(pt.child) * pointer.len,
