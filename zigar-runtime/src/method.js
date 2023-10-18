@@ -20,6 +20,7 @@ export function addMethods(s) {
     };
     if (process.env.ZIGAR_TARGET === 'NODE-CPP-EXT') {
       // need to set the local variables as well as the property of the method object
+      /* c8 ignore next */
       f[RELEASE_THUNK] = r => thunk = argStruct = method.thunk = r;
     }
     Object.defineProperty(f, 'name', { value: name, writable: false });
@@ -37,6 +38,7 @@ export function addMethods(s) {
       return invokeThunk(thunk, a);
     };
     if (process.env.ZIGAR_TARGET === 'NODE-CPP-EXT') {
+      /* c8 ignore next */
       f[RELEASE_THUNK] = r => thunk = argStruct = method.thunk = r;
     }
     Object.defineProperty(f, 'name', { value: name, writable: false });
