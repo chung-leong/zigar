@@ -90,19 +90,7 @@ test "getObjectSlot" {
 }
 
 fn getCString(comptime s: []const u8) [*:0]const u8 {
-    comptime var cs: [s.len + 1]u8 = undefined;
-    @setEvalBranchQuota(s.len);
-    inline for (s, 0..) |c, index| {
-        cs[index] = c;
-    }
-    cs[s.len] = 0;
-    return @ptrCast(&cs);
-}
-
-test "getCString" {
-    const cs = getCString("hello");
-    assert(cs[0] == 'h');
-    assert(cs[5] == 0);
+    return std.fmt.comptimePrint("{s}\x00", .{s});
 }
 
 // enums and external structs
@@ -685,17 +673,68 @@ fn getStructure(host: anytype, comptime T: type) Error!Value {
 }
 
 fn getStructureName(comptime T: type) [*:0]const u8 {
+    const utils = struct {
+        fn getIndexOf(comptime s: []const u8, comptime c: u8) comptime_int {
+            @setEvalBranchQuota(s.len * 2);
+            inline for (s, 0..) |c2, index| {
+                if (c2 == c) {
+                    return index;
+                }
+            }
+            return -1;
+        }
+
+        fn getAlternateName(comptime name: []const u8) []const u8 {
+            const exclam_index = getIndexOf(name, '!');
+            if (exclam_index != -1) {
+                const err_name = getErrorName(name[0..exclam_index]);
+                const type_name = getAlternateName(name[exclam_index + 1 .. name.len]);
+                return std.fmt.comptimePrint("{s}!{s}", .{ err_name, type_name });
+            }
+            const curly_index = getIndexOf(name, '{');
+            if (curly_index != -1) {
+                const id_allocator = slot_allocator.get(.{ .type = "struct" });
+                const id = id_allocator.get(getBigInt(name));
+                return std.fmt.comptimePrint("Struct{d:0>4}", .{id});
+            }
+            return name;
+        }
+
+        fn getErrorName(comptime name: []const u8) []const u8 {
+            const parent_index = getIndexOf(name, '(');
+            if (parent_index != -1) {
+                const id_allocator = slot_allocator.get(.{ .type = "error set" });
+                const id = id_allocator.get(getBigInt(name));
+                return std.fmt.comptimePrint("ErrorSet{d:0>4}", .{id});
+            }
+            return name;
+        }
+
+        fn getBigInt(comptime s: []const u8) comptime_int {
+            comptime var result: comptime_int = 0;
+            @setEvalBranchQuota(s.len * 4);
+            inline for (s) |c| {
+                result = (result << 8) | @as(comptime_int, @intCast(c));
+            }
+            return result;
+        }
+    };
     // name a structure after the function if it's an ArgStruct
     const name = comptime getFunctionName(T) orelse @typeName(T);
-    return getCString(name);
+    const alternate_name = comptime utils.getAlternateName(name);
+    return getCString(alternate_name);
 }
 
 test "getStructureName" {
     const S = struct {
-        fn hello(number: i32) i32 {
+        fn hello(number: i32) !i32 {
             return number + 2;
         }
+
+        const cow = .{.{ .cow = 2 }};
+        const pig = .{.{ .pig = 1 }};
     };
+
     const name1 = getStructureName([]u8);
     assert(name1[0] == '[');
     assert(name1[1] == ']');
@@ -705,6 +744,18 @@ test "getStructureName" {
     assert(name2[0] == 'h');
     assert(name2[1] == 'e');
     assert(name2[5] == 0);
+    const name3 = getStructureName(@TypeOf(S.cow));
+    assert(name3[0] == 'S');
+    assert(name3[1] == 't');
+    assert(name3[9] == '0');
+    const name4 = getStructureName(@TypeOf(S.pig));
+    assert(name4[0] == 'S');
+    assert(name4[1] == 't');
+    assert(name4[9] == '1');
+    const name5 = getStructureName(@typeInfo(@TypeOf(S.hello)).Fn.return_type orelse void);
+    assert(name5[0] == 'E');
+    assert(name5[1] == 'r');
+    assert(name5[11] == '0');
 }
 
 fn getSliceName(comptime T: type) [*:0]const u8 {
