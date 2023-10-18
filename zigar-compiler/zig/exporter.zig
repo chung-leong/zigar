@@ -1045,8 +1045,8 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
                     const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
                     // copy the value
                     const VT = RuntimeType(default_value_ptr.*);
-                    const value: VT = default_value_ptr.*;
-                    const value_ptr = &value;
+                    var value: VT = default_value_ptr.*;
+                    const value_ptr: *const VT = &value;
                     const ptr_memory: Memory = .{
                         .bytes = @ptrCast(@constCast(&value_ptr)),
                         .len = @sizeOf(@TypeOf(value_ptr)),
@@ -1255,7 +1255,8 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                         const VT = RuntimeType(decl_value);
                         // the following must be a var declaration
                         var const_value: VT = decl_value;
-                        break :get_ptr &const_value;
+                        const const_ptr: *const VT = &const_value;
+                        break :get_ptr const_ptr;
                     } else {
                         break :get_ptr decl_ptr;
                     }

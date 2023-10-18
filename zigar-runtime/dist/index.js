@@ -285,13 +285,17 @@ function throwBufferSizeMismatch(structure, dv, target = null) {
 }
 
 function throwBufferExpected(structure) {
-  const { byteSize, typedArray } = structure;
+  const { type, byteSize, typedArray } = structure;
   const s = (byteSize > 1) ? 's' : '';
   const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle);
   if (typedArray) {
     acceptable.push(addArticle(typedArray.name));
   }
-  throw new TypeError(`Expecting ${formatList(acceptable)} ${byteSize} byte${s} in length`);
+  if (type === StructureType.Slice) {
+    throw new TypeError(`Expecting ${formatList(acceptable)} that can accommodate items ${byteSize} byte${s} in length`);
+  } else {
+    throw new TypeError(`Expecting ${formatList(acceptable)} that is ${byteSize} byte${s} in length`);
+  }
 }
 
 function throwInvalidEnum(structure, value) {
@@ -2494,10 +2498,10 @@ function addMethods(s) {
     static: { methods: staticMethods },
   } = s;
   for (const method of staticMethods) {
-    const {
+    let {
       name,
       argStruct,
-      thunk,
+      thunk
     } = method;
     const f = function(...args) {
       const { constructor } = argStruct;
@@ -2508,7 +2512,7 @@ function addMethods(s) {
     Object.defineProperty(constructor, name, { value: f, configurable: true, writable: true });
   }
   for (const method of instanceMembers) {
-    const {
+    let {
       name,
       argStruct,
       thunk,
