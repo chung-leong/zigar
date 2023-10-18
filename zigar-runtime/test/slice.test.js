@@ -850,7 +850,8 @@ describe('Slice functions', function() {
       });
       const Uint64Array = finalizeStructure(arrayStructure);
       const array = new Uint64Array([ 100n, 200n, 300n, 400n ]);
-      expect(() => Int64Slice(array)).to.throw(TypeError);
+      expect(() => Int64Slice(array)).to.throw(TypeError)
+        .with.property('message').that.contains(`that can accommodate items 8 bytes in length`);
     })
     it('should throw when initializer has the wrong size', function() {
       const structStructure = beginStructure({

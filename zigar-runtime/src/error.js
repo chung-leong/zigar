@@ -22,13 +22,17 @@ export function throwBufferSizeMismatch(structure, dv, target = null) {
 }
 
 export function throwBufferExpected(structure) {
-  const { byteSize, typedArray } = structure;
+  const { type, byteSize, typedArray } = structure;
   const s = (byteSize > 1) ? 's' : '';
   const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle);
   if (typedArray) {
     acceptable.push(addArticle(typedArray.name));
   }
-  throw new TypeError(`Expecting ${formatList(acceptable)} ${byteSize} byte${s} in length`);
+  if (type === StructureType.Slice) {
+    throw new TypeError(`Expecting ${formatList(acceptable)} that can accommodate items ${byteSize} byte${s} in length`);
+  } else {
+    throw new TypeError(`Expecting ${formatList(acceptable)} that is ${byteSize} byte${s} in length`);
+  }
 }
 
 export function throwInvalidEnum(structure, value) {
