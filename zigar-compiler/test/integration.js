@@ -9,10 +9,6 @@ export function addTests(importModule, options) {
     optimize,
     target,
   } = options;
-  beforeEach(function() {
-    process.env.ZIGAR_TARGET = target;
-    process.env.ZIGAR_OPTIMIZE = optimize;
-  })
   const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(optimize);
   describe('Console', function() {
     it('should output to development console', async function() {
