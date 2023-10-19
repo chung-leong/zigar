@@ -75,6 +75,69 @@ describe('Code generation', function() {
       expect(code).to.not.contain('useInt()');
       expect(code).to.contain('i31');
     })
+    it('should generate code for defining a standard uint type', function() {
+      const structure = {
+        constructor: null,
+        type: StructureType.Primitive,
+        name: "u32",
+        byteSize: 4,
+        isConst: false,
+        hasPointer: false,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitOffset: 0,
+              bitSize: 32,
+              byteSize: 4,
+            }
+          ],
+          methods: [],
+          template: null,
+        },
+        static: {
+          members: [],
+          methods: [],
+          template: null,
+        },
+        options: {},
+      };
+      const { code } = generateCode([ structure ], {});
+      expect(code).to.contain('useUint()');
+      expect(code).to.contain('u32');
+    })
+    it('should generate code for defining a non-standard uint type', function() {
+      const structure = {
+        constructor: null,
+        type: StructureType.Primitive,
+        name: "u31",
+        byteSize: 4,
+        isConst: false,
+        hasPointer: false,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitOffset: 0,
+              bitSize: 31,
+              byteSize: 4,
+            }
+          ],
+          methods: [],
+          template: null,
+        },
+        static: {
+          members: [],
+          methods: [],
+          template: null,
+        },
+        options: {},
+      };
+      const { code } = generateCode([ structure ], {});
+      expect(code).to.contain('useUintEx()');
+      expect(code).to.not.contain('useUint()');
+      expect(code).to.contain('u31');
+    })
     it('should generate code for defining a standard float type', function() {
       const structure = {
         constructor: null,
