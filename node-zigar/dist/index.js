@@ -15,15 +15,25 @@ let nextModuleId = 1;
 
 async function loadZig(url) {
   // compile the file if it or any of its dependencies has changed
+  const { searchParams } = new URL(url);
   const zigPath = fileURLToPath(url);
-  const { env } = process;
   const options = {
-    clean: !!parseInt(env.ZIGAR_CLEAN ?? ((env.NODE_ENV === 'production') ? '1' : '0')),
-    optimize: env.ZIGAR_OPTIMIZE ?? ((env.NODE_ENV === 'production') ? 'ReleaseFast' : 'Debug'),
-    zigCmd: env.ZIGAR_BUILD_CMD,
-    buildDir: env.ZIGAR_BUILD_DIR,
-    cacheDir: env.ZIGAR_CACHE_DIR,
+    clean: process.env.NODE_ENV === 'production',
+    optimize: (process.env.NODE_ENV === 'production') ? 'ReleaseFast' : 'Debug',
   };
+  // variables from environment
+  for (const [ name, value ] of Object.entries(process.env)) {
+    if (name.startsWith('ZIGAR_')) {
+      options[name.slice(6).toLowerCase()] = value;
+    }
+  }
+  // variables from URL
+  for (const [ name, value ] of new URL(url).searchParams) {
+    options[name] = value;
+  }
+  if (typeof(options.clean) !== 'boolean') {
+    options.clean = !!parseInt(options.clean);
+  }
   const soPath = await compile(zigPath, options);
   const module = await loadModule(soPath);
   const descriptors = Object.getOwnPropertyDescriptors(module);

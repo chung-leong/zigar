@@ -20,7 +20,6 @@ async function importModule(path, optimize) {
     await currentModule.__zigar?.abandon();
     currentModule = null;
   }
-  process.env.ZIGAR_OPTIMIZE = optimize;
   currentModule = import(`${path}?optimize=${optimize}`);
   return currentModule;
 }
