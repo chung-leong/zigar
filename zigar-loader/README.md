@@ -10,8 +10,15 @@ npm install --save-dev zigar-loader
 ```
 
 You must install the Zig compiler onto your computer separately. Follow the instructions outlined
-in the official [Getting Started](https://ziglang.org/learn/getting-started/) guide. This library
-assumes that the compiler is in the search path.
+in the official [Getting Started](https://ziglang.org/learn/getting-started/) guide. Alternately,
+you can let [ZVM](https://github.com/tristanisham/zvm) help manage the installation process.
+
+This library assumes that the compiler is in the search path.
+
+## Versioning
+
+The major and minor version numbers of this plugin correspond to the version of the Zig compiler
+it's designed for. The current version is 0.11.0. It works with Zig 0.11.0.
 
 ## Usage
 

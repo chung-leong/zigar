@@ -10,8 +10,15 @@ npm install --save-dev rollup-plugin-zigar
 ```
 
 You must install the Zig compiler onto your computer separately. Follow the instructions outlined
-in the official [Getting Started](https://ziglang.org/learn/getting-started/) guide. This library
-assumes that the compiler is in the search path.
+in the official [Getting Started](https://ziglang.org/learn/getting-started/) guide. Alternately,
+you can let [ZVM](https://github.com/tristanisham/zvm) help manage the installation process.
+
+This library assumes that the compiler is in the search path.
+
+## Versioning
+
+The major and minor version numbers of this plugin correspond to the version of the Zig compiler
+it's designed for. The current version is 0.11.0. It works with Zig 0.11.0.
 
 ## Usage
 
@@ -50,11 +57,10 @@ export default defineConfig({
 * `optimize` - Optimization level (default: `ReleaseSmall` when building for production, `Debug`
 otherwise)
 * `topLevelAwait` - Use top-level await to wait for compilation of WASM code (default: `true`)
-* `embedWASM` - Embed WASM binary as base64 in JavaScript code (default: `false` in build mode,
-`true` in server mode)
+* `embedWASM` - Embed WASM binary as base64 in JavaScript code (default: `false`)
 * `omitFunctions` - Exclude all functions and produce no WASM code (default: `false`)
 * `stripWASM` - Remove extraneous code from WASM binary, including debugging information (default:
-false when `optimize` is `Debug`, `true` otherwise)
+`true` unless `optimize` is `Debug`)
 * `keepNames` - Keep names of function in WASM binary when stripping (default: `false`)
 * `useReadFile` - Enable the use of readFile() to Load WASM file when library is used in Node.js
 (default: `false`)
