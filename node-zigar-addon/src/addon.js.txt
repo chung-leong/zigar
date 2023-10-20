@@ -3731,6 +3731,7 @@ R"=====(
       };
       {
         // need to set the local variables as well as the property of the method object
+        /* c8 ignore next */
         f[RELEASE_THUNK] = r => thunk = argStruct = method.thunk = r;
       }
       Object.defineProperty(f, 'name', { value: name, writable: false });
@@ -3748,6 +3749,7 @@ R"=====(
         return invokeThunk(thunk, a);
       };
       {
+        /* c8 ignore next */
         f[RELEASE_THUNK] = r => thunk = argStruct = method.thunk = r;
       }
       Object.defineProperty(f, 'name', { value: name, writable: false });

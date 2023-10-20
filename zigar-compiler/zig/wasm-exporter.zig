@@ -127,16 +127,6 @@ pub const Host = struct {
         return exporter.fromMemory(memory, PtrT);
     }
 
-    pub noinline fn onStack(self: Host, memory: Memory) bool {
-        const bytes = memory.bytes orelse return false;
-        const len = memory.len;
-        // self.context is a pointer to a Call object created on the stack in runThunk()
-        const stack_top = self.context + @sizeOf(Call);
-        const stack_bottom = @intFromPtr(&bytes);
-        const address = @intFromPtr(bytes);
-        return (stack_bottom <= address and address + len <= stack_top);
-    }
-
     fn createDataView(self: Host, memory: Memory, disposition: MemoryDisposition) ?Value {
         // null pointer is possible here--JavaScript code will create an empty ArrayBuffer when len is 0
         const bytes = memory.bytes;
