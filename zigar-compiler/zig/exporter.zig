@@ -1035,10 +1035,11 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
             if (field.default_value) |opaque_ptr| {
                 if (!field.is_comptime) {
                     if (hasPointer(field.type)) {
+                        // need to link to default value when it is or contains pointers
                         const slot = getObjectSlot(T, index);
                         const child_ptr = &@field(values, field.name);
                         const child_obj = try obtainChildObject(host, template, slot, child_ptr, .Copy, false);
-                        try dezigStructure(host, child_obj, child_ptr, .Auto);
+                        try dezigStructure(host, child_obj, child_ptr, .Link);
                     }
                 } else if (field.type != type) {
                     // comptime members are pointer objects

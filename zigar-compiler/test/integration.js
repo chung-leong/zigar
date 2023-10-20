@@ -193,8 +193,7 @@ export function addTests(importModule, options) {
     })
     it('should import structs with complex members', async function() {
       this.timeout(60000);
-      const { default: module } = await importModule(resolve('./zig-samples/basic/structs-with-complex-members.zig'));
-      const { Pet, StructB, StructC, StructD } = module;
+      const { default: module, Pet, StructD } = await importModule(resolve('./zig-samples/basic/structs-with-complex-members.zig'));
       expect(module.struct_b.pet).to.equal(Pet.Cat);
       expect(module.struct_b.a.valueOf()).to.eql({ number1: 0, number2: 0 });
       expect([ ...module.struct_b.floats ]).to.eql([ 0.1, 0.2, 0.3, 0.4 ]);

@@ -3891,7 +3891,7 @@ async function runModule(source, options = {}) {
 
   {
     // link variables
-    for (const [ address, object ] of Object.entries(variables)) {
+    for (const { address, object } of variables) {
       linkObject(object, Number(address));
     }
     // link methods
@@ -3908,7 +3908,7 @@ async function runModule(source, options = {}) {
       run = function() {
         throw new Error('WebAssembly instance was abandoned');
       };
-      for (const object of Object.values(variables)) {
+      for (const { object } of variables) {
         unlinkObject(object);
       }
     };
@@ -4232,7 +4232,7 @@ async function runModule(source, options = {}) {
 
 function finalizeStructures(structures) {
   const slots = {};
-  const variables = {};
+  const variables = [];
   initializeErrorSets();
   for (const structure of structures) {
     for (const target of [ structure.static, structure.instance ]) {
@@ -4286,7 +4286,7 @@ function finalizeStructures(structures) {
     if (placeholder.address !== undefined) {
       // need to replace dataview with one pointing to WASM memory later,
       // when the VM is up and running
-      variables[placeholder.address] = object;
+      variables.push({ address: placeholder.address, object });
     }
     return object;
   }
