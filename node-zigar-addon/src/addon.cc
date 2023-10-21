@@ -799,6 +799,7 @@ static void GetGCStatistics(const FunctionCallbackInfo<Value>& info) {
   info.GetReturnValue().Set(stats);
 }
 
+DISABLE_WCAST_FUNCTION_TYPE
 NODE_MODULE_INIT(/* exports, module, context */) {
   auto isolate = context->GetIsolate();
   auto ad = new AddonData(isolate);
@@ -811,6 +812,7 @@ NODE_MODULE_INIT(/* exports, module, context */) {
   add(String::NewFromUtf8Literal(isolate, "load"), Load, 1);
   add(String::NewFromUtf8Literal(isolate, "getGCStatistics"), GetGCStatistics, 0);
 }
+DISABLE_WCAST_FUNCTION_TYPE_END
 
 int AddonData::script_count = 0;
 int ModuleData::count = 0;
