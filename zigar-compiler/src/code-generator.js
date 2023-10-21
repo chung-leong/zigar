@@ -319,8 +319,12 @@ export function generateCode(structures, params) {
       if (dv && !arrayBufferNames.get(dv.buffer)) {
         const varname = `a${arrayBufferCount++}`;
         arrayBufferNames.set(dv.buffer, varname);
-        const ta = new Uint8Array(dv.buffer);
-        add(`const ${varname} = new Uint8Array([ ${ta.join(', ')} ]);`);
+        if (dv.byteLength > 0) {
+          const ta = new Uint8Array(dv.buffer);
+          add(`const ${varname} = new Uint8Array([ ${ta.join(', ')} ]);`);
+        } else {
+          add(`const ${varname} = new Uint8Array();`);
+        }
       }
       if (slots) {
         for (const [ slot, child ] of Object.entries(slots)) {

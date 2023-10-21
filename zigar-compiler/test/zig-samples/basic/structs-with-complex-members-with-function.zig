@@ -1,3 +1,5 @@
+const std = @import("std");
+
 const StructA = struct {
     number1: i32 = 22,
     number2: f64 = 2.2,
@@ -31,3 +33,7 @@ pub var struct_c: StructC = .{
 pub const StructD = struct {
     a_ptr: *const StructA = &struct_b.a,
 };
+
+pub fn print() void {
+    std.debug.print("{d} {d}\n", .{ struct_b.a.number1, struct_b.a.number2 });
+}

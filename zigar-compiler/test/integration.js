@@ -191,15 +191,30 @@ export function addTests(importModule, options) {
         { good: false, numbers: [ 2, 2, 7, 7 ] },
       ])
     })
-    it('should import structs with complex members', async function() {
+    it('should import structs with complex members when there are no functions', async function() {
       this.timeout(60000);
       const { default: module, Pet, StructD } = await importModule(resolve('./zig-samples/basic/structs-with-complex-members.zig'));
       expect(module.struct_b.pet).to.equal(Pet.Cat);
-      expect(module.struct_b.a.valueOf()).to.eql({ number1: 0, number2: 0 });
+      expect(module.struct_b.a.valueOf()).to.eql({ number1: 22, number2: 2.2 });
       expect([ ...module.struct_b.floats ]).to.eql([ 0.1, 0.2, 0.3, 0.4 ]);
       expect([ ...module.struct_b.integers ]).to.eql([ 0, 1, 2, 3 ]);
       module.struct_b.a = { number1: 123, number2: 456 };
       expect(module.struct_c.a_ptr.valueOf()).to.eql({ number1: 123, number2: 456 });
+      // check pointer member default value
+      const objectD = new StructD({});
+      expect(objectD.a_ptr.valueOf()).to.eql({ number1: 123, number2: 456 });
+    })
+    it('should import structs with complex members', async function() {
+      this.timeout(60000);
+      const { default: module, Pet, StructD, print } = await importModule(resolve('./zig-samples/basic/structs-with-complex-members-with-function.zig'));
+      expect(module.struct_b.pet).to.equal(Pet.Cat);
+      expect(module.struct_b.a.valueOf()).to.eql({ number1: 22, number2: 2.2 });
+      expect([ ...module.struct_b.floats ]).to.eql([ 0.1, 0.2, 0.3, 0.4 ]);
+      expect([ ...module.struct_b.integers ]).to.eql([ 0, 1, 2, 3 ]);
+      module.struct_b.a = { number1: 123, number2: 456 };
+      expect(module.struct_c.a_ptr.valueOf()).to.eql({ number1: 123, number2: 456 });
+      const lines = await capture(() => print());
+      expect(lines[0]).to.equal('123 456');
       // check pointer member default value
       const objectD = new StructD({});
       expect(objectD.a_ptr.valueOf()).to.eql({ number1: 123, number2: 456 });

@@ -103,6 +103,7 @@ export async function runModule(source, options = {}) {
     if (errorIndex !== 0) {
       throwError(errorIndex);
     }
+    fixOverlappingMemory(structures);
     return { structures, runtimeSafety };
   } else if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
     // link variables
@@ -620,6 +621,49 @@ export function finalizeStructures(structures) {
   }
 
   return { promise, resolve, reject, slots, variables, methodRunner };
+}
+
+function fixOverlappingMemory(structures) {
+  // look for buffers that requires linkage
+  const list = [];
+  const find = (object) => {
+    if (!object) {
+      return;
+    }
+    if (object[MEMORY]) {
+      const dv = object[MEMORY];
+      const { address } = dv;
+      if (address) {
+        list.push({ address, length: dv.byteLength, owner: object, replaced: false });
+      }
+    }
+    if (object[SLOTS]) {
+      for (const child of Object.values(object[SLOTS])) {
+        find(child);
+      }
+    }
+  };
+  for (const structure of structures) {
+    find(structure.instance.template);
+    find(structure.static.template);
+  }
+  // larger memory blocks come first
+  list.sort((a, b) => b.length - a.length);
+  for (const a of list) {
+    for (const b of list) {
+      if (a !== b && !a.replaced) {
+        if (a.address <= b.address && b.address + b.length <= a.address + a.length) {
+          // B is inside A--replace it with a view of A's buffer
+          const dv = a.owner[MEMORY];
+          const offset = b.address - a.address + dv.byteOffset;
+          const newDV = new DataView(dv.buffer, offset, b.length);
+          newDV.address = b.address;
+          b.owner[MEMORY] = newDV;
+          b.replaced = true;
+        }
+      }
+    }
+  }
 }
 
 export {
