@@ -1,3 +1,6 @@
+# Zigar-runtime
+
+Library for accessing Zig structures in JavaScript.
 
 ## Feautures
 
@@ -117,13 +120,15 @@ console.log([ ...greeting ]);
 // ]
 ```
 
-Zigar will automatically provide the allocator. It allocates memory from the JavaScript engine in the
-form of `ArrayBuffer`. The allocator should only be used for returning data to the caller and not other purposes, as it is not able to free memory (discarded blocks must await garbaged collection).
+Zigar will automatically provide the allocator. It allocates memory from the JavaScript engine in
+the form of `ArrayBuffer`. The allocator should only be used for returning data to the caller and
+not other purposes, as it is not able to free memory (discarded blocks must await garbage
+collection).
 
-The Zig slice `[]const u8` is represented by an object on the JavaScript side by an object. To get
-the actual text string you have to access its `string` property.
+The Zig slice `[]const u8` is represented by an object on the JavaScript side. To get the actual
+text string you have to access its `string` property.
 
-Functions returning error unions will throw when errors returned:
+Functions returning error unions will throw when an error is returned:
 
 ```zig
 // add-error.zig
@@ -152,7 +157,7 @@ try {
 
 // console output:
 // 3
-// [error{UnexpectedSpanishInquisition,RecordIsScratched} [Error]: Unexpected spanish inquisition]
+// [ErrorSet0000 [Error]: Unexpected spanish inquisition]
 // true
 ```
 
@@ -946,14 +951,139 @@ console.log(Object.keys(price));
 
 Note how a tagged union only returns the active key when `Object.keys()` is called on it, while a
 bare union returns all possible keys. This means it's possible to perform a spread operation
-(`{ ...object }`) on a tagged union whiledoing the same on a bare union would always cause an
-error to be thrown.
+(`{ ...object }`) on a tagged union while doing the same on a bare union would always cause an
+error.
 
 ## Special properties
 
+Zig objects come with special properties that let you access their underlying data:
+
+* `dataView` - A [DataView](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DataView)
+object
+* `typedArray` - A [TypedArray](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/TypedArray)
+object (for arrays of integers and floats, including multidimensional ones)
+* `base64` - A string containing the Base64 represention of the data
+* `string` - A string decoded from the data, on the assumption that it contains Unicode characters
+(for u8 and u16 arrays)
+
+These properties can also be used when creating new objects:
+
+```zig
+// cow.zig
+pub const Cow = extern struct {
+    id: u32,
+    weight: u32,
+    age: u32,
+    price: f64,
+};
+```
+```js
+// cow.js
+import { Cow } from './cow.zig';
+
+const base64 = '0gQAAGQAAAAFAAAAAAAAAAAAAAAACHJA';
+const cow = new Cow({ base64 });
+for (const [ name, value ] of Object.entries(cow)) {
+  console.log(`${name}: ${value}`);
+}
+
+// console output:
+// id: 1234
+// weight: 100
+// age: 5
+// price: 288.5
+```
+
+Note the use of `extern` in the struct definition above. Without it the layout of the binary data
+would not match the order of fields in the struct definition. For instance, the `f64` in `Cow`
+would be shifted to byte offset 0 if `extern` were omitted.
+
+The following example initializes a slice of `u16` using a string:
+
+```zig
+// u16-string.zig
+pub const U16String = []const u16;
+```
+```js
+// u16-string.js
+import { U16String } from './u16-string.zig';
+
+const s1 = new U16String({ string: '牛' });
+console.log(`Unicode: ${s1[0].toString(16)}`);
+const s2 = new U16String('牛');
+console.log(`Unicode: ${s2[0].toString(16)}`);
+
+// Unicode: 725b
+// Unicode: 725b
+```
+
+As you can see above, passing a string to the constructor is equivalent to passing it in an object.
+
 ## Getting regular JavaScript objects
 
+You can use the `valueOf()` method to obtain a regular JavaScript object:
+
+```js
+// cower.js
+import { Cow } from './cow.zig';
+
+const cow = new Cow({
+  id: 1234,
+  weight: 100,
+  age: 5,
+  price: 288.5
+});
+console.log(cow);
+console.log('');
+console.log(cow.valueOf());
+
+// console output:
+// Cow [cow.Cow] {
+//     id: [Getter/Setter],
+//     weight: [Getter/Setter],
+//     age: [Getter/Setter],
+//     price: [Getter/Setter],
+//     [Symbol(memory)]: DataView {
+//       byteLength: 24,
+//       byteOffset: 0,
+//       buffer: ArrayBuffer {
+//         [Uint8Contents]: <00 00 00 00 00 08 72 40 d2 04 00 00 64 00 00 00 05 00 00 00 00 00 00 00>,
+//         byteLength: 24
+//       }
+//     }
+//   }
+//
+// { id: 1234, weight: 100, age: 5, price: 288.5 }
+```
+
 ## Stringifying to JSON
+
+You can use [`JSON.stringify()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify)
+to obtain the JSON representation of a Zig object:
+
+```js
+// cow-with-a-vengeance.js
+import { Cow } from './cow.zig';
+
+const cow = new Cow({
+  id: 1234,
+  weight: 100,
+  age: 5,
+  price: 288.5
+});
+console.log(JSON.stringify(cow, undefined, 2));
+
+// console output:
+// {
+//   "id": 1234,
+//   "weight": 100,
+//   "age": 5,
+//   "price": 288.5
+// }
+```
+
+This works only when the struct in question does not have fields that are problematic, such as
+bigInt and untagged unions.
 
 ## Limitations
 

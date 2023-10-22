@@ -10,5 +10,5 @@ try {
 
 // console output:
 // 3
-// [error{UnexpectedSpanishInquisition,RecordIsScratched} [Error]: Unexpected spanish inquisition]
+// [ErrorSet0000 [Error]: Unexpected spanish inquisition]
 // true
