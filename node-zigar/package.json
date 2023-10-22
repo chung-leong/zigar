@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "description": "Enable the use of Zig in NodeJS",
   "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./n14": "./dist/index-n14.js"
+  },
   "type": "module",
   "directories": {
     "test": "test"

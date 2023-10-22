@@ -65,7 +65,7 @@ async function loadZig(url) {
   };
 }
 
-export function resolve(specifier, context, nextResolve) {
+export function resolve(specifier, context, defaultResolve) {
   const { parentURL = baseURL } = context;
   const { pathname, href } = new URL(specifier, parentURL);
   if (extensionsRegex.test(pathname)) {
@@ -74,12 +74,23 @@ export function resolve(specifier, context, nextResolve) {
       url: href,
     };
   }
-  return nextResolve(specifier);
+  return defaultResolve(specifier, context, defaultResolve);
 }
 
-export async function load(url, context, nextLoad) {
+// called by Node 14x
+export async function getFormat(url, context, defaultGetFormat) {
+  if (isZig(url)) {
+    return {
+      format: 'module'
+    };
+  }
+  return defaultGetFormat(url, context, defaultGetFormat);
+}
+
+// called by Node 14x
+export async function getSource(url, context, defaultGetSource) {
   if (isZig(url)) {
     return loadZig(url);
   }
-  return nextLoad(url);
+  return defaultGetSource(url, context, defaultGetSource);
 }

@@ -878,7 +878,7 @@ export function addTests(importModule, options) {
       }
     })
   })
-  skip.if(!process.env.npm_lifecycle_event.includes(':extended')).
+  skip.if(!process.env.npm_lifecycle_event?.includes(':extended')).
   describe('Zig Benchmarks Game', function() {
     it('should produce the right results for the binary-trees example', async function() {
       this.timeout(120000);
