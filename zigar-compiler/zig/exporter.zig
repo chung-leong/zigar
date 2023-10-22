@@ -693,21 +693,33 @@ fn getStructureName(comptime T: type) [*:0]const u8 {
             }
             const curly_index = getIndexOf(name, '{');
             if (curly_index != -1) {
-                const id_allocator = slot_allocator.get(.{ .type = "struct" });
+                const struct_type = select: {
+                    if (curly_index == 5) {
+                        if (name[0] == 'e' and name[1] == 'r' and name[2] == 'r' and name[3] == 'o' and name[4] == 'r') {
+                            break :select "error set";
+                        }
+                    }
+                    break :select "struct";
+                };
+                const struct_prefix = if (struct_type[0] == 'e') "ErrorSet" else "Struct";
+                const id_allocator = slot_allocator.get(.{ .type = struct_type });
                 const id = id_allocator.get(getBigInt(name));
-                return std.fmt.comptimePrint("Struct{d:0>4}", .{id});
+                return std.fmt.comptimePrint("{s}{d:0>4}", .{ struct_prefix, id });
             }
             return name;
         }
 
         fn getErrorName(comptime name: []const u8) []const u8 {
+            // if there's an open parenthesis, then the name is something complicated like
+            // @typeInfo(@typeInfo(@TypeOf([function])).Fn.returnType).error_set
             const parent_index = getIndexOf(name, '(');
             if (parent_index != -1) {
                 const id_allocator = slot_allocator.get(.{ .type = "error set" });
                 const id = id_allocator.get(getBigInt(name));
                 return std.fmt.comptimePrint("ErrorSet{d:0>4}", .{id});
             }
-            return name;
+            // named error set looks like a struct
+            return getAlternateName(name);
         }
 
         fn getBigInt(comptime s: []const u8) comptime_int {
