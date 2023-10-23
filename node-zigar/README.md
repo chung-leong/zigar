@@ -10,7 +10,7 @@ It is designed to work with Node 14 and above.
 ## Installation
 
 ```js
-npm install -g node-zigar
+npm install --save node-zigar
 ```
 
 You must install the Zig compiler onto your computer separately. Follow the instructions outlined
