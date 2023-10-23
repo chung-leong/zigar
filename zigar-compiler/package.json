@@ -1,7 +1,7 @@
 {
   "name": "zigar-compiler",
-  "version": "0.0.0",
-  "description": "Compile Zig code into JavaScript or C++ module",
+  "version": "0.0.1",
+  "description": "Compile Zig code into WASM or C++ module",
   "main": "./dist/index.js",
   "type": "module",
   "directories": {
@@ -14,6 +14,11 @@
     "integration-coverage": "node ./node_modules/c8/bin/c8.js ./node_modules/mocha/bin/mocha.js --parallel -- test/integration.test.js",
     "rollup": "rollup -c rollup.config.js"
   },
+  "files": [
+    "dist/*",
+    "zig/*.zig",
+    "zig/os/*.zig"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/chung-leong/zigar.git"
@@ -27,7 +32,6 @@
   },
   "author": "Chung Leong",
   "license": "MIT",
-  "gypfile": true,
   "bugs": {
     "url": "https://github.com/chung-leong/zigar/issues"
   },
@@ -40,7 +44,6 @@
     "chai-as-promised": "^7.1.1",
     "mocha": "^10.2.0",
     "mocha-skip-if": "^1.0.4",
-    "rollup": "^3.23.0",
-    "webpack-cli": "^5.1.4"
+    "rollup": "^3.23.0"
   }
 }

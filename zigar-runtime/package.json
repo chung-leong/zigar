@@ -13,16 +13,19 @@
     "coverage": "ZIGAR_DEV=1 node ./node_modules/c8/bin/c8.js ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.js",
     "rollup": "rollup -c rollup.config.js"
   },
+  "files": [
+    "dist/*"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/chung-leong/zigar.git"
   },
   "keywords": [
-    "zig"
+    "zig",
+    "javascript"
   ],
   "author": "Chung Leong",
   "license": "MIT",
-  "gypfile": true,
   "bugs": {
     "url": "https://github.com/chung-leong/zigar/issues"
   },

@@ -16,12 +16,18 @@
     "install": "node-gyp rebuild",
     "rollup": "rollup -c rollup.config.js"
   },
+  "files": [
+    "binding.gyp",
+    "src/*",
+    "dist/*"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/chung-leong/zigar.git"
   },
   "keywords": [
-    "zig"
+    "zig",
+    "nodejs"
   ],
   "author": "Chung Leong",
   "license": "MIT",

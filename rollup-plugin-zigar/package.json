@@ -16,6 +16,9 @@
     "integration-coverage": "node ./node_modules/c8/bin/c8.js ./node_modules/mocha/bin/mocha.js --parallel -- test/integration.test.js",
     "rollup": "rollup -c rollup.config.js"
   },
+  "files": [
+    "dist/*"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/chung-leong/zigar.git"
@@ -26,11 +29,14 @@
   ],
   "author": "Chung Leong",
   "license": "MIT",
-  "gypfile": true,
   "bugs": {
     "url": "https://github.com/chung-leong/zigar/issues"
   },
   "homepage": "https://github.com/chung-leong/zigar#readme",
+  "dependencies": {
+    "zigar-compiler": "^0.0.1",
+    "zigar-runtime": "^0.0.0"
+  },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^15.1.0",
     "@rollup/plugin-replace": "^5.0.2",
