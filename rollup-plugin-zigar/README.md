@@ -73,11 +73,11 @@ otherwise)
 ## Awaiting WASM compilation
 
 By default, the plugin uses top-level await to wait for compilation of WASM binary. As of writing,
-this JavaSCript feature is not yet universally available. To produce a production build, you might
+this JavaSCript feature is not yet universally available. To produce a production build you might
 need to set `topLevelAwait` to false.
 
 There are two ways you can await WASM compilation when the feature is turned off. The first way is
-to await the promise return by `init()` of `__zigar`, an object that comes with every module:
+to await the promise return by `__zigar.init()`:
 
 ```js
 async function performTask(input) {
@@ -100,6 +100,14 @@ async function performTask(input) {
 
 Prior to the completion of WASM compilation, every function will return a promise of its eventual
 result.
+
+## __zigar object
+
+Every module exported by Zigar comes with a `__zigar` object. This object has two methods:
+
+* `init()` - Return a promise that resolves when WASM compilation completes
+* `abandon()` - Remove all references to the WebAssembly instance running the code, such that it
+can be garbage-collected
 
 ## Demo app
 
