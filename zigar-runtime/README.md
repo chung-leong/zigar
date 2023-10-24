@@ -1,4 +1,4 @@
-# Zigar-runtime
+# zigar-runtime
 
 Library for accessing Zig structures in JavaScript.
 
@@ -122,7 +122,7 @@ console.log([ ...greeting ]);
 
 Zigar will automatically provide the allocator. It allocates memory from the JavaScript engine in
 the form of `ArrayBuffer`. The allocator should only be used for returning data to the caller and
-not other purposes, as it is not able to free memory (discarded blocks must await garbage
+not other purposes as it is not able to free memory (discarded blocks must wait for garbage
 collection).
 
 The Zig slice `[]const u8` is represented by an object on the JavaScript side. To get the actual
@@ -239,7 +239,7 @@ console.log(Pet.Dog instanceof Pet);
 // true
 ```
 
-Function that take structs or unions as arguments will accept object initializers:
+Function that take structs or unions as arguments accept object initializers:
 
 ```zig
 // print-struct.zig
@@ -306,18 +306,18 @@ printStruct({ number3: 77 });
 Functions with pointer arguments can accept certain JavaScript objects directly. The mapping goes as
 follows:
 
-| Zig pointer type | JavaScript object types                           |
-|------------------|---------------------------------------------------|
-| `[]u8`, `*u8`    | `ArrayBuffer`, `Uint8Array`, `Buffer`, `DataView` |
-| `[]i8`, `*i8`    | `Int8Array`, `Buffer`, `DataView`                 |
-| `[]u16`, `*u16`  | `Unt16Array`, `Buffer`, `DataView`                |
-| `[]i16`, `*i16`  | `Int16Array`, `Buffer`, `DataView`                |
-| `[]u32`, `*u32`  | `Uint32Array`, `Buffer`, `DataView`,              |
-| `[]i32`, `*i32`  | `Int32Array`, `Buffer`, `DataView`,               |
-| `[]u64`, `*u64`  | `BigUint64Array`, `Buffer`, `DataView`,           |
-| `[]i64`, `*i64`  | `BigInt64Array`, `Buffer`, `DataView`,            |
-| `[]f32`, `*f32`  | `Float32Array`, `Buffer`, `DataView`,             |
-| `[]f64`, `*f64`  | `Float64Array`, `Buffer`, `DataView`,             |
+| Zig pointer type | JavaScript object types                                                |
+|------------------|------------------------------------------------------------------------|
+| `[]u8`, `*u8`    | `ArrayBuffer`, `Uint8Array`, `Uint8ClampedArray`, `Buffer`, `DataView` |
+| `[]i8`, `*i8`    | `Int8Array`, `Buffer`, `DataView`                                      |
+| `[]u16`, `*u16`  | `Unt16Array`, `Buffer`, `DataView`                                     |
+| `[]i16`, `*i16`  | `Int16Array`, `Buffer`, `DataView`                                     |
+| `[]u32`, `*u32`  | `Uint32Array`, `Buffer`, `DataView`,                                   |
+| `[]i32`, `*i32`  | `Int32Array`, `Buffer`, `DataView`,                                    |
+| `[]u64`, `*u64`  | `BigUint64Array`, `Buffer`, `DataView`,                                |
+| `[]i64`, `*i64`  | `BigInt64Array`, `Buffer`, `DataView`,                                 |
+| `[]f32`, `*f32`  | `Float32Array`, `Buffer`, `DataView`,                                  |
+| `[]f64`, `*f64`  | `Float64Array`, `Buffer`, `DataView`,                                  |
 
 The following example exports a number of functions, each of which sets all elements of a slice to
 a particular value:
@@ -622,7 +622,7 @@ try {
 // console output:
 // 123 456
 // 1111 3333
-// [TODO]
+// TypeError: *const StructA cannot be modified
 ```
 
 You can get the object that a pointer points to by accessing its '*' property:
@@ -750,17 +750,17 @@ import { StructB } from './struct-with-slice.zig';
 
 const object = new StructB({ text: 'Hello' });
 console.log(object.text.string);
-object.text = 'World';
+object.text = 'World!!!';
 console.log(object.text.string);
 
 // console output:
 // Hello
-// World
+// World!!!
 ```
 
 Zigar uses [JavaScript proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy)
-to enable the use of the bracket operator on arrays and slices. Proxy is notoriously slow.
-In general, accessing the elements of a slice through its iterator is much more performant:
+to enable the use of the bracket operator on arrays and slices. Proxy is notoriously slow. In
+general, accessing the elements of a slice through its iterator is much more performant:
 
 ```js
 // slice-u16-loop.js
@@ -858,8 +858,6 @@ console.timeEnd('bracket');
 // bracket: 539.534ms
 ```
 
-is fast.
-
 ## Working with unions
 
 When a function returns a bare (or extern) union, only the active field can be accessed. An error
@@ -956,7 +954,7 @@ error.
 
 ## Special properties
 
-Zig objects come with special properties that let you access their underlying data:
+Zig objects come with special properties for accessing their underlying data:
 
 * `dataView` - A [DataView](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DataView)
 object
