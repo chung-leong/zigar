@@ -1,7 +1,7 @@
 # Zigar
 
-Zigar is a software tool set that lets you utilize [Zig](https://ziglang.org/) code in your
-JavaScript project. It consists of the following front-facing components:
+A software tool set that lets you utilize [Zig](https://ziglang.org/) code in your JavaScript
+project. It consists of the following front-facing components:
 
 * [node-zigar](./node-zigar/README.md) - [Node.js loader](https://nodejs.org/api/esm.html#loaders)
 that enables the importing of Zig code

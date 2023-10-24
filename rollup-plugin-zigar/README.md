@@ -303,4 +303,4 @@ You can see the demo in action [here](https://chung-leong.github.io/zigar/demo-1
 ## Additional information
 
 Consult the [Zigar runtime](../zigar-runtime/README.md) user guide to learn more about working
-with Zig data structure in JavaScript.
+with Zig data structures in JavaScript.

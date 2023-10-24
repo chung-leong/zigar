@@ -358,8 +358,8 @@ module.exports = {
 ```
 
 Without top-level await the app will work properly most of the time. In theory the loading process
-could hit a hiccup and `sha1()` ends up be called before it's ready. To ensure that our app works
-right all the time we're going to add a check to the `onChange` handler:
+could hit a hiccup and `sha1()` ends up being called before it's ready. To ensure that our app
+works right all the time we're going to add a check to the `onChange` handler:
 
 ```js
 import { useState, useCallback } from 'react'
@@ -398,4 +398,4 @@ You can see the demo in action [here](https://chung-leong.github.io/zigar/demo-2
 ## Additional information
 
 Consult the [Zigar runtime](../zigar-runtime/README.md) user guide to learn more about working
-with Zig data structure in JavaScript.
+with Zig data structures in JavaScript.
