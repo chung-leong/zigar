@@ -1,9 +1,9 @@
 # Node-zigar
 
-Node-zigar is a Node.js module that lets you use functions written in the
-[Zig language](https://ziglang.org/). It compiles Zig code into shared libraries and handles the
-necessary marshalling. Basically, it lets you gain the power of developing your own native Node
-module with a simple `import` statement.
+Node.js module that lets you use functions written in the [Zig language](https://ziglang.org/).
+It compiles Zig code into shared libraries and handles the necessary marshalling. Basically,
+it lets you gain the power of developing your own native Node module with a simple `import`
+statement.
 
 It is designed to work with Node 14 and above.
 
@@ -60,17 +60,17 @@ hello();
 // md5.zig
 const std = @import("std");
 
-pub fn md5(bytes: []const u8) [std.crypto.hash.Md5.digest_length]u8 {
+pub fn md5(bytes: []const u8) [std.crypto.hash.Md5.digest_length * 2]u8 {
     var digest: [std.crypto.hash.Md5.digest_length]u8 = undefined;
     std.crypto.hash.Md5.hash(bytes, &digest, .{});
-    return digest;
+    return std.fmt.bytesToHex(digest, .lower);
 }
 ```
 ```js
 // md5.js
 import { readFileSync } from 'fs';
 import { createHash } from 'crypto';
-import { md5 } from './md5.zig?optimize=ReleastFast';
+import { md5 } from './md5.zig?optimize=ReleaseFast';
 
 const data = readFileSync(process.argv[0]);
 
@@ -93,7 +93,7 @@ console.log(digest2);
 // 46cd8ba8e03525fac17db13dad4362db
 ```
 
-See the documentation of [zigar-runtime](../zigar-runtime) for more code examples.
+See the documentation of [zigar-runtime](../zigar-runtime#readme) for more code examples.
 
 ## Options
 
@@ -102,7 +102,8 @@ variables:
 
 * `optimize` (env: `ZIGAR_OPTIMIZE`) - Optimization level (default: `ReleaseFast` when
 process.env.NODE_ENV is "production", `Debug` otherwise)
-* `clean` (env: `ZIGAR_CLEAN`) - Remove temporary build folder after building (default: `false`)
+* `clean` (env: `ZIGAR_CLEAN`) - Remove temporary build folder after building ("0" = `false`,
+"1" = `true`; default: `false`)
 * `zig_cmd` (env: `ZIGAR_ZIG_CMD`) - Zig build command (default: `zig build -Doptimize=${optimize}`)
 * `cache_dir` (env: `ZIGAR_CACHE_DIR`) - Directory where compiled shared libraries are placed (default: `${CWD}/zigar-cache`)
 * `build_dir` (env: `ZIGAR_BUILD_DIR`) - Root directory where temporary build folder are placed (default: `${os.tmpdir()}`)
@@ -113,4 +114,4 @@ process.env.NODE_ENV is "production", `Debug` otherwise)
 Every module exported by Zigar comes with a `__zigar` object. This object has two methods:
 
 * `init()` - Return a promise that resolves immediately
-* `abandon()` - Remove all references to the shared library, such that it can be garbage-collected
+* `abandon()` - Remove all references to the shared library so that it can be garbage-collected
