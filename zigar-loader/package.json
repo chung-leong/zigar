@@ -1,6 +1,6 @@
 {
   "name": "zigar-loader",
-  "version": "0.0.0",
+  "version": "0.11.0",
   "description": "Webpack plugin for transpiling Zig code",
   "main": "./dist/index.js",
   "type": "commonjs",
@@ -33,8 +33,8 @@
   },
   "homepage": "https://github.com/chung-leong/zigar#readme",
   "dependencies": {
-    "zigar-compiler": "^0.0.1",
-    "zigar-runtime": "^0.0.0"
+    "zigar-compiler": "^0.11.0",
+    "zigar-runtime": "^0.11.0"
   },
   "devDependencies": {
     "c8": "^8.0.0",
