@@ -7,6 +7,7 @@ export default defineConfig({
     React(),
     Zigar({ topLevelAwait: false }),
   ],
+  base: '/zigar/demo-1',
   build: {
     emptyOutDir: true,
     outDir: '../../../docs/demo-1',

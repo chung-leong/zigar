@@ -263,7 +263,7 @@ export default defineConfig({
 ```
 
 Without top-level await the app will work properly most of the time. In theory the loading process
-could hit a hiccup and `sha1()` ends up being called before it's ready. To ensure that our app 
+could hit a hiccup and `sha1()` ends up being called before it's ready. To ensure that our app
 works right all the time we're going to add a check to the `onChange` handler:
 
 ```js
@@ -278,7 +278,7 @@ function App() {
     const { value } = evt.target;
     setText(value);
     const hash = sha1(value);
-    if (hash instanceof Promise) {  <-- check for promise
+    if (hash instanceof Promise) {  // <-- check for promise
       hash.then(hash => setHash(hash.string));
     } else {
       setHash(hash.string);
@@ -297,6 +297,8 @@ function App() {
 
 export default App
 ```
+
+You can see the demo in action [here](https://chung-leong.github.io/zigar/demo-1/).
 
 ## Additional information
 

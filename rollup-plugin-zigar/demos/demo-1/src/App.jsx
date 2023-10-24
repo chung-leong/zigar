@@ -8,7 +8,12 @@ function App() {
   const onChange = useCallback((evt) => {
     const { value } = evt.target;
     setText(value);
-    setHash(sha1(value).string);
+    const hash = sha1(value);
+    if (hash instanceof Promise) {
+      hash.then(hash => setHash(hash.string));
+    } else {
+      setHash(hash.string);
+    }
   }, []);
 
   return (

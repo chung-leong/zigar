@@ -4,6 +4,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 module.exports = {
   entry: './src/main.jsx',
   output: {
+    publicPath: '/zigar/demo-2',
     path: path.join(path.resolve(`${__dirname}/../../../docs`), '/demo-2'),
     filename: 'bundle.js',
   },

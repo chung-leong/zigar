@@ -373,7 +373,7 @@ function App() {
     const { value } = evt.target;
     setText(value);
     const hash = sha1(value);
-    if (hash instanceof Promise) {  <-- check for promise
+    if (hash instanceof Promise) {  // <-- check for promise
       hash.then(hash => setHash(hash.string));
     } else {
       setHash(hash.string);
@@ -392,6 +392,8 @@ function App() {
 
 export default App
 ```
+
+You can see the demo in action [here](https://chung-leong.github.io/zigar/demo-2/).
 
 ## Additional information
 
