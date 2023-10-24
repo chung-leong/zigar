@@ -1,8 +1,8 @@
-# Zigar-compiler
+# zigar-compiler
 
-Zigar-compiler is the backend component responsible for the compilation process. It builds library
-files with the help of the Zig compiler. When targeting WebAssembly, it'll also generate the
-necessary bootstrap JavaScript and stripe the .wasm file of unused code.
+Backend component responsible for the compilation process. It builds library files with the help
+of the Zig compiler. When targeting WebAssembly, it'll also generate the necessary bootstrap
+JavaScript and stripe the .wasm file of extraneous code.
 
 ## API
 
@@ -13,21 +13,21 @@ async function compile(path: string, options: object = {}): string
 Compile the zig file located at `path`. The options are:
 
 * `optimize` - Optimization level (default: `Debug`)
-* `platform` - The platform to target (default: the current system)
-* `arch` - The CPU architecture to target (default: the current system)
+* `platform` - Platform to target (default: the current system)
+* `arch` - CPU architecture to target (default: the current system)
 * `clean` - Remove temporary build folder after building (default: `false`)
 * `zigCmd` - Zig build command (default: `zig build -Doptimize=${optimize}`)
 * `cacheDir` - Directory where compiled shared libraries are placed (default: `${CWD}/zigar-cache`)
 * `buildDir` - Root directory where temporary build folder are placed (default: `${os.tmpdir()}`)
 * `staleTime` - Maximum amount of time to wait for a file lock, in milliseconds (default: `60000`)
 
-* `return` - The path to the compiled library file (.so, .dylib, etc.)
+`return value` - The path to the compiled library file (.so, .dylib, etc.)
 
 ```js
 async function transpile(path: string, options: object = {}): string
 ```
 
-Compile the zig file located at `path` for use in a web-browser (or Node.js). The options, in
+Compile the Zig file located at `path` for use in a browser or Node.js. The options, in
 addition to the ones for `compile()`, are:
 
 * `topLevelAwait` - Use top-level await to wait for compilation of WASM code (default: `true`)
@@ -43,10 +43,15 @@ JavaScript (default: `name => name`)
 * `wasmLoader` - A function that returns JavaScript code for loading WASM binary (default:
 undefined)
 
+`return value` - `{ code, exports, structures }`
+
 `wasmLoader` is required when `embedWASM` is `false`. It's fed two arguments: `path`--the path of the
 Zig file in question, and `dv`, a
 [DataView](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DataView)
 object holding the WASM binary.
+
+The object returned by `transpile()` contains the bootstrap code, a list of exported symbols,
+and a list of objects describing data structures defined in Zig.
 
 ## Compilation process
 
@@ -111,3 +116,9 @@ cache.
 
 Zigar-compiler does not invoke the Zig compiler when it sees that the output library file is newer
 than any of the files in directory holding the target Zig file.
+
+## Transpilation process
+
+The target Zig file is first compiled into a WASM shared library. The library is then loaded into Node.js. Its factory function is invoked, which describes the Zig data types employed
+and the functions available. After capturing this information, zigar-compiler generates the
+JavaScript bootstrap and strips out the factory function.

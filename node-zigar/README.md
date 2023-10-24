@@ -1,4 +1,4 @@
-# Node-zigar
+# node-zigar
 
 Node.js module that lets you use functions written in the [Zig language](https://ziglang.org/).
 It compiles Zig code into shared libraries and handles the necessary marshalling. Basically,
