@@ -106,7 +106,7 @@ result.
 Every module exported by Zigar comes with a `__zigar` object. This object has two methods:
 
 * `init()` - Return a promise that resolves when WASM compilation completes
-* `abandon()` - Remove all references to the WebAssembly instance running the code, such that it
+* `abandon()` - Remove all references to the WebAssembly instance running the code so that it
 can be garbage-collected
 
 ## Demo app
@@ -214,7 +214,7 @@ pub fn sha1(bytes: []const u8) [std.crypto.hash.Sha1.digest_length * 2]u8 {
 `sha1()` returns an array object. We access its `string` property to get a string in our `onChange`
 handler above.
 
-In the command line, run `npm install`, `npm run dev`, the open the link with your browser. You
+In the command line, run `npm run dev`, then open the on-screen hyperlink with your browser. You
 should be greeted by the following:
 
 ![Demo app](./doc/img/screenshot-1.png)
@@ -235,7 +235,7 @@ pub fn sha1(bytes: []const u8) [std.crypto.hash.Sha1.digest_length * 2]u8 {
 
 When you return to the browser again, you should see that typing now produces upper-case hashes.
 
-As of September 2023, you will encounter the following error when you run `npm run build`:
+As of October 2023, you will encounter the following error when you run `npm run build`:
 
 ```
 [vite:esbuild-transpile] Transform failed with 1 error:
@@ -263,8 +263,8 @@ export default defineConfig({
 ```
 
 Without top-level await the app will work properly most of the time. In theory the loading process
-could hit a hiccup and `sha1()` gets called before it's ready. To ensure that our app works right
-all the time we're going to add a check to the `onChange` handler:
+could hit a hiccup and `sha1()` ends up being called before it's ready. To ensure that our app 
+works right all the time we're going to add a check to the `onChange` handler:
 
 ```js
 import { useState, useCallback } from 'react'
