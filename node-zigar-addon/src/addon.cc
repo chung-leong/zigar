@@ -546,6 +546,31 @@ static Local<Object> NewMethod(Call* call,
   return def;
 }
 
+static void GetBufferAddress(const FunctionCallbackInfo<Value>& info) {
+  Local<Value> arg = info[0];
+  size_t address = 0;
+  if (arg->IsArrayBuffer()) {
+    auto buffer = arg.As<ArrayBuffer>();
+    auto store = buffer->GetBackingStore();
+    address = reinterpret_cast<size_t>(store->Data());
+  }
+  // TODO: check range
+  info.GetReturnValue().Set(static_cast<double>(address));
+}
+
+static Local<Object> CreateImportObject(Call* call) {
+  auto isolate = call->isolate;
+  auto context = call->context;
+  auto imports = Object::New(isolate);
+  auto add = [&](Local<String> name, void (*f)(const FunctionCallbackInfo<Value>& info), int length) {
+    auto tmpl = FunctionTemplate::New(isolate, f, Null(isolate), Local<Signature>(), length);
+    auto function = tmpl->GetFunction(isolate->GetCurrentContext()).ToLocalChecked();
+    imports->Set(context, name, function).Check();
+  };
+  add(String::NewFromUtf8Literal(isolate, "getBufferAddress"), GetBufferAddress, 1);
+  return imports;
+}
+
 static Result GetJavaScript(Call* call,
                             Local<Object>* dest) {
   auto isolate = call->isolate;
@@ -577,11 +602,20 @@ static Result GetJavaScript(Call* call,
       } else {
         script = Local<Script>::New(isolate, ad->js_script);
       }
+      // result should be a function expresssion
       Local<Value> result;
-      if (!script->Run(context).ToLocal(&result) || !result->IsObject()) {
+      if (!script->Run(context).ToLocal(&result) || !result->IsFunction()) {
         return Result::Failure;
       }
-      call->js_module = result.As<Object>();
+      Local<Function> fn = result.As<Function>();
+      // call the function with exports and imports
+      auto exports = call->js_module = Object::New(isolate);
+      auto imports = CreateImportObject(call);
+      auto recv = Null(isolate);
+      Local<Value> args[2] = { exports, imports };
+      if (!fn->Call(context, recv, 2, args).ToLocal(&result) || !result->IsObject()) {
+        return Result::Failure;
+      }
       // save the module but allow it to be gc'ed
       md->js_module.Reset(isolate, call->js_module);
       md->js_module.template SetWeak<ModuleData>(md,

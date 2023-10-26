@@ -1,5 +1,5 @@
 R"=====(
-((function (exports) {
+(function (exports, imports) {
   'use strict';
 
   const MEMORY = Symbol('memory');
@@ -21,6 +21,9 @@ R"=====(
   const CHILD_VIVIFICATOR = Symbol('childVivificator');
   const POINTER_VISITOR = Symbol('pointerVisitor');
   const RELEASE_THUNK = Symbol('releaseThunk');
+
+  function setAddressRetriever(f) {
+  }
 
   function getBitAlignFunction(bitPos, bitSize, toAligned) {
     if (bitPos + bitSize <= 8) {
@@ -3775,6 +3778,9 @@ R"=====(
     return args.retval;
   }
 
+  // set memory address retrieval function
+  setAddressRetriever(imports.getBufferAddress);
+
   // enable all member types (including extend types)
   useVoid();
   useBoolEx();
@@ -3948,5 +3954,5 @@ R"=====(
 
   return exports;
 
-})({}))
+})
 )====="

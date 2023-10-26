@@ -1,6 +1,7 @@
 import { StructureType } from './structure.js';
 import { requireDataView, getDataView, isCompatible, isBuffer } from './data-view.js';
 import { MemberType, getAccessors } from './member.js';
+import { getAddressRetriever } from './memory.js';
 import { MEMORY, PROXY, SLOTS, ZIG, PARENT, POINTER_VISITOR } from './symbol.js';
 import {
   throwNoCastingToPointer,
@@ -30,6 +31,7 @@ export function finalizePointer(s) {
   const isTargetPointer = (targetStructure.type === StructureType.Pointer);
   const addressSize = (isTargetSlice) ? byteSize / 2 : byteSize;
   const usizeStructure = { name: 'usize', byteSize: addressSize };
+  const getAddress = getAddressRetriever();
   const setAddress = getAccessors({
     type: MemberType.Uint,
     bitOffset: 0,

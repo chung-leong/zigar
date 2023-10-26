@@ -30,6 +30,12 @@ import {
 import {
   initializeErrorSets,
 } from '../../zigar-runtime/src/error-set.js';
+import {
+  setAddressRetriever,
+} from '../../zigar-runtime/src/memory.js';
+
+// set memory address retrieval function
+setAddressRetriever(imports.getBufferAddress);
 
 // enable all member types (including extend types)
 useVoid();

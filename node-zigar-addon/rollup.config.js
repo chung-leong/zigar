@@ -25,7 +25,11 @@ export default {
         name: 'C++ string',
         renderChunk (code) {
           // Terser insists on saving result to variable--remove assignment
-          code = code.replace(/var variable\s*=\s*([\s\S]*);/, '($1)');
+          code = code.replace(/var variable\s*=\s*([\s\S]*);/, '$1');
+          // convert iife to fe--just a function expression
+          code = code.replace(/^([\s\S]*)\(.*\)$/, '$1');
+          // insert variable "imports"
+          code = code.replace(/(function\s*)\((.*?)\)/, '$1($2, imports)');
           return `R"=====(\n${code}\n)====="`;
         }
       },
