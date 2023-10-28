@@ -1,6 +1,5 @@
 export const MEMORY = Symbol('memory');
 export const SLOTS = Symbol('slots');
-export const ZIG = Symbol('zig');
 export const PARENT = Symbol('parent');
 export const STRUCTURE = Symbol('structure');
 export const ENUM_NAME = Symbol('enumName');
@@ -18,3 +17,4 @@ export const SELF = Symbol('self');
 export const CHILD_VIVIFICATOR = Symbol('childVivificator');
 export const POINTER_VISITOR = Symbol('pointerVisitor');
 export const RELEASE_THUNK = Symbol('releaseThunk');
+export const ENVIROMENT = Symbol('environment');

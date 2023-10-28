@@ -151,21 +151,18 @@ pub const Member = extern struct {
     structure: ?Value,
 };
 
-pub const Memory = extern struct {
-    bytes: ?[*]u8 = null,
-    len: usize = 0,
-};
-
-pub const MemoryDisposition = enum(u32) {
-    Auto,
-    Copy,
-    Link,
-};
-
 pub const MemoryAttributes = packed struct {
     ptr_align: u8,
     is_const: bool,
-    _: u23 = 0,
+    is_comptime: bool,
+    _: u22 = 0,
+};
+
+pub const Memory = extern struct {
+    bytes: ?[*]u8 = null,
+    len: usize = 0,
+    attributes: MemoryAttributes,
+    disposition: MemoryDisposition,
 };
 
 pub const MethodAttributes = packed struct {
@@ -1042,7 +1039,6 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
             }
         }
         const template = try host.createTemplate(bytes);
-        // dezig members that has (or are) pointers
         inline for (st.fields, 0..) |field, index| {
             if (field.default_value) |opaque_ptr| {
                 if (!field.is_comptime) {
@@ -1059,17 +1055,26 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
                     // copy the value
                     const VT = RuntimeType(default_value_ptr.*);
                     var value: VT = default_value_ptr.*;
+                    const value_memory: Memory = .{
+                        .bytes = @ptrCast(@constCast(&value)),
+                        .len = @sizeOf(VT),
+                    };
+                    const value_dv = try host.createView(ptr_memory);
+                    const value_structure = getStructure(host, VT);
+                    const value_obj = try host.createObject(ptr_structure, ptr_dv);
+
                     const value_ptr: *const VT = &value;
                     const ptr_memory: Memory = .{
                         .bytes = @ptrCast(@constCast(&value_ptr)),
                         .len = @sizeOf(@TypeOf(value_ptr)),
                     };
-                    const ptr_obj = try host.wrapMemory(ptr_memory, .Copy, @TypeOf(value_ptr), .One);
-                    // dezig it, creating SharedArrayBuffer or ArrayBuffer
-                    try dezigStructure(host, ptr_obj, &value_ptr, .Copy);
+                    const ptr_dv = try host.createView(ptr_memory);
+                    const ptr_structure = getStructure(host, *const VT);
+                    const ptr_obj = try host.createObject(ptr_structure, ptr_dv);
+
                     // place the pointer into the member's slot in the template
                     const slot = getObjectSlot(T, index);
-                    try host.writeObjectSlot(template, slot, ptr_obj);
+                    try host.writeSlot(template, slot, ptr_obj);
                 }
             }
         }
@@ -1365,6 +1370,14 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
     }
 }
 
+fn exportObject(host: anytype, ptr: anytype, copy: bool) !Value {
+    const memory = toMemory(ptr);
+    const dv = try host.createView(memory, )
+    const structure = try getStructure(host, @typeOf(ptr.*));
+
+}
+
+
 fn getFieldCount(comptime T: type) comptime_int {
     return switch (@typeInfo(T)) {
         .Struct, .Union => std.meta.fields(T).len,
@@ -1566,185 +1579,6 @@ test "getFunctionName" {
     assert(name_weird.len == 12);
 }
 
-fn rezigStructure(host: anytype, obj: Value, ptr: anytype) !void {
-    const T = @TypeOf(ptr.*);
-    switch (@typeInfo(T)) {
-        .Pointer => |pt| {
-            // note: ptr is a pointer to a pointer
-            if (try host.getPointerStatus(obj)) {
-                return;
-            }
-            try host.setPointerStatus(obj, true);
-            const child_obj = try host.readObjectSlot(obj, 0);
-            const current_ptr = try host.getMemory(child_obj, T, true);
-            if (!comparePointers(ptr.*, current_ptr)) {
-                const writable_ptr = @constCast(ptr);
-                writable_ptr.* = current_ptr;
-            }
-            if (hasPointer(pt.child)) {
-                // rezig the target(s)
-                if (pt.size == .One) {
-                    try rezigStructure(host, child_obj, ptr.*);
-                } else if (pt.size == .Slice) {
-                    for (ptr.*, 0..) |*element_ptr, index| {
-                        const element_obj = try host.readObjectSlot(child_obj, index);
-                        try rezigStructure(host, element_obj, element_ptr);
-                    }
-                }
-            }
-        },
-        .Array => |ar| {
-            if (hasPointer(ar.child)) {
-                for (ptr, 0..) |*element_ptr, index| {
-                    const element_obj = try host.readObjectSlot(obj, index);
-                    try rezigStructure(host, element_obj, element_ptr);
-                }
-            }
-        },
-        .Struct => |st| {
-            inline for (st.fields, 0..) |field, index| {
-                if (!field.is_comptime) {
-                    if (hasPointer(field.type)) {
-                        const is_output = comptime isArgumentStruct(T) and index == st.fields.len - 1;
-                        // retval should already be initialized as being owned by Zig on JS side
-                        if (!is_output) {
-                            const slot = getObjectSlot(T, index);
-                            const child_obj = try host.readObjectSlot(obj, slot);
-                            try rezigStructure(host, child_obj, &@field(ptr.*, field.name));
-                        }
-                    }
-                }
-            }
-        },
-        .Union => |un| {
-            if (un.tag_type) |TT| {
-                const selected: TT = ptr.*;
-                const selected_index = @intFromEnum(selected);
-                inline for (un.fields, 0..) |field, index| {
-                    if (hasPointer(field.type)) {
-                        if (index == selected_index) {
-                            const slot = getObjectSlot(T, index);
-                            const child_obj = try host.readObjectSlot(obj, slot);
-                            try rezigStructure(host, child_obj, &@field(ptr.*, field.name));
-                        }
-                    }
-                }
-            }
-        },
-        .Optional => {
-            if (ptr.*) |*child_ptr| {
-                const child_obj = try host.readObjectSlot(obj, 0);
-                try rezigStructure(host, child_obj, child_ptr);
-            }
-        },
-        .ErrorUnion => {
-            if (ptr.*) |*child_ptr| {
-                const child_obj = try host.readObjectSlot(obj, 0);
-                try rezigStructure(host, child_obj, child_ptr);
-            } else |_| {}
-        },
-        else => {},
-    }
-}
-
-fn dezigStructure(host: anytype, obj: Value, ptr: anytype, disposition: MemoryDisposition) !void {
-    const T = @TypeOf(ptr.*);
-    switch (@typeInfo(T)) {
-        .Pointer => |pt| {
-            if (!try host.getPointerStatus(obj)) {
-                return;
-            }
-            try host.setPointerStatus(obj, false);
-            // pointer objects store their target in slot 0
-            const child_obj = try obtainChildObject(host, obj, 0, ptr.*, disposition, true);
-            if (hasPointer(pt.child)) {
-                if (pt.size == .One) {
-                    try dezigStructure(host, child_obj, ptr.*, disposition);
-                } else if (pt.size == .Slice) {
-                    for (ptr.*, 0..) |*element_ptr, index| {
-                        const element_obj = try obtainChildObject(host, child_obj, index, element_ptr, disposition, false);
-                        try dezigStructure(host, element_obj, element_ptr, disposition);
-                    }
-                }
-            }
-        },
-        .Array => |ar| {
-            if (hasPointer(ar.child)) {
-                for (ptr, 0..) |*element_ptr, index| {
-                    const element_obj = try obtainChildObject(host, obj, index, element_ptr, disposition, false);
-                    try dezigStructure(host, element_obj, element_ptr, disposition);
-                }
-            }
-        },
-        .Struct => |st| {
-            inline for (st.fields, 0..) |field, index| {
-                if (!field.is_comptime) {
-                    if (hasPointer(field.type)) {
-                        const slot = getObjectSlot(T, index);
-                        const child_ptr = &@field(ptr.*, field.name);
-                        const is_output = comptime isArgumentStruct(T) and index == st.fields.len - 1;
-                        const child_obj = try obtainChildObject(host, obj, slot, child_ptr, disposition, is_output);
-                        try dezigStructure(host, child_obj, child_ptr, disposition);
-                    }
-                }
-            }
-        },
-        .Union => |un| {
-            if (un.tag_type) |TT| {
-                const selected: TT = ptr.*;
-                const selected_index = @intFromEnum(selected);
-                inline for (un.fields, 0..) |field, index| {
-                    if (hasPointer(field.type)) {
-                        if (index == selected_index) {
-                            const slot = getObjectSlot(T, index);
-                            const child_ptr = &@field(ptr.*, field.name);
-                            const child_obj = try obtainChildObject(host, obj, slot, child_ptr, disposition, false);
-                            try dezigStructure(host, child_obj, child_ptr, disposition);
-                        }
-                    }
-                }
-            }
-        },
-        .Optional => {
-            if (ptr.*) |*child_ptr| {
-                const child_obj = try obtainChildObject(host, obj, 0, child_ptr, disposition, false);
-                try dezigStructure(host, child_obj, child_ptr, disposition);
-            }
-        },
-        .ErrorUnion => {
-            if (ptr.*) |*child_ptr| {
-                const child_obj = try obtainChildObject(host, obj, 0, child_ptr, disposition, true);
-                try dezigStructure(host, child_obj, child_ptr, disposition);
-            } else |_| {}
-        },
-        else => {},
-    }
-}
-
-fn obtainChildObject(host: anytype, container: Value, slot: usize, ptr: anytype, disposition: MemoryDisposition, comptime check: bool) !Value {
-    if (host.readObjectSlot(container, slot)) |child_obj| {
-        if (check) {
-            // see if pointer is still pointing to what it was before
-            const current_ptr = try host.getMemory(child_obj, @TypeOf(ptr), true);
-            if (!comparePointers(ptr, current_ptr)) {
-                // need to create JS wrapper object for new memory
-                return createChildObject(host, container, slot, ptr, disposition);
-            }
-        }
-        return child_obj;
-    } else |_| {
-        return createChildObject(host, container, slot, ptr, disposition);
-    }
-}
-
-fn createChildObject(host: anytype, container: Value, slot: usize, ptr: anytype, disposition: MemoryDisposition) !Value {
-    const pt = @typeInfo(@TypeOf(ptr)).Pointer;
-    const memory = toMemory(ptr);
-    const child_obj = try host.wrapMemory(memory, disposition, pt.child, pt.size);
-    try host.writeObjectSlot(container, slot, child_obj);
-    return child_obj;
-}
-
 fn createAllocator(host_ptr: anytype) std.mem.Allocator {
     const HostPtrT = @TypeOf(host_ptr);
     const VTable = struct {
@@ -1790,10 +1624,6 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
             if (@sizeOf(ArgT) != 0) {
                 const fields = @typeInfo(Args).Struct.fields;
                 var arg_ptr = try host.getMemory(arg_obj, *ArgT, false);
-                if (hasPointer(ArgT)) {
-                    // make sure pointers have up-to-date values
-                    try rezigStructure(host, arg_obj, arg_ptr);
-                }
                 comptime var index = 0;
                 inline for (fields, 0..) |field, i| {
                     if (field.type == std.mem.Allocator) {
@@ -1809,9 +1639,6 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
                 }
                 // never inline the function so its name would show up in the trace
                 arg_ptr.*.retval = @call(.never_inline, function, args);
-                if (hasPointer(ArgT)) {
-                    try dezigStructure(host, arg_obj, arg_ptr, .Auto);
-                }
             } else {
                 @call(.never_inline, function, args);
             }

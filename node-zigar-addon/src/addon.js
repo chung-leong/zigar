@@ -1,4 +1,4 @@
-import { RELEASE_THUNK, SLOTS, CHILD_VIVIFICATOR, MEMORY, ZIG } from '../../zigar-runtime/src/symbol.js';
+import { RELEASE_THUNK, SLOTS, CHILD_VIVIFICATOR, MEMORY } from '../../zigar-runtime/src/symbol.js';
 import { invokeThunk } from '../../zigar-runtime/src/method.js';
 import {
   useVoid,
@@ -27,15 +27,7 @@ import {
   useVector,
   useOpaque,
 } from '../../zigar-runtime/src/structure.js';
-import {
-  initializeErrorSets,
-} from '../../zigar-runtime/src/error-set.js';
-import {
-  setAddressRetriever,
-} from '../../zigar-runtime/src/memory.js';
-
-// set memory address retrieval function
-setAddressRetriever(imports.getBufferAddress);
+import { initializeErrorSets } from '../../zigar-runtime/src/error-set.js';
 
 // enable all member types (including extend types)
 useVoid();
@@ -66,8 +58,6 @@ useOpaque();
 
 export function invokeFactory(thunk) {
   initializeErrorSets();
-  // our C++ code cannot call invokeThunk() directly since it doesn't have the symbol SLOTS
-  // yet and therefore cannot create (or read from) the argument object
   const args = { [SLOTS]: {} };
   invokeThunk(thunk, args);
   let module = args[SLOTS][0].constructor;
@@ -140,69 +130,23 @@ function releaseModule(module) {
     }
     const slots = obj[SLOTS];
     if (slots) {
-      for (const child of Object.values(slots)) {
-        // deal with pointers in structs
-        if (child.hasOwnProperty(ZIG)) {
-          releaseObject(child);
-        }
-      }
-      if (obj.hasOwnProperty(ZIG)) {
-        // a pointer--release what it's pointing to
-        releaseObject(obj[SLOTS][0]);
-      } else {
-        // force recreation of child objects so they'll use non-shared memory
-        obj[SLOTS] = {};
-      }
+      // TODO: refactoring
+      // for (const child of Object.values(slots)) {
+      //   // deal with pointers in structs
+      //   if (child.hasOwnProperty(ZIG)) {
+      //     releaseObject(child);
+      //   }
+      // }
+      // if (obj.hasOwnProperty(ZIG)) {
+      //   // a pointer--release what it's pointing to
+      //   releaseObject(obj[SLOTS][0]);
+      // } else {
+      //   // force recreation of child objects so they'll use non-shared memory
+      //   obj[SLOTS] = {};
+      // }
     }
   };
   releaseClass(module);
 }
 
-const decoder = new TextDecoder();
-let consolePending = '', consoleTimeout = 0;
-
-export function writeToConsole(buffer) {
-  try {
-    const ta = new Uint8Array(buffer);
-    const s = decoder.decode(ta);
-    // send text up to the last newline character
-    const index = s.lastIndexOf('\n');
-    if (index === -1) {
-      consolePending += s;
-    } else {
-      console.log(consolePending + s.substring(0, index));
-      consolePending = s.substring(index + 1);
-    }
-    clearTimeout(consoleTimeout);
-    if (consolePending) {
-      consoleTimeout = setTimeout(() => {
-        console.log(consolePending);
-        consolePending = '';
-      }, 250);
-    }
-    /* c8 ignore next 3 */
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-export function flushConsole() {
-  if (consolePending) {
-    console.log(consolePending);
-    consolePending = '';
-    clearTimeout(consoleTimeout);
-  }
-}
-
-export function log(...args) {
-  console.log(...args);
-}
-
-export {
-  beginStructure,
-  attachMember,
-  attachMethod,
-  attachTemplate,
-  finalizeStructure,
-} from '../../zigar-runtime/src/structure.js';
-
+export { Environment } from '../../zigar-runtime/src/environment.js';

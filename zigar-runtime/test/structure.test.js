@@ -6,7 +6,7 @@ import {
   beginStructure,
   finalizeStructure,
   getStructureFeature,
-  getShortName,
+  getStructureName,
 } from '../src/structure.js';
 
 describe('Structure functions', function() {
@@ -33,12 +33,12 @@ describe('Structure functions', function() {
       expect(name).to.equal('useOpaque');
     })
   })
-  describe('getShortName', function() {
+  describe('getStructureName', function() {
     it('should shorten names by removing namespace qualifiers', function() {
-      expect(getShortName({ name: 'u8' })).to.equal('u8');
-      expect(getShortName({ name: 'zig.Hello' })).to.equal('Hello');
-      expect(getShortName({ name: '[]const zig.Hello' })).to.equal('[]const Hello');
-      expect(getShortName({ name: '[]const zig.world.joga.Hello' })).to.equal('[]const Hello');
+      expect(getStructureName({ name: 'u8' })).to.equal('u8');
+      expect(getStructureName({ name: 'zig.Hello' })).to.equal('Hello');
+      expect(getStructureName({ name: '[]const zig.Hello' })).to.equal('[]const Hello');
+      expect(getStructureName({ name: '[]const zig.world.joga.Hello' })).to.equal('[]const Hello');
     })
   })
 })

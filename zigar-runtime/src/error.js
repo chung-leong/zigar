@@ -1,16 +1,16 @@
 import { MemberType } from './member.js';
-import { StructureType, getShortName } from './structure.js';
+import { StructureType, getStructureName } from './structure.js';
 import { getTypeName } from './data-view.js';
 import { getPrimitiveType } from './primitive.js';
 
 export function throwNoInitializer(structure) {
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   throw new TypeError(`An initializer must be provided to the constructor of ${name}, even when it's undefined`);
 }
 
 export function throwBufferSizeMismatch(structure, dv, target = null) {
   const { type, byteSize } = structure;
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   const actual = dv.byteLength;
   const s = (byteSize > 1) ? 's' : '';
   if (type === StructureType.Slice && !target) {
@@ -36,42 +36,42 @@ export function throwBufferExpected(structure) {
 }
 
 export function throwInvalidEnum(structure, value) {
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   throw new TypeError(`Value given does not correspond to an item of enum ${name}: ${value}`);
 }
 
 export function throwEnumExpected(structure, arg) {
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   throw new TypeError(`Enum item of the type ${name} expected, received ${arg}`);
 }
 
 export function throwNoNewEnum(structure) {
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   throw new TypeError(`Cannot create new enum item\nCall ${name} without the use of "new" to obtain an enum object`);
 }
 
 export function throwNoNewError(structure) {
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   throw new TypeError(`Cannot create new error\nCall ${name} without the use of "new" to obtain an error object`);
 }
 
 export function throwNotInErrorSet(structure) {
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   throw new TypeError(`Error given is not a part of error set ${name}`);
 }
 
 export function throwUnknownErrorNumber(structure, number) {
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   throw new TypeError(`Error number does not corresponds to any error in error set ${name}: #${number}`);
 }
 
 export function throwInvalidType(structure) {
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   throw new TypeError(`Object of specific type expected: ${name}`);
 }
 
 export function throwMultipleUnionInitializers(structure) {
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   throw new TypeError(`Only one property of ${name} can be given a value`);
 }
 
@@ -81,13 +81,13 @@ export function throwInactiveUnionProperty(structure, name, currentName) {
 
 export function throwMissingUnionInitializer(structure, arg, exclusion) {
   const { instance: { members } } = structure;
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   const missing = members.slice(0, exclusion ? -1 : undefined).map(m => m.name);
   throw new TypeError(`${name} needs an initializer for one of its union properties: ${missing.join(', ')}`);
 }
 
 export function throwInvalidInitializer(structure, expected, arg) {
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   const acceptable = [];
   if (Array.isArray(expected)) {
     for (const type of expected) {
@@ -122,7 +122,7 @@ export function throwInvalidArrayInitializer(structure, arg, shapeless = false) 
 
 export function throwArrayLengthMismatch(structure, target, arg) {
   const { length, instance: { members: [ member ] } } = structure;
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   const { structure: { constructor: elementConstructor} } = member;
   const { length: argLength, constructor: argConstructor } = arg;
   // get length from object whech it's a slice
@@ -141,7 +141,7 @@ export function throwArrayLengthMismatch(structure, target, arg) {
 
 export function throwMissingInitializers(structure, arg) {
   const { instance: { members } } = structure;
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   const missing = [];
   for (const { name, isRequired } of members) {
     if (isRequired) {
@@ -154,13 +154,13 @@ export function throwMissingInitializers(structure, arg) {
 }
 
 export function throwNoProperty(structure, propName) {
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   throw new TypeError(`${name} does not have a property with that name: ${propName}`);
 }
 
 export function throwArgumentCountMismatch(structure, actual) {
   const { instance: { members } } = structure;
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   const argCount = members.length - 1;
   const s = (argCount > 1) ? 's' : '';
   throw new Error(`${name} expects ${argCount} argument${s}, received ${actual}`);
@@ -168,7 +168,7 @@ export function throwArgumentCountMismatch(structure, actual) {
 
 export function rethrowArgumentError(structure, index, err) {
   const { instance: { members } } = structure;
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   // Zig currently does not provide the argument name
   const argName = `args[${index}]`;
   const argCount = members.length - 1;
@@ -185,18 +185,18 @@ export function throwNoCastingToPointer(structure) {
 }
 
 export function throwConstantConstraint(structure, pointer) {
-  const name1 = getShortName(structure);
+  const name1 = getStructureName(structure);
   const { constructor: { name: name2 } } = pointer;
   throw new TypeError(`Conversion of ${name2} to ${name1} requires an explicit cast`);
 }
 
 export function throwMisplacedSentinel(structure, value, index, length) {
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}, found at ${index}`);
 }
 
 export function throwMissingSentinel(structure, value, length) {
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}`);
 }
 
@@ -215,7 +215,7 @@ export function throwInaccessiblePointer() {
 }
 
 export function throwInvalidPointerTarget(structure, arg) {
-  const name = getShortName(structure);
+  const name = getStructureName(structure);
   let target;
   if (arg != null) {
     const type = typeof(arg)

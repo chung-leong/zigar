@@ -18,7 +18,7 @@ import {
   attachTemplate,
   finalizeStructure,
 } from '../src/structure.js';
-import { MEMORY, SLOTS, ZIG } from '../src/symbol.js';
+import { MEMORY, SLOTS } from '../src/symbol.js';
 import {
   invokeThunk,
 } from '../src/method.js';
@@ -40,20 +40,13 @@ describe('Method functions', function() {
         [MEMORY]: new DataView(new ArrayBuffer(16)),
         [SLOTS]: { 0: {} },
       };
-      let recv, slots, symbol1, symbol2, symbol3;
+      let recv, arg;
       function thunk(...args) {
         recv = this;
-        slots = args[0];
-        symbol1 = args[1];
-        symbol2 = args[2];
-        symbol3 = args[3];
+        arg = args[0];
       }
       invokeThunk(thunk, argStruct);
-      expect(recv).to.be.equal(argStruct);
-      expect(slots).to.be.an('object');
-      expect(symbol1).to.equal(SLOTS);
-      expect(symbol2).to.equal(MEMORY);
-      expect(symbol3).to.equal(ZIG);
+      expect(arg).to.be.equal(argStruct);
     })
     it('should return a promise when trunk returns a promise', async function() {
       process.env.ZIGAR_TARGET = 'WASM-RUNTIME';

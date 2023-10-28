@@ -7,7 +7,6 @@ import {
   useUintEx,
   useObject,
 } from '../src/member.js';
-import { ZIG } from '../src/symbol.js';
 import {
   StructureType,
   useArgStruct,

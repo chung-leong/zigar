@@ -5,7 +5,7 @@ import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer, throwNoProperty } from './error.js';
-import { MEMORY, SLOTS, ZIG, PARENT, CHILD_VIVIFICATOR, POINTER_VISITOR } from './symbol.js';
+import { MEMORY, SLOTS, PARENT, CHILD_VIVIFICATOR, POINTER_VISITOR } from './symbol.js';
 import { copyPointer } from './pointer.js';
 
 export function finalizeStruct(s) {

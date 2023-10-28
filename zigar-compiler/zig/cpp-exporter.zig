@@ -10,8 +10,6 @@ const MemberType = exporter.MemberType;
 const Member = exporter.Member;
 const Method = exporter.Method;
 const Memory = exporter.Memory;
-const MemoryDisposition = exporter.MemoryDisposition;
-const MemoryAttributes = exporter.MemoryAttributes;
 const Thunk = exporter.Thunk;
 const Error = exporter.Error;
 const missing = exporter.missing;
@@ -63,67 +61,38 @@ pub const Host = struct {
         }
     }
 
-    pub fn getMemory(self: Host, container: Value, comptime PtrT: type, comptime aligning: bool) !PtrT {
-        var memory: Memory = undefined;
-        const pt = @typeInfo(PtrT).Pointer;
-        const attrs: MemoryAttributes = .{
-            .ptr_align = if (aligning) std.math.log2_int(u8, @alignOf(pt.child)) else 0,
-            .is_const = pt.is_const,
-        };
-        if (callbacks.get_memory(self.context, container, attrs, &memory) != .OK) {
-            return Error.UnableToRetrieveMemoryLocation;
-        }
-        return exporter.fromMemory(memory, PtrT);
-    }
-
-    pub fn wrapMemory(self: Host, memory: Memory, disposition: MemoryDisposition, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) !Value {
-        const slot = exporter.getStructureSlot(T, size);
-        const structure = try self.readGlobalSlot(slot);
+    pub fn createView(self: Host, memory: Memory) !Value {
         var value: Value = undefined;
-        if (callbacks.wrap_memory(self.context, structure, &memory, disposition, &value) != .OK) {
+        if (callbacks.create_view(self.context, &memory, &value) != .OK) {
             return Error.UnableToCreateObject;
         }
         return value;
     }
 
-    pub fn getPointerStatus(self: Host, pointer: Value) !bool {
-        var sync: bool = undefined;
-        if (callbacks.get_pointer_status(self.context, pointer, &sync) != .OK) {
-            return Error.PointerIsInvalid;
-        }
-        return sync;
-    }
-
-    pub fn setPointerStatus(self: Host, pointer: Value, sync: bool) !void {
-        if (callbacks.set_pointer_status(self.context, pointer, sync) != .OK) {
-            return Error.PointerIsInvalid;
+    pub fn copyBytes(self: Host, memory: Memory, dest: Value) !void {
+        if (callbacks.copy_bytes(self.context, &memory, &value) != .OK) {
+            return Error.UnableToCreateObject;
         }
     }
 
-    pub fn readGlobalSlot(self: Host, slot: usize) !Value {
+    pub fn createObject(self: Host, structure: Value, dv: Value) !Value {
         var value: Value = undefined;
-        if (callbacks.read_global_slot(self.context, slot, &value) != .OK) {
-            return Error.UnableToFindObjectType;
+        if (callbacks.create_object(self.context, structure, &mem, &value) != .OK) {
+            return Error.UnableToCreateObject;
         }
         return value;
     }
 
-    pub fn writeGlobalSlot(self: Host, slot: usize, value: Value) !void {
-        if (callbacks.write_global_slot(self.context, slot, value) != .OK) {
-            return Error.UnableToSetObjectType;
-        }
-    }
-
-    pub fn readObjectSlot(self: Host, container: Value, id: usize) !Value {
+    pub fn readSlot(self: Host, target: ?Value, id: usize) !Value {
         var result: Value = undefined;
-        if (callbacks.read_object_slot(self.context, container, id, &result) != .OK) {
+        if (callbacks.read_slot(self.context, target, id, &result) != .OK) {
             return Error.UnableToRetrieveObject;
         }
         return result;
     }
 
-    pub fn writeObjectSlot(self: Host, container: Value, id: usize, value: ?Value) !void {
-        if (callbacks.write_object_slot(self.context, container, id, value) != .OK) {
+    pub fn writeSlot(self: Host, target: ?Value, id: usize, value: ?Value) !void {
+        if (callbacks.write_slot(self.context, target, id, value) != .OK) {
             return Error.UnableToInsertObject;
         }
     }
@@ -195,24 +164,16 @@ pub const Host = struct {
 const Callbacks = extern struct {
     allocate_memory: *const fn (Call, usize, u8, *Memory) callconv(.C) Result,
     free_memory: *const fn (Call, *const Memory, u8) callconv(.C) Result,
-    get_memory: *const fn (Call, Value, MemoryAttributes, *Memory) callconv(.C) Result,
-    wrap_memory: *const fn (Call, Value, *const Memory, MemoryDisposition, *Value) callconv(.C) Result,
-
-    get_pointer_status: *const fn (Call, Value, *bool) callconv(.C) Result,
-    set_pointer_status: *const fn (Call, Value, bool) callconv(.C) Result,
-
-    read_global_slot: *const fn (Call, usize, *Value) callconv(.C) Result,
-    write_global_slot: *const fn (Call, usize, ?Value) callconv(.C) Result,
-    read_object_slot: *const fn (Call, Value, usize, *Value) callconv(.C) Result,
-    write_object_slot: *const fn (Call, Value, usize, ?Value) callconv(.C) Result,
-
+    create_view: *const fn (Call, Value, *const Memory, *Value) Result,
+    create_object: *const fn (Call, Value, Value, *Value) Result,
+    read_slot: *const fn (Call, ?Value, usize, *Value) callconv(.C) Result,
+    write_slot: *const fn (Call, ?Value, usize, ?Value) callconv(.C) Result,
     begin_structure: *const fn (Call, *const Structure, *Value) callconv(.C) Result,
     attach_member: *const fn (Call, Value, *const Member, bool) callconv(.C) Result,
     attach_method: *const fn (Call, Value, *const Method, bool) callconv(.C) Result,
     attach_template: *const fn (Call, Value, Value, bool) callconv(.C) Result,
     finalize_structure: *const fn (Call, Value) callconv(.C) Result,
-    create_template: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
-
+    create_template: *const fn (Call, Value, *Value) callconv(.C) Result,
     write_to_console: *const fn (Call, *const Memory) callconv(.C) Result,
     flush_console: *const fn (Call) callconv(.C) Result,
 };

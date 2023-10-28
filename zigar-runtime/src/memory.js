@@ -1,15 +1,5 @@
 import { MEMORY } from './symbol.js';
 
-let addressRetriever;
-
-export function setAddressRetriever(f) {
-  addressRetriever = f;
-}
-
-export function getAddressRetriever() {
-  return addressRetriever;
-}
-
 export function getBitAlignFunction(bitPos, bitSize, toAligned) {
   if (bitPos + bitSize <= 8) {
     const mask = (2 ** bitSize) - 1;

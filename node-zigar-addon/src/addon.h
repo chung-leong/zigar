@@ -69,11 +69,6 @@ struct Member {
   Local<Value> structure;
 };
 
-struct Memory {
-  uint8_t* bytes;
-  size_t len;
-};
-
 enum class MemoryDisposition : uint32_t {
   Auto,
   Copy,
@@ -83,7 +78,14 @@ enum class MemoryDisposition : uint32_t {
 struct MemoryAttributes {
   unsigned ptr_align: 8;
   bool is_const: 1;
-  int :23;
+  bool is_comptime: 1;
+  int :22;
+};
+
+struct Memory {
+  uint8_t* bytes;
+  size_t len;
+  MemoryAttributes attributes;
 };
 
 struct Call;
@@ -119,24 +121,16 @@ struct Module {
 struct Callbacks {
   Result (*allocate_memory)(Call*, size_t, uint8_t, Memory*);
   Result (*free_memory)(Call*, const Memory&, uint8_t);
-  Result (*get_memory)(Call*, Local<Object>, MemoryAttributes, Memory*);
-  Result (*wrap_memory)(Call*, Local<Object>, const Memory&, MemoryDisposition, Local<Object>*);
-
-  Result (*get_pointer_status)(Call*, Local<Object>, bool*);
-  Result (*set_pointer_status)(Call*, Local<Object>, bool);
-
-  Result (*read_global_slot)(Call*, size_t, Local<Value>*);
-  Result (*write_global_slot)(Call*, size_t, Local<Value>);
-  Result (*read_object_slot)(Call*, Local<Object>, size_t, Local<Value>*);
-  Result (*write_object_slot)(Call*, Local<Object>, size_t, Local<Value>);
-
+  Result (*create_view)(Call*, const Memory&, Local<DataView>*);
+  Result (*create_object)(Call*, Local<Object>, Local<DataView>, Local<Object>*);
+  Result (*read_slot)(Call*, Local<Object>, size_t, Local<Value>*);
+  Result (*write_slot)(Call*, Local<Object>, size_t, Local<Value>);
   Result (*begin_structure)(Call*, const Structure&, Local<Object>*);
   Result (*attach_member)(Call*, Local<Object>, const Member&, bool);
   Result (*attach_method)(Call*, Local<Object>, const Method&, bool);
   Result (*attach_template)(Call*, Local<Object>, Local<Object>, bool);
   Result (*finalize_structure)(Call*, Local<Object>);
-  Result (*create_template)(Call*, const Memory&, Local<Object>*);
-
+  Result (*create_template)(Call*, Local<DataView>, Local<Object>*);
   Result (*write_to_console)(Call*, const Memory&);
   Result (*flush_console)(Call*);
 };
@@ -169,8 +163,8 @@ struct AddonData : public ExternalData {
 struct ModuleData : public ExternalData {
   static int count;
   void* so_handle;
-  Global<Object> js_module;
   Global<Object> js_options;
+  Global<Object> global_slots;
   Global<External> addon_data;
 
   ModuleData(Isolate* isolate,
@@ -180,6 +174,7 @@ struct ModuleData : public ExternalData {
     ExternalData(isolate),
     so_handle(so_handle),
     js_options(isolate, js_options),
+    global_slots(isolate, Object::New(isolate)),
     addon_data(isolate, addon_data) {
     count++;
   }
@@ -227,50 +222,21 @@ struct ExternalMemoryData {
   }
 };
 
-struct JSBridge;
-
 struct Call {
   Isolate* isolate;
   Local<Context> context;
-  Local<Array> mem_pool;
-  Local<Map> buffer_map;
+  Local<Object> env;
   Local<Object> js_module;
-  Local<Object> argument;
   Local<Object> global_slots;
-  Local<Symbol> symbol_slots;
-  Local<Symbol> symbol_memory;
-  Local<Symbol> symbol_zig;
   FunctionData* function_data;
-  bool remove_function_data;
 
   Call(Isolate* isolate,
-       Local<External> module_data) :
+       Local<Object> env,
+       Local<External> function_data) :
     isolate(isolate),
     context(isolate->GetCurrentContext()),
-    function_data(new FunctionData(isolate, nullptr, MethodAttributes{ .has_pointer = false }, module_data)),
-    remove_function_data(true) {
-  }
-
-  Call(const FunctionCallbackInfo<Value> &info) :
-    isolate(info.GetIsolate()),
-    context(isolate->GetCurrentContext()),
-    argument(info.This()),
-    global_slots(info[0].As<Object>()),
-    symbol_slots(info[1].As<Symbol>()),
-    symbol_memory(info[2].As<Symbol>()),
-    symbol_zig(info[3].As<Symbol>()),
-    function_data(reinterpret_cast<FunctionData*>(info.Data().As<External>()->Value())),
-    remove_function_data(false) {
-    if (function_data->attributes.has_pointer) {
-      buffer_map = Map::New(isolate);
-    }
-  }
-
-  ~Call() {
-    if (remove_function_data) {
-      delete function_data;
-    }
-  }
+    env(env),
+    function_data(reinterpret_cast<FunctionData*>(function_data->Value())) {}
 };
 
 const size_t missing = SIZE_MAX;

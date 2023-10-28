@@ -1,4 +1,4 @@
-import { MEMORY, SLOTS, ZIG, STRUCTURE } from './symbol.js';
+import { MEMORY, SLOTS, STRUCTURE } from './symbol.js';
 import {
   StructureType,
   beginStructure,
@@ -189,12 +189,13 @@ export async function runModule(source, options = {}) {
     }
     dv2[MEMORY] = { memory: wasmMemory, address, len };
     object[MEMORY] = dv2;
-    if (object.hasOwnProperty(ZIG)) {
-      // a pointer--link the target too
-      const targetObject = object[SLOTS][0];
-      const targetAddress = dv2.getUint32(0, true);
-      linkObject(targetObject, targetAddress);
-    }
+    // TODO: refactoring
+    // if (object.hasOwnProperty(ZIG)) {
+    //   // a pointer--link the target too
+    //   const targetObject = object[SLOTS][0];
+    //   const targetAddress = dv2.getUint32(0, true);
+    //   linkObject(targetObject, targetAddress);
+    // }
   }
 
   function unlinkObject(object) {
@@ -207,11 +208,12 @@ export async function runModule(source, options = {}) {
     const copy = getMemoryCopier(dv1.byteLength);
     copy(dv2, dv1);
     object[MEMORY] = dv2;
-    if (object.hasOwnProperty(ZIG)) {
-      // a pointer--unlink the target too
-      const targetObject = object[SLOTS][0];
-      unlinkObject(targetObject);
-    }
+    // TODO: refactoring
+    // if (object.hasOwnProperty(ZIG)) {
+    //   // a pointer--unlink the target too
+    //   const targetObject = object[SLOTS][0];
+    //   unlinkObject(targetObject);
+    // }
   }
 
   function throwError(errorIndex) {
@@ -351,12 +353,14 @@ export async function runModule(source, options = {}) {
         [MEMORY]: dv,
         [SLOTS]: {},
       };
-      if (structure.type === StructureType.Pointer) {
-        object[ZIG] = true;
-      }
+      // TODO: refactoring
+      // if (structure.type === StructureType.Pointer) {
+      //   object[ZIG] = true;
+      // }
     } else {
       const { constructor } = structure;
-      object = constructor.call(ZIG, dv);
+      // TODO: refactoring
+      // object = constructor.call(ZIG, dv);
     }
     return addObject(object);
   }
@@ -394,19 +398,19 @@ export async function runModule(source, options = {}) {
     container[key] = valueTable[valueIndex];
   }
 
-  function _getPointerStatus(objectIndex) {
-    const pointer = valueTable[objectIndex];
-    const status = pointer[ZIG];
-    if (typeof(status) !== 'boolean') {
-      return -1;
-    }
-    return status ? 1 : 0;
-  }
+  // function _getPointerStatus(objectIndex) {
+  //   const pointer = valueTable[objectIndex];
+  //   const status = pointer[ZIG];
+  //   if (typeof(status) !== 'boolean') {
+  //     return -1;
+  //   }
+  //   return status ? 1 : 0;
+  // }
 
-  function _setPointerStatus(objectIndex, status) {
-    const pointer = valueTable[objectIndex];
-    pointer[ZIG] = !!status;
-  }
+  // function _setPointerStatus(objectIndex, status) {
+  //   const pointer = valueTable[objectIndex];
+  //   pointer[ZIG] = !!status;
+  // }
 
   function _readGlobalSlot(slot) {
     const object = globalSlots[slot];
@@ -590,7 +594,8 @@ export function finalizeStructures(structures) {
       dv = new DataView(new ArrayBuffer(byteSize));
     }
     const { constructor } = placeholder.structure;
-    const object = constructor.call(ZIG, dv);
+    // TODO: refactoring
+    // const object = constructor.call(ZIG, dv);
     if (placeholder.slots) {
       insertObjects(object[SLOTS], placeholder.slots);
     }

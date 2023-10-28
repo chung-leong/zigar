@@ -1,5 +1,6 @@
 import { throwZigError } from './error.js';
-import { MEMORY, SLOTS, ZIG, RELEASE_THUNK } from './symbol.js';
+import { Environment } from './environment.js';
+import { RELEASE_THUNK } from './symbol.js';
 
 export function addMethods(s) {
   const {
@@ -46,33 +47,21 @@ export function addMethods(s) {
   }
 }
 
-const globalSlots = {};
-
 export function invokeThunk(thunk, args) {
-  if (process.env.ZIGAR_TARGET === 'NODE-CPP-EXT') {
-    // pass the argument object as the this/recv variable
-    // while the slots and symbols are passed as arguments
-    const err = thunk.call(args, globalSlots, SLOTS, MEMORY, ZIG);
-    // errors returned by exported Zig functions are normally written into the
-    // argument object and get thrown when we access its retval property (a zig error union)
-    // error strings returned by the thunk are due to problems in the thunking process
-    // (i.e. bugs in export.zig)
-    if (err) {
-      throwZigError(err);
-    }
-  } else if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
-    const res = thunk(args);
-    if (res !== undefined) {
+  const env = new Environment;
+  const err = thunk.call(env, args);
+  // errors returned by exported Zig functions are normally written into the
+  // argument object and get thrown when we access its retval property (a zig error union)
+  // error strings returned by the thunk are due to problems in the thunking process
+  // (i.e. bugs in export.zig)
+  if (err) {
+    if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
       if (res instanceof Promise) {
         // a promise of the function having been linked and called
         return res.then(() => args.retval);
-      } else {
-        throwZigError(res);
       }
     }
-    /* c8 ignore next 3 */
-  } else {
-    throw new Error(`Unknown target: ${process.env.ZIGAR_TARGET}`);
+    throwZigError(err);
   }
   return args.retval;
 }

@@ -1,8 +1,7 @@
 import { StructureType } from './structure.js';
 import { requireDataView, getDataView, isCompatible, isBuffer } from './data-view.js';
 import { MemberType, getAccessors } from './member.js';
-import { getAddressRetriever } from './memory.js';
-import { MEMORY, PROXY, SLOTS, ZIG, PARENT, POINTER_VISITOR } from './symbol.js';
+import { MEMORY, PROXY, SLOTS, PARENT, POINTER_VISITOR, ENVIROMENT } from './symbol.js';
 import {
   throwNoCastingToPointer,
   throwInaccessiblePointer,
@@ -31,7 +30,6 @@ export function finalizePointer(s) {
   const isTargetPointer = (targetStructure.type === StructureType.Pointer);
   const addressSize = (isTargetSlice) ? byteSize / 2 : byteSize;
   const usizeStructure = { name: 'usize', byteSize: addressSize };
-  const getAddress = getAddressRetriever();
   const setAddress = getAccessors({
     type: MemberType.Uint,
     bitOffset: 0,
@@ -47,7 +45,7 @@ export function finalizePointer(s) {
     structure: usizeStructure,
   }, options).set : null;
   const constructor = s.constructor = function(arg) {
-    const calledFromZig = (this === ZIG);
+    const calledFromZig = this?.[ENVIROMENT] ?? false;
     const calledFromParent = (this === PARENT);
     let creating = this instanceof constructor;
     let self, dv;
@@ -77,7 +75,6 @@ export function finalizePointer(s) {
     }
     self[MEMORY] = dv;
     self[SLOTS] = { 0: null };
-    self[ZIG] = calledFromZig;
     if (creating) {
       initializer.call(self, arg);
     }
@@ -215,7 +212,6 @@ const isPointerKeys = {
   '*': true,
   constructor: true,
   valueOf: true,
-  [ZIG]: true,
   [SLOTS]: true,
   [MEMORY]: true,
   [PROXY]: true,

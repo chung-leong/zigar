@@ -92,91 +92,25 @@ export function useArgStruct() {
   factories[StructureType.ArgStruct] = finalizeArgStruct;
 }
 
-export function beginStructure(def, options = {}) {
-  const {
-    type,
-    name,
-    length,
-    byteSize,
-    align,
-    isConst,
-    hasPointer,
-  } = def;
-  return {
-    constructor: null,
-    typedArray: null,
-    type,
-    name,
-    length,
-    byteSize,
-    align,
-    isConst,
-    hasPointer,
-    instance: {
-      members: [],
-      methods: [],
-      template: null,
-    },
-    static: {
-      members: [],
-      methods: [],
-      template: null,
-    },
-    options,
-  };
-}
-
-export function attachMember(s, member, isStatic = false) {
-  const target = (isStatic) ? s.static : s.instance;
-  target.members.push(member);
-}
-
-export function attachMethod(s, method, isStaticOnly = false) {
-  s.static.methods.push(method);
-  if (!isStaticOnly) {
-    s.instance.methods.push(method);
-  }
-}
-
-export function attachTemplate(s, template, isStatic = false) {
-  const target = (isStatic) ? s.static : s.instance;
-  target.template = template;
-}
-
-export function getShortName(s) {
+export function getStructureName(s, full = false) {
   let r = s.name;
-  r = r.replace(/{.*}/, '');
-  r = r.replace(/[^. ]*?\./g, '');
+  if (short) {
+    r = r.replace(/{.*}/, '');
+    r = r.replace(/[^. ]*?\./g, '');
+  }
   return r;
 }
 
-export function finalizeStructure(s) {
-  try {
-    const f = factories[s.type];
-    if (process.env.ZIGAR_DEV) {
-      /* c8 ignore next 10 */
-      if (typeof(f) !== 'function') {
-        const [ name ] = Object.entries(StructureType).find(a => a[1] === s.type);
-        throw new Error(`No factory for ${name}: ${f}`);
-      }
+export function getStructureFactory(type) {
+  const f = factories[type];
+  if (process.env.ZIGAR_DEV) {
+    /* c8 ignore next 10 */
+    if (typeof(f) !== 'function') {
+      const [ name ] = Object.entries(StructureType).find(a => a[1] === s.type);
+      throw new Error(`No factory for ${name}: ${f}`);
     }
-    const constructor = f(s);
-    if (typeof(constructor) === 'function') {
-      Object.defineProperties(constructor, {
-        name: { value: getShortName(s), writable: false }
-      });
-      if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
-        Object.defineProperties(constructor.prototype, {
-          [Symbol.toStringTag]: { value: s.name, configurable: true, writable: false }
-        });
-      }
-    }
-    return constructor;
-    /* c8 ignore next 4 */
-  } catch (err) {
-    console.error(err);
-    throw err;
   }
+  return f;
 }
 
 export function getStructureFeature(structure) {
