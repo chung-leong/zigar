@@ -7,7 +7,7 @@ const consolePending = '';
 const consoleTimeout = 0;
 
 export class Environment {
-  memoryMap = null;
+  memoryPool = null;
 
   getAddress(buffer) {}
   obtainView(address, len) {}
@@ -27,6 +27,9 @@ export class Environment {
     return dv;
   }
 
+  freeMemory(address, len, ptrAlign) {
+  }
+
   createView(address, len, ptrAlign, copy) {
     if (copy) {
       const dv = this.allocMemory(len, ptrAlign);
@@ -37,9 +40,14 @@ export class Environment {
     }
   }
 
-  createObject(structure, dv) {
+  castView(structure, dv) {
     const { constructor } = structure;
-    return constructor(dv);
+    return constructor.call(this, dv);
+  }
+
+  createObject(structure, arg) {
+    const { constructor } = structure;
+    return new constructor(arg);
   }
 
   readSlot(target, slot) {
@@ -50,7 +58,6 @@ export class Environment {
   writeSlot(target, slot, value) {
     const slots = target ? targets[SLOTS] : globalSlots;
     slots[slot] = value;
-    return true;
   }
 
   createTemplate(dv) {
