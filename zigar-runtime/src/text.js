@@ -1,14 +1,15 @@
 let decoder;
 
-function decodeText(data, encoding = 'utf-8') {
-    if (!decoder) {
-        decoder = new TextDecoder;
-    }
-
+export function decodeText(data, encoding = 'utf-8') {
+  if (!decoder) {
+    decoder = new TextDecoder;
+  }
+  return decoder.decode(data);
 }
 
-function encodeText(text, encoding) {
-    if (!decoder) {
-        decoder = new TextDecoder;
-    }
+export function encodeText(text, encoding) {
+  if (!encoder) {
+    encoder = new TextDecoder;
+  }
+  return encoder.encode(text);
 }

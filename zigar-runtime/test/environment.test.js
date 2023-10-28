@@ -8,9 +8,14 @@ import {
   StructureType,
   useStruct,
 } from '../src/structure.js';
-import { Environment } from '../src/environment.js'
+import { Environment, getGlobalSlots } from '../src/environment.js'
+import { MEMORY, SLOTS } from '../src/symbol.js';
 
 describe('Environment', function() {
+  beforeEach(function() {
+    useStruct();
+    useIntEx();
+  })
   const env = new Environment;
   describe('allocMemory', function() {
     it ('should return a data view of a newly created array buffer', function() {
@@ -85,5 +90,299 @@ describe('Environment', function() {
       expect(arg).to.equal(initializer);
     })
   })
-
+  describe('readSlot', function() {
+    it('should read from global slots where target is null', function() {
+      const slots = getGlobalSlots();
+      const object = {}
+      slots[1] = object;
+      const result1 = env.readSlot(null, 1);
+      const result2 = env.readSlot(null, 2);
+      expect(result1).to.equal(object);
+      expect(result2).to.be.undefined;
+    })
+    it('should read from slots of target object', function() {
+      const object = {}
+      const target = {
+        [SLOTS]: {
+          1: object,
+        }
+      };
+      const result1 = env.readSlot(target, 1);
+      const result2 = env.readSlot(target, 2);
+      expect(result1).to.equal(object);
+      expect(result2).to.be.undefined;
+    })
+    it('should not throw where object does not have slots', function() {
+      const target = {};
+      expect(() => env.readSlot(target, 1)).to.not.throw();
+    })
+  });
+  describe('writeSlot', function() {
+    it('should write into global slots where target is null', function() {
+      const slots = getGlobalSlots();
+      const object = {}
+      env.writeSlot(null, 1, object);
+      expect(slots[1]).to.equal(object);
+    })
+    it('should read from slots of target object', function() {
+      const object = {}
+      const target = {
+        [SLOTS]: {}
+      };
+      env.writeSlot(target, 1, object);
+      expect(target[SLOTS][1]).to.equal(object);
+    })
+    it('should not throw where object does not have slots', function() {
+      const object = {}
+      const target = {};
+      expect(() => env.writeSlot(target, 1, object)).to.not.throw();
+    })
+  })
+  describe('createTemplate', function() {
+    it('should return a template object', function() {
+      const dv = new DataView(new ArrayBuffer(8));
+      const templ = env.createTemplate(dv);
+      expect(templ[MEMORY]).to.equal(dv);
+      expect(templ[SLOTS]).to.be.an('object');
+    })
+  })
+  describe('beginStructure', function() {
+    it('should return a structure object', function() {
+      const options = {};
+      const s = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        length: 1,
+        byteSize: 16,
+        align: 3,
+        isConst: false,
+        hasPointer: false,
+      }, options);
+      expect(s.type).to.equal(StructureType.Struct);
+      expect(s.name).to.equal('Hello');
+      expect(s.byteSize).to.equal(16);
+    })
+  })
+  describe('attachMember', function() {
+    it('should add instance member', function() {
+      const options = {};
+      const s = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        length: 1,
+        byteSize: 16,
+        align: 3,
+        isConst: false,
+        hasPointer: false,
+      }, options);
+      env.attachMember(s, {
+        type: MemberType.Int,
+        name: 'number',
+        bitSize: 32,
+        byteSize: 4,
+        bitOffset: 0,
+      }, false);
+      expect(s.instance.members[0]).to.eql({
+        type: MemberType.Int,
+        name: 'number',
+        bitSize: 32,
+        byteSize: 4,
+        bitOffset: 0,
+      });
+    })
+    it('should add static member', function() {
+      const options = {};
+      const s = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        length: 1,
+        byteSize: 16,
+        align: 3,
+        isConst: false,
+        hasPointer: false,
+      }, options);
+      env.attachMember(s, {
+        type: MemberType.Int,
+        name: 'number',
+        bitSize: 32,
+        byteSize: 4,
+        bitOffset: 0,
+      }, true);
+      expect(s.static.members[0]).to.eql({
+        type: MemberType.Int,
+        name: 'number',
+        bitSize: 32,
+        byteSize: 4,
+        bitOffset: 0,
+      });
+    })
+  })
+  describe('attachMethod', function() {
+    it('should attach static method', function() {
+      const method = {
+        name: 'say',
+      };
+      const options = {};
+      const s = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        length: 1,
+        byteSize: 16,
+        align: 3,
+        isConst: false,
+        hasPointer: false,
+      }, options);
+      env.attachMethod(s, method, true);
+      expect(s.static.methods[0]).to.eql(method);
+    })
+    it('should attach both static and instance method', function() {
+      const method = {
+        name: 'say',
+      };
+      const options = {};
+      const s = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        length: 1,
+        byteSize: 16,
+        align: 3,
+        isConst: false,
+        hasPointer: false,
+      }, options);
+      env.attachMethod(s, method, false);
+      expect(s.static.methods[0]).to.eql(method);
+      expect(s.instance.methods[0]).to.eql(method);
+    })
+  })
+  describe('createTemplate', function() {
+    it('should return a template object', function() {
+      const dv = new DataView(new ArrayBuffer(8));
+      const templ = env.createTemplate(dv);
+      expect(templ[MEMORY]).to.equal(dv);
+    })
+  })
+  describe('attachTemplate', function() {
+    it('should attach instance template', function() {
+      const dv = new DataView(new ArrayBuffer(8));
+      const templ = env.createTemplate(dv);
+      const options = {};
+      const s = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        length: 1,
+        byteSize: 16,
+        align: 3,
+        isConst: false,
+        hasPointer: false,
+      }, options);
+      env.attachTemplate(s, templ, false);
+      expect(s.instance.template).to.equal(templ);
+    })
+    it('should attach instance template', function() {
+      const dv = new DataView(new ArrayBuffer(8));
+      const templ = env.createTemplate(dv);
+      const options = {};
+      const s = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        length: 1,
+        byteSize: 16,
+        align: 3,
+        isConst: false,
+        hasPointer: false,
+      }, options);
+      env.attachTemplate(s, templ, true);
+      expect(s.static.template).to.equal(templ);
+    })
+  })
+  describe('finalizeStructure', function() {
+    it('should generate constructor for a struct', function() {
+      const options = {};
+      const s = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        length: 1,
+        byteSize: 16,
+        align: 3,
+        isConst: false,
+        hasPointer: false,
+      }, options);
+      env.attachMember(s, {
+        type: MemberType.Int,
+        name: 'number',
+        bitSize: 32,
+        byteSize: 4,
+        bitOffset: 0,
+        required: false,
+      }, false);
+      const constructor = env.finalizeStructure(s);
+      const object = new constructor(undefined);
+      expect(object).to.have.property('number');
+    })
+  })
+  describe('writeToConsole', function() {
+    const encoder = new TextEncoder();
+    it('should output text to console', async function() {
+      const lines = await capture(() => {
+        const array = encoder.encode('Hello world\n');
+        env.writeToConsole(array);
+      });
+      expect(lines).to.eql([ 'Hello world' ]);
+    })
+    it('should allow addition text to be append to current line', async function() {
+      const lines = await capture(async () => {
+        const array1 = encoder.encode('Hello world');
+        env.writeToConsole(array1);
+        await delay(10);
+        const array2 = encoder.encode('!\n');
+        env.writeToConsole(array2);
+      });
+      expect(lines).to.eql([ 'Hello world!' ]);
+    })
+    it('should eventually output text not ending with newline', async function() {
+      const lines = await capture(async () => {
+        const array1 = encoder.encode('Hello world');
+        env.writeToConsole(array1);
+        await delay(10);
+        const array2 = encoder.encode('!');
+        env.writeToConsole(array2);
+        await delay(300);
+      });
+      expect(lines).to.eql([ 'Hello world!' ]);
+    })
+  })
+  describe('flushConsole', function() {
+    const encoder = new TextEncoder();
+    it('should force pending text to immediately get sent to console', async function() {
+      const lines = await capture(async () => {
+        const array1 = encoder.encode('Hello world');
+        env.writeToConsole(array1);
+        await delay(10);
+        const array2 = encoder.encode('!');
+        env.writeToConsole(array2);
+        env.flushConsole();
+      });
+      expect(lines).to.eql([ 'Hello world!' ]);
+    })
+  })
 })
+
+async function delay(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+async function capture(cb) {
+  const logFn = console.log;
+  const lines = [];
+  try {
+    console.log =  (text) => {
+      for (const line of text.split(/\r?\n/)) {
+        lines.push(line)
+      }
+    };
+    await cb();
+  } finally {
+    console.log = logFn;
+  }
+  return lines;
+}

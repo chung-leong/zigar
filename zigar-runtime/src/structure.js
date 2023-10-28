@@ -106,8 +106,8 @@ export function getStructureFactory(type) {
   if (process.env.ZIGAR_DEV) {
     /* c8 ignore next 10 */
     if (typeof(f) !== 'function') {
-      const [ name ] = Object.entries(StructureType).find(a => a[1] === s.type);
-      throw new Error(`No factory for ${name}: ${f}`);
+      const [ name ] = Object.entries(StructureType).find(a => a[1] === type);
+      throw new Error(`No factory for ${name}`);
     }
   }
   return f;

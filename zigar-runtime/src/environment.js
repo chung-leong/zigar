@@ -1,10 +1,12 @@
 import { getStructureFactory, getStructureName } from './structure.js';
-import { SLOTS, ENVIROMENT } from './symbol.js';
+import { decodeText } from './text.js';
+import { MEMORY, SLOTS, ENVIROMENT } from './symbol.js';
 
 const default_alignment = 16;
 const globalSlots = {};
-const consolePending = '';
-const consoleTimeout = 0;
+
+let consolePending = '';
+let consoleTimeout = 0;
 
 export class Environment {
   memoryPool = null;
@@ -51,13 +53,15 @@ export class Environment {
   }
 
   readSlot(target, slot) {
-    const slots = target ? targets[SLOTS] : globalSlots;
-    return slots[slot];
+    const slots = target ? target[SLOTS] : globalSlots;
+    return slots?.[slot];
   }
 
   writeSlot(target, slot, value) {
-    const slots = target ? targets[SLOTS] : globalSlots;
-    slots[slot] = value;
+    const slots = target ? target[SLOTS] : globalSlots;
+    if (slots) {
+      slots[slot] = value;
+    }
   }
 
   createTemplate(dv) {
@@ -174,7 +178,12 @@ export class Environment {
 }
 Environment.prototype[ENVIROMENT] = true;
 
+export function getGlobalSlots() {
+  return globalSlots;
+}
+
 function getExtraCount(ptrAlign) {
   const alignment = (1 << ptrAlign);
   return (alignment <= default_alignment) ? 0 : alignment;
 }
+
