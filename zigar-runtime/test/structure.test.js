@@ -3,11 +3,14 @@ import { expect } from 'chai';
 import {
   StructureType,
   useOpaque,
-  beginStructure,
-  finalizeStructure,
   getStructureFeature,
   getStructureName,
 } from '../src/structure.js';
+import { Environment } from '../src/environment.js'
+const {
+  beginStructure,
+  finalizeStructure,
+} = Environment.prototype;
 
 describe('Structure functions', function() {
   describe('useOpaque', function() {

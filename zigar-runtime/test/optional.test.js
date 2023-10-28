@@ -15,16 +15,19 @@ import {
   useOptional,
   usePointer,
   useSlice,
-  beginStructure,
-  attachMember,
-  attachTemplate,
-  finalizeStructure,
   useArray,
 } from '../src/structure.js';
 import { CHILD_VIVIFICATOR, MEMORY, SLOTS } from '../src/symbol.js';
 import {
   getOptionalAccessors,
 } from '../src/optional.js';
+import { Environment } from '../src/environment.js'
+const {
+  beginStructure,
+  attachMember,
+  attachTemplate,
+  finalizeStructure,
+} = Environment.prototype;
 
 describe('Optional functions', function() {
   describe('finalizeOptional', function() {

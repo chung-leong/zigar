@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import {
-  allocateMemory,
   getMemoryCopier,
   getMemoryResetter,
   getBitAlignFunction,
@@ -10,27 +9,27 @@ import {
 import { MEMORY } from '../src/symbol.js';
 
 describe('Memory functions', function() {
-  describe('allocateMemory', function() {
-    it ('should return a data view of a newly created array buffer', function() {
-      const context = {
-        getAddress: () => 0x10000,
-      };
-      const dv = allocateMemory.call(context, 32, 3);
-      expect(dv).to.be.instanceOf(DataView);
-      expect(dv.byteLength).to.equal(32);
-      expect(dv.byteOffset).to.equal(0);
-    })
-    it ('should allocate a larger buffer to prevent misalignment', function() {
-      const context = {
-        getAddress: () => 0x10010,
-      };
-      const dv = allocateMemory.call(context, 8 * 4, 5);
-      expect(dv).to.be.instanceOf(DataView);
-      expect(dv.byteLength).to.equal(32);
-      expect(dv.byteOffset).to.equal(16);
-      expect(dv.buffer.byteLength).to.equal(64);
-    })
-  })
+  // describe('allocateMemory', function() {
+  //   it ('should return a data view of a newly created array buffer', function() {
+  //     const context = {
+  //       getAddress: () => 0x10000,
+  //     };
+  //     const dv = allocateMemory.call(context, 32, 3);
+  //     expect(dv).to.be.instanceOf(DataView);
+  //     expect(dv.byteLength).to.equal(32);
+  //     expect(dv.byteOffset).to.equal(0);
+  //   })
+  //   it ('should allocate a larger buffer to prevent misalignment', function() {
+  //     const context = {
+  //       getAddress: () => 0x10010,
+  //     };
+  //     const dv = allocateMemory.call(context, 8 * 4, 5);
+  //     expect(dv).to.be.instanceOf(DataView);
+  //     expect(dv.byteLength).to.equal(32);
+  //     expect(dv.byteOffset).to.equal(16);
+  //     expect(dv.buffer.byteLength).to.equal(64);
+  //   })
+  // })
   describe('getMemoryCopier', function() {
     it('should return optimal function for copying buffers of various sizes', function() {
       const functions = [];

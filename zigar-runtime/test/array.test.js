@@ -15,15 +15,18 @@ import {
   usePointer,
   useSlice,
   usePrimitive,
-  beginStructure,
-  attachMember,
-  finalizeStructure,
 } from '../src/structure.js';
 import {
   getArrayIterator,
   getArrayEntriesIterator,
   createArrayEntries,
 } from '../src/array.js';
+import { Environment } from '../src/environment.js'
+const {
+  beginStructure,
+  attachMember,
+  finalizeStructure,
+} = Environment.prototype;
 
 describe('Array functions', function() {
   describe('finalizeArray', function() {

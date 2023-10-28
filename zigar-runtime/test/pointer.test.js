@@ -14,11 +14,14 @@ import {
   useStruct,
   useSlice,
   useArray,
+} from '../src/structure.js';
+import { MEMORY } from '../src/symbol.js';
+import { Environment } from '../src/environment.js'
+const {
   beginStructure,
   attachMember,
   finalizeStructure,
-} from '../src/structure.js';
-import { MEMORY } from '../src/symbol.js';
+} = Environment.prototype;
 
 describe('Pointer functions', function() {
   describe('finalizePointer', function() {

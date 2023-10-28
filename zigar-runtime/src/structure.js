@@ -94,7 +94,7 @@ export function useArgStruct() {
 
 export function getStructureName(s, full = false) {
   let r = s.name;
-  if (short) {
+  if (!full) {
     r = r.replace(/{.*}/, '');
     r = r.replace(/[^. ]*?\./g, '');
   }

@@ -14,11 +14,14 @@ import {
   useStruct,
   useEnumeration,
   usePointer,
+} from '../src/structure.js';
+import { Environment } from '../src/environment.js'
+const {
   beginStructure,
   attachMember,
   attachTemplate,
   finalizeStructure,
-} from '../src/structure.js';
+} = Environment.prototype;
 
 describe('Static variable functions', function() {
   beforeEach(function() {

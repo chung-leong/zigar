@@ -7,12 +7,15 @@ import {
 import {
   StructureType,
   useEnumeration,
+} from '../src/structure.js';
+import { MEMORY, SLOTS } from '../src/symbol.js';
+import { Environment } from '../src/environment.js'
+const {
   beginStructure,
   attachMember,
   attachTemplate,
   finalizeStructure,
-} from '../src/structure.js';
-import { MEMORY, SLOTS } from '../src/symbol.js';
+} = Environment.prototype;
 
 describe('Enumeration functions', function() {
   describe('finalizeErrorUnion', function() {

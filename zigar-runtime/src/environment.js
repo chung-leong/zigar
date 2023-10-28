@@ -1,5 +1,5 @@
-import { SLOTS } from './symbol';
-import { getStructureFactory, getStructureName } from './structure';
+import { getStructureFactory, getStructureName } from './structure.js';
+import { SLOTS, ENVIROMENT } from './symbol.js';
 
 const default_alignment = 16;
 const globalSlots = {};

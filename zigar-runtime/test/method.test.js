@@ -12,16 +12,19 @@ import {
   StructureType,
   useStruct,
   useEnumeration,
-  beginStructure,
-  attachMember,
-  attachMethod,
-  attachTemplate,
-  finalizeStructure,
 } from '../src/structure.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
 import {
   invokeThunk,
 } from '../src/method.js';
+import { Environment } from '../src/environment.js'
+const {
+  beginStructure,
+  attachMember,
+  attachMethod,
+  attachTemplate,
+  finalizeStructure,
+} = Environment.prototype;
 
 describe('Method functions', function() {
   describe('invokeThunk', function() {

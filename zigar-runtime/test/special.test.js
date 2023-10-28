@@ -6,9 +6,6 @@ import {
   useArray,
   useSlice,
   useStruct,
-  beginStructure,
-  attachMember,
-  finalizeStructure,
 } from '../src/structure.js';
 import {
   MemberType,
@@ -30,6 +27,12 @@ import {
   getDataViewFromUTF8,
   getDataViewFromTypedArray,
 } from '../src/special.js';
+import { Environment } from '../src/environment.js'
+const {
+  beginStructure,
+  attachMember,
+  finalizeStructure,
+} = Environment.prototype;
 
 describe('Special property functions', function() {
   beforeEach(() => {

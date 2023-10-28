@@ -7,11 +7,14 @@ import {
 import {
   StructureType,
   useErrorSet,
+} from '../src/structure.js';
+import { initializeErrorSets } from '../src/error-set.js';
+import { Environment } from '../src/environment.js'
+const {
   beginStructure,
   attachMember,
   finalizeStructure,
-} from '../src/structure.js';
-import { initializeErrorSets } from '../src/error-set.js';
+} = Environment.prototype;
 
 describe('Error set functions', function() {
   describe('finalizeErrorSet', function() {

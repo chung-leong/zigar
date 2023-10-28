@@ -13,10 +13,13 @@ import {
   useStruct,
   usePointer,
   usePrimitive,
+} from '../src/structure.js';
+import { Environment } from '../src/environment.js'
+const {
   beginStructure,
   attachMember,
   finalizeStructure,
-} from '../src/structure.js';
+} = Environment.prototype;
 
 describe('ArgStruct functions', function() {
   describe('finalizeArgStruct', function() {

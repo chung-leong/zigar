@@ -15,15 +15,16 @@ import {
   useStruct,
   usePointer,
   useSlice,
-  beginStructure,
-  attachMember,
-  finalizeStructure,
 } from '../src/structure.js';
 import { initializeErrorSets } from '../src/error-set.js';
 import { CHILD_VIVIFICATOR, MEMORY, SLOTS } from '../src/symbol.js';
-import {
-  getErrorUnionAccessors,
-} from '../src/error-union.js';
+import { getErrorUnionAccessors } from '../src/error-union.js';
+import { Environment } from '../src/environment.js'
+const {
+  beginStructure,
+  attachMember,
+  finalizeStructure,
+} = Environment.prototype;
 
 describe('Error union functions', function() {
   describe('finalizeErrorUnion', function() {

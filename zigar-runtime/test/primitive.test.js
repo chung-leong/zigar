@@ -7,15 +7,18 @@ import {
 import {
   StructureType,
   usePrimitive,
-  beginStructure,
-  attachMember,
-  finalizeStructure,
 } from '../src/structure.js';
 import {
   getIntRange,
   getPrimitiveClass,
   isExtendedType,
 } from '../src/primitive.js';
+import { Environment } from '../src/environment.js'
+const {
+  beginStructure,
+  attachMember,
+  finalizeStructure,
+} = Environment.prototype;
 
 describe('Primitive functions', function() {
   describe('finalizePrimitive', function() {

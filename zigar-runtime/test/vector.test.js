@@ -10,10 +10,13 @@ import {
   StructureType,
   useVector,
   useArray,
+} from '../src/structure.js';
+import { Environment } from '../src/environment.js'
+const {
   beginStructure,
   attachMember,
   finalizeStructure,
-} from '../src/structure.js';
+} = Environment.prototype;
 
 describe('Vector functions', function() {
   describe('finalizeVector', function() {
