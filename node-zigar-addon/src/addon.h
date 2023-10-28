@@ -122,7 +122,8 @@ struct Callbacks {
   Result (*allocate_memory)(Call*, size_t, uint8_t, Memory*);
   Result (*free_memory)(Call*, const Memory&, uint8_t);
   Result (*create_view)(Call*, const Memory&, Local<DataView>*);
-  Result (*create_object)(Call*, Local<Object>, Local<DataView>, Local<Object>*);
+  Result (*cast_view)(Call*, Local<Object>, Local<DataView>, Local<Object>*);
+  Result (*create_object)(Call*, Local<Object>, Local<Value>, Local<Object>*);
   Result (*read_slot)(Call*, Local<Object>, size_t, Local<Value>*);
   Result (*write_slot)(Call*, Local<Object>, size_t, Local<Value>);
   Result (*begin_structure)(Call*, const Structure&, Local<Object>*);

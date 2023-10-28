@@ -97,13 +97,28 @@ static Result CreateView(Call* call,
   return Result::OK;
 }
 
+static Result CastView(Call* call,
+                       Local<Object> structure,
+                       Local<DataView> dv,
+                       Local<Object>* dest) {
+  auto isolate = call->isolate;
+  auto fname = String::NewFromUtf8Literal(isolate, "castView");
+  Local<Value> args[] = { structure, dv };
+  Local<Value> result;
+  if (CallFunction(call, fname, 2, args, &result) != Result::OK || !result->IsObject()) {
+    return Result::Failure;
+  }
+  *dest = result.As<Object>();
+  return Result::OK;
+}
+
 static Result CreateObject(Call* call,
                            Local<Object> structure,
-                           Local<DataView> dv,
+                           Local<Value> arg,
                            Local<Object>* dest) {
   auto isolate = call->isolate;
   auto fname = String::NewFromUtf8Literal(isolate, "createObject");
-  Local<Value> args[] = { structure, dv };
+  Local<Value> args[] = { structure, arg };
   Local<Value> result;
   if (CallFunction(call, fname, 2, args, &result) != Result::OK || !result->IsObject()) {
     return Result::Failure;
@@ -450,6 +465,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   callbacks->allocate_memory = AllocateMemory;
   callbacks->free_memory = FreeMemory;
   callbacks->create_view = CreateView;
+  callbacks->cast_view = CastView;
   callbacks->create_object = CreateObject;
   callbacks->read_slot = ReadSlot;
   callbacks->write_slot = WriteSlot;
