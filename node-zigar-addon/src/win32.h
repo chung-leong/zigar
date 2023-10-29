@@ -1,4 +1,6 @@
 #include <windows.h>
+#define RTLD_LAZY   0
+#define RTLD_NOW    0
 
 inline void* dlopen(const char* filename, int flags) {
   return reinterpret_cast<void*>(LoadLibraryA(filename));

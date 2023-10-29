@@ -429,7 +429,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
 
   // load the shared library
 	String::Utf8Value path(isolate, info[0]);
-  void* handle = dlopen(*path, RTLD_LAZY);
+  void* handle = dlopen(*path, RTLD_NOW);
   if (!handle) {
     Throw("Unable to load shared library");
     return;
