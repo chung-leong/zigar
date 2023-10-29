@@ -429,22 +429,14 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
 
   // load the shared library
 	String::Utf8Value path(isolate, info[0]);
-  #ifdef WIN32
-  HMODULE handle = LoadLibraryA(*path);
-  #else
   void* handle = dlopen(*path, RTLD_LAZY);
-  #endif
   if (!handle) {
     Throw("Unable to load shared library");
     return;
   }
 
   // find the zig module
-  #ifdef WIN32
-  FARPROC symbol = GetProcAddress(handle, "zig_module");
-  #else
   void* symbol = dlsym(handle, "zig_module");
-  #endif
   if (!symbol) {
     Throw("Unable to find the symbol \"zig_module\"");
     return;
