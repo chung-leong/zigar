@@ -320,8 +320,7 @@ static Result WriteToConsole(Call* call,
 static Result FlushConsole(Call* call) {
   auto isolate = call->isolate;
   auto name = String::NewFromUtf8Literal(isolate, "flushConsole");
-  Local<Value> args[] = {};
-  return CallFunction(call, name, 0, args);
+  return CallFunction(call, name, 0, nullptr);
 }
 
 static MaybeLocal<Value> LoadJavaScript(Isolate* isolate,
@@ -430,14 +429,22 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
 
   // load the shared library
 	String::Utf8Value path(isolate, info[0]);
+  #ifdef WIN32
+  HMODULE handle = LoadLibraryA(*path);
+  #else
   void* handle = dlopen(*path, RTLD_LAZY);
+  #endif
   if (!handle) {
     Throw("Unable to load shared library");
     return;
   }
 
   // find the zig module
+  #ifdef WIN32
+  FARPROC symbol = GetProcAddress(handle, "zig_module");
+  #else
   void* symbol = dlsym(handle, "zig_module");
+  #endif
   if (!symbol) {
     Throw("Unable to find the symbol \"zig_module\"");
     return;
@@ -491,7 +498,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   OverrideEnvironmentFunctions(isolate, env_constructor, mde);
 
   // invoke the factory thunk through JavaScript
-  auto fd = new FunctionData(isolate, module->factory, MethodAttributes{ .has_pointer = false }, mde);
+  auto fd = new FunctionData(isolate, module->factory, MethodAttributes{ false }, mde);
   auto fde = Local<External>::New(isolate, fd->external);
   auto ff = CreateThunk(isolate, fd);
   auto env = env_constructor->CallAsConstructor(context, 0, nullptr).ToLocalChecked().As<Object>();

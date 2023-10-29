@@ -2,7 +2,7 @@ R"=====(
 ((function (exports) {
   'use strict';
 
-  const MEMORY$1 = Symbol('memory');
+  const MEMORY = Symbol('memory');
   const SLOTS = Symbol('slots');
   const PARENT = Symbol('parent');
   const ENUM_NAME = Symbol('enumName');
@@ -20,7 +20,7 @@ R"=====(
   const CHILD_VIVIFICATOR = Symbol('childVivificator');
   const POINTER_VISITOR = Symbol('pointerVisitor');
   const RELEASE_THUNK = Symbol('releaseThunk');
-  const ENVIROMENT$1 = Symbol('environment');
+  const ENVIROMENT = Symbol('environment');
 
   function getBitAlignFunction(bitPos, bitSize, toAligned) {
     if (bitPos + bitSize <= 8) {
@@ -360,7 +360,7 @@ R"=====(
     } else if (tag === 'Uint8Array' && typeof(Buffer) === 'function' && arg instanceof Buffer) {
       dv = new DataView(arg.buffer, arg.byteOffset, arg.byteLength);
     } else {
-      const memory = arg?.[MEMORY$1];
+      const memory = arg?.[MEMORY];
       if (memory && (type === StructureType.Array || type === StructureType.Slice || type === StructureType.Vector)) {
         const { instance: { members: [ member ] } } = structure;
         const { byteSize: elementSize, structure: { constructor: Child } } = member;
@@ -990,12 +990,12 @@ R"=====(
     return {
       get() {
         restoreMemory.call(this);
-        return this[MEMORY$1];
+        return this[MEMORY];
       },
       set(dv) {
         checkDataView(dv);
         restoreMemory.call(this);
-        const dest = this[MEMORY$1];
+        const dest = this[MEMORY];
         if (dest.byteLength !== dv.byteLength) {
           throwBufferSizeMismatch(structure, dv, this);
         }
@@ -1159,7 +1159,7 @@ R"=====(
         self = Object.create(constructor.prototype);
         dv = requireDataView(s, arg);
       }
-      self[MEMORY$1] = dv;
+      self[MEMORY] = dv;
       if (creating) {
         initializer.call(self, arg);
       } else {
@@ -1172,7 +1172,7 @@ R"=====(
       if (arg instanceof constructor) {
         restoreMemory.call(this);
         restoreMemory.call(arg);
-        copy(this[MEMORY$1], arg[MEMORY$1]);
+        copy(this[MEMORY], arg[MEMORY]);
       } else {
         if (arg && typeof(arg) === 'object') {
           for (const key of Object.keys(arg)) {
@@ -1278,7 +1278,7 @@ R"=====(
       structure: usizeStructure,
     }, options).set : null;
     const constructor = s.constructor = function(arg) {
-      const calledFromZig = this?.[ENVIROMENT$1] ?? false;
+      const calledFromZig = this?.[ENVIROMENT] ?? false;
       const calledFromParent = (this === PARENT);
       let creating = this instanceof constructor;
       let self, dv;
@@ -1306,7 +1306,7 @@ R"=====(
           }
         }
       }
-      self[MEMORY$1] = dv;
+      self[MEMORY] = dv;
       self[SLOTS] = { 0: null };
       if (creating) {
         initializer.call(self, arg);
@@ -1426,7 +1426,7 @@ R"=====(
 
   function inFixedMemory(arg) {
     {
-      return arg?.[MEMORY$1]?.buffer?.[MEMORY$1];
+      return arg?.[MEMORY]?.buffer?.[MEMORY];
     }
   }
 
@@ -1444,7 +1444,7 @@ R"=====(
     constructor: true,
     valueOf: true,
     [SLOTS]: true,
-    [MEMORY$1]: true,
+    [MEMORY]: true,
     [PROXY]: true,
     [POINTER_VISITOR]: true,
     [Symbol.toStringTag]: true,
@@ -1540,7 +1540,7 @@ R"=====(
         self = Object.create(constructor.prototype);
         dv = requireDataView(s, arg);
       }
-      self[MEMORY$1] = dv;
+      self[MEMORY] = dv;
       self[GETTER] = null;
       self[SETTER] = null;
       if (hasObject) {
@@ -1558,7 +1558,7 @@ R"=====(
       if (arg instanceof constructor) {
         restoreMemory.call(this);
         restoreMemory.call(arg);
-        copy(this[MEMORY$1], arg[MEMORY$1]);
+        copy(this[MEMORY], arg[MEMORY]);
         if (hasPointer) {
           this[POINTER_VISITOR](true, arg, copyPointer);
         }
@@ -1634,7 +1634,7 @@ R"=====(
       let object = this[SLOTS][index];
       if (!object) {
         const { constructor } = structure;
-        const dv = this[MEMORY$1];
+        const dv = this[MEMORY];
         const parentOffset = dv.byteOffset;
         const offset = parentOffset + byteSize * index;
         const childDV = new DataView(dv.buffer, offset, byteSize);
@@ -1871,7 +1871,7 @@ R"=====(
         self = Object.create(constructor.prototype);
         dv = getDataView(s, arg);
       }
-      self[MEMORY$1] = dv;
+      self[MEMORY] = dv;
       Object.defineProperties(self, descriptors);
       if (hasObject) {
         self[SLOTS] = {};
@@ -1889,7 +1889,7 @@ R"=====(
       if (arg instanceof constructor) {
         restoreMemory.call(this);
         restoreMemory.call(arg);
-        copy(this[MEMORY$1], arg[MEMORY$1]);
+        copy(this[MEMORY], arg[MEMORY]);
         if (hasPointer) {
           this[POINTER_VISITOR](true, arg, copyPointer);
         }
@@ -1909,7 +1909,7 @@ R"=====(
             }
           }
           let specialFound = 0;
-          if (!arg[MEMORY$1]) {
+          if (!arg[MEMORY]) {
             // only look for special keys in non-zigar objects
             for (const key of specialKeys) {
               if (key in arg) {
@@ -1928,7 +1928,7 @@ R"=====(
           }
           // apply default values unless all properties are initialized
           if (template && specialFound === 0 && found < keys.length) {
-            copy(this[MEMORY$1], template[MEMORY$1]);
+            copy(this[MEMORY], template[MEMORY]);
             if (hasPointer) {
               this[POINTER_VISITOR](true, template, copyPointer);
             }
@@ -1977,7 +1977,7 @@ R"=====(
         let object = this[SLOTS][slot];
         if (!object) {
           const { constructor } = structure;
-          const dv = this[MEMORY$1];
+          const dv = this[MEMORY];
           const parentOffset = dv.byteOffset;
           const offset = parentOffset + (bitOffset >> 3);
           const childDV = new DataView(dv.buffer, offset, byteSize);
@@ -2126,7 +2126,7 @@ R"=====(
         self = Object.create(constructor.prototype);
         dv = getDataView(s, arg);
       }
-      self[MEMORY$1] = dv;
+      self[MEMORY] = dv;
       if (isTagged) {
         // don't know the TAG property in the console, since it's not always up-to-date
         Object.defineProperties(self, TAG, { value: null, writable: true });
@@ -2155,7 +2155,7 @@ R"=====(
       if (arg instanceof constructor) {
         restoreMemory.call(this);
         restoreMemory.call(arg);
-        copy(this[MEMORY$1], arg[MEMORY$1]);
+        copy(this[MEMORY], arg[MEMORY]);
         if (hasPointer) {
           this[POINTER_VISITOR](true, arg, copyPointer);
         }
@@ -2169,7 +2169,7 @@ R"=====(
             }
           }
           let specialFound = 0;
-          if (!arg[MEMORY$1]) {
+          if (!arg[MEMORY]) {
             for (const key of specialKeys) {
               if (key in arg) {
                 specialFound++;
@@ -2200,7 +2200,7 @@ R"=====(
           } else if (found === 0) {
             if (template) {
               restoreMemory.call(this);
-              copy(this[MEMORY$1], template[MEMORY$1]);
+              copy(this[MEMORY], template[MEMORY]);
               if (hasPointer) {
                 this[POINTER_VISITOR](true, template, copyPointer);
               }
@@ -2240,7 +2240,7 @@ R"=====(
     ownKeys(union) {
       const item = union[ENUM_ITEM];
       const name = item[ENUM_NAME];
-      return [ name, MEMORY$1 ];
+      return [ name, MEMORY ];
     },
   };
 
@@ -2265,7 +2265,7 @@ R"=====(
         self = Object.create(constructor.prototype);
         dv = requireDataView(s, arg);
       }
-      self[MEMORY$1] = dv;
+      self[MEMORY] = dv;
       if (hasObject) {
         self[SLOTS] = {};
       }
@@ -2278,7 +2278,7 @@ R"=====(
     const copy = getMemoryCopier(byteSize);
     const initializer = function(arg) {
       if (arg instanceof constructor) {
-        copy(this[MEMORY$1], arg[MEMORY$1]);
+        copy(this[MEMORY], arg[MEMORY]);
         if (hasPointer) {
           if (check.call(this)) {
             this[POINTER_VISITOR](true, arg, copyPointer);
@@ -2325,7 +2325,7 @@ R"=====(
           if (!(value instanceof ErrorSet)) {
             throwNotInErrorSet(errorStructure);
           }
-          reset(this[MEMORY$1]);
+          reset(this[MEMORY]);
           setError.call(this, value.index);
           this[POINTER_VISITOR]?.(false, null, resetPointer);
         } else {
@@ -2464,7 +2464,7 @@ R"=====(
     // attach the numeric values to the class as its binary data
     // this allows us to reuse the array getter
     Object.defineProperties(constructor, {
-      [MEMORY$1]: { value: template[MEMORY$1] },
+      [MEMORY]: { value: template[MEMORY] },
       [ENUM_ITEMS]: { value: items },
     });
     const valueOf = function() {
@@ -2531,7 +2531,7 @@ R"=====(
         self = Object.create(constructor.prototype);
         dv = requireDataView(s, arg);
       }
-      self[MEMORY$1] = dv;
+      self[MEMORY] = dv;
       if (hasObject) {
         self[SLOTS] = {};
       }
@@ -2546,7 +2546,7 @@ R"=====(
       if (arg instanceof constructor) {
         restoreMemory.call(this);
         restoreMemory.call(arg);
-        copy(this[MEMORY$1], arg[MEMORY$1]);
+        copy(this[MEMORY], arg[MEMORY]);
         if (hasPointer) {
           // don't bother copying pointers when it's empty
           if (check.call(this)) {
@@ -2588,7 +2588,7 @@ R"=====(
           setPresent.call(this, true);
           setValue.call(this, value);
         } else {
-          reset(this[MEMORY$1]);
+          reset(this[MEMORY]);
           this[POINTER_VISITOR]?.(false, null, resetPointer);
         }
       },
@@ -2637,7 +2637,7 @@ R"=====(
       if (!dv) {
         dv = new DataView(new ArrayBuffer(length * elementSize));
       }
-      this[MEMORY$1] = dv;
+      this[MEMORY] = dv;
       this[GETTER] = null;
       this[SETTER] = null;
       this[LENGTH] = length;
@@ -2653,7 +2653,7 @@ R"=====(
     // the initializer behave differently depending on whether it's called  by the
     // constructor or by a member setter (i.e. after object's shape has been established)
     const initializer = function(arg) {
-      let shapeless = !this.hasOwnProperty(MEMORY$1);
+      let shapeless = !this.hasOwnProperty(MEMORY);
       if (arg instanceof constructor) {
         if (shapeless) {
           shapeDefiner.call(this, null, arg.length);
@@ -2662,7 +2662,7 @@ R"=====(
         }
         restoreMemory.call(this);
         restoreMemory.call(arg);
-        copy(this[MEMORY$1], arg[MEMORY$1]);
+        copy(this[MEMORY], arg[MEMORY]);
         if (hasPointer) {
           this[POINTER_VISITOR](true, arg, copyPointer);
         }
@@ -2676,7 +2676,7 @@ R"=====(
             arg = [ ...arg ];
             argLen = arg.length;
           }
-          if (!this[MEMORY$1]) {
+          if (!this[MEMORY]) {
             shapeDefiner.call(this, null, argLen);
           } else {
             shapeChecker.call(this, arg, argLen);
@@ -2734,7 +2734,7 @@ R"=====(
                 sentinel?.validateData(dv, length);
                 if (dup) {
                   shapeDefiner.call(this, null, length);
-                  copy(this[MEMORY$1], dv);
+                  copy(this[MEMORY], dv);
                 } else {
                   // reuse memory from string decoding
                   shapeDefiner.call(this, dv, length);
@@ -2802,7 +2802,7 @@ R"=====(
       }
     };
     const validateData = (runtimeSafety) ? function(dv, l) {
-      const object = { [MEMORY$1]: dv };
+      const object = { [MEMORY]: dv };
       for (let i = 0; i < l; i++) {
         const v = get.call(object, i);
         if (v === value && i !== l - 1) {
@@ -2812,7 +2812,7 @@ R"=====(
         }
       }
     } : function(dv, l) {
-      const object = { [MEMORY$1]: dv };
+      const object = { [MEMORY]: dv };
       if (l > 0) {
         const i = l - 1;
         const v = get.call(object, i);
@@ -2847,7 +2847,7 @@ R"=====(
         self = Object.create(constructor.prototype);
         dv = requireDataView(s, arg);
       }
-      self[MEMORY$1] = dv;
+      self[MEMORY] = dv;
       if (creating) {
         initializer.call(self, arg);
       } else {
@@ -2860,7 +2860,7 @@ R"=====(
       if (arg instanceof constructor) {
         restoreMemory.call(this);
         restoreMemory.call(arg);
-        copy(this[MEMORY$1], arg[MEMORY$1]);
+        copy(this[MEMORY], arg[MEMORY]);
       } else {
         if (arg?.[Symbol.iterator]) {
           let argLen = arg.length;
@@ -2954,7 +2954,7 @@ R"=====(
     const hasObject = !!members.find(m => m.type === MemberType.Object);
     const constructor = s.constructor = function(args) {
       const dv = new DataView(new ArrayBuffer(byteSize));
-      this[MEMORY$1] = dv;
+      this[MEMORY] = dv;
       if (hasObject) {
         this[SLOTS] = {};
       }
@@ -3067,7 +3067,7 @@ R"=====(
 
   function getStructureName(s, full = false) {
     let r = s.name;
-    if (short) {
+    if (!full) {
       r = r.replace(/{.*}/, '');
       r = r.replace(/[^. ]*?\./g, '');
     }
@@ -3309,11 +3309,11 @@ R"=====(
       {
         if (access === 'get') {
           return function() {
-            return accessor.call(this[MEMORY$1], offset, littleEndian);
+            return accessor.call(this[MEMORY], offset, littleEndian);
           };
         } else {
           return function(value) {
-            return accessor.call(this[MEMORY$1], offset, value, littleEndian);
+            return accessor.call(this[MEMORY], offset, value, littleEndian);
           }
         }
       }
@@ -3322,7 +3322,7 @@ R"=====(
         if (access === 'get') {
           return function(index) {
             try {
-              return accessor.call(this[MEMORY$1], index * byteSize, littleEndian);
+              return accessor.call(this[MEMORY], index * byteSize, littleEndian);
             } catch (err) {
               rethrowRangeError(member, index, err);
             }
@@ -3330,7 +3330,7 @@ R"=====(
         } else {
           return function(index, value) {
             try {
-              return accessor.call(this[MEMORY$1], index * byteSize, value, littleEndian);
+              return accessor.call(this[MEMORY], index * byteSize, value, littleEndian);
             } catch (err) {
               rethrowRangeError(member, index, err);
             }
@@ -3643,13 +3643,23 @@ R"=====(
     }
   }
 
+  let decoder;
+
+  function decodeText(data, encoding = 'utf-8') {
+    if (!decoder) {
+      decoder = new TextDecoder;
+    }
+    return decoder.decode(data);
+  }
+
   const default_alignment = 16;
   const globalSlots = {};
-  const consolePending = '';
-  const consoleTimeout = 0;
+
+  let consolePending = '';
+  let consoleTimeout = 0;
 
   class Environment {
-    memoryMap = null;
+    memoryPool = null;
 
     getAddress(buffer) {}
     obtainView(address, len) {}
@@ -3669,6 +3679,9 @@ R"=====(
       return dv;
     }
 
+    freeMemory(address, len, ptrAlign) {
+    }
+
     createView(address, len, ptrAlign, copy) {
       if (copy) {
         const dv = this.allocMemory(len, ptrAlign);
@@ -3679,20 +3692,26 @@ R"=====(
       }
     }
 
-    createObject(structure, dv) {
+    castView(structure, dv) {
       const { constructor } = structure;
-      return constructor(dv);
+      return constructor.call(this, dv);
+    }
+
+    createObject(structure, arg) {
+      const { constructor } = structure;
+      return new constructor(arg);
     }
 
     readSlot(target, slot) {
-      const slots = target ? targets[SLOTS] : globalSlots;
-      return slots[slot];
+      const slots = target ? target[SLOTS] : globalSlots;
+      return slots?.[slot];
     }
 
     writeSlot(target, slot, value) {
-      const slots = target ? targets[SLOTS] : globalSlots;
-      slots[slot] = value;
-      return true;
+      const slots = target ? target[SLOTS] : globalSlots;
+      if (slots) {
+        slots[slot] = value;
+      }
     }
 
     createTemplate(dv) {
@@ -3963,13 +3982,13 @@ R"=====(
         return;
       }
       released.set(obj, true);
-      const dv = obj[MEMORY$1];
+      const dv = obj[MEMORY];
       if (dv.buffer instanceof SharedArrayBuffer) {
         // create new buffer and copy content from shared memory
         const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
         const ta2 = new Uint8Array(ta);
         const dv2 = new DataView(ta2.buffer);
-        obj[MEMORY$1] = dv2;
+        obj[MEMORY] = dv2;
       }
       obj[SLOTS];
     };

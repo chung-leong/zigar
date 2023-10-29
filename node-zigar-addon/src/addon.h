@@ -1,5 +1,9 @@
 #include <node.h>
-#include <dlfcn.h>
+#ifdef WIN32
+  #include <windows.h>
+#else
+  #include <dlfcn.h>
+#endif 
 
 #if defined(__GNUC__) && __GNUC__ >= 8
 #define DISABLE_WCAST_FUNCTION_TYPE _Pragma("GCC diagnostic push") _Pragma("GCC diagnostic ignored \"-Wcast-function-type\"")
@@ -163,13 +167,21 @@ struct AddonData : public ExternalData {
 
 struct ModuleData : public ExternalData {
   static int count;
+#ifdef WIN32
+  HMODULE so_handle;
+#else
   void* so_handle;
+#endif  
   Global<Object> js_options;
   Global<Object> global_slots;
   Global<External> addon_data;
 
   ModuleData(Isolate* isolate,
-             void* so_handle,
+#ifdef WIN32
+             HMODULE so_handle,
+#else
+             void* so_handle;
+#endif  
              Local<Object> js_options,
              Local<External> addon_data) :
     ExternalData(isolate),
@@ -181,7 +193,11 @@ struct ModuleData : public ExternalData {
   }
 
   ~ModuleData() {
+#ifdef WIN32
+    FreeLibrary(so_handle);
+#else
     dlclose(so_handle);
+#endif    
     count--;
   }
 };
