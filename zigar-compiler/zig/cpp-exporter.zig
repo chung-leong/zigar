@@ -61,23 +61,33 @@ pub const Host = struct {
         }
     }
 
-    pub fn createView(self: Host, memory: Memory) !Value {
+    pub fn createString(self: Host, memory: Memory) !Value {
         var value: Value = undefined;
-        if (callbacks.create_view(self.context, &memory, &value) != .OK) {
+        if (callbacks.create_string(self.context, &memory, &value) != .OK) {
             return Error.UnableToCreateObject;
         }
         return value;
     }
 
-    pub fn copyBytes(self: Host, memory: Memory, dest: Value) !void {
-        if (callbacks.copy_bytes(self.context, &memory, &value) != .OK) {
+    pub fn createObject(self: Host, structure: Value, arg: Value) !Value {
+        var value: Value = undefined;
+        if (callbacks.create_object(self.context, structure, arg, &value) != .OK) {
             return Error.UnableToCreateObject;
         }
+        return value;
     }
 
-    pub fn createObject(self: Host, structure: Value, dv: Value) !Value {
+    pub fn createView(self: Host, memory: Memory) !Value {
         var value: Value = undefined;
-        if (callbacks.create_object(self.context, structure, &mem, &value) != .OK) {
+        if (callbacks.create_view(self.context, &memory, &value) != .OK) {
+            return Error.UnableToCreateDataView;
+        }
+        return value;
+    }
+
+    pub fn castView(self: Host, structure: Value, dv: Value) !Value {
+        var value: Value = undefined;
+        if (callbacks.cast_view(self.context, structure, dv, &value) != .OK) {
             return Error.UnableToCreateObject;
         }
         return value;
@@ -133,13 +143,9 @@ pub const Host = struct {
         }
     }
 
-    pub fn createTemplate(self: Host, bytes: []u8) !Value {
-        const memory: Memory = .{
-            .bytes = if (bytes.len > 0) bytes.ptr else null,
-            .len = bytes.len,
-        };
+    pub fn createTemplate(self: Host, dv: ?Value) !Value {
         var value: Value = undefined;
-        if (callbacks.create_template(self.context, &memory, &value) != .OK) {
+        if (callbacks.create_template(self.context, dv, &value) != .OK) {
             return Error.UnableToCreateStructureTemplate;
         }
         return value;
@@ -164,8 +170,10 @@ pub const Host = struct {
 const Callbacks = extern struct {
     allocate_memory: *const fn (Call, usize, u8, *Memory) callconv(.C) Result,
     free_memory: *const fn (Call, *const Memory, u8) callconv(.C) Result,
-    create_view: *const fn (Call, Value, *const Memory, *Value) Result,
+    create_string: *const fn (Call, *const Memory, *Value) Result,
     create_object: *const fn (Call, Value, Value, *Value) Result,
+    create_view: *const fn (Call, *const Memory, *Value) Result,
+    cast_view: *const fn (Call, Value, Value, *Value) Result,
     read_slot: *const fn (Call, ?Value, usize, *Value) callconv(.C) Result,
     write_slot: *const fn (Call, ?Value, usize, ?Value) callconv(.C) Result,
     begin_structure: *const fn (Call, *const Structure, *Value) callconv(.C) Result,
@@ -173,7 +181,7 @@ const Callbacks = extern struct {
     attach_method: *const fn (Call, Value, *const Method, bool) callconv(.C) Result,
     attach_template: *const fn (Call, Value, Value, bool) callconv(.C) Result,
     finalize_structure: *const fn (Call, Value) callconv(.C) Result,
-    create_template: *const fn (Call, Value, *Value) callconv(.C) Result,
+    create_template: *const fn (Call, ?Value, *Value) callconv(.C) Result,
     write_to_console: *const fn (Call, *const Memory) callconv(.C) Result,
     flush_console: *const fn (Call) callconv(.C) Result,
 };

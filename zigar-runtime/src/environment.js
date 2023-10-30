@@ -186,4 +186,3 @@ function getExtraCount(ptrAlign) {
   const alignment = (1 << ptrAlign);
   return (alignment <= default_alignment) ? 0 : alignment;
 }
-

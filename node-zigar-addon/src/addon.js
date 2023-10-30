@@ -1,5 +1,4 @@
 import { RELEASE_THUNK, SLOTS, CHILD_VIVIFICATOR, MEMORY } from '../../zigar-runtime/src/symbol.js';
-import { invokeThunk } from '../../zigar-runtime/src/method.js';
 import {
   useVoid,
   useBoolEx,
@@ -28,6 +27,8 @@ import {
   useOpaque,
 } from '../../zigar-runtime/src/structure.js';
 import { initializeErrorSets } from '../../zigar-runtime/src/error-set.js';
+import { throwZigError } from '../../zigar-runtime/src/error.js';
+import { Environment } from '../../zigar-runtime/src/environment.js';
 
 // enable all member types (including extend types)
 useVoid();
@@ -56,11 +57,15 @@ useSlice();
 useVector();
 useOpaque();
 
-export function invokeFactory(thunk) {
+Environment.prototype.invokeFactory = function(thunk) {
   initializeErrorSets();
-  const args = { [SLOTS]: {} };
-  invokeThunk(thunk, args);
-  let module = args[SLOTS][0].constructor;
+  const env = new Environment;
+  const result = thunk.call(env);
+  if (typeof(result) === 'string') {
+    // an error message
+    throwZigError(result);
+  }
+  let module = result.constructor;
   // attach __zigar object
   const initPromise = Promise.resolve();
   module.__zigar = {
@@ -74,7 +79,7 @@ export function invokeFactory(thunk) {
     released: () => initPromise.then(() => !module),
   };
   return module;
-}
+};
 
 function releaseModule(module) {
   const released = new Map();
@@ -149,4 +154,4 @@ function releaseModule(module) {
   releaseClass(module);
 }
 
-export { Environment } from '../../zigar-runtime/src/environment.js';
+export { Environment };

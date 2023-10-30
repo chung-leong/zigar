@@ -11,6 +11,7 @@ pub const Error = error{
     UnableToAllocateMemory,
     UnableToFreeMemory,
     UnableToRetrieveMemoryLocation,
+    UnableToCreateDataView,
     UnableToCreateObject,
     UnableToFindObjectType,
     UnableToSetObjectType,
@@ -126,7 +127,7 @@ pub const MemberType = enum(u32) {
 };
 
 pub const Value = *opaque {};
-pub const Thunk = *const fn (ptr: *anyopaque, args: Value) callconv(.C) ?[*:0]const u8;
+pub const Thunk = *const fn (ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value;
 
 pub const Structure = extern struct {
     name: ?[*:0]const u8 = null,
@@ -152,17 +153,16 @@ pub const Member = extern struct {
 };
 
 pub const MemoryAttributes = packed struct {
-    ptr_align: u8,
-    is_const: bool,
-    is_comptime: bool,
+    ptr_align: u8 = 0,
+    is_const: bool = false,
+    is_comptime: bool = false,
     _: u22 = 0,
 };
 
 pub const Memory = extern struct {
     bytes: ?[*]u8 = null,
     len: usize = 0,
-    attributes: MemoryAttributes,
-    disposition: MemoryDisposition,
+    attributes: MemoryAttributes = .{},
 };
 
 pub const MethodAttributes = packed struct {
@@ -546,12 +546,12 @@ test "fromMemory" {
     assert(@typeInfo(@TypeOf(p4)).Pointer.size == .C);
 }
 
-pub fn toMemory(pointer: anytype) Memory {
-    const PtrT = @TypeOf(pointer);
+pub fn toMemory(ptr: anytype, is_comptime: bool) Memory {
+    const PtrT = @TypeOf(ptr);
     const pt = @typeInfo(PtrT).Pointer;
     const address = switch (pt.size) {
-        .Slice => @intFromPtr(pointer.ptr),
-        else => @intFromPtr(pointer),
+        .Slice => @intFromPtr(ptr.ptr),
+        else => @intFromPtr(ptr),
     };
     const invalid_address = create: {
         var invalid_ptr: *u8 = undefined;
@@ -562,10 +562,10 @@ pub fn toMemory(pointer: anytype) Memory {
     }
     const len = switch (pt.size) {
         .One => @sizeOf(pt.child),
-        .Slice => @sizeOf(pt.child) * pointer.len,
+        .Slice => @sizeOf(pt.child) * ptr.len,
         .Many => if (getSentinel(PtrT)) |sentinel| find: {
             var len: usize = 0;
-            while (pointer[len] != sentinel) {
+            while (ptr[len] != sentinel) {
                 len += 1;
             }
             break :find (len + 1) * @sizeOf(pt.child);
@@ -575,26 +575,34 @@ pub fn toMemory(pointer: anytype) Memory {
     return .{
         .bytes = @ptrFromInt(address),
         .len = len,
+        .attributes = .{
+            .is_const = pt.is_const,
+            .is_comptime = is_comptime,
+        },
     };
 }
 
 test "toMemory" {
-    const a: i32 = 1234;
-    const memA = toMemory(&a);
+    var a: i32 = 1234;
+    const memA = toMemory(&a, false);
     const b: []const u8 = "Hello";
-    const memB = toMemory(b);
+    const memB = toMemory(b, false);
     const c: [*]const u8 = b.ptr;
-    const memC = toMemory(c);
+    const memC = toMemory(c, true);
     const d: [*c]const u8 = b.ptr;
-    const memD = toMemory(d);
+    const memD = toMemory(d, false);
     const e = &b;
-    const memE = toMemory(e);
+    const memE = toMemory(e, false);
     const f: [*:0]const u8 = "Hello";
-    const memF = toMemory(f);
+    const memF = toMemory(f, false);
     assert(memA.len == 4);
+    assert(memA.attributes.is_const == false);
     assert(memB.len == 5);
+    assert(memB.attributes.is_const == true);
     assert(memC.len == 0);
+    assert(memC.attributes.is_comptime == true);
     assert(memD.len == 0);
+    assert(memD.attributes.is_const == true);
     assert(memE.len == @sizeOf(@TypeOf(b)));
     assert(memF.len == 6);
 }
@@ -646,7 +654,7 @@ test "getPtrAlign" {
 // and https://github.com/ziglang/zig/issues/2971 has not been fully resolved yet
 fn getStructure(host: anytype, comptime T: type) Error!Value {
     const s_slot = getStructureSlot(T, .One);
-    return host.readGlobalSlot(s_slot) catch undefined: {
+    return host.readSlot(null, s_slot) catch undefined: {
         const def: Structure = .{
             .name = getStructureName(T),
             .structure_type = getStructureType(T),
@@ -659,7 +667,7 @@ fn getStructure(host: anytype, comptime T: type) Error!Value {
         // create the structure and place it in the slot immediately
         // so that recursive definition works correctly
         const structure = try host.beginStructure(def);
-        try host.writeGlobalSlot(s_slot, structure);
+        try host.writeSlot(null, s_slot, structure);
         // define the shape of the structure
         try addMembers(host, structure, T);
         try addStaticMembers(host, structure, T);
@@ -942,7 +950,7 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
                 .has_pointer = hasPointer(pt.child),
             };
             const slice_structure = try host.beginStructure(slice_def);
-            try host.writeGlobalSlot(slice_slot, slice_structure);
+            try host.writeSlot(null, slice_slot, slice_structure);
             try host.attachMember(slice_structure, .{
                 .member_type = getMemberType(pt.child),
                 .bit_size = @bitSizeOf(pt.child),
@@ -958,8 +966,9 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
                     .byte_size = @sizeOf(pt.child),
                     .structure = child_structure,
                 }, false);
-                var bytes: []u8 = @constCast(std.mem.asBytes(&sentinel));
-                const template = try host.createTemplate(bytes);
+                const memory = toMemory(&sentinel, true);
+                const dv = try host.createView(memory);
+                const template = try host.createTemplate(dv);
                 try host.attachTemplate(slice_structure, template, false);
             }
             try host.finalizeStructure(slice_structure);
@@ -1020,61 +1029,26 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
             }
         }
     }
-    if (!isArgumentStruct(T)) {
+    if (!isArgumentStruct(T) and @sizeOf(T) > 0) {
         // obtain byte array containing data of default values
-        // for some reason Zig sometimes would refuse to allow a var with
-        // comptime fields--strip them out just so we can compile
-        var values: WithoutComptimeFields(T) = undefined;
-        var bytes: []u8 = @constCast(std.mem.asBytes(&values));
-        for (bytes) |*byte_ptr| {
-            byte_ptr.* = 0;
-        }
-        inline for (st.fields) |field| {
-            if (field.default_value) |opaque_ptr| {
-                if (!field.is_comptime) {
-                    // set default value
-                    const typed_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-                    @field(values, field.name) = typed_ptr.*;
-                }
-            }
-        }
-        const template = try host.createTemplate(bytes);
+        var values = std.mem.zeroInit(T, .{});
+        const memory = toMemory(&values, true);
+        const dv = try host.createView(memory);
+        const template = try host.createTemplate(dv);
         inline for (st.fields, 0..) |field, index| {
             if (field.default_value) |opaque_ptr| {
-                if (!field.is_comptime) {
-                    if (hasPointer(field.type)) {
-                        // need to link to default value when it is or contains pointers
-                        const slot = getObjectSlot(T, index);
-                        const child_ptr = &@field(values, field.name);
-                        const child_obj = try obtainChildObject(host, template, slot, child_ptr, .Copy, false);
-                        try dezigStructure(host, child_obj, child_ptr, .Link);
-                    }
-                } else if (field.type != type) {
-                    // comptime members are pointer objects
+                if (field.is_comptime) {
+                    // comptime members aren't stored in the struct's memory
+                    // their values are stored in separate object, which are then
+                    // referred by pointers in the struct template's slots
                     const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-                    // copy the value
-                    const VT = RuntimeType(default_value_ptr.*);
-                    var value: VT = default_value_ptr.*;
-                    const value_memory: Memory = .{
-                        .bytes = @ptrCast(@constCast(&value)),
-                        .len = @sizeOf(VT),
-                    };
-                    const value_dv = try host.createView(ptr_memory);
-                    const value_structure = getStructure(host, VT);
-                    const value_obj = try host.createObject(ptr_structure, ptr_dv);
-
-                    const value_ptr: *const VT = &value;
-                    const ptr_memory: Memory = .{
-                        .bytes = @ptrCast(@constCast(&value_ptr)),
-                        .len = @sizeOf(@TypeOf(value_ptr)),
-                    };
-                    const ptr_dv = try host.createView(ptr_memory);
-                    const ptr_structure = getStructure(host, *const VT);
-                    const ptr_obj = try host.createObject(ptr_structure, ptr_dv);
-
+                    // create a copy of the value
+                    const RT = RuntimeType(default_value_ptr.*);
+                    const value: RT = default_value_ptr.*;
+                    const value_ptr_obj = try exportVariable(host, &value, true);
                     // place the pointer into the member's slot in the template
                     const slot = getObjectSlot(T, index);
-                    try host.writeSlot(template, slot, ptr_obj);
+                    try host.writeSlot(template, slot, value_ptr_obj);
                 }
             }
         }
@@ -1137,8 +1111,9 @@ fn addEnumMember(host: anytype, structure: Value, comptime T: type) !void {
             .structure = try getStructure(host, IT),
         }, false);
     }
-    var bytes: []u8 = @constCast(std.mem.asBytes(&values));
-    const template = try host.createTemplate(bytes);
+    const memory = toMemory(&values, true);
+    const dv = try host.createView(memory);
+    const template = try host.createTemplate(dv);
     try host.attachTemplate(structure, template, false);
 }
 
@@ -1223,12 +1198,9 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
         .Opaque => |op| op.decls,
         else => return,
     };
-    if (decls.len == 0) {
-        return;
-    }
-    var template_maybe: ?Value = null;
-    // a bookmark type for getObjectSlot
-    const Static = opaque {};
+    var variables: [decls.len]?Value = .{null} ** decls.len;
+    var var_structures: [decls.len]?Value = .{null} ** decls.len;
+    comptime var var_count = 0;
     inline for (decls, 0..) |decl, index| {
         const decl_value = @field(T, decl.name);
         const DT = @TypeOf(decl_value);
@@ -1250,7 +1222,7 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
             else => {
                 // get address to variable
                 const decl_ptr = &@field(T, decl.name);
-                var value_ptr = switch (@typeInfo(@TypeOf(decl_value))) {
+                const value_ptr = switch (@typeInfo(@TypeOf(decl_value))) {
                     .ComptimeFloat, .ComptimeInt => get_ptr: {
                         // comptime values need to have a concrete value to point to
                         const value: RuntimeType(decl_value) = decl_value;
@@ -1259,33 +1231,28 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                     else => decl_ptr,
                 };
                 // export variable as pointer
+                variables[index] = try exportVariable(host, value_ptr, isConst(@TypeOf(value_ptr)));
+                var_structures[index] = try getStructure(host, @TypeOf(value_ptr));
+                var_count += 1;
+            },
+        }
+    }
+    if (var_count > 0) {
+        // a stand-in type representing the "static side" of the structure
+        const Static = opaque {};
+        const template = try host.createTemplate(null);
+        inline for (decls, 0..) |decl, index| {
+            if (variables[index]) |value_ptr_obj| {
                 const slot = getObjectSlot(Static, index);
                 try host.attachMember(structure, .{
                     .name = getCString(decl.name),
                     .member_type = .Object,
                     .slot = slot,
-                    .structure = try getStructure(host, @TypeOf(value_ptr)),
+                    .structure = var_structures[index],
                 }, true);
-                // create the pointer object
-                const ptr_memory: Memory = .{
-                    .bytes = @ptrCast(&value_ptr),
-                    .len = @sizeOf(@TypeOf(value_ptr)),
-                };
-                const ptr_obj = try host.wrapMemory(ptr_memory, .Copy, @TypeOf(value_ptr), .One);
-                // copy constant, link to variable
-                const disposition: MemoryDisposition = if (isConst(@TypeOf(value_ptr))) .Copy else .Link;
-                // dezig it, creating SharedArrayBuffer or ArrayBuffer
-                try dezigStructure(host, ptr_obj, &value_ptr, disposition);
-                const template = template_maybe orelse create: {
-                    const obj = try host.createTemplate(&.{});
-                    template_maybe = obj;
-                    break :create obj;
-                };
-                try host.writeObjectSlot(template, slot, ptr_obj);
-            },
+                try host.writeSlot(template, slot, value_ptr_obj);
+            }
         }
-    }
-    if (template_maybe) |template| {
         try host.attachTemplate(structure, template, true);
     }
 }
@@ -1370,13 +1337,15 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
     }
 }
 
-fn exportObject(host: anytype, ptr: anytype, copy: bool) !Value {
-    const memory = toMemory(ptr);
-    const dv = try host.createView(memory, )
-    const structure = try getStructure(host, @typeOf(ptr.*));
-
+fn exportVariable(host: anytype, ptr: anytype, is_comptime: bool) !Value {
+    const memory = toMemory(ptr, is_comptime);
+    const dv = try host.createView(memory);
+    const structure = try getStructure(host, @TypeOf(ptr.*));
+    const obj = try host.castView(structure, dv);
+    const ptr_structure = try getStructure(host, @TypeOf(ptr));
+    const ptr_obj = try host.createObject(ptr_structure, obj);
+    return ptr_obj;
 }
-
 
 fn getFieldCount(comptime T: type) comptime_int {
     return switch (@typeInfo(T)) {
@@ -1465,68 +1434,6 @@ test "isArgumentStruct" {
     assert(isArgumentStruct(ArgA) == true);
 }
 
-fn hasComptimeFields(comptime T: type) bool {
-    return switch (@typeInfo(T)) {
-        .Struct => |st| find_comptime: {
-            inline for (st.fields) |field| {
-                if (field.is_comptime) {
-                    return true;
-                }
-            }
-            break :find_comptime false;
-        },
-        else => false,
-    };
-}
-
-fn WithoutComptimeFields(comptime T: type) type {
-    if (!hasComptimeFields(T)) return T;
-    const fields = @typeInfo(T).Struct.fields;
-    var new_fields: [fields.len]std.builtin.Type.StructField = undefined;
-    var count = 0;
-    for (fields) |field| {
-        if (!field.is_comptime) {
-            new_fields[count] = field;
-            count += 1;
-        }
-    }
-    return @Type(.{
-        .Struct = .{
-            .layout = .Auto,
-            .decls = &.{},
-            .fields = fields[0..count],
-            .is_tuple = false,
-        },
-    });
-}
-
-test "WithoutComptimeFields" {
-    const S1 = struct {
-        number1: i32,
-        number2: i32,
-    };
-    const WC1 = WithoutComptimeFields(S1);
-    const S2 = struct {
-        comptime number1: i32 = 0,
-        number2: i32,
-    };
-    const WC2 = WithoutComptimeFields(S2);
-    const S3 = struct {
-        comptime number1: i32 = 0,
-        number2: i32,
-        comptime number_type: type = i32,
-    };
-    const WC3 = WithoutComptimeFields(S3);
-    const S4 = comptime_int;
-    const WC4 = WithoutComptimeFields(S4);
-    assert(WC1 == S1);
-    assert(WC2 != S2);
-    assert(@typeInfo(WC2).Struct.fields.len == 1);
-    assert(WC3 != S3);
-    assert(@typeInfo(WC3).Struct.fields.len == 1);
-    assert(WC4 == S4);
-}
-
 fn RuntimeType(comptime value: anytype) type {
     const T = @TypeOf(value);
     return switch (@typeInfo(T)) {
@@ -1611,19 +1518,20 @@ fn createAllocator(host_ptr: anytype) std.mem.Allocator {
     };
 }
 
-fn getErrorMessage(err: anyerror) [*:0]const u8 {
-    return @ptrCast(@errorName(err));
+fn createErrorMessage(host: anytype, err: anyerror) !Value {
+    const err_name = @errorName(err);
+    const memory = toMemory(err_name, true);
+    return host.createString(memory);
 }
 
 fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: type) Thunk {
     const Args = std.meta.ArgsTuple(@TypeOf(function));
     const S = struct {
-        fn tryFunction(host: HostT, arg_obj: Value) !void {
+        fn tryFunction(host: HostT, arg_ptr: *ArgT) !void {
             // extract arguments from argument struct
             var args: Args = undefined;
             if (@sizeOf(ArgT) != 0) {
                 const fields = @typeInfo(Args).Struct.fields;
-                var arg_ptr = try host.getMemory(arg_obj, *ArgT, false);
                 comptime var index = 0;
                 inline for (fields, 0..) |field, i| {
                     if (field.type == std.mem.Allocator) {
@@ -1644,11 +1552,11 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
             }
         }
 
-        fn invokeFunction(ptr: *anyopaque, arg_obj: Value) callconv(.C) ?[*:0]const u8 {
+        fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
             const host = HostT.init(ptr);
             defer host.done();
-            tryFunction(host, arg_obj) catch |err| {
-                return getErrorMessage(err);
+            tryFunction(host, @ptrCast(@alignCast(arg_ptr))) catch |err| {
+                return createErrorMessage(host, err) catch null;
             };
             return null;
         }
@@ -1685,16 +1593,13 @@ test "createThunk" {
 
 pub fn createRootFactory(comptime HostT: type, comptime T: type) Thunk {
     const RootFactory = struct {
-        fn exportStructure(ptr: *anyopaque, args: Value) callconv(.C) ?[*:0]const u8 {
+        fn exportStructure(ptr: *anyopaque, _: *anyopaque) callconv(.C) ?Value {
             const host = HostT.init(ptr);
             defer host.done();
-            var result = getStructure(host, T) catch |err| {
-                return getErrorMessage(err);
+            const result = getStructure(host, T) catch |err| {
+                return createErrorMessage(host, err) catch null;
             };
-            host.writeObjectSlot(args, 0, result) catch |err| {
-                return getErrorMessage(err);
-            };
-            return null;
+            return result;
         }
     };
     return RootFactory.exportStructure;

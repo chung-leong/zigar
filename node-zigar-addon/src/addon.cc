@@ -6,11 +6,16 @@ static Local<Function> CreateThunk(Isolate* isolate,
   auto fde = Local<External>::New(isolate, fd->external);
   return Function::New(context, [](const FunctionCallbackInfo<Value>& info) {
     Call ctx(info.GetIsolate(), info.This(), info.Data().As<External>());
-    const char* err = ctx.function_data->thunk(&ctx, info[0]);
-    if (err) {
-      auto message = String::NewFromUtf8(ctx.isolate, err).ToLocalChecked();
-      info.GetReturnValue().Set(message);
-      return;
+    void *arg_ptr = nullptr;
+    if (info[0]->IsDataView()) {
+      auto dv = info[0].As<DataView>();
+      auto store = dv->Buffer()->GetBackingStore();
+      auto bytes = reinterpret_cast<uint8_t*>(store->Data()) + dv->ByteOffset();
+      arg_ptr = bytes;
+    }
+    auto result = ctx.function_data->thunk(&ctx, arg_ptr);
+    if (!result.IsEmpty()) {
+      info.GetReturnValue().Set(result);
     }
   }, fde, 3).ToLocalChecked();
 }
@@ -127,12 +132,24 @@ static Result CreateObject(Call* call,
   return Result::OK;
 }
 
+static Result CreateString(Call* call,
+                           const Memory& memory,
+                           Local<Value>* dest) {
+  auto isolate = call->isolate;
+  auto chars = reinterpret_cast<const char*>(memory.bytes);
+  auto len = memory.len;
+  *dest = String::NewFromUtf8(isolate, chars, NewStringType::kNormal, len).ToLocalChecked();
+  return Result::OK;
+}
+
 static Result CreateTemplate(Call* call,
                              Local<DataView> dv,
                              Local<Object>* dest) {
   auto isolate = call->isolate;
   auto fname = String::NewFromUtf8Literal(isolate, "createTemplate");
-  Local<Value> args[] = { dv };
+  Local<Value> args[] = {
+    dv.IsEmpty() ? Null(isolate).As<Value>() : dv.As<Value>()
+  };
   Local<Value> result;
   if (CallFunction(call, fname, 1, args, &result) != Result::OK || !result->IsObject()) {
     return Result::Failure;
@@ -155,6 +172,7 @@ static Result ReadSlot(Call* call,
   if (CallFunction(call, fname, 2, args, &result) != Result::OK || !result->IsObject()) {
     return Result::Failure;
   }
+  *dest = result;
   return Result::OK;
 }
 
@@ -374,13 +392,18 @@ static void OverrideEnvironmentFunctions(Isolate* isolate,
     info.GetReturnValue().Set(big_int);
   }, 1);
   add(String::NewFromUtf8Literal(isolate, "obtainView"), [](const FunctionCallbackInfo<Value>& info) {
-    if (!(info[0]->IsBigInt() && info[1]->IsBigInt())) {
+    auto isolate = info.GetIsolate();
+    if (!info[0]->IsBigInt()) {
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Address must be bigInt").ToLocalChecked()));
       return;
     }
-    auto isolate = info.GetIsolate();
+    if (!info[1]->IsNumber()) {
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Length must be number").ToLocalChecked()));
+      return;
+    }
     auto mde = info.Data().As<External>();
     auto address = info[0].As<BigInt>()->Uint64Value();
-    auto len = info[1].As<BigInt>()->Uint64Value();
+    auto len = info[1].As<Number>()->Value();
     auto src_bytes = reinterpret_cast<uint8_t*>(address);
     // create a reference to the module so that the shared library doesn't get unloaded
     // while the shared buffer is still around pointing to it
@@ -395,13 +418,24 @@ static void OverrideEnvironmentFunctions(Isolate* isolate,
     info.GetReturnValue().Set(dv);
   }, 2);
   add(String::NewFromUtf8Literal(isolate, "copyBytes"), [](const FunctionCallbackInfo<Value>& info) {
-    if (!(info[0]->IsDataView() && info[1]->IsBigInt() && info[2]->IsBigInt())) {
+    auto isolate = info.GetIsolate();
+    if (!info[0]->IsDataView()) {
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Destination must be a DataView object").ToLocalChecked()));
+      return;
+    }
+    if (!info[1]->IsBigInt()) {
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Address must be bigInt").ToLocalChecked()));
+      return;
+    }
+    if (!info[2]->IsNumber()) {
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Length must be number").ToLocalChecked()));
       return;
     }
     auto dst = info[0].As<DataView>();
-    auto address = info[0].As<BigInt>()->Uint64Value();
-    auto len = info[1].As<BigInt>()->Uint64Value();
+    auto address = info[1].As<BigInt>()->Uint64Value();
+    auto len = info[2].As<Number>()->Value();
     if (dst->ByteLength() != len) {
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Length ,mismatch").ToLocalChecked()));
       return;
     }
     auto src_bytes = reinterpret_cast<const uint8_t*>(address);
@@ -452,7 +486,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   }
   auto js_module = result.As<Object>();
   // look for the Environment class
-  if (js_module->Get(context, String::NewFromUtf8Literal(isolate, "Environment")).ToLocal(&result) || !result->IsFunction()) {
+  if (!js_module->Get(context, String::NewFromUtf8Literal(isolate, "Environment")).ToLocal(&result) || !result->IsObject()) {
     Throw("Unable to find the class \"Environment\"");
     return;
   }
@@ -463,9 +497,10 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   auto callbacks = module->callbacks;
   callbacks->allocate_memory = AllocateMemory;
   callbacks->free_memory = FreeMemory;
+  callbacks->create_string = CreateString;
+  callbacks->create_object = CreateObject;
   callbacks->create_view = CreateView;
   callbacks->cast_view = CastView;
-  callbacks->create_object = CreateObject;
   callbacks->read_slot = ReadSlot;
   callbacks->write_slot = WriteSlot;
   callbacks->begin_structure = BeginStructure;
@@ -498,7 +533,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   Local<Value> args[1] = { ff };
   Call ctx(isolate, env, fde);
   if (CallFunction(&ctx, name, 1, args, &result) != Result::OK) {
-    // an error will have been thrown already
+    // an error should have been thrown already
     return;
   }
   info.GetReturnValue().Set(result);

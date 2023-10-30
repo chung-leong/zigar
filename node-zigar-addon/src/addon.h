@@ -1,6 +1,6 @@
 #include <node.h>
 #ifdef WIN32
-  #include "win32.h"
+  #include "dlfcn.win32.h"
 #else
   #include <dlfcn.h>
 #endif
@@ -93,7 +93,7 @@ struct Memory {
 };
 
 struct Call;
-typedef const char* (*Thunk)(Call*, Local<Value>);
+typedef Local<Value> (*Thunk)(Call*, void*);
 
 struct MethodAttributes {
   bool has_pointer: 1;
@@ -125,9 +125,10 @@ struct Module {
 struct Callbacks {
   Result (*allocate_memory)(Call*, size_t, uint8_t, Memory*);
   Result (*free_memory)(Call*, const Memory&, uint8_t);
+  Result (*create_string)(Call*, const Memory&, Local<Value>*);
+  Result (*create_object)(Call*, Local<Object>, Local<Value>, Local<Object>*);
   Result (*create_view)(Call*, const Memory&, Local<DataView>*);
   Result (*cast_view)(Call*, Local<Object>, Local<DataView>, Local<Object>*);
-  Result (*create_object)(Call*, Local<Object>, Local<Value>, Local<Object>*);
   Result (*read_slot)(Call*, Local<Object>, size_t, Local<Value>*);
   Result (*write_slot)(Call*, Local<Object>, size_t, Local<Value>);
   Result (*begin_structure)(Call*, const Structure&, Local<Object>*);
