@@ -27,14 +27,10 @@ import {
   getDataViewFromUTF8,
   getDataViewFromTypedArray,
 } from '../src/special.js';
-import { Environment } from '../src/environment.js'
-const {
-  beginStructure,
-  attachMember,
-  finalizeStructure,
-} = Environment.prototype;
+import { BaseEnvironment } from '../src/environment.js'
 
 describe('Special property functions', function() {
+  const env = new BaseEnvironment();
   beforeEach(() => {
     process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
     useArray();
@@ -277,12 +273,12 @@ describe('Special property functions', function() {
       useIntEx();
       useFloatEx();
       useObject();
-      const structStructure = beginStructure({
+      const structStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 4 * 2,
       });
-      attachMember(structStructure, {
+      env.attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
         isRequired: true,
@@ -290,7 +286,7 @@ describe('Special property functions', function() {
         bitOffset: 0,
         bitSize: 32,
       });
-      attachMember(structStructure, {
+      env.attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
         isRequired: true,
@@ -298,26 +294,26 @@ describe('Special property functions', function() {
         bitOffset: 32,
         bitSize: 32,
       });
-      const Hello = finalizeStructure(structStructure);
-      const arrayStructure = beginStructure({
+      const Hello = env.finalizeStructure(structStructure);
+      const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         name: 'HelloArray',
         length: 4,
         byteSize: structStructure.byteSize * 4,
       });
-      attachMember(arrayStructure, {
+      env.attachMember(arrayStructure, {
         type: MemberType.Object,
         bitSize: 64,
         byteSize: 8,
         structure: structStructure,
       });
-      const HelloArray = finalizeStructure(arrayStructure);
-      const structure = beginStructure({
+      const HelloArray = env.finalizeStructure(arrayStructure);
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Complex',
         byteSize: arrayStructure.byteSize + 8 * 2,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'animals',
         type: MemberType.Object,
         bitSize: arrayStructure.byteSize * 8,
@@ -327,7 +323,7 @@ describe('Special property functions', function() {
         slot: 0,
         isRequired: true,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'donut',
         type: MemberType.Float,
         bitSize: 64,
@@ -335,7 +331,7 @@ describe('Special property functions', function() {
         byteSize: 8,
         isRequired: true,
       })
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'turkey',
         type: MemberType.Float,
         bitSize: 64,
@@ -343,7 +339,7 @@ describe('Special property functions', function() {
         byteSize: 8,
         isRequired: true,
       });
-      const Complex = finalizeStructure(structure);
+      const Complex = env.finalizeStructure(structure);
       const data = {
         animals: [
           { dog: 1, cat: 2 },
@@ -360,82 +356,82 @@ describe('Special property functions', function() {
   })
   describe('getSpecialKeys', function() {
     it('should include string and typedArray when structure is an u8 array', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Array,
         name: '[4]u8',
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array },
       });
-      finalizeStructure(structure);
+      env.finalizeStructure(structure);
       const keys = getSpecialKeys(structure);
       expect(keys).to.eql([ 'dataView', 'base64', 'string', 'typedArray' ]);
     })
     it('should include typedArray only when structure is an i8 array', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Array,
         name: '[4]i8',
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         type: MemberType.Int,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Int8Array },
       });
-      finalizeStructure(structure);
+      env.finalizeStructure(structure);
       const keys = getSpecialKeys(structure);
       expect(keys).to.eql([ 'dataView', 'base64', 'typedArray' ]);
     })
     it('should include string and typedArray when structure is an u8 slice', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
         byteSize: 1,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array },
       });
-      finalizeStructure(structure);
+      env.finalizeStructure(structure);
       const keys = getSpecialKeys(structure);
       expect(keys).to.eql([ 'dataView', 'base64', 'string', 'typedArray' ]);
     })
     it('should include string and typedArray when structure is an u16 slice', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]u16',
         byteSize: 2,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array },
       });
-      finalizeStructure(structure);
+      env.finalizeStructure(structure);
       const keys = getSpecialKeys(structure);
       expect(keys).to.eql([ 'dataView', 'base64', 'string', 'typedArray' ]);
     })
     it('should not include string if structure is an u15 slice', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]u15',
         byteSize: 2,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 15,
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array },
       });
-      finalizeStructure(structure);
+      env.finalizeStructure(structure);
       const keys = getSpecialKeys(structure);
       expect(keys).to.eql([ 'dataView', 'base64', 'typedArray' ]);
     })

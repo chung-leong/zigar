@@ -8,8 +8,11 @@ import {
   StructureType,
   useStruct,
 } from '../src/structure.js';
-import { Environment, getGlobalSlots } from '../src/environment.js'
-import { MEMORY, SLOTS } from '../src/symbol.js';
+import { BaseEnvironment, getGlobalSlots } from '../src/environment.js'
+import { MEMORY, SLOTS, ENVIRONMENT } from '../src/symbol.js';
+
+class Environment extends BaseEnvironment {
+}
 
 describe('Environment', function() {
   beforeEach(function() {
@@ -70,7 +73,7 @@ describe('Environment', function() {
       };
       const dv = new DataView(new ArrayBuffer(0));
       const object = env.castView(structure, dv);
-      expect(recv).to.equal(env);
+      expect(recv).to.equal(ENVIRONMENT);
       expect(arg).to.equal(dv);
     })
   })

@@ -1,7 +1,7 @@
 import { MemberType, getAccessors } from './member.js';
 import { CHILD_VIVIFICATOR, SLOTS } from './symbol.js';
 
-export function addStaticMembers(s) {
+export function addStaticMembers(s, env) {
   const {
     constructor,
     static: {

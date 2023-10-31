@@ -6,7 +6,7 @@ import { addSpecialAccessors } from './special.js';
 import { throwInvalidInitializer, throwNoNewEnum } from './error.js';
 import { MEMORY, ENUM_INDEX, ENUM_NAME, ENUM_ITEMS, ENUM_ITEM } from './symbol.js';
 
-export function finalizeEnumeration(s) {
+export function finalizeEnumeration(s, env) {
   const {
     instance: {
       members,
@@ -103,9 +103,9 @@ export function finalizeEnumeration(s) {
     });
     items[index] = item;
   }
-  addSpecialAccessors(s);
-  addStaticMembers(s);
-  addMethods(s);
+  addSpecialAccessors(s, env);
+  addStaticMembers(s, env);
+  addMethods(s, env);
   return constructor;
 };
 

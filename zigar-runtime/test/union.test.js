@@ -20,15 +20,10 @@ import {
   useTaggedUnion,
   useEnumeration,
 } from '../src/structure.js';
-import { Environment } from '../src/environment.js'
-const {
-  beginStructure,
-  attachMember,
-  attachTemplate,
-  finalizeStructure,
-} = Environment.prototype;
+import { BaseEnvironment } from '../src/environment.js'
 
 describe('Union functions', function() {
+  const env = new BaseEnvironment();
   describe('finalizeUnion', function() {
     beforeEach(function() {
       usePrimitive();
@@ -46,12 +41,12 @@ describe('Union functions', function() {
       useObject();
     })
     it('should define a simple extern union', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.ExternUnion,
         name: 'Hello',
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
@@ -59,7 +54,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
@@ -67,7 +62,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(4));
           dv.setInt32(0, 1234, true);
@@ -75,7 +70,7 @@ describe('Union functions', function() {
         })(),
         [SLOTS]: {},
       })
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(Hello).to.be.a('function');
       const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
@@ -89,12 +84,12 @@ describe('Union functions', function() {
       expect(Object.keys(object)).to.eql([ 'dog', 'cat' ]);
     })
     it('should throw when no initializer is provided', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.ExternUnion,
         name: 'Hello',
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
@@ -102,7 +97,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
@@ -110,16 +105,16 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(() => new Hello).to.throw(TypeError);
     })
     it('should define a simple bare union', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
@@ -127,7 +122,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
@@ -135,7 +130,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.Uint,
         bitSize: 16,
@@ -143,7 +138,7 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: {},
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
           dv.setInt32(0, 1234, true);
@@ -151,7 +146,7 @@ describe('Union functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(Hello).to.be.a('function');
       const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
@@ -169,12 +164,12 @@ describe('Union functions', function() {
       expect(Object.keys(object)).to.eql([ 'dog', 'cat' ]);
     })
     it('should initialize a simple bare union', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
@@ -182,7 +177,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
@@ -190,7 +185,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.Uint,
         bitSize: 16,
@@ -198,7 +193,7 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: {},
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
           dv.setInt32(0, 1234, true);
@@ -206,18 +201,18 @@ describe('Union functions', function() {
         })(),
         [SLOTS]: {},
       })
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({ cat: 123 });
       expect(object.cat).to.equal(123);
       expect(() => object.dog).to.throw(TypeError);
     })
     it('should initialize a simple bare union using inenumerable property', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
@@ -225,7 +220,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
@@ -233,7 +228,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.Uint,
         bitSize: 16,
@@ -241,7 +236,7 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: {},
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
           dv.setInt32(0, 1234, true);
@@ -249,18 +244,18 @@ describe('Union functions', function() {
         })(),
         [SLOTS]: {},
       })
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const initObj = Object.create({ cat: 123 })
       const object = new Hello(initObj);
       expect(object.cat).to.equal(123);
     })
     it('should allow casting to a simple bare union', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
@@ -268,7 +263,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
@@ -276,7 +271,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.Uint,
         bitSize: 16,
@@ -284,7 +279,7 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const dv = new DataView(new ArrayBuffer(8));
       dv.setInt32(0, 1234, true);
       dv.setInt16(4, 1, true);
@@ -293,12 +288,12 @@ describe('Union functions', function() {
       expect(() => object.dog).to.throw(TypeError);
     })
     it('should accept base64 data as initializer', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
         byteSize: 6,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
@@ -306,7 +301,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
@@ -314,7 +309,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.Uint,
         bitSize: 16,
@@ -322,7 +317,7 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const str = '\u0001\u0000\u0000\u0000\u0000\u0000';
       const base64 = btoa(str);
       const object = new Hello({ base64 });
@@ -331,12 +326,12 @@ describe('Union functions', function() {
     })
 
     it('should allow assignment of base64 data', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
         byteSize: 6,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
@@ -344,7 +339,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
@@ -352,7 +347,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.Uint,
         bitSize: 16,
@@ -360,7 +355,7 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({ cat: 5 });
       expect(object.cat).to.equal(5);
       const str = '\u0001\u0000\u0000\u0000\u0000\u0000';
@@ -369,12 +364,12 @@ describe('Union functions', function() {
       expect(() => object.cat).to.throw();
     })
     it('should define a bare union containing a struct', function() {
-      const structStructure = beginStructure({
+      const structStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Aniaml',
         byteSize: 8,
       });
-      attachMember(structStructure, {
+      env.attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
@@ -382,7 +377,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structStructure, {
+      env.attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
@@ -390,13 +385,13 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      const Aniaml = finalizeStructure(structStructure);
-      const structure = beginStructure({
+      const Aniaml = env.finalizeStructure(structStructure);
+      const structure = env.beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
         byteSize: structStructure.byteSize * 8 + 32,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'pets',
         type: MemberType.Object,
         bitSize: structStructure.byteSize * 8,
@@ -405,7 +400,7 @@ describe('Union functions', function() {
         slot: 1,
         structure: structStructure,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'money',
         type: MemberType.Int,
         bitSize: 32,
@@ -413,7 +408,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.Uint,
         bitSize: 16,
@@ -421,7 +416,7 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({ pets: { cat: 7, dog: 9 } });
       expect(object.$.pets.cat).to.equal(7);
       object.$ = { money: 1000 };
@@ -429,25 +424,25 @@ describe('Union functions', function() {
       expect(() => object.$.pets).to.throw(TypeError);
     })
     it('should disable pointers in a bare union', function() {
-      const intStructure = beginStructure({
+      const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
       });
-      attachMember(intStructure, {
+      env.attachMember(intStructure, {
         type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = finalizeStructure(intStructure);
-      const ptrStructure = beginStructure({
+      const Int32 = env.finalizeStructure(intStructure);
+      const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true,
       });
-      attachMember(ptrStructure, {
+      env.attachMember(ptrStructure, {
         type: MemberType.Object,
         bitSize: 64,
         bitOffset: 0,
@@ -455,14 +450,14 @@ describe('Union functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = finalizeStructure(ptrStructure);
-      const structStructure = beginStructure({
+      const Int32Ptr = env.finalizeStructure(ptrStructure);
+      const structStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'SomeStruct',
         byteSize: 8,
         hasPointer: true,
       });
-      attachMember(structStructure, {
+      env.attachMember(structStructure, {
         name: 'pointer',
         type: MemberType.Object,
         bitSize: 64,
@@ -471,28 +466,28 @@ describe('Union functions', function() {
         slot: 0,
         structure: ptrStructure,
       });
-      const SomeStruct = finalizeStructure(structStructure);
-      const arrayStructure = beginStructure({
+      const SomeStruct = env.finalizeStructure(structStructure);
+      const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         name: '[4]*Int32',
         length: 4,
         byteSize: 8 * 4,
         hasPointer: true,
       });
-      attachMember(arrayStructure, {
+      env.attachMember(arrayStructure, {
         type: MemberType.Object,
         bitSize: 64,
         byteSize: 8,
         structure: ptrStructure,
       });
-      const Int32PtrArray = finalizeStructure(arrayStructure);
-      const structure = beginStructure({
+      const Int32PtrArray = env.finalizeStructure(arrayStructure);
+      const structure = env.beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
         byteSize: 8 * 4,
         hasPointer: false,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'pointer',
         type: MemberType.Object,
         bitSize: 64,
@@ -501,7 +496,7 @@ describe('Union functions', function() {
         slot: 0,
         structure: ptrStructure,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'struct',
         type: MemberType.Object,
         bitSize: 64,
@@ -510,7 +505,7 @@ describe('Union functions', function() {
         slot: 1,
         structure: structStructure,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'array',
         type: MemberType.Object,
         bitSize: 64,
@@ -519,7 +514,7 @@ describe('Union functions', function() {
         slot: 2,
         structure: arrayStructure,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
         bitSize: 32,
@@ -527,7 +522,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      const Hello = finalizeStructure(structure, { runtimeSafety: false });
+      const Hello = env.finalizeStructure(structure, { runtimeSafety: false });
       // initializer will call pointer setter which will throw
       const pointer = new Int32(1234);
       const struct = { pointer: new Int32(1234) };
@@ -544,23 +539,23 @@ describe('Union functions', function() {
         .with.property('message').that.contains('not accessible');
     })
     it('should define a simple tagged union', function() {
-      const enumStructure = beginStructure({
+      const enumStructure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',
       });
-      attachMember(enumStructure, {
+      env.attachMember(enumStructure, {
         name: 'dog',
         type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
-      attachMember(enumStructure, {
+      env.attachMember(enumStructure, {
         name: 'cat',
         type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
-      attachTemplate(enumStructure, {
+      env.attachTemplate(enumStructure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setUint32(0, 100, true);
@@ -569,13 +564,13 @@ describe('Union functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const HelloType = finalizeStructure(enumStructure);
-      const structure = beginStructure({
+      const HelloType = env.finalizeStructure(enumStructure);
+      const structure = env.beginStructure({
         type: StructureType.TaggedUnion,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
@@ -583,7 +578,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
@@ -591,7 +586,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.EnumerationItem,
         bitSize: 32,
@@ -599,7 +594,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: enumStructure,
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
           dv.setInt32(0, 1234, true);
@@ -608,7 +603,7 @@ describe('Union functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(Hello).to.be.a('function');
       const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
@@ -624,23 +619,23 @@ describe('Union functions', function() {
       expect(HelloType(object)).to.equal(HelloType.cat);
     })
     it('should only have a single enumerable property', function() {
-      const enumStructure = beginStructure({
+      const enumStructure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',
       });
-      attachMember(enumStructure, {
+      env.attachMember(enumStructure, {
         name: 'dog',
         type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
-      attachMember(enumStructure, {
+      env.attachMember(enumStructure, {
         name: 'cat',
         type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
-      attachTemplate(enumStructure, {
+      env.attachTemplate(enumStructure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setUint32(0, 100, true);
@@ -649,13 +644,13 @@ describe('Union functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const HelloType = finalizeStructure(enumStructure);
-      const structure = beginStructure({
+      const HelloType = env.finalizeStructure(enumStructure);
+      const structure = env.beginStructure({
         type: StructureType.TaggedUnion,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
@@ -663,7 +658,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
@@ -671,7 +666,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.EnumerationItem,
         bitSize: 32,
@@ -679,32 +674,32 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: enumStructure,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({ dog: 1234 });
       expect(object.dog).to.equal(1234);
       expect(object.valueOf()).to.eql({ dog: 1234 });
     })
     it('should define a tagged union containing a pointer', function() {
-      const intStructure = beginStructure({
+      const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
       });
-      attachMember(intStructure, {
+      env.attachMember(intStructure, {
         type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
         structure: {},
       });
-      const Int32 = finalizeStructure(intStructure);
-      const ptrStructure = beginStructure({
+      const Int32 = env.finalizeStructure(intStructure);
+      const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true,
       });
-      attachMember(ptrStructure, {
+      env.attachMember(ptrStructure, {
         type: MemberType.Object,
         bitSize: 64,
         bitOffset: 0,
@@ -712,25 +707,25 @@ describe('Union functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = finalizeStructure(ptrStructure);
-      const enumStructure = beginStructure({
+      const Int32Ptr = env.finalizeStructure(ptrStructure);
+      const enumStructure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',
         byteSize: 2,
       });
-      attachMember(enumStructure, {
+      env.attachMember(enumStructure, {
         name: 'pointer',
         type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
       });
-      attachMember(enumStructure, {
+      env.attachMember(enumStructure, {
         name: 'number',
         type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
       });
-      attachTemplate(enumStructure, {
+      env.attachTemplate(enumStructure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(2 * 2));
           dv.setUint16(0, 0, true);
@@ -739,14 +734,14 @@ describe('Union functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const HelloTag = finalizeStructure(enumStructure);
-      const structure = beginStructure({
+      const HelloTag = env.finalizeStructure(enumStructure);
+      const structure = env.beginStructure({
         type: StructureType.TaggedUnion,
         name: 'Hello',
         byteSize: 10,
         hasPointer: true,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'pointer',
         type: MemberType.Object,
         bitSize: 64,
@@ -755,7 +750,7 @@ describe('Union functions', function() {
         slot: 0,
         structure: ptrStructure,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
         bitSize: 32,
@@ -763,7 +758,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.EnumerationItem,
         bitSize: 16,
@@ -771,7 +766,7 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: enumStructure,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({ pointer: new Int32(1234) });
       expect(object.$.pointer['*']).to.equal(1234);
       object.$ = { number: 4567 };
@@ -779,26 +774,26 @@ describe('Union functions', function() {
       expect(object.$.number).to.equal(4567);
     })
     it('should correctly copy a tagged union containing a pointer', function() {
-      const intStructure = beginStructure({
+      const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
       });
-      attachMember(intStructure, {
+      env.attachMember(intStructure, {
         type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
         structure: {},
       });
-      const Int32 = finalizeStructure(intStructure);
-      const ptrStructure = beginStructure({
+      const Int32 = env.finalizeStructure(intStructure);
+      const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true,
       });
-      attachMember(ptrStructure, {
+      env.attachMember(ptrStructure, {
         type: MemberType.Object,
         bitSize: 64,
         bitOffset: 0,
@@ -806,25 +801,25 @@ describe('Union functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = finalizeStructure(ptrStructure);
-      const enumStructure = beginStructure({
+      const Int32Ptr = env.finalizeStructure(ptrStructure);
+      const enumStructure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',
         byteSize: 2,
       });
-      attachMember(enumStructure, {
+      env.attachMember(enumStructure, {
         name: 'pointer',
         type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
       });
-      attachMember(enumStructure, {
+      env.attachMember(enumStructure, {
         name: 'number',
         type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
       });
-      attachTemplate(enumStructure, {
+      env.attachTemplate(enumStructure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(2 * 2));
           dv.setUint16(0, 0, true);
@@ -833,14 +828,14 @@ describe('Union functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const HelloTag = finalizeStructure(enumStructure);
-      const structure = beginStructure({
+      const HelloTag = env.finalizeStructure(enumStructure);
+      const structure = env.beginStructure({
         type: StructureType.TaggedUnion,
         name: 'Hello',
         byteSize: 10,
         hasPointer: true,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'pointer',
         type: MemberType.Object,
         bitSize: 64,
@@ -849,7 +844,7 @@ describe('Union functions', function() {
         slot: 0,
         structure: ptrStructure,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
         bitSize: 32,
@@ -857,7 +852,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.EnumerationItem,
         bitSize: 16,
@@ -865,7 +860,7 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: enumStructure,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({ pointer: new Int32(1234) });
       const object2 = new Hello(object);
       expect(object2.$.pointer['*']).to.equal(1234);
@@ -873,25 +868,25 @@ describe('Union functions', function() {
       expect(object.$.pointer['*']).to.equal(4567);
     })
     it('should release pointer when a different property is activated', function() {
-      const intStructure = beginStructure({
+      const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
       });
-      attachMember(intStructure, {
+      env.attachMember(intStructure, {
         type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = finalizeStructure(intStructure);
-      const ptrStructure = beginStructure({
+      const Int32 = env.finalizeStructure(intStructure);
+      const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true,
       });
-      attachMember(ptrStructure, {
+      env.attachMember(ptrStructure, {
         type: MemberType.Object,
         bitSize: 64,
         bitOffset: 0,
@@ -899,25 +894,25 @@ describe('Union functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = finalizeStructure(ptrStructure);
-      const enumStructure = beginStructure({
+      const Int32Ptr = env.finalizeStructure(ptrStructure);
+      const enumStructure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',
         byteSize: 2,
       });
-      attachMember(enumStructure, {
+      env.attachMember(enumStructure, {
         name: 'pointer',
         type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
       });
-      attachMember(enumStructure, {
+      env.attachMember(enumStructure, {
         name: 'number',
         type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
       });
-      attachTemplate(enumStructure, {
+      env.attachTemplate(enumStructure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(2 * 2));
           dv.setUint16(0, 0, true);
@@ -926,14 +921,14 @@ describe('Union functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const HelloTag = finalizeStructure(enumStructure);
-      const structure = beginStructure({
+      const HelloTag = env.finalizeStructure(enumStructure);
+      const structure = env.beginStructure({
         type: StructureType.TaggedUnion,
         name: 'Hello',
         byteSize: 10,
         hasPointer: true,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'pointer',
         type: MemberType.Object,
         bitSize: 64,
@@ -942,7 +937,7 @@ describe('Union functions', function() {
         slot: 0,
         structure: ptrStructure,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
         bitSize: 32,
@@ -950,7 +945,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.EnumerationItem,
         bitSize: 16,
@@ -958,32 +953,32 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: enumStructure,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({ pointer: new Int32(1234) });
       const pointer = object.pointer;
       object.$ = { number: 4567 };
       expect(pointer[SLOTS][0]).to.be.null;
     })
     it('should reapply pointer when initialized with no initializer', function() {
-      const intStructure = beginStructure({
+      const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
       });
-      attachMember(intStructure, {
+      env.attachMember(intStructure, {
         type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = finalizeStructure(intStructure);
-      const ptrStructure = beginStructure({
+      const Int32 = env.finalizeStructure(intStructure);
+      const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true,
       });
-      attachMember(ptrStructure, {
+      env.attachMember(ptrStructure, {
         type: MemberType.Object,
         bitSize: 64,
         bitOffset: 0,
@@ -991,25 +986,25 @@ describe('Union functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = finalizeStructure(ptrStructure);
-      const enumStructure = beginStructure({
+      const Int32Ptr = env.finalizeStructure(ptrStructure);
+      const enumStructure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',
         byteSize: 2,
       });
-      attachMember(enumStructure, {
+      env.attachMember(enumStructure, {
         name: 'pointer',
         type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
       });
-      attachMember(enumStructure, {
+      env.attachMember(enumStructure, {
         name: 'number',
         type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
       });
-      attachTemplate(enumStructure, {
+      env.attachTemplate(enumStructure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(2 * 2));
           dv.setUint16(0, 0, true);
@@ -1018,14 +1013,14 @@ describe('Union functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const HelloTag = finalizeStructure(enumStructure);
-      const structure = beginStructure({
+      const HelloTag = env.finalizeStructure(enumStructure);
+      const structure = env.beginStructure({
         type: StructureType.TaggedUnion,
         name: 'Hello',
         byteSize: 10,
         hasPointer: true,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'pointer',
         type: MemberType.Object,
         isRequired: false,
@@ -1035,7 +1030,7 @@ describe('Union functions', function() {
         slot: 0,
         structure: ptrStructure,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
         isRequired: true,
@@ -1044,7 +1039,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.EnumerationItem,
         bitSize: 16,
@@ -1052,11 +1047,11 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: enumStructure,
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: new DataView(new ArrayBuffer(10)),
         [SLOTS]: { 0: new Int32Ptr(new Int32(1234)) },
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({});
       const pointer = object.pointer;
       expect(object.pointer['*']).to.equal(1234);
@@ -1066,12 +1061,12 @@ describe('Union functions', function() {
       expect(object.pointer['*']).to.equal(1234);
     })
     it('should complain about missing union initializer', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         isRequired: true,
@@ -1080,7 +1075,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         isRequired: true,
@@ -1089,7 +1084,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.Uint,
         bitSize: 16,
@@ -1097,19 +1092,19 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(() => new Hello({})).to.throw(TypeError)
         .with.property('message').that.contains('dog, cat')
       const object = new Hello({ cat: 4567 });
       expect(object.cat).to.equal(4567);
     })
     it('should throw when there is more than one initializer', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         isRequired: true,
@@ -1118,7 +1113,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         isRequired: true,
@@ -1127,7 +1122,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.Uint,
         bitSize: 16,
@@ -1135,19 +1130,19 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(() => new Hello({ dog: 1234, cat: 4567 })).to.throw(TypeError);
       const object = new Hello({ dog: 1234 });
       expect(object.dog).to.equal(1234);
       expect(() => { return { ...object } }).to.throw(TypeError);
     })
     it('should throw when an unknown initializer is encountered', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         isRequired: true,
@@ -1156,7 +1151,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         isRequired: true,
@@ -1165,7 +1160,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.Uint,
         bitSize: 16,
@@ -1173,17 +1168,17 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(() => new Hello({ dogg: 1234 })).to.throw(TypeError)
         .with.property('message').that.contains('dogg');
     })
     it('should throw when constructor is given something other than an object', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         isRequired: true,
@@ -1192,7 +1187,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         isRequired: true,
@@ -1201,7 +1196,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.Uint,
         bitSize: 16,
@@ -1209,16 +1204,16 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(() => new Hello(5)).to.throw(TypeError);
     })
     it('should throw when attempting to set an active property', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         isRequired: true,
@@ -1227,7 +1222,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         isRequired: true,
@@ -1236,7 +1231,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.Uint,
         bitSize: 16,
@@ -1244,18 +1239,18 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({ dog: 1234 });
       expect(() => object.cat = 4567).to.throw(TypeError)
         .with.property('message').that.contains('dog')
     })
     it('should allow switching of active property through dollar property', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         isRequired: true,
@@ -1264,7 +1259,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         isRequired: true,
@@ -1273,7 +1268,7 @@ describe('Union functions', function() {
         byteSize: 4,
         structure: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'selector',
         type: MemberType.Uint,
         bitSize: 16,
@@ -1281,7 +1276,7 @@ describe('Union functions', function() {
         byteSize: 2,
         structure: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({ dog: 1234 });
       object.$ = { cat: 4567 };
       expect(object.cat).to.equal(4567);

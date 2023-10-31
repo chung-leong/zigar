@@ -17,4 +17,4 @@ export const SELF = Symbol('self');
 export const CHILD_VIVIFICATOR = Symbol('childVivificator');
 export const POINTER_VISITOR = Symbol('pointerVisitor');
 export const RELEASE_THUNK = Symbol('releaseThunk');
-export const ENVIROMENT = Symbol('environment');
+export const ENVIRONMENT = Symbol('environment');

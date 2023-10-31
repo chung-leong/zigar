@@ -28,7 +28,7 @@ import {
 } from '../../zigar-runtime/src/structure.js';
 import { initializeErrorSets } from '../../zigar-runtime/src/error-set.js';
 import { throwZigError } from '../../zigar-runtime/src/error.js';
-import { Environment } from '../../zigar-runtime/src/environment.js';
+import { BaseEnvironment } from '../../zigar-runtime/src/environment.js';
 
 // enable all member types (including extend types)
 useVoid();
@@ -57,29 +57,31 @@ useSlice();
 useVector();
 useOpaque();
 
-Environment.prototype.invokeFactory = function(thunk) {
-  initializeErrorSets();
-  const env = new Environment;
-  const result = thunk.call(env);
-  if (typeof(result) === 'string') {
-    // an error message
-    throwZigError(result);
+class Environment extends BaseEnvironment {
+  invokeFactory(thunk) {
+    initializeErrorSets();
+    const env = new Environment;
+    const result = thunk.call(env);
+    if (typeof(result) === 'string') {
+      // an error message
+      throwZigError(result);
+    }
+    let module = result.constructor;
+    // attach __zigar object
+    const initPromise = Promise.resolve();
+    module.__zigar = {
+      init: () => initPromise,
+      abandon: () => initPromise.then(() => {
+        if (module) {
+          releaseModule(module);
+        }
+        module = null;
+      }),
+      released: () => initPromise.then(() => !module),
+    };
+    return module;
   }
-  let module = result.constructor;
-  // attach __zigar object
-  const initPromise = Promise.resolve();
-  module.__zigar = {
-    init: () => initPromise,
-    abandon: () => initPromise.then(() => {
-      if (module) {
-        releaseModule(module);
-      }
-      module = null;
-    }),
-    released: () => initPromise.then(() => !module),
-  };
-  return module;
-};
+}
 
 function releaseModule(module) {
   const released = new Map();

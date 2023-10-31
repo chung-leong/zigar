@@ -1,5 +1,5 @@
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, getMemoryResetter, restoreMemory } from './memory.js';
+import { getMemoryCopier, getMemoryResetter, restoreMemory, getPointerAlign } from './memory.js';
 import { requireDataView }  from './data-view.js';
 import { addChildVivificators, addPointerVisitor } from './struct.js';
 import { addSpecialAccessors } from './special.js';
@@ -7,14 +7,16 @@ import { MEMORY, POINTER_VISITOR, SLOTS } from './symbol.js';
 import { throwNoInitializer } from './error.js';
 import { copyPointer, resetPointer } from './pointer.js';
 
-export function finalizeOptional(s) {
+export function finalizeOptional(s, env) {
   const {
     byteSize,
+    align,
     instance: { members },
     options,
     hasPointer,
   } = s;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -23,7 +25,7 @@ export function finalizeOptional(s) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = new DataView(new ArrayBuffer(byteSize));
+      dv = env.allocMemory(byteSize, ptrAlign);
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);

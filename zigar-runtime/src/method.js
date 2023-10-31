@@ -1,13 +1,13 @@
 import { throwZigError } from './error.js';
-import { Environment } from './environment.js';
 import { MEMORY, RELEASE_THUNK } from './symbol.js';
 
-export function addMethods(s) {
+export function addMethods(s, env) {
   const {
     constructor,
     instance: { methods: instanceMembers },
     static: { methods: staticMethods },
   } = s;
+  const Environment = env.constructor;
   for (const method of staticMethods) {
     let {
       name,
@@ -17,7 +17,7 @@ export function addMethods(s) {
     const f = function(...args) {
       const { constructor } = argStruct;
       const a = new constructor(args);
-      return invokeThunk(thunk, a);
+      return invokeThunk(thunk, a, Environment);
     };
     if (process.env.ZIGAR_TARGET === 'NODE-CPP-EXT') {
       // need to set the local variables as well as the property of the method object
@@ -36,7 +36,7 @@ export function addMethods(s) {
     const f = function(...args) {
       const { constructor } = argStruct;
       const a = new constructor([ this, ...args ]);
-      return invokeThunk(thunk, a);
+      return invokeThunk(thunk, a, Environment);
     };
     if (process.env.ZIGAR_TARGET === 'NODE-CPP-EXT') {
       /* c8 ignore next */
@@ -47,7 +47,7 @@ export function addMethods(s) {
   }
 }
 
-export function invokeThunk(thunk, args) {
+export function invokeThunk(thunk, args, Environment) {
   const env = new Environment;
   const err = thunk.call(env, args[MEMORY]);
   // errors returned by exported Zig functions are normally written into the
@@ -56,9 +56,9 @@ export function invokeThunk(thunk, args) {
   // (i.e. bugs in export.zig)
   if (err) {
     if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
-      if (res instanceof Promise) {
+      if (err instanceof Promise) {
         // a promise of the function having been linked and called
-        return res.then(() => args.retval);
+        return err.then(() => args.retval);
       }
     }
     throwZigError(err);

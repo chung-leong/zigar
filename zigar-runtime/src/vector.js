@@ -1,15 +1,16 @@
 import { getAccessors } from './member.js';
-import { getMemoryCopier, restoreMemory } from './memory.js';
+import { getMemoryCopier, restoreMemory, getPointerAlign } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
 import { MEMORY, COMPAT } from './symbol.js';
 import { getSelf } from './struct.js';
 
-export function finalizeVector(s) {
+export function finalizeVector(s, env) {
   const {
     length,
     byteSize,
+    align,
     instance: {
       members: [ member ],
     },
@@ -25,6 +26,7 @@ export function finalizeVector(s) {
       throw new Error(`slot must be undefined for vector member`);
     }
   }
+  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -33,7 +35,7 @@ export function finalizeVector(s) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = new DataView(new ArrayBuffer(byteSize));
+      dv = env.allocMemory(byteSize, ptrAlign);
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);

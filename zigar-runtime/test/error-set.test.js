@@ -9,14 +9,10 @@ import {
   useErrorSet,
 } from '../src/structure.js';
 import { initializeErrorSets } from '../src/error-set.js';
-import { Environment } from '../src/environment.js'
-const {
-  beginStructure,
-  attachMember,
-  finalizeStructure,
-} = Environment.prototype;
+import { BaseEnvironment } from '../src/environment.js'
 
 describe('Error set functions', function() {
+  const env = new BaseEnvironment();
   describe('finalizeErrorSet', function() {
     beforeEach(function() {
       useIntEx();
@@ -24,21 +20,21 @@ describe('Error set functions', function() {
       initializeErrorSets();
     })
     it('should define an error set', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'Hello',
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
         slot: 5,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'UnableToCreateObject',
         type: MemberType.Object,
         slot: 8,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(Hello).to.be.a('function');
       expect(Hello.UnableToRetrieveMemoryLocation).to.be.an.instanceOf(Error);
       expect(Hello.UnableToRetrieveMemoryLocation).to.be.an('error');
@@ -57,140 +53,140 @@ describe('Error set functions', function() {
       }
     })
     it('should not allow the creation of new error objects', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'Hello',
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
         slot: 5,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'UnableToCreateObject',
         type: MemberType.Object,
         slot: 8,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(() => new Hello()).to.throw(TypeError);
     })
     it('should make previously defined error sets its subclasses if it has all its error numbers', function() {
-      const catStructure = beginStructure({
+      const catStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'CatError',
       });
-      attachMember(catStructure, {
+      env.attachMember(catStructure, {
         name: 'CucumberEncountered',
         type: MemberType.Object,
         slot: 5,
       });
-      attachMember(catStructure, {
+      env.attachMember(catStructure, {
         name: 'CatnipEncountered',
         type: MemberType.Object,
         slot: 6,
       });
-      const CatError = finalizeStructure(catStructure);
-      const dogStructure = beginStructure({
+      const CatError = env.finalizeStructure(catStructure);
+      const dogStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'DogError',
       });
-      attachMember(dogStructure, {
+      env.attachMember(dogStructure, {
         name: 'StrangerEncountered',
         type: MemberType.Object,
         slot: 7,
       });
-      attachMember(dogStructure, {
+      env.attachMember(dogStructure, {
         name: 'BathRequired',
         type: MemberType.Object,
         slot: 8,
       });
-      const DogError = finalizeStructure(dogStructure);
-      const petStructure = beginStructure({
+      const DogError = env.finalizeStructure(dogStructure);
+      const petStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'PetError',
       });
-      attachMember(petStructure, {
+      env.attachMember(petStructure, {
         name: 'CucumberEncountered',
         type: MemberType.Object,
         slot: 5,
       });
-      attachMember(petStructure, {
+      env.attachMember(petStructure, {
         name: 'CatnipEncountered',
         type: MemberType.Object,
         slot: 6,
       });
-      attachMember(petStructure, {
+      env.attachMember(petStructure, {
         name: 'StrangerEncountered',
         type: MemberType.Object,
         slot: 7,
       });
-      attachMember(petStructure, {
+      env.attachMember(petStructure, {
         name: 'BathRequired',
         type: MemberType.Object,
         slot: 8,
       });
-      const PetError = finalizeStructure(petStructure);
+      const PetError = env.finalizeStructure(petStructure);
       expect(PetError.BathRequired).to.equal(DogError.BathRequired);
       expect(DogError.BathRequired).to.be.instanceOf(PetError);
       expect(CatError.CucumberEncountered).to.be.instanceOf(PetError);
     })
     it('should use previously defined error set as parent class if the other has all its error numbers', function() {
       // same test as above, with the error sets processed in different order
-      const petStructure = beginStructure({
+      const petStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'PetError',
       });
-      attachMember(petStructure, {
+      env.attachMember(petStructure, {
         name: 'CucumberEncountered',
         type: MemberType.Object,
         slot: 5,
       });
-      attachMember(petStructure, {
+      env.attachMember(petStructure, {
         name: 'CatnipEncountered',
         type: MemberType.Object,
         slot: 6,
       });
-      attachMember(petStructure, {
+      env.attachMember(petStructure, {
         name: 'StrangerEncountered',
         type: MemberType.Object,
         slot: 7,
       });
-      attachMember(petStructure, {
+      env.attachMember(petStructure, {
         name: 'BathRequired',
         type: MemberType.Object,
         slot: 8,
       });
-      const PetError = finalizeStructure(petStructure);
-      const catStructure = beginStructure({
+      const PetError = env.finalizeStructure(petStructure);
+      const catStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'CatError',
       });
-      attachMember(catStructure, {
+      env.attachMember(catStructure, {
         name: 'CucumberEncountered',
         type: MemberType.Object,
         slot: 5,
       });
-      attachMember(catStructure, {
+      env.attachMember(catStructure, {
         name: 'CatnipEncountered',
         type: MemberType.Object,
         slot: 6,
       });
-      const CatError = finalizeStructure(catStructure);
-      const dogStructure = beginStructure({
+      const CatError = env.finalizeStructure(catStructure);
+      const dogStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'DogError',
       });
-      attachMember(dogStructure, {
+      env.attachMember(dogStructure, {
         name: 'StrangerEncountered',
         type: MemberType.Object,
         slot: 7,
       });
-      attachMember(dogStructure, {
+      env.attachMember(dogStructure, {
         name: 'BathRequired',
         type: MemberType.Object,
         slot: 8,
       });
-      const DogError = finalizeStructure(dogStructure);
+      const DogError = env.finalizeStructure(dogStructure);
       expect(PetError.BathRequired).to.equal(DogError.BathRequired);
       expect(DogError.BathRequired).to.be.instanceOf(PetError);
       expect(CatError.CucumberEncountered).to.be.instanceOf(PetError);

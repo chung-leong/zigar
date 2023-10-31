@@ -1,5 +1,5 @@
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, restoreMemory } from './memory.js';
+import { getMemoryCopier, restoreMemory, getPointerAlign } from './memory.js';
 import { requireDataView, addTypedArray, checkDataViewSize, getCompatibleTags } from './data-view.js';
 import { getArrayIterator, createProxy, createArrayEntries, addChildVivificator, addPointerVisitor } from './array.js';
 import {
@@ -22,8 +22,9 @@ import { LENGTH, MEMORY, SLOTS, GETTER, SETTER, COMPAT, POINTER_VISITOR } from '
 import { copyPointer } from './pointer.js';
 import { getSelf } from './struct.js';
 
-export function finalizeSlice(s) {
+export function finalizeSlice(s, env) {
   const {
+    align,
     instance: {
       members: [ member ],
     },
@@ -48,7 +49,8 @@ export function finalizeSlice(s) {
     // so we're not putting this prop into the standard structure
     s.sentinel = sentinel;
   }
-  // the slices are different from other structures due to their variable sizes
+  const ptrAlign = getPointerAlign(align);
+  // the slices are different from other structures due to variability of their sizes
   // we only know the "shape" of an object after we've processed the initializers
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
@@ -68,9 +70,9 @@ export function finalizeSlice(s) {
   };
   const copy = getMemoryCopier(elementSize, true);
   const specialKeys = getSpecialKeys(s);
-  const shapeDefiner = function(dv, length, recv = null) {
+  const shapeDefiner = function(dv, length) {
     if (!dv) {
-      dv = new DataView(new ArrayBuffer(length * elementSize));
+      dv = env.allocMemory(length * elementSize, ptrAlign);
     }
     this[MEMORY] = dv;
     this[GETTER] = null;

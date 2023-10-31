@@ -4,6 +4,7 @@ import {
   MemberType,
   useBool,
   useIntEx,
+  useUintEx,
   useFloatEx,
   useEnumerationItem,
   useObject,
@@ -17,27 +18,22 @@ import { MEMORY, SLOTS } from '../src/symbol.js';
 import {
   invokeThunk,
 } from '../src/method.js';
-import { Environment } from '../src/environment.js'
-const {
-  beginStructure,
-  attachMember,
-  attachMethod,
-  attachTemplate,
-  finalizeStructure,
-} = Environment.prototype;
+import { BaseEnvironment } from '../src/environment.js'
 
 describe('Method functions', function() {
+  const env = new BaseEnvironment();
   describe('invokeThunk', function() {
     beforeEach(function() {
       useStruct();
       useEnumeration();
       useIntEx();
+      useUintEx();
       useBool();
       useFloatEx();
       useEnumerationItem();
       useObject();
     })
-    it('should invoke the given thunk with the expected arguments for C++', function() {
+    it('should invoke the given thunk with the expected arguments', function() {
       process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
       const argStruct = {
         [MEMORY]: new DataView(new ArrayBuffer(16)),
@@ -48,8 +44,9 @@ describe('Method functions', function() {
         recv = this;
         arg = args[0];
       }
-      invokeThunk(thunk, argStruct);
-      expect(arg).to.be.equal(argStruct);
+      invokeThunk(thunk, argStruct, BaseEnvironment);
+      expect(recv).to.be.instanceOf(BaseEnvironment);
+      expect(arg).to.equal(argStruct[MEMORY]);
     })
     it('should return a promise when trunk returns a promise', async function() {
       process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
@@ -70,7 +67,7 @@ describe('Method functions', function() {
         called = true;
         args.retval = 123;
       }
-      const result = invokeThunk(thunk, argStruct);
+      const result = invokeThunk(thunk, argStruct, BaseEnvironment);
       expect(result).to.be.a('promise');
       expect(called).to.be.false;
       ready = true;
@@ -79,7 +76,7 @@ describe('Method functions', function() {
       const value = await result;
       expect(value).to.equal(123);
     })
-    it('should throw an error if C++ addon returns a string', function() {
+    it('should throw an error if thunk returns a string', function() {
       process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
       const argStruct = {
         [MEMORY]: new DataView(new ArrayBuffer(16)),
@@ -88,22 +85,9 @@ describe('Method functions', function() {
       function thunk(...args) {
         return `JellyDonutInsurrection`;
       }
-      expect(() => invokeThunk(thunk, argStruct)).to.throw(Error)
+      expect(() => invokeThunk(thunk, argStruct, BaseEnvironment)).to.throw(Error)
         .with.property('message').that.equals('Jelly donut insurrection') ;
     })
-    it('should throw an error if WASM code returns a string', function() {
-      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
-      const argStruct = {
-        [MEMORY]: new DataView(new ArrayBuffer(16)),
-        [SLOTS]: { 0: {} },
-      };
-      function thunk(...args) {
-        return `ChickensEvolvedIntoCats`;
-      }
-      expect(() => invokeThunk(thunk, argStruct)).to.throw(Error)
-        .with.property('message').that.equals('Chickens evolved into cats') ;
-    })
-
   })
   describe('addMethods', function() {
     beforeEach(function() {
@@ -117,31 +101,31 @@ describe('Method functions', function() {
       useObject();
     })
     it('should attach methods to a struct', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
-      const argStruct = beginStructure({
+      const argStruct = env.beginStructure({
         type: StructureType.Struct,
         name: 'Argument',
         byteSize: 12,
       });
-      attachMember(argStruct, {
+      env.attachMember(argStruct, {
         name: '0',
         type: MemberType.Object,
         bitSize: structure.byteSize * 8,
@@ -150,24 +134,28 @@ describe('Method functions', function() {
         structure,
         slot: 0,
       });
-      attachMember(argStruct, {
+      env.attachMember(argStruct, {
         name: 'retval',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 64,
         byteSize: 4,
       });
-      const c = finalizeStructure(argStruct);
-      const thunk = function() {
-        this.retval = this[0].dog + this[0].cat;
+      const c = env.finalizeStructure(argStruct);
+      let recv;
+      const thunk = function(dv) {
+        recv = this;
+        const dog = dv.getInt32(0, true);
+        const cat = dv.getInt32(4, true);
+        dv.setInt32(8, dog + cat, true);
       };
-      attachMethod(structure, {
+      env.attachMethod(structure, {
         name: 'merge',
         argStruct,
         isStaticOnly: false,
         thunk,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({});
       expect(Hello.merge).to.be.a('function');
       expect(Hello.merge).to.have.property('name', 'merge');
@@ -176,29 +164,30 @@ describe('Method functions', function() {
       object.dog = 10;
       object.cat = 13;
       const res1 = object.merge();
+      expect(recv).to.be.instanceOf(BaseEnvironment);
       expect(res1).to.equal(23);
       const res2 = Hello.merge(object);
       expect(res2).to.equal(23);
     })
     it('should attach methods to enum items', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'Hello',
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setUint32(0, 0, true);
@@ -207,12 +196,12 @@ describe('Method functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const argStruct = beginStructure({
+      const argStruct = env.beginStructure({
         type: StructureType.Struct,
         name: 'Arguments',
         byteSize: 12,
       });
-      attachMember(argStruct, {
+      env.attachMember(argStruct, {
         name: '0',
         type: MemberType.EnumerationItem,
         bitSize: 32,
@@ -220,55 +209,48 @@ describe('Method functions', function() {
         byteSize: 4,
         structure,
       });
-      attachMember(argStruct, {
+      env.attachMember(argStruct, {
         name: '1',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
-      attachMember(argStruct, {
+      env.attachMember(argStruct, {
         name: 'retval',
         type: MemberType.Bool,
         bitSize: 1,
         bitOffset: 64,
         byteSize: 1,
       });
-      finalizeStructure(argStruct);
-      let arg1, arg2, symbol1, symbol2, argDV, slots;
-      const thunk = function(...args) {
-        slots = args[0];
-        symbol1 = args[1];
-        symbol2 = args[2];
-        arg1 = this[0];
-        arg2 = this[1];
-        this.retval = true;
-        argDV = this[symbol2];
+      env.finalizeStructure(argStruct);
+      let recv, arg1, arg2;
+      const thunk = function(dv) {
+        recv = this;
+        arg1 = dv.getInt32(0, true);
+        arg2 = dv.getInt32(4, true);
+        dv.setInt32(8, 1, true);
       };
-      attachMethod(structure, {
+      env.attachMethod(structure, {
         name: 'foo',
         argStruct,
         isStaticOnly: false,
         thunk,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(Hello.foo).to.be.a('function');
       expect(Hello.foo).to.have.property('name', 'foo');
       expect(Hello.prototype.foo).to.be.a('function');
       expect(Hello.prototype.foo).to.have.property('name', 'foo');
       const res1 = Hello.Cat.foo(1234);
+      expect(recv).to.be.instanceOf(BaseEnvironment);
       expect(res1).to.be.true;
-      expect(arg1).to.equal(Hello.Cat);
+      expect(arg1).to.equal(Number(Hello.Cat));
       expect(arg2).to.equal(1234);
       const res2 = Hello.foo(Hello.Dog, 4567);
       expect(res2).to.be.true;
-      expect(arg1).to.equal(Hello.Dog);
+      expect(arg1).to.equal(Number(Hello.Dog));
       expect(arg2).to.equal(4567);
-      expect(symbol1).to.be.a('symbol');
-      expect(symbol2).to.be.a('symbol');
-      expect(slots).to.be.an('object');
-      expect(argDV).to.be.an.instanceOf(DataView);
-      expect(argDV).to.have.property('byteLength', 12);
     })
   })
 })

@@ -5,7 +5,7 @@ import {
   useStruct,
   useOptional,
 } from '../src/structure.js';
-import { CHILD_VIVIFICATOR, MEMORY, SLOTS } from '../src/symbol.js';
+import { CHILD_VIVIFICATOR, MEMORY } from '../src/symbol.js';
 import {
   MemberType,
   isByteAligned,

@@ -1,19 +1,22 @@
 import { MemberType, getAccessors } from './member.js';
+import { getPointerAlign } from './memory.js';
 import { throwArgumentCountMismatch, rethrowArgumentError } from './error.js';
 import { MEMORY, SLOTS } from './symbol.js';
 import { addChildVivificators } from './struct.js';
 
-export function finalizeArgStruct(s) {
+export function finalizeArgStruct(s, env) {
   const {
     byteSize,
+    align,
     instance: {
       members,
     },
     options,
   } = s;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(args) {
-    const dv = new DataView(new ArrayBuffer(byteSize));
+    const dv = env.allocMemory(byteSize, ptrAlign);
     this[MEMORY] = dv;
     if (hasObject) {
       this[SLOTS] = {};

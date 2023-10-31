@@ -3,7 +3,7 @@ import { throwNoNewError, decamelizeErrorName } from './error.js';
 
 let currentErrorSets;
 
-export function finalizeErrorSet(s) {
+export function finalizeErrorSet(s, env) {
   const {
     name,
     instance: {

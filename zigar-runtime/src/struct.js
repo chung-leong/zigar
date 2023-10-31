@@ -1,5 +1,5 @@
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, restoreMemory } from './memory.js';
+import { getMemoryCopier, restoreMemory, getPointerAlign } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
@@ -8,9 +8,10 @@ import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer, 
 import { MEMORY, SLOTS, PARENT, CHILD_VIVIFICATOR, POINTER_VISITOR } from './symbol.js';
 import { copyPointer } from './pointer.js';
 
-export function finalizeStruct(s) {
+export function finalizeStruct(s, env) {
   const {
     byteSize,
+    align,
     instance: {
       members,
       template,
@@ -34,6 +35,7 @@ export function finalizeStruct(s) {
   }
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -42,7 +44,7 @@ export function finalizeStruct(s) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = new DataView(new ArrayBuffer(byteSize));
+      dv = env.allocMemory(byteSize, ptrAlign);
     } else {
       self = Object.create(constructor.prototype);
       dv = getDataView(s, arg);
@@ -135,8 +137,8 @@ export function finalizeStruct(s) {
       addPointerVisitor(s);
     }
   }
-  addStaticMembers(s);
-  addMethods(s);
+  addStaticMembers(s, env);
+  addMethods(s, env);
   return constructor;
 }
 

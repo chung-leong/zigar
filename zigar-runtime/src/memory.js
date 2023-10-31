@@ -1,5 +1,9 @@
 import { MEMORY } from './symbol.js';
 
+export function getPointerAlign(align) {
+  return (align) ? Math.log2(align) : 0;
+}
+
 export function getBitAlignFunction(bitPos, bitSize, toAligned) {
   if (bitPos + bitSize <= 8) {
     const mask = (2 ** bitSize) - 1;

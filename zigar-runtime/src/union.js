@@ -1,6 +1,6 @@
 import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, restoreMemory } from './memory.js';
+import { getMemoryCopier, restoreMemory, getPointerAlign } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
@@ -17,10 +17,11 @@ import {
 import { copyPointer, disablePointer, resetPointer } from './pointer.js';
 import { MEMORY, ENUM_NAME, ENUM_ITEM, TAG, SLOTS, POINTER_VISITOR } from './symbol.js';
 
-export function finalizeUnion(s) {
+export function finalizeUnion(s, env) {
   const {
     type,
     byteSize,
+    align,
     instance: {
       members,
       template,
@@ -118,6 +119,7 @@ export function finalizeUnion(s) {
   // non-tagged union as marked as not having pointers--if there're actually
   // members with pointers, we need to disable them
   const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
+  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -126,7 +128,7 @@ export function finalizeUnion(s) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = new DataView(new ArrayBuffer(byteSize));
+      dv = env.allocMemory(byteSize, ptrAlign);
     } else {
       self = Object.create(constructor.prototype);
       dv = getDataView(s, arg);
@@ -231,14 +233,14 @@ export function finalizeUnion(s) {
   }
   Object.defineProperty(constructor.prototype, '$', { get: getSelf, set: initializer, configurable: true });
   if (hasObject) {
-    addChildVivificators(s);
+    addChildVivificators.call(this, s);
     if (hasPointer || hasInaccessiblePointer) {
-      addPointerVisitor(s);
+      addPointerVisitor.call(this, s);
     }
   }
-  addSpecialAccessors(s);
-  addStaticMembers(s);
-  addMethods(s);
+  addSpecialAccessors(s, env);
+  addStaticMembers(s, env);
+  addMethods(s, env);
   return constructor;
 };
 

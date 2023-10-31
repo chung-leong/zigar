@@ -6,28 +6,25 @@ import {
   getStructureFeature,
   getStructureName,
 } from '../src/structure.js';
-import { Environment } from '../src/environment.js'
-const {
-  beginStructure,
-  finalizeStructure,
-} = Environment.prototype;
+import { BaseEnvironment } from '../src/environment.js'
 
 describe('Structure functions', function() {
+  const env = new BaseEnvironment();
   describe('useOpaque', function() {
     it(`should enable the creation of opaque structure`, function() {
       useOpaque();
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Opaque,
         name: 'Hello',
         byteSize: 0
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(Hello).to.be.an('function');
     })
   })
   describe('getStructureFeature', function() {
     it(`should return the name of the function needed by structure`, function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Opaque,
         name: 'Hello',
         byteSize: 0

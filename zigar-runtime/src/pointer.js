@@ -1,7 +1,8 @@
 import { StructureType } from './structure.js';
+import { getPointerAlign } from './memory.js';
 import { requireDataView, getDataView, isCompatible, isBuffer } from './data-view.js';
 import { MemberType, getAccessors } from './member.js';
-import { MEMORY, PROXY, SLOTS, PARENT, POINTER_VISITOR, ENVIROMENT } from './symbol.js';
+import { MEMORY, PROXY, SLOTS, PARENT, POINTER_VISITOR, ENVIRONMENT } from './symbol.js';
 import {
   throwNoCastingToPointer,
   throwInaccessiblePointer,
@@ -13,9 +14,10 @@ import {
   addArticle,
 } from './error.js';
 
-export function finalizePointer(s) {
+export function finalizePointer(s, env) {
   const {
     byteSize,
+    align,
     instance: {
       members: [ member ],
     },
@@ -30,23 +32,24 @@ export function finalizePointer(s) {
   const isTargetPointer = (targetStructure.type === StructureType.Pointer);
   const addressSize = (isTargetSlice) ? byteSize / 2 : byteSize;
   const usizeStructure = { name: 'usize', byteSize: addressSize };
-  const setAddress = getAccessors({
+  const { get: getAddress, set: setAddress } = getAccessors({
     type: MemberType.Uint,
     bitOffset: 0,
     bitSize: addressSize * 8,
     byteSize: addressSize,
     structure: usizeStructure,
-  }, options).set;
-  const setLength = (isTargetSlice) ? getAccessors({
+  }, options);
+  const { get: getLength, set: setLength } = (isTargetSlice) ? getAccessors({
     type: MemberType.Uint,
     bitOffset: addressSize * 8,
     bitSize: addressSize * 8,
     byteSize: addressSize,
     structure: usizeStructure,
-  }, options).set : null;
+  }, options).set : {};
+  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
-    const calledFromZig = this?.[ENVIROMENT] ?? false;
-    const calledFromParent = (this === PARENT);
+    const calledFromEnviroment = this === ENVIRONMENT;
+    const calledFromParent = this === PARENT;
     let creating = this instanceof constructor;
     let self, dv;
     if (creating) {
@@ -54,10 +57,10 @@ export function finalizePointer(s) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = new DataView(new ArrayBuffer(byteSize));
+      dv = env.allocMemory(byteSize, ptrAlign);
     } else {
       self = Object.create(constructor.prototype);
-      if (calledFromZig || calledFromParent) {
+      if (calledFromEnviroment || calledFromParent) {
         dv = requireDataView(s, arg);
       } else {
         const Target = targetStructure.constructor;
@@ -77,6 +80,17 @@ export function finalizePointer(s) {
     self[SLOTS] = { 0: null };
     if (creating) {
       initializer.call(self, arg);
+    } else {
+      if (calledFromEnviroment) {
+        // obtain address (and possibly length) from memory
+        const address = getAddress.call(self);
+        const len = (isTargetSlice) ? getLength.call(self) : targetStructure.byteSize;
+        // get view of memory that pointer points to
+        const dv = env.obtainView(address, len);
+        // create the target
+        const Target = targetStructure.constructor;
+        Target.call(this, dv);
+      }
     }
     return createProxy.call(self, isConst, isTargetPointer);
   };
@@ -119,9 +133,10 @@ export function finalizePointer(s) {
             throwInvalidPointerTarget(s, arg);
           }
         }
-        if (inFixedMemory(this)) {
-          if (inFixedMemory(arg)) {
-            const { address } = inFixedMemory(arg);
+        if (env.isShared(this[MEMORY])) {
+          // the pointer sits in shared memory--apply the change immediately
+          if (env.isShared(arg[MEMORY])) {
+            const address = env.getAddress(arg[MEMORY]);
             setAddress.call(this, address);
             if (setLength) {
               setLength.call(this, arg.length);

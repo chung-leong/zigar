@@ -1,6 +1,6 @@
 import { getStructureFactory, getStructureName } from './structure.js';
 import { decodeText } from './text.js';
-import { MEMORY, SLOTS, ENVIROMENT } from './symbol.js';
+import { MEMORY, SLOTS, ENVIRONMENT } from './symbol.js';
 
 const default_alignment = 16;
 const globalSlots = {};
@@ -8,19 +8,30 @@ const globalSlots = {};
 let consolePending = '';
 let consoleTimeout = 0;
 
-export class Environment {
+export class BaseEnvironment {
   memoryPool = null;
 
-  getAddress(buffer) {}
-  obtainView(address, len) {}
-  copyBytes(dst, address, len) {}
+  /*
+  Functions to be defined in subclass:
+
+  getAddress(buffer: ArrayBuffer): bigInt|number {
+    // return a buffer's address
+  }
+  obtainView(address: bigInt|number, len: number): DataView {
+    // obtain a data view of memory at given address
+  }
+  copyBytes(dst: DataView, address: bigInt|number, len: number): void {
+    // copy memory at given address into destination view
+  }
+
+  */
 
   allocMemory(len, ptrAlign) {
     const extra = getExtraCount(ptrAlign);
     const buffer = new ArrayBuffer(len + extra);
-    const address = this.getAddress(buffer);
     let offset = 0;
     if (extra !== 0) {
+      const address = this.getAddress(buffer);
       const mask = ~(extra - 1);
       const aligned = (address & mask) + extra;
       offset = aligned - address;
@@ -30,6 +41,10 @@ export class Environment {
   }
 
   freeMemory(address, len, ptrAlign) {
+  }
+
+  isShared(dv) {
+    return dv.buffer instanceof SharedArrayBuffer;
   }
 
   createView(address, len, ptrAlign, copy) {
@@ -44,7 +59,7 @@ export class Environment {
 
   castView(structure, dv) {
     const { constructor } = structure;
-    return constructor.call(this, dv);
+    return constructor.call(ENVIRONMENT, dv);
   }
 
   createObject(structure, arg) {
@@ -125,7 +140,7 @@ export class Environment {
   finalizeStructure(s) {
     try {
       const f = getStructureFactory(s.type);
-      const constructor = f(s);
+      const constructor = f(s, this);
       if (typeof(constructor) === 'function') {
         Object.defineProperties(constructor, {
           name: { value: getStructureName(s), writable: false }
@@ -176,7 +191,6 @@ export class Environment {
     }
   }
 }
-Environment.prototype[ENVIROMENT] = true;
 
 export function getGlobalSlots() {
   return globalSlots;

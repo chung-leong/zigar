@@ -21,15 +21,10 @@ import { CHILD_VIVIFICATOR, MEMORY, SLOTS } from '../src/symbol.js';
 import {
   getOptionalAccessors,
 } from '../src/optional.js';
-import { Environment } from '../src/environment.js'
-const {
-  beginStructure,
-  attachMember,
-  attachTemplate,
-  finalizeStructure,
-} = Environment.prototype;
+import { BaseEnvironment } from '../src/environment.js'
 
 describe('Optional functions', function() {
+  const env = new BaseEnvironment();
   describe('finalizeOptional', function() {
     beforeEach(function() {
       usePrimitive();
@@ -45,12 +40,12 @@ describe('Optional functions', function() {
       useObject();
     })
     it('should define a structure for storing an optional value', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
         byteSize: 18,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'value',
         type: MemberType.Float,
         bitOffset: 0,
@@ -60,14 +55,14 @@ describe('Optional functions', function() {
           type: StructureType.Primitive,
         }
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'present',
         type: MemberType.Bool,
         bitOffset: 128,
         bitSize: 1,
         byteSize: 1,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = Hello(new ArrayBuffer(18));
       expect(object.$).to.equal(null);
       object.$ = 3.14;
@@ -76,12 +71,12 @@ describe('Optional functions', function() {
       expect(object.$).to.equal(null);
     })
     it('should throw when no initializer is provided', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
         byteSize: 18,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'value',
         type: MemberType.Float,
         bitOffset: 0,
@@ -91,23 +86,23 @@ describe('Optional functions', function() {
           type: StructureType.Primitive,
         }
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'present',
         type: MemberType.Bool,
         bitOffset: 128,
         bitSize: 1,
         byteSize: 1,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(() => new Hello).to.throw(TypeError);
     })
     it('should initialize an optional value based on argument given', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
         byteSize: 18,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'value',
         type: MemberType.Float,
         bitOffset: 0,
@@ -117,26 +112,26 @@ describe('Optional functions', function() {
           type: StructureType.Primitive,
         }
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'present',
         type: MemberType.Bool,
         bitOffset: 128,
         bitSize: 1,
         byteSize: 1,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello(undefined);
       expect(object.$).to.equal(null);
       object.$ = 3.14;
       expect(object.$).to.equal(3.14);
     })
     it('should initialize an optional value from object of same type', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
         byteSize: 18,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'value',
         type: MemberType.Float,
         bitOffset: 0,
@@ -146,46 +141,46 @@ describe('Optional functions', function() {
           type: StructureType.Primitive,
         }
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'present',
         type: MemberType.Bool,
         bitOffset: 128,
         bitSize: 1,
         byteSize: 1,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({});
       object.$ = 3.14;
       const object2 = new Hello(object);
       expect(object2.$).to.equal(3.14);
     })
     it('should define a structure for storing an optional struct', function() {
-      const structStructure = beginStructure({
+      const structStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Animal',
         byteSize: 8,
       });
-      attachMember(structStructure, {
+      env.attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      attachMember(structStructure, {
+      env.attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
-      const Animal = finalizeStructure(structStructure);
-      const structure = beginStructure({
+      const Animal = env.finalizeStructure(structStructure);
+      const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
         byteSize: 18,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'value',
         type: MemberType.Object,
         bitOffset: 0,
@@ -194,14 +189,14 @@ describe('Optional functions', function() {
         slot: 0,
         structure: structStructure,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'present',
         type: MemberType.Bool,
         bitOffset: 128,
         bitSize: 1,
         byteSize: 1,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = Hello(new ArrayBuffer(18));
       expect(object.$).to.equal(null);
       object.$ = { dog: 1, cat: 2 };
@@ -210,25 +205,25 @@ describe('Optional functions', function() {
       expect(object.$).to.equal(null);
     })
     it('should define a structure for storing an optional pointer', function() {
-      const intStructure = beginStructure({
+      const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
       });
-      attachMember(intStructure, {
+      env.attachMember(intStructure, {
         type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = finalizeStructure(intStructure);
-      const ptrStructure = beginStructure({
+      const Int32 = env.finalizeStructure(intStructure);
+      const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true,
       });
-      attachMember(ptrStructure, {
+      env.attachMember(ptrStructure, {
         type: MemberType.Object,
         bitSize: 64,
         bitOffset: 0,
@@ -236,14 +231,14 @@ describe('Optional functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = finalizeStructure(ptrStructure);
-      const structure = beginStructure({
+      const Int32Ptr = env.finalizeStructure(ptrStructure);
+      const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
         byteSize: 8,
         hasPointer: true,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'value',
         type: MemberType.Object,
         bitOffset: 0,
@@ -252,7 +247,7 @@ describe('Optional functions', function() {
         slot: 0,
         structure: ptrStructure,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'present',
         type: MemberType.Bool,
         bitOffset: 0,
@@ -260,7 +255,7 @@ describe('Optional functions', function() {
         byteSize: 8,
         structure: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = Hello(new ArrayBuffer(8));
       expect(object.$).to.equal(null);
       object.$ = new Int32(0);
@@ -268,25 +263,25 @@ describe('Optional functions', function() {
       expect(object.$['*']).to.equal(5);
     })
     it('should define a structure for storing an optional slice', function() {
-      const sliceStructure = beginStructure({
+      const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Uint8',
         byteSize: 1,
       })
-      attachMember(sliceStructure, {
+      env.attachMember(sliceStructure, {
         type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array },
       });
-      const Uint8Slice = finalizeStructure(sliceStructure);
-      const ptrStructure = beginStructure({
+      const Uint8Slice = env.finalizeStructure(sliceStructure);
+      const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]Uint8',
         byteSize: 16,
         hasPointer: true,
       });
-      attachMember(ptrStructure, {
+      env.attachMember(ptrStructure, {
         type: MemberType.Object,
         bitSize: 128,
         bitOffset: 0,
@@ -294,14 +289,14 @@ describe('Optional functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const Uint8SlicePtr = finalizeStructure(ptrStructure);
-      const structure = beginStructure({
+      const Uint8SlicePtr = env.finalizeStructure(ptrStructure);
+      const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
         byteSize: 16,
         hasPointer: true,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'value',
         type: MemberType.Object,
         bitOffset: 0,
@@ -310,7 +305,7 @@ describe('Optional functions', function() {
         slot: 0,
         structure: ptrStructure,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'present',
         type: MemberType.Bool,
         bitOffset: 0,
@@ -318,7 +313,7 @@ describe('Optional functions', function() {
         byteSize: 8,
         structure: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const encoder = new TextEncoder();
       const array = encoder.encode('This is a test');
       const object = new Hello(array);
@@ -329,25 +324,25 @@ describe('Optional functions', function() {
       expect(object2.$).to.be.null;
     })
     it('should copy pointers where initialized from an optional of the same type', function() {
-      const sliceStructure = beginStructure({
+      const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Uint8',
         byteSize: 1,
       })
-      attachMember(sliceStructure, {
+      env.attachMember(sliceStructure, {
         type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array },
       });
-      const Uint8Slice = finalizeStructure(sliceStructure);
-      const ptrStructure = beginStructure({
+      const Uint8Slice = env.finalizeStructure(sliceStructure);
+      const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]Uint8',
         byteSize: 16,
         hasPointer: true,
       });
-      attachMember(ptrStructure, {
+      env.attachMember(ptrStructure, {
         type: MemberType.Object,
         bitSize: 128,
         bitOffset: 0,
@@ -355,14 +350,14 @@ describe('Optional functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const Uint8SlicePtr = finalizeStructure(ptrStructure);
-      const structure = beginStructure({
+      const Uint8SlicePtr = env.finalizeStructure(ptrStructure);
+      const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
         byteSize: 16,
         hasPointer: true,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'value',
         type: MemberType.Object,
         bitOffset: 0,
@@ -371,7 +366,7 @@ describe('Optional functions', function() {
         slot: 0,
         structure: ptrStructure,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'present',
         type: MemberType.Bool,
         bitOffset: 0,
@@ -379,7 +374,7 @@ describe('Optional functions', function() {
         byteSize: 8,
         structure: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const encoder = new TextEncoder();
       const array = encoder.encode('This is a test');
       const object = new Hello(array);
@@ -387,25 +382,25 @@ describe('Optional functions', function() {
       expect(object2.$.string).to.equal('This is a test');
     })
     it('should release pointers in struct when it is set to null', function() {
-      const intStructure = beginStructure({
+      const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
       });
-      attachMember(intStructure, {
+      env.attachMember(intStructure, {
         type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = finalizeStructure(intStructure);
-      const ptrStructure = beginStructure({
+      const Int32 = env.finalizeStructure(intStructure);
+      const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true
       });
-      attachMember(ptrStructure, {
+      env.attachMember(ptrStructure, {
         type: MemberType.Object,
         bitSize: 64,
         bitOffset: 0,
@@ -413,14 +408,14 @@ describe('Optional functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = finalizeStructure(ptrStructure);
-      const structStructure = beginStructure({
+      const Int32Ptr = env.finalizeStructure(ptrStructure);
+      const structStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 8 * 2,
         hasPointer: true
       });
-      attachMember(structStructure, {
+      env.attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Object,
         bitSize: 64,
@@ -429,7 +424,7 @@ describe('Optional functions', function() {
         slot: 0,
         structure: ptrStructure,
       });
-      attachMember(structStructure, {
+      env.attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Object,
         bitSize: 64,
@@ -442,7 +437,7 @@ describe('Optional functions', function() {
       const int2 = new Int32(4567);
       const intPtr1 = new Int32Ptr(int1);
       const intPtr2 = new Int32Ptr(int2);
-      attachTemplate(structStructure, {
+      env.attachTemplate(structStructure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8 * 2));
           dv.setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
@@ -454,14 +449,14 @@ describe('Optional functions', function() {
           1: intPtr2,
         }
       });
-      finalizeStructure(structStructure);
-      const structure = beginStructure({
+      env.finalizeStructure(structStructure);
+      const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
         byteSize: structStructure.byteSize + 32,
         hasPointer: true,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'value',
         type: MemberType.Object,
         bitOffset: 0,
@@ -470,7 +465,7 @@ describe('Optional functions', function() {
         slot: 0,
         structure: structStructure,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'present',
         type: MemberType.Bool,
         bitOffset: structStructure.byteSize * 8,
@@ -478,7 +473,7 @@ describe('Optional functions', function() {
         byteSize: 8,
         structure: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({});
       const ptr = object.$.cat;
       expect(ptr[SLOTS][0]).to.not.be.null;
@@ -486,25 +481,25 @@ describe('Optional functions', function() {
       expect(ptr[SLOTS][0]).to.be.null;
     })
     it('should release pointers in array when it is set to null', function() {
-      const intStructure = beginStructure({
+      const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
       });
-      attachMember(intStructure, {
+      env.attachMember(intStructure, {
         type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = finalizeStructure(intStructure);
-      const ptrStructure = beginStructure({
+      const Int32 = env.finalizeStructure(intStructure);
+      const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true,
       });
-      attachMember(ptrStructure, {
+      env.attachMember(ptrStructure, {
         type: MemberType.Object,
         bitSize: 64,
         bitOffset: 0,
@@ -512,28 +507,28 @@ describe('Optional functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = finalizeStructure(ptrStructure);
-      const arrayStructure = beginStructure({
+      const Int32Ptr = env.finalizeStructure(ptrStructure);
+      const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         name: 'Hello',
         length: 4,
         byteSize: 8 * 4,
         hasPointer: true,
       });
-      attachMember(arrayStructure, {
+      env.attachMember(arrayStructure, {
         type: MemberType.Object,
         bitSize: 64,
         byteSize: 8,
         structure: ptrStructure,
       });
-      const Int32PtrArray = finalizeStructure(arrayStructure);
-      const structure = beginStructure({
+      const Int32PtrArray = env.finalizeStructure(arrayStructure);
+      const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
         byteSize: arrayStructure.byteSize + 32,
         hasPointer: true,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'value',
         type: MemberType.Object,
         bitOffset: 0,
@@ -542,7 +537,7 @@ describe('Optional functions', function() {
         slot: 0,
         structure: arrayStructure,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'present',
         type: MemberType.Bool,
         bitOffset: arrayStructure.byteSize * 8,
@@ -550,7 +545,7 @@ describe('Optional functions', function() {
         byteSize: 8,
         structure: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello([ new Int32(1234), new Int32(4567), new Int32(7890), new Int32(12345) ]);
       const array = object.$;
       for (let i = 0; i < 4; i++) {

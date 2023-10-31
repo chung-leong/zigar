@@ -15,15 +15,10 @@ import {
   useEnumeration,
   usePointer,
 } from '../src/structure.js';
-import { Environment } from '../src/environment.js'
-const {
-  beginStructure,
-  attachMember,
-  attachTemplate,
-  finalizeStructure,
-} = Environment.prototype;
+import { BaseEnvironment } from '../src/environment.js'
 
 describe('Static variable functions', function() {
+  const env = new BaseEnvironment();
   beforeEach(function() {
     useStruct();
     usePointer();
@@ -37,26 +32,26 @@ describe('Static variable functions', function() {
   describe('Static variables', function() {
     it('should attach variables to a struct', function() {
       // define structure for integer variables
-      const intStructure = beginStructure({
+      const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
       });
-      attachMember(intStructure, {
+      env.attachMember(intStructure, {
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = finalizeStructure(intStructure);
-      const intPtrStructure = beginStructure({
+      const Int32 = env.finalizeStructure(intStructure);
+      const intPtrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
         byteSize: 8,
         isConst: false,
         hasPointer: true,
       });
-      attachMember(intPtrStructure, {
+      env.attachMember(intPtrStructure, {
         type: MemberType.Object,
         bitSize: 64,
         bitOffset: 0,
@@ -64,15 +59,15 @@ describe('Static variable functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = finalizeStructure(intPtrStructure);
-      const constIntPtrStructure = beginStructure({
+      const Int32Ptr = env.finalizeStructure(intPtrStructure);
+      const constIntPtrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
         byteSize: 8,
         isConst: true,
         hasPointer: true,
       });
-      attachMember(constIntPtrStructure, {
+      env.attachMember(constIntPtrStructure, {
         type: MemberType.Object,
         bitSize: 64,
         bitOffset: 0,
@@ -80,27 +75,27 @@ describe('Static variable functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const ConstInt32Ptr = finalizeStructure(constIntPtrStructure);
-      const structure = beginStructure({
+      const ConstInt32Ptr = env.finalizeStructure(constIntPtrStructure);
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 8 * 2,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'superdog',
         type: MemberType.Object,
         bitSize: 64,
@@ -109,7 +104,7 @@ describe('Static variable functions', function() {
         slot: 0,
         structure: intPtrStructure,
       }, true);
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'supercat',
         type: MemberType.Object,
         bitSize: 64,
@@ -120,13 +115,13 @@ describe('Static variable functions', function() {
       }, true);
       const int1 = new Int32(1234);
       const int2 = new Int32(4567);
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [SLOTS]: {
           0: new Int32Ptr(int1),
           1: new ConstInt32Ptr(int2),
         },
       }, true);
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(Hello.superdog).to.equal(1234);
       Hello.superdog = 43;
       expect(Hello.superdog).to.equal(43);
@@ -143,25 +138,25 @@ describe('Static variable functions', function() {
       expect(descriptors.supercat.set).to.be.undefined;
     })
     it('should attach variables to an enumeration', function() {
-      const intStructure = beginStructure({
+      const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
       });
-      attachMember(intStructure, {
+      env.attachMember(intStructure, {
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = finalizeStructure(intStructure);
-      const intPtrStructure = beginStructure({
+      const Int32 = env.finalizeStructure(intStructure);
+      const intPtrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true,
       });
-      attachMember(intPtrStructure, {
+      env.attachMember(intPtrStructure, {
         type: MemberType.Object,
         bitSize: 64,
         bitOffset: 0,
@@ -169,24 +164,24 @@ describe('Static variable functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = finalizeStructure(intPtrStructure);
-      const structure = beginStructure({
+      const Int32Ptr = env.finalizeStructure(intPtrStructure);
+      const structure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'Hello'
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setUint32(0, 0, true);
@@ -195,7 +190,7 @@ describe('Static variable functions', function() {
         })(),
         [SLOTS]: {},
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'superdog',
         type: MemberType.Object,
         bitSize: 64,
@@ -204,7 +199,7 @@ describe('Static variable functions', function() {
         slot: 0,
         structure: intPtrStructure,
       }, true);
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'supercat',
         type: MemberType.Object,
         bitSize: 64,
@@ -215,13 +210,13 @@ describe('Static variable functions', function() {
       }, true);
       const int1 = new Int32(1234);
       const int2 = new Int32(4567);
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [SLOTS]: {
           0: new Int32Ptr(int1),
           1: new Int32Ptr(int2),
         },
       }, true);
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(Hello.superdog).to.equal(1234);
       Hello.superdog = 43;
       expect(Hello.superdog).to.equal(43);

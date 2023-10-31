@@ -1,15 +1,16 @@
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, restoreMemory } from './memory.js';
+import { getMemoryCopier, restoreMemory, getPointerAlign } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
 import { MEMORY, SLOTS, PARENT, GETTER, SETTER, PROXY, COMPAT, CHILD_VIVIFICATOR, POINTER_VISITOR, SELF } from './symbol.js';
 import { copyPointer, getProxy } from './pointer.js';
 
-export function finalizeArray(s) {
+export function finalizeArray(s, env) {
   const {
     length,
     byteSize,
+    align,
     instance: {
       members: [ member ],
     },
@@ -27,6 +28,7 @@ export function finalizeArray(s) {
   }
   addTypedArray(s);
   const hasObject = (member.type === MemberType.Object);
+  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -35,7 +37,7 @@ export function finalizeArray(s) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = new DataView(new ArrayBuffer(byteSize));
+      dv = env.allocMemory(byteSize, ptrAlign);
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);

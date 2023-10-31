@@ -14,15 +14,10 @@ import {
   useStruct,
   usePointer,
 } from '../src/structure.js';
-import { Environment } from '../src/environment.js'
-const {
-  beginStructure,
-  attachMember,
-  attachTemplate,
-  finalizeStructure,
-} = Environment.prototype;
+import { BaseEnvironment } from '../src/environment.js'
 
 describe('Struct functions', function() {
+  const env = new BaseEnvironment();
   describe('finalizeStruct', function() {
     beforeEach(function() {
       usePrimitive();
@@ -34,26 +29,26 @@ describe('Struct functions', function() {
       useObject();
     })
     it('should define a simple struct', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 4 * 2,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setInt32(0, 1234, true);
@@ -62,7 +57,7 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(Hello).to.be.a('function');
       const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
@@ -72,51 +67,51 @@ describe('Struct functions', function() {
       expect(object.cat).to.equal(4567);
     })
     it('should initialize fields from object', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 4 * 2,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({ dog: 5, cat: 6 });
       expect(object.dog).to.equal(5);
       expect(object.cat).to.equal(6);
     })
     it('should initialize fields from object whose fields are not enumerable', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 4 * 2,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const initObj = Object.create({ dog: 5 });
       Object.defineProperty(initObj, 'cat', { value: 6 });
       const object = new Hello(initObj);
@@ -126,49 +121,49 @@ describe('Struct functions', function() {
       expect(object.cat).to.equal(6);
     })
     it('should throw when no initializer is provided', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 4 * 2,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(() => new Hello).to.throw(TypeError);
     })
     it('should work correctly with big-endian data', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 4 * 2,
       }, { littleEndian: false });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setInt32(0, 1234, false);
@@ -177,7 +172,7 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(Hello).to.be.a('function');
       const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
@@ -187,26 +182,26 @@ describe('Struct functions', function() {
       expect(object.cat).to.equal(4567);
     })
     it('should create functional setters', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 4 * 2,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setInt32(0, 1234, true);
@@ -215,7 +210,7 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({});
       object.dog = 72;
       expect(object.dog).to.equal(72);
@@ -225,26 +220,26 @@ describe('Struct functions', function() {
       expect(object.dog).to.equal(72);
     })
     it('should have dataView property', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 4 * 2,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setInt32(0, 1234, true);
@@ -253,31 +248,31 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({});
       expect(object.dataView).to.be.instanceOf(DataView);
     })
     it('should throw when a value exceed the maximum capability of the type', function () {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 4 * 2,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setInt32(0, 1234, true);
@@ -286,31 +281,31 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({});
       expect(() => object.dog = 0x1FFFFFFFF).to.throw(TypeError);
     })
     it('should permit overflow when runtime safety is off', function () {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 4 * 2,
       }, { runtimeSafety: false });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setInt32(0, 1234, true);
@@ -319,29 +314,29 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({});
       expect(() => object.dog = 0x1FFFFFFFF).to.not.throw();
     })
     it('should be able to handle bitfields', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 1,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Bool,
         bitSize: 1,
         bitOffset: 0,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Bool,
         bitSize: 1,
         bitOffset: 1,
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(1));
           dv.setInt8(0, 2, true);
@@ -349,7 +344,7 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({});
       expect(object.dog).to.be.false;
       expect(object.cat).to.be.true;
@@ -360,24 +355,24 @@ describe('Struct functions', function() {
       expect(object.cat).to.be.false;
     })
     it('should be able to handle small int type', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 1,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Uint,
         bitSize: 2,
         bitOffset: 0,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 3,
         bitOffset: 2,
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(1));
           dv.setInt8(0, 7, true);
@@ -385,7 +380,7 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({});
       expect(object.dog).to.equal(3);
       expect(object.cat).to.equal(1);
@@ -398,24 +393,24 @@ describe('Struct functions', function() {
       expect(object.dog).to.equal(3);
     })
     it('should be able to handle bit-misalignment', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 5,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Uint,
         bitSize: 2,
         bitOffset: 0,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 2,
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(5));
           dv.setUint32(0, 8, true);
@@ -423,32 +418,32 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({});
       expect(object.dog).to.equal(0);
       expect(object.cat).to.equal(2);
     })
     it('should complain about missing required initializers', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 32,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(() => new Hello({})).to.throw(TypeError)
         .with.property('message').that.contains('dog, cat');
       expect(() => new Hello({ dog: 1234 })).to.throw(TypeError)
@@ -458,66 +453,66 @@ describe('Struct functions', function() {
       expect(object.cat).to.equal(4567);
     })
     it('should complain about invalid initializers', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 32,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(() => new Hello({ dog: 1234, cat: 4567, turkey: 1 })).to.throw(TypeError)
         .with.property('message').that.contains('turkey');
     })
     it('should complain about invalid initializers', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 32,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(() => new Hello(5)).to.throw(TypeError)
         .with.property('message').that.does.not.contain('dog');
     })
     it('should apply default value when only some properties are provided', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Uint,
         isRequired: true,
@@ -526,36 +521,36 @@ describe('Struct functions', function() {
       });
       const dv = new DataView(new ArrayBuffer(8));
       dv.setUint32(0, 1234, true);
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: dv,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(() => new Hello({})).to.throw();
       const object = new Hello({ cat: 4567 });
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(4567);
     })
     it('should accept base64 data as initializer', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 32,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const str = '\u0001\u0000\u0000\u0000\u0007\u0000\u0000\u0000';
       const base64 = btoa(str);
       const object = new Hello({ base64 });
@@ -563,26 +558,26 @@ describe('Struct functions', function() {
       expect(object.cat).to.equal(7);
     })
     it('should allow assignment of base64 data', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 32,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello(undefined);
       const str = '\u000f\u0000\u0000\u0000\u000a\u0000\u0000\u0000';
       object.base64 = btoa(str);
@@ -590,26 +585,26 @@ describe('Struct functions', function() {
       expect(object.cat).to.equal(10);
     })
     it('should accept data view as initializer', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 32,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const typedArray = new Uint32Array([ 123, 456 ]);
       const dataView = new DataView(typedArray.buffer);
       const object = new Hello({ dataView });
@@ -617,26 +612,26 @@ describe('Struct functions', function() {
       expect(object.cat).to.equal(456);
     })
     it('should allow assignment of data view', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 0,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Uint,
         isRequired: true,
         bitSize: 32,
         bitOffset: 32,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello(undefined);
       const typedArray = new Uint32Array([ 123, 456 ]);
       object.dataView = new DataView(typedArray.buffer);
@@ -644,19 +639,19 @@ describe('Struct functions', function() {
       expect(object.cat).to.equal(456);
     })
     it('should allow assignment through the dollar property', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 8,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Uint,
         isRequired: false,
         bitSize: 32,
         bitOffset: 0,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Uint,
         isRequired: false,
@@ -666,10 +661,10 @@ describe('Struct functions', function() {
       const dv = new DataView(new ArrayBuffer(8));
       dv.setUint32(0, 1234, true);
       dv.setUint32(4, 4567, true);
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: dv,
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({});
       expect(object.valueOf()).to.eql({ dog: 1234, cat: 4567 });
       object.dog = 777;
@@ -680,25 +675,25 @@ describe('Struct functions', function() {
       expect(object.valueOf()).to.eql({ dog: 1234, cat: 4567 });
     })
     it('should define a struct that contains another struct', function() {
-      const structureA = beginStructure({
+      const structureA = env.beginStructure({
         type: StructureType.Struct,
         name: 'StructA',
         byteSize: 4,
       });
-      attachMember(structureA, {
+      env.attachMember(structureA, {
         type: MemberType.Int,
         name: 'number',
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      const StructA = finalizeStructure(structureA);
-      const structureB = beginStructure({
+      const StructA = env.finalizeStructure(structureA);
+      const structureB = env.beginStructure({
         type: StructureType.Struct,
         name: 'StructB',
         byteSize: 4,
       });
-      attachMember(structureB, {
+      env.attachMember(structureB, {
         type: MemberType.Object,
         name: 'a',
         bitSize: 32,
@@ -707,7 +702,7 @@ describe('Struct functions', function() {
         slot: 0,
         structure: structureA,
       });
-      const StructB = finalizeStructure(structureB);
+      const StructB = env.finalizeStructure(structureB);
       const buffer = new ArrayBuffer(8);
       const dv = new DataView(buffer, 4, 4);
       dv.setInt32(0, 1234, true);
@@ -715,39 +710,39 @@ describe('Struct functions', function() {
       expect(object.a.number).to.equal(1234);
     })
     it('should define a struct that contains pointers', function() {
-      const intStructure = beginStructure({
+      const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
       });
-      attachMember(intStructure, {
+      env.attachMember(intStructure, {
         type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = finalizeStructure(intStructure);
-      const ptrStructure = beginStructure({
+      const Int32 = env.finalizeStructure(intStructure);
+      const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true
       });
-      attachMember(ptrStructure, {
+      env.attachMember(ptrStructure, {
         type: MemberType.Object,
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
         structure: intStructure,
       });
-      const Int32Ptr = finalizeStructure(ptrStructure);
-      const structure = beginStructure({
+      const Int32Ptr = env.finalizeStructure(ptrStructure);
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 8 * 2,
         hasPointer: true
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Object,
         bitSize: 64,
@@ -756,7 +751,7 @@ describe('Struct functions', function() {
         slot: 0,
         structure: ptrStructure,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Object,
         bitSize: 64,
@@ -769,7 +764,7 @@ describe('Struct functions', function() {
       const int2 = new Int32(4567);
       const intPtr1 = new Int32Ptr(int1);
       const intPtr2 = new Int32Ptr(int2);
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8 * 2));
           dv.setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
@@ -781,7 +776,7 @@ describe('Struct functions', function() {
           1: intPtr2,
         }
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({});
       expect(object.dog['*']).to.equal(1234);
       expect(object.cat['*']).to.equal(4567);
@@ -791,25 +786,25 @@ describe('Struct functions', function() {
       expect(object2.dog['*']).to.equal(7788);
     })
     it('should not when default values are not available for all pointers', function() {
-      const intStructure = beginStructure({
+      const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
       });
-      attachMember(intStructure, {
+      env.attachMember(intStructure, {
         type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = finalizeStructure(intStructure);
-      const ptrStructure = beginStructure({
+      const Int32 = env.finalizeStructure(intStructure);
+      const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true
       });
-      attachMember(ptrStructure, {
+      env.attachMember(ptrStructure, {
         type: MemberType.Object,
         bitSize: 64,
         bitOffset: 0,
@@ -817,14 +812,14 @@ describe('Struct functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = finalizeStructure(ptrStructure);
-      const structure = beginStructure({
+      const Int32Ptr = env.finalizeStructure(ptrStructure);
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 8 * 2,
         hasPointer: true
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Object,
         isRequired: true,
@@ -834,7 +829,7 @@ describe('Struct functions', function() {
         slot: 0,
         structure: ptrStructure,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Object,
         bitSize: 64,
@@ -846,38 +841,38 @@ describe('Struct functions', function() {
       const int1 = new Int32(1234);
       const int2 = new Int32(4567);
       const intPtr2 = new Int32Ptr(int2);
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: new DataView(new ArrayBuffer(8 * 2)),
         [SLOTS]: {
           1: intPtr2,
         }
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({ dog: int1 });
       expect(object.dog['*']).to.equal(1234);
       expect(object.cat['*']).to.equal(4567);
     })
     it('should have correct string tag', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'zig.super.Hello',
         byteSize: 4 * 2,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(4 * 2));
           dv.setInt32(0, 1234, true);
@@ -886,35 +881,35 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       expect(Hello.name).to.equal('Hello');
       const object = new Hello({});
       const desc = Object.prototype.toString.call(object);
       expect(desc).to.equal('[object zig.super.Hello]');
     })
     it('should handle comptime fields', function() {
-      const structure = beginStructure({
+      const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'zig.super.Hello',
         byteSize: 0,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Comptime,
         slot: 0,
       });
-      attachMember(structure, {
+      env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Comptime,
         slot: 1,
       });
-      attachTemplate(structure, {
+      env.attachTemplate(structure, {
         [SLOTS]: {
           0: { '*': 123  },
           1: { '*': 456  },
         },
       });
-      const Hello = finalizeStructure(structure);
+      const Hello = env.finalizeStructure(structure);
       const object = new Hello({});
       expect(object.dog).to.equal(123);
       expect(object.cat).to.equal(456);

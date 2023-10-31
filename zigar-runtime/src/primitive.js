@@ -1,19 +1,21 @@
 import { MemberType, isByteAligned, getAccessors } from './member.js';
-import { getMemoryCopier, restoreMemory } from './memory.js';
+import { getMemoryCopier, restoreMemory, getPointerAlign } from './memory.js';
 import { getCompatibleTags, addTypedArray, requireDataView } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { MEMORY, COMPAT } from './symbol.js';
 import { throwInvalidInitializer, throwNoInitializer, throwNoProperty } from './error.js';
 
-export function finalizePrimitive(s) {
+export function finalizePrimitive(s, env) {
   const {
     byteSize,
+    align,
     instance: {
       members: [ member ],
     },
     options,
   } = s;
   addTypedArray(s);
+  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -22,7 +24,7 @@ export function finalizePrimitive(s) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = new DataView(new ArrayBuffer(byteSize));
+      dv = env.allocMemory(byteSize, ptrAlign);
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
