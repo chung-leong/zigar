@@ -30,22 +30,22 @@ export function finalizePointer(s, env) {
   const { structure: targetStructure } = member;
   const isTargetSlice = (targetStructure.type === StructureType.Slice);
   const isTargetPointer = (targetStructure.type === StructureType.Pointer);
-  const addressSize = (isTargetSlice) ? byteSize / 2 : byteSize;
-  const usizeStructure = { name: 'usize', byteSize: addressSize };
+  const hasLength = isTargetSlice && !targetStructure.sentinel;
+  const addressSize = (hasLength) ? byteSize / 2 : byteSize;
   const { get: getAddress, set: setAddress } = getAccessors({
     type: MemberType.Uint,
     bitOffset: 0,
     bitSize: addressSize * 8,
     byteSize: addressSize,
-    structure: usizeStructure,
+    structure: { byteSize: addressSize },
   }, options);
-  const { get: getLength, set: setLength } = (isTargetSlice) ? getAccessors({
+  const { get: getLength, set: setLength } = (hasLength) ? getAccessors({
     type: MemberType.Uint,
     bitOffset: addressSize * 8,
     bitSize: addressSize * 8,
     byteSize: addressSize,
-    structure: usizeStructure,
-  }, options).set : {};
+    structure: { name: 'usize', byteSize: addressSize },
+  }, options) : {};
   const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
     const calledFromEnviroment = this === ENVIRONMENT;
@@ -74,6 +74,7 @@ export function finalizePointer(s, env) {
         } else {
           throwNoCastingToPointer(s);
         }
+        dv = env.allocMemory(byteSize, ptrAlign);
       }
     }
     self[MEMORY] = dv;
@@ -84,22 +85,32 @@ export function finalizePointer(s, env) {
       if (calledFromEnviroment) {
         // obtain address (and possibly length) from memory
         const address = getAddress.call(self);
-        const len = (isTargetSlice) ? getLength.call(self) : targetStructure.byteSize;
+        let len = 1;
+        if (isTargetSlice) {
+          if (hasLength) {
+            len = getLength.call(self);
+          } else {
+            len = env.findSentinel(address, targetStructure.sentinel.bytes) + 1;
+          }
+        }
         // get view of memory that pointer points to
-        const dv = env.obtainView(address, len);
+        const dv = env.obtainView(address, len * targetStructure.byteSize);
         // create the target
         const Target = targetStructure.constructor;
-        Target.call(this, dv);
+        const target = Target.call(this, dv);
+        self[SLOTS][0] = target;
       }
     }
     return createProxy.call(self, isConst, isTargetPointer);
   };
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      if (inFixedMemory(this)) {
+      if (env.isShared(this[MEMORY])) {
+        // initialize with the other pointer's target
         initializer.call(this, arg[SLOTS][0]);
       } else {
-        // not doing memory copying since the value stored there likely isn't valid
+        // copy the object stored in slots 0, not copying memory of the other object
+        // since the value stored there likely isn't valid
         copyPointer.call(this, arg);
       }
     } else {
@@ -136,7 +147,7 @@ export function finalizePointer(s, env) {
         if (env.isShared(this[MEMORY])) {
           // the pointer sits in shared memory--apply the change immediately
           if (env.isShared(arg[MEMORY])) {
-            const address = env.getAddress(arg[MEMORY]);
+            const address = env.getViewAddress(arg[MEMORY]);
             setAddress.call(this, address);
             if (setLength) {
               setLength.call(this, arg.length);

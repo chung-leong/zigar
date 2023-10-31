@@ -443,6 +443,31 @@ static void OverrideEnvironmentFunctions(Isolate* isolate,
     auto dst_bytes = reinterpret_cast<uint8_t*>(dst_store->Data()) + dst->ByteOffset();
     memcpy(dst_bytes, src_bytes, len);
   }, 3);
+  add(String::NewFromUtf8Literal(isolate, "findSentinel"), [](const FunctionCallbackInfo<Value>& info) {
+    auto isolate = info.GetIsolate();
+    if (!info[0]->IsBigInt()) {
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Address must be bigInt").ToLocalChecked()));
+      return;
+    }
+    if (!info[1]->IsDataView()) {
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Sentinel value must be a DataView object").ToLocalChecked()));
+      return;
+    }
+    auto address = info[0].As<BigInt>()->Uint64Value();
+    auto sentinel = info[1].As<DataView>();
+    auto sentinel_store = sentinel->Buffer()->GetBackingStore();
+    auto sentinel_bytes = reinterpret_cast<uint8_t*>(sentinel_store->Data()) + sentinel->ByteOffset();
+    auto sentinel_len = sentinel->ByteLength();
+    auto src_bytes = reinterpret_cast<const uint8_t*>(address);
+    if (sentinel_len > 0) {
+      for (int32_t i = 0, j = 0; i < INT32_MAX; i += sentinel_len, j++) {
+        if (memcmp(src_bytes + i, sentinel_bytes, sentinel_len) == 0) {
+          info.GetReturnValue().Set(j);
+          break;
+        }
+      }
+    }
+  }, 2);
 }
 
 static void Load(const FunctionCallbackInfo<Value>& info) {

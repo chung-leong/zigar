@@ -23,8 +23,17 @@ export class BaseEnvironment {
   copyBytes(dst: DataView, address: bigInt|number, len: number): void {
     // copy memory at given address into destination view
   }
+  findSentinel(address, bytes: DataView): number {
+    // return offset where sentinel value is found
+  }
 
   */
+
+  getViewAddress(dv) {
+    const address = this.getAddress(dv.buffer);
+    const offset = (typeof(address) === 'bigint') ? BigInt(dv.byteOffset) : dv.byteOffset;
+    return address + offset;
+  }
 
   allocMemory(len, ptrAlign) {
     const extra = getExtraCount(ptrAlign);

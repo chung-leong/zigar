@@ -264,5 +264,6 @@ export function getSentinel(structure, options) {
       }
     }
   };
-  return { value, validateValue, validateData };
+  const bytes = template[MEMORY];
+  return { value, bytes, validateValue, validateData };
 }

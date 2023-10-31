@@ -1031,7 +1031,21 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
     }
     if (!isArgumentStruct(T) and @sizeOf(T) > 0) {
         // obtain byte array containing data of default values
-        var values = std.mem.zeroInit(T, .{});
+        // can't use std.mem.zeroInit() here, since it'd fail with unions
+        var values: T = undefined;
+        const bytes: []u8 = std.mem.asBytes(&values);
+        for (bytes) |*byte_ptr| {
+            byte_ptr.* = 0;
+        }
+        inline for (st.fields) |field| {
+            if (field.default_value) |opaque_ptr| {
+                if (!field.is_comptime) {
+                    // set default value
+                    const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+                    @field(values, field.name) = default_value_ptr.*;
+                }
+            }
+        }
         const memory = toMemory(&values, true);
         const dv = try host.createView(memory);
         const template = try host.createTemplate(dv);
