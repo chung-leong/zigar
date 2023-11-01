@@ -5,7 +5,7 @@ import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
-import { addChildVivificators, addPointerVisitor, getSelf } from './struct.js';
+import { addChildVivificators, getSelf } from './struct.js';
 import {
   throwInvalidInitializer,
   throwMissingUnionInitializer,
@@ -15,7 +15,7 @@ import {
   throwNoInitializer,
 } from './error.js';
 import { copyPointer, disablePointer, resetPointer } from './pointer.js';
-import { MEMORY, ENUM_NAME, ENUM_ITEM, TAG, SLOTS, POINTER_VISITOR } from './symbol.js';
+import { MEMORY, ENUM_NAME, ENUM_ITEM, TAG, SLOTS, POINTER_VISITOR, CHILD_VIVIFICATOR } from './symbol.js';
 
 export function finalizeUnion(s, env) {
   const {
@@ -37,11 +37,11 @@ export function finalizeUnion(s, env) {
   let valueMembers;
   const isTagged = (type === StructureType.TaggedUnion);
   const exclusion = (isTagged || (type === StructureType.BareUnion && runtimeSafety));
+  let getName, setName;
   if (exclusion) {
     valueMembers = members.slice(0, -1);
     const selectorMember = members[members.length - 1];
     const { get: getSelector, set: setSelector } = getAccessors(selectorMember, options);
-    let getName, setName;
     if (type === StructureType.TaggedUnion) {
       const { structure: { constructor } } = selectorMember;
       getEnumItem = getSelector;
@@ -227,6 +227,29 @@ export function finalizeUnion(s, env) {
       }
     }
   };
+  if (hasPointer || hasInaccessiblePointer) {
+    const pointerMembers = members.filter(m => m.structure.hasPointer);
+    const visitor = function(vivificating, src, fn) {
+      const currentName = getName?.call(this);
+      for (const { name, slot } of pointerMembers) {
+        if (currentName !== undefined && name !== currentName) {
+          continue;
+        }
+        let srcChild;
+        if (src) {
+          srcChild = src[SLOTS]?.[slot];
+          if (!srcChild) {
+            continue;
+          }
+        }
+        const child = (vivificating) ? this[CHILD_VIVIFICATOR][slot].call(this) : this[SLOTS][slot];
+        if (child) {
+          child[POINTER_VISITOR](vivificating, srcChild, fn);
+        }
+      }
+    };
+    Object.defineProperty(constructor.prototype, POINTER_VISITOR, { value: visitor });
+  }
   if (isTagged) {
     // enable casting to enum
     Object.defineProperty(constructor.prototype, ENUM_ITEM, { get: getEnumItem, configurable: true });
@@ -234,9 +257,6 @@ export function finalizeUnion(s, env) {
   Object.defineProperty(constructor.prototype, '$', { get: getSelf, set: initializer, configurable: true });
   if (hasObject) {
     addChildVivificators.call(this, s);
-    if (hasPointer || hasInaccessiblePointer) {
-      addPointerVisitor.call(this, s);
-    }
   }
   addSpecialAccessors(s, env);
   addStaticMembers(s, env);

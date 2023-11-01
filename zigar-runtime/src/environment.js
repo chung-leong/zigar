@@ -1,6 +1,6 @@
 import { getStructureFactory, getStructureName } from './structure.js';
 import { decodeText } from './text.js';
-import { MEMORY, SLOTS, ENVIRONMENT } from './symbol.js';
+import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, TARGET_ACQUIRER } from './symbol.js';
 
 const default_alignment = 16;
 const globalSlots = {};
@@ -67,8 +67,15 @@ export class BaseEnvironment {
   }
 
   castView(structure, dv) {
-    const { constructor } = structure;
-    return constructor.call(ENVIRONMENT, dv);
+    const { constructor, hasPointer } = structure;
+    const object = constructor.call(ENVIRONMENT, dv);
+    if (hasPointer) {
+      // vivificate pointers and acquire their targets
+      object[POINTER_VISITOR](true, null, function() {
+        this[TARGET_ACQUIRER]();
+      });
+    }
+    return object;
   }
 
   createObject(structure, arg) {

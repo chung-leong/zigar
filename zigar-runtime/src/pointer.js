@@ -2,7 +2,7 @@ import { StructureType } from './structure.js';
 import { getPointerAlign } from './memory.js';
 import { requireDataView, getDataView, isCompatible, isBuffer } from './data-view.js';
 import { MemberType, getAccessors } from './member.js';
-import { MEMORY, PROXY, SLOTS, PARENT, POINTER_VISITOR, ENVIRONMENT } from './symbol.js';
+import { MEMORY, PROXY, SLOTS, PARENT, TARGET_ACQUIRER, ADDRESS_UPDATER, POINTER_VISITOR, ENVIRONMENT } from './symbol.js';
 import {
   throwNoCastingToPointer,
   throwInaccessiblePointer,
@@ -81,25 +81,6 @@ export function finalizePointer(s, env) {
     self[SLOTS] = { 0: null };
     if (creating) {
       initializer.call(self, arg);
-    } else {
-      if (calledFromEnviroment) {
-        // obtain address (and possibly length) from memory
-        const address = getAddress.call(self);
-        let len = 1;
-        if (isTargetSlice) {
-          if (hasLength) {
-            len = getLength.call(self);
-          } else {
-            len = env.findSentinel(address, targetStructure.sentinel.bytes) + 1;
-          }
-        }
-        // get view of memory that pointer points to
-        const dv = env.obtainView(address, len * targetStructure.byteSize);
-        // create the target
-        const Target = targetStructure.constructor;
-        const target = Target.call(this, dv);
-        self[SLOTS][0] = target;
-      }
     }
     return createProxy.call(self, isConst, isTargetPointer);
   };
@@ -160,11 +141,39 @@ export function finalizePointer(s, env) {
       }
     }
   };
+  const targetAcquirer = function() {
+    // obtain address (and possibly length) from memory
+    const address = getAddress.call(this);
+    let len = 1;
+    if (isTargetSlice) {
+      if (hasLength) {
+        len = getLength.call(this);
+      } else {
+        len = env.findSentinel(address, targetStructure.sentinel.bytes) + 1;
+      }
+    }
+    // get view of memory that pointer points to
+    const dv = env.obtainView(address, len * targetStructure.byteSize);
+    // create the target
+    const Target = targetStructure.constructor;
+    const target = Target.call(this, dv);
+    this[SLOTS][0] = target;
+  };
+  const addressUpdater = function() {
+    const target = this[SLOTS][0];
+    const address = env.getAddress(target[MEMORY].buffer);
+    setAddress.call(this, address);
+    if (hasLength) {
+      setLength(this, target.length);
+    }
+  };
   // return the proxy object if one is used
   Object.defineProperties(constructor.prototype, {
     '*': { get: getTarget, set: (isConst) ? undefined : setTarget, configurable: true },
     '$': { get: getProxy, set: initializer, configurable: true, },
     'valueOf': { value: getTargetValue, configurable: true, writable: true },
+    [TARGET_ACQUIRER]: { value: targetAcquirer },
+    [ADDRESS_UPDATER]: { value: addressUpdater },
     [POINTER_VISITOR]: { value: visitPointer },
   });
   Object.defineProperties(constructor, {
@@ -217,14 +226,6 @@ function isPointerOf(arg, Target) {
   return (arg?.constructor?.child === Target && arg['*']);
 }
 
-function inFixedMemory(arg) {
-  if (process.env.ZIGAR_TARGET === 'NODE-CPP-EXT') {
-    return arg?.[MEMORY]?.buffer?.[MEMORY];
-  } else {
-    return arg?.[MEMORY]?.[MEMORY];
-  }
-}
-
 function createProxy(isConst, isTargetPointer) {
   const handlers = (!isTargetPointer) ? (isConst) ? constProxyHandlers : proxyHandlers : {};
   const proxy = new Proxy(this, handlers);
@@ -241,6 +242,8 @@ const isPointerKeys = {
   [SLOTS]: true,
   [MEMORY]: true,
   [PROXY]: true,
+  [TARGET_ACQUIRER]: true,
+  [ADDRESS_UPDATER]: true,
   [POINTER_VISITOR]: true,
   [Symbol.toStringTag]: true,
   [Symbol.toPrimitive]: true,
