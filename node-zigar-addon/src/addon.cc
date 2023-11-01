@@ -381,15 +381,23 @@ static void OverrideEnvironmentFunctions(Isolate* isolate,
     prototype->Set(context, name, function).Check();
   };
   add(String::NewFromUtf8Literal(isolate, "getAddress"), [](const FunctionCallbackInfo<Value>& info) {
-    if (!info[0]->IsArrayBuffer()) {
-      return;
-    }
     auto isolate = info.GetIsolate();
-    auto buffer = info[0].As<ArrayBuffer>();
-    auto store = buffer->GetBackingStore();
-    auto address = reinterpret_cast<size_t>(store->Data());
-    auto big_int = BigInt::NewFromUnsigned(isolate, address);
-    info.GetReturnValue().Set(big_int);
+    if (!(info[0]->IsArrayBuffer() || info[0]->IsSharedArrayBuffer())) {
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Argument must be ArrayBuffer or SharedArrayBuffer").ToLocalChecked()));
+    }
+    if (info[0]->IsArrayBuffer()) {
+      auto buffer = info[0].As<ArrayBuffer>();
+      auto store = buffer->GetBackingStore();
+      auto address = reinterpret_cast<size_t>(store->Data());
+      auto big_int = BigInt::NewFromUnsigned(isolate, address);
+      info.GetReturnValue().Set(big_int);
+    } else {
+      auto buffer = info[0].As<SharedArrayBuffer>();
+      auto store = buffer->GetBackingStore();
+      auto address = reinterpret_cast<size_t>(store->Data());
+      auto big_int = BigInt::NewFromUnsigned(isolate, address);
+      info.GetReturnValue().Set(big_int);
+    }
   }, 1);
   add(String::NewFromUtf8Literal(isolate, "obtainView"), [](const FunctionCallbackInfo<Value>& info) {
     auto isolate = info.GetIsolate();
@@ -420,7 +428,7 @@ static void OverrideEnvironmentFunctions(Isolate* isolate,
   add(String::NewFromUtf8Literal(isolate, "copyBytes"), [](const FunctionCallbackInfo<Value>& info) {
     auto isolate = info.GetIsolate();
     if (!info[0]->IsDataView()) {
-      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Destination must be a DataView object").ToLocalChecked()));
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Destination must be DataView").ToLocalChecked()));
       return;
     }
     if (!info[1]->IsBigInt()) {
@@ -435,7 +443,7 @@ static void OverrideEnvironmentFunctions(Isolate* isolate,
     auto address = info[1].As<BigInt>()->Uint64Value();
     auto len = info[2].As<Number>()->Value();
     if (dst->ByteLength() != len) {
-      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Length ,mismatch").ToLocalChecked()));
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Length mismatch").ToLocalChecked()));
       return;
     }
     auto src_bytes = reinterpret_cast<const uint8_t*>(address);
@@ -450,7 +458,7 @@ static void OverrideEnvironmentFunctions(Isolate* isolate,
       return;
     }
     if (!info[1]->IsDataView()) {
-      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Sentinel value must be a DataView object").ToLocalChecked()));
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Sentinel value must be DataView").ToLocalChecked()));
       return;
     }
     auto address = info[0].As<BigInt>()->Uint64Value();

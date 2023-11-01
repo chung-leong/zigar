@@ -15,6 +15,28 @@ export function finalizeOptional(s, env) {
     options,
     hasPointer,
   } = s;
+  const { get: getValue, set: setValue } = getAccessors(members[0], options);
+  const { get: getPresent, set: setPresent } = getAccessors(members[1], options);
+  const reset = getMemoryResetter(byteSize);
+  const get = function() {
+    const present = getPresent.call(this);
+    if (present) {
+      return getValue.call(this);
+    } else {
+      this[POINTER_VISITOR]?.(resetPointer);
+      return null;
+    }
+  };
+  const set = function(value) {
+    if (value != null) {
+      setPresent.call(this, true);
+      setValue.call(this, value);
+    } else {
+      reset(this[MEMORY]);
+      this[POINTER_VISITOR]?.(resetPointer);
+    }
+  };
+  const check = getPresent;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
@@ -49,48 +71,22 @@ export function finalizeOptional(s, env) {
       if (hasPointer) {
         // don't bother copying pointers when it's empty
         if (check.call(this)) {
-          this[POINTER_VISITOR](true, arg, copyPointer);
+          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg});
         }
       }
     } else {
       this.$ = arg;
     }
   };
-  const { get, set, check } = getOptionalAccessors(members, byteSize, options);
   Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
   if (hasObject) {
     addChildVivificators(s);
     if (hasPointer) {
+      // function used by pointer visitor to see whether pointer field is active
+      Object.defineProperty(constructor.prototype, FIELD_VALIDATOR, { value: check });
       addPointerVisitor(s);
     }
   }
   addSpecialAccessors(s);
   return constructor;
-}
-
-export function getOptionalAccessors(members, byteSize, options) {
-  const { get: getValue, set: setValue } = getAccessors(members[0], options);
-  const { get: getPresent, set: setPresent } = getAccessors(members[1], options);
-  const reset = getMemoryResetter(byteSize);
-  return {
-    get: function() {
-      const present = getPresent.call(this);
-      if (present) {
-        return getValue.call(this);
-      } else {
-        this[POINTER_VISITOR]?.(false, null, resetPointer);
-        return null;
-      }
-    },
-    set: function(value) {
-      if (value != null) {
-        setPresent.call(this, true);
-        setValue.call(this, value);
-      } else {
-        reset(this[MEMORY]);
-        this[POINTER_VISITOR]?.(false, null, resetPointer);
-      }
-    },
-    check: getPresent
-  };
 }

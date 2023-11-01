@@ -62,7 +62,7 @@ export function finalizeArray(s, env) {
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (hasPointer) {
-        this[POINTER_VISITOR](true, arg, copyPointer);
+        this[POINTER_VISITOR](copyPointer, { vivificate: true });
       }
     } else {
       if (typeof(arg) === 'string' && specialKeys.includes('string')) {
@@ -149,13 +149,20 @@ export function addChildVivificator(s) {
 
 export function addPointerVisitor(s) {
   const { constructor: { prototype } } = s;
-  const visitor = function visitPointers(vivificating, src, fn) {
+  const visitor = function visitPointers(cb, options = {}) {
+    const {
+      source,
+      vivificate = false,
+    } = options;
+    const childOptions = { ...options };
     for (let i = 0, len = this.length; i < len; i++) {
       // no need to check for empty slots, since that isn't possible
-      const srcChild = src?.[SLOTS][i];
-      const child = (vivificating) ? this[CHILD_VIVIFICATOR](i) : this[SLOTS][i];
+      if (source) {
+        childOptions.source = src?.[SLOTS][i];
+      }
+      const child = (vivificate) ? this[CHILD_VIVIFICATOR](i) : this[SLOTS][i];
       if (child) {
-        child[POINTER_VISITOR](vivificating, srcChild, fn);
+        child[POINTER_VISITOR](cb, childOptions);
       }
     }
   };

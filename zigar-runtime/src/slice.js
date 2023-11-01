@@ -101,7 +101,7 @@ export function finalizeSlice(s, env) {
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (hasPointer) {
-        this[POINTER_VISITOR](true, arg, copyPointer);
+        this[POINTER_VISITOR](copyPointer, { source: arg });
       }
     } else {
       if (typeof(arg) === 'string' && specialKeys.includes('string')) {

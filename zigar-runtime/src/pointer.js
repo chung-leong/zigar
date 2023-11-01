@@ -161,10 +161,12 @@ export function finalizePointer(s, env) {
   };
   const addressUpdater = function() {
     const target = this[SLOTS][0];
-    const address = env.getAddress(target[MEMORY].buffer);
-    setAddress.call(this, address);
-    if (hasLength) {
-      setLength(this, target.length);
+    if (target) {
+      const address = env.getAddress(target[MEMORY].buffer);
+      setAddress.call(this, address);
+      if (hasLength) {
+        setLength.call(this, target.length);
+      }
     }
   };
   // return the proxy object if one is used
@@ -195,6 +197,14 @@ export function resetPointer() {
   this[SLOTS][0] = null;
 }
 
+export function acquireTarget() {
+  this[TARGET_ACQUIRER]();
+}
+
+export function updateAddress() {
+  this[ADDRESS_UPDATER]();
+}
+
 export function disablePointer() {
   Object.defineProperty(this[SLOTS], 0, {
     get: throwInaccessiblePointer,
@@ -218,8 +228,9 @@ function getTargetValue() {
   return object.$.valueOf();
 }
 
-function visitPointer(_, src, fn) {
-  fn.call(this, src);
+function visitPointer(fn, options) {
+  const { source } = options;
+  fn.call(this, source);
 }
 
 function isPointerOf(arg, Target) {

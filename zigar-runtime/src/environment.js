@@ -1,6 +1,7 @@
 import { getStructureFactory, getStructureName } from './structure.js';
 import { decodeText } from './text.js';
-import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, TARGET_ACQUIRER } from './symbol.js';
+import { acquireTarget } from './pointer.js';
+import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR } from './symbol.js';
 
 const default_alignment = 16;
 const globalSlots = {};
@@ -71,9 +72,7 @@ export class BaseEnvironment {
     const object = constructor.call(ENVIRONMENT, dv);
     if (hasPointer) {
       // vivificate pointers and acquire their targets
-      object[POINTER_VISITOR](true, null, function() {
-        this[TARGET_ACQUIRER]();
-      });
+      object[POINTER_VISITOR](acquireTarget, { vivificate: true });
     }
     return object;
   }

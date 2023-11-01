@@ -2,7 +2,7 @@ import { MemberType, getAccessors } from './member.js';
 import { getPointerAlign } from './memory.js';
 import { throwArgumentCountMismatch, rethrowArgumentError } from './error.js';
 import { MEMORY, SLOTS } from './symbol.js';
-import { addChildVivificators } from './struct.js';
+import { addChildVivificators, addPointerVisitor } from './struct.js';
 
 export function finalizeArgStruct(s, env) {
   const {
@@ -11,6 +11,7 @@ export function finalizeArgStruct(s, env) {
     instance: {
       members,
     },
+    hasPointer,
     options,
   } = s;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
@@ -43,6 +44,9 @@ export function finalizeArgStruct(s, env) {
   }
   if (hasObject) {
     addChildVivificators(s);
+    if (hasPointer) {
+      addPointerVisitor(s);
+    }
   }
   return constructor;
 }

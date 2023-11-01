@@ -1,5 +1,6 @@
 import { throwZigError } from './error.js';
-import { MEMORY, RELEASE_THUNK } from './symbol.js';
+import { acquireTarget, updateAddress } from './pointer.js';
+import { MEMORY, POINTER_VISITOR, RELEASE_THUNK } from './symbol.js';
 
 export function addMethods(s, env) {
   const {
@@ -48,8 +49,11 @@ export function addMethods(s, env) {
 }
 
 export function invokeThunk(thunk, args, Environment) {
+  args[POINTER_VISITOR]?.(updateAddress, {});
   const env = new Environment;
   const err = thunk.call(env, args[MEMORY]);
+  args[POINTER_VISITOR]?.(acquireTarget, { vivificate: true });
+
   // errors returned by exported Zig functions are normally written into the
   // argument object and get thrown when we access its retval property (a zig error union)
   // error strings returned by the thunk are due to problems in the thunking process

@@ -5,7 +5,7 @@ import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer, throwNoProperty } from './error.js';
-import { MEMORY, SLOTS, PARENT, CHILD_VIVIFICATOR, POINTER_VISITOR } from './symbol.js';
+import { MEMORY, SLOTS, PARENT, CHILD_VIVIFICATOR, POINTER_VISITOR, FIELD_VALIDATOR } from './symbol.js';
 import { copyPointer } from './pointer.js';
 
 export function finalizeStruct(s, env) {
@@ -69,7 +69,7 @@ export function finalizeStruct(s, env) {
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (hasPointer) {
-        this[POINTER_VISITOR](true, arg, copyPointer);
+        this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else {
       if (arg && typeof(arg) === 'object') {
@@ -108,7 +108,7 @@ export function finalizeStruct(s, env) {
         if (template && specialFound === 0 && found < keys.length) {
           copy(this[MEMORY], template[MEMORY]);
           if (hasPointer) {
-            this[POINTER_VISITOR](true, template, copyPointer);
+            this[POINTER_VISITOR](copyPointer, { vivificate: true, source: template });
           }
         }
         if (specialFound > 0) {
@@ -170,20 +170,32 @@ export function addChildVivificators(s) {
 export function addPointerVisitor(s) {
   const { constructor: { prototype }, instance: { members } } = s;
   const pointerMembers = members.filter(m => m.structure.hasPointer);
-  const visitor = function visitPointers(vivificating, src, fn) {
-    for (const { slot } of pointerMembers) {
-      let srcChild;
-      if (src) {
-        // when src is a the struct's template, most slots will likely be empty,
-        // since point fields aren't likely to have default values
-        srcChild = src[SLOTS]?.[slot];
-        if (!srcChild) {
+  const visitor = function visitPointers(cb, options = {}) {
+    const {
+      source,
+      vivificate = false,
+      ignoreInactive = true,
+    } = options;
+    const childOptions = { ...options };
+    for (const { name, slot } of pointerMembers) {
+      if (ignoreInactive) {
+        const active = this[FIELD_VALIDATOR]?.(name) ?? true;
+        if (!active) {
           continue;
         }
       }
-      const child = (vivificating) ? this[CHILD_VIVIFICATOR][slot].call(this) : this[SLOTS][slot];
+      if (source) {
+        // when src is a the struct's template, most slots will likely be empty,
+        // since point fields aren't likely to have default values
+        const srcChild = source[SLOTS]?.[slot];
+        if (!srcChild) {
+          continue;
+        }
+        childOptions.source = srcChild;
+      }
+      const child = (vivificate) ? this[CHILD_VIVIFICATOR][slot].call(this) : this[SLOTS][slot];
       if (child) {
-        child[POINTER_VISITOR](vivificating, srcChild, fn);
+        child[POINTER_VISITOR](cb, childOptions);
       }
     }
   };

@@ -5,7 +5,7 @@ import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
-import { addChildVivificators, getSelf } from './struct.js';
+import { addChildVivificators, getSelf, addPointerVisitor } from './struct.js';
 import {
   throwInvalidInitializer,
   throwMissingUnionInitializer,
@@ -15,7 +15,7 @@ import {
   throwNoInitializer,
 } from './error.js';
 import { copyPointer, disablePointer, resetPointer } from './pointer.js';
-import { MEMORY, ENUM_NAME, ENUM_ITEM, TAG, SLOTS, POINTER_VISITOR, CHILD_VIVIFICATOR } from './symbol.js';
+import { MEMORY, ENUM_NAME, ENUM_ITEM, TAG, SLOTS, POINTER_VISITOR, FIELD_VALIDATOR } from './symbol.js';
 
 export function finalizeUnion(s, env) {
   const {
@@ -73,7 +73,7 @@ export function finalizeUnion(s, env) {
           if (hasPointer) {
             this[TAG].clear = () => {
               const object = this[SLOTS][slot];
-              object[POINTER_VISITOR](false, null, resetPointer);
+              object[POINTER_VISITOR](resetPointer);
             };
           }
         }
@@ -143,7 +143,7 @@ export function finalizeUnion(s, env) {
       self[SLOTS] = {};
       if (hasInaccessiblePointer) {
         // make pointer access throw
-        self[POINTER_VISITOR](true, null, disablePointer);
+        self[POINTER_VISITOR](disablePointer, { vivificate: true, ignoreInactive: false });
       }
     }
     if (creating) {
@@ -164,7 +164,7 @@ export function finalizeUnion(s, env) {
       restoreMemory.call(arg);
       copy(this[MEMORY], arg[MEMORY]);
       if (hasPointer) {
-        this[POINTER_VISITOR](true, arg, copyPointer);
+        this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else {
       if (arg && typeof(arg) === 'object') {
@@ -209,7 +209,7 @@ export function finalizeUnion(s, env) {
             restoreMemory.call(this);
             copy(this[MEMORY], template[MEMORY]);
             if (hasPointer) {
-              this[POINTER_VISITOR](true, template, copyPointer);
+              this[POINTER_VISITOR](copyPointer, { vivificate: true, source: template });
             }
           }
         } else {
@@ -227,36 +227,19 @@ export function finalizeUnion(s, env) {
       }
     }
   };
-  if (hasPointer || hasInaccessiblePointer) {
-    const pointerMembers = members.filter(m => m.structure.hasPointer);
-    const visitor = function(vivificating, src, fn) {
-      const currentName = getName?.call(this);
-      for (const { name, slot } of pointerMembers) {
-        if (currentName !== undefined && name !== currentName) {
-          continue;
-        }
-        let srcChild;
-        if (src) {
-          srcChild = src[SLOTS]?.[slot];
-          if (!srcChild) {
-            continue;
-          }
-        }
-        const child = (vivificating) ? this[CHILD_VIVIFICATOR][slot].call(this) : this[SLOTS][slot];
-        if (child) {
-          child[POINTER_VISITOR](vivificating, srcChild, fn);
-        }
-      }
-    };
-    Object.defineProperty(constructor.prototype, POINTER_VISITOR, { value: visitor });
-  }
   if (isTagged) {
     // enable casting to enum
     Object.defineProperty(constructor.prototype, ENUM_ITEM, { get: getEnumItem, configurable: true });
   }
   Object.defineProperty(constructor.prototype, '$', { get: getSelf, set: initializer, configurable: true });
   if (hasObject) {
-    addChildVivificators.call(this, s);
+    addChildVivificators(s);
+    if (hasPointer || hasInaccessiblePointer) {
+      // add means to check whether a field is active
+      const validator = (isTagged) ? function(name) { return getName(this) === name } : function() { return false };
+      Object.defineProperty(constructor.prototype, FIELD_VALIDATOR, { value: validator });
+      addPointerVisitor(s);
+    }
   }
   addSpecialAccessors(s, env);
   addStaticMembers(s, env);
