@@ -3,7 +3,7 @@ import { getMemoryCopier, getMemoryResetter, getPointerAlign } from './memory.js
 import { requireDataView } from './data-view.js';
 import { addSpecialAccessors } from './special.js';
 import { throwNoInitializer, throwNotInErrorSet, throwUnknownErrorNumber } from './error.js';
-import { MEMORY, POINTER_VISITOR, SLOTS } from './symbol.js';
+import { MEMORY, FIELD_VALIDATOR, POINTER_VISITOR, SLOTS } from './symbol.js';
 import { copyPointer, resetPointer } from './pointer.js';
 import { addChildVivificators, addPointerVisitor } from './struct.js';
 
