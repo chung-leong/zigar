@@ -144,28 +144,50 @@ export function finalizePointer(s, env) {
   const targetAcquirer = function() {
     // obtain address (and possibly length) from memory
     const address = getAddress.call(this);
+    const currentTarget = this[SLOTS][0];
+    if (currentTarget) {
+      const currentAddress = env.getViewAddress(currentTarget[MEMORY]);
+      if (address === currentAddress) {
+        // don't need to do anything
+        return;
+      }
+    }
     let len = 1;
     if (isTargetSlice) {
       if (hasLength) {
         len = getLength.call(this);
-      } else {
+      } else if (targetStructure.sentinel) {
         len = env.findSentinel(address, targetStructure.sentinel.bytes) + 1;
+      } else {
+        len = 0;
       }
     }
     // get view of memory that pointer points to
-    const dv = env.obtainView(address, len * targetStructure.byteSize);
+    const dv = env.findMemory(address, len * targetStructure.byteSize);
     // create the target
     const Target = targetStructure.constructor;
     const target = Target.call(this, dv);
     this[SLOTS][0] = target;
+    if (target[POINTER_VISITOR]) {
+      // acquire objects pointed to by pointers in target
+      target[POINTER_VISITOR](acquireTarget, { vivificate: true });
+    }
   };
   const addressUpdater = function() {
+    if (env.rememberPointer(this)) {
+      // already processed
+      return;
+    }
     const target = this[SLOTS][0];
     if (target) {
-      const address = env.getAddress(target[MEMORY].buffer);
+      const address = env.importMemory(target[MEMORY]);
       setAddress.call(this, address);
       if (hasLength) {
         setLength.call(this, target.length);
+      }
+      if (target[POINTER_VISITOR]) {
+        // update pointers in the target
+        target[POINTER_VISITOR](updateAddress, {});
       }
     }
   };

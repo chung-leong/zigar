@@ -10,8 +10,6 @@ let consolePending = '';
 let consoleTimeout = 0;
 
 export class BaseEnvironment {
-  memoryPool = null;
-
   /*
   Functions to be defined in subclass:
 
@@ -27,8 +25,64 @@ export class BaseEnvironment {
   findSentinel(address, bytes: DataView): number {
     // return offset where sentinel value is found
   }
-
   */
+  context;
+  contextStack = [];
+
+  startContext() {
+    if (this.context) {
+      this.contextStack.push(this.context);
+    }
+    this.context = new CallContext();
+  }
+
+  endContext() {
+    this.context = this.contextStack.pop();
+  }
+
+  rememberPointer(pointer) {
+    const { pointerProcessed } = this.context;
+    if (pointerProcessed.get(pointer)) {
+      return true;
+    } else {
+      pointerProcessed.set(pointer, true);
+      this.importMemory(pointer[MEMORY]);
+      return false;
+    }
+  }
+
+  importMemory(dv) {
+    const { memoryList } = this.context;
+    const { buffer } = dv;
+    const address = this.getAddress(buffer);
+    const offset = (typeof(address) === 'bigint') ? BigInt(dv.byteOffset) : dv.byteOffset;
+    const index = findSortedIndex(memoryList, address);
+    memoryList.splice(index, 0, { address, buffer, len: buffer.byteLength });
+    return address + offset;
+  }
+
+  findMemory(address, len) {
+    if (this.context) {
+      const { memoryList } = this.context;
+      const index = findSortedIndex(memoryList, address);
+      const at = memoryList[index];
+      let memory;
+      if (at?.address == address) {
+        memory = at;
+      } else if (index > 0) {
+        const prev = memoryList[index - 1];
+        if (prev?.address > address && address < prev.address + prev.len) {
+          memory = prev;
+        }
+      }
+      if (memory) {
+        const offset = Number(address - memory.address);
+        return new DataView(memory.buffer, offset, len);
+      }
+    }
+    // not found in any of the buffers we've seen--assume it's shared memory
+    return this.obtainView(address, len);
+  }
 
   getViewAddress(dv) {
     const address = this.getAddress(dv.buffer);
@@ -47,6 +101,9 @@ export class BaseEnvironment {
       offset = aligned - address;
     }
     const dv = new DataView(buffer, offset, len);
+    if (this.context) {
+      this.importMemory(dv);
+    }
     return dv;
   }
 
@@ -207,6 +264,11 @@ export class BaseEnvironment {
   }
 }
 
+class CallContext {
+  pointerProcessed = new Map();
+  memoryList = [];
+}
+
 export function getGlobalSlots() {
   return globalSlots;
 }
@@ -214,4 +276,22 @@ export function getGlobalSlots() {
 function getExtraCount(ptrAlign) {
   const alignment = (1 << ptrAlign);
   return (alignment <= default_alignment) ? 0 : alignment;
+}
+
+export function findSortedIndex(array, address) {
+  let low = 0;
+  let high = array.length;
+  if (high === 0) {
+    return 0;
+  }
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    const address2 = array[mid].address;
+    if (address2 < address) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return high;
 }

@@ -235,7 +235,7 @@ export function finalizeUnion(s, env) {
   if (hasObject) {
     addChildVivificators(s);
     if (hasPointer || hasInaccessiblePointer) {
-      // add means to check whether a field is active
+      // add a mean to check whether pointer is actually active
       const validator = (isTagged) ? function(name) { return getName.call(this) === name } : function() { return false };
       Object.defineProperty(constructor.prototype, FIELD_VALIDATOR, { value: validator });
       addPointerVisitor(s);

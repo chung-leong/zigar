@@ -60,8 +60,7 @@ useOpaque();
 class Environment extends BaseEnvironment {
   invokeFactory(thunk) {
     initializeErrorSets();
-    const env = new Environment;
-    const result = thunk.call(env);
+    const result = thunk.call(this);
     if (typeof(result) === 'string') {
       // an error message
       throwZigError(result);

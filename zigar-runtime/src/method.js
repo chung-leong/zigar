@@ -8,51 +8,25 @@ export function addMethods(s, env) {
     instance: { methods: instanceMembers },
     static: { methods: staticMethods },
   } = s;
-  const Environment = env.constructor;
   for (const method of staticMethods) {
-    let {
-      name,
-      argStruct,
-      thunk
-    } = method;
-    const f = function(...args) {
-      const { constructor } = argStruct;
-      const a = new constructor(args);
-      return invokeThunk(thunk, a, Environment);
-    };
-    if (process.env.ZIGAR_TARGET === 'NODE-CPP-EXT') {
-      // need to set the local variables as well as the property of the method object
-      /* c8 ignore next */
-      f[RELEASE_THUNK] = r => thunk = argStruct = method.thunk = r;
-    }
-    Object.defineProperty(f, 'name', { value: name, writable: false });
-    Object.defineProperty(constructor, name, { value: f, configurable: true, writable: true });
+    const f = createFunction(method, env, false);
+    Object.defineProperty(constructor, f.name, { value: f, configurable: true, writable: true });
   }
   for (const method of instanceMembers) {
-    let {
-      name,
-      argStruct,
-      thunk,
-    } = method;
-    const f = function(...args) {
-      const { constructor } = argStruct;
-      const a = new constructor([ this, ...args ]);
-      return invokeThunk(thunk, a, Environment);
-    };
-    if (process.env.ZIGAR_TARGET === 'NODE-CPP-EXT') {
-      /* c8 ignore next */
-      f[RELEASE_THUNK] = r => thunk = argStruct = method.thunk = r;
-    }
-    Object.defineProperty(f, 'name', { value: name, writable: false });
-    Object.defineProperty(Object.prototype, name, { value: f, configurable: true, writable: true });
+    const f = createFunction(method, env, true);
+    Object.defineProperty(Object.prototype, f.name, { value: f, configurable: true, writable: true });
   }
 }
 
-export function invokeThunk(thunk, args, Environment) {
-  args[POINTER_VISITOR]?.(updateAddress, {});
-  const env = new Environment;
+export function invokeThunk(thunk, args, env) {
+  // create an object where information concerning pointers can be stored
+  env.startContext();
+  // copy addresses of garbage-collectible objects into memory
+  args[POINTER_VISITOR](updateAddress, {});
   const err = thunk.call(env, args[MEMORY]);
-  args[POINTER_VISITOR]?.(acquireTarget, { vivificate: true });
+  args[POINTER_VISITOR](acquireTarget, { vivificate: true });
+  // restore the previous context if there's one
+  env.endContext();
 
   // errors returned by exported Zig functions are normally written into the
   // argument object and get thrown when we access its retval property (a zig error union)
@@ -68,4 +42,51 @@ export function invokeThunk(thunk, args, Environment) {
     throwZigError(err);
   }
   return args.retval;
+}
+
+export function invokeThunkNP(thunk, args, env) {
+  const err = thunk.call(env, args[MEMORY]);
+  if (err) {
+    if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
+      if (err instanceof Promise) {
+        return err.then(() => args.retval);
+      }
+    }
+    throwZigError(err);
+  }
+  return args.retval;
+}
+
+function createFunction(method, env, pushThis) {
+  let { name,  argStruct, thunk } = method;
+  const { constructor, hasPointer } = argStruct;
+  let f;
+  if (hasPointer) {
+    if (pushThis) {
+      f = function(...args) {
+        return invokeThunk(thunk, new constructor([ this, ...args ]), env);
+      }
+    } else {
+      f = function(...args) {
+        return invokeThunk(thunk, new constructor(args), env);
+      }
+    }
+  } else {
+    if (pushThis) {
+      f = function(...args) {
+        return invokeThunkNP(thunk, new constructor([ this, ...args ]), env);
+      }
+    } else {
+      f = function(...args) {
+        return invokeThunkNP(thunk, new constructor(args), env);
+      }
+    }
+  }
+  if (process.env.ZIGAR_TARGET === 'NODE-CPP-EXT') {
+    // need to set the local variables as well as the property of the method object
+    /* c8 ignore next */
+    f[RELEASE_THUNK] = r => thunk = argStruct = method.thunk = r;
+  }
+  Object.defineProperty(f, 'name', { value: name, writable: false });
+  return f;
 }

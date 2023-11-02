@@ -366,8 +366,7 @@ export function addTests(importModule, options) {
       const outputStrings = await capture(() => print(inputStrings));
       expect(outputStrings).to.eql(inputStrings);
     })
-    skip.
-    it('should takes and returns a slice of strings', async function() {
+    it('should take and return a slice of strings', async function() {
       this.timeout(60000);
       const { bounce } = await importModule(resolve('./zig-samples/basic/function-returning-slice-of-slices.zig'));
       const inputStrings = [
@@ -1045,9 +1044,13 @@ async function capture(cb) {
   const logFn = console.log;
   const lines = [];
   try {
-    console.log =  (text) => {
-      for (const line of text.split(/\r?\n/)) {
-        lines.push(line)
+    console.log = (text) => {
+      if (typeof(text) === 'string') {
+        for (const line of text.split(/\r?\n/)) {
+          lines.push(line)
+        }
+      } else {
+        logFn.call(console, text);
       }
     };
     await cb();
@@ -1062,8 +1065,12 @@ async function captureWarning(cb) {
   const lines = [];
   try {
     console.warn =  (text) => {
-      for (const line of text.split(/\r?\n/)) {
-        lines.push(line)
+      if (typeof(text) === 'string') {
+        for (const line of text.split(/\r?\n/)) {
+          lines.push(line)
+        }
+      } else {
+        warnFn.call(console, text);
       }
     };
     await cb();

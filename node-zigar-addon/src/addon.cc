@@ -384,6 +384,7 @@ static void OverrideEnvironmentFunctions(Isolate* isolate,
     auto isolate = info.GetIsolate();
     if (!(info[0]->IsArrayBuffer() || info[0]->IsSharedArrayBuffer())) {
       isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Argument must be ArrayBuffer or SharedArrayBuffer").ToLocalChecked()));
+      return;
     }
     if (info[0]->IsArrayBuffer()) {
       auto buffer = info[0].As<ArrayBuffer>();
