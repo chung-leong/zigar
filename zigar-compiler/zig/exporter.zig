@@ -25,6 +25,7 @@ pub const Error = error{
     UnableToCreateString,
     UnableToAddStructureTemplate,
     UnableToDefineStructure,
+    UnableToWriteToConsole,
     PointerIsInvalid,
 };
 
@@ -1568,7 +1569,7 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
 
         fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
             const host = HostT.init(ptr);
-            defer host.done();
+            defer host.release();
             tryFunction(host, @ptrCast(@alignCast(arg_ptr))) catch |err| {
                 return createErrorMessage(host, err) catch null;
             };

@@ -137,7 +137,7 @@ struct Callbacks {
   Result (*attach_template)(Call*, Local<Object>, Local<Object>, bool);
   Result (*finalize_structure)(Call*, Local<Object>);
   Result (*create_template)(Call*, Local<DataView>, Local<Object>*);
-  Result (*write_to_console)(Call*, const Memory&);
+  Result (*write_to_console)(Call*, Local<DataView>);
   Result (*flush_console)(Call*);
 };
 

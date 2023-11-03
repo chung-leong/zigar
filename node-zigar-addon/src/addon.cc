@@ -324,7 +324,7 @@ static Result FinalizeStructure(Call* call,
 }
 
 static Result WriteToConsole(Call* call,
-                             const Memory& memory) {
+                             Local<DataView> dv) {
   auto isolate = call->isolate;
   auto name = String::NewFromUtf8Literal(isolate, "writeToConsole");
   auto buffer = ArrayBuffer::New(isolate, memory.len);
@@ -519,9 +519,9 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
     return;
   }
   auto js_module = result.As<Object>();
-  // look for the Environment class
-  if (!js_module->Get(context, String::NewFromUtf8Literal(isolate, "Environment")).ToLocal(&result) || !result->IsObject()) {
-    Throw("Unable to find the class \"Environment\"");
+  // look for the NodeEnvironment class
+  if (!js_module->Get(context, String::NewFromUtf8Literal(isolate, "NodeEnvironment")).ToLocal(&result) || !result->IsObject()) {
+    Throw("Unable to find the class \"NodeEnvironment\"");
     return;
   }
   auto env_constructor = result.As<Function>();

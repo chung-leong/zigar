@@ -16,9 +16,9 @@ import {
   useArray,
 } from '../src/structure.js';
 import { ENVIRONMENT, MEMORY } from '../src/symbol.js';
-import { BaseEnvironment } from '../src/environment.js'
+import { Environment } from '../src/environment.js'
 
-class Environment extends BaseEnvironment {};
+class Environment extends Environment {};
 
 describe('Pointer functions', function() {
   const env = new Environment();

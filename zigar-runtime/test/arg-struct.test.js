@@ -14,10 +14,10 @@ import {
   usePointer,
   usePrimitive,
 } from '../src/structure.js';
-import { BaseEnvironment } from '../src/environment.js'
+import { Environment } from '../src/environment.js'
 
 describe('ArgStruct functions', function() {
-  const env = new BaseEnvironment();
+  const env = new Environment();
   describe('finalizeArgStruct', function() {
     beforeEach(function() {
       useArgStruct();

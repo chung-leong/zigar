@@ -6,10 +6,10 @@ import {
   getStructureFeature,
   getStructureName,
 } from '../src/structure.js';
-import { BaseEnvironment } from '../src/environment.js'
+import { Environment } from '../src/environment.js'
 
 describe('Structure functions', function() {
-  const env = new BaseEnvironment();
+  const env = new Environment();
   describe('useOpaque', function() {
     it(`should enable the creation of opaque structure`, function() {
       useOpaque();

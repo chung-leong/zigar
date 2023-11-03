@@ -8,10 +8,10 @@ import {
   StructureType,
   useStruct,
 } from '../src/structure.js';
-import { BaseEnvironment, getGlobalSlots } from '../src/environment.js'
+import { Environment, getGlobalSlots } from '../src/environment.js'
 import { MEMORY, SLOTS, ENVIRONMENT } from '../src/symbol.js';
 
-class Environment extends BaseEnvironment {
+class Environment extends Environment {
 }
 
 describe('Environment', function() {

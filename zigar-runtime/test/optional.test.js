@@ -21,10 +21,10 @@ import { CHILD_VIVIFICATOR, MEMORY, SLOTS } from '../src/symbol.js';
 import {
   getOptionalAccessors,
 } from '../src/optional.js';
-import { BaseEnvironment } from '../src/environment.js'
+import { Environment } from '../src/environment.js'
 
 describe('Optional functions', function() {
-  const env = new BaseEnvironment();
+  const env = new Environment();
   describe('finalizeOptional', function() {
     beforeEach(function() {
       usePrimitive();

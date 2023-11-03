@@ -20,19 +20,13 @@ const Call = struct {
     allocator: std.mem.Allocator,
 };
 
-extern fn _allocMemory(host: usize, len: usize, ptr_align: u8) usize;
-extern fn _freeMemory(host: usize, address: usize, len: usize, ptr_align: u8) void;
-extern fn _getMemory(host: usize, object: usize, ptr_align: u8, is_const: i32) usize;
-extern fn _getMemoryOffset(object: usize) usize;
-extern fn _getMemoryLength(object: usize) usize;
-extern fn _createDataView(host: usize, address: usize, len: usize, disposition: u32) usize;
-extern fn _wrapMemory(structure: usize, view: usize) usize;
-extern fn _getPointerStatus(object: usize) i32;
-extern fn _setPointerStatus(object: usize, status: i32) void;
-extern fn _readGlobalSlot(slot: usize) usize;
-extern fn _writeGlobalSlot(slot: usize, object: usize) void;
-extern fn _readObjectSlot(container: usize, slot: usize) usize;
-extern fn _writeObjectSlot(container: usize, slot: usize, object: usize) void;
+extern fn _allocMemory(len: usize, ptr_align: u8) usize;
+extern fn _freeMemory(address: usize, len: usize, ptr_align: u8) void;
+
+extern fn _createDataView(address: usize, len: usize, disposition: u32) usize;
+
+extern fn _readSlot(container: usize, slot: usize) usize;
+extern fn _writeSlot(container: usize, slot: usize, object: usize) void;
 extern fn _beginStructure(def: u32) u32;
 extern fn _attachMember(structure: usize, def: usize, is_static: i32) void;
 extern fn _attachMethod(structure: usize, def: usize, is_static_only: i32) void;
@@ -40,14 +34,14 @@ extern fn _attachTemplate(structure: usize, def: usize, is_static: i32) void;
 extern fn _finalizeStructure(structure: usize) void;
 extern fn _createTemplate(buffer: usize) usize;
 extern fn _writeToConsole(address: usize, len: usize) void;
-extern fn _createObject() usize;
+
+extern fn _beginDefinition() usize;
 extern fn _createString(address: usize, len: usize) usize;
-extern fn _setObjectPropertyString(container: usize, key: usize, value: usize) void;
-extern fn _setObjectPropertyInteger(container: usize, key: usize, value: i32) void;
-extern fn _setObjectPropertyBoolean(container: usize, key: usize, value: i32) void;
-extern fn _setObjectPropertyObject(container: usize, key: usize, value: usize) void;
-extern fn _startCall(host: usize) void;
-extern fn _endCall(host: usize) void;
+
+extern fn _insertString(container: usize, key: usize, value: usize) void;
+extern fn _insertInteger(container: usize, key: usize, value: i32) void;
+extern fn _insertBoolean(container: usize, key: usize, value: i32) void;
+extern fn _insertObject(container: usize, key: usize, value: usize) void;
 
 fn ref(number: usize) Value {
     return @ptrFromInt(number);
@@ -85,18 +79,14 @@ pub fn free(ptr: *anyopaque, address: usize, len: usize, ptr_align: u8) void {
 }
 
 pub const Host = struct {
-    context: u32,
-
-    pub const RuntimeHost = Host;
+    var initial_context: ?Call = null;
 
     pub fn init(ptr: *anyopaque) Host {
-        return .{ .context = @intFromPtr(ptr) };
+        return .{};
     }
 
-    pub fn done(_: Host) void {}
-
     pub fn allocateMemory(self: Host, size: usize, ptr_align: u8) !Memory {
-        const address = _allocMemory(self.context, size, ptr_align);
+        const address = _allocMemory(size, ptr_align);
         if (address == 0) {
             return Error.UnableToAllocateMemory;
         }
@@ -107,117 +97,91 @@ pub const Host = struct {
     }
 
     pub fn freeMemory(self: Host, memory: Memory, ptr_align: u8) !void {
-        _freeMemory(self.context, @intFromPtr(memory.bytes), memory.len, ptr_align);
+        _freeMemory(@intFromPtr(memory.bytes), memory.len, ptr_align);
     }
 
-    pub fn getMemory(self: Host, container: Value, comptime PtrT: type, comptime aligning: bool) !PtrT {
-        const pt = @typeInfo(PtrT).Pointer;
-        const ptr_align = if (aligning) std.math.log2_int(u8, @alignOf(pt.child)) else 0;
-        const is_const = if (pt.is_const) 1 else 0;
-        const view_index = _getMemory(self.context, index(container), ptr_align, is_const);
-        if (view_index == 0) {
-            return Error.UnableToRetrieveMemoryLocation;
-        }
-        const len = _getMemoryLength(view_index);
-        const offset = _getMemoryOffset(view_index);
-        const memory: Memory = .{
-            .bytes = @ptrFromInt(offset),
-            .len = len,
-        };
-        return exporter.fromMemory(memory, PtrT);
-    }
-
-    fn createDataView(self: Host, memory: Memory, disposition: MemoryDisposition) ?Value {
-        // null pointer is possible here--JavaScript code will create an empty ArrayBuffer when len is 0
+    pub fn createString(self: Host, memory: Memory) !Value {
         const bytes = memory.bytes;
         const len = memory.len;
         const address = @intFromPtr(bytes);
-        const dv_index = _createDataView(self.context, address, len, @intFromEnum(disposition));
+        const str_index = _createString(address, len);
+        if (str_index == 0) {
+            return Error.UnableToCreateString;
+        }
+        return ref(str_index);
+    }
+
+    pub fn createObject(self: Host, structure: Value, arg: Value) !Value {
+        const value_index = _createObject(index(structure), index(arg));
+        if (value_index == 0) {
+            return Error.UnableToCreateObject;
+        }
+        return ref(value_index);
+    }
+
+    pub fn createView(self: Host, memory: Memory) !Value {
+        const bytes = memory.bytes;
+        const len = memory.len;
+        const address = @intFromPtr(bytes);
+        const dv_index = _createView(address, len);
         if (dv_index == 0) {
-            return null;
+            return Error.UnableToCreateDataView;
         }
         return ref(dv_index);
     }
 
-    pub fn wrapMemory(self: Host, memory: Memory, disposition: MemoryDisposition, comptime T: type, comptime size: std.builtin.Type.Pointer.Size) !Value {
-        const dv = self.createDataView(memory, disposition) orelse return Error.UnableToCreateObject;
-        const slot = exporter.getStructureSlot(T, size);
-        const structure = try self.readGlobalSlot(slot);
-        const obj_index = _wrapMemory(index(structure), index(dv));
-        if (obj_index == 0) {
+    pub fn castView(self: Host, structure: Value, dv: Value) !Value {
+        const value_index = _castView(index(structure), index(dv));
+        if (value_index == 0) {
             return Error.UnableToCreateObject;
         }
-        return ref(obj_index);
+        return ref(value_index);
     }
 
-    pub fn getPointerStatus(_: Host, pointer: Value) !bool {
-        const value = _getPointerStatus(index(pointer));
-        if (value == -1) {
-            return Error.PointerIsInvalid;
-        }
-        return (value != 0);
-    }
-
-    pub fn setPointerStatus(_: Host, pointer: Value, sync: bool) !void {
-        _setPointerStatus(index(pointer), if (sync) 1 else 0);
-    }
-
-    pub fn readGlobalSlot(_: Host, slot: usize) !Value {
-        const obj_index = _readGlobalSlot(slot);
-        if (obj_index == 0) {
-            return Error.UnableToFindObjectType;
-        }
-        return ref(obj_index);
-    }
-
-    pub fn writeGlobalSlot(_: Host, slot: usize, value: Value) !void {
-        _writeGlobalSlot(@truncate(slot), index(value));
-    }
-
-    pub fn readObjectSlot(_: Host, container: Value, slot: usize) !Value {
-        const obj_index = _readObjectSlot(index(container), slot);
+    pub fn readSlot(_: Host, container: ?Value, slot: usize) !Value {
+        const obj_index = _readSlot(index(container), slot);
         if (obj_index == 0) {
             return Error.UnableToRetrieveObject;
         }
         return ref(obj_index);
     }
 
-    pub fn writeObjectSlot(_: Host, container: Value, slot: usize, value: ?Value) !void {
-        _writeObjectSlot(index(container), slot, index(value));
+    pub fn writeSlot(_: Host, container: ?Value, slot: usize, value: ?Value) !void {
+        _writeSlot(index(c), slot, index(value));
     }
 
-    fn createObject() Value {
-        return ref(_createObject());
+    fn beginDefinition() Value {
+        return ref(_beginDefinition());
     }
 
-    fn setObjectProperty(container: Value, key: []const u8, value: anytype) void {
+    fn insertProperty(container: Value, key: []const u8, value: anytype) void {
         const T = @TypeOf(value);
         const key_index = _createString(@intFromPtr(key.ptr), key.len);
         switch (@typeInfo(T)) {
             .Pointer => {
                 if (T == [*:0]const u8) {
                     const value_index = _createString(@intFromPtr(value), strlen(value));
-                    _setObjectPropertyString(index(container), key_index, value_index);
+                    _insertString(index(container), key_index, value_index);
                 } else if (T == Value) {
-                    _setObjectPropertyObject(index(container), key_index, index(value));
+                    _insertObject(index(container), key_index, index(value));
                 } else {
                     @compileError("No support for value type: " ++ @typeName(T));
                 }
             },
             .Int => {
-                _setObjectPropertyInteger(index(container), key_index, @intCast(value));
+                _insertInteger(index(container), key_index, @intCast(value));
             },
             .Enum => {
-                _setObjectPropertyInteger(index(container), key_index, @intCast(@intFromEnum(value)));
+                _insertInteger(index(container), key_index, @intCast(@intFromEnum(value)));
             },
             .Bool => {
-                _setObjectPropertyBoolean(index(container), key_index, if (value) 1 else 0);
+                _insertBoolean(index(container), key_index, if (value) 1 else 0);
             },
             .Optional => {
                 if (value) |v| {
-                    setObjectProperty(container, key, v);
+                    insertProperty(container, key, v);
                 } else {
-                    _setObjectPropertyObject(index(container), key_index, 0);
+                    _insertObject(index(container), key_index, 0);
                 }
             },
             else => {
@@ -227,49 +191,49 @@ pub const Host = struct {
     }
 
     pub fn beginStructure(_: Host, def: Structure) !Value {
-        const structure = createObject();
-        setObjectProperty(structure, "name", def.name);
-        setObjectProperty(structure, "type", def.structure_type);
-        setObjectProperty(structure, "length", def.length);
-        setObjectProperty(structure, "byteSize", def.byte_size);
-        setObjectProperty(structure, "align", def.ptr_align);
-        setObjectProperty(structure, "isConst", def.is_const);
-        setObjectProperty(structure, "hasPointer", def.has_pointer);
+        const structure = beginDefinition();
+        insertProperty(structure, "name", def.name);
+        insertProperty(structure, "type", def.structure_type);
+        insertProperty(structure, "length", def.length);
+        insertProperty(structure, "byteSize", def.byte_size);
+        insertProperty(structure, "align", def.ptr_align);
+        insertProperty(structure, "isConst", def.is_const);
+        insertProperty(structure, "hasPointer", def.has_pointer);
         return ref(_beginStructure(index(structure)));
     }
 
     pub fn attachMember(self: Host, structure: Value, member: Member, is_static: bool) !void {
         _ = self;
-        const def = createObject();
-        setObjectProperty(def, "type", member.member_type);
-        setObjectProperty(def, "isRequired", member.is_required);
+        const def = beginDefinition();
+        insertProperty(def, "type", member.member_type);
+        insertProperty(def, "isRequired", member.is_required);
         if (member.bit_offset != missing) {
-            setObjectProperty(def, "bitOffset", member.bit_offset);
+            insertProperty(def, "bitOffset", member.bit_offset);
         }
         if (member.bit_size != missing) {
-            setObjectProperty(def, "bitSize", member.bit_size);
+            insertProperty(def, "bitSize", member.bit_size);
         }
         if (member.byte_size != missing) {
-            setObjectProperty(def, "byteSize", member.byte_size);
+            insertProperty(def, "byteSize", member.byte_size);
         }
         if (member.slot != missing) {
-            setObjectProperty(def, "slot", member.slot);
+            insertProperty(def, "slot", member.slot);
         }
         if (member.name) |name| {
-            setObjectProperty(def, "name", name);
+            insertProperty(def, "name", name);
         }
         if (member.structure) |s| {
-            setObjectProperty(def, "structure", s);
+            insertProperty(def, "structure", s);
         }
         _attachMember(index(structure), index(def), if (is_static) 1 else 0);
     }
 
     pub fn attachMethod(_: Host, structure: Value, method: Method, is_static_only: bool) !void {
-        const def = createObject();
-        setObjectProperty(def, "argStruct", method.structure);
-        setObjectProperty(def, "thunk", @intFromPtr(method.thunk));
+        const def = beginDefinition();
+        insertProperty(def, "argStruct", method.structure);
+        insertProperty(def, "thunk", @intFromPtr(method.thunk));
         if (method.name) |name| {
-            setObjectProperty(def, "name", name);
+            insertProperty(def, "name", name);
         }
         _attachMethod(index(structure), index(def), if (is_static_only) 1 else 0);
     }
@@ -282,39 +246,54 @@ pub const Host = struct {
         _finalizeStructure(index(structure));
     }
 
-    pub fn createTemplate(self: Host, bytes: []u8) !Value {
-        const memory: Memory = .{
-            .bytes = if (bytes.len > 0) bytes.ptr else null,
-            .len = bytes.len,
-        };
-        const dv = self.createDataView(memory, .Copy);
+    pub fn createTemplate(self: Host, dv: ?Value) !Value {
         const templ_index = _createTemplate(index(dv));
         if (templ_index == 0) {
             return Error.UnableToCreateStructureTemplate;
         }
         return ref(templ_index);
     }
+
+    pub fn writeToConsole(self: Host, dv: Value) !void {
+        const result = _writeToConsole(dv);
+        if (result == 0) {
+            return Error.UnableToWriteToConsole;
+        }
+    }
+
+    pub fn write(ptr: [*]const u8, len: usize) !void {
+        if (initial_context) |context| {
+            const host = Host.init(context);
+            const memory: Memory = .{
+                .bytes = @constCast(ptr),
+                .len = len,
+            };
+            const dv = try host.createView(memory);
+            try host.writeToConsole(dv);
+        } else {
+            return Error.UnableToWriteToConsole;
+        }
+    }
 };
 
-pub fn runThunk(arg_index: usize, address: usize) usize {
+pub fn runThunk(fn_address: usize, arg_address: usize) usize {
     var ctx: Call = .{
         .allocator = .{ .ptr = undefined, .vtable = &std.heap.WasmAllocator.vtable },
     };
-    const thunk: Thunk = @ptrFromInt(address);
     const ptr: *anyopaque = @ptrCast(&ctx);
-    _startCall(@intFromPtr(ptr));
-    const result = thunk(ptr, ref(arg_index));
-    _endCall(@intFromPtr(ptr));
-    if (result) |error_msg| {
-        return _createString(@intFromPtr(error_msg), strlen(error_msg));
+    const thunk: Thunk = @ptrFromInt(fn_address);
+    const arg_ptr: *anyopaque = @ptrFromInt(arg_address);
+    if (thunk(ptr, arg_ptr)) |result| {
+        return index(result);
     } else {
         return 0;
     }
 }
 
-pub fn exportModule(comptime T: type, arg_index: usize) usize {
+pub fn exportModule(comptime T: type) usize {
     const factory = exporter.createRootFactory(Host, T);
-    return runThunk(arg_index, @intFromPtr(factory));
+    const arg_address = @ptrFromInt(0);
+    return runThunk(@intFromPtr(factory), arg_address);
 }
 
 pub fn getOS() type {
@@ -332,7 +311,9 @@ pub fn getOS() type {
 
             pub fn write(f: fd_t, ptr: [*]const u8, len: usize) usize {
                 if (f == STDOUT_FILENO or f == STDERR_FILENO) {
-                    _writeToConsole(@intFromPtr(ptr), len);
+                    if (Host.write(ptr, len)) {
+                        return @intCast(len);
+                    } else |_| {}
                 }
                 return len;
             }

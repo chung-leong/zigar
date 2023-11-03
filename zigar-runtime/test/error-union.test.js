@@ -19,10 +19,10 @@ import {
 import { initializeErrorSets } from '../src/error-set.js';
 import { CHILD_VIVIFICATOR, MEMORY, SLOTS } from '../src/symbol.js';
 import { getErrorUnionAccessors } from '../src/error-union.js';
-import { BaseEnvironment } from '../src/environment.js'
+import { Environment } from '../src/environment.js'
 
 describe('Error union functions', function() {
-  const env = new BaseEnvironment();
+  const env = new Environment();
   describe('finalizeErrorUnion', function() {
     beforeEach(function() {
       usePrimitive();

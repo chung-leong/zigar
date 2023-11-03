@@ -9,10 +9,10 @@ import {
   useErrorSet,
 } from '../src/structure.js';
 import { initializeErrorSets } from '../src/error-set.js';
-import { BaseEnvironment } from '../src/environment.js'
+import { Environment } from '../src/environment.js'
 
 describe('Error set functions', function() {
-  const env = new BaseEnvironment();
+  const env = new Environment();
   describe('finalizeErrorSet', function() {
     beforeEach(function() {
       useIntEx();

@@ -15,10 +15,10 @@ import {
   useEnumeration,
   usePointer,
 } from '../src/structure.js';
-import { BaseEnvironment } from '../src/environment.js'
+import { Environment } from '../src/environment.js'
 
 describe('Static variable functions', function() {
-  const env = new BaseEnvironment();
+  const env = new Environment();
   beforeEach(function() {
     useStruct();
     usePointer();

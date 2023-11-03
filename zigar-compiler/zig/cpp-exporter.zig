@@ -24,10 +24,7 @@ pub const Result = enum(u32) {
 pub const Host = struct {
     context: Call,
 
-    pub const RuntimeHost = Host;
-
     var initial_context: ?Call = null;
-    var flush_required: bool = false;
 
     pub fn init(ptr: *anyopaque) Host {
         const context: Call = @ptrCast(ptr);
@@ -37,13 +34,9 @@ pub const Host = struct {
         return .{ .context = context };
     }
 
-    pub fn done(self: Host) void {
+    pub fn release() void {
         if (initial_context == self.context) {
             initial_context = null;
-            if (flush_required) {
-                _ = callbacks.flush_console(self.context);
-                flush_required = false;
-            }
         }
     }
 
@@ -151,17 +144,23 @@ pub const Host = struct {
         return value;
     }
 
-    pub fn writeToConsole(ptr: [*]const u8, len: usize) bool {
+    pub fn writeToConsole(self: Host, dv: Value) !void {
+        if (callbacks.write_to_console(self.context, context, dv) != .OK) {
+            return Error.UnableToWriteToConsole;
+        }
+    }
+
+    pub fn write(ptr: [*]const u8, len: usize) !void {
         if (initial_context) |context| {
+            const host = Host.init(context);
             const memory: Memory = .{
                 .bytes = @constCast(ptr),
                 .len = len,
             };
-            _ = callbacks.write_to_console(context, &memory);
-            flush_required = true;
-            return true;
+            const dv = try host.createView(memory);
+            try host.writeToConsole(dv);
         } else {
-            return false;
+            return Error.UnableToWriteToConsole;
         }
     }
 };
@@ -182,7 +181,7 @@ const Callbacks = extern struct {
     attach_template: *const fn (Call, Value, Value, bool) callconv(.C) Result,
     finalize_structure: *const fn (Call, Value) callconv(.C) Result,
     create_template: *const fn (Call, ?Value, *Value) callconv(.C) Result,
-    write_to_console: *const fn (Call, *const Memory) callconv(.C) Result,
+    write_to_console: *const fn (Call, Value) callconv(.C) Result,
     flush_console: *const fn (Call) callconv(.C) Result,
 };
 
@@ -274,9 +273,9 @@ pub fn getOS() type {
             const substitutes = struct {
                 pub fn write(f: fd_t, ptr: [*]const u8, len: usize) return_t {
                     if (f == STDOUT_FILENO or f == STDERR_FILENO) {
-                        if (Host.writeToConsole(ptr, len)) {
+                        if (Host.write(ptr, len)) {
                             return @intCast(len);
-                        }
+                        } else |_| {}
                     }
                     return target.write(f, ptr, len);
                 }

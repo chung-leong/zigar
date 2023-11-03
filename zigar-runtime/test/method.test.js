@@ -18,10 +18,10 @@ import { MEMORY, SLOTS } from '../src/symbol.js';
 import {
   invokeThunk,
 } from '../src/method.js';
-import { BaseEnvironment } from '../src/environment.js'
+import { Environment } from '../src/environment.js'
 
 describe('Method functions', function() {
-  const env = new BaseEnvironment();
+  const env = new Environment();
   describe('invokeThunk', function() {
     beforeEach(function() {
       useStruct();
@@ -44,8 +44,8 @@ describe('Method functions', function() {
         recv = this;
         arg = args[0];
       }
-      invokeThunk(thunk, argStruct, BaseEnvironment);
-      expect(recv).to.be.instanceOf(BaseEnvironment);
+      invokeThunk(thunk, argStruct, Environment);
+      expect(recv).to.be.instanceOf(Environment);
       expect(arg).to.equal(argStruct[MEMORY]);
     })
     it('should return a promise when trunk returns a promise', async function() {
@@ -67,7 +67,7 @@ describe('Method functions', function() {
         called = true;
         args.retval = 123;
       }
-      const result = invokeThunk(thunk, argStruct, BaseEnvironment);
+      const result = invokeThunk(thunk, argStruct, Environment);
       expect(result).to.be.a('promise');
       expect(called).to.be.false;
       ready = true;
@@ -85,7 +85,7 @@ describe('Method functions', function() {
       function thunk(...args) {
         return `JellyDonutInsurrection`;
       }
-      expect(() => invokeThunk(thunk, argStruct, BaseEnvironment)).to.throw(Error)
+      expect(() => invokeThunk(thunk, argStruct, Environment)).to.throw(Error)
         .with.property('message').that.equals('Jelly donut insurrection') ;
     })
   })
@@ -164,7 +164,7 @@ describe('Method functions', function() {
       object.dog = 10;
       object.cat = 13;
       const res1 = object.merge();
-      expect(recv).to.be.instanceOf(BaseEnvironment);
+      expect(recv).to.be.instanceOf(Environment);
       expect(res1).to.equal(23);
       const res2 = Hello.merge(object);
       expect(res2).to.equal(23);
@@ -243,7 +243,7 @@ describe('Method functions', function() {
       expect(Hello.prototype.foo).to.be.a('function');
       expect(Hello.prototype.foo).to.have.property('name', 'foo');
       const res1 = Hello.Cat.foo(1234);
-      expect(recv).to.be.instanceOf(BaseEnvironment);
+      expect(recv).to.be.instanceOf(Environment);
       expect(res1).to.be.true;
       expect(arg1).to.equal(Number(Hello.Cat));
       expect(arg2).to.equal(1234);

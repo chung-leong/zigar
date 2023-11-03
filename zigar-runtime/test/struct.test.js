@@ -14,10 +14,10 @@ import {
   useStruct,
   usePointer,
 } from '../src/structure.js';
-import { BaseEnvironment } from '../src/environment.js'
+import { Environment } from '../src/environment.js'
 
 describe('Struct functions', function() {
-  const env = new BaseEnvironment();
+  const env = new Environment();
   describe('finalizeStruct', function() {
     beforeEach(function() {
       usePrimitive();

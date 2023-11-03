@@ -13,10 +13,10 @@ import {
   getPrimitiveClass,
   isExtendedType,
 } from '../src/primitive.js';
-import { BaseEnvironment } from '../src/environment.js'
+import { Environment } from '../src/environment.js'
 
 describe('Primitive functions', function() {
-  const env = new BaseEnvironment();
+  const env = new Environment();
   describe('finalizePrimitive', function() {
     beforeEach(function() {
       usePrimitive();

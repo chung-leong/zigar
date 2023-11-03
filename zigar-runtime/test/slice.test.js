@@ -16,10 +16,10 @@ import {
   useVector,
 } from '../src/structure.js';
 import { MEMORY } from '../src/symbol.js';
-import { BaseEnvironment } from '../src/environment.js'
+import { Environment } from '../src/environment.js'
 
 describe('Slice functions', function() {
-  const env = new BaseEnvironment();
+  const env = new Environment();
   describe('finalizeSlice', function() {
     beforeEach(function() {
       usePrimitive();

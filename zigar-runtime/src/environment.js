@@ -1,15 +1,17 @@
 import { getStructureFactory, getStructureName } from './structure.js';
 import { decodeText } from './text.js';
 import { acquireTarget } from './pointer.js';
-import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR } from './symbol.js';
+import { initializeErrorSets } from './error-set.js';
+import { throwZigError } from './error.js';
+import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CHILD_VIVIFICATOR, RELEASE_THUNK } from './symbol.js';
 
 const default_alignment = 16;
 const globalSlots = {};
 
-let consolePending = '';
+let consolePending = [];
 let consoleTimeout = 0;
 
-export class BaseEnvironment {
+export class Environment {
   /*
   Functions to be defined in subclass:
 
@@ -231,22 +233,25 @@ export class BaseEnvironment {
     }
   }
 
-  writeToConsole(buffer) {
+  writeToConsole(dv) {
     try {
-      const s = decodeText(buffer);
+      const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
       // send text up to the last newline character
-      const index = s.lastIndexOf('\n');
+      const index = array.lastIndexOf('\n');
       if (index === -1) {
-        consolePending += s;
+        consolePending.push(array);
       } else {
-        console.log(consolePending + s.substring(0, index));
-        consolePending = s.substring(index + 1);
+        const beginning = array.subarray(0, index + 1);
+        const remaining = array.slice(index + 1);   // copying, in case incoming buffer is pointing to stack memory
+        const list = [ ...consolePending, beginning ];
+        console.log(decodeText(list));
+        consolePending = (remaining.length > 0) ? [ remaining ] : [];
       }
       clearTimeout(consoleTimeout);
       if (consolePending) {
         consoleTimeout = setTimeout(() => {
-          console.log(consolePending);
-          consolePending = '';
+          console.log(decodeText(consolePending));
+          consolePending = [];
         }, 250);
       }
       /* c8 ignore next 3 */
@@ -256,11 +261,280 @@ export class BaseEnvironment {
   }
 
   flushConsole() {
-    if (consolePending) {
-      console.log(consolePending);
-      consolePending = '';
+    if (consolePending.length > 0) {
+      console.log(decodeText(consolePending));
+      consolePending = [];
       clearTimeout(consoleTimeout);
     }
+  }
+}
+
+export class NodeEnvironment extends Environment {
+  // C++ code will patch in getAddress, obtainView, copyBytes, and findSentinel
+
+  invokeFactory(thunk) {
+    initializeErrorSets();
+    const result = thunk.call(this);
+    if (typeof(result) === 'string') {
+      // an error message
+      throwZigError(result);
+    }
+    let module = result.constructor;
+    // attach __zigar object
+    const initPromise = Promise.resolve();
+    module.__zigar = {
+      init: () => initPromise,
+      abandon: () => initPromise.then(() => {
+        if (module) {
+          this.releaseModule(module);
+        }
+        module = null;
+      }),
+      released: () => initPromise.then(() => !module),
+    };
+    return module;
+  }
+
+  releaseModule(module) {
+    const released = new Map();
+    const replacement = function() {
+      throw new Error(`Shared library was abandoned`);
+    };
+    const releaseClass = (cls) => {
+      if (!cls || released.get(cls)) {
+        return;
+      }
+      released.set(cls, true);
+      // release static variables--vivificators return pointers
+      const vivificators = cls[CHILD_VIVIFICATOR];
+      if (vivificators) {
+        for (const vivificator of Object.values(vivificators)) {
+          const ptr = vivificator.call(cls);
+          if (ptr) {
+            releaseObject(ptr);
+          }
+        }
+      }
+      for (const [ name, { value, get, set }  ] of Object.entries(Object.getOwnPropertyDescriptors(cls))) {
+        if (typeof(value) === 'function') {
+          // release thunk of static function
+          value[RELEASE_THUNK]?.(replacement);
+        } else if (get && !set) {
+          // the getter might return a type/class/constuctor
+          const child = cls[name];
+          if (typeof(child) === 'function') {
+            releaseClass(child);
+          }
+        }
+      }
+      for (const [ name, { value } ] of Object.entries(Object.getOwnPropertyDescriptors(cls.prototype))) {
+        if (typeof(value) === 'function') {
+          // release thunk of instance function
+          value[RELEASE_THUNK]?.(replacement);
+        }
+      }
+    };
+    const releaseObject = (obj) => {
+      if (!obj || released.get(obj)) {
+        return;
+      }
+      released.set(obj, true);
+      const dv = obj[MEMORY];
+      if (dv.buffer instanceof SharedArrayBuffer) {
+        // create new buffer and copy content from shared memory
+        const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+        const ta2 = new Uint8Array(ta);
+        const dv2 = new DataView(ta2.buffer);
+        obj[MEMORY] = dv2;
+      }
+      const slots = obj[SLOTS];
+      if (slots) {
+        // TODO: refactoring
+        // for (const child of Object.values(slots)) {
+        //   // deal with pointers in structs
+        //   if (child.hasOwnProperty(ZIG)) {
+        //     releaseObject(child);
+        //   }
+        // }
+        // if (obj.hasOwnProperty(ZIG)) {
+        //   // a pointer--release what it's pointing to
+        //   releaseObject(obj[SLOTS][0]);
+        // } else {
+        //   // force recreation of child objects so they'll use non-shared memory
+        //   obj[SLOTS] = {};
+        // }
+      }
+    };
+    releaseClass(module);
+  }
+}
+
+export class WebAssemblyEnvironment extends Environment {
+  nextValueIndex = 0;
+  valueTable = null;
+  valueIndices = null;
+
+  constructor() {
+    this.resetValueTables();
+  }
+
+  resetValueTables() {
+    if (this.nextValueIndex !== 1) {
+      this.nextValueIndex = 1;
+      this.valueTable = { 0: null };
+      this.valueIndices = new WeakMap();
+    }
+  }
+
+  getObjectIndex(object) {
+    if (object != undefined) {
+      let index = this.valueIndices.get(object);
+      if (index === undefined) {
+        index = nextValueIndex++;
+        this.valueIndices.set(object, index);
+        this.valueTable[index] = object;
+      }
+      return index;
+    } else {
+      return 0;
+    }
+  }
+
+  createBridge(fn, argType = '', returnType = '', runtime = false) {
+    if (process.env.ZIGAR_TARGET === 'WASM-COMPTIME' && !runtime) {
+      return () => {};
+    }
+    return function (...args) {
+      args = args.map((arg, i) => {
+        switch (argType.charAt(i)) {
+          case 'v': return valueTable[arg];
+          case 's': return valueTable[arg]?.valueOf();
+          case 'i': return arg;
+          case 'b': return !!arg;
+        }
+      });
+      const retval = fn.apply(env, args);
+      switch (returnType) {
+        case 'v': return this.getObjectIndex(retval);
+        case 's': return this.getObjectIndex(new String(retval));
+        case 'i': return retval;
+        case 'b': return arg ? 1 : 0;
+    }
+    };
+  }
+
+  createImports() {
+    return {
+      _allocMemory: this.createBridge(this.allocMemory, 'ii', 'v', true),
+      _freeMemory: this.createBridge(this.freeMemory, 'iii', '', true),
+      _createString: this.createBridge(this.createString, 'ii', 'v'),
+      _createObject: this.createBridge(this.createObject, 'vv', 's'),
+      _createView: this.createBridge(this.createView, 'ii', 'v'),
+      _castView: this.createBridge(this.castView, 'vv', 'v'),
+      _readSlot: this.createBridge(this.readSlot, 'vi', 'v'),
+      _writeSlot: this.createBridge(this.writeSlot, 'viv'),
+      _beginDefinition: this.createBridge(this.beginDefinition),
+      _insertInteger: this.createBridge(this.insertProperty, 'vsi'),
+      _insertBoolean: this.createBridge(this.insertProperty, 'vsb'),
+      _insertString: this.createBridge(this.insertProperty, 'vss'),
+      _beginStructure: this.createBridge(this.beginStructure, 'v', 'v'),
+      _attachMember: this.createBridge(this.attachMember, 'vvb'),
+      _attachMethod: this.createBridge(this.attachMethod, 'vvb'),
+      _attachTemplate: this.createBridge(this.attachTemplate, 'vvb'),
+      _finalizeStructure: this.createBridge(this.finalizeStructure, 'v'),
+      _writeToConsole: this.createBridge(this.writeToConsole, 'v', '', true),
+    }
+  }
+
+  beginDefinition() {
+    return {};
+  }
+
+  insertProperty(def, name, value) {
+    def[name] = value;
+  }
+
+  finalizeStructures(structures) {
+    const slots = {};
+    const variables = [];
+    initializeErrorSets();
+    for (const structure of structures) {
+      for (const target of [ structure.static, structure.instance ]) {
+        // first create the actual template using the provided placeholder
+        if (target.template) {
+          target.template = createTemplate(target.template);
+        }
+      }
+      for (const method of structure.static.methods) {
+        // create thunk function
+        method.thunk = createThunk(method.thunk);
+      }
+      this.finalizeStructure(structure);
+      // place structure into its assigned slot
+      slots[structure.slot] = structure;
+    }
+
+    function createTemplate(placeholder) {
+      const template = {};
+      if (placeholder.memory) {
+        const { array, offset, length } = placeholder.memory;
+        template[MEMORY] = new DataView(array.buffer, offset, length);
+      }
+      if (placeholder.slots) {
+        template[SLOTS] = insertObjects({}, placeholder.slots);
+      }
+      return template;
+    }
+
+    function insertObjects(dest, placeholders) {
+      for (const [ slot, placeholder ] of Object.entries(placeholders)) {
+        dest[slot] = createObject(placeholder);
+      }
+      return dest;
+    }
+
+    function createObject(placeholder) {
+      let dv;
+      if (placeholder.memory) {
+        const { array, offset, length } = placeholder.memory;
+        dv = new DataView(array.buffer, offset, length);
+      } else {
+        const { byteSize } = placeholder.structure;
+        dv = new DataView(new ArrayBuffer(byteSize));
+      }
+      const { constructor } = placeholder.structure;
+      // TODO: refactoring
+      // const object = constructor.call(ZIG, dv);
+      if (placeholder.slots) {
+        insertObjects(object[SLOTS], placeholder.slots);
+      }
+      if (placeholder.address !== undefined) {
+        // need to replace dataview with one pointing to WASM memory later,
+        // when the VM is up and running
+        variables.push({ address: placeholder.address, object });
+      }
+      return object;
+    }
+
+    let resolve, reject;
+    const promise = new Promise((r1, r2) => {
+      resolve = r1;
+      reject = r2;
+    });
+    const methodRunner = {
+      0: function(index, argStruct) {
+        // wait for linking to occur, then activate the runner again
+        return promise.then(() => methodRunner[0].call(this, index, argStruct));
+      },
+    };
+
+    function createThunk(index) {
+      return function(argStruct) {
+        return methodRunner[0](index, argStruct);
+      };
+    }
+
+    return { promise, resolve, reject, slots, variables, methodRunner };
   }
 }
 
@@ -294,4 +568,9 @@ export function findSortedIndex(array, address) {
     }
   }
   return high;
+}
+
+function isMisaligned({ address }, ptrAlign) {
+  const mask = (1 << ptrAlign) - 1;
+  return (address & mask) !== 0;
 }
