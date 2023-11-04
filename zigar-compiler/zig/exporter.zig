@@ -1610,7 +1610,7 @@ pub fn createRootFactory(comptime HostT: type, comptime T: type) Thunk {
     const RootFactory = struct {
         fn exportStructure(ptr: *anyopaque, _: *anyopaque) callconv(.C) ?Value {
             const host = HostT.init(ptr);
-            defer host.done();
+            defer host.release();
             const result = getStructure(host, T) catch |err| {
                 return createErrorMessage(host, err) catch null;
             };

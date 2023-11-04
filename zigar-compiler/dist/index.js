@@ -363,107 +363,61 @@ function absolute(relpath) {
 
 const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
-const ZIG = Symbol('zig');
 const STRUCTURE = Symbol('structure');
+const POINTER_VISITOR = Symbol('pointerVisitor');
+const TARGET_ACQUIRER = Symbol('targetAcquirer');
+const ENVIRONMENT = Symbol('environment');
 
-function getMemoryCopier(size, multiple = false) {
-  if (!multiple) {
-    switch (size) {
-      case 1: return copy1;
-      case 2: return copy2;
-      case 4: return copy4;
-      case 8: return copy8;
-      case 16: return copy16;
-      case 32: return copy32;
+function acquireTarget() {
+  this[TARGET_ACQUIRER]();
+}
+
+const StructureType = {
+  Primitive: 0,
+  Array: 1,
+  Struct: 2,
+  ArgStruct: 3,
+  ExternUnion: 4,
+  BareUnion: 5,
+  TaggedUnion: 6,
+  ErrorUnion: 7,
+  ErrorSet: 8,
+  Enumeration: 9,
+  Optional: 10,
+  Pointer: 11,
+  Slice: 12,
+  Vector: 13,
+  Opaque: 14,
+  Function: 15,
+};
+
+const factories = Array(Object.values(StructureType).length);
+
+function getStructureName(s, full = false) {
+  let r = s.name;
+  if (!full) {
+    r = r.replace(/{.*}/, '');
+    r = r.replace(/[^. ]*?\./g, '');
+  }
+  return r;
+}
+
+function getStructureFactory(type) {
+  const f = factories[type];
+  if (process.env.ZIGAR_DEV) {
+    /* c8 ignore next 10 */
+    if (typeof(f) !== 'function') {
+      const [ name ] = Object.entries(StructureType).find(a => a[1] === type);
+      throw new Error(`No factory for ${name}`);
     }
   }
-  if (!(size & 0x07)) return copy8x;
-  if (!(size & 0x03)) return copy4x;
-  if (!(size & 0x01)) return copy2x;
-  return copy1x;
+  return f;
 }
 
-function copy1x(dest, src) {
-  for (let i = 0, len = dest.byteLength; i < len; i++) {
-    dest.setInt8(i, src.getInt8(i));
-  }
-}
-
-function copy2x(dest, src) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 2) {
-    dest.setInt16(i, src.getInt16(i, true), true);
-  }
-}
-
-function copy4x(dest, src) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 4) {
-    dest.setInt32(i, src.getInt32(i, true), true);
-  }
-}
-
-function copy8x(dest, src) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 8) {
-    dest.setInt32(i, src.getInt32(i, true), true);
-    dest.setInt32(i + 4, src.getInt32(i + 4, true), true);
-  }
-}
-
-function copy1(dest, src) {
-  dest.setInt8(0, src.getInt8(0));
-}
-
-function copy2(dest, src) {
-  dest.setInt16(0, src.getInt16(0, true), true);
-}
-
-function copy4(dest, src) {
-  dest.setInt32(0, src.getInt32(0, true), true);
-}
-
-function copy8(dest, src) {
-  dest.setInt32(0, src.getInt32(0, true), true);
-  dest.setInt32(4, src.getInt32(4, true), true);
-}
-
-function copy16(dest, src) {
-  dest.setInt32(0, src.getInt32(0, true), true);
-  dest.setInt32(4, src.getInt32(4, true), true);
-  dest.setInt32(8, src.getInt32(8, true), true);
-  dest.setInt32(12, src.getInt32(12, true), true);
-}
-
-function copy32(dest, src) {
-  dest.setInt32(0, src.getInt32(0, true), true);
-  dest.setInt32(4, src.getInt32(4, true), true);
-  dest.setInt32(8, src.getInt32(8, true), true);
-  dest.setInt32(12, src.getInt32(12, true), true);
-  dest.setInt32(16, src.getInt32(16, true), true);
-  dest.setInt32(20, src.getInt32(20, true), true);
-  dest.setInt32(24, src.getInt32(24, true), true);
-  dest.setInt32(28, src.getInt32(28, true), true);
-}
-
-function decamelizeErrorName(name) {
-  // use a try block in case Unicode regex fails
-  try {
-    const lc = name.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
-      if (m1.length === 1) {
-        return ` ${m1.toLocaleLowerCase()}${m2}`;
-      } else {
-        if (m2) {
-          const acronym = m1.substring(0, m1.length - 1);
-          const letter = m1.charAt(m1.length - 1).toLocaleLowerCase();
-          return ` ${acronym} ${letter}${m2}`;
-        } else {
-          return ` ${m1}`;
-        }
-      }
-    }).trimStart();
-    return lc.charAt(0).toLocaleUpperCase() + lc.substring(1);
-    /* c8 ignore next 3 */
-  } catch (err) {
-    return name;
-  }
+function getStructureFeature(structure) {
+  const { type } = structure;
+  const [ name ] = Object.entries(StructureType).find(a => a[1] === type);
+  return `use${name}`;
 }
 
 const MemberType = {
@@ -526,516 +480,528 @@ function isByteAligned({ bitOffset, bitSize, byteSize }) {
   return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
 }
 
-const StructureType = {
-  Primitive: 0,
-  Array: 1,
-  Struct: 2,
-  ArgStruct: 3,
-  ExternUnion: 4,
-  BareUnion: 5,
-  TaggedUnion: 6,
-  ErrorUnion: 7,
-  ErrorSet: 8,
-  Enumeration: 9,
-  Optional: 10,
-  Pointer: 11,
-  Slice: 12,
-  Vector: 13,
-  Opaque: 14,
-  Function: 15,
-};
-
-Array(Object.values(StructureType).length);
-
-function beginStructure(def, options = {}) {
-  const {
-    type,
-    name,
-    length,
-    byteSize,
-    align,
-    isConst,
-    hasPointer,
-  } = def;
-  return {
-    constructor: null,
-    typedArray: null,
-    type,
-    name,
-    length,
-    byteSize,
-    align,
-    isConst,
-    hasPointer,
-    instance: {
-      members: [],
-      methods: [],
-      template: null,
-    },
-    static: {
-      members: [],
-      methods: [],
-      template: null,
-    },
-    options,
-  };
+function throwZigError(name) {
+  throw new Error(decamelizeErrorName(name));
 }
 
-function attachMember(s, member, isStatic = false) {
-  const target = (isStatic) ? s.static : s.instance;
-  target.members.push(member);
-}
-
-function attachMethod(s, method, isStaticOnly = false) {
-  s.static.methods.push(method);
-  if (!isStaticOnly) {
-    s.instance.methods.push(method);
-  }
-}
-
-function attachTemplate(s, template, isStatic = false) {
-  const target = (isStatic) ? s.static : s.instance;
-  target.template = template;
-}
-
-function getStructureFeature(structure) {
-  const { type } = structure;
-  const [ name ] = Object.entries(StructureType).find(a => a[1] === type);
-  return `use${name}`;
-}
-
-const MemoryDisposition = {
-  Auto: 0,
-  Copy: 1,
-  Link: 2,
-};
-
-async function runModule(source, options = {}) {
-  const {
-    omitFunctions = false,
-    slots = {},
-    variables,
-    methodRunner,
-    writeBack = true,
-  } = options;
-  let nextValueIndex = 0;
-  let valueTable = null;
-  let valueIndices = null;
-  let nextStringIndex = 0;
-  let stringTable = null;
-  let stringIndices = null;
-  const decoder = new TextDecoder();
-  const callContexts = {};
-  let callContextCount = 0;
-  const globalSlots = slots;
-  const structures = [];
-  const imports = {
-    _startCall,
-    _endCall,
-    _allocMemory,
-    _freeMemory,
-    _getMemory,
-    _getMemoryOffset,
-    _getMemoryLength,
-    _wrapMemory,
-    _createString,
-    _getPointerStatus,
-    _setPointerStatus,
-    _readGlobalSlot,
-    _readObjectSlot,
-    _writeObjectSlot,
-    _createDataView,
-    _writeToConsole,
-
-    // these functions will only be called at comptime
-    _writeGlobalSlot: _writeGlobalSlot ,
-    _setObjectPropertyString: _setObjectPropertyString ,
-    _setObjectPropertyInteger: _setObjectPropertyInteger ,
-    _setObjectPropertyBoolean: _setObjectPropertyBoolean ,
-    _setObjectPropertyObject: _setObjectPropertyObject ,
-    _beginStructure: _beginStructure ,
-    _attachMember: _attachMember ,
-    _attachMethod: _attachMethod ,
-    _attachTemplate: _attachTemplate ,
-    _finalizeStructure: _finalizeStructure ,
-    _createObject: _createObject ,
-    _createTemplate: _createTemplate ,
-  };
-  const importObject = { env: imports };
-  const promise = (source[Symbol.toStringTag] === 'Response')
-    ? WebAssembly.instantiateStreaming(source, importObject)
-    : WebAssembly.instantiate(source, importObject);
-  let { instance } = await promise;
-  let { memory: wasmMemory, define, run, alloc, free, safe } = instance.exports;
-  let consolePending = '', consoleTimeout = 0;
-  resetTables();
-
-  {
-    // call factory function
-    const runtimeSafety = !!safe();
-    const argStructIndex = addObject({ [SLOTS]: {} });
-    const errorIndex = define(argStructIndex);
-    if (errorIndex !== 0) {
-      throwError(errorIndex);
-    }
-    fixOverlappingMemory(structures);
-    return { structures, runtimeSafety };
-  }
-
-  function resetTables() {
-    if (nextValueIndex !== 1) {
-      nextValueIndex = 1;
-      valueTable = { 0: null };
-      valueIndices = new WeakMap();
-    }
-    if (nextStringIndex !== 1) {
-      nextStringIndex = 1;
-      stringTable = { 0: null };
-      stringIndices = {};
-    }
-  }
-
-  function getString(address, len) {
-    const ta = new Uint8Array(wasmMemory.buffer, address, len);
-    return decoder.decode(ta);
-  }
-
-  function addString(address, len) {
-    const s = getString(address, len);
-    let index = stringIndices[s];
-    if (index === undefined) {
-      index = stringIndices[s] = nextStringIndex++;
-      stringTable[index] = s;
-    }
-    return index;
-  }
-
-  function addObject(object) {
-    const index = nextValueIndex++;
-    valueTable[index] = object;
-    valueIndices.set(object, index);
-    return index;
-  }
-
-  function getObjectIndex(object) {
-    const index = valueIndices.get(object);
-    return (index !== undefined) ? index : addObject(object);
-  }
-
-  function throwError(errorIndex) {
-    const errorName = stringTable[errorIndex];
-    const errorMsg = decamelizeErrorName(errorName);
-    throw new Error(errorMsg);
-  }
-
-  function _startCall(ctxAddr) {
-    callContexts[ctxAddr] = { bufferMap: new Map() };
-    callContextCount++;
-  }
-
-  function _endCall(ctxAddr) {
-    // move data from WASM memory into buffers
-    const ctx = callContexts[ctxAddr];
-    for (const [ dest, { address, len, ptrAlign, copy, shadow } ] of ctx.bufferMap) {
-      if (copy) {
-        const src = new DataView(wasmMemory.buffer, address, len);
-        copy(dest, src);
-      }
-      if (shadow) {
-        free(ctxAddr, address, len, ptrAlign);
-      }
-    }
-    delete callContexts[ctxAddr];
-    callContextCount--;
-    if (callContextCount === 0) {
-      // clear the value tables
-      resetTables();
-      // output pending text to console
-      if (consolePending) {
-        console.log(consolePending);
-        consolePending = '';
-        clearTimeout(consoleTimeout);
-      }
-    }
-  }
-
-  function _allocMemory(ctxAddr, len, ptrAlign) {
-    if (len === 0) {
-      return null;
-    }
-    const address = alloc(ctxAddr, len, ptrAlign);
-    const { bufferMap } = callContexts[ctxAddr];
-    const buffer = new ArrayBuffer(len);
-    const dv = new DataView(buffer);
-    const copy = getMemoryCopier(len);
-    new DataView(wasmMemory.buffer, address, len);
-    bufferMap.set(dv, { address, len, ptrAlign, copy, shadow: true });
-    return address;
-  }
-
-  function _freeMemory(ctxAddr, address, len, ptrAlign) {
-    const { bufferMap } = callContexts[ctxAddr];
-    for (const [ dv, { address: matching } ] of bufferMap) {
-      if (address === matching) {
-        bufferMap.delete(dv);
-        free(ctxAddr, address, len, ptrAlign);
-      }
-    }
-  }
-
-  function isMisaligned({ address }, ptrAlign) {
-    const mask = (1 << ptrAlign) - 1;
-    return (address & mask) !== 0;
-  }
-
-  function _getMemory(ctxAddr, objectIndex, ptrAlign, isConst) {
-    const object = valueTable[objectIndex];
-    let dv = object[MEMORY];
-    if (!dv) {
-      return 0;
-    }
-    const source = dv[MEMORY];
-    if (source) {
-      return addObject(source);
-    } else {
-      const ctx = callContexts[ctxAddr];
-      let memory = ctx.bufferMap.get(dv);
-      if (!memory) {
-        // see if memory overlaps another data view seen earlier
-        const len = dv.byteLength;
-        if (len === 0) {
-          return addObject({ address: 0, len: 0 });
-        }
-        for (const [ prevDV, prevMemory ] of ctx.bufferMap) {
-          if (dv.buffer === prevDV.buffer) {
-            if (prevDV.byteOffset <= dv.byteOffset && dv.byteOffset + len <= prevDV.byteOffset + prevDV.byteLength) {
-              const address = prevMemory.address + (dv.byteOffset - prevDV.byteOffset);
-              memory = { address, len, copy: null, ptrAlign, shadow: false };
-              break;
-            } else if (prevDV.byteOffset >= dv.byteOffset + len || dv.byteOffset >= prevDV.byteOffset + prevDV.byteLength) ; else {
-              // overlapping
-              return 0;
-            }
-          }
-        }
-        if (memory) {
-          if (isMisaligned(memory, ptrAlign)) {
-            return 0;
-          }
+function decamelizeErrorName(name) {
+  // use a try block in case Unicode regex fails
+  try {
+    const lc = name.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
+      if (m1.length === 1) {
+        return ` ${m1.toLocaleLowerCase()}${m2}`;
+      } else {
+        if (m2) {
+          const acronym = m1.substring(0, m1.length - 1);
+          const letter = m1.charAt(m1.length - 1).toLocaleLowerCase();
+          return ` ${acronym} ${letter}${m2}`;
         } else {
-          const address = alloc(ctxAddr, len, ptrAlign);
-          const dest = new DataView(wasmMemory.buffer, address, len);
-          // create new dataview if the one given only covers a portion of it
-          const src = (dv.byteLength === len) ? dv : new DataView(dv.buffer);
-          const copy = getMemoryCopier(len);
-          copy(dest, src);
-          memory = { address, len, copy: (isConst) ? null : copy, ptrAlign, shadow: true };
+          return ` ${m1}`;
         }
-        ctx.bufferMap.set(dv, memory);
       }
-      return addObject(memory);
+    }).trimStart();
+    return lc.charAt(0).toLocaleUpperCase() + lc.substring(1);
+    /* c8 ignore next 3 */
+  } catch (err) {
+    return name;
+  }
+}
+
+let decoder;
+
+function decodeText(data, encoding = 'utf-8') {
+  if (!decoder) {
+    decoder = new TextDecoder;
+  }
+  return decoder.decode(data);
+}
+
+const default_alignment = 16;
+const globalSlots = {};
+
+let consolePending = [];
+let consoleTimeout = 0;
+
+class Environment {
+  /*
+  Functions to be defined in subclass:
+
+  getAddress(buffer: ArrayBuffer): bigInt|number {
+    // return a buffer's address
+  }
+  obtainView(address: bigInt|number, len: number): DataView {
+    // obtain a data view of memory at given address
+  }
+  copyBytes(dst: DataView, address: bigInt|number, len: number): void {
+    // copy memory at given address into destination view
+  }
+  findSentinel(address, bytes: DataView): number {
+    // return offset where sentinel value is found
+  }
+  */
+  context;
+  contextStack = [];
+
+  startContext() {
+    if (this.context) {
+      this.contextStack.push(this.context);
+    }
+    this.context = new CallContext();
+  }
+
+  endContext() {
+    this.context = this.contextStack.pop();
+  }
+
+  rememberPointer(pointer) {
+    const { pointerProcessed } = this.context;
+    if (pointerProcessed.get(pointer)) {
+      return true;
+    } else {
+      pointerProcessed.set(pointer, true);
+      this.importMemory(pointer[MEMORY]);
+      return false;
     }
   }
 
-  function _getMemoryOffset(objectIndex) {
-    const object = valueTable[objectIndex];
-    return object.address;
+  importMemory(dv) {
+    const { memoryList } = this.context;
+    const { buffer } = dv;
+    const address = this.getAddress(buffer);
+    const offset = (typeof(address) === 'bigint') ? BigInt(dv.byteOffset) : dv.byteOffset;
+    const index = findSortedIndex(memoryList, address);
+    memoryList.splice(index, 0, { address, buffer, len: buffer.byteLength });
+    return address + offset;
   }
 
-  function _getMemoryLength(objectIndex) {
-    const object = valueTable[objectIndex];
-    return object.len;
-  }
-
-  function _wrapMemory(structureIndex, viewIndex) {
-    const structure = valueTable[structureIndex];
-    let dv = valueTable[viewIndex];
-    let object;
-    {
-      object = {
-        [STRUCTURE]: structure,
-        [MEMORY]: dv,
-        [SLOTS]: {},
-      };
-      if (structure.type === StructureType.Pointer) {
-        object[ZIG] = true;
+  findMemory(address, len) {
+    if (this.context) {
+      const { memoryList } = this.context;
+      const index = findSortedIndex(memoryList, address);
+      const at = memoryList[index];
+      let memory;
+      if (at?.address == address) {
+        memory = at;
+      } else if (index > 0) {
+        const prev = memoryList[index - 1];
+        if (prev?.address > address && address < prev.address + prev.len) {
+          memory = prev;
+        }
+      }
+      if (memory) {
+        const offset = Number(address - memory.address);
+        return new DataView(memory.buffer, offset, len);
       }
     }
-    return addObject(object);
+    // not found in any of the buffers we've seen--assume it's shared memory
+    return this.obtainView(address, len);
   }
 
-  function _createString(address, len) {
-    return addString(address, len);
+  getViewAddress(dv) {
+    const address = this.getAddress(dv.buffer);
+    const offset = (typeof(address) === 'bigint') ? BigInt(dv.byteOffset) : dv.byteOffset;
+    return address + offset;
   }
 
-  function _createObject() {
-    return addObject({});
-  }
-
-  function _setObjectPropertyString(containerIndex, keyIndex, valueIndex) {
-    const container = valueTable[containerIndex];
-    const key = stringTable[keyIndex];
-    const value = stringTable[valueIndex];
-    container[key] = value;
-  }
-
-  function _setObjectPropertyInteger(containerIndex, keyIndex, value) {
-    const container = valueTable[containerIndex];
-    const key = stringTable[keyIndex];
-    container[key] = value;
-  }
-
-  function _setObjectPropertyBoolean(containerIndex, keyIndex, value) {
-    const container = valueTable[containerIndex];
-    const key = stringTable[keyIndex];
-    container[key] = !!value;
-  }
-
-  function _setObjectPropertyObject(containerIndex, keyIndex, valueIndex) {
-    const container = valueTable[containerIndex];
-    const key = stringTable[keyIndex];
-    container[key] = valueTable[valueIndex];
-  }
-
-  function _getPointerStatus(objectIndex) {
-    const pointer = valueTable[objectIndex];
-    const status = pointer[ZIG];
-    if (typeof(status) !== 'boolean') {
-      return -1;
+  allocMemory(len, ptrAlign) {
+    const extra = getExtraCount(ptrAlign);
+    const buffer = new ArrayBuffer(len + extra);
+    let offset = 0;
+    if (extra !== 0) {
+      const address = this.getAddress(buffer);
+      const mask = ~(extra - 1);
+      const aligned = (address & mask) + extra;
+      offset = aligned - address;
     }
-    return status ? 1 : 0;
-  }
-
-  function _setPointerStatus(objectIndex, status) {
-    const pointer = valueTable[objectIndex];
-    pointer[ZIG] = !!status;
-  }
-
-  function _readGlobalSlot(slot) {
-    const object = globalSlots[slot];
-    return object ? getObjectIndex(object) : 0;
-  }
-
-  function _writeGlobalSlot(slot, valueIndex) {
-    const value = valueTable[valueIndex];
-    globalSlots[slot] = value;
-    // remember the slot number of each structure defined
-    value.slot = slot;
-  }
-
-  function _readObjectSlot(objectIndex, slot) {
-    const object = valueTable[objectIndex];
-    const value = object[SLOTS][slot];
-    return value ? getObjectIndex(value) : 0;
-  }
-
-  function _writeObjectSlot(objectIndex, slot, valueIndex) {
-    const object = valueTable[objectIndex];
-    object[SLOTS][slot] = valueTable[valueIndex];
-  }
-
-  function _beginStructure(defIndex) {
-    const def = valueTable[defIndex];
-    return addObject(beginStructure(def));
-  }
-
-  function _attachMember(structureIndex, defIndex, isStatic) {
-    if (omitFunctions) {
-      return;
+    const dv = new DataView(buffer, offset, len);
+    if (this.context) {
+      this.importMemory(dv);
     }
-    const structure = valueTable[structureIndex];
-    const def = valueTable[defIndex];
-    attachMember(structure, def, !!isStatic);
-  }
-
-  function _attachMethod(structureIndex, defIndex, isStaticOnly) {
-    const structure = valueTable[structureIndex];
-    const def = valueTable[defIndex];
-    attachMethod(structure, def, !!isStaticOnly);
-  }
-
-  function _attachTemplate(structureIndex, templateIndex, isStatic) {
-    const structure = valueTable[structureIndex];
-    const template = valueTable[templateIndex];
-    attachTemplate(structure, template, !!isStatic);
-  }
-
-  function _finalizeStructure(structureIndex) {
-    const structure = valueTable[structureIndex];
-    structures.push(structure);
-  }
-
-  function createCopy(ctx, address, len) {
-    const buffer = new ArrayBuffer(len);
-    const dv = new DataView(buffer);
-    if (len > 0) {
-      // copy content immediately, since address is likely pointing to a stack location
-      const copy = getMemoryCopier(len);
-      const src = new DataView(wasmMemory.buffer, address, len);
-      copy(dv, src);
-    }
-    ctx.bufferMap.set(dv, { address, len, copy: null, ptrAlign: 0, shadow: false });
     return dv;
   }
 
-  function obtainDataView(ctx, address, len, disposition) {
-    if (disposition === MemoryDisposition.Copy) {
-      return createCopy(ctx, address, len);
-    } else if (disposition === MemoryDisposition.Auto) {
-      // look for address among existing buffers
-      for (const [ dv, { address: start, len: len2 } ] of ctx.bufferMap) {
-        if (start <= address && address + len <= start + len2) {
-          if (len === len2) {
-            return dv;
-          } else {
-            const offset = address - start;
-            return new DataView(dv.buffer, offset, len);
-          }
+  freeMemory(address, len, ptrAlign) {
+  }
+
+  isShared(dv) {
+    return dv.buffer instanceof SharedArrayBuffer;
+  }
+
+  createView(address, len, ptrAlign, copy) {
+    if (copy) {
+      const dv = this.allocMemory(len, ptrAlign);
+      this.copyBytes(dv, address, len);
+      return dv;
+    } else {
+      return this.obtainView(address, len);
+    }
+  }
+
+  castView(structure, dv) {
+    const { constructor, hasPointer } = structure;
+    const object = constructor.call(ENVIRONMENT, dv);
+    if (hasPointer) {
+      // vivificate pointers and acquire their targets
+      object[POINTER_VISITOR](acquireTarget, { vivificate: true });
+    }
+    return object;
+  }
+
+  createObject(structure, arg) {
+    const { constructor } = structure;
+    return new constructor(arg);
+  }
+
+  readSlot(target, slot) {
+    const slots = target ? target[SLOTS] : globalSlots;
+    return slots?.[slot];
+  }
+
+  writeSlot(target, slot, value) {
+    const slots = target ? target[SLOTS] : globalSlots;
+    if (slots) {
+      slots[slot] = value;
+    }
+  }
+
+  createTemplate(dv) {
+    return {
+      [MEMORY]: dv,
+      [SLOTS]: {}
+    };
+  }
+
+  beginStructure(def, options = {}) {
+    const {
+      type,
+      name,
+      length,
+      byteSize,
+      align,
+      isConst,
+      hasPointer,
+    } = def;
+    return {
+      constructor: null,
+      typedArray: null,
+      type,
+      name,
+      length,
+      byteSize,
+      align,
+      isConst,
+      hasPointer,
+      instance: {
+        members: [],
+        methods: [],
+        template: null,
+      },
+      static: {
+        members: [],
+        methods: [],
+        template: null,
+      },
+      options,
+    };
+  }
+
+  attachMember(s, member, isStatic = false) {
+    const target = (isStatic) ? s.static : s.instance;
+    target.members.push(member);
+  }
+
+  attachMethod(s, method, isStaticOnly = false) {
+    s.static.methods.push(method);
+    if (!isStaticOnly) {
+      s.instance.methods.push(method);
+    }
+  }
+
+  attachTemplate(s, template, isStatic = false) {
+    const target = (isStatic) ? s.static : s.instance;
+    target.template = template;
+  }
+
+  finalizeStructure(s) {
+    try {
+      const f = getStructureFactory(s.type);
+      const constructor = f(s, this);
+      if (typeof(constructor) === 'function') {
+        Object.defineProperties(constructor, {
+          name: { value: getStructureName(s), writable: false }
+        });
+        if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
+          Object.defineProperties(constructor.prototype, {
+            [Symbol.toStringTag]: { value: s.name, configurable: true, writable: false }
+          });
         }
       }
+      return constructor;
+      /* c8 ignore next 4 */
+    } catch (err) {
+      console.error(err);
+      throw err;
     }
-    {
-      const dv = createCopy(ctx, address, len);
-      if (disposition !== MemoryDisposition.Copy) {
-        // need linkage to wasm memory at runtime
-        dv.address = address;
+  }
+
+  writeToConsole(dv) {
+    try {
+      const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+      // send text up to the last newline character
+      const index = array.lastIndexOf('\n');
+      if (index === -1) {
+        consolePending.push(array);
+      } else {
+        const beginning = array.subarray(0, index + 1);
+        const remaining = array.slice(index + 1);   // copying, in case incoming buffer is pointing to stack memory
+        const list = [ ...consolePending, beginning ];
+        console.log(decodeText(list));
+        consolePending = (remaining.length > 0) ? [ remaining ] : [];
       }
-      return dv;
+      clearTimeout(consoleTimeout);
+      if (consolePending) {
+        consoleTimeout = setTimeout(() => {
+          console.log(decodeText(consolePending));
+          consolePending = [];
+        }, 250);
+      }
+      /* c8 ignore next 3 */
+    } catch (err) {
+      console.error(err);
     }
   }
 
-  function _createDataView(ctxAddr, address, len, disposition) {
-    const ctx = callContexts[ctxAddr];
-    return addObject(obtainDataView(ctx, address, len, disposition));
-  }
-
-  function _createTemplate(memoryIndex) {
-    const memory = valueTable[memoryIndex];
-    return addObject({
-      [MEMORY]: memory,
-      [SLOTS]: {},
-    });
-  }
-
-  function _writeToConsole(address, len) {
-    // send text up to the last newline character
-    const s = getString(address, len);
-    const index = s.lastIndexOf('\n');
-    if (index === -1) {
-      consolePending += s;
-    } else {
-      console.log(consolePending + s.substring(0, index));
-      consolePending = s.substring(index + 1);
-    }
-    clearTimeout(consoleTimeout);
-    if (consolePending) {
-      consoleTimeout = setTimeout(() => {
-        console.log(consolePending);
-        consolePending = '';
-      }, 250);
+  flushConsole() {
+    if (consolePending.length > 0) {
+      console.log(decodeText(consolePending));
+      consolePending = [];
+      clearTimeout(consoleTimeout);
     }
   }
 }
+
+class WebAssemblyEnvironment extends Environment {
+  nextValueIndex = 0;
+  valueTable = null;
+  valueIndices = null;
+
+  constructor() {
+    super();
+    this.resetValueTables();
+  }
+
+  resetValueTables() {
+    if (this.nextValueIndex !== 1) {
+      this.nextValueIndex = 1;
+      this.valueTable = { 0: null };
+      this.valueIndices = new WeakMap();
+    }
+  }
+
+  getObjectIndex(object) {
+    if (object != undefined) {
+      let index = this.valueIndices.get(object);
+      if (index === undefined) {
+        index = nextValueIndex++;
+        this.valueIndices.set(object, index);
+        this.valueTable[index] = object;
+      }
+      return index;
+    } else {
+      return 0;
+    }
+  }
+
+  createBridge(fn, argType = '', returnType = '', runtime = false) {
+    if (!runtime) {
+      return () => {};
+    }
+    return function (...args) {
+      args = args.map((arg, i) => {
+        switch (argType.charAt(i)) {
+          case 'v': return valueTable[arg];
+          case 's': return valueTable[arg]?.valueOf();
+          case 'i': return arg;
+          case 'b': return !!arg;
+        }
+      });
+      const retval = fn.apply(this, args);
+      switch (returnType) {
+        case 'v': return this.getObjectIndex(retval);
+        case 's': return this.getObjectIndex(new String(retval));
+        case 'i': return retval;
+        case 'b': return arg ? 1 : 0;
+    }
+    };
+  }
+
+  createImports() {
+    return {
+      _setCallContext: this.createBridge(this.allocMemory, 'i', '', true),
+      _allocMemory: this.createBridge(this.allocMemory, 'ii', 'v', true),
+      _freeMemory: this.createBridge(this.freeMemory, 'iii', '', true),
+      _createString: this.createBridge(this.createString, 'ii', 'v'),
+      _createObject: this.createBridge(this.createObject, 'vv', 's'),
+      _createView: this.createBridge(this.createView, 'ii', 'v'),
+      _castView: this.createBridge(this.castView, 'vv', 'v'),
+      _readSlot: this.createBridge(this.readSlot, 'vi', 'v'),
+      _writeSlot: this.createBridge(this.writeSlot, 'viv'),
+      _beginDefinition: this.createBridge(this.beginDefinition),
+      _insertInteger: this.createBridge(this.insertProperty, 'vsi'),
+      _insertBoolean: this.createBridge(this.insertProperty, 'vsb'),
+      _insertString: this.createBridge(this.insertProperty, 'vss'),
+      _insertObject: this.createBridge(this.insertProperty, 'vsv'),
+      _beginStructure: this.createBridge(this.beginStructure, 'v', 'v'),
+      _attachMember: this.createBridge(this.attachMember, 'vvb'),
+      _attachMethod: this.createBridge(this.attachMethod, 'vvb'),
+      _createTemplate: this.createBridge(this.attachMethod, 'v'),
+      _attachTemplate: this.createBridge(this.attachTemplate, 'vvb'),
+      _finalizeStructure: this.createBridge(this.finalizeStructure, 'v'),
+      _writeToConsole: this.createBridge(this.writeToConsole, 'v', '', true),
+    }
+  }
+
+  beginDefinition() {
+    return {};
+  }
+
+  insertProperty(def, name, value) {
+    def[name] = value;
+  }
+
+  finalizeStructures(structures) {
+    const slots = {};
+    const variables = [];
+    for (const structure of structures) {
+      for (const target of [ structure.static, structure.instance ]) {
+        // first create the actual template using the provided placeholder
+        if (target.template) {
+          target.template = createTemplate(target.template);
+        }
+      }
+      for (const method of structure.static.methods) {
+        // create thunk function
+        method.thunk = createThunk(method.thunk);
+      }
+      this.finalizeStructure(structure);
+      // place structure into its assigned slot
+      slots[structure.slot] = structure;
+    }
+
+    function createTemplate(placeholder) {
+      const template = {};
+      if (placeholder.memory) {
+        const { array, offset, length } = placeholder.memory;
+        template[MEMORY] = new DataView(array.buffer, offset, length);
+      }
+      if (placeholder.slots) {
+        template[SLOTS] = insertObjects({}, placeholder.slots);
+      }
+      return template;
+    }
+
+    function insertObjects(dest, placeholders) {
+      for (const [ slot, placeholder ] of Object.entries(placeholders)) {
+        dest[slot] = createObject(placeholder);
+      }
+      return dest;
+    }
+
+    function createObject(placeholder) {
+      if (placeholder.memory) {
+        const { array, offset, length } = placeholder.memory;
+        new DataView(array.buffer, offset, length);
+      } else {
+        placeholder.structure;
+      }
+      placeholder.structure;
+      // TODO: refactoring
+      // const object = constructor.call(ZIG, dv);
+      if (placeholder.slots) {
+        insertObjects(object[SLOTS], placeholder.slots);
+      }
+      if (placeholder.address !== undefined) {
+        // need to replace dataview with one pointing to WASM memory later,
+        // when the VM is up and running
+        variables.push({ address: placeholder.address, object });
+      }
+      return object;
+    }
+
+    let resolve, reject;
+    const promise = new Promise((r1, r2) => {
+      resolve = r1;
+      reject = r2;
+    });
+    const methodRunner = {
+      0: function(index, argStruct) {
+        // wait for linking to occur, then activate the runner again
+        return promise.then(() => methodRunner[0].call(this, index, argStruct));
+      },
+    };
+
+    function createThunk(index) {
+      return function(argStruct) {
+        return methodRunner[0](index, argStruct);
+      };
+    }
+
+    return { promise, resolve, reject, slots, variables, methodRunner };
+  }
+}
+
+class CallContext {
+  pointerProcessed = new Map();
+  memoryList = [];
+}
+
+function getExtraCount(ptrAlign) {
+  const alignment = (1 << ptrAlign);
+  return (alignment <= default_alignment) ? 0 : alignment;
+}
+
+function findSortedIndex(array, address) {
+  let low = 0;
+  let high = array.length;
+  if (high === 0) {
+    return 0;
+  }
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    const address2 = array[mid].address;
+    if (address2 < address) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return high;
+}
+
+async function createWebAssemblyInstance(source, env) {
+  if (source[Symbol.toStringTag] === 'Response') {
+    return WebAssembly.instantiateStreaming(source, { env });
+  } else {
+    return WebAssembly.instantiate(source, { env });
+  }
+}
+
+async function runFactoryFunction(source) {
+  const env = new WebAssemblyEnvironment();
+  const imports = env.createImports();
+  const { instance } = await createWebAssemblyInstance(source, imports);
+  const { define, safe } = instance.exports;
+  const runtimeSafety = !!safe();
+  const runDefine = env.createBridge(define, '', 'v', true);
+  const result = runDefine();
+  if (typeof(result) === 'string') {
+    throwZigError(result);
+  }
+  const { structures } = env;
+  fixOverlappingMemory(structures);
+  return { structures, runtimeSafety };
+}
+
 
 function fixOverlappingMemory(structures) {
   // look for buffers that requires linkage
@@ -2760,7 +2726,7 @@ async function transpile(path, options = {}) {
     platform: 'freestanding'
   });
   const content = await readFile(wasmPath);
-  const { structures, runtimeSafety } = await runModule(content, { omitFunctions });
+  const { structures, runtimeSafety } = await runFactoryFunction(content);
   // all methods are static, so there's no need to check the instance methods
   const hasMethods = !!structures.find(s => s.static.methods.length > 0);
   const runtimeURL = moduleResolver('zigar-runtime');

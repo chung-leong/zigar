@@ -16,17 +16,25 @@ const Thunk = exporter.Thunk;
 const Error = exporter.Error;
 const missing = exporter.missing;
 
-const Call = struct {
+const CallContext = struct {
     allocator: std.mem.Allocator,
 };
+const Call = *const CallContext;
 
+extern fn _setCallContext(address: usize) void;
 extern fn _allocMemory(len: usize, ptr_align: u8) usize;
 extern fn _freeMemory(address: usize, len: usize, ptr_align: u8) void;
-
-extern fn _createDataView(address: usize, len: usize, disposition: u32) usize;
-
+extern fn _createString(address: usize, len: usize) usize;
+extern fn _createObject(structure: usize, dv: usize) usize;
+extern fn _createView(address: usize, len: usize) usize;
+extern fn _castView(structure: usize, dv: usize) usize;
 extern fn _readSlot(container: usize, slot: usize) usize;
 extern fn _writeSlot(container: usize, slot: usize, object: usize) void;
+extern fn _beginDefinition() usize;
+extern fn _insertInteger(container: usize, key: usize, value: i32) void;
+extern fn _insertBoolean(container: usize, key: usize, value: i32) void;
+extern fn _insertString(container: usize, key: usize, value: usize) void;
+extern fn _insertObject(container: usize, key: usize, value: usize) void;
 extern fn _beginStructure(def: u32) u32;
 extern fn _attachMember(structure: usize, def: usize, is_static: i32) void;
 extern fn _attachMethod(structure: usize, def: usize, is_static_only: i32) void;
@@ -34,14 +42,6 @@ extern fn _attachTemplate(structure: usize, def: usize, is_static: i32) void;
 extern fn _finalizeStructure(structure: usize) void;
 extern fn _createTemplate(buffer: usize) usize;
 extern fn _writeToConsole(address: usize, len: usize) void;
-
-extern fn _beginDefinition() usize;
-extern fn _createString(address: usize, len: usize) usize;
-
-extern fn _insertString(container: usize, key: usize, value: usize) void;
-extern fn _insertInteger(container: usize, key: usize, value: i32) void;
-extern fn _insertBoolean(container: usize, key: usize, value: i32) void;
-extern fn _insertObject(container: usize, key: usize, value: usize) void;
 
 fn ref(number: usize) Value {
     return @ptrFromInt(number);
@@ -60,7 +60,7 @@ fn strlen(s: [*:0]const u8) usize {
 }
 
 pub fn alloc(ptr: *anyopaque, len: usize, ptr_align: u8) usize {
-    const ctx: *Call = @alignCast(@ptrCast(ptr));
+    const ctx: Call = @alignCast(@ptrCast(ptr));
     if (len > 0) {
         if (ctx.allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
             return @intFromPtr(bytes);
@@ -73,19 +73,32 @@ pub fn alloc(ptr: *anyopaque, len: usize, ptr_align: u8) usize {
 }
 
 pub fn free(ptr: *anyopaque, address: usize, len: usize, ptr_align: u8) void {
-    const ctx: *Call = @alignCast(@ptrCast(ptr));
+    const ctx: Call = @alignCast(@ptrCast(ptr));
     const bytes: [*]u8 = @ptrFromInt(address);
     ctx.allocator.rawFree(bytes[0..len], ptr_align, 0);
 }
 
 pub const Host = struct {
+    context: Call,
+
     var initial_context: ?Call = null;
 
     pub fn init(ptr: *anyopaque) Host {
-        return .{};
+        const context: Call = @ptrCast(@alignCast(ptr));
+        if (initial_context == null) {
+            initial_context = context;
+        }
+        _setCallContext(@intFromPtr(ptr));
+        return .{ .context = context };
     }
 
-    pub fn allocateMemory(self: Host, size: usize, ptr_align: u8) !Memory {
+    pub fn release(self: Host) void {
+        if (initial_context == self.context) {
+            initial_context = null;
+        }
+    }
+
+    pub fn allocateMemory(_: Host, size: usize, ptr_align: u8) !Memory {
         const address = _allocMemory(size, ptr_align);
         if (address == 0) {
             return Error.UnableToAllocateMemory;
@@ -96,11 +109,11 @@ pub const Host = struct {
         };
     }
 
-    pub fn freeMemory(self: Host, memory: Memory, ptr_align: u8) !void {
+    pub fn freeMemory(_: Host, memory: Memory, ptr_align: u8) !void {
         _freeMemory(@intFromPtr(memory.bytes), memory.len, ptr_align);
     }
 
-    pub fn createString(self: Host, memory: Memory) !Value {
+    pub fn createString(_: Host, memory: Memory) !Value {
         const bytes = memory.bytes;
         const len = memory.len;
         const address = @intFromPtr(bytes);
@@ -111,7 +124,7 @@ pub const Host = struct {
         return ref(str_index);
     }
 
-    pub fn createObject(self: Host, structure: Value, arg: Value) !Value {
+    pub fn createObject(_: Host, structure: Value, arg: Value) !Value {
         const value_index = _createObject(index(structure), index(arg));
         if (value_index == 0) {
             return Error.UnableToCreateObject;
@@ -119,7 +132,7 @@ pub const Host = struct {
         return ref(value_index);
     }
 
-    pub fn createView(self: Host, memory: Memory) !Value {
+    pub fn createView(_: Host, memory: Memory) !Value {
         const bytes = memory.bytes;
         const len = memory.len;
         const address = @intFromPtr(bytes);
@@ -130,7 +143,7 @@ pub const Host = struct {
         return ref(dv_index);
     }
 
-    pub fn castView(self: Host, structure: Value, dv: Value) !Value {
+    pub fn castView(_: Host, structure: Value, dv: Value) !Value {
         const value_index = _castView(index(structure), index(dv));
         if (value_index == 0) {
             return Error.UnableToCreateObject;
@@ -147,7 +160,7 @@ pub const Host = struct {
     }
 
     pub fn writeSlot(_: Host, container: ?Value, slot: usize, value: ?Value) !void {
-        _writeSlot(index(c), slot, index(value));
+        _writeSlot(index(container), slot, index(value));
     }
 
     fn beginDefinition() Value {
@@ -202,8 +215,7 @@ pub const Host = struct {
         return ref(_beginStructure(index(structure)));
     }
 
-    pub fn attachMember(self: Host, structure: Value, member: Member, is_static: bool) !void {
-        _ = self;
+    pub fn attachMember(_: Host, structure: Value, member: Member, is_static: bool) !void {
         const def = beginDefinition();
         insertProperty(def, "type", member.member_type);
         insertProperty(def, "isRequired", member.is_required);
@@ -246,7 +258,7 @@ pub const Host = struct {
         _finalizeStructure(index(structure));
     }
 
-    pub fn createTemplate(self: Host, dv: ?Value) !Value {
+    pub fn createTemplate(_: Host, dv: ?Value) !Value {
         const templ_index = _createTemplate(index(dv));
         if (templ_index == 0) {
             return Error.UnableToCreateStructureTemplate;
@@ -254,7 +266,7 @@ pub const Host = struct {
         return ref(templ_index);
     }
 
-    pub fn writeToConsole(self: Host, dv: Value) !void {
+    pub fn writeToConsole(_: Host, dv: Value) !void {
         const result = _writeToConsole(dv);
         if (result == 0) {
             return Error.UnableToWriteToConsole;
@@ -277,7 +289,7 @@ pub const Host = struct {
 };
 
 pub fn runThunk(fn_address: usize, arg_address: usize) usize {
-    var ctx: Call = .{
+    var ctx: CallContext = .{
         .allocator = .{ .ptr = undefined, .vtable = &std.heap.WasmAllocator.vtable },
     };
     const ptr: *anyopaque = @ptrCast(&ctx);
@@ -292,8 +304,8 @@ pub fn runThunk(fn_address: usize, arg_address: usize) usize {
 
 pub fn exportModule(comptime T: type) usize {
     const factory = exporter.createRootFactory(Host, T);
-    const arg_address = @ptrFromInt(0);
-    return runThunk(@intFromPtr(factory), arg_address);
+    const fn_address: usize = @intFromPtr(factory);
+    return runThunk(fn_address, 0);
 }
 
 pub fn getOS() type {

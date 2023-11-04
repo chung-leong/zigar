@@ -272,6 +272,10 @@ export class Environment {
 export class NodeEnvironment extends Environment {
   // C++ code will patch in getAddress, obtainView, copyBytes, and findSentinel
 
+  setCallContext(address) {
+    this.context.callContext = address;
+  }
+
   invokeFactory(thunk) {
     initializeErrorSets();
     const result = thunk.call(this);
@@ -375,6 +379,7 @@ export class WebAssemblyEnvironment extends Environment {
   valueIndices = null;
 
   constructor() {
+    super();
     this.resetValueTables();
   }
 
@@ -413,7 +418,7 @@ export class WebAssemblyEnvironment extends Environment {
           case 'b': return !!arg;
         }
       });
-      const retval = fn.apply(env, args);
+      const retval = fn.apply(this, args);
       switch (returnType) {
         case 'v': return this.getObjectIndex(retval);
         case 's': return this.getObjectIndex(new String(retval));
@@ -425,6 +430,7 @@ export class WebAssemblyEnvironment extends Environment {
 
   createImports() {
     return {
+      _setCallContext: this.createBridge(this.allocMemory, 'i', '', true),
       _allocMemory: this.createBridge(this.allocMemory, 'ii', 'v', true),
       _freeMemory: this.createBridge(this.freeMemory, 'iii', '', true),
       _createString: this.createBridge(this.createString, 'ii', 'v'),
@@ -437,9 +443,11 @@ export class WebAssemblyEnvironment extends Environment {
       _insertInteger: this.createBridge(this.insertProperty, 'vsi'),
       _insertBoolean: this.createBridge(this.insertProperty, 'vsb'),
       _insertString: this.createBridge(this.insertProperty, 'vss'),
+      _insertObject: this.createBridge(this.insertProperty, 'vsv'),
       _beginStructure: this.createBridge(this.beginStructure, 'v', 'v'),
       _attachMember: this.createBridge(this.attachMember, 'vvb'),
       _attachMethod: this.createBridge(this.attachMethod, 'vvb'),
+      _createTemplate: this.createBridge(this.attachMethod, 'v'),
       _attachTemplate: this.createBridge(this.attachTemplate, 'vvb'),
       _finalizeStructure: this.createBridge(this.finalizeStructure, 'v'),
       _writeToConsole: this.createBridge(this.writeToConsole, 'v', '', true),

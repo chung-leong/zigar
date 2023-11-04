@@ -34,7 +34,7 @@ pub const Host = struct {
         return .{ .context = context };
     }
 
-    pub fn release() void {
+    pub fn release(self: Host) void {
         if (initial_context == self.context) {
             initial_context = null;
         }
@@ -145,7 +145,7 @@ pub const Host = struct {
     }
 
     pub fn writeToConsole(self: Host, dv: Value) !void {
-        if (callbacks.write_to_console(self.context, context, dv) != .OK) {
+        if (callbacks.write_to_console(self.context, dv) != .OK) {
             return Error.UnableToWriteToConsole;
         }
     }

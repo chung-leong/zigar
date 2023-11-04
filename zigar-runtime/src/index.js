@@ -2,7 +2,7 @@ import { MEMORY, SLOTS } from './symbol.js';
 import { throwZigError } from './error.js';
 import { WebAssemblyEnvironment } from './environment.js';
 
-function createWebAssemblyInstance(source, env) {
+async function createWebAssemblyInstance(source, env) {
   if (source[Symbol.toStringTag] === 'Response') {
     return WebAssembly.instantiateStreaming(source, { env });
   } else {
@@ -13,7 +13,7 @@ function createWebAssemblyInstance(source, env) {
 export async function runFactoryFunction(source) {
   const env = new WebAssemblyEnvironment();
   const imports = env.createImports();
-  const instance = await createWebAssemblyInstance(source, imports);
+  const { instance } = await createWebAssemblyInstance(source, imports);
   const { define, safe } = instance.exports;
   const runtimeSafety = !!safe();
   const runDefine = env.createBridge(define, '', 'v', true)
@@ -38,7 +38,7 @@ export async function linkModule(sourcePromise, params = {}) {
   try {
     const source = await sourcePromise;
     const { imports, clearTables } = createImports(env);
-    const instance = await createWebAssemblyInstance(source, imports);
+    const { instance } = await createWebAssemblyInstance(source, imports);
 
     // link variables
     for (const { address, object } of variables) {
