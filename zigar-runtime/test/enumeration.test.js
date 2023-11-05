@@ -10,10 +10,10 @@ import {
   useEnumeration,
 } from '../src/structure.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
-import { Environment } from '../src/environment.js'
+import { NodeEnvironment } from '../src/environment.js'
 
 describe('Enumeration functions', function() {
-  const env = new Environment();
+  const env = new NodeEnvironment();
   describe('finalizeErrorUnion', function() {
     beforeEach(function() {
       useIntEx();

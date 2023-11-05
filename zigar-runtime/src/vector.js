@@ -35,7 +35,7 @@ export function finalizeVector(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.allocMemory(byteSize, ptrAlign);
+      dv = env.createBuffer(byteSize, ptrAlign);
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);

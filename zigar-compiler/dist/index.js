@@ -488,11 +488,30 @@ function getStructureFeature(structure) {
 
 let decoder;
 
-function decodeText(data, encoding = 'utf-8') {
+function decodeText(arrays, encoding = 'utf-8') {
   if (!decoder) {
     decoder = new TextDecoder;
   }
-  return decoder.decode(data);
+  let array;
+  if (Array.isArray(arrays)) {
+    if (arrays.length === 1) {
+      array = arrays[0];
+    } else {
+      let len = 0;
+      for (const a of arrays) {
+        len += a.length;
+      }
+      array = new Uint8Array(len);
+      let offset = 0;
+      for (const a of arrays) {
+        array.set(a, offset);
+        offset += a.length;
+      }
+    }
+  } else {
+    array = arrays;
+  }
+  return decoder.decode(array);
 }
 
 const default_alignment = 16;
@@ -516,6 +535,9 @@ class Environment {
   }
   findSentinel(address, bytes: DataView): number {
     // return offset where sentinel value is found
+  }
+  isShared(dv: DataView): boolean {
+    // return true/false depending on whether view is point to shared memory
   }
   */
   context;
@@ -547,29 +569,22 @@ class Environment {
     const { memoryList } = this.context;
     const { buffer } = dv;
     const address = this.getAddress(buffer);
-    const offset = (typeof(address) === 'bigint') ? BigInt(dv.byteOffset) : dv.byteOffset;
     const index = findSortedIndex(memoryList, address);
-    memoryList.splice(index, 0, { address, buffer, len: buffer.byteLength });
-    return address + offset;
+    const prev = memoryList[index - 1];
+    if (!(prev?.address <= address && address < addLength(prev.address, prev.len))) {
+      memoryList.splice(index, 0, { address, buffer, len: buffer.byteLength });
+    }
+    return addLength(address, dv.byteOffset);
   }
 
   findMemory(address, len) {
     if (this.context) {
       const { memoryList } = this.context;
       const index = findSortedIndex(memoryList, address);
-      const at = memoryList[index];
-      let memory;
-      if (at?.address == address) {
-        memory = at;
-      } else if (index > 0) {
-        const prev = memoryList[index - 1];
-        if (prev?.address > address && address < prev.address + prev.len) {
-          memory = prev;
-        }
-      }
-      if (memory) {
-        const offset = Number(address - memory.address);
-        return new DataView(memory.buffer, offset, len);
+      const prev = memoryList[index - 1];
+      if (prev?.address <= address && address < addLength(prev.address, prev.len)) {
+        const offset = Number(address - prev.address);
+        return new DataView(prev.buffer, offset, len);
       }
     }
     // not found in any of the buffers we've seen--assume it's shared memory
@@ -582,7 +597,7 @@ class Environment {
     return address + offset;
   }
 
-  allocMemory(len, ptrAlign) {
+  createBuffer(len, ptrAlign) {
     const extra = getExtraCount(ptrAlign);
     const buffer = new ArrayBuffer(len + extra);
     let offset = 0;
@@ -592,23 +607,35 @@ class Environment {
       const aligned = (address & mask) + extra;
       offset = aligned - address;
     }
-    const dv = new DataView(buffer, offset, len);
-    if (this.context) {
-      this.importMemory(dv);
-    }
+    return new DataView(buffer, offset, len);
+  }
+
+  allocMemory(len, ptrAlign) {
+    const dv = this.createBuffer(len, ptrAlign);
+    this.importMemory(dv);
     return dv;
   }
 
   freeMemory(address, len, ptrAlign) {
-  }
-
-  isShared(dv) {
-    return dv.buffer instanceof SharedArrayBuffer;
+    const { memoryList } = this.context;
+    const index = findSortedIndex(memoryList, address);
+    const prev = memoryList[index - 1];
+    if (prev?.address <= address && address < addLength(prev.address, prev.len)) {
+      let prevAddress = prev.address;
+      const extra = getExtraCount(ptrAlign);
+      if (extra) {
+        const mask = ~(extra - 1);
+        prevAddress = (prevAddress & mask) + extra;
+      }
+      if (prevAddress === address) {
+        memoryList.splice(index - 1, 1);
+      }
+    }
   }
 
   createView(address, len, ptrAlign, copy) {
     if (copy) {
-      const dv = this.allocMemory(len, ptrAlign);
+      const dv = this.createBuffer(len, ptrAlign);
       this.copyBytes(dv, address, len);
       return dv;
     } else {
@@ -708,18 +735,18 @@ class Environment {
     try {
       const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
       // send text up to the last newline character
-      const index = array.lastIndexOf('\n');
+      const index = array.lastIndexOf(0x0a);
       if (index === -1) {
         consolePending.push(array);
       } else {
-        const beginning = array.subarray(0, index + 1);
+        const beginning = array.subarray(0, index);
         const remaining = array.slice(index + 1);   // copying, in case incoming buffer is pointing to stack memory
         const list = [ ...consolePending, beginning ];
         console.log(decodeText(list));
         consolePending = (remaining.length > 0) ? [ remaining ] : [];
       }
       clearTimeout(consoleTimeout);
-      if (consolePending) {
+      if (consolePending.length > 0) {
         consoleTimeout = setTimeout(() => {
           console.log(decodeText(consolePending));
           consolePending = [];
@@ -746,6 +773,7 @@ class WebAssemblyEnvironment extends Environment {
   nextValueIndex = 1;
   valueTable = { 0: null };
   valueIndices = new WeakMap;
+  memory = null;
   /* COMPTIME-ONLY */
   structures = [];
   /* COMPTIME-ONLY-END */
@@ -761,6 +789,14 @@ class WebAssemblyEnvironment extends Environment {
 
   constructor() {
     super();
+  }
+
+  isShared(dv) {
+    return dv.buffer === this.memory.buffer;
+  }
+
+  setCallContext(address) {
+    this.context.callContext = address;
   }
 
   releaseObjects() {
@@ -850,10 +886,10 @@ class WebAssemblyEnvironment extends Environment {
 
   importFunctions(exports) {
     for (const [ name, fn ] of Object.entries(exports)) {
-      const info = this.expected[name];
+      const info = this.expectedMethods[name];
       if (info) {
         const { name, argType, returnType } = info;
-        this[name] = this.importFunction(fn, argType, returnType);
+        this[name] = this.importFunction(fn, name, argType, returnType);
       }
     }
   }
@@ -1075,13 +1111,17 @@ function findSortedIndex(array, address) {
   while (low < high) {
     const mid = Math.floor((low + high) / 2);
     const address2 = array[mid].address;
-    if (address2 < address) {
+    if (address2 <= address) {
       low = mid + 1;
     } else {
       high = mid;
     }
   }
   return high;
+}
+
+function addLength(address, len) {
+  return address + ((typeof(address) === 'bigint') ? BigInt(len) : len);
 }
 
 function generateCode(structures, params) {

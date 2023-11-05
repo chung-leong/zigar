@@ -11,10 +11,10 @@ import {
   useVector,
   useArray,
 } from '../src/structure.js';
-import { Environment } from '../src/environment.js'
+import { NodeEnvironment } from '../src/environment.js'
 
 describe('Vector functions', function() {
-  const env = new Environment();
+  const env = new NodeEnvironment();
   describe('finalizeVector', function() {
     beforeEach(function() {
       useVector();

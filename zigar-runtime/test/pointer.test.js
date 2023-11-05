@@ -16,12 +16,10 @@ import {
   useArray,
 } from '../src/structure.js';
 import { ENVIRONMENT, MEMORY } from '../src/symbol.js';
-import { Environment } from '../src/environment.js'
-
-class Environment extends Environment {};
+import { NodeEnvironment } from '../src/environment.js'
 
 describe('Pointer functions', function() {
-  const env = new Environment();
+  const env = new NodeEnvironment();
   describe('finalizePointer', function() {
     beforeEach(function() {
       useIntEx();
@@ -1146,7 +1144,7 @@ describe('Pointer functions', function() {
       expect(() => intPtr.$ = int32).to.not.throw();
     })
     it('should throw when garbage collected object is assigned to a pointer in shared memory', function() {
-      const env = new Environment();
+      const env = new NodeEnvironment();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
@@ -1185,7 +1183,7 @@ describe('Pointer functions', function() {
         .with.property('message').that.contains('garbage');
     })
     it('should throw when pointer to garbage collected object is assigned to a pointer in fixed memory', function() {
-      const env = new Environment();
+      const env = new NodeEnvironment();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
@@ -1225,7 +1223,7 @@ describe('Pointer functions', function() {
         .with.property('message').that.contains('garbage');
     })
     it('should immediately write to a pointer in shared memory', function() {
-      const env = new Environment();
+      const env = new NodeEnvironment();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
@@ -1269,7 +1267,7 @@ describe('Pointer functions', function() {
       expect(dv2.getBigUint64(0, true)).to.equal(0xbbbbbbbbn);
     })
     it('should immediately write to slice pointer in shared memory', function() {
-      const env = new Environment();
+      const env = new NodeEnvironment();
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',

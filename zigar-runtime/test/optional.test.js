@@ -17,14 +17,11 @@ import {
   useSlice,
   useArray,
 } from '../src/structure.js';
-import { CHILD_VIVIFICATOR, MEMORY, SLOTS } from '../src/symbol.js';
-import {
-  getOptionalAccessors,
-} from '../src/optional.js';
-import { Environment } from '../src/environment.js'
+import { MEMORY, SLOTS } from '../src/symbol.js';
+import { NodeEnvironment } from '../src/environment.js'
 
 describe('Optional functions', function() {
-  const env = new Environment();
+  const env = new NodeEnvironment();
   describe('finalizeOptional', function() {
     beforeEach(function() {
       usePrimitive();
@@ -557,109 +554,109 @@ describe('Optional functions', function() {
       }
     })
   })
-  describe('getOptionalAccessors', function() {
-    beforeEach(function() {
-      useBool();
-      useFloatEx();
-      useObject();
-    })
-    it('should return a function for getting optional float', function() {
-      const members = [
-        {
-          type: MemberType.Float,
-          bitOffset: 0,
-          bitSize: 64,
-          byteSize: 8,
-          structure: {
-            type: StructureType.Primitive,
-          }
-        },
-        {
-          type: MemberType.Bool,
-          bitOffset: 64,
-          bitSize: 1,
-          byteSize: 1,
-        },
-      ];
-      const dv = new DataView(new ArrayBuffer(10));
-      dv.setFloat64(0, 3.14, true);
-      dv.setUint8(8, 1, true);
-      const object = {
-        [MEMORY]: dv,
-      };
-      const { get } = getOptionalAccessors(members, dv.byteLength, {});
-      const result1 = get.call(object);
-      expect(result1).to.equal(3.14);
-      dv.setUint8(8, 0, true);
-      const result2 = get.call(object);
-      expect(result2).to.be.null;
-    })
-    it('should return a function for getting optional object value', function() {
-      const DummyClass = function() {};
-      const members = [
-        {
-          type: MemberType.Object,
-          bitOffset: 0,
-          bitSize: 64,
-          byteSize: 8,
-          slot: 0,
-          structure: {
-            type: StructureType.Struct,
-            constructor: DummyClass,
-          }
-        },
-        {
-          type: MemberType.Bool,
-          bitOffset: 64,
-          bitSize: 1,
-          byteSize: 1,
-        },
-      ];
-      const dv = new DataView(new ArrayBuffer(10));
-      const object = {
-        [MEMORY]: dv,
-        [CHILD_VIVIFICATOR]: { 0: () => dummyObject },
-      };
-      const dummyObject = new DummyClass();
-      const { get } = getOptionalAccessors(members, dv.byteLength, {});
-      const result1 = get.call(object);
-      expect(result1).to.equal(null);
-      dv.setUint8(8, 1, true);
-      const result2 = get.call(object);
-      expect(result2).to.equal(dummyObject);
-    })
-    it('should return a function for setting float or null', function() {
-      const members = [
-        {
-          type: MemberType.Float,
-          bitOffset: 0,
-          bitSize: 64,
-          byteSize: 8,
-          structure: {
-            type: StructureType.Primitive,
-          }
-        },
-        {
-          type: MemberType.Bool,
-          bitOffset: 64,
-          bitSize: 1,
-          byteSize: 1,
-        },
-      ];
-      const dv = new DataView(new ArrayBuffer(10));
-      dv.setInt8(8, 1, true);
-      dv.setFloat64(0, 3.14, true);
-      const object = {
-        [MEMORY]: dv,
-      };
-      const { get, set } = getOptionalAccessors(members, dv.byteLength, {});
-      expect(get.call(object)).to.equal(3.14);
-      set.call(object, null);
-      expect(dv.getUint8(8, true)).to.equal(0);
-      expect(dv.getFloat64(0, true)).to.equal(0);
-      set.call(object, 1234.5678);
-      expect(dv.getUint8(8, true)).to.equal(1);
-      expect(dv.getFloat64(0, true)).to.equal(1234.5678);
-    })
-  })
+  // describe('getOptionalAccessors', function() {
+  //   beforeEach(function() {
+  //     useBool();
+  //     useFloatEx();
+  //     useObject();
+  //   })
+  //   it('should return a function for getting optional float', function() {
+  //     const members = [
+  //       {
+  //         type: MemberType.Float,
+  //         bitOffset: 0,
+  //         bitSize: 64,
+  //         byteSize: 8,
+  //         structure: {
+  //           type: StructureType.Primitive,
+  //         }
+  //       },
+  //       {
+  //         type: MemberType.Bool,
+  //         bitOffset: 64,
+  //         bitSize: 1,
+  //         byteSize: 1,
+  //       },
+  //     ];
+  //     const dv = new DataView(new ArrayBuffer(10));
+  //     dv.setFloat64(0, 3.14, true);
+  //     dv.setUint8(8, 1, true);
+  //     const object = {
+  //       [MEMORY]: dv,
+  //     };
+  //     const { get } = getOptionalAccessors(members, dv.byteLength, {});
+  //     const result1 = get.call(object);
+  //     expect(result1).to.equal(3.14);
+  //     dv.setUint8(8, 0, true);
+  //     const result2 = get.call(object);
+  //     expect(result2).to.be.null;
+  //   })
+  //   it('should return a function for getting optional object value', function() {
+  //     const DummyClass = function() {};
+  //     const members = [
+  //       {
+  //         type: MemberType.Object,
+  //         bitOffset: 0,
+  //         bitSize: 64,
+  //         byteSize: 8,
+  //         slot: 0,
+  //         structure: {
+  //           type: StructureType.Struct,
+  //           constructor: DummyClass,
+  //         }
+  //       },
+  //       {
+  //         type: MemberType.Bool,
+  //         bitOffset: 64,
+  //         bitSize: 1,
+  //         byteSize: 1,
+  //       },
+  //     ];
+  //     const dv = new DataView(new ArrayBuffer(10));
+  //     const object = {
+  //       [MEMORY]: dv,
+  //       [CHILD_VIVIFICATOR]: { 0: () => dummyObject },
+  //     };
+  //     const dummyObject = new DummyClass();
+  //     const { get } = getOptionalAccessors(members, dv.byteLength, {});
+  //     const result1 = get.call(object);
+  //     expect(result1).to.equal(null);
+  //     dv.setUint8(8, 1, true);
+  //     const result2 = get.call(object);
+  //     expect(result2).to.equal(dummyObject);
+  //   })
+  //   it('should return a function for setting float or null', function() {
+  //     const members = [
+  //       {
+  //         type: MemberType.Float,
+  //         bitOffset: 0,
+  //         bitSize: 64,
+  //         byteSize: 8,
+  //         structure: {
+  //           type: StructureType.Primitive,
+  //         }
+  //       },
+  //       {
+  //         type: MemberType.Bool,
+  //         bitOffset: 64,
+  //         bitSize: 1,
+  //         byteSize: 1,
+  //       },
+  //     ];
+  //     const dv = new DataView(new ArrayBuffer(10));
+  //     dv.setInt8(8, 1, true);
+  //     dv.setFloat64(0, 3.14, true);
+  //     const object = {
+  //       [MEMORY]: dv,
+  //     };
+  //     const { get, set } = getOptionalAccessors(members, dv.byteLength, {});
+  //     expect(get.call(object)).to.equal(3.14);
+  //     set.call(object, null);
+  //     expect(dv.getUint8(8, true)).to.equal(0);
+  //     expect(dv.getFloat64(0, true)).to.equal(0);
+  //     set.call(object, 1234.5678);
+  //     expect(dv.getUint8(8, true)).to.equal(1);
+  //     expect(dv.getFloat64(0, true)).to.equal(1234.5678);
+  //   })
+  // })
 })

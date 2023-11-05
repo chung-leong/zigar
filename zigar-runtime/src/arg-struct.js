@@ -17,7 +17,7 @@ export function finalizeArgStruct(s, env) {
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(args) {
-    const dv = env.allocMemory(byteSize, ptrAlign);
+    const dv = env.createBuffer(byteSize, ptrAlign);
     this[MEMORY] = dv;
     if (hasObject) {
       this[SLOTS] = {};

@@ -41,7 +41,7 @@ extern fn _attachMethod(structure: usize, def: usize, is_static_only: i32) void;
 extern fn _attachTemplate(structure: usize, def: usize, is_static: i32) void;
 extern fn _finalizeStructure(structure: usize) void;
 extern fn _createTemplate(buffer: usize) usize;
-extern fn _writeToConsole(address: usize, len: usize) void;
+extern fn _writeToConsole(dv: usize) i32;
 
 fn ref(number: usize) Value {
     return @ptrFromInt(number);
@@ -267,7 +267,7 @@ pub const Host = struct {
     }
 
     pub fn writeToConsole(_: Host, dv: Value) !void {
-        const result = _writeToConsole(dv);
+        const result = _writeToConsole(index(dv));
         if (result == 0) {
             return Error.UnableToWriteToConsole;
         }
@@ -275,7 +275,7 @@ pub const Host = struct {
 
     pub fn write(ptr: [*]const u8, len: usize) !void {
         if (initial_context) |context| {
-            const host = Host.init(context);
+            const host = Host.init(@ptrCast(@constCast(context)));
             const memory: Memory = .{
                 .bytes = @constCast(ptr),
                 .len = len,

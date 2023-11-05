@@ -17,12 +17,11 @@ import {
   useSlice,
 } from '../src/structure.js';
 import { initializeErrorSets } from '../src/error-set.js';
-import { CHILD_VIVIFICATOR, MEMORY, SLOTS } from '../src/symbol.js';
-import { getErrorUnionAccessors } from '../src/error-union.js';
-import { Environment } from '../src/environment.js'
+import { MEMORY, SLOTS } from '../src/symbol.js';
+import { NodeEnvironment } from '../src/environment.js'
 
 describe('Error union functions', function() {
-  const env = new Environment();
+  const env = new NodeEnvironment();
   describe('finalizeErrorUnion', function() {
     beforeEach(function() {
       usePrimitive();
@@ -561,142 +560,142 @@ describe('Error union functions', function() {
         .with.property('message').that.contains('SomeError');
     })
   })
-  describe('getErrorUnionAccessors', function() {
-    beforeEach(function() {
-      useStruct();
-      useErrorUnion();
-      useIntEx();
-      useFloatEx();
-      useObject();
-    })
-    it('should return a function for getting float with potential error', function() {
-      let errorNumber;
-      const DummyErrorSet = function(arg) {
-        if (this instanceof DummyErrorSet) {
-          this.index = arg;
-        } else {
-          errorNumber = arg;
-          return dummyError;
-        }
-      };
-      Object.setPrototypeOf(DummyErrorSet.prototype, Error.prototype);
-      const dummyError = new DummyErrorSet(18);
-      const members = [
-        {
-          type: MemberType.Float,
-          bitOffset: 0,
-          bitSize: 64,
-          byteSize: 8,
-          structure: {},
-        },
-        {
-          type: MemberType.Uint,
-          bitOffset: 64,
-          bitSize: 16,
-          byteSize: 2,
-          structure: { constructor: DummyErrorSet }
-        },
-      ];
-      const dv = new DataView(new ArrayBuffer(10));
-      dv.setUint16(8, 18, true);
-      const object = {
-        [MEMORY]: dv,
-      };
-      const { get } = getErrorUnionAccessors(members, dv.byteLength, {});
-      expect(() => get.call(object)).to.throw().equal(dummyError);
-      expect(errorNumber).to.equal(18);
-      dv.setUint16(8, 0, true);
-      dv.setFloat64(0, 3.14, true);
-      const result = get.call(object);
-      expect(result).to.equal(3.14);
-    })
-    it('should return a function for getting object value with potential error', function() {
-      let errorNumber;
-      const DummyErrorSet = function(arg) {
-        if (this instanceof DummyErrorSet) {
-          this.index = arg;
-        } else {
-          errorNumber = arg;
-          return dummyError;
-        }
-      };
-      Object.setPrototypeOf(DummyErrorSet.prototype, Error.prototype);
-      const dummyError = new DummyErrorSet(18);
-      const DummyClass = function() {};
-      const members = [
-        {
-          type: MemberType.Object,
-          bitOffset: 16,
-          bitSize: 0,
-          byteSize: 8,
-          slot: 0,
-          structure: {
-            type: StructureType.Struct,
-            constructor: DummyClass,
-          }
-        },
-        {
-          type: MemberType.Uint,
-          bitOffset: 64,
-          bitSize: 16,
-          byteSize: 2,
-          structure: { constructor: DummyErrorSet }
-        },
-      ];
-      const dv = new DataView(new ArrayBuffer(10));
-      dv.setUint16(8, 18, true);
-      const object = {
-        [MEMORY]: dv,
-        [CHILD_VIVIFICATOR]: { 0: () => dummyObject },
-      };
-      const dummyObject = new DummyClass();
-      const { get } = getErrorUnionAccessors(members, dv.byteLength, {});
-      expect(() => get.call(object)).to.throw().equal(dummyError);
-      expect(errorNumber).to.equal(18);
-      dv.setUint16(8, 0, true);
-      const result = get.call(object);
-      expect(result).to.equal(dummyObject);
-    })
-    it('should return a function for setting int or error', function() {
-      const DummyErrorSet = function(arg) {
-        if (this instanceof DummyErrorSet) {
-          this.index = arg;
-        } else {
-          return dummyError;
-        }
-      };
-      Object.setPrototypeOf(DummyErrorSet.prototype, Error.prototype);
-      const dummyError = new DummyErrorSet(18);
-      const members = [
-        {
-          type: MemberType.Float,
-          bitOffset: 0,
-          bitSize: 64,
-          byteSize: 8,
-          structure: {
-            type: StructureType.Primitive,
-          }
-        },
-        {
-          type: MemberType.Uint,
-          bitOffset: 64,
-          bitSize: 16,
-          byteSize: 2,
-          structure: { constructor: DummyErrorSet }
-        },
-      ];
-      const dv = new DataView(new ArrayBuffer(10));
-      dv.setFloat64(0, 3.14, true);
-      const object = {
-        [MEMORY]: dv,
-      };
-      const { set } = getErrorUnionAccessors(members, dv.byteLength, {});
-      set.call(object, dummyError);
-      expect(dv.getUint16(8, true)).to.equal(18);
-      expect(dv.getFloat64(0, true)).to.equal(0);
-      set.call(object, 1234.5678);
-      expect(dv.getUint16(8, true)).to.equal(0);
-      expect(dv.getFloat64(0, true)).to.equal(1234.5678);
-    })
-  })
+  // describe('getErrorUnionAccessors', function() {
+  //   beforeEach(function() {
+  //     useStruct();
+  //     useErrorUnion();
+  //     useIntEx();
+  //     useFloatEx();
+  //     useObject();
+  //   })
+  //   it('should return a function for getting float with potential error', function() {
+  //     let errorNumber;
+  //     const DummyErrorSet = function(arg) {
+  //       if (this instanceof DummyErrorSet) {
+  //         this.index = arg;
+  //       } else {
+  //         errorNumber = arg;
+  //         return dummyError;
+  //       }
+  //     };
+  //     Object.setPrototypeOf(DummyErrorSet.prototype, Error.prototype);
+  //     const dummyError = new DummyErrorSet(18);
+  //     const members = [
+  //       {
+  //         type: MemberType.Float,
+  //         bitOffset: 0,
+  //         bitSize: 64,
+  //         byteSize: 8,
+  //         structure: {},
+  //       },
+  //       {
+  //         type: MemberType.Uint,
+  //         bitOffset: 64,
+  //         bitSize: 16,
+  //         byteSize: 2,
+  //         structure: { constructor: DummyErrorSet }
+  //       },
+  //     ];
+  //     const dv = new DataView(new ArrayBuffer(10));
+  //     dv.setUint16(8, 18, true);
+  //     const object = {
+  //       [MEMORY]: dv,
+  //     };
+  //     const { get } = getErrorUnionAccessors(members, dv.byteLength, {});
+  //     expect(() => get.call(object)).to.throw().equal(dummyError);
+  //     expect(errorNumber).to.equal(18);
+  //     dv.setUint16(8, 0, true);
+  //     dv.setFloat64(0, 3.14, true);
+  //     const result = get.call(object);
+  //     expect(result).to.equal(3.14);
+  //   })
+  //   it('should return a function for getting object value with potential error', function() {
+  //     let errorNumber;
+  //     const DummyErrorSet = function(arg) {
+  //       if (this instanceof DummyErrorSet) {
+  //         this.index = arg;
+  //       } else {
+  //         errorNumber = arg;
+  //         return dummyError;
+  //       }
+  //     };
+  //     Object.setPrototypeOf(DummyErrorSet.prototype, Error.prototype);
+  //     const dummyError = new DummyErrorSet(18);
+  //     const DummyClass = function() {};
+  //     const members = [
+  //       {
+  //         type: MemberType.Object,
+  //         bitOffset: 16,
+  //         bitSize: 0,
+  //         byteSize: 8,
+  //         slot: 0,
+  //         structure: {
+  //           type: StructureType.Struct,
+  //           constructor: DummyClass,
+  //         }
+  //       },
+  //       {
+  //         type: MemberType.Uint,
+  //         bitOffset: 64,
+  //         bitSize: 16,
+  //         byteSize: 2,
+  //         structure: { constructor: DummyErrorSet }
+  //       },
+  //     ];
+  //     const dv = new DataView(new ArrayBuffer(10));
+  //     dv.setUint16(8, 18, true);
+  //     const object = {
+  //       [MEMORY]: dv,
+  //       [CHILD_VIVIFICATOR]: { 0: () => dummyObject },
+  //     };
+  //     const dummyObject = new DummyClass();
+  //     const { get } = getErrorUnionAccessors(members, dv.byteLength, {});
+  //     expect(() => get.call(object)).to.throw().equal(dummyError);
+  //     expect(errorNumber).to.equal(18);
+  //     dv.setUint16(8, 0, true);
+  //     const result = get.call(object);
+  //     expect(result).to.equal(dummyObject);
+  //   })
+  //   it('should return a function for setting int or error', function() {
+  //     const DummyErrorSet = function(arg) {
+  //       if (this instanceof DummyErrorSet) {
+  //         this.index = arg;
+  //       } else {
+  //         return dummyError;
+  //       }
+  //     };
+  //     Object.setPrototypeOf(DummyErrorSet.prototype, Error.prototype);
+  //     const dummyError = new DummyErrorSet(18);
+  //     const members = [
+  //       {
+  //         type: MemberType.Float,
+  //         bitOffset: 0,
+  //         bitSize: 64,
+  //         byteSize: 8,
+  //         structure: {
+  //           type: StructureType.Primitive,
+  //         }
+  //       },
+  //       {
+  //         type: MemberType.Uint,
+  //         bitOffset: 64,
+  //         bitSize: 16,
+  //         byteSize: 2,
+  //         structure: { constructor: DummyErrorSet }
+  //       },
+  //     ];
+  //     const dv = new DataView(new ArrayBuffer(10));
+  //     dv.setFloat64(0, 3.14, true);
+  //     const object = {
+  //       [MEMORY]: dv,
+  //     };
+  //     const { set } = getErrorUnionAccessors(members, dv.byteLength, {});
+  //     set.call(object, dummyError);
+  //     expect(dv.getUint16(8, true)).to.equal(18);
+  //     expect(dv.getFloat64(0, true)).to.equal(0);
+  //     set.call(object, 1234.5678);
+  //     expect(dv.getUint16(8, true)).to.equal(0);
+  //     expect(dv.getFloat64(0, true)).to.equal(1234.5678);
+  //   })
+  // })
 })

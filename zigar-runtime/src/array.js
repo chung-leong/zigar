@@ -37,7 +37,7 @@ export function finalizeArray(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.allocMemory(byteSize, ptrAlign);
+      dv = env.createBuffer(byteSize, ptrAlign);
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
@@ -160,7 +160,7 @@ export function addPointerVisitor(s) {
     for (let i = 0, len = this.length; i < len; i++) {
       // no need to check for empty slots, since that isn't possible
       if (source) {
-        childOptions.source = src?.[SLOTS][i];
+        childOptions.source = source?.[SLOTS][i];
       }
       const child = (vivificate) ? this[CHILD_VIVIFICATOR](i) : this[SLOTS][i];
       if (child) {

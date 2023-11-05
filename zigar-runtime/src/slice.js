@@ -72,7 +72,7 @@ export function finalizeSlice(s, env) {
   const specialKeys = getSpecialKeys(s);
   const shapeDefiner = function(dv, length) {
     if (!dv) {
-      dv = env.allocMemory(length * elementSize, ptrAlign);
+      dv = env.createBuffer(length * elementSize, ptrAlign);
     }
     this[MEMORY] = dv;
     this[GETTER] = null;

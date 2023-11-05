@@ -21,10 +21,10 @@ import {
   getArrayEntriesIterator,
   createArrayEntries,
 } from '../src/array.js';
-import { Environment } from '../src/environment.js'
+import { NodeEnvironment } from '../src/environment.js'
 
 describe('Array functions', function() {
-  const env = new Environment();
+  const env = new NodeEnvironment();
   describe('finalizeArray', function() {
     beforeEach(function() {
       usePrimitive();

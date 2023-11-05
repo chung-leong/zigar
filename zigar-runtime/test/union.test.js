@@ -20,10 +20,10 @@ import {
   useTaggedUnion,
   useEnumeration,
 } from '../src/structure.js';
-import { Environment } from '../src/environment.js'
+import { NodeEnvironment } from '../src/environment.js'
 
 describe('Union functions', function() {
-  const env = new Environment();
+  const env = new NodeEnvironment();
   describe('finalizeUnion', function() {
     beforeEach(function() {
       usePrimitive();

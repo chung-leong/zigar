@@ -57,7 +57,7 @@ export function finalizePointer(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.allocMemory(byteSize, ptrAlign);
+      dv = env.createBuffer(byteSize, ptrAlign);
     } else {
       self = Object.create(constructor.prototype);
       if (calledFromEnviroment || calledFromParent) {
@@ -74,7 +74,7 @@ export function finalizePointer(s, env) {
         } else {
           throwNoCastingToPointer(s);
         }
-        dv = env.allocMemory(byteSize, ptrAlign);
+        dv = env.createBuffer(byteSize, ptrAlign);
       }
     }
     self[MEMORY] = dv;
@@ -250,7 +250,7 @@ function getTargetValue() {
   return object.$.valueOf();
 }
 
-function visitPointer(fn, options) {
+function visitPointer(fn, options = {}) {
   const { source } = options;
   fn.call(this, source);
 }
