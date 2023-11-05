@@ -374,16 +374,23 @@ export class NodeEnvironment extends Environment {
 }
 
 export class WebAssemblyEnvironment extends Environment {
-  nextValueIndex = 0;
-  valueTable = null;
-  valueIndices = null;
+  nextValueIndex = 1;
+  valueTable = { 0: null };
+  valueIndices = new WeakMap;
+  structures = [];
+  expectedMethods = {
+    define: { name: 'defineStructures', argType: '', returnType: 'v' },
+    alloc: { name: 'allocSharedMemory', argType: 'iii', returnType: 'i' },
+    free: { name: 'freeSharedMemory', argType: 'iiii', returnType: '' },
+    run: { name: 'runThunk', argType: 'ii', returnType: 'v' },
+    safe: { name: 'isRuntimeSafetyActive', argType: '', returnType: 'b' },
+  };
 
   constructor() {
     super();
-    this.resetValueTables();
   }
 
-  resetValueTables() {
+  releaseObjects() {
     if (this.nextValueIndex !== 1) {
       this.nextValueIndex = 1;
       this.valueTable = { 0: null };
@@ -405,53 +412,142 @@ export class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  createBridge(fn, argType = '', returnType = '', runtime = false) {
-    if (process.env.ZIGAR_TARGET === 'WASM-COMPTIME' && !runtime) {
+  fromWebAssembly(type, arg) {
+    switch (type) {
+      case 'v': return valueTable[arg];
+      case 's': return valueTable[arg]?.valueOf();
+      case 'i': return arg;
+      case 'b': return !!arg;
+    }
+  }
+
+  toWebAssembly(type, arg) {
+    switch (type) {
+      case 'v': return this.getObjectIndex(arg);
+      case 's': return this.getObjectIndex(new String(arg));
+      case 'i': return arg;
+      case 'b': return arg ? 1 : 0;
+    }
+  }
+
+  exportFunction(fn, argType = '', returnType = '') {
+    if (!fn) {
       return () => {};
     }
     return function (...args) {
-      args = args.map((arg, i) => {
-        switch (argType.charAt(i)) {
-          case 'v': return valueTable[arg];
-          case 's': return valueTable[arg]?.valueOf();
-          case 'i': return arg;
-          case 'b': return !!arg;
-        }
-      });
+      args = args.map((arg, i) => this.fromWebAssembly(argType.charAt(i), arg));
       const retval = fn.apply(this, args);
-      switch (returnType) {
-        case 'v': return this.getObjectIndex(retval);
-        case 's': return this.getObjectIndex(new String(retval));
-        case 'i': return retval;
-        case 'b': return arg ? 1 : 0;
-    }
+      return this.toWebAssembly(returnType, retval);
     };
   }
 
-  createImports() {
+  importFunction(fn, argType = '', returnType = '') {
+    return function (...args) {
+      args = args.map((arg, i) => this.toWebAssembly(argType.charAt(i), retval));
+      const retval = fn.apply(this, args);
+      return this.fromWebAssembly(returnType, retval);
+    };
+  }
+
+  exportFunctions() {
     return {
-      _setCallContext: this.createBridge(this.allocMemory, 'i', '', true),
-      _allocMemory: this.createBridge(this.allocMemory, 'ii', 'v', true),
-      _freeMemory: this.createBridge(this.freeMemory, 'iii', '', true),
-      _createString: this.createBridge(this.createString, 'ii', 'v'),
-      _createObject: this.createBridge(this.createObject, 'vv', 's'),
-      _createView: this.createBridge(this.createView, 'ii', 'v'),
-      _castView: this.createBridge(this.castView, 'vv', 'v'),
-      _readSlot: this.createBridge(this.readSlot, 'vi', 'v'),
-      _writeSlot: this.createBridge(this.writeSlot, 'viv'),
-      _beginDefinition: this.createBridge(this.beginDefinition),
-      _insertInteger: this.createBridge(this.insertProperty, 'vsi'),
-      _insertBoolean: this.createBridge(this.insertProperty, 'vsb'),
-      _insertString: this.createBridge(this.insertProperty, 'vss'),
-      _insertObject: this.createBridge(this.insertProperty, 'vsv'),
-      _beginStructure: this.createBridge(this.beginStructure, 'v', 'v'),
-      _attachMember: this.createBridge(this.attachMember, 'vvb'),
-      _attachMethod: this.createBridge(this.attachMethod, 'vvb'),
-      _createTemplate: this.createBridge(this.attachMethod, 'v'),
-      _attachTemplate: this.createBridge(this.attachTemplate, 'vvb'),
-      _finalizeStructure: this.createBridge(this.finalizeStructure, 'v'),
-      _writeToConsole: this.createBridge(this.writeToConsole, 'v', '', true),
+      _setCallContext: this.exportFunction(this.allocMemory, 'i', '', true),
+      _allocMemory: this.exportFunction(this.allocMemory, 'ii', 'v', true),
+      _freeMemory: this.exportFunction(this.freeMemory, 'iii', '', true),
+      _createString: this.exportFunction(this.createString, 'ii', 'v'),
+      _createObject: this.exportFunction(this.createObject, 'vv', 's'),
+      _createView: this.exportFunction(this.createView, 'ii', 'v'),
+      _castView: this.exportFunction(this.castView, 'vv', 'v'),
+      _readSlot: this.exportFunction(this.readSlot, 'vi', 'v'),
+      _writeSlot: this.exportFunction(this.writeSlot, 'viv'),
+      _beginDefinition: this.exportFunction(this.beginDefinition),
+      _insertInteger: this.exportFunction(this.insertProperty, 'vsi'),
+      _insertBoolean: this.exportFunction(this.insertProperty, 'vsb'),
+      _insertString: this.exportFunction(this.insertProperty, 'vss'),
+      _insertObject: this.exportFunction(this.insertProperty, 'vsv'),
+      _beginStructure: this.exportFunction(this.beginStructure, 'v', 'v'),
+      _attachMember: this.exportFunction(this.attachMember, 'vvb'),
+      _attachMethod: this.exportFunction(this.attachMethod, 'vvb'),
+      _createTemplate: this.exportFunction(this.attachMethod, 'v'),
+      _attachTemplate: this.exportFunction(this.attachTemplate, 'vvb'),
+      _finalizeStructure: this.exportFunction(this.finalizeStructure, 'v'),
+      _writeToConsole: this.exportFunction(this.writeToConsole, 'v', '', true),
     }
+  }
+
+  importFunctions(exports) {
+    for (const [ name, fn ] of Object.entries(exports)) {
+      const info = this.expected[name];
+      if (info) {
+        const { name, argType, returnType } = info;
+        this[name] = this.importFunction(fn, argType, returnType);
+      }
+    }
+  }
+
+  releaseFunctions() {
+    const throwError = function() {
+      throw new Error('WebAssembly instance was abandoned');
+    };
+    for (const { name } of Object.values(this.expectedMethods)) {
+      if (this[name]) {
+        this[name] = throwError;
+      }
+    }
+  }
+
+  async createInstance(source) {
+    const env = this.exportFunctions();
+    if (source[Symbol.toStringTag] === 'Response') {
+      return WebAssembly.instantiateStreaming(source, { env });
+    } else {
+      return WebAssembly.instantiate(source, { env });
+    }
+  }
+
+  async loadWebAssembly(source) {
+    const { instance } = await this.createInstance(source);
+    this.memory = instance.memory;
+    this.importFunctions(instance.exports);
+    // create a WeakRef so that we know whether the instance is gc'ed or not
+    const weakRef = new WeakRef(instance);
+    return {
+      abandon: () => {
+        this.memory = null;
+        this.releaseFunctions();
+        this.unlinkVariables();
+      },
+      released: () => {
+        return !weakRef.deref();
+      }
+    }
+  }
+
+  async linkWebAssembly(source, params) {
+    const {
+      writeBack = true,
+    } = params;
+    const zigar = await this.loadWebAssembly(source);
+    // TODO
+    return zigar;
+  }
+
+  runFactory(options) {
+    const {
+      omitFunctions = false
+    } = options;
+    if (omitFunctions) {
+      this.attachMethod = () => {};
+    }
+    const result = this.defineStructures();
+    if (result instanceof String) {
+      throwZigError(result.valueOf());
+    }
+    this.fixOverlappingMemory();
+    return {
+      structures: this.structures,
+      runtimeSafety: this.isRuntimeSafetyActive(),
+    };
   }
 
   beginDefinition() {
@@ -460,6 +556,10 @@ export class WebAssemblyEnvironment extends Environment {
 
   insertProperty(def, name, value) {
     def[name] = value;
+  }
+
+  finalizeStructure(structure) {
+    this.structures.push(structure);
   }
 
   finalizeStructures(structures) {
@@ -543,6 +643,49 @@ export class WebAssemblyEnvironment extends Environment {
     }
 
     return { promise, resolve, reject, slots, variables, methodRunner };
+  }
+
+  fixOverlappingMemory() {
+    // look for buffers that requires linkage
+    const list = [];
+    const find = (object) => {
+      if (!object) {
+        return;
+      }
+      if (object[MEMORY]) {
+        const dv = object[MEMORY];
+        const { address } = dv;
+        if (address) {
+          list.push({ address, length: dv.byteLength, owner: object, replaced: false });
+        }
+      }
+      if (object[SLOTS]) {
+        for (const child of Object.values(object[SLOTS])) {
+          find(child);
+        }
+      }
+    };
+    for (const structure of this.structures) {
+      find(structure.instance.template);
+      find(structure.static.template);
+    }
+    // larger memory blocks come first
+    list.sort((a, b) => b.length - a.length);
+    for (const a of list) {
+      for (const b of list) {
+        if (a !== b && !a.replaced) {
+          if (a.address <= b.address && b.address + b.length <= a.address + a.length) {
+            // B is inside A--replace it with a view of A's buffer
+            const dv = a.owner[MEMORY];
+            const offset = b.address - a.address + dv.byteOffset;
+            const newDV = new DataView(dv.buffer, offset, b.length);
+            newDV.address = b.address;
+            b.owner[MEMORY] = newDV;
+            b.replaced = true;
+          }
+        }
+      }
+    }
   }
 }
 

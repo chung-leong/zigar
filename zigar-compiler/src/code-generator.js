@@ -53,10 +53,7 @@ export function generateCode(structures, params) {
     delete memberFeatures.useBool;
   }
   const features = [ ...Object.keys(structureFeatures), ...Object.keys(memberFeatures) ];
-  const imports = [ 'finalizeStructures' ];
-  if (loadWASM) {
-    imports.push('linkModule');
-  }
+  const imports = [ 'WebAssemblyEnvironment' ];
   imports.push(...features);
   add(`import {`);
   for (const name of imports) {
@@ -133,7 +130,8 @@ export function generateCode(structures, params) {
     }
     add(`];`);
   }
-  add(`const linkage = finalizeStructures(structures);`);
+  add(`const env = new WebAssemblyEnvironment();`)
+  add(`const linkage = env.finalizeStructures(structures);`);
 
   // the root structure gets finalized last
   const root = structures[structures.length - 1];
@@ -142,7 +140,7 @@ export function generateCode(structures, params) {
   if (loadWASM) {
     add(`\n// initiate loading and compilation of WASM bytecodes`);
     add(`const wasmPromise = ${loadWASM};`);
-    add(`const initPromise = linkModule(wasmPromise, { ...linkage, writeBack: ${!topLevelAwait} });`);
+    add(`const initPromise = env.linkWebAssembly(wasmPromise, { ...linkage, writeBack: ${!topLevelAwait} });`);
   } else {
     add(`\n// no need to use WASM binary`);
     add(`const initPromise = Promise.resolve();`);

@@ -25,7 +25,6 @@ import {
   useVector,
   useOpaque,
 } from '../../zigar-runtime/src/structure.js';
-export { Environment } from '../../zigar-runtime/src/environment.js';
 
 // enable all member types (including extend types)
 useVoid();
@@ -53,3 +52,5 @@ usePointer();
 useSlice();
 useVector();
 useOpaque();
+
+export { NodeEnvironment } from '../../zigar-runtime/src/environment.js';
