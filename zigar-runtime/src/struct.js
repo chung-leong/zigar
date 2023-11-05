@@ -65,8 +65,10 @@ export function finalizeStruct(s, env) {
   const requiredKeys = members.filter(m => m.isRequired).map(m => m.name);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
+      /* WASM-ONLY */
       restoreMemory.call(this);
       restoreMemory.call(arg);
+      /* WASM-ONLY-END */
       copy(this[MEMORY], arg[MEMORY]);
       if (hasPointer) {
         this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });

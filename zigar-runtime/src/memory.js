@@ -249,16 +249,14 @@ export function showBits(object) {
 /* c8 ignore end */
 
 export function restoreMemory() {
-  if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
-    const dv = this[MEMORY];
-    const source = dv[MEMORY];
-    if (!source || dv.buffer.byteLength !== 0) {
-      return false;
-    }
-    const { memory, address, len } = source;
-    const newDV = new DataView(memory.buffer, address, len);
-    newDV[MEMORY] = source;
-    this[MEMORY] = newDV;
-    return true;
+  const dv = this[MEMORY];
+  const source = dv[MEMORY];
+  if (!source || dv.buffer.byteLength !== 0) {
+    return false;
   }
+  const { memory, address, len } = source;
+  const newDV = new DataView(memory.buffer, address, len);
+  newDV[MEMORY] = source;
+  this[MEMORY] = newDV;
+  return true;
 }

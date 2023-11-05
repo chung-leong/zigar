@@ -33,7 +33,6 @@ describe('Pointer functions', function() {
       usePointer();
       useSlice();
       useArray();
-      process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
     })
     it('should define a pointer for pointing to integers', function() {
       const intStructure = env.beginStructure({

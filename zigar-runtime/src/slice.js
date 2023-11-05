@@ -32,15 +32,15 @@ export function finalizeSlice(s, env) {
     options,
   } = s;
   const typedArray = addTypedArray(s);
-  if (process.env.ZIGAR_DEV) {
-    /* c8 ignore next 6 */
-    if (member.bitOffset !== undefined) {
-      throw new Error(`bitOffset must be undefined for slice member`);
-    }
-    if (member.slot !== undefined) {
-      throw new Error(`slot must be undefined for slice member`);
-    }
+  /* DEV-TEST */
+  /* c8 ignore next 6 */
+  if (member.bitOffset !== undefined) {
+    throw new Error(`bitOffset must be undefined for slice member`);
   }
+  if (member.slot !== undefined) {
+    throw new Error(`slot must be undefined for slice member`);
+  }
+  /* DEV-TEST-END */
   const hasObject = (member.type === MemberType.Object);
   const { byteSize: elementSize, structure: elementStructure } = member;
   const sentinel = getSentinel(s, options);
@@ -97,8 +97,10 @@ export function finalizeSlice(s, env) {
       } else {
         shapeChecker.call(this, arg, arg.length);
       }
+      /* WASM-ONLY */
       restoreMemory.call(this);
       restoreMemory.call(arg);
+      /* WASM-ONLY-END */
       copy(this[MEMORY], arg[MEMORY]);
       if (hasPointer) {
         this[POINTER_VISITOR](copyPointer, { source: arg });
@@ -224,11 +226,10 @@ export function getSentinel(structure, options) {
   if (!sentinel) {
     return;
   }
-  if (process.env.ZIGAR_DEV) {
-    /* c8 ignore next 3 */
-    if (sentinel.bitOffset === undefined) {
-      throw new Error(`bitOffset must be 0 for sentinel member`);
-    }
+  /* DEV-TEST */
+  /* c8 ignore next 3 */
+  if (sentinel.bitOffset === undefined) {
+    throw new Error(`bitOffset must be 0 for sentinel member`);
   }
   const { get: getSentinelValue } = getAccessors(sentinel, options);
   const value = getSentinelValue.call(template, 0);

@@ -34,7 +34,6 @@ describe('Method functions', function() {
       useObject();
     })
     it('should invoke the given thunk with the expected arguments', function() {
-      process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
       const argStruct = {
         [MEMORY]: new DataView(new ArrayBuffer(16)),
         [SLOTS]: { 0: {} },
@@ -49,7 +48,6 @@ describe('Method functions', function() {
       expect(arg).to.equal(argStruct[MEMORY]);
     })
     it('should return a promise when trunk returns a promise', async function() {
-      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
       const argStruct = {
         [MEMORY]: new DataView(new ArrayBuffer(16)),
         [SLOTS]: { 0: {} },
@@ -77,7 +75,6 @@ describe('Method functions', function() {
       expect(value).to.equal(123);
     })
     it('should throw an error if thunk returns a string', function() {
-      process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
       const argStruct = {
         [MEMORY]: new DataView(new ArrayBuffer(16)),
         [SLOTS]: { 0: {} },
@@ -91,7 +88,6 @@ describe('Method functions', function() {
   })
   describe('addMethods', function() {
     beforeEach(function() {
-      process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
       useStruct();
       useEnumeration();
       useBool();

@@ -37,12 +37,12 @@
   },
   "homepage": "https://github.com/chung-leong/zigar#readme",
   "devDependencies": {
-    "@rollup/plugin-replace": "^5.0.2",
     "@rollup/plugin-terser": "^0.4.3",
     "c8": "^8.0.0",
     "chai": "^4.3.7",
     "mocha": "^10.2.0",
     "mocha-skip-if": "^1.0.4",
-    "rollup": "^3.23.0"
+    "rollup": "^3.23.0",
+    "rollup-plugin-strip-code": "^0.2.7"
   }
 }

@@ -33,12 +33,12 @@ export function invokeThunk(thunk, args, env) {
   // error strings returned by the thunk are due to problems in the thunking process
   // (i.e. bugs in export.zig)
   if (err) {
-    if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
-      if (err instanceof Promise) {
-        // a promise of the function having been linked and called
-        return err.then(() => args.retval);
-      }
+    /* WASM-ONLY */
+    if (err instanceof Promise) {
+      // a promise of the function having been linked and called
+      return err.then(() => args.retval);
     }
+    /* WASM-ONLY-END */
     throwZigError(err);
   }
   return args.retval;
@@ -47,11 +47,11 @@ export function invokeThunk(thunk, args, env) {
 export function invokeThunkNP(thunk, args, env) {
   const err = thunk.call(env, args[MEMORY]);
   if (err) {
-    if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
-      if (err instanceof Promise) {
-        return err.then(() => args.retval);
-      }
+    /* WASM-ONLY */
+    if (err instanceof Promise) {
+      return err.then(() => args.retval);
     }
+    /* WASM-ONLY-END */
     throwZigError(err);
   }
   return args.retval;
@@ -82,11 +82,11 @@ function createFunction(method, env, pushThis) {
       }
     }
   }
-  if (process.env.ZIGAR_TARGET === 'NODE-CPP-EXT') {
-    // need to set the local variables as well as the property of the method object
-    /* c8 ignore next */
-    f[RELEASE_THUNK] = r => thunk = argStruct = method.thunk = r;
-  }
+  /* NODE-ONLY */
+  // need to set the local variables as well as the property of the method object
+  /* c8 ignore next */
+  f[RELEASE_THUNK] = r => thunk = argStruct = method.thunk = r;
+  /* NODE-ONLY-END */
   Object.defineProperty(f, 'name', { value: name, writable: false });
   return f;
 }

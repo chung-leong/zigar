@@ -17,15 +17,15 @@ export function finalizeVector(s, env) {
     options,
   } = s;
   addTypedArray(s);
-  if (process.env.ZIGAR_DEV) {
-    /* c8 ignore next 6 */
-    if (member.bitOffset !== undefined) {
-      throw new Error(`bitOffset must be undefined for vector member`);
-    }
-    if (member.slot !== undefined) {
-      throw new Error(`slot must be undefined for vector member`);
-    }
+  /* DEV-TEST */
+  /* c8 ignore next 6 */
+  if (member.bitOffset !== undefined) {
+    throw new Error(`bitOffset must be undefined for vector member`);
   }
+  if (member.slot !== undefined) {
+    throw new Error(`slot must be undefined for vector member`);
+  }
+  /* DEV-TEST-END */
   const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
@@ -51,8 +51,10 @@ export function finalizeVector(s, env) {
   const copy = getMemoryCopier(byteSize);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
+      /* WASM-ONLY */
       restoreMemory.call(this);
       restoreMemory.call(arg);
+      /* WASM-ONLY-END */
       copy(this[MEMORY], arg[MEMORY]);
     } else {
       if (arg?.[Symbol.iterator]) {

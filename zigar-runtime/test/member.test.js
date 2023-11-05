@@ -29,7 +29,6 @@ import { clearMethodCache } from '../src/data-view.js';
 
 describe('Member functions', function() {
   beforeEach(function() {
-    process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
     useVoid();
     useBoolEx()
     useIntEx();
@@ -695,7 +694,6 @@ describe('Member functions', function() {
       expect(get.call(object, 2, false)).to.equal(-2);
     })
     it('should return accessors for accessing WASM memory', function() {
-      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
       const memory = new WebAssembly.Memory({
         initial: 128,
         maximum: 1024,
@@ -723,7 +721,6 @@ describe('Member functions', function() {
       expect(dv3).to.not.equal(dv2);
     })
     it('should return array accessors for accessing WASM memory', function() {
-      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
       const memory = new WebAssembly.Memory({
         initial: 128,
         maximum: 1024,
@@ -751,7 +748,6 @@ describe('Member functions', function() {
       expect(dv3).to.not.equal(dv2);
     })
     it('should not trap errors unrelated to WASM buffer detachment', function() {
-      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
       const memory = new WebAssembly.Memory({
         initial: 128,
         maximum: 1024,
@@ -779,7 +775,6 @@ describe('Member functions', function() {
       expect(() => set.call(object, 123)).to.throw();
     })
     it('should throw range error when indexing beyond an array after WASM memory detachment', function() {
-      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
       const memory = new WebAssembly.Memory({
         initial: 128,
         maximum: 1024,
@@ -804,7 +799,6 @@ describe('Member functions', function() {
       expect(() => get.call(object, 4)).to.throw(RangeError);
     })
     it('should return accessors that work correctly with regular ArrayBuffer', function() {
-      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
       const dv = new DataView(new ArrayBuffer(4));
       const object = {
         [MEMORY]: dv,

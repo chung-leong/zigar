@@ -32,7 +32,6 @@ import { Environment } from '../src/environment.js'
 describe('Special property functions', function() {
   const env = new Environment();
   beforeEach(() => {
-    process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
     useArray();
     useSlice();
     useStruct();
@@ -62,7 +61,6 @@ describe('Special property functions', function() {
       expect(dv2.getInt32(0, true)).to.equal(1234);
     })
     it('should restore WASM memory data view', function() {
-      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
       const structure = {
         type: StructureType.Primitive,
         name: 'i32',

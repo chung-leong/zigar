@@ -368,56 +368,31 @@ const POINTER_VISITOR = Symbol('pointerVisitor');
 const TARGET_ACQUIRER = Symbol('targetAcquirer');
 const ENVIRONMENT = Symbol('environment');
 
-function acquireTarget() {
-  this[TARGET_ACQUIRER]();
+function throwZigError(name) {
+  throw new Error(decamelizeErrorName(name));
 }
 
-const StructureType = {
-  Primitive: 0,
-  Array: 1,
-  Struct: 2,
-  ArgStruct: 3,
-  ExternUnion: 4,
-  BareUnion: 5,
-  TaggedUnion: 6,
-  ErrorUnion: 7,
-  ErrorSet: 8,
-  Enumeration: 9,
-  Optional: 10,
-  Pointer: 11,
-  Slice: 12,
-  Vector: 13,
-  Opaque: 14,
-  Function: 15,
-};
-
-const factories = Array(Object.values(StructureType).length);
-
-function getStructureName(s, full = false) {
-  let r = s.name;
-  if (!full) {
-    r = r.replace(/{.*}/, '');
-    r = r.replace(/[^. ]*?\./g, '');
+function decamelizeErrorName(name) {
+  // use a try block in case Unicode regex fails
+  try {
+    const lc = name.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
+      if (m1.length === 1) {
+        return ` ${m1.toLocaleLowerCase()}${m2}`;
+      } else {
+        if (m2) {
+          const acronym = m1.substring(0, m1.length - 1);
+          const letter = m1.charAt(m1.length - 1).toLocaleLowerCase();
+          return ` ${acronym} ${letter}${m2}`;
+        } else {
+          return ` ${m1}`;
+        }
+      }
+    }).trimStart();
+    return lc.charAt(0).toLocaleUpperCase() + lc.substring(1);
+    /* c8 ignore next 3 */
+  } catch (err) {
+    return name;
   }
-  return r;
-}
-
-function getStructureFactory(type) {
-  const f = factories[type];
-  if (process.env.ZIGAR_DEV) {
-    /* c8 ignore next 10 */
-    if (typeof(f) !== 'function') {
-      const [ name ] = Object.entries(StructureType).find(a => a[1] === type);
-      throw new Error(`No factory for ${name}`);
-    }
-  }
-  return f;
-}
-
-function getStructureFeature(structure) {
-  const { type } = structure;
-  const [ name ] = Object.entries(StructureType).find(a => a[1] === type);
-  return `use${name}`;
 }
 
 const MemberType = {
@@ -480,31 +455,35 @@ function isByteAligned({ bitOffset, bitSize, byteSize }) {
   return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
 }
 
-function throwZigError(name) {
-  throw new Error(decamelizeErrorName(name));
+function acquireTarget() {
+  this[TARGET_ACQUIRER]();
 }
 
-function decamelizeErrorName(name) {
-  // use a try block in case Unicode regex fails
-  try {
-    const lc = name.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
-      if (m1.length === 1) {
-        return ` ${m1.toLocaleLowerCase()}${m2}`;
-      } else {
-        if (m2) {
-          const acronym = m1.substring(0, m1.length - 1);
-          const letter = m1.charAt(m1.length - 1).toLocaleLowerCase();
-          return ` ${acronym} ${letter}${m2}`;
-        } else {
-          return ` ${m1}`;
-        }
-      }
-    }).trimStart();
-    return lc.charAt(0).toLocaleUpperCase() + lc.substring(1);
-    /* c8 ignore next 3 */
-  } catch (err) {
-    return name;
-  }
+const StructureType = {
+  Primitive: 0,
+  Array: 1,
+  Struct: 2,
+  ArgStruct: 3,
+  ExternUnion: 4,
+  BareUnion: 5,
+  TaggedUnion: 6,
+  ErrorUnion: 7,
+  ErrorSet: 8,
+  Enumeration: 9,
+  Optional: 10,
+  Pointer: 11,
+  Slice: 12,
+  Vector: 13,
+  Opaque: 14,
+  Function: 15,
+};
+
+Array(Object.values(StructureType).length);
+
+function getStructureFeature(structure) {
+  const { type } = structure;
+  const [ name ] = Object.entries(StructureType).find(a => a[1] === type);
+  return `use${name}`;
 }
 
 let decoder;
@@ -664,6 +643,7 @@ class Environment {
     }
   }
 
+  /* COMPTIME-ONLY */
   createTemplate(dv) {
     return {
       [MEMORY]: dv,
@@ -721,28 +701,8 @@ class Environment {
     const target = (isStatic) ? s.static : s.instance;
     target.template = template;
   }
+  /* COMPTIME-ONLY-END */
 
-  finalizeStructure(s) {
-    try {
-      const f = getStructureFactory(s.type);
-      const constructor = f(s, this);
-      if (typeof(constructor) === 'function') {
-        Object.defineProperties(constructor, {
-          name: { value: getStructureName(s), writable: false }
-        });
-        if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
-          Object.defineProperties(constructor.prototype, {
-            [Symbol.toStringTag]: { value: s.name, configurable: true, writable: false }
-          });
-        }
-      }
-      return constructor;
-      /* c8 ignore next 4 */
-    } catch (err) {
-      console.error(err);
-      throw err;
-    }
-  }
 
   writeToConsole(dv) {
     try {
@@ -780,17 +740,30 @@ class Environment {
   }
 }
 
+
+/* WASM-ONLY */
 class WebAssemblyEnvironment extends Environment {
-  nextValueIndex = 0;
-  valueTable = null;
-  valueIndices = null;
+  nextValueIndex = 1;
+  valueTable = { 0: null };
+  valueIndices = new WeakMap;
+  /* COMPTIME-ONLY */
+  structures = [];
+  /* COMPTIME-ONLY-END */
+  expectedMethods = {
+    /* COMPTIME-ONLY */
+    define: { name: 'defineStructures', argType: '', returnType: 'v' },
+    /* COMPTIME-ONLY-END */
+    alloc: { name: 'allocSharedMemory', argType: 'iii', returnType: 'i' },
+    free: { name: 'freeSharedMemory', argType: 'iiii', returnType: '' },
+    run: { name: 'runThunk', argType: 'ii', returnType: 'v' },
+    safe: { name: 'isRuntimeSafetyActive', argType: '', returnType: 'b' },
+  };
 
   constructor() {
     super();
-    this.resetValueTables();
   }
 
-  resetValueTables() {
+  releaseObjects() {
     if (this.nextValueIndex !== 1) {
       this.nextValueIndex = 1;
       this.valueTable = { 0: null };
@@ -812,53 +785,134 @@ class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  createBridge(fn, argType = '', returnType = '', runtime = false) {
-    if (!runtime) {
+  fromWebAssembly(type, arg) {
+    switch (type) {
+      case 'v': return valueTable[arg];
+      case 's': return valueTable[arg]?.valueOf();
+      case 'i': return arg;
+      case 'b': return !!arg;
+    }
+  }
+
+  toWebAssembly(type, arg) {
+    switch (type) {
+      case 'v': return this.getObjectIndex(arg);
+      case 's': return this.getObjectIndex(new String(arg));
+      case 'i': return arg;
+      case 'b': return arg ? 1 : 0;
+    }
+  }
+
+  exportFunction(fn, argType = '', returnType = '') {
+    if (!fn) {
       return () => {};
     }
     return function (...args) {
-      args = args.map((arg, i) => {
-        switch (argType.charAt(i)) {
-          case 'v': return valueTable[arg];
-          case 's': return valueTable[arg]?.valueOf();
-          case 'i': return arg;
-          case 'b': return !!arg;
-        }
-      });
+      args = args.map((arg, i) => this.fromWebAssembly(argType.charAt(i), arg));
       const retval = fn.apply(this, args);
-      switch (returnType) {
-        case 'v': return this.getObjectIndex(retval);
-        case 's': return this.getObjectIndex(new String(retval));
-        case 'i': return retval;
-        case 'b': return arg ? 1 : 0;
-    }
+      return this.toWebAssembly(returnType, retval);
     };
   }
 
-  createImports() {
+  importFunction(fn, argType = '', returnType = '') {
+    return function (...args) {
+      args = args.map((arg, i) => this.toWebAssembly(argType.charAt(i), retval));
+      const retval = fn.apply(this, args);
+      return this.fromWebAssembly(returnType, retval);
+    };
+  }
+
+  exportFunctions() {
     return {
-      _setCallContext: this.createBridge(this.allocMemory, 'i', '', true),
-      _allocMemory: this.createBridge(this.allocMemory, 'ii', 'v', true),
-      _freeMemory: this.createBridge(this.freeMemory, 'iii', '', true),
-      _createString: this.createBridge(this.createString, 'ii', 'v'),
-      _createObject: this.createBridge(this.createObject, 'vv', 's'),
-      _createView: this.createBridge(this.createView, 'ii', 'v'),
-      _castView: this.createBridge(this.castView, 'vv', 'v'),
-      _readSlot: this.createBridge(this.readSlot, 'vi', 'v'),
-      _writeSlot: this.createBridge(this.writeSlot, 'viv'),
-      _beginDefinition: this.createBridge(this.beginDefinition),
-      _insertInteger: this.createBridge(this.insertProperty, 'vsi'),
-      _insertBoolean: this.createBridge(this.insertProperty, 'vsb'),
-      _insertString: this.createBridge(this.insertProperty, 'vss'),
-      _insertObject: this.createBridge(this.insertProperty, 'vsv'),
-      _beginStructure: this.createBridge(this.beginStructure, 'v', 'v'),
-      _attachMember: this.createBridge(this.attachMember, 'vvb'),
-      _attachMethod: this.createBridge(this.attachMethod, 'vvb'),
-      _createTemplate: this.createBridge(this.attachMethod, 'v'),
-      _attachTemplate: this.createBridge(this.attachTemplate, 'vvb'),
-      _finalizeStructure: this.createBridge(this.finalizeStructure, 'v'),
-      _writeToConsole: this.createBridge(this.writeToConsole, 'v', '', true),
+      _setCallContext: this.exportFunction(this.allocMemory, 'i', '', true),
+      _allocMemory: this.exportFunction(this.allocMemory, 'ii', 'v', true),
+      _freeMemory: this.exportFunction(this.freeMemory, 'iii', '', true),
+      _createString: this.exportFunction(this.createString, 'ii', 'v'),
+      _createObject: this.exportFunction(this.createObject, 'vv', 's'),
+      _createView: this.exportFunction(this.createView, 'ii', 'v'),
+      _castView: this.exportFunction(this.castView, 'vv', 'v'),
+      _readSlot: this.exportFunction(this.readSlot, 'vi', 'v'),
+      _writeSlot: this.exportFunction(this.writeSlot, 'viv'),
+      _beginDefinition: this.exportFunction(this.beginDefinition),
+      _insertInteger: this.exportFunction(this.insertProperty, 'vsi'),
+      _insertBoolean: this.exportFunction(this.insertProperty, 'vsb'),
+      _insertString: this.exportFunction(this.insertProperty, 'vss'),
+      _insertObject: this.exportFunction(this.insertProperty, 'vsv'),
+      _beginStructure: this.exportFunction(this.beginStructure, 'v', 'v'),
+      _attachMember: this.exportFunction(this.attachMember, 'vvb'),
+      _attachMethod: this.exportFunction(this.attachMethod, 'vvb'),
+      _createTemplate: this.exportFunction(this.attachMethod, 'v'),
+      _attachTemplate: this.exportFunction(this.attachTemplate, 'vvb'),
+      _finalizeStructure: this.exportFunction(this.finalizeStructure, 'v'),
+      _writeToConsole: this.exportFunction(this.writeToConsole, 'v', '', true),
     }
+  }
+
+  importFunctions(exports) {
+    for (const [ name, fn ] of Object.entries(exports)) {
+      const info = this.expected[name];
+      if (info) {
+        const { name, argType, returnType } = info;
+        this[name] = this.importFunction(fn, argType, returnType);
+      }
+    }
+  }
+
+  releaseFunctions() {
+    const throwError = function() {
+      throw new Error('WebAssembly instance was abandoned');
+    };
+    for (const { name } of Object.values(this.expectedMethods)) {
+      if (this[name]) {
+        this[name] = throwError;
+      }
+    }
+  }
+
+  async createInstance(source) {
+    const env = this.exportFunctions();
+    if (source[Symbol.toStringTag] === 'Response') {
+      return WebAssembly.instantiateStreaming(source, { env });
+    } else {
+      return WebAssembly.instantiate(source, { env });
+    }
+  }
+
+  async loadWebAssembly(source) {
+    const { instance } = await this.createInstance(source);
+    this.memory = instance.memory;
+    this.importFunctions(instance.exports);
+    // create a WeakRef so that we know whether the instance is gc'ed or not
+    const weakRef = new WeakRef(instance);
+    return {
+      abandon: () => {
+        this.memory = null;
+        this.releaseFunctions();
+        this.unlinkVariables();
+      },
+      released: () => {
+        return !weakRef.deref();
+      }
+    }
+  }
+
+  /* COMPTIME-ONLY */
+  runFactory(options) {
+    const {
+      omitFunctions = false
+    } = options;
+    if (omitFunctions) {
+      this.attachMethod = () => {};
+    }
+    const result = this.defineStructures();
+    if (result instanceof String) {
+      throwZigError(result.valueOf());
+    }
+    this.fixOverlappingMemory();
+    return {
+      structures: this.structures,
+      runtimeSafety: this.isRuntimeSafetyActive(),
+    };
   }
 
   beginDefinition() {
@@ -869,9 +923,56 @@ class WebAssemblyEnvironment extends Environment {
     def[name] = value;
   }
 
+  fixOverlappingMemory() {
+    // look for buffers that requires linkage
+    const list = [];
+    const find = (object) => {
+      if (!object) {
+        return;
+      }
+      if (object[MEMORY]) {
+        const dv = object[MEMORY];
+        const { address } = dv;
+        if (address) {
+          list.push({ address, length: dv.byteLength, owner: object, replaced: false });
+        }
+      }
+      if (object[SLOTS]) {
+        for (const child of Object.values(object[SLOTS])) {
+          find(child);
+        }
+      }
+    };
+    for (const structure of this.structures) {
+      find(structure.instance.template);
+      find(structure.static.template);
+    }
+    // larger memory blocks come first
+    list.sort((a, b) => b.length - a.length);
+    for (const a of list) {
+      for (const b of list) {
+        if (a !== b && !a.replaced) {
+          if (a.address <= b.address && b.address + b.length <= a.address + a.length) {
+            // B is inside A--replace it with a view of A's buffer
+            const dv = a.owner[MEMORY];
+            const offset = b.address - a.address + dv.byteOffset;
+            const newDV = new DataView(dv.buffer, offset, b.length);
+            newDV.address = b.address;
+            b.owner[MEMORY] = newDV;
+            b.replaced = true;
+          }
+        }
+      }
+    }
+  }
+
+  finalizeStructure(structure) {
+    this.structures.push(structure);
+  }
+  /* COMPTIME-ONLY-END */
+
+  /* RUNTIME-ONLY */
   finalizeStructures(structures) {
-    const slots = {};
-    const variables = [];
     for (const structure of structures) {
       for (const target of [ structure.static, structure.instance ]) {
         // first create the actual template using the provided placeholder
@@ -883,9 +984,9 @@ class WebAssemblyEnvironment extends Environment {
         // create thunk function
         method.thunk = createThunk(method.thunk);
       }
-      this.finalizeStructure(structure);
+      super.finalizeStructure(structure);
       // place structure into its assigned slot
-      slots[structure.slot] = structure;
+      this.slots[structure.slot] = structure;
     }
 
     function createTemplate(placeholder) {
@@ -923,9 +1024,15 @@ class WebAssemblyEnvironment extends Environment {
       if (placeholder.address !== undefined) {
         // need to replace dataview with one pointing to WASM memory later,
         // when the VM is up and running
-        variables.push({ address: placeholder.address, object });
+        this.variables.push({ address: placeholder.address, object });
       }
       return object;
+    }
+
+    function createThunk(index) {
+      return function(argStruct) {
+        return this.runThunk(index, argStruct);
+      };
     }
 
     let resolve, reject;
@@ -933,22 +1040,21 @@ class WebAssemblyEnvironment extends Environment {
       resolve = r1;
       reject = r2;
     });
-    const methodRunner = {
-      0: function(index, argStruct) {
-        // wait for linking to occur, then activate the runner again
-        return promise.then(() => methodRunner[0].call(this, index, argStruct));
-      },
+    this.runThunk = function(index, argStruct) {
+      // wait for linking to occur, then call function again
+      // this.runThunk should have been replaced
+      return promise.then(() => this.runThunk(index, argStruct));
     };
-
-    function createThunk(index) {
-      return function(argStruct) {
-        return methodRunner[0](index, argStruct);
-      };
-    }
-
-    return { promise, resolve, reject, slots, variables, methodRunner };
+    return { resolve, reject };
   }
+
+  async linkWebAssembly(source, params) {
+    const zigar = await this.loadWebAssembly(source);
+    return zigar;
+  }
+  /* RUNTIME-ONLY */
 }
+/* WASM-ONLY-END */
 
 class CallContext {
   pointerProcessed = new Map();
@@ -976,74 +1082,6 @@ function findSortedIndex(array, address) {
     }
   }
   return high;
-}
-
-async function createWebAssemblyInstance(source, env) {
-  if (source[Symbol.toStringTag] === 'Response') {
-    return WebAssembly.instantiateStreaming(source, { env });
-  } else {
-    return WebAssembly.instantiate(source, { env });
-  }
-}
-
-async function runFactoryFunction(source) {
-  const env = new WebAssemblyEnvironment();
-  const imports = env.createImports();
-  const { instance } = await createWebAssemblyInstance(source, imports);
-  const { define, safe } = instance.exports;
-  const runtimeSafety = !!safe();
-  const runDefine = env.createBridge(define, '', 'v', true);
-  const result = runDefine();
-  if (typeof(result) === 'string') {
-    throwZigError(result);
-  }
-  const { structures } = env;
-  fixOverlappingMemory(structures);
-  return { structures, runtimeSafety };
-}
-
-
-function fixOverlappingMemory(structures) {
-  // look for buffers that requires linkage
-  const list = [];
-  const find = (object) => {
-    if (!object) {
-      return;
-    }
-    if (object[MEMORY]) {
-      const dv = object[MEMORY];
-      const { address } = dv;
-      if (address) {
-        list.push({ address, length: dv.byteLength, owner: object, replaced: false });
-      }
-    }
-    if (object[SLOTS]) {
-      for (const child of Object.values(object[SLOTS])) {
-        find(child);
-      }
-    }
-  };
-  for (const structure of structures) {
-    find(structure.instance.template);
-    find(structure.static.template);
-  }
-  // larger memory blocks come first
-  list.sort((a, b) => b.length - a.length);
-  for (const a of list) {
-    for (const b of list) {
-      if (a !== b && !a.replaced) {
-        if (a.address <= b.address && b.address + b.length <= a.address + a.length) {
-          // B is inside A--replace it with a view of A's buffer
-          const dv = a.owner[MEMORY];
-          const offset = b.address - a.address + dv.byteOffset;
-          const newDV = new DataView(dv.buffer, offset, b.length);
-          newDV.address = b.address;
-          b.owner[MEMORY] = newDV;
-          b.replaced = true;
-        }
-      }
-    }
-  }
 }
 
 function generateCode(structures, params) {
@@ -1097,10 +1135,7 @@ function generateCode(structures, params) {
     delete memberFeatures.useBool;
   }
   const features = [ ...Object.keys(structureFeatures), ...Object.keys(memberFeatures) ];
-  const imports = [ 'finalizeStructures' ];
-  if (loadWASM) {
-    imports.push('linkModule');
-  }
+  const imports = [ 'WebAssemblyEnvironment' ];
   imports.push(...features);
   add(`import {`);
   for (const name of imports) {
@@ -1177,7 +1212,8 @@ function generateCode(structures, params) {
     }
     add(`];`);
   }
-  add(`const linkage = finalizeStructures(structures);`);
+  add(`const env = new WebAssemblyEnvironment();`);
+  add(`const { resolve, reject } = env.finalizeStructures(structures);`);
 
   // the root structure gets finalized last
   const root = structures[structures.length - 1];
@@ -1186,7 +1222,8 @@ function generateCode(structures, params) {
   if (loadWASM) {
     add(`\n// initiate loading and compilation of WASM bytecodes`);
     add(`const wasmPromise = ${loadWASM};`);
-    add(`const initPromise = linkModule(wasmPromise, { ...linkage, writeBack: ${!topLevelAwait} });`);
+    add(`const initPromise = env.linkWebAssembly(wasmPromise, { ...linkage, writeBack: ${!topLevelAwait} });`);
+    add(`initPromise.then(resolve, reject);`);
   } else {
     add(`\n// no need to use WASM binary`);
     add(`const initPromise = Promise.resolve();`);
@@ -2703,7 +2740,6 @@ function repackNames({ moduleName, functionNames, localNames, size }) {
 }
 
 async function transpile(path, options = {}) {
-  process;
   const {
     embedWASM = true,
     topLevelAwait = true,
@@ -2726,7 +2762,9 @@ async function transpile(path, options = {}) {
     platform: 'freestanding'
   });
   const content = await readFile(wasmPath);
-  const { structures, runtimeSafety } = await runFactoryFunction(content);
+  const env = new WebAssemblyEnvironment();
+  await env.loadWebAssembly(content);
+  const { structures, runtimeSafety } = env.runFactory({ omitFunctions });
   // all methods are static, so there's no need to check the instance methods
   const hasMethods = !!structures.find(s => s.static.methods.length > 0);
   const runtimeURL = moduleResolver('zigar-runtime');

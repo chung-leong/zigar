@@ -134,13 +134,13 @@ export function isByteAligned({ bitOffset, bitSize, byteSize }) {
 
 export function getAccessors(member, options = {}) {
   const f = factories[member.type];
-  if (process.env.ZIGAR_DEV) {
-    /* c8 ignore next 10 */
-    if (typeof(f) !== 'function') {
-      const [ name ] = Object.entries(MemberType).find(a => a[1] === member.type);
-      throw new Error(`No factory for ${name}: ${member.name}`);
-    }
+  /* DEV-TEST */
+  /* c8 ignore next 4 */
+  if (typeof(f) !== 'function') {
+    const [ name ] = Object.entries(MemberType).find(a => a[1] === member.type);
+    throw new Error(`No factory for ${name}: ${member.name}`);
   }
+  /* DEV-TEST-END */
   return {
     get: f('get', member, options),
     set: f('set', member, options)
@@ -200,11 +200,11 @@ function addRuntimeCheck(options, getDataViewAccessor) {
       runtimeSafety = true,
     } = options;
     const accessor = getDataViewAccessor(access, member);
-    if (process.env.ZIGAR_DEV) {
-      if (!accessor) {
-        return;
-      }
+    /* DEV-TEST */
+    if (!accessor) {
+      return;
     }
+    /* DEV-TEST-END */
     if (runtimeSafety && access === 'set') {
       const { min, max } = getIntRange(member);
       return function(offset, value, littleEndian) {
@@ -245,11 +245,11 @@ function addEnumerationLookup(getDataViewIntAccessor) {
     }
     const intMember = { type: MemberType.Int, bitSize, byteSize };
     const accessor = getDataViewIntAccessor(access, intMember);
-    if (process.env.ZIGAR_DEV) {
-      if (!accessor) {
-        return;
-      }
+    /* DEV-TEST */
+    if (!accessor) {
+      return;
     }
+    /* DEV-TEST-END */
     const { structure } = member;
     if (access === 'get') {
       return function(offset, littleEndian) {
@@ -349,96 +349,80 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
   } = options;
   const { bitOffset, byteSize } = member;
   const accessor = getDataViewAccessor(access, member);
-  if (process.env.ZIGAR_DEV) {
-    if (!accessor) {
-      return;
-    }
+  /* DEV-TEST */
+  /* c8 ignore next 3 */
+  if (!accessor) {
+    return;
   }
+  /* DEV-TEST-END */
   if (bitOffset !== undefined) {
     const offset = bitOffset >> 3;
-    if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
-      if (access === 'get') {
-        return function() {
-          try {
-            return accessor.call(this[MEMORY], offset, littleEndian);
-          } catch (err) {
-            if (err instanceof TypeError && restoreMemory.call(this)) {
-              return accessor.call(this[MEMORY], offset, littleEndian);
-            } else {
-              throw err;
-            }
-          }
-        };
-      } else {
-        return function(value) {
-          try {
-            return accessor.call(this[MEMORY], offset, value, littleEndian);
-          } catch (err) {
-            if (err instanceof TypeError && restoreMemory.call(this)) {
-              return accessor.call(this[MEMORY], offset, value, littleEndian);
-            } else {
-              throw err;
-            }
-          }
-        }
-      }
-    } else {
-      if (access === 'get') {
-        return function() {
+    if (access === 'get') {
+      return function() {
+        /* WASM-ONLY */
+        try {
+        /* WASM-ONLY-END*/
           return accessor.call(this[MEMORY], offset, littleEndian);
-        };
-      } else {
-        return function(value) {
-          return accessor.call(this[MEMORY], offset, value, littleEndian);
+        /* WASM-ONLY */
+        } catch (err) {
+          if (err instanceof TypeError && restoreMemory.call(this)) {
+            return accessor.call(this[MEMORY], offset, littleEndian);
+          } else {
+            throw err;
+          }
         }
+        /* WASM-ONLY-END*/
+      };
+    } else {
+      return function(value) {
+        /* WASM-ONLY */
+        try {
+        /* WASM-ONLY-END*/
+        return accessor.call(this[MEMORY], offset, value, littleEndian);
+        /* WASM-ONLY */
+        } catch (err) {
+          if (err instanceof TypeError && restoreMemory.call(this)) {
+            return accessor.call(this[MEMORY], offset, value, littleEndian);
+          } else {
+            throw err;
+          }
+        }
+        /* WASM-ONLY-END*/
       }
     }
   } else {
-    if (process.env.ZIGAR_TARGET === 'WASM-RUNTIME') {
-      if (access === 'get') {
-        return function(index) {
-          try {
+    if (access === 'get') {
+      return function(index) {
+        try {
+          return accessor.call(this[MEMORY], index * byteSize, littleEndian);
+        } catch (err) {
+          /* WASM-ONLY */
+          if (err instanceof TypeError && restoreMemory.call(this)) {
             return accessor.call(this[MEMORY], index * byteSize, littleEndian);
-          } catch (err) {
-            if (err instanceof TypeError && restoreMemory.call(this)) {
-              return accessor.call(this[MEMORY], index * byteSize, littleEndian);
-            } else {
-              rethrowRangeError(member, index, err);
-            }
+          } else {
+          /* WASM-ONLY-END */
+            rethrowRangeError(member, index, err);
+          /* WASM-ONLY */
           }
-        };
-      } else {
-        return function(index, value) {
-          try {
-            return accessor.call(this[MEMORY], index * byteSize, value, littleEndian);
-          } catch (err) {
-            if (err instanceof TypeError && restoreMemory.call(this)) {
-              return accessor.call(this[MEMORY], index * byteSize, value, littleEndian);
-            } else {
-              rethrowRangeError(member, index, err);
-            }
-          }
+          /* WASM-ONLY-END */
         }
-      }
+      };
     } else {
-      if (access === 'get') {
-        return function(index) {
-          try {
-            return accessor.call(this[MEMORY], index * byteSize, littleEndian);
-          } catch (err) {
-            rethrowRangeError(member, index, err);
-          }
-        };
-      } else {
-        return function(index, value) {
-          try {
+      return function(index, value) {
+        /* WASM-ONLY */
+        try {
+        /* WASM-ONLY-END */
+          return accessor.call(this[MEMORY], index * byteSize, value, littleEndian);
+        /* WASM-ONLY */
+        } catch (err) {
+          if (err instanceof TypeError && restoreMemory.call(this)) {
             return accessor.call(this[MEMORY], index * byteSize, value, littleEndian);
-          } catch (err) {
+          } else {
             rethrowRangeError(member, index, err);
           }
         }
+        /* WASM-ONLY-END */
       }
     }
   }
 }
-

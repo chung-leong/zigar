@@ -144,11 +144,7 @@ describe('Memory functions', function() {
     })
   })
   describe('restoreMemory', function() {
-    afterEach(function() {
-      process.env.ZIGAR_TARGET = 'NODE-CPP-EXT';
-    })
     it('should restore WASM memory buffer that has become detached', function() {
-      process.env.ZIGAR_TARGET = 'WASM-RUNTIME';
       const memory = new WebAssembly.Memory({
         initial: 128,
         maximum: 1024,

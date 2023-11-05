@@ -160,8 +160,10 @@ export function finalizeUnion(s, env) {
   const specialKeys = getSpecialKeys(s);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
+      /* WASM-ONLY */
       restoreMemory.call(this);
       restoreMemory.call(arg);
+      /* WASM-ONLY-END */
       copy(this[MEMORY], arg[MEMORY]);
       if (hasPointer) {
         this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
@@ -206,7 +208,9 @@ export function finalizeUnion(s, env) {
           }
         } else if (found === 0) {
           if (template) {
+            /* WASM-ONLY */
             restoreMemory.call(this);
+            /* WASM-ONLY-END */
             copy(this[MEMORY], template[MEMORY]);
             if (hasPointer) {
               this[POINTER_VISITOR](copyPointer, { vivificate: true, source: template });

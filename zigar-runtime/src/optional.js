@@ -65,8 +65,10 @@ export function finalizeOptional(s, env) {
   const copy = getMemoryCopier(byteSize);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
+      /* WASM-ONLY */
       restoreMemory.call(this);
       restoreMemory.call(arg);
+      /* WASM-ONLY-END */
       copy(this[MEMORY], arg[MEMORY]);
       if (hasPointer) {
         // don't bother copying pointers when it's empty

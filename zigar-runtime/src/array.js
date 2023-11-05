@@ -17,15 +17,15 @@ export function finalizeArray(s, env) {
     hasPointer,
     options,
   } = s;
-  if (process.env.ZIGAR_DEV) {
-    /* c8 ignore next 6 */
-    if (member.bitOffset !== undefined) {
-      throw new Error(`bitOffset must be undefined for array member`);
-    }
-    if (member.slot !== undefined) {
-      throw new Error(`slot must be undefined for array member`);
-    }
+  /* DEV-TEST */
+  /* c8 ignore next 6 */
+  if (member.bitOffset !== undefined) {
+    throw new Error(`bitOffset must be undefined for array member`);
   }
+  if (member.slot !== undefined) {
+    throw new Error(`slot must be undefined for array member`);
+  }
+  /* DEV-TEST-END */
   addTypedArray(s);
   const hasObject = (member.type === MemberType.Object);
   const ptrAlign = getPointerAlign(align);
@@ -58,8 +58,10 @@ export function finalizeArray(s, env) {
   const specialKeys = getSpecialKeys(s);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
+      /* WASM-ONLY */
       restoreMemory.call(this);
       restoreMemory.call(arg);
+      /* WASM-ONLY-END */
       copy(this[MEMORY], arg[MEMORY]);
       if (hasPointer) {
         this[POINTER_VISITOR](copyPointer, { vivificate: true });

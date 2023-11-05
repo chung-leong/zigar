@@ -798,10 +798,7 @@ export function addTests(importModule, options) {
     })
   })
   describe('Error handling', function() {
-    beforeEach(function() {
-      process.env.ZIGAR_KEEP_NAMES = '1';
-    })
-    skip.permanently.unless(process.env.ZIGAR_TARGET === 'WASM-COMPTIME').
+    skip.permanently.unless(target === 'wasm32').
     it('should produce an error return trace', async function() {
       this.timeout(60000);
       const { fail } = await importModule(resolve('./zig-samples/basic/error-trace.zig'));
@@ -816,9 +813,6 @@ export function addTests(importModule, options) {
       } else {
         expect(fail).to.not.throw();
       }
-    })
-    afterEach(function() {
-      process.env.ZIGAR_KEEP_NAMES = '';
     })
   })
   describe('Memory allocation', function() {

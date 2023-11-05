@@ -1,30 +1,35 @@
-import Replace from '@rollup/plugin-replace';
 import NodeResolve from '@rollup/plugin-node-resolve';
+import StripCode from 'rollup-plugin-strip-code';
+
+const input = './src/index.js';
+const plugins = [
+  NodeResolve({}),
+  StripCode({
+    start_comment: 'DEV-TEST',
+    end_comment: 'DEV-TEST-END'
+  }),
+  StripCode({
+    start_comment: 'NODE-ONLY',
+    end_comment: 'NODE-ONLY-END'
+  }),
+  StripCode({
+    start_comment: 'RUNTIME-ONLY',
+    end_comment: 'RUNTIME-ONLY-END'
+  })
+];
 
 export default [
   {
-    input: './src/index.js',
-    plugins: [
-      Replace({
-        preventAssignment: true,
-        'process.env.ZIGAR_TARGET': '"WASM-COMPTIME"',
-      }),
-      NodeResolve({}),
-    ],
+    input,
+    plugins,
     output: {
       file: './dist/index.js',
       format: 'esm',
     },
   },
   {
-    input: './src/index.js',
-    plugins: [
-      Replace({
-        preventAssignment: true,
-        'process.env.ZIGAR_TARGET': '"WASM-COMPTIME"',
-      }),
-      NodeResolve({}),
-    ],
+    input,
+    plugins,
     output: {
       file: './dist/index.cjs',
       format: 'commonjs',

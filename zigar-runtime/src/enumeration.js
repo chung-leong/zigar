@@ -14,14 +14,13 @@ export function finalizeEnumeration(s, env) {
     },
     options,
   } = s;
-  if (process.env.ZIGAR_DEV) {
-    /* c8 ignore next 5 */
-    for (const member of members) {
-      if (member.bitOffset !== undefined) {
-        throw new Error(`bitOffset must be undefined for enumeration member`);
-      }
+  /* DEV-TEST */
+  for (const member of members) {
+    if (member.bitOffset !== undefined) {
+      throw new Error(`bitOffset must be undefined for enumeration member`);
     }
   }
+  /* DEV-TEST-END */
   const Primitive = getPrimitiveClass(members[0]);
   const { get: getValue } = getAccessors(members[0], options);
   const count = members.length;

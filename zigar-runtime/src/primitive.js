@@ -40,8 +40,10 @@ export function finalizePrimitive(s, env) {
   const specialKeys = getSpecialKeys(s);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
+      /* WASM-ONLY */
       restoreMemory.call(this);
       restoreMemory.call(arg);
+      /* WASM-ONLY-END */
       copy(this[MEMORY], arg[MEMORY]);
     } else {
       if (arg && typeof(arg) === 'object') {

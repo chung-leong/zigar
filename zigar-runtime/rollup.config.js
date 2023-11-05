@@ -1,13 +1,20 @@
-import Replace from '@rollup/plugin-replace';
+import StripCode from 'rollup-plugin-strip-code';
 
 export default {
   input: './src/index.js',
   plugins: [
-    Replace({
-      preventAssignment: true,
-      'process.env.ZIGAR_TARGET': '"WASM-RUNTIME"',
-      'process.env.ZIGAR_DEV': 'false',
+    StripCode({
+      start_comment: 'DEV-TEST',
+      end_comment: 'DEV-TEST-END'
     }),
+    StripCode({
+      start_comment: 'NODE-ONLY',
+      end_comment: 'NODE-ONLY-END'
+    }),
+    StripCode({
+      start_comment: 'COMPTIME-ONLY',
+      end_comment: 'COMPTIME-ONLY-END'
+    })
   ],
   output: {
     file: './dist/index.js',

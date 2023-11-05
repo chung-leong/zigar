@@ -131,7 +131,7 @@ export function generateCode(structures, params) {
     add(`];`);
   }
   add(`const env = new WebAssemblyEnvironment();`)
-  add(`const linkage = env.finalizeStructures(structures);`);
+  add(`const { resolve, reject } = env.finalizeStructures(structures);`);
 
   // the root structure gets finalized last
   const root = structures[structures.length - 1];
@@ -141,6 +141,7 @@ export function generateCode(structures, params) {
     add(`\n// initiate loading and compilation of WASM bytecodes`);
     add(`const wasmPromise = ${loadWASM};`);
     add(`const initPromise = env.linkWebAssembly(wasmPromise, { ...linkage, writeBack: ${!topLevelAwait} });`);
+    add(`initPromise.then(resolve, reject);`);
   } else {
     add(`\n// no need to use WASM binary`);
     add(`const initPromise = Promise.resolve();`);

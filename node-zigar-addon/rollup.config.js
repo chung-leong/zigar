@@ -1,15 +1,18 @@
 import Terser from '@rollup/plugin-terser';
-import Replace from '@rollup/plugin-replace';
+import StripCode from 'rollup-plugin-strip-code';
 
-const production = false;
+const productionReady = false;
 
 export default {
   input: 'src/addon.js',
   plugins: [
-    Replace({
-      preventAssignment: true,
-      'process.env.ZIGAR_TARGET': '"NODE-CPP-EXT"',
-      'process.env.ZIGAR_DEV': 'false',
+    StripCode({
+      start_comment: 'DEV-TEST',
+      end_comment: 'DEV-TEST-END'
+    }),
+    StripCode({
+      start_comment: 'WASM-ONLY',
+      end_comment: 'WASM-ONLY-END'
     }),
   ],
   output: {
@@ -17,7 +20,7 @@ export default {
     format: 'iife',
     name: 'variable',
     plugins: [
-      production && Terser(),
+      productionReady && Terser(),
       {
         // place JS code into a C++ string
         name: 'C++ string',

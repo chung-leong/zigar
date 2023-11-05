@@ -7,9 +7,6 @@ import { transpile } from '../src/transpiler.js';
 
 describe('Transpilation', function() {
   describe('transpile', function() {
-    beforeEach(function() {
-      process.env.ZIGAR_TARGET = 'WASM-COMPTIME';
-    })
     it('should transpile zig source code containing no methods', async function() {
       this.timeout(30000);
       const { pathname } = new URL('./zig-samples/basic/integers.zig', import.meta.url);

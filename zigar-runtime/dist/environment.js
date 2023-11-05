@@ -1,9 +1,70 @@
-import { getStructureFactory, getStructureName } from './structure.js';
-import { decodeText } from './text.js';
-import { acquireTarget } from './pointer.js';
-import { initializeErrorSets } from './error-set.js';
-import { throwZigError } from './error.js';
-import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CHILD_VIVIFICATOR, RELEASE_THUNK } from './symbol.js';
+const MEMORY = Symbol('memory');
+const SLOTS = Symbol('slots');
+const POINTER_VISITOR = Symbol('pointerVisitor');
+const TARGET_ACQUIRER = Symbol('targetAcquirer');
+const ENVIRONMENT = Symbol('environment');
+
+const MemberType = {
+  Void: 0,
+  Bool: 1,
+  Int: 2,
+  Uint: 3,
+  Float: 4,
+  EnumerationItem: 5,
+  Object: 6,
+  Type: 7,
+  Comptime: 8,
+};
+
+Array(Object.values(MemberType).length);
+
+function acquireTarget() {
+  this[TARGET_ACQUIRER]();
+}
+
+const StructureType = {
+  Primitive: 0,
+  Array: 1,
+  Struct: 2,
+  ArgStruct: 3,
+  ExternUnion: 4,
+  BareUnion: 5,
+  TaggedUnion: 6,
+  ErrorUnion: 7,
+  ErrorSet: 8,
+  Enumeration: 9,
+  Optional: 10,
+  Pointer: 11,
+  Slice: 12,
+  Vector: 13,
+  Opaque: 14,
+  Function: 15,
+};
+
+const factories = Array(Object.values(StructureType).length);
+
+function getStructureName(s, full = false) {
+  let r = s.name;
+  if (!full) {
+    r = r.replace(/{.*}/, '');
+    r = r.replace(/[^. ]*?\./g, '');
+  }
+  return r;
+}
+
+function getStructureFactory(type) {
+  const f = factories[type];
+  return f;
+}
+
+let decoder;
+
+function decodeText(data, encoding = 'utf-8') {
+  if (!decoder) {
+    decoder = new TextDecoder;
+  }
+  return decoder.decode(data);
+}
 
 const default_alignment = 16;
 const globalSlots = {};
@@ -11,7 +72,7 @@ const globalSlots = {};
 let consolePending = [];
 let consoleTimeout = 0;
 
-export class Environment {
+class Environment {
   /*
   Functions to be defined in subclass:
 
@@ -153,66 +214,6 @@ export class Environment {
     }
   }
 
-  /* COMPTIME-ONLY */
-  createTemplate(dv) {
-    return {
-      [MEMORY]: dv,
-      [SLOTS]: {}
-    };
-  }
-
-  beginStructure(def, options = {}) {
-    const {
-      type,
-      name,
-      length,
-      byteSize,
-      align,
-      isConst,
-      hasPointer,
-    } = def;
-    return {
-      constructor: null,
-      typedArray: null,
-      type,
-      name,
-      length,
-      byteSize,
-      align,
-      isConst,
-      hasPointer,
-      instance: {
-        members: [],
-        methods: [],
-        template: null,
-      },
-      static: {
-        members: [],
-        methods: [],
-        template: null,
-      },
-      options,
-    };
-  }
-
-  attachMember(s, member, isStatic = false) {
-    const target = (isStatic) ? s.static : s.instance;
-    target.members.push(member);
-  }
-
-  attachMethod(s, method, isStaticOnly = false) {
-    s.static.methods.push(method);
-    if (!isStaticOnly) {
-      s.instance.methods.push(method);
-    }
-  }
-
-  attachTemplate(s, template, isStatic = false) {
-    const target = (isStatic) ? s.static : s.instance;
-    target.template = template;
-  }
-  /* COMPTIME-ONLY-END */
-
   /* RUNTIME-ONLY */
   finalizeStructure(s) {
     try {
@@ -273,124 +274,12 @@ export class Environment {
   }
 }
 
-/* NODE-ONLY */
-export class NodeEnvironment extends Environment {
-  // C++ code will patch in getAddress, obtainView, copyBytes, and findSentinel
-
-  setCallContext(address) {
-    this.context.callContext = address;
-  }
-
-  invokeFactory(thunk) {
-    initializeErrorSets();
-    const result = thunk.call(this);
-    if (typeof(result) === 'string') {
-      // an error message
-      throwZigError(result);
-    }
-    let module = result.constructor;
-    // attach __zigar object
-    const initPromise = Promise.resolve();
-    module.__zigar = {
-      init: () => initPromise,
-      abandon: () => initPromise.then(() => {
-        if (module) {
-          this.releaseModule(module);
-        }
-        module = null;
-      }),
-      released: () => initPromise.then(() => !module),
-    };
-    return module;
-  }
-
-  releaseModule(module) {
-    const released = new Map();
-    const replacement = function() {
-      throw new Error(`Shared library was abandoned`);
-    };
-    const releaseClass = (cls) => {
-      if (!cls || released.get(cls)) {
-        return;
-      }
-      released.set(cls, true);
-      // release static variables--vivificators return pointers
-      const vivificators = cls[CHILD_VIVIFICATOR];
-      if (vivificators) {
-        for (const vivificator of Object.values(vivificators)) {
-          const ptr = vivificator.call(cls);
-          if (ptr) {
-            releaseObject(ptr);
-          }
-        }
-      }
-      for (const [ name, { value, get, set }  ] of Object.entries(Object.getOwnPropertyDescriptors(cls))) {
-        if (typeof(value) === 'function') {
-          // release thunk of static function
-          value[RELEASE_THUNK]?.(replacement);
-        } else if (get && !set) {
-          // the getter might return a type/class/constuctor
-          const child = cls[name];
-          if (typeof(child) === 'function') {
-            releaseClass(child);
-          }
-        }
-      }
-      for (const [ name, { value } ] of Object.entries(Object.getOwnPropertyDescriptors(cls.prototype))) {
-        if (typeof(value) === 'function') {
-          // release thunk of instance function
-          value[RELEASE_THUNK]?.(replacement);
-        }
-      }
-    };
-    const releaseObject = (obj) => {
-      if (!obj || released.get(obj)) {
-        return;
-      }
-      released.set(obj, true);
-      const dv = obj[MEMORY];
-      if (dv.buffer instanceof SharedArrayBuffer) {
-        // create new buffer and copy content from shared memory
-        const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
-        const ta2 = new Uint8Array(ta);
-        const dv2 = new DataView(ta2.buffer);
-        obj[MEMORY] = dv2;
-      }
-      const slots = obj[SLOTS];
-      if (slots) {
-        // TODO: refactoring
-        // for (const child of Object.values(slots)) {
-        //   // deal with pointers in structs
-        //   if (child.hasOwnProperty(ZIG)) {
-        //     releaseObject(child);
-        //   }
-        // }
-        // if (obj.hasOwnProperty(ZIG)) {
-        //   // a pointer--release what it's pointing to
-        //   releaseObject(obj[SLOTS][0]);
-        // } else {
-        //   // force recreation of child objects so they'll use non-shared memory
-        //   obj[SLOTS] = {};
-        // }
-      }
-    };
-    releaseClass(module);
-  }
-}
-/* NODE-ONLY-END */
-
 /* WASM-ONLY */
-export class WebAssemblyEnvironment extends Environment {
+class WebAssemblyEnvironment extends Environment {
   nextValueIndex = 1;
   valueTable = { 0: null };
   valueIndices = new WeakMap;
-  /* COMPTIME-ONLY */
-  structures = [];
-  /* COMPTIME-ONLY-END */
   expectedMethods = {
-    /* COMPTIME-ONLY */
-    define: { name: 'defineStructures', argType: '', returnType: 'v' },
-    /* COMPTIME-ONLY-END */
     alloc: { name: 'allocSharedMemory', argType: 'iii', returnType: 'i' },
     free: { name: 'freeSharedMemory', argType: 'iiii', returnType: '' },
     run: { name: 'runThunk', argType: 'ii', returnType: 'v' },
@@ -534,84 +423,9 @@ export class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  /* COMPTIME-ONLY */
-  runFactory(options) {
-    const {
-      omitFunctions = false
-    } = options;
-    if (omitFunctions) {
-      this.attachMethod = () => {};
-    }
-    const result = this.defineStructures();
-    if (result instanceof String) {
-      throwZigError(result.valueOf());
-    }
-    this.fixOverlappingMemory();
-    return {
-      structures: this.structures,
-      runtimeSafety: this.isRuntimeSafetyActive(),
-    };
-  }
-
-  beginDefinition() {
-    return {};
-  }
-
-  insertProperty(def, name, value) {
-    def[name] = value;
-  }
-
-  fixOverlappingMemory() {
-    // look for buffers that requires linkage
-    const list = [];
-    const find = (object) => {
-      if (!object) {
-        return;
-      }
-      if (object[MEMORY]) {
-        const dv = object[MEMORY];
-        const { address } = dv;
-        if (address) {
-          list.push({ address, length: dv.byteLength, owner: object, replaced: false });
-        }
-      }
-      if (object[SLOTS]) {
-        for (const child of Object.values(object[SLOTS])) {
-          find(child);
-        }
-      }
-    };
-    for (const structure of this.structures) {
-      find(structure.instance.template);
-      find(structure.static.template);
-    }
-    // larger memory blocks come first
-    list.sort((a, b) => b.length - a.length);
-    for (const a of list) {
-      for (const b of list) {
-        if (a !== b && !a.replaced) {
-          if (a.address <= b.address && b.address + b.length <= a.address + a.length) {
-            // B is inside A--replace it with a view of A's buffer
-            const dv = a.owner[MEMORY];
-            const offset = b.address - a.address + dv.byteOffset;
-            const newDV = new DataView(dv.buffer, offset, b.length);
-            newDV.address = b.address;
-            b.owner[MEMORY] = newDV;
-            b.replaced = true;
-          }
-        }
-      }
-    }
-  }
-
-  finalizeStructure(structure) {
-    this.structures.push(structure);
-  }
-  /* COMPTIME-ONLY-END */
 
   /* RUNTIME-ONLY */
   finalizeStructures(structures) {
-    initializeErrorSets();
     for (const structure of structures) {
       for (const target of [ structure.static, structure.instance ]) {
         // first create the actual template using the provided placeholder
@@ -648,15 +462,13 @@ export class WebAssemblyEnvironment extends Environment {
     }
 
     function createObject(placeholder) {
-      let dv;
       if (placeholder.memory) {
         const { array, offset, length } = placeholder.memory;
-        dv = new DataView(array.buffer, offset, length);
+        new DataView(array.buffer, offset, length);
       } else {
-        const { byteSize } = placeholder.structure;
-        dv = new DataView(new ArrayBuffer(byteSize));
+        placeholder.structure;
       }
-      const { constructor } = placeholder.structure;
+      placeholder.structure;
       // TODO: refactoring
       // const object = constructor.call(ZIG, dv);
       if (placeholder.slots) {
@@ -690,9 +502,6 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   async linkWebAssembly(source, params) {
-    const {
-      writeBack = true,
-    } = params;
     const zigar = await this.loadWebAssembly(source);
     return zigar;
   }
@@ -705,7 +514,7 @@ class CallContext {
   memoryList = [];
 }
 
-export function getGlobalSlots() {
+function getGlobalSlots() {
   return globalSlots;
 }
 
@@ -714,7 +523,7 @@ function getExtraCount(ptrAlign) {
   return (alignment <= default_alignment) ? 0 : alignment;
 }
 
-export function findSortedIndex(array, address) {
+function findSortedIndex(array, address) {
   let low = 0;
   let high = array.length;
   if (high === 0) {
@@ -732,7 +541,4 @@ export function findSortedIndex(array, address) {
   return high;
 }
 
-function isMisaligned({ address }, ptrAlign) {
-  const mask = (1 << ptrAlign) - 1;
-  return (address & mask) !== 0;
-}
+export { Environment, WebAssemblyEnvironment, findSortedIndex, getGlobalSlots };

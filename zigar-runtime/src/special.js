@@ -60,12 +60,16 @@ export function getDataViewAccessors(structure) {
   const copy = getMemoryCopier(byteSize, type === StructureType.Slice);
   return {
     get() {
+      /* WASM-ONLY */
       restoreMemory.call(this);
+      /* WASM-ONLY-END */
       return this[MEMORY];
     },
     set(dv) {
       checkDataView(dv);
+      /* WASM-ONLY */
       restoreMemory.call(this);
+      /* WASM-ONLY-END */
       const dest = this[MEMORY];
       if (dest.byteLength !== dv.byteLength) {
         throwBufferSizeMismatch(structure, dv, this);
