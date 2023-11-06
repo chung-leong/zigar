@@ -26,8 +26,7 @@ pub const Host = struct {
 
     var initial_context: ?Call = null;
 
-    pub fn init(ptr: *anyopaque) Host {
-        const context: Call = @ptrCast(ptr);
+    pub fn init(context: Call) Host {
         if (initial_context == null) {
             initial_context = context;
         }

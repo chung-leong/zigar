@@ -774,7 +774,7 @@ class Environment {
 class WebAssemblyEnvironment extends Environment {
   nextValueIndex = 1;
   valueTable = { 0: null };
-  valueIndices = new WeakMap;
+  valueIndices = new Map;
   memory = null;
   /* COMPTIME-ONLY */
   structures = [];
@@ -793,27 +793,19 @@ class WebAssemblyEnvironment extends Environment {
     super();
   }
 
-  isShared(dv) {
-    return dv.buffer === this.memory.buffer;
-  }
-
-  setCallContext(address) {
-    this.context.callContext = address;
-  }
-
   releaseObjects() {
     if (this.nextValueIndex !== 1) {
       this.nextValueIndex = 1;
       this.valueTable = { 0: null };
-      this.valueIndices = new WeakMap();
+      this.valueIndices = new Map();
     }
   }
 
   getObjectIndex(object) {
-    if (object != undefined) {
+    if (object) {
       let index = this.valueIndices.get(object);
       if (index === undefined) {
-        index = nextValueIndex++;
+        index = this.nextValueIndex++;
         this.valueIndices.set(object, index);
         this.valueTable[index] = object;
       }
@@ -825,8 +817,8 @@ class WebAssemblyEnvironment extends Environment {
 
   fromWebAssembly(type, arg) {
     switch (type) {
-      case 'v': return valueTable[arg];
-      case 's': return valueTable[arg]?.valueOf();
+      case 'v':
+      case 's': return this.valueTable[arg];
       case 'i': return arg;
       case 'b': return !!arg;
     }
@@ -834,8 +826,8 @@ class WebAssemblyEnvironment extends Environment {
 
   toWebAssembly(type, arg) {
     switch (type) {
-      case 'v': return this.getObjectIndex(arg);
-      case 's': return this.getObjectIndex(new String(arg));
+      case 'v':
+      case 's': return this.getObjectIndex(arg);
       case 'i': return arg;
       case 'b': return arg ? 1 : 0;
     }
@@ -845,7 +837,7 @@ class WebAssemblyEnvironment extends Environment {
     if (!fn) {
       return () => {};
     }
-    return function (...args) {
+    return (...args) => {
       args = args.map((arg, i) => this.fromWebAssembly(argType.charAt(i), arg));
       const retval = fn.apply(this, args);
       return this.toWebAssembly(returnType, retval);
@@ -853,8 +845,8 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   importFunction(fn, argType = '', returnType = '') {
-    return function (...args) {
-      args = args.map((arg, i) => this.toWebAssembly(argType.charAt(i), retval));
+    return (...args) => {
+      args = args.map((arg, i) => this.toWebAssembly(argType.charAt(i), arg));
       const retval = fn.apply(this, args);
       return this.fromWebAssembly(returnType, retval);
     };
@@ -862,16 +854,15 @@ class WebAssemblyEnvironment extends Environment {
 
   exportFunctions() {
     return {
-      _setCallContext: this.exportFunction(this.allocMemory, 'i', '', true),
-      _allocMemory: this.exportFunction(this.allocMemory, 'ii', 'v', true),
-      _freeMemory: this.exportFunction(this.freeMemory, 'iii', '', true),
+      _allocMemory: this.exportFunction(this.allocMemory, 'ii', 'v'),
+      _freeMemory: this.exportFunction(this.freeMemory, 'iii', ''),
       _createString: this.exportFunction(this.createString, 'ii', 'v'),
       _createObject: this.exportFunction(this.createObject, 'vv', 's'),
       _createView: this.exportFunction(this.createView, 'ii', 'v'),
       _castView: this.exportFunction(this.castView, 'vv', 'v'),
       _readSlot: this.exportFunction(this.readSlot, 'vi', 'v'),
       _writeSlot: this.exportFunction(this.writeSlot, 'viv'),
-      _beginDefinition: this.exportFunction(this.beginDefinition),
+      _beginDefinition: this.exportFunction(this.beginDefinition, '', 'v'),
       _insertInteger: this.exportFunction(this.insertProperty, 'vsi'),
       _insertBoolean: this.exportFunction(this.insertProperty, 'vsb'),
       _insertString: this.exportFunction(this.insertProperty, 'vss'),
@@ -882,7 +873,9 @@ class WebAssemblyEnvironment extends Environment {
       _createTemplate: this.exportFunction(this.attachMethod, 'v'),
       _attachTemplate: this.exportFunction(this.attachTemplate, 'vvb'),
       _finalizeStructure: this.exportFunction(this.finalizeStructure, 'v'),
-      _writeToConsole: this.exportFunction(this.writeToConsole, 'v', '', true),
+      _writeToConsole: this.exportFunction(this.writeToConsole, 'v', ''),
+      _startCall: this.exportFunction(this.startCall, 'iv', 'i'),
+      _endCall: this.exportFunction(this.endCall, 'v', 'i'),
     }
   }
 
@@ -891,7 +884,7 @@ class WebAssemblyEnvironment extends Environment {
       const info = this.expectedMethods[name];
       if (info) {
         const { name, argType, returnType } = info;
-        this[name] = this.importFunction(fn, name, argType, returnType);
+        this[name] = this.importFunction(fn, argType, returnType);
       }
     }
   }
@@ -907,7 +900,7 @@ class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  async createInstance(source) {
+  async instantiateWebAssembly(source) {
     const env = this.exportFunctions();
     if (source[Symbol.toStringTag] === 'Response') {
       return WebAssembly.instantiateStreaming(source, { env });
@@ -917,8 +910,8 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   async loadWebAssembly(source) {
-    const { instance } = await this.createInstance(source);
-    this.memory = instance.memory;
+    const { instance } = await this.instantiateWebAssembly(source);
+    this.memory = instance.exports.memory;
     this.importFunctions(instance.exports);
     // create a WeakRef so that we know whether the instance is gc'ed or not
     const weakRef = new WeakRef(instance);
@@ -932,6 +925,43 @@ class WebAssemblyEnvironment extends Environment {
         return !weakRef.deref();
       }
     }
+  }
+
+  isShared(dv) {
+    return dv.buffer === this.memory.buffer;
+  }
+
+  getAddress(buffer) {
+    if (buffer === this.memory.buffer) {
+      return 0;
+    } else {
+      throw new Error('Unable to obtain address of ArrayBuffer');
+    }
+  }
+
+  obtainView(address, len) {
+    const { buffer } = this.memory;
+    return new DataView(buffer, address, len);
+  }
+
+  createString(address, len) {
+    const { buffer } = this.memory;
+    const ta = new Uint8Array(buffer, address, len);
+    return decodeText(ta);
+  }
+
+  startCall(call, args) {
+    this.startContext();
+    // call context, use by allocSharedMemory and freeSharedMemory
+    this.context.call = call;
+    if (!args) {
+      // can't be 0 since that sets off Zig's runtime safety check
+      return 0xaaaaaaaa;
+    }
+  }
+
+  endCall(call, args) {
+    this.endContext();
   }
 
   /* COMPTIME-ONLY */
@@ -1047,15 +1077,15 @@ class WebAssemblyEnvironment extends Environment {
     }
 
     function createObject(placeholder) {
+      let dv;
       if (placeholder.memory) {
         const { array, offset, length } = placeholder.memory;
-        new DataView(array.buffer, offset, length);
+        dv = new DataView(array.buffer, offset, length);
       } else {
-        placeholder.structure;
+        const { byteSize } = placeholder.structure;
+        dv = new DataView(new ArrayBuffer(byteSize));
       }
-      placeholder.structure;
-      // TODO: refactoring
-      // const object = constructor.call(ZIG, dv);
+      const object = this.castObject(placeholder.structure, dv);
       if (placeholder.slots) {
         insertObjects(object[SLOTS], placeholder.slots);
       }
@@ -1089,6 +1119,24 @@ class WebAssemblyEnvironment extends Environment {
   async linkWebAssembly(source, params) {
     const zigar = await this.loadWebAssembly(source);
     return zigar;
+  }
+
+  invokeThunk(thunk, args) {
+    // WASM thunks aren't functions--they're indices into the function table 0
+    // wasm-exporter.zig will invoke startCall() with the context address and the args
+    // we can't do pointer fix up here since we need the context in order to allocate
+    // memory from the WebAssembly allocator; point target acquisition will happen in
+    // endCall()
+    const err = this.runThunk(thunk, args);
+
+    // errors returned by exported Zig functions are normally written into the
+    // argument object and get thrown when we access its retval property (a zig error union)
+    // error strings returned by the thunk are due to problems in the thunking process
+    // (i.e. bugs in export.zig)
+    if (err) {
+      throwZigError(err);
+    }
+    return args.retval;
   }
   /* RUNTIME-ONLY */
 }
@@ -1264,7 +1312,7 @@ function generateCode(structures, params) {
   if (loadWASM) {
     add(`\n// initiate loading and compilation of WASM bytecodes`);
     add(`const wasmPromise = ${loadWASM};`);
-    add(`const initPromise = env.linkWebAssembly(wasmPromise, { ...linkage, writeBack: ${!topLevelAwait} });`);
+    add(`const initPromise = env.linkWebAssembly(wasmPromise, { writeBack: ${!topLevelAwait} });`);
     add(`initPromise.then(resolve, reject);`);
   } else {
     add(`\n// no need to use WASM binary`);

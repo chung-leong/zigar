@@ -21,7 +21,6 @@ const CallContext = struct {
 };
 const Call = *const CallContext;
 
-extern fn _setCallContext(address: usize) void;
 extern fn _allocMemory(len: usize, ptr_align: u8) usize;
 extern fn _freeMemory(address: usize, len: usize, ptr_align: u8) void;
 extern fn _createString(address: usize, len: usize) usize;
@@ -42,6 +41,8 @@ extern fn _attachTemplate(structure: usize, def: usize, is_static: i32) void;
 extern fn _finalizeStructure(structure: usize) void;
 extern fn _createTemplate(buffer: usize) usize;
 extern fn _writeToConsole(dv: usize) i32;
+extern fn _startCall(call_addr: usize, arg_struct: usize) usize;
+extern fn _endCall(call_addr: usize, arg_struct: usize) void;
 
 fn ref(number: usize) Value {
     return @ptrFromInt(number);
@@ -59,8 +60,8 @@ fn strlen(s: [*:0]const u8) usize {
     return len;
 }
 
-pub fn alloc(ptr: *anyopaque, len: usize, ptr_align: u8) usize {
-    const ctx: Call = @alignCast(@ptrCast(ptr));
+pub fn alloc(call_addr: usize, len: usize, ptr_align: u8) usize {
+    const ctx: Call = @ptrFromInt(call_addr);
     if (len > 0) {
         if (ctx.allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
             return @intFromPtr(bytes);
@@ -72,9 +73,9 @@ pub fn alloc(ptr: *anyopaque, len: usize, ptr_align: u8) usize {
     }
 }
 
-pub fn free(ptr: *anyopaque, address: usize, len: usize, ptr_align: u8) void {
-    const ctx: Call = @alignCast(@ptrCast(ptr));
-    const bytes: [*]u8 = @ptrFromInt(address);
+pub fn free(call_addr: usize, bytes_addr: usize, len: usize, ptr_align: u8) void {
+    const ctx: Call = @ptrFromInt(call_addr);
+    const bytes: [*]u8 = @ptrFromInt(bytes_addr);
     ctx.allocator.rawFree(bytes[0..len], ptr_align, 0);
 }
 
@@ -83,12 +84,10 @@ pub const Host = struct {
 
     var initial_context: ?Call = null;
 
-    pub fn init(ptr: *anyopaque) Host {
-        const context: Call = @ptrCast(@alignCast(ptr));
+    pub fn init(context: Call) Host {
         if (initial_context == null) {
             initial_context = context;
         }
-        _setCallContext(@intFromPtr(ptr));
         return .{ .context = context };
     }
 
@@ -288,12 +287,15 @@ pub const Host = struct {
     }
 };
 
-pub fn runThunk(fn_address: usize, arg_address: usize) usize {
+pub fn runThunk(fn_address: usize, arg_struct: usize) usize {
+    // note that std.debug.print() doesn't work here since the initial context is not set
+    const thunk: Thunk = @ptrFromInt(fn_address);
     var ctx: CallContext = .{
         .allocator = .{ .ptr = undefined, .vtable = &std.heap.WasmAllocator.vtable },
     };
     const ptr: *anyopaque = @ptrCast(&ctx);
-    const thunk: Thunk = @ptrFromInt(fn_address);
+    const arg_address = _startCall(@intFromPtr(ptr), arg_struct);
+    defer _endCall(@intFromPtr(ptr), arg_struct);
     const arg_ptr: *anyopaque = @ptrFromInt(arg_address);
     if (thunk(ptr, arg_ptr)) |result| {
         return index(result);

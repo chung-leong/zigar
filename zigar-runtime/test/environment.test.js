@@ -884,14 +884,21 @@ describe('Environment', function() {
       })
     })
     describe('instantiateWebAssembly', function() {
-      it('should attempt to stream in a WASM instance', function() {
-
+      it('should attempt to stream in a WASM instance', async function() {
+        const env = new WebAssemblyEnvironment();
+        const response = {
+          [Symbol.toStringTag]: 'Response',
+        };
+        try {
+          const wasm = await env.instantiateWebAssembly(response);
+        } catch (err) {
+        }
       })
       it('should initiate a WASM instance from a buffer', async function() {
         const env = new WebAssemblyEnvironment();
-        const buffer = await readFile(resolve('./wasm-samples/function-simple.wasm'));
+        const url = new URL('./wasm-samples/simple.wasm', import.meta.url);
+        const buffer = await readFile(url.pathname);
         const wasm = await env.instantiateWebAssembly(buffer);
-        console.log(wasm);
       })
     })
     describe('loadWebAssembly', function() {
@@ -1074,6 +1081,3 @@ async function capture(cb) {
   return lines;
 }
 
-function resolve(path) {
-  return new URL(path, import.meta.url).pathname;
-}

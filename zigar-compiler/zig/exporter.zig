@@ -1568,7 +1568,7 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
         }
 
         fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
-            const host = HostT.init(ptr);
+            const host = HostT.init(@ptrCast(@alignCast(ptr)));
             defer host.release();
             tryFunction(host, @ptrCast(@alignCast(arg_ptr))) catch |err| {
                 return createErrorMessage(host, err) catch null;
@@ -1609,7 +1609,7 @@ test "createThunk" {
 pub fn createRootFactory(comptime HostT: type, comptime T: type) Thunk {
     const RootFactory = struct {
         fn exportStructure(ptr: *anyopaque, _: *anyopaque) callconv(.C) ?Value {
-            const host = HostT.init(ptr);
+            const host = HostT.init(@ptrCast(@alignCast(ptr)));
             defer host.release();
             const result = getStructure(host, T) catch |err| {
                 return createErrorMessage(host, err) catch null;
