@@ -296,8 +296,8 @@ export class NodeEnvironment extends Environment {
       // an error message
       throwZigError(result);
     }
-    let module = result.constructor;
     // attach __zigar object
+    let module = result;
     const initPromise = Promise.resolve();
     module.__zigar = {
       init: () => initPromise,
@@ -430,7 +430,7 @@ export class WebAssemblyEnvironment extends Environment {
     if (object != undefined) {
       let index = this.valueIndices.get(object);
       if (index === undefined) {
-        index = nextValueIndex++;
+        index = this.nextValueIndex++;
         this.valueIndices.set(object, index);
         this.valueTable[index] = object;
       }
@@ -442,8 +442,8 @@ export class WebAssemblyEnvironment extends Environment {
 
   fromWebAssembly(type, arg) {
     switch (type) {
-      case 'v': return valueTable[arg];
-      case 's': return valueTable[arg]?.valueOf();
+      case 'v': return this.valueTable[arg];
+      case 's': return this.valueTable[arg]?.valueOf();
       case 'i': return arg;
       case 'b': return !!arg;
     }
@@ -462,7 +462,7 @@ export class WebAssemblyEnvironment extends Environment {
     if (!fn) {
       return () => {};
     }
-    return function (...args) {
+    return (...args) => {
       args = args.map((arg, i) => this.fromWebAssembly(argType.charAt(i), arg));
       const retval = fn.apply(this, args);
       return this.toWebAssembly(returnType, retval);
@@ -470,8 +470,8 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   importFunction(fn, argType = '', returnType = '') {
-    return function (...args) {
-      args = args.map((arg, i) => this.toWebAssembly(argType.charAt(i), retval));
+    return (...args) => {
+      args = args.map((arg, i) => this.toWebAssembly(argType.charAt(i), arg));
       const retval = fn.apply(this, args);
       return this.fromWebAssembly(returnType, retval);
     };
@@ -479,7 +479,7 @@ export class WebAssemblyEnvironment extends Environment {
 
   exportFunctions() {
     return {
-      _setCallContext: this.exportFunction(this.allocMemory, 'i', '', true),
+      _setCallContext: this.exportFunction(this.setCallContext, 'i', '', true),
       _allocMemory: this.exportFunction(this.allocMemory, 'ii', 'v', true),
       _freeMemory: this.exportFunction(this.freeMemory, 'iii', '', true),
       _createString: this.exportFunction(this.createString, 'ii', 'v'),
