@@ -488,7 +488,7 @@ export class WebAssemblyEnvironment extends Environment {
       _castView: this.exportFunction(this.castView, 'vv', 'v'),
       _readSlot: this.exportFunction(this.readSlot, 'vi', 'v'),
       _writeSlot: this.exportFunction(this.writeSlot, 'viv'),
-      _beginDefinition: this.exportFunction(this.beginDefinition),
+      _beginDefinition: this.exportFunction(this.beginDefinition, '', 'v'),
       _insertInteger: this.exportFunction(this.insertProperty, 'vsi'),
       _insertBoolean: this.exportFunction(this.insertProperty, 'vsb'),
       _insertString: this.exportFunction(this.insertProperty, 'vss'),

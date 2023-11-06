@@ -789,6 +789,42 @@ describe('Environment', function() {
         expect(() => env.runThunk()).to.throw();
       })
     })
+    describe('beginDefinition', function() {
+      it('should return an empty object', function() {
+        const env = new WebAssemblyEnvironment();
+        const def1 = env.beginDefinition();
+        expect(def1).to.be.an('object');
+        const { _beginDefinition } = env.exportFunctions();
+        const def2 = env.fromWebAssembly('v', _beginDefinition());
+        expect(def2).to.be.an('object');
+      })
+    })
+    describe('insertProperty', function() {
+      it('should insert value into object', function() {
+        const env = new WebAssemblyEnvironment();
+        const def1 = env.beginDefinition();
+        env.insertProperty(def1, 'hello', 1234);
+        expect(def1).to.have.property('hello', 1234);
+        const {
+          _beginDefinition,
+          _insertInteger,
+          _insertBoolean,
+          _insertString,
+          _insertObject,
+        } = env.exportFunctions();
+        const object = {};
+        const defIndex = _beginDefinition();
+        _insertInteger(defIndex, env.toWebAssembly('s', 'number'), 4567);
+        _insertBoolean(defIndex, env.toWebAssembly('s', 'boolean'), 1);
+        _insertString(defIndex, env.toWebAssembly('s', 'string'), env.toWebAssembly('s', 'holy cow'));
+        _insertObject(defIndex, env.toWebAssembly('s', 'object'), env.toWebAssembly('v', object));
+        const def2 = env.fromWebAssembly('v', defIndex);
+        expect(def2).to.have.property('number', 4567);
+        expect(def2).to.have.property('boolean', true);
+        expect(def2).to.have.property('string', 'holy cow');
+        expect(def2).to.have.property('object', object);
+      })
+    })
   })
 })
 
