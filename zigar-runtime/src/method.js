@@ -1,6 +1,6 @@
 import { throwZigError } from './error.js';
 import { acquireTarget, updateAddress } from './pointer.js';
-import { MEMORY, POINTER_VISITOR, RELEASE_THUNK } from './symbol.js';
+import { MEMORY, POINTER_VISITOR, THUNK_REPLACER } from './symbol.js';
 
 export function addMethods(s, env) {
   const {
@@ -85,7 +85,7 @@ function createFunction(method, env, pushThis) {
   /* NODE-ONLY */
   // need to set the local variables as well as the property of the method object
   /* c8 ignore next */
-  f[RELEASE_THUNK] = r => thunk = argStruct = method.thunk = r;
+  f[THUNK_REPLACER] = r => thunk = argStruct = method.thunk = r;
   /* NODE-ONLY-END */
   Object.defineProperty(f, 'name', { value: name, writable: false });
   return f;

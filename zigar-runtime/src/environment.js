@@ -3,7 +3,7 @@ import { decodeText } from './text.js';
 import { acquireTarget } from './pointer.js';
 import { initializeErrorSets } from './error-set.js';
 import { throwZigError } from './error.js';
-import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CHILD_VIVIFICATOR, RELEASE_THUNK } from './symbol.js';
+import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CHILD_VIVIFICATOR, THUNK_REPLACER } from './symbol.js';
 
 const default_alignment = 16;
 const globalSlots = {};
@@ -335,7 +335,7 @@ export class NodeEnvironment extends Environment {
       for (const [ name, { value, get, set }  ] of Object.entries(Object.getOwnPropertyDescriptors(cls))) {
         if (typeof(value) === 'function') {
           // release thunk of static function
-          value[RELEASE_THUNK]?.(replacement);
+          value[THUNK_REPLACER]?.(replacement);
         } else if (get && !set) {
           // the getter might return a type/class/constuctor
           const child = cls[name];
@@ -347,7 +347,7 @@ export class NodeEnvironment extends Environment {
       for (const [ name, { value } ] of Object.entries(Object.getOwnPropertyDescriptors(cls.prototype))) {
         if (typeof(value) === 'function') {
           // release thunk of instance function
-          value[RELEASE_THUNK]?.(replacement);
+          value[THUNK_REPLACER]?.(replacement);
         }
       }
     };
@@ -366,20 +366,19 @@ export class NodeEnvironment extends Environment {
       }
       const slots = obj[SLOTS];
       if (slots) {
-        // TODO: refactoring
-        // for (const child of Object.values(slots)) {
-        //   // deal with pointers in structs
-        //   if (child.hasOwnProperty(ZIG)) {
-        //     releaseObject(child);
-        //   }
-        // }
-        // if (obj.hasOwnProperty(ZIG)) {
-        //   // a pointer--release what it's pointing to
-        //   releaseObject(obj[SLOTS][0]);
-        // } else {
-        //   // force recreation of child objects so they'll use non-shared memory
-        //   obj[SLOTS] = {};
-        // }
+        for (const child of Object.values(slots)) {
+          // deal with pointers in structs
+          if (child.hasOwnProperty(POINTER_VISITOR)) {
+            releaseObject(child);
+          }
+        }
+        if (obj.hasOwnProperty(POINTER_VISITOR)) {
+          // a pointer--release what it's pointing to
+          releaseObject(obj[SLOTS][0]);
+        } else {
+          // force recreation of child objects so they'll use non-shared memory
+          obj[SLOTS] = {};
+        }
       }
     };
     releaseClass(module);
@@ -427,7 +426,7 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   getObjectIndex(object) {
-    if (object != undefined) {
+    if (object) {
       let index = this.valueIndices.get(object);
       if (index === undefined) {
         index = this.nextValueIndex++;
@@ -524,7 +523,7 @@ export class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  async createInstance(source) {
+  async instantiateWebAssembly(source) {
     const env = this.exportFunctions();
     if (source[Symbol.toStringTag] === 'Response') {
       return WebAssembly.instantiateStreaming(source, { env });
@@ -534,7 +533,7 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   async loadWebAssembly(source) {
-    const { instance } = await this.createInstance(source);
+    const { instance } = await this.instantiateWebAssembly(source);
     this.memory = instance.memory;
     this.importFunctions(instance.exports);
     // create a WeakRef so that we know whether the instance is gc'ed or not
@@ -726,7 +725,7 @@ export function getGlobalSlots() {
   return globalSlots;
 }
 
-function getExtraCount(ptrAlign) {
+export function getExtraCount(ptrAlign) {
   const alignment = (1 << ptrAlign);
   return (alignment <= default_alignment) ? 0 : alignment;
 }
@@ -753,7 +752,10 @@ function addLength(address, len) {
   return address + ((typeof(address) === 'bigint') ? BigInt(len) : len);
 }
 
-function isMisaligned({ address }, ptrAlign) {
+export function isMisaligned(address, ptrAlign) {
+  if (typeof(address) === 'bigint') {
+    address = Number(address & 0xFFFFFFFFn);
+  }
   const mask = (1 << ptrAlign) - 1;
   return (address & mask) !== 0;
 }

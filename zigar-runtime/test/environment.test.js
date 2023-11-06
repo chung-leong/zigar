@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import { readFile } from 'fs/promises';
 
 import {
   MemberType,
@@ -12,10 +13,14 @@ import {
   Environment,
   NodeEnvironment,
   WebAssemblyEnvironment,
+  CallContext,
+  getExtraCount,
+  findSortedIndex,
   getGlobalSlots,
-  CallContext
+  isMisaligned,
 } from '../src/environment.js'
-import { MEMORY, SLOTS, ENVIRONMENT } from '../src/symbol.js';
+import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, THUNK_REPLACER, CHILD_VIVIFICATOR } from '../src/symbol.js';
+import { acquireTarget } from '../src/pointer.js';
 
 describe('Environment', function() {
   beforeEach(function() {
@@ -233,6 +238,21 @@ describe('Environment', function() {
         const object = env.castView(structure, dv);
         expect(recv).to.equal(ENVIRONMENT);
         expect(arg).to.equal(dv);
+      })
+      it('should try to create targets of pointers', function() {
+        const env = new Environment();
+        let visitor;
+        const structure = {
+          constructor: function(dv) {
+            return {
+              [POINTER_VISITOR]: function(f) { visitor = f },
+            };
+          },
+          hasPointer: true,
+        };
+        const dv = new DataView(new ArrayBuffer(8));
+        const object = env.castView(structure, dv);
+        expect(visitor).to.equal(acquireTarget);
       })
     })
     describe('createObject', function() {
@@ -579,8 +599,75 @@ describe('Environment', function() {
         expect(() => env.invokeFactory(thunk)).to.throw(Error)
           .with.property('message').that.equal('Total brain fart');
       })
+      it('should allow abandonment of library', async function() {
+        const env = new NodeEnvironment();
+        const constructor = function() {};
+        function thunk(...args) {
+          return constructor
+        }
+        const result = env.invokeFactory(thunk);
+        await result.__zigar.init();
+        const promise = result.__zigar.abandon();
+        expect(promise).to.be.a('promise');
+        const released = await result.__zigar.released();
+        expect(released).to.be.true;
+      })
+      it('should replace abandoned functions with placeholders that throw', async function() {
+        const env = new NodeEnvironment();
+        const constructor = function() {};
+        function thunk(...args) {
+          return constructor
+        }
+        let t = () => console.log('hello');
+        constructor.hello = function() { t() };
+        constructor.hello[THUNK_REPLACER] = (r) => t = r;
+        const constructor2 = function() {};
+        Object.defineProperty(constructor, 'submodule', { get: () => constructor2 });
+        Object.defineProperty(constructor, 'self', { get: () => constructor });
+        const result = env.invokeFactory(thunk);
+        await capture(() => {
+          expect(constructor.hello).to.not.throw();
+        });
+        await result.__zigar.abandon();
+        expect(constructor.hello).to.throw(Error)
+          .with.property('message').that.contains('was abandoned');
+      })
+      it('should release variable of abandoned module', async function() {
+        const env = new NodeEnvironment();
+        const constructor = function() {};
+        function thunk(...args) {
+          return constructor
+        }
+        const obj1 = {
+          [MEMORY]: new DataView(new SharedArrayBuffer(8)),
+          [POINTER_VISITOR]: () => {},
+          [SLOTS]: {
+            0: {
+              [MEMORY]: new DataView(new SharedArrayBuffer(4))
+            }
+          },
+        };
+        obj1[SLOTS][0][MEMORY].setInt32(0, 1234, true);
+        const obj2 = {
+          [MEMORY]: new DataView(new SharedArrayBuffer(8)),
+          [POINTER_VISITOR]: () => {},
+          [SLOTS]: {
+            0: {
+              [MEMORY]: new DataView(new SharedArrayBuffer(32)),
+              [SLOTS]: {}
+            }
+          },
+        };
+        constructor[CHILD_VIVIFICATOR] = {
+          hello: () => { return obj1 },
+          world: () => { return obj2 },
+        };
+        const result = env.invokeFactory(thunk);
+        await result.__zigar.abandon();
+        expect(obj1[SLOTS][0][MEMORY].buffer).to.be.an.instanceOf(ArrayBuffer);
+        expect(obj1[SLOTS][0][MEMORY].getInt32(0, true)).to.equal(1234);
+      })
     })
-
   })
   describe('WebAssemblyEnvironment', function() {
     describe('isShared', function() {
@@ -635,6 +722,13 @@ describe('Environment', function() {
         const index4 = env.getObjectIndex(object2);
         expect(index3).to.equal(index1);
         expect(index4).to.equal(index2);
+      })
+      it('should return 0 for undefined and null', function() {
+        const env = new WebAssemblyEnvironment();
+        const index1 = env.getObjectIndex(undefined);
+        const index2 = env.getObjectIndex(null);
+        expect(index1).to.equal(0);
+        expect(index2).to.equal(0);
       })
     })
     describe('fromWebAssembly', function() {
@@ -789,6 +883,31 @@ describe('Environment', function() {
         expect(() => env.runThunk()).to.throw();
       })
     })
+    describe('instantiateWebAssembly', function() {
+      it('should attempt to stream in a WASM instance', function() {
+
+      })
+      it('should initiate a WASM instance from a buffer', async function() {
+        const env = new WebAssemblyEnvironment();
+        const buffer = await readFile(resolve('./wasm-samples/function-simple.wasm'));
+        const wasm = await env.instantiateWebAssembly(buffer);
+        console.log(wasm);
+      })
+    })
+    describe('loadWebAssembly', function() {
+      it('should load a WASM file', function() {
+
+
+      })
+      it('should allow the releasing of a WebAssembly instance', function() {
+
+      })
+    })
+    describe('runFactory', function() {
+      it('should return list of structures defined in WASM file', function() {
+
+      })
+    })
     describe('beginDefinition', function() {
       it('should return an empty object', function() {
         const env = new WebAssemblyEnvironment();
@@ -825,6 +944,109 @@ describe('Environment', function() {
         expect(def2).to.have.property('object', object);
       })
     })
+    describe('fixOverlappingMemory', function() {
+      it('should combine data views that overlaps the same memory region', function() {
+        const env = new WebAssemblyEnvironment();
+        const templ1 = {
+          [MEMORY]: new DataView(new ArrayBuffer(8))
+        };
+        const object = {
+          [MEMORY]: new DataView(new ArrayBuffer(8))
+        };
+        const templ2 = {
+          [MEMORY]: new DataView(new ArrayBuffer(32)),
+          [SLOTS]: {
+            0: object,
+          },
+        };
+        const structures = env.structures = [
+          {
+            instance: { template: templ1 },
+            static: {}
+          },
+          {
+            instance: { template: templ2 },
+            static: {}
+          },
+        ];
+        templ1[MEMORY].address = 1002;
+        templ2[MEMORY].address = 1000;
+        object[MEMORY].address = 1016;
+        env.fixOverlappingMemory();
+        expect(templ1[MEMORY].buffer).to.equal(templ2[MEMORY].buffer);
+        expect(templ1[MEMORY].byteOffset).to.equal(2);
+        expect(object[MEMORY].buffer).to.equal(templ2[MEMORY].buffer);
+        expect(object[MEMORY].byteOffset).to.equal(16);
+      })
+    })
+    describe('finalizeStructure', function() {
+      it('should add structure to list', function() {
+        const env = new WebAssemblyEnvironment();
+        const s = {};
+        env.finalizeStructure(s);
+        expect(env.structures[0]).to.equal(s);
+      })
+    })
+    describe('finalizeStructures', function() {
+      it('should define the structures with the info provided', function() {
+
+      })
+    })
+    describe('linkWebAssembly', function() {
+      it('should link methods and variables')
+    })
+  })
+  describe('getGlobalSlots', function() {
+    it('should return global slots', function() {
+      expect(getGlobalSlots()).to.be.an('object');
+    })
+  })
+  describe('getExtraCount', function() {
+    it('should return 0 for ptr alignment 4 and below', function() {
+      expect(getExtraCount(0)).to.equal(0);
+      expect(getExtraCount(1)).to.equal(0);
+      expect(getExtraCount(2)).to.equal(0);
+      expect(getExtraCount(3)).to.equal(0);
+      expect(getExtraCount(4)).to.equal(0);
+    })
+    it('should return 2 ** x when ptr alignment is 4 and above', function() {
+      expect(getExtraCount(5)).to.equal(32);
+      expect(getExtraCount(6)).to.equal(64);
+    })
+  })
+  describe('findSortedIndex', function() {
+    it('should return correct indices for the addresses given', function() {
+      const list = [
+        { address: 10 },
+        { address: 20 },
+        { address: 30 },
+      ];
+      expect(findSortedIndex(list, 5)).to.equal(0);
+      expect(findSortedIndex(list, 15)).to.equal(1);
+      expect(findSortedIndex(list, 25)).to.equal(2);
+      expect(findSortedIndex(list, 35)).to.equal(3);
+      expect(findSortedIndex(list, 30)).to.equal(3);
+      expect(findSortedIndex(list, 10)).to.equal(1);
+    })
+  })
+  describe('isMisaligned', function() {
+    it(`should determine whether address is misaligned`, function() {
+      expect(isMisaligned(0x1000, 1)).to.be.false;
+      expect(isMisaligned(0x1001, 1)).to.be.true;
+      expect(isMisaligned(0x1002, 1)).to.be.false;
+      expect(isMisaligned(0x1002, 2)).to.be.true;
+      expect(isMisaligned(0x1004, 2)).to.be.false;
+      expect(isMisaligned(0x1004, 3)).to.be.true;
+    })
+    it(`should handle bigInt addresses`, function() {
+      expect(isMisaligned(0xF000000000001000n, 1)).to.be.false;
+      expect(isMisaligned(0xF000000000001001n, 1)).to.be.true;
+      expect(isMisaligned(0xF000000000001002n, 1)).to.be.false;
+      expect(isMisaligned(0xF000000000001002n, 2)).to.be.true;
+      expect(isMisaligned(0xF000000000001004n, 2)).to.be.false;
+      expect(isMisaligned(0xF000000000001004n, 3)).to.be.true;
+    })
+
   })
 })
 
@@ -850,4 +1072,8 @@ async function capture(cb) {
     console.log = logFn;
   }
   return lines;
+}
+
+function resolve(path) {
+  return new URL(path, import.meta.url).pathname;
 }
