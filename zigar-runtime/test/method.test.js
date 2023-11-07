@@ -15,87 +15,20 @@ import {
   useEnumeration,
 } from '../src/structure.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
-import {
-  invokeThunk,
-} from '../src/method.js';
 import { NodeEnvironment } from '../src/environment.js'
 
 describe('Method functions', function() {
-  const env = new NodeEnvironment();
-  describe('invokeThunk', function() {
-    beforeEach(function() {
-      useStruct();
-      useEnumeration();
-      useIntEx();
-      useUintEx();
-      useBool();
-      useFloatEx();
-      useEnumerationItem();
-      useObject();
-    })
-    it('should invoke the given thunk with the expected arguments', function() {
-      const argStruct = {
-        [MEMORY]: new DataView(new ArrayBuffer(16)),
-        [SLOTS]: { 0: {} },
-      };
-      let recv, arg;
-      function thunk(...args) {
-        recv = this;
-        arg = args[0];
-      }
-      invokeThunk(thunk, argStruct, env);
-      expect(recv).to.equal(env);
-      expect(arg).to.equal(argStruct[MEMORY]);
-    })
-    it('should return a promise when trunk returns a promise', async function() {
-      const argStruct = {
-        [MEMORY]: new DataView(new ArrayBuffer(16)),
-        [SLOTS]: { 0: {} },
-      };
-      let resolve, reject, ready = false;
-      const promise = new Promise((r1, r2) => {
-        resolve = r1;
-        reject = r2;
-      });
-      let called = false;
-      function thunk(args) {
-        if (!ready) {
-          return promise;
-        }
-        called = true;
-        args.retval = 123;
-      }
-      const result = invokeThunk(thunk, argStruct, env);
-      expect(result).to.be.a('promise');
-      expect(called).to.be.false;
-      ready = true;
-      resolve();
-      thunk(argStruct);
-      const value = await result;
-      expect(value).to.equal(123);
-    })
-    it('should throw an error if thunk returns a string', function() {
-      const argStruct = {
-        [MEMORY]: new DataView(new ArrayBuffer(16)),
-        [SLOTS]: { 0: {} },
-      };
-      function thunk(...args) {
-        return `JellyDonutInsurrection`;
-      }
-      expect(() => invokeThunk(thunk, argStruct, env)).to.throw(Error)
-        .with.property('message').that.equals('Jelly donut insurrection') ;
-    })
+  beforeEach(function() {
+    useStruct();
+    useEnumeration();
+    useBool();
+    useIntEx();
+    useFloatEx();
+    useEnumerationItem();
+    useObject();
   })
+  const env = new NodeEnvironment();
   describe('addMethods', function() {
-    beforeEach(function() {
-      useStruct();
-      useEnumeration();
-      useBool();
-      useIntEx();
-      useFloatEx();
-      useEnumerationItem();
-      useObject();
-    })
     it('should attach methods to a struct', function() {
       const structure = env.beginStructure({
         type: StructureType.Struct,

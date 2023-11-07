@@ -16,7 +16,6 @@ import {
   CallContext,
   getExtraCount,
   findSortedIndex,
-  getGlobalSlots,
   isMisaligned,
 } from '../src/environment.js'
 import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, THUNK_REPLACER, CHILD_VIVIFICATOR } from '../src/symbol.js';
@@ -275,9 +274,8 @@ describe('Environment', function() {
     describe('readSlot', function() {
       it('should read from global slots where target is null', function() {
         const env = new Environment();
-        const slots = getGlobalSlots();
         const object = {}
-        slots[1] = object;
+        env.slots[1] = object;
         const result1 = env.readSlot(null, 1);
         const result2 = env.readSlot(null, 2);
         expect(result1).to.equal(object);
@@ -305,10 +303,9 @@ describe('Environment', function() {
     describe('writeSlot', function() {
       it('should write into global slots where target is null', function() {
         const env = new Environment();
-        const slots = getGlobalSlots();
         const object = {}
         env.writeSlot(null, 1, object);
-        expect(slots[1]).to.equal(object);
+        expect(env.slots[1]).to.equal(object);
       })
       it('should read from slots of target object', function() {
         const env = new Environment();
@@ -668,31 +665,37 @@ describe('Environment', function() {
         expect(obj1[SLOTS][0][MEMORY].getInt32(0, true)).to.equal(1234);
       })
     })
+    describe('invokeThunk', function() {
+      it('should invoke the given thunk with the expected arguments', function() {
+        const env = new NodeEnvironment();
+        const argStruct = {
+          [MEMORY]: new DataView(new ArrayBuffer(16)),
+          [SLOTS]: { 0: {} },
+        };
+        let recv, arg;
+        function thunk(...args) {
+          recv = this;
+          arg = args[0];
+        }
+        env.invokeThunk(thunk, argStruct);
+        expect(recv).to.equal(env);
+        expect(arg).to.equal(argStruct[MEMORY]);
+      })
+      it('should throw an error if thunk returns a string', function() {
+        const env = new NodeEnvironment();
+        const argStruct = {
+          [MEMORY]: new DataView(new ArrayBuffer(16)),
+          [SLOTS]: { 0: {} },
+        };
+        function thunk(...args) {
+          return `JellyDonutInsurrection`;
+        }
+        expect(() => env.invokeThunk(thunk, argStruct)).to.throw(Error)
+          .with.property('message').that.equals('Jelly donut insurrection') ;
+      })
+    })
   })
   describe('WebAssemblyEnvironment', function() {
-    describe('isShared', function() {
-      it('should return true when view points to a WebAssembly memory', function() {
-        const env = new WebAssemblyEnvironment();
-        const memory = env.memory = new WebAssembly.Memory({
-          initial: 128,
-          maximum: 1024,
-        });
-        const dv = new DataView(memory.buffer, 0, 8);
-        const result = env.isShared(dv);
-        expect(result).to.be.true;
-      })
-    })
-    describe('setCallContext', function() {
-      it('should save the address of the context object in WebAssembly', function() {
-        const env = new WebAssemblyEnvironment();
-        env.startContext();
-        env.setCallContext(1234);
-        expect(env.context.callContext).to.equal(1234);
-        const { _setCallContext } = env.exportFunctions();
-        _setCallContext(4567);
-        expect(env.context.callContext).to.equal(4567);
-      })
-    })
     describe('releaseObjects', function() {
       it('should release objects stored in value table', function() {
         const env = new WebAssemblyEnvironment();
@@ -741,7 +744,7 @@ describe('Environment', function() {
       })
       it('should return string stored in value table', function() {
         const env = new WebAssemblyEnvironment();
-        const object = new String('hello world');
+        const object = 'hello world';
         const index = env.getObjectIndex(object);
         const result = env.fromWebAssembly('s', index);
         expect(result).to.equal('hello world');
@@ -822,7 +825,7 @@ describe('Environment', function() {
         let args;
         const fn = function(...a) {
           args = a;
-          return env.getObjectIndex(new String('Hello world'));
+          return env.getObjectIndex('Hello world');
         };
         const fnIM = env.importFunction(fn, 'vsib', 's');
         const object = {}, string = 'Cow', number = 1234, boolean = true;
@@ -842,7 +845,6 @@ describe('Environment', function() {
       it('should export functions of the class needed by Zig code', function() {
         const env = new WebAssemblyEnvironment();
         const exports = env.exportFunctions();
-        expect(exports._setCallContext).to.be.a('function');
         expect(exports._allocMemory).to.be.a('function');
         expect(exports._beginStructure).to.be.a('function');
       })
@@ -913,6 +915,18 @@ describe('Environment', function() {
     describe('runFactory', function() {
       it('should return list of structures defined in WASM file', function() {
 
+      })
+    })
+    describe('isShared', function() {
+      it('should return true when view points to a WebAssembly memory', function() {
+        const env = new WebAssemblyEnvironment();
+        const memory = env.memory = new WebAssembly.Memory({
+          initial: 128,
+          maximum: 1024,
+        });
+        const dv = new DataView(memory.buffer, 0, 8);
+        const result = env.isShared(dv);
+        expect(result).to.be.true;
       })
     })
     describe('beginDefinition', function() {
@@ -1001,11 +1015,6 @@ describe('Environment', function() {
     })
     describe('linkWebAssembly', function() {
       it('should link methods and variables')
-    })
-  })
-  describe('getGlobalSlots', function() {
-    it('should return global slots', function() {
-      expect(getGlobalSlots()).to.be.an('object');
     })
   })
   describe('getExtraCount', function() {

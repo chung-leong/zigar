@@ -86,13 +86,9 @@ export function getBitAlignFunction(bitPos, bitSize, toAligned) {
 
 export function getMemoryCopier(size, multiple = false) {
   if (!multiple) {
-    switch (size) {
-      case 1: return copy1;
-      case 2: return copy2;
-      case 4: return copy4;
-      case 8: return copy8;
-      case 16: return copy16;
-      case 32: return copy32;
+    const copier = copiers[size];
+    if (copier) {
+      return copier;
     }
   }
   if (!(size & 0x07)) return copy8x;
@@ -100,6 +96,15 @@ export function getMemoryCopier(size, multiple = false) {
   if (!(size & 0x01)) return copy2x;
   return copy1x;
 }
+
+const copiers = {
+  1: copy1,
+  2: copy2,
+  4: copy4,
+  8: copy8,
+  16: copy16,
+  32: copy32,
+};
 
 function copy1x(dest, src) {
   for (let i = 0, len = dest.byteLength; i < len; i++) {
@@ -162,20 +167,24 @@ function copy32(dest, src) {
 }
 
 export function getMemoryResetter(size) {
-  switch (size) {
-    case 1: return reset1;
-    case 2: return reset2;
-    case 4: return reset4;
-    case 8: return reset8;
-    case 16: return reset16;
-    case 32: return reset32;
-    default:
-      if (!(size & 0x07)) return reset8x;
-      if (!(size & 0x03)) return reset4x;
-      if (!(size & 0x01)) return reset2x;
-      return reset1x;
+  const resetter = resetters[size];
+  if (resetter) {
+    return resetter;
   }
+  if (!(size & 0x07)) return reset8x;
+  if (!(size & 0x03)) return reset4x;
+  if (!(size & 0x01)) return reset2x;
+  return reset1x;
 }
+
+const resetters = {
+  1: reset1,
+  2: reset2,
+  4: reset4,
+  8: reset8,
+  16: reset16,
+  32: reset32,
+};
 
 function reset1x(dest) {
   for (let i = 0, len = dest.byteLength; i < len; i++) {

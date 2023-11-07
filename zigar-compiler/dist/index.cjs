@@ -517,10 +517,6 @@ function decodeText(arrays, encoding = 'utf-8') {
 }
 
 const default_alignment = 16;
-const globalSlots = {};
-
-let consolePending = [];
-let consoleTimeout = 0;
 
 class Environment {
   /*
@@ -544,6 +540,9 @@ class Environment {
   */
   context;
   contextStack = [];
+  consolePending = [];
+  consoleTimeout = 0;
+  slots = {}
 
   startContext() {
     if (this.context) {
@@ -661,12 +660,12 @@ class Environment {
   }
 
   readSlot(target, slot) {
-    const slots = target ? target[SLOTS] : globalSlots;
+    const slots = target ? target[SLOTS] : this.slots;
     return slots?.[slot];
   }
 
   writeSlot(target, slot, value) {
-    const slots = target ? target[SLOTS] : globalSlots;
+    const slots = target ? target[SLOTS] : this.slots;
     if (slots) {
       slots[slot] = value;
     }
@@ -739,19 +738,19 @@ class Environment {
       // send text up to the last newline character
       const index = array.lastIndexOf(0x0a);
       if (index === -1) {
-        consolePending.push(array);
+        this.consolePending.push(array);
       } else {
         const beginning = array.subarray(0, index);
         const remaining = array.slice(index + 1);   // copying, in case incoming buffer is pointing to stack memory
-        const list = [ ...consolePending, beginning ];
+        const list = [ ...this.consolePending, beginning ];
         console.log(decodeText(list));
-        consolePending = (remaining.length > 0) ? [ remaining ] : [];
+        this.consolePending = (remaining.length > 0) ? [ remaining ] : [];
       }
-      clearTimeout(consoleTimeout);
-      if (consolePending.length > 0) {
-        consoleTimeout = setTimeout(() => {
-          console.log(decodeText(consolePending));
-          consolePending = [];
+      clearTimeout(this.consoleTimeout);
+      if (this.consolePending.length > 0) {
+        this.consoleTimeout = setTimeout(() => {
+          console.log(decodeText(this.consolePending));
+          this.consolePending = [];
         }, 250);
       }
       /* c8 ignore next 3 */
@@ -761,10 +760,10 @@ class Environment {
   }
 
   flushConsole() {
-    if (consolePending.length > 0) {
-      console.log(decodeText(consolePending));
-      consolePending = [];
-      clearTimeout(consoleTimeout);
+    if (this.consolePending.length > 0) {
+      console.log(decodeText(this.consolePending));
+      this.consolePending = [];
+      clearTimeout(this.consoleTimeout);
     }
   }
 }
@@ -785,7 +784,7 @@ class WebAssemblyEnvironment extends Environment {
     /* COMPTIME-ONLY-END */
     alloc: { name: 'allocSharedMemory', argType: 'iii', returnType: 'i' },
     free: { name: 'freeSharedMemory', argType: 'iiii', returnType: '' },
-    run: { name: 'runThunk', argType: 'ii', returnType: 'v' },
+    run: { name: 'runThunk', argType: 'iv', returnType: 'v' },
     safe: { name: 'isRuntimeSafetyActive', argType: '', returnType: 'b' },
   };
 
@@ -905,7 +904,8 @@ class WebAssemblyEnvironment extends Environment {
     if (source[Symbol.toStringTag] === 'Response') {
       return WebAssembly.instantiateStreaming(source, { env });
     } else {
-      return WebAssembly.instantiate(source, { env });
+      const buffer = await source;
+      return WebAssembly.instantiate(buffer, { env });
     }
   }
 
@@ -954,6 +954,7 @@ class WebAssemblyEnvironment extends Environment {
     this.startContext();
     // call context, use by allocSharedMemory and freeSharedMemory
     this.context.call = call;
+    console.log({ args });
     if (!args) {
       // can't be 0 since that sets off Zig's runtime safety check
       return 0xaaaaaaaa;
@@ -1048,10 +1049,6 @@ class WebAssemblyEnvironment extends Environment {
           target.template = createTemplate(target.template);
         }
       }
-      for (const method of structure.static.methods) {
-        // create thunk function
-        method.thunk = createThunk(method.thunk);
-      }
       super.finalizeStructure(structure);
       // place structure into its assigned slot
       this.slots[structure.slot] = structure;
@@ -1097,12 +1094,6 @@ class WebAssemblyEnvironment extends Environment {
       return object;
     }
 
-    function createThunk(index) {
-      return function(argStruct) {
-        return this.runThunk(index, argStruct);
-      };
-    }
-
     let resolve, reject;
     const promise = new Promise((r1, r2) => {
       resolve = r1;
@@ -1127,6 +1118,7 @@ class WebAssemblyEnvironment extends Environment {
     // we can't do pointer fix up here since we need the context in order to allocate
     // memory from the WebAssembly allocator; point target acquisition will happen in
     // endCall()
+    console.log({ thunk, args });
     const err = this.runThunk(thunk, args);
 
     // errors returned by exported Zig functions are normally written into the

@@ -106,13 +106,9 @@ function getBitAlignFunction(bitPos, bitSize, toAligned) {
 
 function getMemoryCopier(size, multiple = false) {
   if (!multiple) {
-    switch (size) {
-      case 1: return copy1;
-      case 2: return copy2;
-      case 4: return copy4;
-      case 8: return copy8;
-      case 16: return copy16;
-      case 32: return copy32;
+    const copier = copiers[size];
+    if (copier) {
+      return copier;
     }
   }
   if (!(size & 0x07)) return copy8x;
@@ -120,6 +116,15 @@ function getMemoryCopier(size, multiple = false) {
   if (!(size & 0x01)) return copy2x;
   return copy1x;
 }
+
+const copiers = {
+  1: copy1,
+  2: copy2,
+  4: copy4,
+  8: copy8,
+  16: copy16,
+  32: copy32,
+};
 
 function copy1x(dest, src) {
   for (let i = 0, len = dest.byteLength; i < len; i++) {
@@ -182,20 +187,24 @@ function copy32(dest, src) {
 }
 
 function getMemoryResetter(size) {
-  switch (size) {
-    case 1: return reset1;
-    case 2: return reset2;
-    case 4: return reset4;
-    case 8: return reset8;
-    case 16: return reset16;
-    case 32: return reset32;
-    default:
-      if (!(size & 0x07)) return reset8x;
-      if (!(size & 0x03)) return reset4x;
-      if (!(size & 0x01)) return reset2x;
-      return reset1x;
+  const resetter = resetters[size];
+  if (resetter) {
+    return resetter;
   }
+  if (!(size & 0x07)) return reset8x;
+  if (!(size & 0x03)) return reset4x;
+  if (!(size & 0x01)) return reset2x;
+  return reset1x;
 }
+
+const resetters = {
+  1: reset1,
+  2: reset2,
+  4: reset4,
+  8: reset8,
+  16: reset16,
+  32: reset32,
+};
 
 function reset1x(dest) {
   for (let i = 0, len = dest.byteLength; i < len; i++) {
@@ -3924,10 +3933,6 @@ function decodeText(arrays, encoding = 'utf-8') {
 }
 
 const default_alignment = 16;
-const globalSlots = {};
-
-let consolePending = [];
-let consoleTimeout = 0;
 
 class Environment {
   /*
@@ -3951,6 +3956,9 @@ class Environment {
   */
   context;
   contextStack = [];
+  consolePending = [];
+  consoleTimeout = 0;
+  slots = {}
 
   startContext() {
     if (this.context) {
@@ -4068,12 +4076,12 @@ class Environment {
   }
 
   readSlot(target, slot) {
-    const slots = target ? target[SLOTS] : globalSlots;
+    const slots = target ? target[SLOTS] : this.slots;
     return slots?.[slot];
   }
 
   writeSlot(target, slot, value) {
-    const slots = target ? target[SLOTS] : globalSlots;
+    const slots = target ? target[SLOTS] : this.slots;
     if (slots) {
       slots[slot] = value;
     }
@@ -4106,14 +4114,15 @@ class Environment {
   createCaller(method, useThis) {
     let { name,  argStruct, thunk } = method;
     const { constructor, hasPointer } = argStruct;
+    const self = this;
     let f;
     if (useThis) {
       f = function(...args) {
-        return env.invokeThunk(thunk, new constructor([ this, ...args ]), hasPointer);
+        return self.invokeThunk(thunk, new constructor([ this, ...args ]), hasPointer);
       };
     } else {
       f = function(...args) {
-        return env.invokeThunk(thunk, new constructor(args), hasPointer);
+        return self.invokeThunk(thunk, new constructor(args), hasPointer);
       };
     }
     Object.defineProperty(f, 'name', { value: name });
@@ -4127,19 +4136,19 @@ class Environment {
       // send text up to the last newline character
       const index = array.lastIndexOf(0x0a);
       if (index === -1) {
-        consolePending.push(array);
+        this.consolePending.push(array);
       } else {
         const beginning = array.subarray(0, index);
         const remaining = array.slice(index + 1);   // copying, in case incoming buffer is pointing to stack memory
-        const list = [ ...consolePending, beginning ];
+        const list = [ ...this.consolePending, beginning ];
         console.log(decodeText(list));
-        consolePending = (remaining.length > 0) ? [ remaining ] : [];
+        this.consolePending = (remaining.length > 0) ? [ remaining ] : [];
       }
-      clearTimeout(consoleTimeout);
-      if (consolePending.length > 0) {
-        consoleTimeout = setTimeout(() => {
-          console.log(decodeText(consolePending));
-          consolePending = [];
+      clearTimeout(this.consoleTimeout);
+      if (this.consolePending.length > 0) {
+        this.consoleTimeout = setTimeout(() => {
+          console.log(decodeText(this.consolePending));
+          this.consolePending = [];
         }, 250);
       }
       /* c8 ignore next 3 */
@@ -4149,10 +4158,10 @@ class Environment {
   }
 
   flushConsole() {
-    if (consolePending.length > 0) {
-      console.log(decodeText(consolePending));
-      consolePending = [];
-      clearTimeout(consoleTimeout);
+    if (this.consolePending.length > 0) {
+      console.log(decodeText(this.consolePending));
+      this.consolePending = [];
+      clearTimeout(this.consoleTimeout);
     }
   }
 }
@@ -4167,7 +4176,7 @@ class WebAssemblyEnvironment extends Environment {
   expectedMethods = {
     alloc: { name: 'allocSharedMemory', argType: 'iii', returnType: 'i' },
     free: { name: 'freeSharedMemory', argType: 'iiii', returnType: '' },
-    run: { name: 'runThunk', argType: 'ii', returnType: 'v' },
+    run: { name: 'runThunk', argType: 'iv', returnType: 'v' },
     safe: { name: 'isRuntimeSafetyActive', argType: '', returnType: 'b' },
   };
 
@@ -4287,7 +4296,8 @@ class WebAssemblyEnvironment extends Environment {
     if (source[Symbol.toStringTag] === 'Response') {
       return WebAssembly.instantiateStreaming(source, { env });
     } else {
-      return WebAssembly.instantiate(source, { env });
+      const buffer = await source;
+      return WebAssembly.instantiate(buffer, { env });
     }
   }
 
@@ -4340,6 +4350,7 @@ class WebAssemblyEnvironment extends Environment {
       // can't be 0 since that sets off Zig's runtime safety check
       return 0xaaaaaaaa;
     }
+    console.log({ args });
   }
 
   endCall(call, args) {
@@ -4356,10 +4367,6 @@ class WebAssemblyEnvironment extends Environment {
         if (target.template) {
           target.template = createTemplate(target.template);
         }
-      }
-      for (const method of structure.static.methods) {
-        // create thunk function
-        method.thunk = createThunk(method.thunk);
       }
       super.finalizeStructure(structure);
       // place structure into its assigned slot
@@ -4404,12 +4411,6 @@ class WebAssemblyEnvironment extends Environment {
         this.variables.push({ address: placeholder.address, object });
       }
       return object;
-    }
-
-    function createThunk(index) {
-      return function(argStruct) {
-        return this.runThunk(index, argStruct);
-      };
     }
 
     let resolve, reject;

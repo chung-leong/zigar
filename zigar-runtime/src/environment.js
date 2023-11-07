@@ -6,10 +6,6 @@ import { throwZigError } from './error.js';
 import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CHILD_VIVIFICATOR, THUNK_REPLACER } from './symbol.js';
 
 const default_alignment = 16;
-const globalSlots = {};
-
-let consolePending = [];
-let consoleTimeout = 0;
 
 export class Environment {
   /*
@@ -33,6 +29,9 @@ export class Environment {
   */
   context;
   contextStack = [];
+  consolePending = [];
+  consoleTimeout = 0;
+  slots = {}
 
   startContext() {
     if (this.context) {
@@ -150,12 +149,12 @@ export class Environment {
   }
 
   readSlot(target, slot) {
-    const slots = target ? target[SLOTS] : globalSlots;
+    const slots = target ? target[SLOTS] : this.slots;
     return slots?.[slot];
   }
 
   writeSlot(target, slot, value) {
-    const slots = target ? target[SLOTS] : globalSlots;
+    const slots = target ? target[SLOTS] : this.slots;
     if (slots) {
       slots[slot] = value;
     }
@@ -247,14 +246,15 @@ export class Environment {
   createCaller(method, useThis) {
     let { name,  argStruct, thunk } = method;
     const { constructor, hasPointer } = argStruct;
+    const self = this;
     let f;
     if (useThis) {
       f = function(...args) {
-        return env.invokeThunk(thunk, new constructor([ this, ...args ]), hasPointer);
+        return self.invokeThunk(thunk, new constructor([ this, ...args ]), hasPointer);
       }
     } else {
       f = function(...args) {
-        return env.invokeThunk(thunk, new constructor(args), hasPointer);
+        return self.invokeThunk(thunk, new constructor(args), hasPointer);
       }
     }
     Object.defineProperty(f, 'name', { value: name });
@@ -273,19 +273,19 @@ export class Environment {
       // send text up to the last newline character
       const index = array.lastIndexOf(0x0a);
       if (index === -1) {
-        consolePending.push(array);
+        this.consolePending.push(array);
       } else {
         const beginning = array.subarray(0, index);
         const remaining = array.slice(index + 1);   // copying, in case incoming buffer is pointing to stack memory
-        const list = [ ...consolePending, beginning ];
+        const list = [ ...this.consolePending, beginning ];
         console.log(decodeText(list));
-        consolePending = (remaining.length > 0) ? [ remaining ] : [];
+        this.consolePending = (remaining.length > 0) ? [ remaining ] : [];
       }
-      clearTimeout(consoleTimeout);
-      if (consolePending.length > 0) {
-        consoleTimeout = setTimeout(() => {
-          console.log(decodeText(consolePending));
-          consolePending = [];
+      clearTimeout(this.consoleTimeout);
+      if (this.consolePending.length > 0) {
+        this.consoleTimeout = setTimeout(() => {
+          console.log(decodeText(this.consolePending));
+          this.consolePending = [];
         }, 250);
       }
       /* c8 ignore next 3 */
@@ -295,10 +295,10 @@ export class Environment {
   }
 
   flushConsole() {
-    if (consolePending.length > 0) {
-      console.log(decodeText(consolePending));
-      consolePending = [];
-      clearTimeout(consoleTimeout);
+    if (this.consolePending.length > 0) {
+      console.log(decodeText(this.consolePending));
+      this.consolePending = [];
+      clearTimeout(this.consoleTimeout);
     }
   }
 }
@@ -341,12 +341,12 @@ export class NodeEnvironment extends Environment {
       this.startContext();
       // copy addresses of garbage-collectible objects into memory
       args[POINTER_VISITOR](updateAddress, {});
-      err = thunk.call(env, args[MEMORY]);
+      err = thunk.call(this, args[MEMORY]);
       args[POINTER_VISITOR](acquireTarget, { vivificate: true });
       // restore the previous context if there's one
       this.endContext();
     } else {
-      err = thunk.call(env, args[MEMORY]);
+      err = thunk.call(this, args[MEMORY]);
     }
 
     // errors returned by exported Zig functions are normally written into the
@@ -448,7 +448,7 @@ export class WebAssemblyEnvironment extends Environment {
     /* COMPTIME-ONLY-END */
     alloc: { name: 'allocSharedMemory', argType: 'iii', returnType: 'i' },
     free: { name: 'freeSharedMemory', argType: 'iiii', returnType: '' },
-    run: { name: 'runThunk', argType: 'ii', returnType: 'v' },
+    run: { name: 'runThunk', argType: 'iv', returnType: 'v' },
     safe: { name: 'isRuntimeSafetyActive', argType: '', returnType: 'b' },
   };
 
@@ -568,7 +568,8 @@ export class WebAssemblyEnvironment extends Environment {
     if (source[Symbol.toStringTag] === 'Response') {
       return WebAssembly.instantiateStreaming(source, { env });
     } else {
-      return WebAssembly.instantiate(source, { env });
+      const buffer = await source;
+      return WebAssembly.instantiate(buffer, { env });
     }
   }
 
@@ -621,6 +622,7 @@ export class WebAssemblyEnvironment extends Environment {
       // can't be 0 since that sets off Zig's runtime safety check
       return 0xaaaaaaaa;
     }
+    console.log({ args });
   }
 
   endCall(call, args) {
@@ -712,10 +714,6 @@ export class WebAssemblyEnvironment extends Environment {
           target.template = createTemplate(target.template);
         }
       }
-      for (const method of structure.static.methods) {
-        // create thunk function
-        method.thunk = createThunk(method.thunk);
-      }
       super.finalizeStructure(structure);
       // place structure into its assigned slot
       this.slots[structure.slot] = structure;
@@ -759,12 +757,6 @@ export class WebAssemblyEnvironment extends Environment {
         this.variables.push({ address: placeholder.address, object });
       }
       return object;
-    }
-
-    function createThunk(index) {
-      return function(argStruct) {
-        return this.runThunk(index, argStruct);
-      };
     }
 
     let resolve, reject;
@@ -812,10 +804,6 @@ export class WebAssemblyEnvironment extends Environment {
 export class CallContext {
   pointerProcessed = new Map();
   memoryList = [];
-}
-
-export function getGlobalSlots() {
-  return globalSlots;
 }
 
 export function getExtraCount(ptrAlign) {
