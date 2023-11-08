@@ -20,6 +20,5 @@ export const CHILD_VIVIFICATOR = Symbol('childVivificator');
 export const POINTER_VISITOR = Symbol('pointerVisitor');
 export const TARGET_ACQUIRER = Symbol('targetAcquirer');
 export const ADDRESS_UPDATER = Symbol('addressUpdater');
-export const FIELD_VALIDATOR = Symbol('fieldValidator');
 export const THUNK_REPLACER = Symbol('releaseThunk');
 export const ENVIRONMENT = Symbol('environment');

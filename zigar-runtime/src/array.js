@@ -1,3 +1,4 @@
+import { defineProperties } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier, getPointerAlign } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
@@ -59,7 +60,7 @@ export function finalizeArray(s, env) {
     if (arg instanceof constructor) {
       this[MEMORY_COPIER](arg);
       if (hasPointer) {
-        this[POINTER_VISITOR](copyPointer, { vivificate: true });
+        this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else {
       if (typeof(arg) === 'string' && specialKeys.includes('string')) {
@@ -104,7 +105,7 @@ export function finalizeArray(s, env) {
     }
   };
   const { get, set } = getAccessors(member, options);
-  Object.defineProperties(constructor.prototype, {
+  defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { value: length, configurable: true },
@@ -112,25 +113,21 @@ export function finalizeArray(s, env) {
     entries: { value: createArrayEntries, configurable: true, writable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s) },
   });
-  Object.defineProperties(constructor, {
+  defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(s) },
   });
-  if (hasObject) {
-    addChildVivificator(s);
-    if (hasPointer) {
-      addPointerVisitor(s);
-    }
-  }
   addSpecialAccessors(s);
   return constructor;
 }
 
-export function addChildVivificator(s) {
-  const { constructor: { prototype }, instance: { members: [ member ]} } = s;
+export function getChildVivificator(s) {
+  const { instance: { members: [ member ]} } = s;
   const { byteSize, structure } = member;
-  const vivificator = function getChild(index) {
+  return function getChild(index) {
     let object = this[SLOTS][index];
     if (!object) {
       const { constructor } = structure;
@@ -142,17 +139,25 @@ export function addChildVivificator(s) {
     }
     return object;
   };
-  Object.defineProperty(prototype, CHILD_VIVIFICATOR, { value: vivificator });
 }
 
-export function addPointerVisitor(s) {
-  const { constructor: { prototype } } = s;
-  const visitor = function visitPointers(cb, options = {}) {
+export function getPointerVisitor(s) {
+  return function visitPointers(cb, options = {}) {
     const {
       source,
       vivificate = false,
+      validate,
     } = options;
-    const childOptions = { ...options };
+    const childOptions = {
+      ...options,
+      validate: () => {
+        // make sure this object is valid
+        if (validate?.(this) === false) {
+          return false;
+        }
+        return true;
+      },
+    };
     for (let i = 0, len = this.length; i < len; i++) {
       // no need to check for empty slots, since that isn't possible
       if (source) {
@@ -164,7 +169,6 @@ export function addPointerVisitor(s) {
       }
     }
   };
-  Object.defineProperty(prototype, POINTER_VISITOR, { value: visitor });
 }
 
 export function getArrayIterator() {

@@ -1,9 +1,10 @@
+import { defineProperties } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier, getMemoryResetter, getPointerAlign } from './memory.js';
 import { requireDataView }  from './data-view.js';
-import { addChildVivificators, addPointerVisitor } from './struct.js';
+import { getChildVivificators, getPointerVisitor } from './struct.js';
 import { addSpecialAccessors } from './special.js';
-import { MEMORY, FIELD_VALIDATOR, POINTER_VISITOR, SLOTS, MEMORY_COPIER, MEMORY_RESETTER } from './symbol.js';
+import { MEMORY, POINTER_VISITOR, SLOTS, MEMORY_COPIER, MEMORY_RESETTER, CHILD_VIVIFICATOR } from './symbol.js';
 import { throwNoInitializer } from './error.js';
 import { copyPointer, resetPointer } from './pointer.js';
 
@@ -73,19 +74,13 @@ export function finalizeOptional(s, env) {
       this.$ = arg;
     }
   };
-  Object.defineProperties(constructor.prototype, {
+  defineProperties(constructor.prototype, {
     '$': { get, set, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [MEMORY_RESETTER]: { value: getMemoryResetter(byteSize) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, check) },
   });
-  if (hasObject) {
-    addChildVivificators(s);
-    if (hasPointer) {
-      // function used by pointer visitor to see whether pointer field is active
-      Object.defineProperty(constructor.prototype, FIELD_VALIDATOR, { value: check });
-      addPointerVisitor(s);
-    }
-  }
   addSpecialAccessors(s);
   return constructor;
 }

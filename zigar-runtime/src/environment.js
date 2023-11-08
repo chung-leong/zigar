@@ -1,4 +1,4 @@
-import { getStructureFactory, getStructureName } from './structure.js';
+import { defineProperties, getStructureFactory, getStructureName } from './structure.js';
 import { decodeText } from './text.js';
 import { acquireTarget } from './pointer.js';
 import { initializeErrorSets } from './error-set.js';
@@ -226,11 +226,11 @@ export class Environment {
       const f = getStructureFactory(s.type);
       const constructor = f(s, this);
       if (typeof(constructor) === 'function') {
-        Object.defineProperties(constructor, {
+        defineProperties(constructor, {
           name: { value: getStructureName(s), writable: false }
         });
         if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
-          Object.defineProperties(constructor.prototype, {
+          defineProperties(constructor.prototype, {
             [Symbol.toStringTag]: { value: s.name, configurable: true, writable: false }
           });
         }
@@ -300,6 +300,13 @@ export class Environment {
       this.consolePending = [];
       clearTimeout(this.consoleTimeout);
     }
+  }
+
+  collectPointers() {
+    const map = new Map();
+    args[POINTER_VISITOR](() => {
+
+    }, {});
   }
 }
 

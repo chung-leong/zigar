@@ -1,7 +1,9 @@
+import { defineProperties, getSelf } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier, getPointerAlign } from './memory.js';
 import { requireDataView, addTypedArray, checkDataViewSize, getCompatibleTags } from './data-view.js';
-import { getArrayIterator, createProxy, createArrayEntries, addChildVivificator, addPointerVisitor } from './array.js';
+import { getArrayIterator, createProxy, createArrayEntries, getChildVivificator, getPointerVisitor } from './array.js';
+import { copyPointer } from './pointer.js';
 import {
   addSpecialAccessors,
   checkDataView,
@@ -18,9 +20,7 @@ import {
   throwMissingSentinel,
   throwNoInitializer,
 } from './error.js';
-import { LENGTH, MEMORY, SLOTS, GETTER, SETTER, COMPAT, MEMORY_COPIER, POINTER_VISITOR } from './symbol.js';
-import { copyPointer } from './pointer.js';
-import { getSelf } from './struct.js';
+import { CHILD_VIVIFICATOR, COMPAT, GETTER, LENGTH, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SETTER, SLOTS } from './symbol.js';
 
 export function finalizeSlice(s, env) {
   const {
@@ -186,7 +186,7 @@ export function finalizeSlice(s, env) {
     }
   };
   const { get, set } = getAccessors(member, options);
-  Object.defineProperties(constructor.prototype, {
+  defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { get: getLength, configurable: true },
@@ -194,17 +194,13 @@ export function finalizeSlice(s, env) {
     entries: { value: createArrayEntries, configurable: true, writable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(elementSize, true) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s) }
   });
-  Object.defineProperties(constructor, {
+  defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(s) },
   });
-  if (hasObject) {
-    addChildVivificator(s);
-    if (hasPointer) {
-      addPointerVisitor(s);
-    }
-  }
   addSpecialAccessors(s);
   return constructor;
 }

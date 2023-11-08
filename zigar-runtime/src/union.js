@@ -1,11 +1,11 @@
-import { StructureType } from './structure.js';
+import { StructureType, defineProperties, getSelf } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier, getPointerAlign } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
-import { addChildVivificators, getSelf, addPointerVisitor } from './struct.js';
+import { getChildVivificators, getPointerVisitor } from './struct.js';
 import {
   throwInvalidInitializer,
   throwMissingUnionInitializer,
@@ -15,7 +15,7 @@ import {
   throwNoInitializer,
 } from './error.js';
 import { copyPointer, disablePointer, resetPointer } from './pointer.js';
-import { MEMORY, ENUM_NAME, ENUM_ITEM, TAG, SLOTS, POINTER_VISITOR, FIELD_VALIDATOR, MEMORY_COPIER } from './symbol.js';
+import { CHILD_VIVIFICATOR, ENUM_ITEM, ENUM_NAME, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SLOTS, TAG } from './symbol.js';
 
 export function finalizeUnion(s, env) {
   const {
@@ -113,6 +113,9 @@ export function finalizeUnion(s, env) {
       descriptors[member.name] = { get, set, init: set, configurable: true, enumerable: true };
     }
   }
+  if (isTagged) {
+    descriptors[TAG] = { value: null, writable: true };
+  }
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const pointerMembers = members.filter(m => m.structure.hasPointer);
@@ -134,16 +137,12 @@ export function finalizeUnion(s, env) {
       dv = getDataView(s, arg);
     }
     self[MEMORY] = dv;
-    if (isTagged) {
-      // don't know the TAG property in the console, since it's not always up-to-date
-      Object.defineProperties(self, TAG, { value: null, writable: true });
-    }
-    Object.defineProperties(self, descriptors);
+    defineProperties(self, descriptors);
     if (hasObject) {
       self[SLOTS] = {};
       if (hasInaccessiblePointer) {
         // make pointer access throw
-        self[POINTER_VISITOR](disablePointer, { vivificate: true, ignoreInactive: false });
+        self[POINTER_VISITOR](disablePointer, { vivificate: true });
       }
     }
     if (creating) {
@@ -224,23 +223,18 @@ export function finalizeUnion(s, env) {
       }
     }
   };
-  Object.defineProperties(constructor.prototype, {
+  const validateChild = function(child) {
+    const name = getName.call(this);
+    const active = this[name];
+    return child === active;
+  };
+  defineProperties(constructor.prototype, {
     '$': { get: getSelf, set: initializer, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
+    [ENUM_ITEM]: isTagged && { get: getEnumItem, configurable: true },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
+    [POINTER_VISITOR]: (hasPointer || hasInaccessiblePointer) && { value: getPointerVisitor(s, validateChild) },
   });
-  if (isTagged) {
-    // enable casting to enum
-    Object.defineProperty(constructor.prototype, ENUM_ITEM, { get: getEnumItem, configurable: true });
-  }
-  if (hasObject) {
-    addChildVivificators(s);
-    if (hasPointer || hasInaccessiblePointer) {
-      // add a mean to check whether pointer is actually active
-      const validator = (isTagged) ? function(name) { return getName.call(this) === name } : function() { return false };
-      Object.defineProperty(constructor.prototype, FIELD_VALIDATOR, { value: validator });
-      addPointerVisitor(s);
-    }
-  }
   addSpecialAccessors(s, env);
   addStaticMembers(s, env);
   addMethods(s, env);
@@ -251,6 +245,6 @@ const taggedProxyHandlers = {
   ownKeys(union) {
     const item = union[ENUM_ITEM];
     const name = item[ENUM_NAME];
-    return [ name, MEMORY ];
+    return [ name, MEMORY, TAG ];
   },
 };

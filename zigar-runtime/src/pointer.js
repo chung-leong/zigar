@@ -1,4 +1,4 @@
-import { StructureType } from './structure.js';
+import { StructureType, defineProperties } from './structure.js';
 import { getMemoryCopier, getPointerAlign } from './memory.js';
 import { requireDataView, getDataView, isCompatible, isBuffer } from './data-view.js';
 import { MemberType, getAccessors } from './member.js';
@@ -92,7 +92,7 @@ export function finalizePointer(s, env) {
       } else {
         // copy the object stored in slots 0, not copying memory of the other object
         // since the value stored there likely isn't valid
-        copyPointer.call(this, arg);
+        copyPointer.call(this, { source: arg });
       }
     } else {
       const Target = targetStructure.constructor;
@@ -100,7 +100,7 @@ export function finalizePointer(s, env) {
         if (!isConst && arg.constructor.const) {
           throwConstantConstraint(s, arg);
         }
-        copyPointer.call(this, arg);
+        copyPointer.call(this, { source: arg });
       } else {
         if (!(arg instanceof Target)) {
           if (isCompatible(arg, Target)) {
@@ -192,7 +192,7 @@ export function finalizePointer(s, env) {
     }
   };
   // return the proxy object if one is used
-  Object.defineProperties(constructor.prototype, {
+  defineProperties(constructor.prototype, {
     '*': { get: getTarget, set: (isConst) ? undefined : setTarget, configurable: true },
     '$': { get: getProxy, set: initializer, configurable: true, },
     'valueOf': { value: getTargetValue, configurable: true, writable: true },
@@ -201,7 +201,7 @@ export function finalizePointer(s, env) {
     [POINTER_VISITOR]: { value: visitPointer },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
   });
-  Object.defineProperties(constructor, {
+  defineProperties(constructor, {
     child: { get: () => targetStructure.constructor },
     const: { value: isConst },
   });
@@ -212,20 +212,26 @@ export function getProxy() {
   return this[PROXY];
 }
 
-export function copyPointer(src) {
-  this[SLOTS][0] = src[SLOTS][0];
+export function copyPointer({ source, validate }) {
+  if (validate?.(this) !== false) {
+    this[SLOTS][0] = source[SLOTS][0];
+  }
 }
 
 export function resetPointer() {
   this[SLOTS][0] = null;
 }
 
-export function acquireTarget() {
-  this[TARGET_ACQUIRER]();
+export function acquireTarget({ validate }) {
+  if (validate?.(this) !== false) {
+    this[TARGET_ACQUIRER]();
+  }
 }
 
-export function updateAddress() {
-  this[ADDRESS_UPDATER]();
+export function updateAddress({ validate }) {
+  if (validate?.(this) !== false) {
+    this[ADDRESS_UPDATER]();
+  }
 }
 
 export function disablePointer() {
@@ -252,8 +258,7 @@ function getTargetValue() {
 }
 
 function visitPointer(fn, options = {}) {
-  const { source } = options;
-  fn.call(this, source);
+  fn.call(this, options);
 }
 
 function isPointerOf(arg, Target) {

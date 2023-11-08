@@ -118,3 +118,21 @@ export function getStructureFeature(structure) {
   const [ name ] = Object.entries(StructureType).find(a => a[1] === type);
   return `use${name}`;
 }
+
+export function defineProperties(object, descriptors) {
+  for (const [ name, descriptor ] of Object.entries(descriptors)) {
+    if (descriptor) {
+      Object.defineProperty(object, name, descriptor);
+    }
+  }
+  for (const symbol of Object.getOwnPropertySymbols(descriptors)) {
+    const descriptor = descriptors[symbol];
+    if (descriptor) {
+      Object.defineProperty(object, symbol, descriptor);
+    }
+  }
+}
+
+export function getSelf() {
+  return this;
+}

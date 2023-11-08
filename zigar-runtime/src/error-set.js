@@ -1,5 +1,6 @@
-import { ERROR_INDEX } from './symbol.js';
+import { defineProperties } from './structure.js';
 import { throwNoNewError, decamelizeErrorName } from './error.js';
+import { ERROR_INDEX } from './symbol.js';
 
 let currentErrorSets;
 
@@ -20,17 +21,8 @@ export function finalizeErrorSet(s, env) {
     return errors[index];
   };
   Object.setPrototypeOf(constructor.prototype, Error.prototype);
-  const getIndex = function() { return this[ERROR_INDEX] };
-  const toStringTag = function() { return 'Error' };
-  Object.defineProperties(constructor.prototype, {
-    // provide a way to retrieve the error index
-    index: { get: getIndex, configurable: true },
-    // ensure that libraries that rely on the string tag for type detection will
-    // correctly identify the object as an error
-    [Symbol.toStringTag]: { get: toStringTag, configurable: true },
-  });
-  // attach the errors to the constructor and the
   let errorIndices;
+  const errorDescriptors = {};
   for (const [ index, { name, slot } ] of members.entries()) {
     let error = errors[slot];
     if (error) {
@@ -60,16 +52,24 @@ export function finalizeErrorSet(s, env) {
       // need to create the error object--can't use the constructor since it would throw
       error = Object.create(constructor.prototype);
       const message = decamelizeErrorName(name);
-      Object.defineProperties(error, {
+      defineProperties(error, {
         message: { value: message, configurable: true, enumerable: true, writable: false },
         [ERROR_INDEX]: { value: slot },
       });
       errors[slot] = error;
     }
-    Object.defineProperties(constructor, {
-      [name]: { value: error, configurable: true, enumerable: true, writable: true },
-    });
+    errorDescriptors[name] = { value: error, configurable: true, enumerable: true, writable: true };
   }
+  const getIndex = function() { return this[ERROR_INDEX] };
+  const toStringTag = function() { return 'Error' };
+  defineProperties(constructor.prototype, {
+    // provide a way to retrieve the error index
+    index: { get: getIndex, configurable: true },
+    // ensure that libraries that rely on the string tag for type detection will
+    // correctly identify the object as an error
+    [Symbol.toStringTag]: { get: toStringTag, configurable: true },
+  });
+  defineProperties(constructor, errorDescriptors);
   return constructor;
 };
 

@@ -1,12 +1,13 @@
+import { defineProperties, getSelf } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
 import { getMemoryCopier, getPointerAlign } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
+import { copyPointer } from './pointer.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer, throwNoProperty } from './error.js';
-import { MEMORY, SLOTS, PARENT, CHILD_VIVIFICATOR, POINTER_VISITOR, FIELD_VALIDATOR, MEMORY_COPIER } from './symbol.js';
-import { copyPointer } from './pointer.js';
+import { CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR, SLOTS } from './symbol.js';
 
 export function finalizeStruct(s, env) {
   const {
@@ -128,28 +129,20 @@ export function finalizeStruct(s, env) {
       }
     }
   };
-  Object.defineProperties(constructor.prototype, {
+  defineProperties(constructor.prototype, {
     '$': { get: getSelf, set: initializer, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s) },
   });
-  addSpecialAccessors(s);
-  if (hasObject) {
-    addChildVivificators(s);
-    if (hasPointer) {
-      addPointerVisitor(s);
-    }
-  }
+  addSpecialAccessors(s, env);
   addStaticMembers(s, env);
   addMethods(s, env);
   return constructor;
 }
 
-export function getSelf() {
-  return this;
-}
-
-export function addChildVivificators(s) {
-  const { constructor: { prototype }, instance: { members } } = s;
+export function getChildVivificators(s) {
+  const { instance: { members } } = s;
   const objectMembers = members.filter(m => m.type === MemberType.Object);
   const vivificators = {};
   for (const { slot, bitOffset, byteSize, structure } of objectMembers) {
@@ -166,26 +159,33 @@ export function addChildVivificators(s) {
       return object;
     };
   }
-  Object.defineProperty(prototype, CHILD_VIVIFICATOR, { value: vivificators });
+  return vivificators;
 }
 
-export function addPointerVisitor(s) {
-  const { constructor: { prototype }, instance: { members } } = s;
+export function getPointerVisitor(s, validateChild = null) {
+  const { instance: { members } } = s;
   const pointerMembers = members.filter(m => m.structure.hasPointer);
-  const visitor = function visitPointers(cb, options = {}) {
+  return function visitPointers(cb, options = {}) {
     const {
       source,
       vivificate = false,
-      ignoreInactive = true,
+      validate,
     } = options;
-    const childOptions = { ...options };
-    for (const { name, slot } of pointerMembers) {
-      if (ignoreInactive) {
-        const active = this[FIELD_VALIDATOR]?.(name) ?? true;
-        if (!active) {
-          continue;
+    const childOptions = {
+      ...options,
+      validate: (object) => {
+        // make sure this object is valid
+        if (validate?.(this) === false) {
+          return false;
         }
-      }
+        // then check the validity of the child
+        if (validateChild?.call(this, object) === false) {
+          return false;
+        }
+        return true;
+      },
+    };
+    for (const { name, slot } of pointerMembers) {
       if (source) {
         // when src is a the struct's template, most slots will likely be empty,
         // since point fields aren't likely to have default values
@@ -201,5 +201,4 @@ export function addPointerVisitor(s) {
       }
     }
   };
-  Object.defineProperty(prototype, POINTER_VISITOR, { value: visitor });
 }

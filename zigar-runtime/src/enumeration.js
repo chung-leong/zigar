@@ -5,6 +5,7 @@ import { addMethods } from './method.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidInitializer, throwNoNewEnum } from './error.js';
 import { MEMORY, ENUM_INDEX, ENUM_NAME, ENUM_ITEMS, ENUM_ITEM } from './symbol.js';
+import { defineProperties } from './structure.js';
 
 export function finalizeEnumeration(s, env) {
   const {
@@ -59,17 +60,11 @@ export function finalizeEnumeration(s, env) {
       throwInvalidInitializer(s, [ 'number', 'string', 'tagged union' ], arg);
     }
   };
-  // attach the numeric values to the class as its binary data
-  // this allows us to reuse the array getter
-  Object.defineProperties(constructor, {
-    [MEMORY]: { value: template[MEMORY] },
-    [ENUM_ITEMS]: { value: items },
-  });
   const valueOf = function() {
     const index = this[ENUM_INDEX] ;
     return getValue.call(constructor, index);
   };
-  Object.defineProperties(constructor.prototype, {
+  defineProperties(constructor.prototype, {
     [Symbol.toPrimitive]: { value: valueOf, configurable: true, writable: true },
     $: { get: valueOf, configurable: true },
   });
@@ -90,18 +85,25 @@ export function finalizeEnumeration(s, env) {
     }
   })();
   // attach the enum items to the constructor
+  const itemDescriptors = {};
   for (const [ index, { name } ] of members.entries()) {
     // can't use the constructor since it would throw
     const item = Object.create(constructor.prototype);
-    Object.defineProperties(item, {
+    defineProperties(item, {
       [ENUM_INDEX]: { value: index },
       [ENUM_NAME]: { value: name },
     });
-    Object.defineProperties(constructor, {
-      [name]: { value: item, configurable: true, enumerable: true, writable: true },
-    });
+    itemDescriptors[name] = { value: item, configurable: true, enumerable: true, writable: true };
     items[index] = item;
   }
+  // attach the numeric values to the class as its binary data
+  // this allows us to reuse the array getter
+  defineProperties(constructor, {
+    ...itemDescriptors,
+    [MEMORY]: { value: template[MEMORY] },
+    [ENUM_ITEMS]: { value: items },
+  });
+
   addSpecialAccessors(s, env);
   addStaticMembers(s, env);
   addMethods(s, env);

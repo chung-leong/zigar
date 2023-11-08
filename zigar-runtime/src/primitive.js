@@ -1,3 +1,4 @@
+import { defineProperties } from './structure.js';
 import { MemberType, isByteAligned, getAccessors } from './member.js';
 import { getMemoryCopier, getPointerAlign } from './memory.js';
 import { getCompatibleTags, addTypedArray, requireDataView } from './data-view.js';
@@ -68,12 +69,14 @@ export function finalizePrimitive(s, env) {
     }
   };
   const { get, set } = getAccessors(member, options);
-  Object.defineProperties(constructor.prototype, {
+  defineProperties(constructor.prototype, {
     $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
   });
-  Object.defineProperty(constructor, COMPAT, { value: getCompatibleTags(s) });
+  defineProperties(constructor, {
+    [COMPAT]: { value: getCompatibleTags(s) },
+  });
   addSpecialAccessors(s);
   return constructor;
 };
