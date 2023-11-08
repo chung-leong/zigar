@@ -85,6 +85,19 @@ export function getBitAlignFunction(bitPos, bitSize, toAligned) {
 }
 
 export function getMemoryCopier(size, multiple = false) {
+  const copy = getCopyFunction(size, multiple);
+  return function(target) {
+    /* WASM-ONLY */
+    restoreMemory.call(this);
+    restoreMemory.call(target);
+    /* WASM-ONLY-END */
+    const src = target[MEMORY];
+    const dest = this[MEMORY];
+    copy(dest, src);
+  };
+}
+
+export function getCopyFunction(size, multiple = false) {
   if (!multiple) {
     const copier = copiers[size];
     if (copier) {
@@ -167,6 +180,14 @@ function copy32(dest, src) {
 }
 
 export function getMemoryResetter(size) {
+  const reset = getResetFunction(size);
+  return function() {
+    const dest = this[MEMORY];
+    reset(dest);
+  };
+}
+
+export function getResetFunction(size) {
   const resetter = resetters[size];
   if (resetter) {
     return resetter;

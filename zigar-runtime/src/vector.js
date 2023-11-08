@@ -1,9 +1,9 @@
 import { getAccessors } from './member.js';
-import { getMemoryCopier, restoreMemory, getPointerAlign } from './memory.js';
+import { getMemoryCopier, getPointerAlign } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
-import { MEMORY, COMPAT } from './symbol.js';
+import { MEMORY, COMPAT, MEMORY_COPIER } from './symbol.js';
 import { getSelf } from './struct.js';
 
 export function finalizeVector(s, env) {
@@ -48,14 +48,9 @@ export function finalizeVector(s, env) {
     }
   };
   const { bitSize: elementBitSize, structure: elementStructure } = member;
-  const copy = getMemoryCopier(byteSize);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      restoreMemory.call(arg);
-      /* WASM-ONLY-END */
-      copy(this[MEMORY], arg[MEMORY]);
+      this[MEMORY_COPIER](arg);
     } else {
       if (arg?.[Symbol.iterator]) {
         let argLen = arg.length;
@@ -81,9 +76,10 @@ export function finalizeVector(s, env) {
   }
   Object.defineProperties(constructor.prototype, {
     length: { value: length, configurable: true },
+    entries: { value: createVectorEntries, configurable: true, writable: true },
     $: { get: getSelf, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
-    entries: { value: createVectorEntries, configurable: true, writable: true },
+    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },

@@ -1,8 +1,9 @@
 import { StructureType } from './structure.js';
 import { MemberType } from './member.js';
-import { getMemoryCopier, restoreMemory } from './memory.js';
+import { restoreMemory } from './memory.js';
+import { decodeText, encodeText } from './text.js';
 import { throwBufferSizeMismatch, throwTypeMismatch } from './error.js';
-import { MEMORY } from './symbol.js';
+import { MEMORY, MEMORY_COPIER } from './symbol.js';
 import { isTypedArray } from './data-view.js';
 
 export function addSpecialAccessors(s) {
@@ -56,8 +57,7 @@ export function getSpecialKeys(s) {
 }
 
 export function getDataViewAccessors(structure) {
-  const { type, byteSize, sentinel } = structure;
-  const copy = getMemoryCopier(byteSize, type === StructureType.Slice);
+  const { sentinel, type, byteSize } = structure;
   return {
     get() {
       /* WASM-ONLY */
@@ -67,15 +67,13 @@ export function getDataViewAccessors(structure) {
     },
     set(dv) {
       checkDataView(dv);
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      /* WASM-ONLY-END */
-      const dest = this[MEMORY];
-      if (dest.byteLength !== dv.byteLength) {
+      const byteLength = byteSize * ((type === StructureType.Slice) ? this.length : 1);
+      if (dv.byteLength !== byteLength) {
         throwBufferSizeMismatch(structure, dv, this);
       }
-      sentinel?.validateData(dv, this.length);
-      copy(dest, dv);
+      const source = { [MEMORY]: dv };
+      sentinel?.validateData(source, this.length);
+      this[MEMORY_COPIER](source);
     },
   };
 }
@@ -113,21 +111,15 @@ export function getDataViewFromBase64(str) {
   return new DataView(ta.buffer);
 }
 
-const decoders = {};
-
 export function getStringAccessors(structure) {
   const { sentinel, instance: { members: [ member ] } } = structure;
   const { byteSize } = member;
   return {
     get() {
-      let decoder = decoders[byteSize];
-      if (!decoder) {
-        decoder = decoders[byteSize] = new TextDecoder(`utf-${byteSize * 8}`);
-      }
       const dv = this.dataView;
       const TypedArray = (byteSize === 1) ? Int8Array : Int16Array;
       const ta = new TypedArray(dv.buffer, dv.byteOffset, this.length);
-      const s = decoder.decode(ta);
+      const s = decodeText(ta, `utf-${byteSize * 8}`);
       return (sentinel?.value === undefined) ? s : s.slice(0, -1);
     },
     set(src) {
@@ -135,8 +127,6 @@ export function getStringAccessors(structure) {
     },
   };
 }
-
-let encoder;
 
 export function getDataViewFromUTF8(str, byteSize, sentinelValue) {
   if (typeof(str) !== 'string') {
@@ -147,19 +137,7 @@ export function getDataViewFromUTF8(str, byteSize, sentinelValue) {
       str = str + String.fromCharCode(sentinelValue);
     }
   }
-  let ta;
-  if (byteSize === 1) {
-    if (!encoder) {
-      encoder = new TextEncoder(`utf-${byteSize * 8}`);
-    }
-    ta = encoder.encode(str);
-  } else if (byteSize === 2) {
-    const { length } = str;
-    ta = new Uint16Array(length);
-    for (let i = 0; i < length; i++) {
-      ta[i] = str.charCodeAt(i);
-    }
-  }
+  const ta = encodeText(str, `utf-${byteSize * 8}`);
   return new DataView(ta.buffer);
 }
 

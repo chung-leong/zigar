@@ -595,12 +595,15 @@ export class WebAssemblyEnvironment extends Environment {
     return dv.buffer === this.memory.buffer;
   }
 
-  getAddress(buffer) {
-    if (buffer === this.memory.buffer) {
-      return 0;
+  getViewAddress(dv) {
+    const { buffer } = dv;
+    let address;
+    if (buffer !== this.memory.buffer) {
+
     } else {
-      throw new Error('Unable to obtain address of ArrayBuffer');
+      address = dv.byteOffset();
     }
+    return address;
   }
 
   obtainView(address, len) {

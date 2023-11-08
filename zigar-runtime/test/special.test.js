@@ -14,7 +14,7 @@ import {
   useFloatEx,
   useObject,
 } from '../src/member.js';
-import { MEMORY } from '../src/symbol.js';
+import { MEMORY, MEMORY_COPIER } from '../src/symbol.js';
 import {
   getDataViewAccessors,
   getBase64Accessors,
@@ -28,6 +28,7 @@ import {
   getDataViewFromTypedArray,
 } from '../src/special.js';
 import { Environment } from '../src/environment.js'
+import { getMemoryCopier } from '../src/memory.js';
 
 describe('Special property functions', function() {
   const env = new Environment();
@@ -52,7 +53,8 @@ describe('Special property functions', function() {
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(4));
       const object = {
-        [MEMORY]: dv
+        [MEMORY]: dv,
+        [MEMORY_COPIER]: getMemoryCopier(4),
       };
       expect(get.call(object)).to.equal(dv);
       const dv2 = new DataView(new ArrayBuffer(4));
@@ -75,6 +77,7 @@ describe('Special property functions', function() {
       dv[MEMORY] = { memory, address: 0, len: 4 };
       const object = {
         [MEMORY]: dv,
+        [MEMORY_COPIER]: getMemoryCopier(4),
       };
       memory.grow(1);
       expect(get.call(object)).to.have.property('byteLength', 4);
@@ -94,7 +97,8 @@ describe('Special property functions', function() {
       const { set } = getDataViewAccessors(structure);
       const dv = new DataView(new ArrayBuffer(4));
       const object = {
-        [MEMORY]: dv
+        [MEMORY]: dv,
+        [MEMORY_COPIER]: getMemoryCopier(4),
       };
       const dv2 = new DataView(new ArrayBuffer(5));
       dv2.setInt32(0, 1234, true);

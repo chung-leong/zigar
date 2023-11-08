@@ -393,6 +393,9 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
   } else {
     if (access === 'get') {
       return function(index) {
+        if (this.source) {
+          debugger;
+        }
         try {
           return accessor.call(this[MEMORY], index * byteSize, littleEndian);
         } catch (err) {

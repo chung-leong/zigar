@@ -1,8 +1,8 @@
 import { StructureType } from './structure.js';
-import { getPointerAlign } from './memory.js';
+import { getMemoryCopier, getPointerAlign } from './memory.js';
 import { requireDataView, getDataView, isCompatible, isBuffer } from './data-view.js';
 import { MemberType, getAccessors } from './member.js';
-import { MEMORY, PROXY, SLOTS, PARENT, TARGET_ACQUIRER, ADDRESS_UPDATER, POINTER_VISITOR, ENVIRONMENT } from './symbol.js';
+import { MEMORY, PROXY, SLOTS, PARENT, TARGET_ACQUIRER, ADDRESS_UPDATER, POINTER_VISITOR, ENVIRONMENT, MEMORY_COPIER } from './symbol.js';
 import {
   throwNoCastingToPointer,
   throwInaccessiblePointer,
@@ -199,6 +199,7 @@ export function finalizePointer(s, env) {
     [TARGET_ACQUIRER]: { value: targetAcquirer },
     [ADDRESS_UPDATER]: { value: addressUpdater },
     [POINTER_VISITOR]: { value: visitPointer },
+    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
   });
   Object.defineProperties(constructor, {
     child: { get: () => targetStructure.constructor },

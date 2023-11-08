@@ -1,9 +1,9 @@
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, restoreMemory, getPointerAlign } from './memory.js';
+import { getMemoryCopier, getPointerAlign } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
-import { MEMORY, SLOTS, PARENT, GETTER, SETTER, PROXY, COMPAT, CHILD_VIVIFICATOR, POINTER_VISITOR, SELF } from './symbol.js';
+import { MEMORY, SLOTS, PARENT, GETTER, SETTER, PROXY, COMPAT, CHILD_VIVIFICATOR, POINTER_VISITOR, SELF, MEMORY_COPIER } from './symbol.js';
 import { copyPointer, getProxy } from './pointer.js';
 
 export function finalizeArray(s, env) {
@@ -54,15 +54,10 @@ export function finalizeArray(s, env) {
     return createProxy.call(self);
   };
   const { structure: elementStructure } = member;
-  const copy = getMemoryCopier(byteSize);
   const specialKeys = getSpecialKeys(s);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      restoreMemory.call(arg);
-      /* WASM-ONLY-END */
-      copy(this[MEMORY], arg[MEMORY]);
+      this[MEMORY_COPIER](arg);
       if (hasPointer) {
         this[POINTER_VISITOR](copyPointer, { vivificate: true });
       }
@@ -114,8 +109,9 @@ export function finalizeArray(s, env) {
     set: { value: set, configurable: true, writable: true },
     length: { value: length, configurable: true },
     $: { get: getProxy, set: initializer, configurable: true },
+    entries: { value: createArrayEntries, configurable: true, writable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
-    entries: { value: createArrayEntries, configurable: true, writable: true }
+    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },

@@ -1,8 +1,8 @@
 import { MemberType, isByteAligned, getAccessors } from './member.js';
-import { getMemoryCopier, restoreMemory, getPointerAlign } from './memory.js';
+import { getMemoryCopier, getPointerAlign } from './memory.js';
 import { getCompatibleTags, addTypedArray, requireDataView } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
-import { MEMORY, COMPAT } from './symbol.js';
+import { MEMORY, COMPAT, MEMORY_COPIER } from './symbol.js';
 import { throwInvalidInitializer, throwNoInitializer, throwNoProperty } from './error.js';
 
 export function finalizePrimitive(s, env) {
@@ -36,15 +36,10 @@ export function finalizePrimitive(s, env) {
       return self;
     }
   };
-  const copy = getMemoryCopier(byteSize);
   const specialKeys = getSpecialKeys(s);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      restoreMemory.call(arg);
-      /* WASM-ONLY-END */
-      copy(this[MEMORY], arg[MEMORY]);
+      this[MEMORY_COPIER](arg);
     } else {
       if (arg && typeof(arg) === 'object') {
         for (const key of Object.keys(arg)) {
@@ -76,6 +71,7 @@ export function finalizePrimitive(s, env) {
   Object.defineProperties(constructor.prototype, {
     $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
+    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
   });
   Object.defineProperty(constructor, COMPAT, { value: getCompatibleTags(s) });
   addSpecialAccessors(s);

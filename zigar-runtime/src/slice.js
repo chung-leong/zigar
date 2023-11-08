@@ -1,5 +1,5 @@
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, restoreMemory, getPointerAlign } from './memory.js';
+import { getMemoryCopier, getPointerAlign } from './memory.js';
 import { requireDataView, addTypedArray, checkDataViewSize, getCompatibleTags } from './data-view.js';
 import { getArrayIterator, createProxy, createArrayEntries, addChildVivificator, addPointerVisitor } from './array.js';
 import {
@@ -18,7 +18,7 @@ import {
   throwMissingSentinel,
   throwNoInitializer,
 } from './error.js';
-import { LENGTH, MEMORY, SLOTS, GETTER, SETTER, COMPAT, POINTER_VISITOR } from './symbol.js';
+import { LENGTH, MEMORY, SLOTS, GETTER, SETTER, COMPAT, MEMORY_COPIER, POINTER_VISITOR } from './symbol.js';
 import { copyPointer } from './pointer.js';
 import { getSelf } from './struct.js';
 
@@ -68,7 +68,6 @@ export function finalizeSlice(s, env) {
     }
     return createProxy.call(self);
   };
-  const copy = getMemoryCopier(elementSize, true);
   const specialKeys = getSpecialKeys(s);
   const shapeDefiner = function(dv, length) {
     if (!dv) {
@@ -97,11 +96,7 @@ export function finalizeSlice(s, env) {
       } else {
         shapeChecker.call(this, arg, arg.length);
       }
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      restoreMemory.call(arg);
-      /* WASM-ONLY-END */
-      copy(this[MEMORY], arg[MEMORY]);
+      this[MEMORY_COPIER](arg);
       if (hasPointer) {
         this[POINTER_VISITOR](copyPointer, { source: arg });
       }
@@ -169,14 +164,15 @@ export function finalizeSlice(s, env) {
                   break;
               }
               checkDataViewSize(s, dv);
-              const length = dv.byteLength / elementSize;
-              sentinel?.validateData(dv, length);
+              const len = dv.byteLength / elementSize;
+              const source = { [MEMORY]: dv };
+              sentinel?.validateData(source, len);
               if (dup) {
-                shapeDefiner.call(this, null, length);
-                copy(this[MEMORY], dv);
+                shapeDefiner.call(this, null, len);
+                this[MEMORY_COPIER](source);
               } else {
                 // reuse memory from string decoding
-                shapeDefiner.call(this, dv, length);
+                shapeDefiner.call(this, dv, len);
               }
               shapeless = false;
             } else {
@@ -195,8 +191,9 @@ export function finalizeSlice(s, env) {
     set: { value: set, configurable: true, writable: true },
     length: { get: getLength, configurable: true },
     $: { get: getSelf, set: initializer, configurable: true },
-    [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     entries: { value: createArrayEntries, configurable: true, writable: true },
+    [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
+    [MEMORY_COPIER]: { value: getMemoryCopier(elementSize, true) },
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
@@ -221,6 +218,7 @@ export function getSentinel(structure, options) {
     runtimeSafety = true,
   } = options;
   const {
+    byteSize,
     instance: { members: [ member, sentinel ], template },
   } = structure;
   if (!sentinel) {
@@ -231,6 +229,7 @@ export function getSentinel(structure, options) {
   if (sentinel.bitOffset === undefined) {
     throw new Error(`bitOffset must be 0 for sentinel member`);
   }
+  /* DEV-TEST-END */
   const { get: getSentinelValue } = getAccessors(sentinel, options);
   const value = getSentinelValue.call(template, 0);
   const { get } = getAccessors(member, options);
@@ -245,23 +244,21 @@ export function getSentinel(structure, options) {
       throwMissingSentinel(structure, value, l);
     }
   };
-  const validateData = (runtimeSafety) ? function(dv, l) {
-    const object = { [MEMORY]: dv };
-    for (let i = 0; i < l; i++) {
-      const v = get.call(object, i);
-      if (v === value && i !== l - 1) {
-        throwMisplacedSentinel(structure, value, i, l);
-      } else if (v !== value && i === l - 1) {
-        throwMissingSentinel(structure, value, l);
+  const validateData = (runtimeSafety) ? function(source, len) {
+    for (let i = 0; i < len; i++) {
+      const v = get.call(source, i);
+      if (v === value && i !== len - 1) {
+        throwMisplacedSentinel(structure, value, i, len);
+      } else if (v !== value && i === len - 1) {
+        throwMissingSentinel(structure, value, len);
       }
     }
-  } : function(dv, l) {
-    const object = { [MEMORY]: dv };
-    if (l > 0) {
-      const i = l - 1;
-      const v = get.call(object, i);
+  } : function(source, len) {
+    if (len * byteSize === source[MEMORY].byteLength) {
+      const i = len - 1;
+      const v = get.call(source, i);
       if (v !== value) {
-        throwMissingSentinel(structure, value, l);
+        throwMissingSentinel(structure, value, len);
       }
     }
   };

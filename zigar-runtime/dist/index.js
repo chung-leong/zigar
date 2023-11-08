@@ -13,6 +13,8 @@ const LENGTH = Symbol('length');
 const PROXY = Symbol('proxy');
 const COMPAT = Symbol('compat');
 const SELF = Symbol('self');
+const MEMORY_COPIER$1 = Symbol('memoryCopier');
+const MEMORY_RESETTER = Symbol('memoryResetter');
 const CHILD_VIVIFICATOR = Symbol('childVivificator');
 const POINTER_VISITOR = Symbol('pointerVisitor');
 const TARGET_ACQUIRER = Symbol('targetAcquirer');
@@ -105,6 +107,24 @@ function getBitAlignFunction(bitPos, bitSize, toAligned) {
 }
 
 function getMemoryCopier(size, multiple = false) {
+  const copy = getCopyFunction(size, multiple);
+  return function(target) {
+    /* WASM-ONLY */
+    restoreMemory.call(this);
+    restoreMemory.call(arg);
+    /* WASM-ONLY-END */
+    const src = target[MEMORY];
+    const dest = this[MEMORY];
+    if (dest.byteLength === src.byteLength) {
+      copy(dest, src);
+      return true;
+    } else {
+      return false;
+    }
+  };
+}
+
+function getCopyFunction(size, multiple = false) {
   if (!multiple) {
     const copier = copiers[size];
     if (copier) {
@@ -187,83 +207,11 @@ function copy32(dest, src) {
 }
 
 function getMemoryResetter(size) {
-  const resetter = resetters[size];
-  if (resetter) {
-    return resetter;
-  }
-  if (!(size & 0x07)) return reset8x;
-  if (!(size & 0x03)) return reset4x;
-  if (!(size & 0x01)) return reset2x;
-  return reset1x;
-}
-
-const resetters = {
-  1: reset1,
-  2: reset2,
-  4: reset4,
-  8: reset8,
-  16: reset16,
-  32: reset32,
-};
-
-function reset1x(dest) {
-  for (let i = 0, len = dest.byteLength; i < len; i++) {
-    dest.setInt8(i, 0);
-  }
-}
-
-function reset2x(dest) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 2) {
-    dest.setInt16(i, 0, true);
-  }
-}
-
-function reset4x(dest) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 4) {
-    dest.setInt32(i, 0, true);
-  }
-}
-
-function reset8x(dest) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 8) {
-    dest.setInt32(i, 0, true);
-    dest.setInt32(i + 4, 0, true);
-  }
-}
-
-function reset1(dest) {
-  dest.setInt8(0, 0);
-}
-
-function reset2(dest) {
-  dest.setInt16(0, 0, true);
-}
-
-function reset4(dest) {
-  dest.setInt32(0, 0, true);
-}
-
-function reset8(dest) {
-  dest.setInt32(0, 0, true);
-  dest.setInt32(4, 0, true);
-}
-
-function reset16(dest) {
-  dest.setInt32(0, 0, true);
-  dest.setInt32(4, 0, true);
-  dest.setInt32(8, 0, true);
-  dest.setInt32(12, 0, true);
-}
-
-function reset32(dest) {
-  dest.setInt32(0, 0, true);
-  dest.setInt32(4, 0, true);
-  dest.setInt32(8, 0, true);
-  dest.setInt32(12, 0, true);
-  dest.setInt32(16, 0, true);
-  dest.setInt32(20, 0, true);
-  dest.setInt32(24, 0, true);
-  dest.setInt32(28, 0, true);
+  const reset = getCopyFunction(size);
+  return function() {
+    const dest = this[MEMORY];
+    reset(dest);
+  };
 }
 /* c8 ignore end */
 
@@ -1617,6 +1565,34 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
   }
 }
 
+let decoder;
+
+function decodeText(arrays, encoding = 'utf-8') {
+  if (!decoder) {
+    decoder = new TextDecoder;
+  }
+  let array;
+  if (Array.isArray(arrays)) {
+    if (arrays.length === 1) {
+      array = arrays[0];
+    } else {
+      let len = 0;
+      for (const a of arrays) {
+        len += a.length;
+      }
+      array = new Uint8Array(len);
+      let offset = 0;
+      for (const a of arrays) {
+        array.set(a, offset);
+        offset += a.length;
+      }
+    }
+  } else {
+    array = arrays;
+  }
+  return decoder.decode(array);
+}
+
 function addSpecialAccessors(s) {
   const {
     constructor,
@@ -1668,8 +1644,7 @@ function getSpecialKeys(s) {
 }
 
 function getDataViewAccessors(structure) {
-  const { type, byteSize, sentinel } = structure;
-  const copy = getMemoryCopier(byteSize, type === StructureType.Slice);
+  const { sentinel } = structure;
   return {
     get() {
       /* WASM-ONLY */
@@ -1679,15 +1654,11 @@ function getDataViewAccessors(structure) {
     },
     set(dv) {
       checkDataView(dv);
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      /* WASM-ONLY-END */
-      const dest = this[MEMORY];
-      if (dest.byteLength !== dv.byteLength) {
+      const source = { [MEMORY]: dv };
+      sentinel?.validateData({ source });
+      if (!this[MEMORY_COPIER$1](source)) {
         throwBufferSizeMismatch(structure, dv, this);
       }
-      sentinel?.validateData(dv, this.length);
-      copy(dest, dv);
     },
   };
 }
@@ -1725,21 +1696,15 @@ function getDataViewFromBase64(str) {
   return new DataView(ta.buffer);
 }
 
-const decoders = {};
-
 function getStringAccessors(structure) {
   const { sentinel, instance: { members: [ member ] } } = structure;
   const { byteSize } = member;
   return {
     get() {
-      let decoder = decoders[byteSize];
-      if (!decoder) {
-        decoder = decoders[byteSize] = new TextDecoder(`utf-${byteSize * 8}`);
-      }
       const dv = this.dataView;
       const TypedArray = (byteSize === 1) ? Int8Array : Int16Array;
       const ta = new TypedArray(dv.buffer, dv.byteOffset, this.length);
-      const s = decoder.decode(ta);
+      const s = decodeText(ta);
       return (sentinel?.value === undefined) ? s : s.slice(0, -1);
     },
     set(src) {
@@ -1747,8 +1712,6 @@ function getStringAccessors(structure) {
     },
   };
 }
-
-let encoder;
 
 function getDataViewFromUTF8(str, byteSize, sentinelValue) {
   if (typeof(str) !== 'string') {
@@ -1759,19 +1722,7 @@ function getDataViewFromUTF8(str, byteSize, sentinelValue) {
       str = str + String.fromCharCode(sentinelValue);
     }
   }
-  let ta;
-  if (byteSize === 1) {
-    if (!encoder) {
-      encoder = new TextEncoder(`utf-${byteSize * 8}`);
-    }
-    ta = encoder.encode(str);
-  } else if (byteSize === 2) {
-    const { length } = str;
-    ta = new Uint16Array(length);
-    for (let i = 0; i < length; i++) {
-      ta[i] = str.charCodeAt(i);
-    }
-  }
+  const ta = encodeText(str, `utf-${byteSize}`);
   return new DataView(ta.buffer);
 }
 
@@ -1855,15 +1806,10 @@ function finalizePrimitive(s, env) {
       return self;
     }
   };
-  const copy = getMemoryCopier(byteSize);
   const specialKeys = getSpecialKeys(s);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      restoreMemory.call(arg);
-      /* WASM-ONLY-END */
-      copy(this[MEMORY], arg[MEMORY]);
+      this[MEMORY_COPIER$1](arg);
     } else {
       if (arg && typeof(arg) === 'object') {
         for (const key of Object.keys(arg)) {
@@ -1895,6 +1841,7 @@ function finalizePrimitive(s, env) {
   Object.defineProperties(constructor.prototype, {
     $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
+    [MEMORY_COPIER$1]: { value: getMemoryCopier(byteSize) },
   });
   Object.defineProperty(constructor, COMPAT, { value: getCompatibleTags(s) });
   addSpecialAccessors(s);
@@ -2122,6 +2069,7 @@ function finalizePointer(s, env) {
     [TARGET_ACQUIRER]: { value: targetAcquirer },
     [ADDRESS_UPDATER]: { value: addressUpdater },
     [POINTER_VISITOR]: { value: visitPointer },
+    [MEMORY_COPIER$1]: { value: getMemoryCopier(byteSize) },
   });
   Object.defineProperties(constructor, {
     child: { get: () => targetStructure.constructor },
@@ -2308,15 +2256,10 @@ function finalizeArray(s, env) {
     return createProxy.call(self);
   };
   const { structure: elementStructure } = member;
-  const copy = getMemoryCopier(byteSize);
   const specialKeys = getSpecialKeys(s);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      restoreMemory.call(arg);
-      /* WASM-ONLY-END */
-      copy(this[MEMORY], arg[MEMORY]);
+      this[MEMORY_COPIER$1](arg);
       if (hasPointer) {
         this[POINTER_VISITOR](copyPointer, { vivificate: true });
       }
@@ -2368,8 +2311,9 @@ function finalizeArray(s, env) {
     set: { value: set, configurable: true, writable: true },
     length: { value: length, configurable: true },
     $: { get: getProxy, set: initializer, configurable: true },
+    entries: { value: createArrayEntries, configurable: true, writable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
-    entries: { value: createArrayEntries, configurable: true, writable: true }
+    [MEMORY_COPIER$1]: { value: getMemoryCopier(byteSize) },
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
@@ -2665,16 +2609,11 @@ function finalizeStruct(s, env) {
       return self;
     }
   };
-  const copy = getMemoryCopier(byteSize);
   const specialKeys = getSpecialKeys(s);
   const requiredKeys = members.filter(m => m.isRequired).map(m => m.name);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      restoreMemory.call(arg);
-      /* WASM-ONLY-END */
-      copy(this[MEMORY], arg[MEMORY]);
+      this[MEMORY_COPIER$1](arg);
       if (hasPointer) {
         this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
@@ -2713,7 +2652,7 @@ function finalizeStruct(s, env) {
         }
         // apply default values unless all properties are initialized
         if (template && specialFound === 0 && found < keys.length) {
-          copy(this[MEMORY], template[MEMORY]);
+          this[MEMORY_COPIER$1](template);
           if (hasPointer) {
             this[POINTER_VISITOR](copyPointer, { vivificate: true, source: template });
           }
@@ -2736,7 +2675,10 @@ function finalizeStruct(s, env) {
       }
     }
   };
-  Object.defineProperty(constructor.prototype, '$', { get: getSelf, set: initializer, configurable: true });
+  Object.defineProperty(constructor.prototype, {
+    '$': { get: getSelf, set: initializer, configurable: true },
+    [MEMORY_COPIER$1]: { value: getMemoryCopier(byteSize) },
+  });
   addSpecialAccessors(s);
   if (hasObject) {
     addChildVivificators(s);
@@ -2948,15 +2890,11 @@ function finalizeUnion(s, env) {
     }
   };
   const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
-  const copy = getMemoryCopier(byteSize);
   const specialKeys = getSpecialKeys(s);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      restoreMemory.call(arg);
       /* WASM-ONLY-END */
-      copy(this[MEMORY], arg[MEMORY]);
+      this[MEMORY_COPIER$1](arg);
       if (hasPointer) {
         this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
@@ -3000,10 +2938,7 @@ function finalizeUnion(s, env) {
           }
         } else if (found === 0) {
           if (template) {
-            /* WASM-ONLY */
-            restoreMemory.call(this);
-            /* WASM-ONLY-END */
-            copy(this[MEMORY], template[MEMORY]);
+            this[MEMORY_COPIER$1](template);
             if (hasPointer) {
               this[POINTER_VISITOR](copyPointer, { vivificate: true, source: template });
             }
@@ -3023,11 +2958,14 @@ function finalizeUnion(s, env) {
       }
     }
   };
+  Object.defineProperties(constructor.prototype, {
+    '$': { get: getSelf, set: initializer, configurable: true },
+    [MEMORY_COPIER$1]: { value: getMemoryCopier(byteSize) },
+  });
   if (isTagged) {
     // enable casting to enum
     Object.defineProperty(constructor.prototype, ENUM_ITEM, { get: getEnumItem, configurable: true });
   }
-  Object.defineProperty(constructor.prototype, '$', { get: getSelf, set: initializer, configurable: true });
   if (hasObject) {
     addChildVivificators(s);
     if (hasPointer || hasInaccessiblePointer) {
@@ -3063,15 +3001,14 @@ function finalizeErrorUnion(s, env) {
   const { get: getError, set: setError } = getAccessors(members[1], options);
   const { structure: errorStructure } = members[1];
   const { constructor: ErrorSet } = errorStructure;
-  const reset = getMemoryResetter(byteSize);
   const set = function(value) {
     if (value instanceof Error) {
       if (!(value instanceof ErrorSet)) {
         throwNotInErrorSet(errorStructure);
       }
-      reset(this[MEMORY]);
-      setError.call(this, value.index);
+      this[MEMORY_RESETTER]();
       this[POINTER_VISITOR]?.(resetPointer);
+      setError.call(this, value.index);
     } else {
       setValue.call(this, value);
       setError.call(this, 0);
@@ -3119,10 +3056,9 @@ function finalizeErrorUnion(s, env) {
       return self;
     }
   };
-  const copy = getMemoryCopier(byteSize);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      copy(this[MEMORY], arg[MEMORY]);
+      this[MEMORY_COPIER$1](arg);
       if (hasPointer) {
         if (check.call(this)) {
           this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
@@ -3132,7 +3068,11 @@ function finalizeErrorUnion(s, env) {
       this.$ = arg;
     }
   };
-  Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
+  Object.defineProperties(constructor.prototype, {
+    '$': { get, set, configurable: true },
+    [MEMORY_COPIER$1]: { value: getMemoryCopier(byteSize) },
+    [MEMORY_RESETTER]: { value: getMemoryResetter(byteSize) },
+  });
   if (hasObject) {
     addChildVivificators(s);
     if (hasPointer) {
@@ -3325,7 +3265,6 @@ function finalizeOptional(s, env) {
   } = s;
   const { get: getValue, set: setValue } = getAccessors(members[0], options);
   const { get: getPresent, set: setPresent } = getAccessors(members[1], options);
-  const reset = getMemoryResetter(byteSize);
   const get = function() {
     const present = getPresent.call(this);
     if (present) {
@@ -3340,7 +3279,7 @@ function finalizeOptional(s, env) {
       setPresent.call(this, true);
       setValue.call(this, value);
     } else {
-      reset(this[MEMORY]);
+      this[MEMORY_RESETTER]();
       this[POINTER_VISITOR]?.(resetPointer);
     }
   };
@@ -3370,25 +3309,24 @@ function finalizeOptional(s, env) {
       return self;
     }
   };
-  const copy = getMemoryCopier(byteSize);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      restoreMemory.call(arg);
-      /* WASM-ONLY-END */
-      copy(this[MEMORY], arg[MEMORY]);
+      this[MEMORY_COPIER$1](arg);
       if (hasPointer) {
         // don't bother copying pointers when it's empty
         if (check.call(this)) {
-          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg});
+          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }
     } else {
       this.$ = arg;
     }
   };
-  Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
+  Object.defineProperties(constructor.prototype, {
+    '$': { get, set, configurable: true },
+    [MEMORY_COPIER$1]: { value: getMemoryCopier(byteSize) },
+    [MEMORY_RESETTER]: { value: getMemoryResetter(byteSize) },
+  });
   if (hasObject) {
     addChildVivificators(s);
     if (hasPointer) {
@@ -3438,7 +3376,6 @@ function finalizeSlice(s, env) {
     }
     return createProxy.call(self);
   };
-  const copy = getMemoryCopier(elementSize, true);
   const specialKeys = getSpecialKeys(s);
   const shapeDefiner = function(dv, length) {
     if (!dv) {
@@ -3467,11 +3404,7 @@ function finalizeSlice(s, env) {
       } else {
         shapeChecker.call(this, arg, arg.length);
       }
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      restoreMemory.call(arg);
-      /* WASM-ONLY-END */
-      copy(this[MEMORY], arg[MEMORY]);
+      this[MEMORY_COPIER](arg);
       if (hasPointer) {
         this[POINTER_VISITOR](copyPointer, { source: arg });
       }
@@ -3543,7 +3476,7 @@ function finalizeSlice(s, env) {
               sentinel?.validateData(dv, length);
               if (dup) {
                 shapeDefiner.call(this, null, length);
-                copy(this[MEMORY], dv);
+                this[MEMORY_COPIER]({ [MEMORY]: dv });
               } else {
                 // reuse memory from string decoding
                 shapeDefiner.call(this, dv, length);
@@ -3565,8 +3498,9 @@ function finalizeSlice(s, env) {
     set: { value: set, configurable: true, writable: true },
     length: { get: getLength, configurable: true },
     $: { get: getSelf, set: initializer, configurable: true },
-    [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     entries: { value: createArrayEntries, configurable: true, writable: true },
+    [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
+    [MEMORY_COPIER]: getMemoryCopier(elementSize, true),
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
@@ -3591,15 +3525,11 @@ function getSentinel(structure, options) {
     runtimeSafety = true,
   } = options;
   const {
+    byteSize,
     instance: { members: [ member, sentinel ], template },
   } = structure;
   if (!sentinel) {
     return;
-  }
-  /* DEV-TEST */
-  /* c8 ignore next 3 */
-  if (sentinel.bitOffset === undefined) {
-    throw new Error(`bitOffset must be 0 for sentinel member`);
   }
   const { get: getSentinelValue } = getAccessors(sentinel, options);
   const value = getSentinelValue.call(template, 0);
@@ -3615,24 +3545,27 @@ function getSentinel(structure, options) {
       throwMissingSentinel(structure, value, l);
     }
   };
-  const validateData = (runtimeSafety) ? function(dv, l) {
-    const object = { [MEMORY]: dv };
-    for (let i = 0; i < l; i++) {
+  const validateData = (runtimeSafety) ? function(source) {
+    const dv = source[MEMORY];
+    const len = dv.byteLength / byteSize;
+    for (let i = 0; i < len; i++) {
       const v = get.call(object, i);
-      if (v === value && i !== l - 1) {
-        throwMisplacedSentinel(structure, value, i, l);
-      } else if (v !== value && i === l - 1) {
-        throwMissingSentinel(structure, value, l);
+      if (v === value && i !== len - 1) {
+        throwMisplacedSentinel(structure, value, i, len);
+      } else if (v !== value && i === len - 1) {
+        throwMissingSentinel(structure, value, len);
       }
     }
-  } : function(dv, l) {
-    const object = { [MEMORY]: dv };
-    if (l > 0) {
-      const i = l - 1;
-      const v = get.call(object, i);
-      if (v !== value) {
-        throwMissingSentinel(structure, value, l);
-      }
+  } : function(source) {
+    const dv = source[MEMORY];
+    const len = dv.byteLength / byteSize;
+    if (len === 0) {
+      throwMissingSentinel(structure, value, len);
+    }
+    const i = len - 1;
+    const v = get.call(object, i);
+    if (v !== value) {
+      throwMissingSentinel(structure, value, len);
     }
   };
   const bytes = template[MEMORY];
@@ -3672,14 +3605,9 @@ function finalizeVector(s, env) {
     }
   };
   const { bitSize: elementBitSize, structure: elementStructure } = member;
-  const copy = getMemoryCopier(byteSize);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      restoreMemory.call(arg);
-      /* WASM-ONLY-END */
-      copy(this[MEMORY], arg[MEMORY]);
+      this[MEMORY_COPIER$1](arg);
     } else {
       if (arg?.[Symbol.iterator]) {
         let argLen = arg.length;
@@ -3705,9 +3633,10 @@ function finalizeVector(s, env) {
   }
   Object.defineProperties(constructor.prototype, {
     length: { value: length, configurable: true },
+    entries: { value: createVectorEntries, configurable: true, writable: true },
     $: { get: getSelf, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
-    entries: { value: createVectorEntries, configurable: true, writable: true },
+    [MEMORY_COPIER$1]: { value: getMemoryCopier(byteSize) },
   });
   Object.defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
@@ -3902,34 +3831,6 @@ function getStructureName(s, full = false) {
 function getStructureFactory(type) {
   const f = factories[type];
   return f;
-}
-
-let decoder;
-
-function decodeText(arrays, encoding = 'utf-8') {
-  if (!decoder) {
-    decoder = new TextDecoder;
-  }
-  let array;
-  if (Array.isArray(arrays)) {
-    if (arrays.length === 1) {
-      array = arrays[0];
-    } else {
-      let len = 0;
-      for (const a of arrays) {
-        len += a.length;
-      }
-      array = new Uint8Array(len);
-      let offset = 0;
-      for (const a of arrays) {
-        array.set(a, offset);
-        offset += a.length;
-      }
-    }
-  } else {
-    array = arrays;
-  }
-  return decoder.decode(array);
 }
 
 const default_alignment = 16;
@@ -4323,12 +4224,13 @@ class WebAssemblyEnvironment extends Environment {
     return dv.buffer === this.memory.buffer;
   }
 
-  getAddress(buffer) {
-    if (buffer === this.memory.buffer) {
-      return 0;
-    } else {
-      throw new Error('Unable to obtain address of ArrayBuffer');
+  getViewAddress(dv) {
+    const { buffer } = dv;
+    let address;
+    if (buffer !== this.memory.buffer) ; else {
+      address = dv.byteOffset();
     }
+    return address;
   }
 
   obtainView(address, len) {

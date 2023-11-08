@@ -1,6 +1,6 @@
 import { StructureType } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, restoreMemory, getPointerAlign } from './memory.js';
+import { getMemoryCopier, getPointerAlign } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
@@ -15,7 +15,7 @@ import {
   throwNoInitializer,
 } from './error.js';
 import { copyPointer, disablePointer, resetPointer } from './pointer.js';
-import { MEMORY, ENUM_NAME, ENUM_ITEM, TAG, SLOTS, POINTER_VISITOR, FIELD_VALIDATOR } from './symbol.js';
+import { MEMORY, ENUM_NAME, ENUM_ITEM, TAG, SLOTS, POINTER_VISITOR, FIELD_VALIDATOR, MEMORY_COPIER } from './symbol.js';
 
 export function finalizeUnion(s, env) {
   const {
@@ -156,15 +156,11 @@ export function finalizeUnion(s, env) {
     }
   };
   const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
-  const copy = getMemoryCopier(byteSize);
   const specialKeys = getSpecialKeys(s);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      restoreMemory.call(arg);
       /* WASM-ONLY-END */
-      copy(this[MEMORY], arg[MEMORY]);
+      this[MEMORY_COPIER](arg);
       if (hasPointer) {
         this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
@@ -208,10 +204,7 @@ export function finalizeUnion(s, env) {
           }
         } else if (found === 0) {
           if (template) {
-            /* WASM-ONLY */
-            restoreMemory.call(this);
-            /* WASM-ONLY-END */
-            copy(this[MEMORY], template[MEMORY]);
+            this[MEMORY_COPIER](template);
             if (hasPointer) {
               this[POINTER_VISITOR](copyPointer, { vivificate: true, source: template });
             }
@@ -231,11 +224,14 @@ export function finalizeUnion(s, env) {
       }
     }
   };
+  Object.defineProperties(constructor.prototype, {
+    '$': { get: getSelf, set: initializer, configurable: true },
+    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
+  });
   if (isTagged) {
     // enable casting to enum
     Object.defineProperty(constructor.prototype, ENUM_ITEM, { get: getEnumItem, configurable: true });
   }
-  Object.defineProperty(constructor.prototype, '$', { get: getSelf, set: initializer, configurable: true });
   if (hasObject) {
     addChildVivificators(s);
     if (hasPointer || hasInaccessiblePointer) {

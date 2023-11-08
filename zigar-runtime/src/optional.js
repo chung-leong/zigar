@@ -1,9 +1,9 @@
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, getMemoryResetter, restoreMemory, getPointerAlign } from './memory.js';
+import { getMemoryCopier, getMemoryResetter, getPointerAlign } from './memory.js';
 import { requireDataView }  from './data-view.js';
 import { addChildVivificators, addPointerVisitor } from './struct.js';
 import { addSpecialAccessors } from './special.js';
-import { MEMORY, FIELD_VALIDATOR, POINTER_VISITOR, SLOTS } from './symbol.js';
+import { MEMORY, FIELD_VALIDATOR, POINTER_VISITOR, SLOTS, MEMORY_COPIER, MEMORY_RESETTER } from './symbol.js';
 import { throwNoInitializer } from './error.js';
 import { copyPointer, resetPointer } from './pointer.js';
 
@@ -17,13 +17,11 @@ export function finalizeOptional(s, env) {
   } = s;
   const { get: getValue, set: setValue } = getAccessors(members[0], options);
   const { get: getPresent, set: setPresent } = getAccessors(members[1], options);
-  const reset = getMemoryResetter(byteSize);
   const get = function() {
     const present = getPresent.call(this);
     if (present) {
       return getValue.call(this);
     } else {
-      this[POINTER_VISITOR]?.(resetPointer);
       return null;
     }
   };
@@ -32,7 +30,7 @@ export function finalizeOptional(s, env) {
       setPresent.call(this, true);
       setValue.call(this, value);
     } else {
-      reset(this[MEMORY]);
+      this[MEMORY_RESETTER]();
       this[POINTER_VISITOR]?.(resetPointer);
     }
   };
@@ -62,25 +60,24 @@ export function finalizeOptional(s, env) {
       return self;
     }
   };
-  const copy = getMemoryCopier(byteSize);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      restoreMemory.call(arg);
-      /* WASM-ONLY-END */
-      copy(this[MEMORY], arg[MEMORY]);
+      this[MEMORY_COPIER](arg);
       if (hasPointer) {
         // don't bother copying pointers when it's empty
         if (check.call(this)) {
-          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg});
+          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }
     } else {
       this.$ = arg;
     }
   };
-  Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
+  Object.defineProperties(constructor.prototype, {
+    '$': { get, set, configurable: true },
+    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
+    [MEMORY_RESETTER]: { value: getMemoryResetter(byteSize) },
+  });
   if (hasObject) {
     addChildVivificators(s);
     if (hasPointer) {

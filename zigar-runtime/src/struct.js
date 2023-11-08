@@ -1,11 +1,11 @@
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, restoreMemory, getPointerAlign } from './memory.js';
+import { getMemoryCopier, getPointerAlign } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer, throwNoProperty } from './error.js';
-import { MEMORY, SLOTS, PARENT, CHILD_VIVIFICATOR, POINTER_VISITOR, FIELD_VALIDATOR } from './symbol.js';
+import { MEMORY, SLOTS, PARENT, CHILD_VIVIFICATOR, POINTER_VISITOR, FIELD_VALIDATOR, MEMORY_COPIER } from './symbol.js';
 import { copyPointer } from './pointer.js';
 
 export function finalizeStruct(s, env) {
@@ -60,16 +60,11 @@ export function finalizeStruct(s, env) {
       return self;
     }
   };
-  const copy = getMemoryCopier(byteSize);
   const specialKeys = getSpecialKeys(s);
   const requiredKeys = members.filter(m => m.isRequired).map(m => m.name);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      restoreMemory.call(arg);
-      /* WASM-ONLY-END */
-      copy(this[MEMORY], arg[MEMORY]);
+      this[MEMORY_COPIER](arg);
       if (hasPointer) {
         this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
@@ -108,7 +103,9 @@ export function finalizeStruct(s, env) {
         }
         // apply default values unless all properties are initialized
         if (template && specialFound === 0 && found < keys.length) {
-          copy(this[MEMORY], template[MEMORY]);
+          if (template[MEMORY]) {
+            this[MEMORY_COPIER](template);
+          }
           if (hasPointer) {
             this[POINTER_VISITOR](copyPointer, { vivificate: true, source: template });
           }
@@ -131,7 +128,10 @@ export function finalizeStruct(s, env) {
       }
     }
   };
-  Object.defineProperty(constructor.prototype, '$', { get: getSelf, set: initializer, configurable: true });
+  Object.defineProperties(constructor.prototype, {
+    '$': { get: getSelf, set: initializer, configurable: true },
+    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
+  });
   addSpecialAccessors(s);
   if (hasObject) {
     addChildVivificators(s);

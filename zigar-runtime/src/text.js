@@ -1,8 +1,10 @@
-let decoder;
+const decoders = {};
+const encoders = {};
 
 export function decodeText(arrays, encoding = 'utf-8') {
+  let decoder = decoders[encoding];
   if (!decoder) {
-    decoder = new TextDecoder;
+    decoder = decoders[encoding] = new TextDecoder(encoding);
   }
   let array;
   if (Array.isArray(arrays)) {
@@ -26,9 +28,22 @@ export function decodeText(arrays, encoding = 'utf-8') {
   return decoder.decode(array);
 }
 
-export function encodeText(text, encoding) {
-  if (!encoder) {
-    encoder = new TextDecoder;
+export function encodeText(text, encoding = 'utf-8') {
+  switch (encoding) {
+    case 'utf-16': {
+      const { length } = text;
+      const ta = new Uint16Array(length);
+      for (let i = 0; i < length; i++) {
+        ta[i] = text.charCodeAt(i);
+      }
+      return ta;
+    }
+    default: {
+      let encoder = encoders[encoding];
+      if (!encoder) {
+        encoder = encoders[encoding] = new TextEncoder();
+      }
+      return encoder.encode(text);
+    }
   }
-  return encoder.encode(text);
 }

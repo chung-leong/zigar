@@ -3,7 +3,7 @@ import { getMemoryCopier, getMemoryResetter, getPointerAlign } from './memory.js
 import { requireDataView } from './data-view.js';
 import { addSpecialAccessors } from './special.js';
 import { throwNoInitializer, throwNotInErrorSet, throwUnknownErrorNumber } from './error.js';
-import { MEMORY, FIELD_VALIDATOR, POINTER_VISITOR, SLOTS } from './symbol.js';
+import { MEMORY, FIELD_VALIDATOR, POINTER_VISITOR, SLOTS, MEMORY_COPIER, MEMORY_RESETTER } from './symbol.js';
 import { copyPointer, resetPointer } from './pointer.js';
 import { addChildVivificators, addPointerVisitor } from './struct.js';
 
@@ -20,15 +20,14 @@ export function finalizeErrorUnion(s, env) {
   const { get: getError, set: setError } = getAccessors(members[1], options);
   const { structure: errorStructure } = members[1];
   const { constructor: ErrorSet } = errorStructure;
-  const reset = getMemoryResetter(byteSize)
   const set = function(value) {
     if (value instanceof Error) {
       if (!(value instanceof ErrorSet)) {
         throwNotInErrorSet(errorStructure);
       }
-      reset(this[MEMORY]);
-      setError.call(this, value.index);
+      this[MEMORY_RESETTER]();
       this[POINTER_VISITOR]?.(resetPointer);
+      setError.call(this, value.index);
     } else {
       setValue.call(this, value);
       setError.call(this, 0);
@@ -41,7 +40,6 @@ export function finalizeErrorUnion(s, env) {
       if (!err) {
         throwUnknownErrorNumber(errorStructure, errorNumber);
       }
-      this[POINTER_VISITOR]?.(resetPointer);
       throw err;
     } else {
       return getValue.call(this);
@@ -76,10 +74,9 @@ export function finalizeErrorUnion(s, env) {
       return self;
     }
   };
-  const copy = getMemoryCopier(byteSize);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      copy(this[MEMORY], arg[MEMORY]);
+      this[MEMORY_COPIER](arg);
       if (hasPointer) {
         if (check.call(this)) {
           this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
@@ -89,7 +86,11 @@ export function finalizeErrorUnion(s, env) {
       this.$ = arg;
     }
   };
-  Object.defineProperty(constructor.prototype, '$', { get, set, configurable: true });
+  Object.defineProperties(constructor.prototype, {
+    '$': { get, set, configurable: true },
+    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
+    [MEMORY_RESETTER]: { value: getMemoryResetter(byteSize) },
+  });
   if (hasObject) {
     addChildVivificators(s);
     if (hasPointer) {

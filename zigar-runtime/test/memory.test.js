@@ -1,15 +1,15 @@
 import { expect } from 'chai';
 
 import {
-  getMemoryCopier,
-  getMemoryResetter,
+  getCopyFunction,
+  getResetFunction,
   getBitAlignFunction,
   restoreMemory,
 } from '../src/memory.js';
 import { MEMORY } from '../src/symbol.js';
 
 describe('Memory functions', function() {
-  describe('getMemoryCopier', function() {
+  describe('getCopyFunction', function() {
     it('should return optimal function for copying buffers of various sizes', function() {
       const functions = [];
       for (let size = 1; size <= 64; size++) {
@@ -18,7 +18,7 @@ describe('Memory functions', function() {
           src.setInt8(i, i);
         }
         const dest = new DataView(new ArrayBuffer(size));
-        const f = getMemoryCopier(size);
+        const f = getCopyFunction(size);
         if (!functions.includes(f)) {
           functions.push(f);
         }
@@ -33,7 +33,7 @@ describe('Memory functions', function() {
           src.setInt8(i, i);
         }
         const dest = new DataView(new ArrayBuffer(size * 16));
-        const f = getMemoryCopier(size, true);
+        const f = getCopyFunction(size, true);
         if (!functions.includes(f)) {
           functions.push(f);
         }
@@ -45,7 +45,7 @@ describe('Memory functions', function() {
       expect(functions).to.have.lengthOf(10);
     })
   })
-  describe('getMemoryResetter', function() {
+  describe('getResetFunction', function() {
     it('should return optimal function for clearing buffers of various sizes', function() {
       const functions = [];
       for (let size = 1; size <= 64; size++) {
@@ -53,7 +53,7 @@ describe('Memory functions', function() {
         for (let i = 0; i < size; i++) {
           dest.setInt8(i, i);
         }
-        const f = getMemoryResetter(size);
+        const f = getResetFunction(size);
         if (!functions.includes(f)) {
           functions.push(f);
         }
