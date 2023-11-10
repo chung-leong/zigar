@@ -39,16 +39,16 @@ pub const Host = struct {
         }
     }
 
-    pub fn allocateMemory(self: Host, size: usize, ptr_align: u8) !Memory {
+    pub fn allocateMemory(self: Host, size: usize, align: u16) !Memory {
         var memory: Memory = undefined;
-        if (callbacks.allocate_memory(self.context, size, ptr_align, &memory) != .OK) {
+        if (callbacks.allocate_memory(self.context, size, align, &memory) != .OK) {
             return Error.UnableToAllocateMemory;
         }
         return memory;
     }
 
-    pub fn freeMemory(self: Host, memory: Memory, ptr_align: u8) !void {
-        if (callbacks.free_memory(self.context, &memory, ptr_align) != .OK) {
+    pub fn freeMemory(self: Host, memory: Memory, align: u16) !void {
+        if (callbacks.free_memory(self.context, &memory, align) != .OK) {
             return Error.UnableToFreeMemory;
         }
     }

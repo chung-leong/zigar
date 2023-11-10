@@ -135,7 +135,7 @@ pub const Structure = extern struct {
     structure_type: StructureType,
     length: usize,
     byte_size: usize,
-    ptr_align: u8,
+    align: u16,
     is_const: bool = false,
     has_pointer: bool,
 };
@@ -154,10 +154,10 @@ pub const Member = extern struct {
 };
 
 pub const MemoryAttributes = packed struct {
-    ptr_align: u8 = 0,
+    align: u16 = 0,
     is_const: bool = false,
     is_comptime: bool = false,
-    _: u22 = 0,
+    _: u14 = 0,
 };
 
 pub const Memory = extern struct {
@@ -639,18 +639,6 @@ test "comparePointers" {
     assert(comparePointers(j, k) == false);
 }
 
-fn getPtrAlign(comptime T: type) u8 {
-    const alignment = @alignOf(T);
-    return if (alignment != 0) std.math.log2_int(u8, @alignOf(T)) else 0;
-}
-
-test "getPtrAlign" {
-    assert(getPtrAlign(u8) == 0);
-    assert(getPtrAlign(i32) == 2);
-    assert(getPtrAlign(i64) == 3);
-    assert(getPtrAlign(f128) == 4);
-}
-
 // NOTE: error type has to be specified here since the function is called recursively
 // and https://github.com/ziglang/zig/issues/2971 has not been fully resolved yet
 fn getStructure(host: anytype, comptime T: type) Error!Value {
@@ -661,7 +649,7 @@ fn getStructure(host: anytype, comptime T: type) Error!Value {
             .structure_type = getStructureType(T),
             .length = getStructureLength(T),
             .byte_size = @sizeOf(T),
-            .ptr_align = getPtrAlign(T),
+            .align = @alignOf(T),
             .is_const = isConst(T),
             .has_pointer = hasPointer(T),
         };
@@ -947,7 +935,7 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
                 .structure_type = .Slice,
                 .length = 0,
                 .byte_size = @sizeOf(pt.child),
-                .ptr_align = getPtrAlign(pt.child),
+                .align = @alignOf(pt.child),
                 .has_pointer = hasPointer(pt.child),
             };
             const slice_structure = try host.beginStructure(slice_def);
@@ -1506,7 +1494,7 @@ fn createAllocator(host_ptr: anytype) std.mem.Allocator {
     const VTable = struct {
         fn alloc(p: *anyopaque, size: usize, ptr_align: u8, _: usize) ?[*]u8 {
             const h: HostPtrT = @alignCast(@ptrCast(p));
-            return if (h.allocateMemory(size, ptr_align)) |m| m.bytes else |_| null;
+            return if (h.allocateMemory(size, 1 << ptr_align)) |m| m.bytes else |_| null;
         }
 
         fn resize(_: *anyopaque, _: []u8, _: u8, _: usize, _: usize) bool {
@@ -1518,7 +1506,7 @@ fn createAllocator(host_ptr: anytype) std.mem.Allocator {
             h.freeMemory(.{
                 .bytes = @ptrCast(bytes.ptr),
                 .len = bytes.len,
-            }, ptr_align) catch {};
+            }, 1 << ptr_align) catch {};
         }
 
         const instance: std.mem.Allocator.VTable = .{

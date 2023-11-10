@@ -1,14 +1,15 @@
+import { defineProperties } from './structure.js';
 import { getAccessors } from './member.js';
 import { getPrimitiveClass } from './primitive.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidInitializer, throwNoNewEnum } from './error.js';
-import { MEMORY, ENUM_INDEX, ENUM_NAME, ENUM_ITEMS, ENUM_ITEM } from './symbol.js';
-import { defineProperties } from './structure.js';
+import { ENUM_INDEX, ENUM_NAME, ENUM_ITEMS, ENUM_ITEM, MEMORY } from './symbol.js';
 
 export function finalizeEnumeration(s, env) {
   const {
+    align,
     instance: {
       members,
       template,
@@ -102,8 +103,8 @@ export function finalizeEnumeration(s, env) {
     ...itemDescriptors,
     [MEMORY]: { value: template[MEMORY] },
     [ENUM_ITEMS]: { value: items },
+    [ALIGN]: { value: align },
   });
-
   addSpecialAccessors(s, env);
   addStaticMembers(s, env);
   addMethods(s, env);

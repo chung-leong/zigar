@@ -1,26 +1,15 @@
 import { defineProperties, getSelf } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, getPointerAlign } from './memory.js';
+import { getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, checkDataViewSize, getCompatibleTags } from './data-view.js';
 import { getArrayIterator, createProxy, createArrayEntries, getChildVivificator, getPointerVisitor } from './array.js';
 import { copyPointer } from './pointer.js';
-import {
-  addSpecialAccessors,
-  checkDataView,
-  getDataViewFromBase64,
-  getDataViewFromTypedArray,
-  getDataViewFromUTF8,
-  getSpecialKeys
-} from './special.js';
-import {
-  throwInvalidArrayInitializer,
-  throwArrayLengthMismatch,
-  throwNoProperty,
-  throwMisplacedSentinel,
-  throwMissingSentinel,
-  throwNoInitializer,
-} from './error.js';
-import { CHILD_VIVIFICATOR, COMPAT, GETTER, LENGTH, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SETTER, SLOTS } from './symbol.js';
+import { addSpecialAccessors, checkDataView, getDataViewFromBase64, getDataViewFromTypedArray,
+  getDataViewFromUTF8, getSpecialKeys } from './special.js';
+import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoProperty,
+  throwMisplacedSentinel, throwMissingSentinel, throwNoInitializer } from './error.js';
+import { ALIGN, CHILD_VIVIFICATOR, COMPAT, GETTER, LENGTH, MEMORY, MEMORY_COPIER, POINTER_VISITOR,
+  SETTER, SLOTS } from './symbol.js';
 
 export function finalizeSlice(s, env) {
   const {
@@ -49,7 +38,6 @@ export function finalizeSlice(s, env) {
     // so we're not putting this prop into the standard structure
     s.sentinel = sentinel;
   }
-  const ptrAlign = getPointerAlign(align);
   // the slices are different from other structures due to variability of their sizes
   // we only know the "shape" of an object after we've processed the initializers
   const constructor = s.constructor = function(arg) {
@@ -71,7 +59,7 @@ export function finalizeSlice(s, env) {
   const specialKeys = getSpecialKeys(s);
   const shapeDefiner = function(dv, length) {
     if (!dv) {
-      dv = env.createBuffer(length * elementSize, ptrAlign);
+      dv = env.createBuffer(length * elementSize, align);
     }
     this[MEMORY] = dv;
     this[GETTER] = null;
@@ -200,6 +188,7 @@ export function finalizeSlice(s, env) {
   defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(s) },
+    [ALIGN]: { value: align },
   });
   addSpecialAccessors(s);
   return constructor;

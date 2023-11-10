@@ -3,9 +3,9 @@ import { decodeText } from './text.js';
 import { acquireTarget } from './pointer.js';
 import { initializeErrorSets } from './error-set.js';
 import { throwZigError } from './error.js';
-import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CHILD_VIVIFICATOR, THUNK_REPLACER } from './symbol.js';
+import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CHILD_VIVIFICATOR, THUNK_REPLACER, POINTER_SELF } from './symbol.js';
 
-const default_alignment = 16;
+const defAlign = 16;
 
 export class Environment {
   /*
@@ -59,7 +59,7 @@ export class Environment {
     const { memoryList } = this.context;
     const { buffer } = dv;
     const address = this.getAddress(buffer);
-    const index = findSortedIndex(memoryList, address);
+    const index = findMemoryIndex(memoryList, address);
     const prev = memoryList[index - 1];
     if (!(prev?.address <= address && address < addLength(prev.address, prev.len))) {
       memoryList.splice(index, 0, { address, buffer, len: buffer.byteLength });
@@ -70,7 +70,7 @@ export class Environment {
   findMemory(address, len) {
     if (this.context) {
       const { memoryList } = this.context;
-      const index = findSortedIndex(memoryList, address);
+      const index = findMemoryIndex(memoryList, address);
       const prev = memoryList[index - 1];
       if (prev?.address <= address && address < addLength(prev.address, prev.len)) {
         const offset = Number(address - prev.address);
@@ -85,42 +85,6 @@ export class Environment {
     const address = this.getAddress(dv.buffer);
     const offset = (typeof(address) === 'bigint') ? BigInt(dv.byteOffset) : dv.byteOffset;
     return address + offset;
-  }
-
-  createBuffer(len, ptrAlign) {
-    const extra = getExtraCount(ptrAlign);
-    const buffer = new ArrayBuffer(len + extra);
-    let offset = 0;
-    if (extra !== 0) {
-      const address = this.getAddress(buffer);
-      const mask = ~(extra - 1);
-      const aligned = (address & mask) + extra;
-      offset = aligned - address;
-    }
-    return new DataView(buffer, offset, len);
-  }
-
-  allocMemory(len, ptrAlign) {
-    const dv = this.createBuffer(len, ptrAlign);
-    this.importMemory(dv);
-    return dv;
-  }
-
-  freeMemory(address, len, ptrAlign) {
-    const { memoryList } = this.context;
-    const index = findSortedIndex(memoryList, address);
-    const prev = memoryList[index - 1];
-    if (prev?.address <= address && address < addLength(prev.address, prev.len)) {
-      let prevAddress = prev.address;
-      const extra = getExtraCount(ptrAlign);
-      if (extra) {
-        const mask = ~(extra - 1);
-        prevAddress = (prevAddress & mask) + extra;
-      }
-      if (prevAddress === address) {
-        memoryList.splice(index - 1, 1);
-      }
-    }
   }
 
   createView(address, len, ptrAlign, copy) {
@@ -303,10 +267,59 @@ export class Environment {
   }
 
   collectPointers() {
-    const map = new Map();
-    args[POINTER_VISITOR](() => {
+    const pointerMap = new Map();
+    const bufferMap = new Map();
+    let overlappingBuffers = null;
+    const callback = function({ validate }) {
+      // bypass proxy
+      const pointer = this[POINTER_SELF];
+      if (pointerMap.get(pointer)) {
+        return;
+      }
+      const target = pointer['*'];
+      if (target) {
+        const dataView = target[MEMORY];
+        const info = {
+          const: pointer.constructor.const,
+          align: pointer.constructor.align,
+          dataView,
+          validate,
+        };
+        pointerMap.set(pointer, info);
+        // see if the buffer is shared with other views
+        const other = bufferMap.get(dataView.buffer);
+        if (other) {
+          const { byteOffset } = dataView;
+          const array = Array.isArray(other) ? other : [ other ];
+          const index = findSortedIndex(array, byteOffset, i => i.dataView.byteOffset);
+          const prev = array[index - 1];
+          if (prev) {
+            // see if the views overlap
+            const prevEnd = prev.dataView.byteOffset + prev.dataView.byteLength;
+            if (prevEnd > byteOffset) {
+              if (!overlappingBuffers) {
+                overlappingBuffers = [ dataView.buffer ];
+              } else if (!overlappingBuffers.includes(dataView.buffer)) {
+                overlappingBuffers.push(dataView.buffer);
+              }
+            }
+          }
+          array.splice(index, 0, info);
+          if (!Array.isArray(other)) {
+            bufferMap.get(dataView.buffer, other);
+          }
+        }
+        target[POINTER_VISITOR]?.(callback);
+      }
+    };
+    args[POINTER_VISITOR](callback, {});
+    if (overlappingBuffers) {
+      for (const buffer of overlappingBuffers) {
+        const array = bufferMap.get(buffer);
 
-    }, {});
+      }
+    }
+    return { pointerMap, bufferMap };
   }
 }
 
@@ -316,6 +329,42 @@ export class NodeEnvironment extends Environment {
 
   isShared(dv) {
     return dv.buffer instanceof SharedArrayBuffer;
+  }
+
+  createBuffer(len, align) {
+    const extra = (align <= 16) ? 0 : align;
+    const buffer = new ArrayBuffer(len + extra);
+    let offset = 0;
+    if (extra !== 0) {
+      const address = this.getAddress(buffer);
+      const mask = ~(extra - 1);
+      const aligned = (address & mask) + extra;
+      offset = aligned - address;
+    }
+    return new DataView(buffer, offset, len);
+  }
+
+  allocMemory(len, align) {
+    const dv = this.createBuffer(len, align);
+    this.importMemory(dv);
+    return dv;
+  }
+
+  freeMemory(address, len, ptrAlign) {
+    const { memoryList } = this.context;
+    const index = findMemoryIndex(memoryList, address);
+    const prev = memoryList[index - 1];
+    if (prev?.address <= address && address < addLength(prev.address, prev.len)) {
+      let prevAddress = prev.address;
+      const extra = (align <= 16) ? 0 : align;
+      if (extra) {
+        const mask = ~(extra - 1);
+        prevAddress = (prevAddress & mask) + extra;
+      }
+      if (prevAddress === address) {
+        memoryList.splice(index - 1, 1);
+      }
+    }
   }
 
   invokeFactory(thunk) {
@@ -816,12 +865,7 @@ export class CallContext {
   memoryList = [];
 }
 
-export function getExtraCount(ptrAlign) {
-  const alignment = (1 << ptrAlign);
-  return (alignment <= default_alignment) ? 0 : alignment;
-}
-
-export function findSortedIndex(array, address) {
+export function findSortedIndex(array, value, cb) {
   let low = 0;
   let high = array.length;
   if (high === 0) {
@@ -829,14 +873,18 @@ export function findSortedIndex(array, address) {
   }
   while (low < high) {
     const mid = Math.floor((low + high) / 2);
-    const address2 = array[mid].address;
-    if (address2 <= address) {
+    const value2 = cb(array[mid]);
+    if (value2 <= value) {
       low = mid + 1;
     } else {
       high = mid;
     }
   }
   return high;
+}
+
+function findMemoryIndex(array, address) {
+  return findSortedIndex(array, address, m => m.address);
 }
 
 function addLength(address, len) {

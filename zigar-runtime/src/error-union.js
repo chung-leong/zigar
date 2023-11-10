@@ -1,12 +1,13 @@
 import { defineProperties } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, getMemoryResetter, getPointerAlign } from './memory.js';
+import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView } from './data-view.js';
 import { addSpecialAccessors } from './special.js';
 import { throwNoInitializer, throwNotInErrorSet, throwUnknownErrorNumber } from './error.js';
-import { MEMORY, POINTER_VISITOR, SLOTS, MEMORY_COPIER, MEMORY_RESETTER, CHILD_VIVIFICATOR } from './symbol.js';
 import { copyPointer, resetPointer } from './pointer.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
+import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, MEMORY_RESETTER, POINTER_VISITOR,
+  SLOTS } from './symbol.js';
 
 export function finalizeErrorUnion(s, env) {
   const {
@@ -16,7 +17,6 @@ export function finalizeErrorUnion(s, env) {
     options,
     hasPointer,
   } = s;
-
   const { get: getValue, set: setValue } = getAccessors(members[0], options);
   const { get: getError, set: setError } = getAccessors(members[1], options);
   const { structure: errorStructure } = members[1];
@@ -51,7 +51,6 @@ export function finalizeErrorUnion(s, env) {
     return (errorNumber === 0);
   };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -60,7 +59,7 @@ export function finalizeErrorUnion(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, ptrAlign);
+      dv = env.createBuffer(byteSize, align);
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
@@ -94,6 +93,9 @@ export function finalizeErrorUnion(s, env) {
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, check) },
   });
+  defineProperties(constructor, {
+    [ALIGN]: { value: align },
+  })
   addSpecialAccessors(s);
   return constructor;
 }

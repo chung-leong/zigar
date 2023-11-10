@@ -1,6 +1,6 @@
 import { defineProperties } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, getMemoryResetter, getPointerAlign } from './memory.js';
+import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView }  from './data-view.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
 import { addSpecialAccessors } from './special.js';
@@ -37,7 +37,6 @@ export function finalizeOptional(s, env) {
   };
   const check = getPresent;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -46,7 +45,7 @@ export function finalizeOptional(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, ptrAlign);
+      dv = env.createBuffer(byteSize, align);
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
@@ -80,6 +79,9 @@ export function finalizeOptional(s, env) {
     [MEMORY_RESETTER]: { value: getMemoryResetter(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, check) },
+  });
+  defineProperties(constructor, {
+    [ALIGN]: { value: align },
   });
   addSpecialAccessors(s);
   return constructor;

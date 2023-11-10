@@ -1,19 +1,12 @@
 import { StructureType, defineProperties } from './structure.js';
-import { getMemoryCopier, getPointerAlign } from './memory.js';
+import { getMemoryCopier } from './memory.js';
 import { requireDataView, getDataView, isCompatible, isBuffer } from './data-view.js';
 import { MemberType, getAccessors } from './member.js';
-import { MEMORY, PROXY, SLOTS, PARENT, TARGET_ACQUIRER, ADDRESS_UPDATER, POINTER_VISITOR, ENVIRONMENT, MEMORY_COPIER } from './symbol.js';
-import {
-  throwNoCastingToPointer,
-  throwInaccessiblePointer,
-  throwInvalidPointerTarget,
-  throwAssigningToConstant,
-  throwConstantConstraint,
-  throwNoInitializer,
-  throwFixedMemoryTargetRequired,
-  addArticle,
-} from './error.js';
-
+import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerTarget,
+  throwAssigningToConstant, throwConstantConstraint, throwNoInitializer,
+  throwFixedMemoryTargetRequired, addArticle } from './error.js';
+import { ADDRESS_UPDATER, ALIGN, ENVIRONMENT, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR,
+  PARENT, PROXY, SLOTS, TARGET_ACQUIRER } from './symbol.js';
 export function finalizePointer(s, env) {
   const {
     byteSize,
@@ -46,7 +39,6 @@ export function finalizePointer(s, env) {
     byteSize: addressSize,
     structure: { name: 'usize', byteSize: addressSize },
   }, options) : {};
-  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
     const calledFromEnviroment = this === ENVIRONMENT;
     const calledFromParent = this === PARENT;
@@ -57,7 +49,7 @@ export function finalizePointer(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, ptrAlign);
+      dv = env.createBuffer(byteSize, align);
     } else {
       self = Object.create(constructor.prototype);
       if (calledFromEnviroment || calledFromParent) {
@@ -185,10 +177,6 @@ export function finalizePointer(s, env) {
       if (hasLength) {
         setLength.call(this, target.length);
       }
-      if (target[POINTER_VISITOR]) {
-        // update pointers in the target
-        target[POINTER_VISITOR](updateAddress, {});
-      }
     }
   };
   // return the proxy object if one is used
@@ -204,6 +192,7 @@ export function finalizePointer(s, env) {
   defineProperties(constructor, {
     child: { get: () => targetStructure.constructor },
     const: { value: isConst },
+    [ALIGN]: { value: align },
   });
   return constructor;
 }
@@ -290,7 +279,9 @@ const isPointerKeys = {
 
 const proxyHandlers = {
   get(pointer, name) {
-    if (isPointerKeys[name]) {
+    if (name === POINTER_SELF) {
+      return pointer;
+    } else if (isPointerKeys[name]) {
       return pointer[name];
     } else {
       return pointer[SLOTS][0][name];

@@ -1,9 +1,8 @@
 import { defineProperties } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
-import { getPointerAlign } from './memory.js';
 import { throwArgumentCountMismatch, rethrowArgumentError } from './error.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
-import { CHILD_VIVIFICATOR, MEMORY, POINTER_VISITOR, SLOTS } from './symbol.js';
+import { ALIGN, CHILD_VIVIFICATOR, MEMORY, POINTER_VISITOR, SLOTS } from './symbol.js';
 
 export function finalizeArgStruct(s, env) {
   const {
@@ -16,9 +15,8 @@ export function finalizeArgStruct(s, env) {
     options,
   } = s;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(args) {
-    const dv = env.createBuffer(byteSize, ptrAlign);
+    const dv = env.createBuffer(byteSize, align);
     this[MEMORY] = dv;
     if (hasObject) {
       this[SLOTS] = {};
@@ -47,6 +45,9 @@ export function finalizeArgStruct(s, env) {
     ...memberDescriptors,
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s) },
+  });
+  defineProperties(constructor, {
+    [ALIGN]: { value: align },
   });
   return constructor;
 }

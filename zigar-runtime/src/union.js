@@ -1,21 +1,16 @@
 import { StructureType, defineProperties, getSelf } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, getPointerAlign } from './memory.js';
+import { getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
-import {
-  throwInvalidInitializer,
-  throwMissingUnionInitializer,
-  throwMultipleUnionInitializers,
-  throwNoProperty,
-  throwInactiveUnionProperty,
-  throwNoInitializer,
-} from './error.js';
+import { throwInvalidInitializer, throwMissingUnionInitializer, throwMultipleUnionInitializers,
+  throwNoProperty, throwInactiveUnionProperty, throwNoInitializer } from './error.js';
 import { copyPointer, disablePointer, resetPointer } from './pointer.js';
-import { CHILD_VIVIFICATOR, ENUM_ITEM, ENUM_NAME, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SLOTS, TAG } from './symbol.js';
+import { ALIGN, CHILD_VIVIFICATOR, ENUM_ITEM, ENUM_NAME, MEMORY, MEMORY_COPIER, POINTER_VISITOR,
+  SLOTS, TAG } from './symbol.js';
 
 export function finalizeUnion(s, env) {
   const {
@@ -122,7 +117,6 @@ export function finalizeUnion(s, env) {
   // non-tagged union as marked as not having pointers--if there're actually
   // members with pointers, we need to disable them
   const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
-  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -131,7 +125,7 @@ export function finalizeUnion(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, ptrAlign);
+      dv = env.createBuffer(byteSize, align);
     } else {
       self = Object.create(constructor.prototype);
       dv = getDataView(s, arg);
@@ -234,6 +228,9 @@ export function finalizeUnion(s, env) {
     [ENUM_ITEM]: isTagged && { get: getEnumItem, configurable: true },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
     [POINTER_VISITOR]: (hasPointer || hasInaccessiblePointer) && { value: getPointerVisitor(s, validateChild) },
+  });
+  defineProperties(constructor, {
+    [ALIGN]: { value: align },
   });
   addSpecialAccessors(s, env);
   addStaticMembers(s, env);

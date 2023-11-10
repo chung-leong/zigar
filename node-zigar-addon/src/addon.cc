@@ -42,13 +42,13 @@ static Result CallFunction(Call* call,
 
 static Result AllocateMemory(Call* call,
                              size_t len,
-                             uint8_t ptr_align,
+                             uint16_t align,
                              Memory* dest) {
   auto isolate = call->isolate;
   auto fname = String::NewFromUtf8Literal(isolate, "allocMemory");
   Local<Value> args[] = {
     Number::New(isolate, len),
-    Uint32::NewFromUnsigned(isolate, ptr_align)
+    Uint32::NewFromUnsigned(isolate, align)
   };
   Local<Value> result;
   if (CallFunction(call, fname, 2, args, &result) != Result::OK || !result->IsDataView()) {
@@ -60,20 +60,20 @@ static Result AllocateMemory(Call* call,
   dest->len = len;
   dest->attributes.is_const = false;
   dest->attributes.is_comptime = false;
-  dest->attributes.ptr_align = ptr_align;
+  dest->attributes.align = align;
   return Result::OK;
 }
 
 static Result FreeMemory(Call* call,
                          const Memory& memory,
-                         uint8_t ptr_align) {
+                         uint16_t align) {
   auto isolate = call->isolate;
   auto fname = String::NewFromUtf8Literal(isolate, "freeMemory");
   auto address = reinterpret_cast<size_t>(memory.bytes);
   Local<Value> args[] = {
     BigInt::NewFromUnsigned(isolate, address),
     Number::New(isolate, memory.len),
-    Uint32::NewFromUnsigned(isolate, memory.attributes.ptr_align),
+    Uint32::NewFromUnsigned(isolate, memory.attributes.align),
   };
   Local<Value> result;
   if (CallFunction(call, fname, 3, args, &result) != Result::OK) {
@@ -91,7 +91,7 @@ static Result CreateView(Call* call,
   Local<Value> args[] = {
     BigInt::NewFromUnsigned(isolate, address),
     Number::New(isolate, memory.len),
-    Uint32::NewFromUnsigned(isolate, memory.attributes.ptr_align),
+    Uint32::NewFromUnsigned(isolate, memory.attributes.align),
     Boolean::New(isolate, memory.attributes.is_comptime),
   };
   Local<Value> result;
@@ -203,7 +203,7 @@ static Result BeginStructure(Call* call,
   auto type = Int32::New(isolate, static_cast<int32_t>(structure.type));
   auto length = Uint32::NewFromUnsigned(isolate, structure.length);
   auto byte_size = Uint32::NewFromUnsigned(isolate, structure.byte_size);
-  auto align = Uint32::NewFromUnsigned(isolate, structure.ptr_align);
+  auto align = Uint32::NewFromUnsigned(isolate, structure.align);
   auto is_const = Boolean::New(isolate, structure.is_const);
   auto has_pointer = Boolean::New(isolate, structure.has_pointer);
   def->Set(context, String::NewFromUtf8Literal(isolate, "type"), type).Check();

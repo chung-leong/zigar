@@ -1,13 +1,15 @@
 import { defineProperties, getSelf } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, getPointerAlign } from './memory.js';
+import { getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { copyPointer } from './pointer.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
-import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer, throwNoProperty } from './error.js';
-import { CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR, SLOTS } from './symbol.js';
+import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer,
+  throwNoProperty } from './error.js';
+import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR,
+  SLOTS } from './symbol.js';
 
 export function finalizeStruct(s, env) {
   const {
@@ -36,7 +38,6 @@ export function finalizeStruct(s, env) {
   }
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -45,7 +46,7 @@ export function finalizeStruct(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, ptrAlign);
+      dv = env.createBuffer(byteSize, align);
     } else {
       self = Object.create(constructor.prototype);
       dv = getDataView(s, arg);
@@ -134,6 +135,9 @@ export function finalizeStruct(s, env) {
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s) },
+  });
+  defineProperties(constructor, {
+    [ALIGN]: { value: align },
   });
   addSpecialAccessors(s, env);
   addStaticMembers(s, env);

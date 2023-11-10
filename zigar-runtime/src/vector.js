@@ -1,10 +1,10 @@
 import { defineProperties, getSelf } from './structure.js';
 import { getAccessors } from './member.js';
-import { getMemoryCopier, getPointerAlign } from './memory.js';
+import { getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
-import { MEMORY, COMPAT, MEMORY_COPIER } from './symbol.js';
+import { ALIGN, COMPAT, MEMORY, MEMORY_COPIER } from './symbol.js';
 
 export function finalizeVector(s, env) {
   const {
@@ -26,7 +26,6 @@ export function finalizeVector(s, env) {
     throw new Error(`slot must be undefined for vector member`);
   }
   /* DEV-TEST-END */
-  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -35,7 +34,7 @@ export function finalizeVector(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, ptrAlign);
+      dv = env.createBuffer(byteSize, align);
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
@@ -86,6 +85,7 @@ export function finalizeVector(s, env) {
   defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(s) },
+    [ALIGN]: { value: align },
   });
   addSpecialAccessors(s);
   return constructor;

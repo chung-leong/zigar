@@ -1,9 +1,9 @@
 import { defineProperties } from './structure.js';
 import { MemberType, isByteAligned, getAccessors } from './member.js';
-import { getMemoryCopier, getPointerAlign } from './memory.js';
+import { getMemoryCopier } from './memory.js';
 import { getCompatibleTags, addTypedArray, requireDataView } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
-import { MEMORY, COMPAT, MEMORY_COPIER } from './symbol.js';
+import { ALIGN, COMPAT, MEMORY, MEMORY_COPIER } from './symbol.js';
 import { throwInvalidInitializer, throwNoInitializer, throwNoProperty } from './error.js';
 
 export function finalizePrimitive(s, env) {
@@ -16,7 +16,6 @@ export function finalizePrimitive(s, env) {
     options,
   } = s;
   addTypedArray(s);
-  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -25,7 +24,7 @@ export function finalizePrimitive(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, ptrAlign);
+      dv = env.createBuffer(byteSize, align);
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
@@ -76,6 +75,7 @@ export function finalizePrimitive(s, env) {
   });
   defineProperties(constructor, {
     [COMPAT]: { value: getCompatibleTags(s) },
+    [ALIGN]: { value: align },
   });
   addSpecialAccessors(s);
   return constructor;

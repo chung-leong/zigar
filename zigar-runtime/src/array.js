@@ -1,11 +1,12 @@
 import { defineProperties } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
-import { getMemoryCopier, getPointerAlign } from './memory.js';
+import { getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
-import { MEMORY, SLOTS, PARENT, GETTER, SETTER, PROXY, COMPAT, CHILD_VIVIFICATOR, POINTER_VISITOR, SELF, MEMORY_COPIER } from './symbol.js';
 import { copyPointer, getProxy } from './pointer.js';
+import { ALIGN, CHILD_VIVIFICATOR, COMPAT, GETTER, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR,
+  PROXY, SELF, SETTER, SLOTS } from './symbol.js';
 
 export function finalizeArray(s, env) {
   const {
@@ -29,7 +30,6 @@ export function finalizeArray(s, env) {
   /* DEV-TEST-END */
   addTypedArray(s);
   const hasObject = (member.type === MemberType.Object);
-  const ptrAlign = getPointerAlign(align);
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -38,7 +38,7 @@ export function finalizeArray(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, ptrAlign);
+      dv = env.createBuffer(byteSize, align);
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
@@ -119,6 +119,7 @@ export function finalizeArray(s, env) {
   defineProperties(constructor, {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(s) },
+    [ALIGN]: { value: align },
   });
   addSpecialAccessors(s);
   return constructor;

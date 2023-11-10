@@ -1018,16 +1018,16 @@ describe('Environment', function() {
     })
   })
   describe('getExtraCount', function() {
-    it('should return 0 for ptr alignment 4 and below', function() {
+    it('should return 0 for alignment 16 and below', function() {
       expect(getExtraCount(0)).to.equal(0);
-      expect(getExtraCount(1)).to.equal(0);
       expect(getExtraCount(2)).to.equal(0);
-      expect(getExtraCount(3)).to.equal(0);
       expect(getExtraCount(4)).to.equal(0);
+      expect(getExtraCount(8)).to.equal(0);
+      expect(getExtraCount(16)).to.equal(0);
     })
-    it('should return 2 ** x when ptr alignment is 4 and above', function() {
-      expect(getExtraCount(5)).to.equal(32);
-      expect(getExtraCount(6)).to.equal(64);
+    it('should return byte size when alignment is 32 and above', function() {
+      expect(getExtraCount(32)).to.equal(32);
+      expect(getExtraCount(64)).to.equal(64);
     })
   })
   describe('findSortedIndex', function() {
@@ -1037,12 +1037,12 @@ describe('Environment', function() {
         { address: 20 },
         { address: 30 },
       ];
-      expect(findSortedIndex(list, 5)).to.equal(0);
-      expect(findSortedIndex(list, 15)).to.equal(1);
-      expect(findSortedIndex(list, 25)).to.equal(2);
-      expect(findSortedIndex(list, 35)).to.equal(3);
-      expect(findSortedIndex(list, 30)).to.equal(3);
-      expect(findSortedIndex(list, 10)).to.equal(1);
+      expect(findSortedIndex(list, 5, m => m.address)).to.equal(0);
+      expect(findSortedIndex(list, 15, m => m.address)).to.equal(1);
+      expect(findSortedIndex(list, 25, m => m.address)).to.equal(2);
+      expect(findSortedIndex(list, 35, m => m.address)).to.equal(3);
+      expect(findSortedIndex(list, 30, m => m.address)).to.equal(3);
+      expect(findSortedIndex(list, 10, m => m.address)).to.equal(1);
     })
   })
   describe('isMisaligned', function() {

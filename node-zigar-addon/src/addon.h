@@ -56,7 +56,7 @@ struct Structure {
   StructureType type;
   size_t length;
   size_t byte_size;
-  uint8_t ptr_align;
+  uint16_t align;
   bool is_const;
   bool has_pointer;
 };
@@ -80,10 +80,10 @@ enum class MemoryDisposition : uint32_t {
 };
 
 struct MemoryAttributes {
-  unsigned ptr_align: 8;
+  uint16_t align: 16;
   bool is_const: 1;
   bool is_comptime: 1;
-  int :22;
+  int :14;
 };
 
 struct Memory {

@@ -21,8 +21,8 @@ const CallContext = struct {
 };
 const Call = *const CallContext;
 
-extern fn _allocMemory(len: usize, ptr_align: u8) usize;
-extern fn _freeMemory(address: usize, len: usize, ptr_align: u8) void;
+extern fn _allocMemory(len: usize, align: u16) usize;
+extern fn _freeMemory(address: usize, len: usize, align: u16) void;
 extern fn _createString(address: usize, len: usize) usize;
 extern fn _createObject(structure: usize, dv: usize) usize;
 extern fn _createView(address: usize, len: usize) usize;
@@ -60,9 +60,10 @@ fn strlen(s: [*:0]const u8) usize {
     return len;
 }
 
-pub fn alloc(call_addr: usize, len: usize, ptr_align: u8) usize {
+pub fn alloc(call_addr: usize, len: usize, align: u16) usize {
     const ctx: Call = @ptrFromInt(call_addr);
     if (len > 0) {
+        const ptr_align = if (align != 0) std.math.log2_int(u8, @alignOf(T)) else 0;
         if (ctx.allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
             return @intFromPtr(bytes);
         } else {
@@ -73,9 +74,10 @@ pub fn alloc(call_addr: usize, len: usize, ptr_align: u8) usize {
     }
 }
 
-pub fn free(call_addr: usize, bytes_addr: usize, len: usize, ptr_align: u8) void {
+pub fn free(call_addr: usize, bytes_addr: usize, len: usize, align: u16) void {
     const ctx: Call = @ptrFromInt(call_addr);
     const bytes: [*]u8 = @ptrFromInt(bytes_addr);
+    const ptr_align = if (align != 0) std.math.log2_int(u8, @alignOf(T)) else 0;
     ctx.allocator.rawFree(bytes[0..len], ptr_align, 0);
 }
 
