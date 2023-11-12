@@ -1,20 +1,43 @@
 import { defineProperties, getStructureFactory, getStructureName } from './structure.js';
 import { decodeText } from './text.js';
-import { acquireTarget } from './pointer.js';
+import { acquireTarget, updateAddress } from './pointer.js';
 import { initializeErrorSets } from './error-set.js';
 import { throwZigError } from './error.js';
-import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CHILD_VIVIFICATOR, THUNK_REPLACER, POINTER_SELF } from './symbol.js';
+import { ADDRESS_UPDATER, ALIGN, CHILD_VIVIFICATOR, ENVIRONMENT, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SLOTS,
+  THUNK_REPLACER } from './symbol.js';
+import { getMemoryCopier } from './memory.js';
 
 const defAlign = 16;
 
 export class Environment {
+  context;
+  contextStack = [];
+  consolePending = [];
+  consoleTimeout = 0;
+  slots = {}
+
   /*
   Functions to be defined in subclass:
 
-  getAddress(buffer: ArrayBuffer): bigInt|number {
+  getBufferAddress(buffer: ArrayBuffer): bigInt|number {
     // return a buffer's address
   }
-  obtainView(address: bigInt|number, len: number): DataView {
+  allocateRelocatableMemory(len: number, align: number): DataView {
+    // allocate memory and remember its address
+  }
+  allocateShadowMemory(len: number, align: number): DataView {
+    // allocate memory for shadowing objects
+  }
+  freeRelocatableMemory(address: bigInt|number, len: number, align: number): void {
+    // free previously allocated memory
+  }
+  freeShadowMemory(address: bigInt|number, len: number, align: number): void {
+    // free memory allocated for shadow
+  }
+  createFixedBuffer(len: number, align: number): DataView {
+    // allocate fixed memory and remember its address
+  }
+  obtainFixedView(address: bigInt|number, len: number): DataView {
     // obtain a data view of memory at given address
   }
   copyBytes(dst: DataView, address: bigInt|number, len: number): void {
@@ -23,15 +46,10 @@ export class Environment {
   findSentinel(address, bytes: DataView): number {
     // return offset where sentinel value is found
   }
-  isShared(dv: DataView): boolean {
+  isFixed(dv: DataView): boolean {
     // return true/false depending on whether view is point to shared memory
   }
   */
-  context;
-  contextStack = [];
-  consolePending = [];
-  consoleTimeout = 0;
-  slots = {}
 
   startContext() {
     if (this.context) {
@@ -44,27 +62,45 @@ export class Environment {
     this.context = this.contextStack.pop();
   }
 
-  rememberPointer(pointer) {
-    const { pointerProcessed } = this.context;
-    if (pointerProcessed.get(pointer)) {
-      return true;
+  getAlignmentExtra(align) {
+    return 0;
+  }
+
+  createBuffer(len, align, fixed = false) {
+    if (fixed) {
+      return this.createFixedBuffer(len, align);
     } else {
-      pointerProcessed.set(pointer, true);
-      this.importMemory(pointer[MEMORY]);
-      return false;
+      return this.createRelocatableBuffer(len, align);
     }
   }
 
-  importMemory(dv) {
+  createRelocatableBuffer(len, align) {
+    const extra = this.getAlignmentExtra(align);
+    const buffer = new ArrayBuffer(len + extra);
+    let offset = 0;
+    if (extra !== 0) {
+      const address = this.getBufferAddress(buffer);
+      const align = getAlignedAddress(address, align);
+      offset = aligned - address;
+    }
+    return new DataView(buffer, offset, len);
+  }
+
+  registerMemory(dv) {
     const { memoryList } = this.context;
     const { buffer } = dv;
-    const address = this.getAddress(buffer);
+    const address = this.getViewAddress(buffer);
+    const index = findMemoryIndex(memoryList, address);
+    memoryList.splice(index, 0, { address, buffer, len: buffer.byteLength });
+    return addLength(address, dv.byteOffset);
+  }
+
+  unregisterMemory(address) {
     const index = findMemoryIndex(memoryList, address);
     const prev = memoryList[index - 1];
-    if (!(prev?.address <= address && address < addLength(prev.address, prev.len))) {
-      memoryList.splice(index, 0, { address, buffer, len: buffer.byteLength });
+    if (prev?.address === address) {
+      memoryList.splice(index, 1);
     }
-    return addLength(address, dv.byteOffset);
   }
 
   findMemory(address, len) {
@@ -82,18 +118,17 @@ export class Environment {
   }
 
   getViewAddress(dv) {
-    const address = this.getAddress(dv.buffer);
-    const offset = (typeof(address) === 'bigint') ? BigInt(dv.byteOffset) : dv.byteOffset;
-    return address + offset;
+    const address = this.getBufferAddress(dv.buffer);
+    return addLength(address, dv.byteOffset);
   }
 
   createView(address, len, ptrAlign, copy) {
     if (copy) {
-      const dv = this.createBuffer(len, ptrAlign);
+      const dv = this.createRelocatableBuffer(len, ptrAlign);
       this.copyBytes(dv, address, len);
       return dv;
     } else {
-      return this.obtainView(address, len);
+      return this.obtainFixedView(address, len);
     }
   }
 
@@ -110,6 +145,60 @@ export class Environment {
   createObject(structure, arg) {
     const { constructor } = structure;
     return new constructor(arg);
+  }
+
+  addShadow(shadow, object) {
+    let { shadowMap } = this.context;
+    if (!shadowMap) {
+      shadowMap = this.context.shadowMap = new Map();
+    }
+    shadowMap.set(shadow, object);
+  }
+
+  createShadow(object) {
+    const dv = object[MEMORY]
+    const align = object.constructor[ALIGN];
+    const shadowDV = this.allocShadowMemory(dv.byteLength, align);
+    const shadow = { [MEMORY]: shadowDV };
+    object[MEMORY_COPIER].call(shadow, object);
+    this.addShadow(shadow, object);
+    return shadow;
+  }
+
+  createShadowForRange(sourceBuffer, startOffset, endOffset, aligns) {
+    let maxAlign = 0, maxAlignOffset;
+    for (const [ offset, align ] of Object.entries(aligns)) {
+      if (align > maxAlign) {
+        maxAlign = align;
+        maxAlignOffset = offset;
+      }
+    }
+    const len = endOffset - startOffset;
+    // make sure the shadow buffer is large enough
+    const { buffer } = this.allocShadowMemory(len + maxAlign, 0);
+    const address = this.getBufferAddress(buffer);
+    const maxAlignMask = ~(maxAlign - 1);
+    const maxAlignAddress = (add(address + maxAlignOffset) & maxAlignMask) + maxAlign;
+    const shadowAddress = maxAlignAddress
+
+    const shadow = {
+      constructor: { [ALIGN]: maxAlign },
+      [MEMORY]: shadowDV,
+
+    };
+
+
+  }
+
+  releaseShadows() {
+    for (const [ shadow, object ] of this.context.shadowMap) {
+      object[MEMORY_COPIER](shadow);
+      const shadowDV = shadow[MEMORY];
+      const address = this.getViewAddress(shadowDV);
+      const len = shadowDV.byteLength;
+      const align = object.constructor[ALIGN];
+      this.freeShadowMemory(address, len, align);
+    }
   }
 
   readSlot(target, slot) {
@@ -209,16 +298,16 @@ export class Environment {
 
   createCaller(method, useThis) {
     let { name,  argStruct, thunk } = method;
-    const { constructor, hasPointer } = argStruct;
+    const { constructor } = argStruct;
     const self = this;
     let f;
     if (useThis) {
       f = function(...args) {
-        return self.invokeThunk(thunk, new constructor([ this, ...args ]), hasPointer);
+        return self.invokeThunk(thunk, new constructor([ this, ...args ]));
       }
     } else {
       f = function(...args) {
-        return self.invokeThunk(thunk, new constructor(args), hasPointer);
+        return self.invokeThunk(thunk, new constructor(args));
       }
     }
     Object.defineProperty(f, 'name', { value: name });
@@ -266,11 +355,14 @@ export class Environment {
     }
   }
 
-  collectPointers() {
+  collectPointers(args) {
     const pointerMap = new Map();
     const bufferMap = new Map();
-    let overlappingBuffers = null;
+    let buffersWithOverlaps = null;
     const callback = function({ validate }) {
+      if (!validate(this)) {
+        return;
+      }
       // bypass proxy
       const pointer = this[POINTER_SELF];
       if (pointerMap.get(pointer)) {
@@ -278,93 +370,162 @@ export class Environment {
       }
       const target = pointer['*'];
       if (target) {
-        const dataView = target[MEMORY];
+        const dv = target[MEMORY];
         const info = {
           const: pointer.constructor.const,
-          align: pointer.constructor.align,
-          dataView,
-          validate,
+          target,
         };
         pointerMap.set(pointer, info);
-        // see if the buffer is shared with other views
-        const other = bufferMap.get(dataView.buffer);
+        // see if the buffer is shared with other objects
+        const other = bufferMap.get(dv.buffer);
         if (other) {
-          const { byteOffset } = dataView;
+          const { byteOffset } = dv;
           const array = Array.isArray(other) ? other : [ other ];
-          const index = findSortedIndex(array, byteOffset, i => i.dataView.byteOffset);
+          const index = findSortedIndex(array, byteOffset, i => i.target[MEMORY].byteOffset);
           const prev = array[index - 1];
           if (prev) {
             // see if the views overlap
-            const prevEnd = prev.dataView.byteOffset + prev.dataView.byteLength;
+            const prevEnd = prev.target[MEMORY].byteOffset + prev.target[MEMORY].byteLength;
             if (prevEnd > byteOffset) {
-              if (!overlappingBuffers) {
-                overlappingBuffers = [ dataView.buffer ];
-              } else if (!overlappingBuffers.includes(dataView.buffer)) {
-                overlappingBuffers.push(dataView.buffer);
+              if (!buffersWithOverlaps) {
+                buffersWithOverlaps = [ dv.buffer ];
+              } else if (!buffersWithOverlaps.includes(dv.buffer)) {
+                buffersWithOverlaps.push(dv.buffer);
               }
             }
           }
           array.splice(index, 0, info);
           if (!Array.isArray(other)) {
-            bufferMap.get(dataView.buffer, other);
+            bufferMap.set(dv.buffer, other);
           }
         }
         target[POINTER_VISITOR]?.(callback);
       }
     };
     args[POINTER_VISITOR](callback, {});
-    if (overlappingBuffers) {
-      for (const buffer of overlappingBuffers) {
+    if (buffersWithOverlaps) {
+      for (const buffer of buffersWithOverlaps) {
+        // overlapping views needs be shadowed together
+        // attach an object into each of the pointers so we can allocate a single
+        // block with for all of them
         const array = bufferMap.get(buffer);
-
+        const jointSource = {
+          aligns: {},
+          startOffset: 0,
+          endOffset: 0,
+          address: undefined,
+        };
+        for (const [ index, info ] of array.entries()) {
+          const { byteOffset, byteLength } = info.dataView;
+          jointSource.aligns[byteOffset] = info.target.constructor[ALIGN];
+          if (index === 0) {
+            jointSource.startOffset = byteOffset;
+          }
+          if (index === array.length - 1) {
+            jointSource.endOffset = byteOffset + byteLength;
+          }
+          info.jointSource = jointSource;
+        }
       }
     }
-    return { pointerMap, bufferMap };
+    return pointerMap;
   }
 }
 
 /* NODE-ONLY */
 export class NodeEnvironment extends Environment {
-  // C++ code will patch in getAddress, obtainView, copyBytes, and findSentinel
+  // C++ code will patch in these functions:
+  //
+  // getBufferAddress
+  // allocateFixedMemory
+  // freeFixedMemory
+  // obtainFixedView
+  // copyBytes
+  // findSentinel
 
-  isShared(dv) {
+  isFixed(dv) {
     return dv.buffer instanceof SharedArrayBuffer;
   }
 
-  createBuffer(len, align) {
-    const extra = (align <= 16) ? 0 : align;
-    const buffer = new ArrayBuffer(len + extra);
-    let offset = 0;
-    if (extra !== 0) {
-      const address = this.getAddress(buffer);
-      const mask = ~(extra - 1);
-      const aligned = (address & mask) + extra;
-      offset = aligned - address;
-    }
-    return new DataView(buffer, offset, len);
+  getAlignmentExtra(align) {
+    return (align <= 16) ? 0 : align;
   }
 
-  allocMemory(len, align) {
-    const dv = this.createBuffer(len, align);
-    this.importMemory(dv);
+  allocateRelocatableMemory(len, align) {
+    const dv = this.createRelocatableBuffer(len, align);
+    this.registerMemory(dv);
     return dv;
   }
 
-  freeMemory(address, len, ptrAlign) {
-    const { memoryList } = this.context;
-    const index = findMemoryIndex(memoryList, address);
-    const prev = memoryList[index - 1];
-    if (prev?.address <= address && address < addLength(prev.address, prev.len)) {
-      let prevAddress = prev.address;
-      const extra = (align <= 16) ? 0 : align;
-      if (extra) {
-        const mask = ~(extra - 1);
-        prevAddress = (prevAddress & mask) + extra;
+  freeRelocatableMemory(address, len, align) {
+    this.unregisterMemory(address);
+  }
+
+  allocateShadowMemory(len, align) {
+    return this.createRelocatableBuffer(len, align);
+  }
+
+  freeShadowMemory(address, len, align) {
+    // nothing needs to happen
+  }
+
+  updatePointerAddresses(args) {
+    // collect the pointers first
+    const map = this.collectPointers(args);
+    for (const [ pointer, info ] of map) {
+      const { target, jointSource } = info;
+      const dv = target[MEMORY];
+      let address;
+      if (jointSource) {
+        // pointer is pointing to buffer with overlapping views
+        if (jointSource.address === undefined) {
+          const baseAddress = this.getBufferAddress(dv.buffer);
+          let allAligned = true;
+          // ensure that all the pointers are properly aligned
+          for (const [ offset, align ] of Object.entries(jointSource.aligns)) {
+            const viewAddress = addLength(baseAddress, offset);
+            if (isMisaligned(viewAddress, align)) {
+              allAligned = false;
+              break;
+            }
+          }
+          if (allAligned) {
+            jointSource.address = baseAddress;
+          } else {
+            // allocate a
+            const { startOffset, endOffset } = jointSource;
+            const len = endOffset - startOffset;
+            const sourceDV = new DataView(dv.buffer, startOffset, len);
+            const source = {
+              constructor: {
+                [ALIGN]: maxAlign,
+              },
+              [MEMORY]: sourceDV,
+              [MEMORY_COPIER]: getMemoryCopier(len),
+            };
+            const sourceShadow = this.createShadow(source);
+            const shadowDV = sourceShadow[MEMORY];
+            const shadowAddress = this.getViewAddress(shadowDV);
+
+          }
+        }
+        address = jointSource.address + dv.byteOffset;
+      } else {
+        const align = target.constructor[ALIGN];
+        address = this.getViewAddress(dv);
+        if (isMisaligned(address, align)) {
+          // need to shadow the object
+          const shadow = this.createShadow(target);
+          address = this.getViewAddress(shadow[MEMORY]);
+        }
       }
-      if (prevAddress === address) {
-        memoryList.splice(index - 1, 1);
-      }
+      // update the pointer
+      pointer[ADDRESS_UPDATER](address, target.length);
     }
+  }
+
+  acquirePointerTargets(args) {
+    args[POINTER_VISITOR](acquireTarget, { vivificate: true });
   }
 
   invokeFactory(thunk) {
@@ -390,18 +551,20 @@ export class NodeEnvironment extends Environment {
     return module;
   }
 
-  invokeThunk(thunk, args, hasPointer) {
+  invokeThunk(thunk, args) {
     let err;
-    if (hasPointer) {
+    if (args[POINTER_VISITOR]) {
       // create an object where information concerning pointers can be stored
       this.startContext();
       // copy addresses of garbage-collectible objects into memory
-      args[POINTER_VISITOR](updateAddress, {});
+      this.updatePointerAddresses(args);
       err = thunk.call(this, args[MEMORY]);
-      args[POINTER_VISITOR](acquireTarget, { vivificate: true });
+      // create objects that pointers point to
+      this.acquirePointerTargets(args);
       // restore the previous context if there's one
       this.endContext();
     } else {
+      // don't need to do any of that if there're no pointers
       err = thunk.call(this, args[MEMORY]);
     }
 
@@ -491,6 +654,39 @@ export class NodeEnvironment extends Environment {
 
 /* WASM-ONLY */
 export class WebAssemblyEnvironment extends Environment {
+  imports = {
+    defineStructures: { argType: '', returnType: 'v' },
+    allocateFixedMemory: { argType: 'iii', returnType: 'v' },
+    freeFixedMemory: { argType: 'iiii' },
+    allocateShadowMemory: { argType: 'ii', returnType: 'v' },
+    freeShadowMemory: { argType: 'iii' },
+    runThunk: { argType: 'iv', returnType: 'v' },
+    isRuntimeSafetyActive: { argType: '', returnType: 'b' },
+  };
+  exports = {
+    allocoateRelocatableMemory: { argType: 'ii', returnType: 'v' },
+    freeRelocatableMemory: { argType: 'iii' },
+    createString: { argType: 'ii', returnType: 'v' },
+    createObject: { argType: 'vv', returnType: 's' },
+    createView: { argType: 'ii', returnType: 'v' },
+    castView: { argType: 'vv', returnType: 'v' },
+    readSlot: { argType: 'vi', returnType: 'v' },
+    writeSlot: { argType: 'viv' },
+    beginDefinition: { returnType: 'v' },
+    insertInteger: { argType: 'vsi' },
+    insertBoolean: { argType: 'vsb' },
+    insertString: { argType: 'vss' },
+    insertObject: { argType: 'vsv' },
+    beginStructure: { argType: 'v', returnType: 'v' },
+    attachMember: { argType: 'vvb' },
+    attachMethod: { argType: 'vvb' },
+    createTemplate: { argType: 'v' },
+    attachTemplate: { argType: 'vvb' },
+    finalizeStructure: { argType: 'v' },
+    writeToConsole: { argType: 'v' },
+    startCall: { argType: 'iv', returnType: 'i' },
+    endCall: { argType: 'v', returnType: 'i' },
+  };
   nextValueIndex = 1;
   valueTable = { 0: null };
   valueIndices = new Map;
@@ -498,15 +694,10 @@ export class WebAssemblyEnvironment extends Environment {
   /* COMPTIME-ONLY */
   structures = [];
   /* COMPTIME-ONLY-END */
-  expectedMethods = {
-    /* COMPTIME-ONLY */
-    define: { name: 'defineStructures', argType: '', returnType: 'v' },
-    /* COMPTIME-ONLY-END */
-    alloc: { name: 'allocSharedMemory', argType: 'iii', returnType: 'i' },
-    free: { name: 'freeSharedMemory', argType: 'iiii', returnType: '' },
-    run: { name: 'runThunk', argType: 'iv', returnType: 'v' },
-    safe: { name: 'isRuntimeSafetyActive', argType: '', returnType: 'b' },
-  };
+  /* RUNTIME-ONLY */
+  fixedBufferList = [];
+  fixedBufferInterval = 0;
+  /* RUNTIME-ONLY-END */
 
   constructor() {
     super();
@@ -572,37 +763,19 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   exportFunctions() {
-    return {
-      _allocMemory: this.exportFunction(this.allocMemory, 'ii', 'v'),
-      _freeMemory: this.exportFunction(this.freeMemory, 'iii', ''),
-      _createString: this.exportFunction(this.createString, 'ii', 'v'),
-      _createObject: this.exportFunction(this.createObject, 'vv', 's'),
-      _createView: this.exportFunction(this.createView, 'ii', 'v'),
-      _castView: this.exportFunction(this.castView, 'vv', 'v'),
-      _readSlot: this.exportFunction(this.readSlot, 'vi', 'v'),
-      _writeSlot: this.exportFunction(this.writeSlot, 'viv'),
-      _beginDefinition: this.exportFunction(this.beginDefinition, '', 'v'),
-      _insertInteger: this.exportFunction(this.insertProperty, 'vsi'),
-      _insertBoolean: this.exportFunction(this.insertProperty, 'vsb'),
-      _insertString: this.exportFunction(this.insertProperty, 'vss'),
-      _insertObject: this.exportFunction(this.insertProperty, 'vsv'),
-      _beginStructure: this.exportFunction(this.beginStructure, 'v', 'v'),
-      _attachMember: this.exportFunction(this.attachMember, 'vvb'),
-      _attachMethod: this.exportFunction(this.attachMethod, 'vvb'),
-      _createTemplate: this.exportFunction(this.attachMethod, 'v'),
-      _attachTemplate: this.exportFunction(this.attachTemplate, 'vvb'),
-      _finalizeStructure: this.exportFunction(this.finalizeStructure, 'v'),
-      _writeToConsole: this.exportFunction(this.writeToConsole, 'v', ''),
-      _startCall: this.exportFunction(this.startCall, 'iv', 'i'),
-      _endCall: this.exportFunction(this.endCall, 'v', 'i'),
+    const imports = {};
+    for (const [ name, { argType, returnType } ] of Object.entries(this.exports)) {
+      const fn = this[name];
+      imports[`_${name}`] = this.exportFunction(fn, argType, returnType);
     }
+    return imports;
   }
 
   importFunctions(exports) {
     for (const [ name, fn ] of Object.entries(exports)) {
-      const info = this.expectedMethods[name];
+      const info = this.imports[name];
       if (info) {
-        const { name, argType, returnType } = info;
+        const { argType, returnType } = info;
         this[name] = this.importFunction(fn, argType, returnType);
       }
     }
@@ -612,7 +785,7 @@ export class WebAssemblyEnvironment extends Environment {
     const throwError = function() {
       throw new Error('WebAssembly instance was abandoned');
     };
-    for (const { name } of Object.values(this.expectedMethods)) {
+    for (const { name } of Object.values(this.imports)) {
       if (this[name]) {
         this[name] = throwError;
       }
@@ -647,8 +820,12 @@ export class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  isShared(dv) {
+  isFixed(dv) {
     return dv.buffer === this.memory.buffer;
+  }
+
+  createBuffer(len, align) {
+    return new DataView(new ArrayBuffer(len));
   }
 
   getViewAddress(dv) {
@@ -662,7 +839,39 @@ export class WebAssemblyEnvironment extends Environment {
     return address;
   }
 
-  obtainView(address, len) {
+  createFixedBuffer(len, align) {
+    const dv = this.allocateFixedMemory(len, align);
+    const ref = new WeakRef(dv);
+    const address = this.getViewAddress(dv);
+    this.fixedBufferList.push({ ref, address, len, align });
+    if (!this.fixedBufferInterval) {
+      this.fixedBufferInterval = setInterval(() => {
+        this.freeUnreferencedBuffers();
+        if (this.fixedBufferList.length === 0) {
+          clearInterval(this.fixedBufferInterval);
+          this.fixedBufferInterval = 0;
+        }
+      }, 500);
+    }
+    return dv;
+  }
+
+  freeUnreferencedBuffers() {
+    const bufferList = this.fixedBufferList;
+    for (let i = bufferList.length - 1; i >= 0; i--) {
+      const { ref, address, len, align } = bufferList[i];
+      if (!ref.deref()) {
+        // freeFixedMemory() would throw if the wasm instance was abandoned
+        try {
+          this.freeFixedMemory(address, len, align);
+        } catch (err) {
+        }
+        bufferList.splice(i, 1);
+      }
+    }
+  }
+
+  obtainFixedView(address, len) {
     const { buffer } = this.memory;
     return new DataView(buffer, address, len);
   }
@@ -863,6 +1072,7 @@ export class WebAssemblyEnvironment extends Environment {
 export class CallContext {
   pointerProcessed = new Map();
   memoryList = [];
+  shadowMap = [];
 }
 
 export function findSortedIndex(array, value, cb) {
@@ -891,10 +1101,21 @@ function addLength(address, len) {
   return address + ((typeof(address) === 'bigint') ? BigInt(len) : len);
 }
 
-export function isMisaligned(address, ptrAlign) {
+export function isMisaligned(address, align) {
   if (typeof(address) === 'bigint') {
     address = Number(address & 0xFFFFFFFFn);
   }
-  const mask = (1 << ptrAlign) - 1;
+  const mask = align - 1;
   return (address & mask) !== 0;
+}
+
+export function getAlignedAddress(address, align) {
+  let mask;
+  if (typeof(address) === 'bigint') {
+    align = BigInt(align);
+    mask = ~(align - 1n);
+  } else {
+    mask = ~(align - 1);
+  }
+  return (address & mask) + align;
 }

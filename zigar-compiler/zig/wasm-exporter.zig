@@ -21,8 +21,8 @@ const CallContext = struct {
 };
 const Call = *const CallContext;
 
-extern fn _allocMemory(len: usize, align: u16) usize;
-extern fn _freeMemory(address: usize, len: usize, align: u16) void;
+extern fn _allocateRelocatableMemory(len: usize, align: u16) usize;
+extern fn _freeRelocatableMemory(address: usize, len: usize, align: u16) void;
 extern fn _createString(address: usize, len: usize) usize;
 extern fn _createObject(structure: usize, dv: usize) usize;
 extern fn _createView(address: usize, len: usize) usize;
@@ -60,24 +60,40 @@ fn strlen(s: [*:0]const u8) usize {
     return len;
 }
 
-pub fn alloc(call_addr: usize, len: usize, align: u16) usize {
-    const ctx: Call = @ptrFromInt(call_addr);
-    if (len > 0) {
-        const ptr_align = if (align != 0) std.math.log2_int(u8, @alignOf(T)) else 0;
-        if (ctx.allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
-            return @intFromPtr(bytes);
-        } else {
-            return 0;
-        }
+const allocator: std.mem.Allocator = .{
+    .ptr = undefined,
+    .vtable = &std.heap.WasmAllocator.vtable,
+},
+
+pub fn allocateFixedMemory(len: usize, align: u16) usize {
+    const ptr_align = if (align != 0) std.math.log2_int(u8, align) else 0;
+    if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
+        return _createView(@intFromPtr(bytes), len);
     } else {
         return 0;
     }
 }
 
-pub fn free(call_addr: usize, bytes_addr: usize, len: usize, align: u16) void {
+pub fn freeFixedMemory(bytes_addr: usize, len: usize, align: u16) void {
+    const bytes: [*]u8 = @ptrFromInt(bytes_addr);
+    const ptr_align = if (align != 0) std.math.log2_int(u8, align) else 0;
+    allocator.rawFree(bytes[0..len], ptr_align, 0);
+}
+
+pub fn allocateShadowMemory(call_addr: usize, len: usize, align: u16) usize {
+    const ctx: Call = @ptrFromInt(call_addr);
+    const ptr_align = if (align != 0) std.math.log2_int(u8, align) else 0;
+    if (ctx.allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
+        return _createView(@intFromPtr(bytes), len);
+    } else {
+        return 0;
+    }
+}
+
+pub fn freeShadowMemory(call_addr: usize, bytes_addr: usize, len: usize, align: u16) void {
     const ctx: Call = @ptrFromInt(call_addr);
     const bytes: [*]u8 = @ptrFromInt(bytes_addr);
-    const ptr_align = if (align != 0) std.math.log2_int(u8, @alignOf(T)) else 0;
+    const ptr_align = if (align != 0) std.math.log2_int(u8, align) else 0;
     ctx.allocator.rawFree(bytes[0..len], ptr_align, 0);
 }
 
@@ -100,7 +116,7 @@ pub const Host = struct {
     }
 
     pub fn allocateMemory(_: Host, size: usize, ptr_align: u8) !Memory {
-        const address = _allocMemory(size, ptr_align);
+        const address = _allocateRelocatableMemory(size, ptr_align);
         if (address == 0) {
             return Error.UnableToAllocateMemory;
         }
@@ -111,7 +127,7 @@ pub const Host = struct {
     }
 
     pub fn freeMemory(_: Host, memory: Memory, ptr_align: u8) !void {
-        _freeMemory(@intFromPtr(memory.bytes), memory.len, ptr_align);
+        _freeRelocatableMemory(@intFromPtr(memory.bytes), memory.len, ptr_align);
     }
 
     pub fn createString(_: Host, memory: Memory) !Value {
@@ -306,7 +322,7 @@ pub fn runThunk(fn_address: usize, arg_struct: usize) usize {
     }
 }
 
-pub fn exportModule(comptime T: type) usize {
+pub fn defineStructures(comptime T: type) usize {
     const factory = exporter.createRootFactory(Host, T);
     const fn_address: usize = @intFromPtr(factory);
     return runThunk(fn_address, 0);
@@ -337,6 +353,6 @@ pub fn getOS() type {
     };
 }
 
-pub fn getRuntimeSafety() u8 {
+pub fn isRuntimeSafetyActive() u8 {
     return if (builtin.mode == .ReleaseSafe or builtin.mode == .Debug) 1 else 0;
 }

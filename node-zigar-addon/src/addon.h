@@ -1,8 +1,11 @@
 #include <node.h>
 #ifdef WIN32
   #include "dlfcn.win32.h"
+  #define aligned_alloc(align, size)  _aligned_malloc(size, align)
+  #define aligned_free(ptr)           _aligned_free(ptr)
 #else
   #include <dlfcn.h>
+  #define aligned_free(ptr)           free(ptr)
 #endif
 
 #if defined(__GNUC__) && __GNUC__ >= 8
@@ -216,15 +219,21 @@ struct FunctionData : public ExternalData {
 struct ExternalMemoryData {
   static int count;
   Global<External> module_data;
+  void* memory;
 
   ExternalMemoryData(Isolate* isolate,
+                     void* memory,
                      Local<External> module_data) :
+    memory(memory),
     module_data(isolate, module_data) {
     count++;
   }
 
   ~ExternalMemoryData() {
     count--;
+    if (memory) {
+      aligned_free(memory);
+    }
   }
 };
 

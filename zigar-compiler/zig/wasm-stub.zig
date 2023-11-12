@@ -4,22 +4,30 @@ const package = @import("package");
 
 pub const os = exporter.getOS();
 
-export fn alloc(call_addr: usize, len: usize, ptr_align: u8) usize {
-    return exporter.alloc(call_addr, len, ptr_align);
+export fn allocateFixedMemory(len: usize, align: u16) usize {
+    return exporter.allocateFixedMemory(len, align);
 }
 
-export fn free(call_addr: usize, byte_addr: usize, len: usize, ptr_align: u8) void {
-    exporter.free(call_addr, byte_addr, len, ptr_align);
+export fn freeFixedMemory(byte_addr: usize, len: usize, align: u16) void {
+    exporter.freeFixedMemory(byte_addr, len, align);
 }
 
-export fn define() usize {
-    return exporter.exportModule(package);
+export fn allocateShadowMemory(call_addr: usize, len: usize, align: u16) usize {
+    return exporter.allocateShadowMemory(call_addr, len, align);
 }
 
-export fn run(thunk_address: usize, arg_struct: usize) usize {
+export fn freeShadowMemory(call_addr: usize, byte_addr: usize, len: usize, align: u16) void {
+    exporter.freeShadowMemory(call_addr, byte_addr, len, align);
+}
+
+export fn defineStructures() usize {
+    return exporter.defineStructures(package);
+}
+
+export fn runThunk(thunk_address: usize, arg_struct: usize) usize {
     return exporter.runThunk(thunk_address, arg_struct);
 }
 
-export fn safe() u8 {
-    return exporter.getRuntimeSafety();
+export fn isRuntimeSafetyActive() u8 {
+    return exporter.isRuntimeSafetyActive();
 }
