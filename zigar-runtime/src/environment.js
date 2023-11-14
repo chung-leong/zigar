@@ -44,7 +44,7 @@ export class Environment {
     // obtain a data view of memory at given address
   }
   isFixed(dv: DataView): boolean {
-    // return true/false depending on whether view is point to shared memory
+    // return true/false depending on whether view is point to fixed memory
   }
   copyBytes(dst: DataView, address: bigInt|number, len: number): void {
     // copy memory at given address into destination view
@@ -83,18 +83,18 @@ export class Environment {
 
   registerMemory(dv) {
     const { memoryList } = this.context;
-    const { buffer } = dv;
-    const address = this.getViewAddress(buffer);
+    const address = this.getViewAddress(dv);
     const index = findMemoryIndex(memoryList, address);
-    memoryList.splice(index, 0, { address, buffer, len: buffer.byteLength });
-    return add(address, dv.byteOffset);
+    memoryList.splice(index, 0, { address, dv, len: dv.byteLength });
+    return address;
   }
 
   unregisterMemory(address) {
+    const { memoryList } = this.context;
     const index = findMemoryIndex(memoryList, address);
     const prev = memoryList[index - 1];
     if (prev?.address === address) {
-      memoryList.splice(index, 1);
+      memoryList.splice(index - 1, 1);
     }
   }
 
@@ -103,13 +103,15 @@ export class Environment {
       const { memoryList } = this.context;
       const index = findMemoryIndex(memoryList, address);
       const prev = memoryList[index - 1];
-      if (prev?.address <= address && address < add(prev.address, prev.len)) {
-        const offset = Number(address - prev.address);
-        return new DataView(prev.buffer, offset, len);
+      if (prev?.address === address && prev.len === len) {
+        return prev.dv;
+      } else if (prev?.address <= address && address < add(prev.address, prev.len)) {
+        const offset = Number(address - prev.address) + prev.dv.byteOffset;
+        return new DataView(prev.dv.buffer, offset, len);
       }
     }
-    // not found in any of the buffers we've seen--assume it's shared memory
-    return this.obtainView(address, len);
+    // not found in any of the buffers we've seen--assume it's fixed memory
+    return this.obtainFixedView(address, len);
   }
 
   getViewAddress(dv) {
@@ -677,7 +679,7 @@ export class NodeEnvironment extends Environment {
       released.set(obj, true);
       const dv = obj[MEMORY];
       if (dv.buffer instanceof SharedArrayBuffer) {
-        // create new buffer and copy content from shared memory
+        // create new buffer and copy content from fixed memory
         const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
         const ta2 = new Uint8Array(ta);
         const dv2 = new DataView(ta2.buffer);
@@ -695,7 +697,7 @@ export class NodeEnvironment extends Environment {
           // a pointer--release what it's pointing to
           releaseObject(obj[SLOTS][0]);
         } else {
-          // force recreation of child objects so they'll use non-shared memory
+          // force recreation of child objects so they'll use non-fixed memory
           obj[SLOTS] = {};
         }
       }
@@ -717,7 +719,7 @@ export class WebAssemblyEnvironment extends Environment {
     isRuntimeSafetyActive: { argType: '', returnType: 'b' },
   };
   exports = {
-    allocoateRelocatableMemory: { argType: 'ii', returnType: 'v' },
+    allocateRelocatableMemory: { argType: 'ii', returnType: 'v' },
     freeRelocatableMemory: { argType: 'iii' },
     createString: { argType: 'ii', returnType: 'v' },
     createObject: { argType: 'vv', returnType: 's' },
@@ -726,10 +728,10 @@ export class WebAssemblyEnvironment extends Environment {
     readSlot: { argType: 'vi', returnType: 'v' },
     writeSlot: { argType: 'viv' },
     beginDefinition: { returnType: 'v' },
-    insertInteger: { argType: 'vsi' },
-    insertBoolean: { argType: 'vsb' },
-    insertString: { argType: 'vss' },
-    insertObject: { argType: 'vsv' },
+    insertInteger: { argType: 'vsi', alias: 'insertProperty' },
+    insertBoolean: { argType: 'vsb', alias: 'insertProperty' },
+    insertString: { argType: 'vss', alias: 'insertProperty' },
+    insertObject: { argType: 'vsv', alias: 'insertProperty' },
     beginStructure: { argType: 'v', returnType: 'v' },
     attachMember: { argType: 'vvb' },
     attachMethod: { argType: 'vvb' },
@@ -877,8 +879,8 @@ export class WebAssemblyEnvironment extends Environment {
 
   exportFunctions() {
     const imports = {};
-    for (const [ name, { argType, returnType } ] of Object.entries(this.exports)) {
-      const fn = this[name];
+    for (const [ name, { argType, returnType, alias } ] of Object.entries(this.exports)) {
+      const fn = this[alias ?? name];
       imports[`_${name}`] = this.exportFunction(fn, argType, returnType);
     }
     return imports;
@@ -935,7 +937,7 @@ export class WebAssemblyEnvironment extends Environment {
 
   startCall(call, args) {
     this.startContext();
-    // call context, use by allocShadowMemory and freeShadowMemory
+    // call context, use by allocateShadowMemory and freeShadowMemory
     this.context.call = call;
     if (!args) {
       // can't be 0 since that sets off Zig's runtime safety check

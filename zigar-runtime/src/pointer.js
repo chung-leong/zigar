@@ -66,7 +66,7 @@ export function finalizePointer(s, env) {
         } else {
           throwNoCastingToPointer(s);
         }
-        dv = env.createBuffer(byteSize, ptrAlign);
+        dv = env.createBuffer(byteSize, align);
       }
     }
     self[MEMORY] = dv;

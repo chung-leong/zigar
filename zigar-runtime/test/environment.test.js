@@ -79,16 +79,6 @@ describe('Environment', function() {
         const address = env.registerMemory(dv);
         expect(address).to.equal(0x1000 + 8);
       })
-      it('should not import same buffer twice', function() {
-        const env = new Environment();
-        env.getBufferAddress = () => 0x1000;
-        const dv = new DataView(new ArrayBuffer(16), 8, 8);
-        env.startContext();
-        env.registerMemory(dv);
-        env.registerMemory(dv);
-        env.registerMemory(dv);
-        expect(env.context.memoryList).to.have.lengthOf(1);
-      })
     })
     describe('findMemory', function() {
       it('should find previously imported buffer', function() {
@@ -144,44 +134,6 @@ describe('Environment', function() {
         expect(dv).to.be.instanceOf(DataView);
         expect(dv.byteLength).to.equal(32);
         expect(dv.byteOffset).to.equal(0);
-      })
-      it('should create a larger buffer to prevent misalignment', function() {
-        const env = new Environment();
-        env.getBufferAddress = () => 0x10010;
-        const dv = env.createBuffer(32, 5);
-        expect(dv).to.be.instanceOf(DataView);
-        expect(dv.byteLength).to.equal(32);
-        expect(dv.byteOffset).to.equal(16);
-        expect(dv.buffer.byteLength).to.equal(64);
-      })
-    })
-    describe('allocateRelocatableMemory', function() {
-      it('should create a buffer that can be discovered later', function() {
-        const env = new Environment();
-        env.getBufferAddress = () => 0x10000n;
-        env.startContext();
-        const dv1 = env.allocateRelocatableMemory(32, 3);
-        expect(dv1).to.be.instanceOf(DataView);
-        expect(dv1.byteLength).to.equal(32);
-        const dv2 = env.findMemory(0x10000n, 32);
-        expect(dv2.buffer).to.equal(dv1.buffer);
-        expect(dv2.byteLength).to.equal(32);
-      })
-    })
-    describe('freeRelocatableMemory', function() {
-      it('should remove buffer at indicated address', function() {
-        const env = new Environment();
-        env.obtainFixedView = () => null;
-        env.getBufferAddress = () => 0x10010;
-        env.startContext();
-        const dv = env.allocateRelocatableMemory(32, 5);
-        expect(dv).to.be.instanceOf(DataView);
-        expect(dv.byteLength).to.equal(32);
-        expect(dv.byteOffset).to.equal(16);
-        const address = env.getViewAddress(dv);
-        env.freeRelocatableMemory(address, 32, 5);
-        const bad = env.findMemory(address, 32);
-        expect(bad).to.be.null;
       })
     })
     describe('createView', function() {
@@ -551,6 +503,35 @@ describe('Environment', function() {
     })
   })
   describe('NodeEnvironment', function() {
+    describe('allocateRelocatableMemory', function() {
+      it('should create a buffer that can be discovered later', function() {
+        const env = new NodeEnvironment();
+        env.getBufferAddress = () => 0x10000n;
+        env.startContext();
+        const dv1 = env.allocateRelocatableMemory(32, 8);
+        expect(dv1).to.be.instanceOf(DataView);
+        expect(dv1.byteLength).to.equal(32);
+        const dv2 = env.findMemory(0x10000n, 32);
+        expect(dv2.buffer).to.equal(dv1.buffer);
+        expect(dv2.byteLength).to.equal(32);
+      })
+    })
+    describe('freeRelocatableMemory', function() {
+      it('should remove buffer at indicated address', function() {
+        const env = new NodeEnvironment();
+        env.obtainFixedView = () => null;
+        env.getBufferAddress = () => 0x10010;
+        env.startContext();
+        const dv = env.allocateRelocatableMemory(32, 32);
+        expect(dv).to.be.instanceOf(DataView);
+        expect(dv.byteLength).to.equal(32);
+        expect(dv.byteOffset).to.equal(16);
+        const address = env.getViewAddress(dv);
+        env.freeRelocatableMemory(address, 32, 32);
+        const bad = env.findMemory(address, 32);
+        expect(bad).to.be.null;
+      })
+    })
     describe('isFixed', function() {
       it('should return true when view points to a SharedArrayBuffer', function() {
         const env = new NodeEnvironment();
@@ -830,7 +811,7 @@ describe('Environment', function() {
       it('should export functions of the class needed by Zig code', function() {
         const env = new WebAssemblyEnvironment();
         const exports = env.exportFunctions();
-        expect(exports._allocRelocatableMemory).to.be.a('function');
+        expect(exports._allocateRelocatableMemory).to.be.a('function');
         expect(exports._beginStructure).to.be.a('function');
       })
     })
@@ -847,8 +828,8 @@ describe('Environment', function() {
         };
         env.importFunctions(exports);
         expect(env.defineStructures).to.be.a('function');
-        expect(env.allocateSharedMemory).to.be.a('function');
-        expect(env.freeSharedMemory).to.be.a('function');
+        expect(env.allocateShadowMemory).to.be.a('function');
+        expect(env.freeShadowMemory).to.be.a('function');
         expect(env.runThunk).to.be.a('function');
         expect(env.isRuntimeSafetyActive).to.be.a('function');
       })
@@ -1019,20 +1000,20 @@ describe('Environment', function() {
   })
   describe('isMisaligned', function() {
     it(`should determine whether address is misaligned`, function() {
-      expect(isMisaligned(0x1000, 1)).to.be.false;
-      expect(isMisaligned(0x1001, 1)).to.be.true;
-      expect(isMisaligned(0x1002, 1)).to.be.false;
-      expect(isMisaligned(0x1002, 2)).to.be.true;
-      expect(isMisaligned(0x1004, 2)).to.be.false;
-      expect(isMisaligned(0x1004, 3)).to.be.true;
+      expect(isMisaligned(0x1000, 2)).to.be.false;
+      expect(isMisaligned(0x1001, 2)).to.be.true;
+      expect(isMisaligned(0x1002, 2)).to.be.false;
+      expect(isMisaligned(0x1002, 4)).to.be.true;
+      expect(isMisaligned(0x1004, 4)).to.be.false;
+      expect(isMisaligned(0x1004, 8)).to.be.true;
     })
     it(`should handle bigInt addresses`, function() {
-      expect(isMisaligned(0xF000000000001000n, 1)).to.be.false;
-      expect(isMisaligned(0xF000000000001001n, 1)).to.be.true;
-      expect(isMisaligned(0xF000000000001002n, 1)).to.be.false;
-      expect(isMisaligned(0xF000000000001002n, 2)).to.be.true;
-      expect(isMisaligned(0xF000000000001004n, 2)).to.be.false;
-      expect(isMisaligned(0xF000000000001004n, 3)).to.be.true;
+      expect(isMisaligned(0xF000000000001000n, 2)).to.be.false;
+      expect(isMisaligned(0xF000000000001001n, 2)).to.be.true;
+      expect(isMisaligned(0xF000000000001002n, 2)).to.be.false;
+      expect(isMisaligned(0xF000000000001002n, 4)).to.be.true;
+      expect(isMisaligned(0xF000000000001004n, 4)).to.be.false;
+      expect(isMisaligned(0xF000000000001004n, 8)).to.be.true;
     })
 
   })

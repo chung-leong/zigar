@@ -1156,7 +1156,7 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      env.obtainView = (address, len) => {
+      env.obtainFixedView = (address, len) => {
         return new DataView(new ArrayBuffer(4));
       };
       const Int32 = env.finalizeStructure(intStructure);
@@ -1195,7 +1195,7 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      env.obtainView = (address, len) => {
+      env.obtainFixedView = (address, len) => {
         return new DataView(new ArrayBuffer(4));
       };
       const Int32 = env.finalizeStructure(intStructure);
@@ -1235,10 +1235,10 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      env.getAddress = (buffer) => {
+      env.getBufferAddress = (buffer) => {
         return buffer.address;
       };
-      env.obtainView = (address, len) => {
+      env.obtainFixedView = (address, len) => {
         return new DataView(new ArrayBuffer(4));
       };
       const Int32 = env.finalizeStructure(intStructure);
@@ -1317,12 +1317,12 @@ describe('Pointer functions', function() {
         structure: sliceStructure,
       });
       const HelloPtr = env.finalizeStructure(structure);
-      env.obtainView = (address, len) => {
+      env.obtainFixedView = (address, len) => {
         const buffer = new SharedArrayBuffer(len);
         buffer.address = address;
         return new DataView(buffer);
       };
-      env.getAddress = (buffer) => {
+      env.getBufferAddress = (buffer) => {
         return buffer.address;
       };
       const dv1 = new DataView(new SharedArrayBuffer(16));
