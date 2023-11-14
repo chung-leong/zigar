@@ -302,6 +302,7 @@ export class Environment {
     const pointerMap = new Map();
     const bufferMap = new Map();
     const potentialClusters = [];
+    const env = this;
     const callback = function({ validate }) {
       if (!validate(this)) {
         return;
@@ -315,7 +316,7 @@ export class Environment {
       if (target) {
         pointerMap.set(pointer, target);
         const dv = target[MEMORY];
-        if (!this.isFixed(dv)) {
+        if (!env.isFixed(dv)) {
           // see if the buffer is shared with other objects
           const other = bufferMap.get(dv.buffer);
           if (other) {
@@ -348,7 +349,7 @@ export class Environment {
     for (const [ pointer, target ] of pointerMap) {
       const cluster = clusterMap.get(target);
       let address = this.getTargetAddress(target, cluster);
-      if (!address) {
+      if (address === false) {
         // need to shadow the object
         address = this.getShadowAddress(target, cluster);
       }
@@ -421,7 +422,7 @@ export class Environment {
     const dv = object[MEMORY]
     const align = object.constructor[ALIGN];
     const shadow = Object.create(object.constructor)
-    shadow[MEMORY] = this.allocShadowMemory(dv.byteLength, align);
+    shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
     shadow[MEMORY_COPIER](object);
     return this.addShadow(shadow, object);
   }
@@ -440,7 +441,7 @@ export class Environment {
     }
     // ensure the shadow buffer is large enough to accommodate necessary adjustments
     const len = end - start;
-    const { buffer, byteOffset } = this.allocShadowMemory(len + maxAlign, 0);
+    const { buffer, byteOffset } = this.allocateShadowMemory(len + maxAlign, 0);
     const address = add(this.getBufferAddress(buffer), byteOffset);
     const maxAlignAddress = getAlignedAddress(add(address, maxAlignOffset), maxAlign);
     const shadowAddress = subtract(maxAlignAddress, maxAlignOffset);
@@ -499,7 +500,7 @@ export class Environment {
   }
 
   acquirePointerTargets(args) {
-    args[POINTER_VISITOR](acquireTarget, { vivificate: true });
+    //args[POINTER_VISITOR](acquireTarget, { vivificate: true });
   }
   /* RUNTIME-ONLY-END */
 }
@@ -530,7 +531,7 @@ export class NodeEnvironment extends Environment {
   }
 
   allocateShadowMemory(len, align) {
-    return createAlignedBuffer(len, align);
+    return this.createAlignedBuffer(len, align);
   }
 
   freeShadowMemory(address, len, align) {
@@ -562,11 +563,11 @@ export class NodeEnvironment extends Environment {
           cluster.address = address;
         }
       }
-      return (cluster.misaligned) ? 0 : cluster.address + dv.byteOffset;
+      return (cluster.misaligned) ? false : cluster.address + dv.byteOffset;
     } else {
       const align = target.constructor[ALIGN];
       const address = this.getViewAddress(dv);
-      return isMisaligned(address, align) ? 0 : address;
+      return isMisaligned(address, align) ? false : address;
     }
   }
 
@@ -590,8 +591,9 @@ export class NodeEnvironment extends Environment {
       // an error message
       throwZigError(result);
     }
+    // factory function returns a structure object
+    let module = result.constructor;
     // attach __zigar object
-    let module = result;
     const initPromise = Promise.resolve();
     module.__zigar = {
       init: () => initPromise,
@@ -759,7 +761,7 @@ export class WebAssemblyEnvironment extends Environment {
     const constructor = { [ALIGN]: align };
     const copier = getMemoryCopier(len);
     const dv = this.createBuffer(len);
-    const shadowDV = this.allocShadowMemory(len, align);
+    const shadowDV = this.allocateShadowMemory(len, align);
     // create a shadow for the relocatable memory
     const object = { constructor, [MEMORY]: dv, [MEMORY_COPIER]: copier };
     const shadow = { constructor, [MEMORY]: shadowDV, [MEMORY_COPIER]: copier };
@@ -806,7 +808,7 @@ export class WebAssemblyEnvironment extends Environment {
       return this.getViewAddress(dv);
     } else {
       // relocatable buffers always need shadowing
-      return 0;
+      return false;
     }
   }
 

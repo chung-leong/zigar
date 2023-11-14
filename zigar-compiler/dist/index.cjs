@@ -366,9 +366,120 @@ function absolute(relpath) {
 const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
 const STRUCTURE = Symbol('structure');
+const ALIGN = Symbol('align');
+const MEMORY_COPIER = Symbol('memoryCopier');
 const POINTER_VISITOR = Symbol('pointerVisitor');
 const TARGET_ACQUIRER = Symbol('targetAcquirer');
 const ENVIRONMENT = Symbol('environment');
+
+function getMemoryCopier(size, multiple = false) {
+  const copy = getCopyFunction(size, multiple);
+  return function(target) {
+    /* WASM-ONLY */
+    restoreMemory.call(this);
+    restoreMemory.call(target);
+    /* WASM-ONLY-END */
+    const src = target[MEMORY];
+    const dest = this[MEMORY];
+    copy(dest, src);
+  };
+}
+
+function getCopyFunction(size, multiple = false) {
+  if (!multiple) {
+    const copier = copiers[size];
+    if (copier) {
+      return copier;
+    }
+  }
+  if (!(size & 0x07)) return copy8x;
+  if (!(size & 0x03)) return copy4x;
+  if (!(size & 0x01)) return copy2x;
+  return copy1x;
+}
+
+const copiers = {
+  1: copy1,
+  2: copy2,
+  4: copy4,
+  8: copy8,
+  16: copy16,
+  32: copy32,
+};
+
+function copy1x(dest, src) {
+  for (let i = 0, len = dest.byteLength; i < len; i++) {
+    dest.setInt8(i, src.getInt8(i));
+  }
+}
+
+function copy2x(dest, src) {
+  for (let i = 0, len = dest.byteLength; i < len; i += 2) {
+    dest.setInt16(i, src.getInt16(i, true), true);
+  }
+}
+
+function copy4x(dest, src) {
+  for (let i = 0, len = dest.byteLength; i < len; i += 4) {
+    dest.setInt32(i, src.getInt32(i, true), true);
+  }
+}
+
+function copy8x(dest, src) {
+  for (let i = 0, len = dest.byteLength; i < len; i += 8) {
+    dest.setInt32(i, src.getInt32(i, true), true);
+    dest.setInt32(i + 4, src.getInt32(i + 4, true), true);
+  }
+}
+
+function copy1(dest, src) {
+  dest.setInt8(0, src.getInt8(0));
+}
+
+function copy2(dest, src) {
+  dest.setInt16(0, src.getInt16(0, true), true);
+}
+
+function copy4(dest, src) {
+  dest.setInt32(0, src.getInt32(0, true), true);
+}
+
+function copy8(dest, src) {
+  dest.setInt32(0, src.getInt32(0, true), true);
+  dest.setInt32(4, src.getInt32(4, true), true);
+}
+
+function copy16(dest, src) {
+  dest.setInt32(0, src.getInt32(0, true), true);
+  dest.setInt32(4, src.getInt32(4, true), true);
+  dest.setInt32(8, src.getInt32(8, true), true);
+  dest.setInt32(12, src.getInt32(12, true), true);
+}
+
+function copy32(dest, src) {
+  dest.setInt32(0, src.getInt32(0, true), true);
+  dest.setInt32(4, src.getInt32(4, true), true);
+  dest.setInt32(8, src.getInt32(8, true), true);
+  dest.setInt32(12, src.getInt32(12, true), true);
+  dest.setInt32(16, src.getInt32(16, true), true);
+  dest.setInt32(20, src.getInt32(20, true), true);
+  dest.setInt32(24, src.getInt32(24, true), true);
+  dest.setInt32(28, src.getInt32(28, true), true);
+}
+/* c8 ignore end */
+
+function restoreMemory() {
+  const dv = this[MEMORY];
+  const source = dv[MEMORY];
+  if (!source || dv.buffer.byteLength !== 0) {
+    return false;
+  }
+  const { memory, address, len } = source;
+  const newDV = new DataView(memory.buffer, address, len);
+  newDV[MEMORY] = source;
+  this[MEMORY] = newDV;
+  return true;
+}
 
 function throwZigError(name) {
   throw new Error(decamelizeErrorName(name));
@@ -457,8 +568,39 @@ function isByteAligned({ bitOffset, bitSize, byteSize }) {
   return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
 }
 
-function acquireTarget() {
-  this[TARGET_ACQUIRER]();
+const decoders = {};
+
+function decodeText(arrays, encoding = 'utf-8') {
+  let decoder = decoders[encoding];
+  if (!decoder) {
+    decoder = decoders[encoding] = new TextDecoder(encoding);
+  }
+  let array;
+  if (Array.isArray(arrays)) {
+    if (arrays.length === 1) {
+      array = arrays[0];
+    } else {
+      let len = 0;
+      for (const a of arrays) {
+        len += a.length;
+      }
+      array = new Uint8Array(len);
+      let offset = 0;
+      for (const a of arrays) {
+        array.set(a, offset);
+        offset += a.length;
+      }
+    }
+  } else {
+    array = arrays;
+  }
+  return decoder.decode(array);
+}
+
+function acquireTarget({ validate }) {
+  if (validate?.(this) !== false) {
+    this[TARGET_ACQUIRER]();
+  }
 }
 
 const StructureType = {
@@ -488,45 +630,42 @@ function getStructureFeature(structure) {
   return `use${name}`;
 }
 
-let decoder;
-
-function decodeText(arrays, encoding = 'utf-8') {
-  if (!decoder) {
-    decoder = new TextDecoder;
-  }
-  let array;
-  if (Array.isArray(arrays)) {
-    if (arrays.length === 1) {
-      array = arrays[0];
-    } else {
-      let len = 0;
-      for (const a of arrays) {
-        len += a.length;
-      }
-      array = new Uint8Array(len);
-      let offset = 0;
-      for (const a of arrays) {
-        array.set(a, offset);
-        offset += a.length;
-      }
-    }
-  } else {
-    array = arrays;
-  }
-  return decoder.decode(array);
-}
-
-const default_alignment = 16;
-
 class Environment {
+  context;
+  contextStack = [];
+  consolePending = [];
+  consoleTimeout = 0;
+  slots = {}
+
   /*
   Functions to be defined in subclass:
 
-  getAddress(buffer: ArrayBuffer): bigInt|number {
+  getBufferAddress(buffer: ArrayBuffer): bigInt|number {
     // return a buffer's address
   }
-  obtainView(address: bigInt|number, len: number): DataView {
+  allocateRelocatableMemory(len: number, align: number): DataView {
+    // allocate memory and remember its address
+  }
+  allocateShadowMemory(len: number, align: number): DataView {
+    // allocate memory for shadowing objects
+  }
+  freeRelocatableMemory(address: bigInt|number, len: number, align: number): void {
+    // free previously allocated memory
+  }
+  freeShadowMemory(address: bigInt|number, len: number, align: number): void {
+    // free memory allocated for shadow
+  }
+  allocateFixedMemory(len: number, align: number): DataView {
+    // allocate fixed memory and keep a reference to it
+  }
+  freeFixedMemory(address: bigInt|number, len: number, align: number): void {
+    // free previously allocated fixed memory return the reference
+  }
+  obtainFixedView(address: bigInt|number, len: number): DataView {
     // obtain a data view of memory at given address
+  }
+  isFixed(dv: DataView): boolean {
+    // return true/false depending on whether view is point to fixed memory
   }
   copyBytes(dst: DataView, address: bigInt|number, len: number): void {
     // copy memory at given address into destination view
@@ -534,15 +673,10 @@ class Environment {
   findSentinel(address, bytes: DataView): number {
     // return offset where sentinel value is found
   }
-  isShared(dv: DataView): boolean {
-    // return true/false depending on whether view is point to shared memory
+  getTargetAddress(target: object, cluster: object|undefined) {
+    // return the address of target's buffer if correctly aligned
   }
   */
-  context;
-  contextStack = [];
-  consolePending = [];
-  consoleTimeout = 0;
-  slots = {}
 
   startContext() {
     if (this.context) {
@@ -555,92 +689,64 @@ class Environment {
     this.context = this.contextStack.pop();
   }
 
-  rememberPointer(pointer) {
-    const { pointerProcessed } = this.context;
-    if (pointerProcessed.get(pointer)) {
-      return true;
+  createBuffer(len, align, fixed = false) {
+    if (fixed) {
+      return this.createFixedBuffer(len);
     } else {
-      pointerProcessed.set(pointer, true);
-      this.importMemory(pointer[MEMORY]);
-      return false;
+      return this.createRelocatableBuffer(len, align);
     }
   }
 
-  importMemory(dv) {
+  createRelocatableBuffer(len) {
+    const buffer = new ArrayBuffer(len);
+    return new DataView(buffer);
+  }
+
+  registerMemory(dv) {
     const { memoryList } = this.context;
-    const { buffer } = dv;
-    const address = this.getAddress(buffer);
-    const index = findSortedIndex(memoryList, address);
+    const address = this.getViewAddress(dv);
+    const index = findMemoryIndex(memoryList, address);
+    memoryList.splice(index, 0, { address, dv, len: dv.byteLength });
+    return address;
+  }
+
+  unregisterMemory(address) {
+    const { memoryList } = this.context;
+    const index = findMemoryIndex(memoryList, address);
     const prev = memoryList[index - 1];
-    if (!(prev?.address <= address && address < addLength(prev.address, prev.len))) {
-      memoryList.splice(index, 0, { address, buffer, len: buffer.byteLength });
+    if (prev?.address === address) {
+      memoryList.splice(index - 1, 1);
     }
-    return addLength(address, dv.byteOffset);
   }
 
   findMemory(address, len) {
     if (this.context) {
       const { memoryList } = this.context;
-      const index = findSortedIndex(memoryList, address);
+      const index = findMemoryIndex(memoryList, address);
       const prev = memoryList[index - 1];
-      if (prev?.address <= address && address < addLength(prev.address, prev.len)) {
-        const offset = Number(address - prev.address);
-        return new DataView(prev.buffer, offset, len);
+      if (prev?.address === address && prev.len === len) {
+        return prev.dv;
+      } else if (prev?.address <= address && address < add(prev.address, prev.len)) {
+        const offset = Number(address - prev.address) + prev.dv.byteOffset;
+        return new DataView(prev.dv.buffer, offset, len);
       }
     }
-    // not found in any of the buffers we've seen--assume it's shared memory
-    return this.obtainView(address, len);
+    // not found in any of the buffers we've seen--assume it's fixed memory
+    return this.obtainFixedView(address, len);
   }
 
   getViewAddress(dv) {
-    const address = this.getAddress(dv.buffer);
-    const offset = (typeof(address) === 'bigint') ? BigInt(dv.byteOffset) : dv.byteOffset;
-    return address + offset;
-  }
-
-  createBuffer(len, ptrAlign) {
-    const extra = getExtraCount(ptrAlign);
-    const buffer = new ArrayBuffer(len + extra);
-    let offset = 0;
-    if (extra !== 0) {
-      const address = this.getAddress(buffer);
-      const mask = ~(extra - 1);
-      const aligned = (address & mask) + extra;
-      offset = aligned - address;
-    }
-    return new DataView(buffer, offset, len);
-  }
-
-  allocMemory(len, ptrAlign) {
-    const dv = this.createBuffer(len, ptrAlign);
-    this.importMemory(dv);
-    return dv;
-  }
-
-  freeMemory(address, len, ptrAlign) {
-    const { memoryList } = this.context;
-    const index = findSortedIndex(memoryList, address);
-    const prev = memoryList[index - 1];
-    if (prev?.address <= address && address < addLength(prev.address, prev.len)) {
-      let prevAddress = prev.address;
-      const extra = getExtraCount(ptrAlign);
-      if (extra) {
-        const mask = ~(extra - 1);
-        prevAddress = (prevAddress & mask) + extra;
-      }
-      if (prevAddress === address) {
-        memoryList.splice(index - 1, 1);
-      }
-    }
+    const address = this.getBufferAddress(dv.buffer);
+    return add(address, dv.byteOffset);
   }
 
   createView(address, len, ptrAlign, copy) {
     if (copy) {
-      const dv = this.createBuffer(len, ptrAlign);
+      const dv = this.createRelocatableBuffer(len, ptrAlign);
       this.copyBytes(dv, address, len);
       return dv;
     } else {
-      return this.obtainView(address, len);
+      return this.obtainFixedView(address, len);
     }
   }
 
@@ -731,46 +837,44 @@ class Environment {
   }
   /* COMPTIME-ONLY-END */
 
-
-  writeToConsole(dv) {
-    try {
-      const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
-      // send text up to the last newline character
-      const index = array.lastIndexOf(0x0a);
-      if (index === -1) {
-        this.consolePending.push(array);
-      } else {
-        const beginning = array.subarray(0, index);
-        const remaining = array.slice(index + 1);   // copying, in case incoming buffer is pointing to stack memory
-        const list = [ ...this.consolePending, beginning ];
-        console.log(decodeText(list));
-        this.consolePending = (remaining.length > 0) ? [ remaining ] : [];
-      }
-      clearTimeout(this.consoleTimeout);
-      if (this.consolePending.length > 0) {
-        this.consoleTimeout = setTimeout(() => {
-          console.log(decodeText(this.consolePending));
-          this.consolePending = [];
-        }, 250);
-      }
-      /* c8 ignore next 3 */
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
-  flushConsole() {
-    if (this.consolePending.length > 0) {
-      console.log(decodeText(this.consolePending));
-      this.consolePending = [];
-      clearTimeout(this.consoleTimeout);
-    }
-  }
 }
 
 
 /* WASM-ONLY */
 class WebAssemblyEnvironment extends Environment {
+  imports = {
+    defineStructures: { argType: '', returnType: 'v' },
+    allocateFixedMemory: { argType: 'ii', returnType: 'v' },
+    freeFixedMemory: { argType: 'iii' },
+    allocateShadowMemory: { argType: 'cii', returnType: 'v' },
+    freeShadowMemory: { argType: 'ciii' },
+    runThunk: { argType: 'iv', returnType: 'v' },
+    isRuntimeSafetyActive: { argType: '', returnType: 'b' },
+  };
+  exports = {
+    allocateRelocatableMemory: { argType: 'ii', returnType: 'v' },
+    freeRelocatableMemory: { argType: 'iii' },
+    createString: { argType: 'ii', returnType: 'v' },
+    createObject: { argType: 'vv', returnType: 's' },
+    createView: { argType: 'ii', returnType: 'v' },
+    castView: { argType: 'vv', returnType: 'v' },
+    readSlot: { argType: 'vi', returnType: 'v' },
+    writeSlot: { argType: 'viv' },
+    beginDefinition: { returnType: 'v' },
+    insertInteger: { argType: 'vsi', alias: 'insertProperty' },
+    insertBoolean: { argType: 'vsb', alias: 'insertProperty' },
+    insertString: { argType: 'vss', alias: 'insertProperty' },
+    insertObject: { argType: 'vsv', alias: 'insertProperty' },
+    beginStructure: { argType: 'v', returnType: 'v' },
+    attachMember: { argType: 'vvb' },
+    attachMethod: { argType: 'vvb' },
+    createTemplate: { argType: 'v' },
+    attachTemplate: { argType: 'vvb' },
+    finalizeStructure: { argType: 'v' },
+    writeToConsole: { argType: 'v' },
+    startCall: { argType: 'iv', returnType: 'i' },
+    endCall: { argType: 'v', returnType: 'i' },
+  };
   nextValueIndex = 1;
   valueTable = { 0: null };
   valueIndices = new Map;
@@ -778,18 +882,60 @@ class WebAssemblyEnvironment extends Environment {
   /* COMPTIME-ONLY */
   structures = [];
   /* COMPTIME-ONLY-END */
-  expectedMethods = {
-    /* COMPTIME-ONLY */
-    define: { name: 'defineStructures', argType: '', returnType: 'v' },
-    /* COMPTIME-ONLY-END */
-    alloc: { name: 'allocSharedMemory', argType: 'iii', returnType: 'i' },
-    free: { name: 'freeSharedMemory', argType: 'iiii', returnType: '' },
-    run: { name: 'runThunk', argType: 'iv', returnType: 'v' },
-    safe: { name: 'isRuntimeSafetyActive', argType: '', returnType: 'b' },
-  };
 
   constructor() {
     super();
+  }
+
+  allocateRelocatableMemory(len, align) {
+    // allocate memory in both JS and WASM space
+    const constructor = { [ALIGN]: align };
+    const copier = getMemoryCopier(len);
+    const dv = this.createBuffer(len);
+    const shadowDV = this.allocateShadowMemory(len, align);
+    // create a shadow for the relocatable memory
+    const object = { constructor, [MEMORY]: dv, [MEMORY_COPIER]: copier };
+    const shadow = { constructor, [MEMORY]: shadowDV, [MEMORY_COPIER]: copier };
+    this.addShadow(shadow, object);
+    // remember and return the shadow address
+    this.registerMemory(shadowDV);
+    return shadowDV;
+  }
+
+  freeRelocatableMemory(address, len, align) {
+    const dv = this.findMemory(address, len);
+    this.removeShadow(dv);
+    this.unregisterMemory(address);
+    this.freeShadowMemory(address, len, align);
+  }
+
+  getBufferAddress(buffer) {
+    return 0;
+  }
+
+  obtainFixedView(address, len) {
+    const { buffer } = this.memory;
+    return new DataView(buffer, address, len);
+  }
+
+  isFixed(dv) {
+    return dv.buffer === this.memory.buffer;
+  }
+
+  createString(address, len) {
+    const { buffer } = this.memory;
+    const ta = new Uint8Array(buffer, address, len);
+    return decodeText(ta);
+  }
+
+  getTargetAddress(target, cluster) {
+    const dv = target[MEMORY];
+    if (this.isFixed(dv)) {
+      return this.getViewAddress(dv);
+    } else {
+      // relocatable buffers always need shadowing
+      return false;
+    }
   }
 
   releaseObjects() {
@@ -836,8 +982,16 @@ class WebAssemblyEnvironment extends Environment {
     if (!fn) {
       return () => {};
     }
+    let needCallContext = false;
+    if (argType.startsWith('c')) {
+      needCallContext = true;
+      argType = argType.slice(1);
+    }
     return (...args) => {
       args = args.map((arg, i) => this.fromWebAssembly(argType.charAt(i), arg));
+      if (needCallContext) {
+        args = [ this.context.call, ...args ];
+      }
       const retval = fn.apply(this, args);
       return this.toWebAssembly(returnType, retval);
     };
@@ -852,37 +1006,19 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   exportFunctions() {
-    return {
-      _allocMemory: this.exportFunction(this.allocMemory, 'ii', 'v'),
-      _freeMemory: this.exportFunction(this.freeMemory, 'iii', ''),
-      _createString: this.exportFunction(this.createString, 'ii', 'v'),
-      _createObject: this.exportFunction(this.createObject, 'vv', 's'),
-      _createView: this.exportFunction(this.createView, 'ii', 'v'),
-      _castView: this.exportFunction(this.castView, 'vv', 'v'),
-      _readSlot: this.exportFunction(this.readSlot, 'vi', 'v'),
-      _writeSlot: this.exportFunction(this.writeSlot, 'viv'),
-      _beginDefinition: this.exportFunction(this.beginDefinition, '', 'v'),
-      _insertInteger: this.exportFunction(this.insertProperty, 'vsi'),
-      _insertBoolean: this.exportFunction(this.insertProperty, 'vsb'),
-      _insertString: this.exportFunction(this.insertProperty, 'vss'),
-      _insertObject: this.exportFunction(this.insertProperty, 'vsv'),
-      _beginStructure: this.exportFunction(this.beginStructure, 'v', 'v'),
-      _attachMember: this.exportFunction(this.attachMember, 'vvb'),
-      _attachMethod: this.exportFunction(this.attachMethod, 'vvb'),
-      _createTemplate: this.exportFunction(this.attachMethod, 'v'),
-      _attachTemplate: this.exportFunction(this.attachTemplate, 'vvb'),
-      _finalizeStructure: this.exportFunction(this.finalizeStructure, 'v'),
-      _writeToConsole: this.exportFunction(this.writeToConsole, 'v', ''),
-      _startCall: this.exportFunction(this.startCall, 'iv', 'i'),
-      _endCall: this.exportFunction(this.endCall, 'v', 'i'),
+    const imports = {};
+    for (const [ name, { argType, returnType, alias } ] of Object.entries(this.exports)) {
+      const fn = this[alias ?? name];
+      imports[`_${name}`] = this.exportFunction(fn, argType, returnType);
     }
+    return imports;
   }
 
   importFunctions(exports) {
     for (const [ name, fn ] of Object.entries(exports)) {
-      const info = this.expectedMethods[name];
+      const info = this.imports[name];
       if (info) {
-        const { name, argType, returnType } = info;
+        const { argType, returnType } = info;
         this[name] = this.importFunction(fn, argType, returnType);
       }
     }
@@ -892,7 +1028,7 @@ class WebAssemblyEnvironment extends Environment {
     const throwError = function() {
       throw new Error('WebAssembly instance was abandoned');
     };
-    for (const { name } of Object.values(this.expectedMethods)) {
+    for (const { name } of Object.values(this.imports)) {
       if (this[name]) {
         this[name] = throwError;
       }
@@ -927,38 +1063,15 @@ class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  isShared(dv) {
-    return dv.buffer === this.memory.buffer;
-  }
-
-  getAddress(buffer) {
-    if (buffer === this.memory.buffer) {
-      return 0;
-    } else {
-      throw new Error('Unable to obtain address of ArrayBuffer');
-    }
-  }
-
-  obtainView(address, len) {
-    const { buffer } = this.memory;
-    return new DataView(buffer, address, len);
-  }
-
-  createString(address, len) {
-    const { buffer } = this.memory;
-    const ta = new Uint8Array(buffer, address, len);
-    return decodeText(ta);
-  }
-
   startCall(call, args) {
     this.startContext();
-    // call context, use by allocSharedMemory and freeSharedMemory
+    // call context, use by allocateShadowMemory and freeShadowMemory
     this.context.call = call;
-    console.log({ args });
     if (!args) {
       // can't be 0 since that sets off Zig's runtime safety check
       return 0xaaaaaaaa;
     }
+    console.log({ args });
   }
 
   endCall(call, args) {
@@ -1118,7 +1231,6 @@ class WebAssemblyEnvironment extends Environment {
     // we can't do pointer fix up here since we need the context in order to allocate
     // memory from the WebAssembly allocator; point target acquisition will happen in
     // endCall()
-    console.log({ thunk, args });
     const err = this.runThunk(thunk, args);
 
     // errors returned by exported Zig functions are normally written into the
@@ -1137,14 +1249,13 @@ class WebAssemblyEnvironment extends Environment {
 class CallContext {
   pointerProcessed = new Map();
   memoryList = [];
+  shadowMap = [];
+  /* WASM-ONLY */
+  call = 0;
+  /* WASM-ONLY-END */
 }
 
-function getExtraCount(ptrAlign) {
-  const alignment = (1 << ptrAlign);
-  return (alignment <= default_alignment) ? 0 : alignment;
-}
-
-function findSortedIndex(array, address) {
+function findSortedIndex(array, value, cb) {
   let low = 0;
   let high = array.length;
   if (high === 0) {
@@ -1152,8 +1263,8 @@ function findSortedIndex(array, address) {
   }
   while (low < high) {
     const mid = Math.floor((low + high) / 2);
-    const address2 = array[mid].address;
-    if (address2 <= address) {
+    const value2 = cb(array[mid]);
+    if (value2 <= value) {
       low = mid + 1;
     } else {
       high = mid;
@@ -1162,7 +1273,11 @@ function findSortedIndex(array, address) {
   return high;
 }
 
-function addLength(address, len) {
+function findMemoryIndex(array, address) {
+  return findSortedIndex(array, address, m => m.address);
+}
+
+function add(address, len) {
   return address + ((typeof(address) === 'bigint') ? BigInt(len) : len);
 }
 

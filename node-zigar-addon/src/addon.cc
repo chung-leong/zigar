@@ -453,10 +453,10 @@ static void OverrideEnvironmentFunctions(Isolate* isolate,
     auto align = info[2].As<Number>()->Value();
     Memory memory = {
       reinterpret_cast<uint8_t*>(address),
-      len,
-      { align, false, false }
+      static_cast<size_t>(len),
+      { static_cast<uint16_t>(align), false, false }
     };
-    md->imports->free_fixed_memory(&memory);
+    md->imports->free_fixed_memory(memory);
   }, 3);
   add(String::NewFromUtf8Literal(isolate, "obtainFixedView"), [](const FunctionCallbackInfo<Value>& info) {
     auto isolate = info.GetIsolate();
@@ -577,6 +577,10 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
 
   // attach exports to module
   auto module = reinterpret_cast<::Module*>(symbol);
+  if (module->version != 2) {
+    Throw("Cached module is compiled for a different version of Zigar");
+    return;
+  }
   auto exports = module->exports;
   exports->allocate_relocatable_memory = AllocateRelocatableMemory;
   exports->free_relocatable_memory = FreeRelocatableMemory;

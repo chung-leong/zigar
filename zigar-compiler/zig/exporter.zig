@@ -135,7 +135,7 @@ pub const Structure = extern struct {
     structure_type: StructureType,
     length: usize,
     byte_size: usize,
-    align: u16,
+    alignment: u16,
     is_const: bool = false,
     has_pointer: bool,
 };
@@ -154,7 +154,7 @@ pub const Member = extern struct {
 };
 
 pub const MemoryAttributes = packed struct {
-    align: u16 = 0,
+    alignment: u16 = 0,
     is_const: bool = false,
     is_comptime: bool = false,
     _: u14 = 0,
@@ -649,7 +649,7 @@ fn getStructure(host: anytype, comptime T: type) Error!Value {
             .structure_type = getStructureType(T),
             .length = getStructureLength(T),
             .byte_size = @sizeOf(T),
-            .align = @alignOf(T),
+            .alignment = @alignOf(T),
             .is_const = isConst(T),
             .has_pointer = hasPointer(T),
         };
@@ -935,7 +935,7 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
                 .structure_type = .Slice,
                 .length = 0,
                 .byte_size = @sizeOf(pt.child),
-                .align = @alignOf(pt.child),
+                .alignment = @alignOf(pt.child),
                 .has_pointer = hasPointer(pt.child),
             };
             const slice_structure = try host.beginStructure(slice_def);

@@ -39,9 +39,9 @@ pub const Host = struct {
         }
     }
 
-    pub fn allocateMemory(self: Host, size: usize, align: u16) !Memory {
+    pub fn allocateMemory(self: Host, size: usize, alignment: u16) !Memory {
         var memory: Memory = undefined;
-        if (imports.allocate_relocatable_memory(self.context, size, align, &memory) != .OK) {
+        if (imports.allocate_relocatable_memory(self.context, size, alignment, &memory) != .OK) {
             return Error.UnableToAllocateMemory;
         }
         return memory;
@@ -168,27 +168,30 @@ pub const Host = struct {
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = gpa.allocator();
 
-fn allocateFixedMemory(len usize, align: u8, memory: *Memory) callconv(.C) Result {
-    const ptr_align = if (align != 0) std.math.log2_int(u8, align) else 0;
-    if (ctx.allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
+fn allocateFixedMemory(len: usize, alignment: u8, memory: *Memory) callconv(.C) Result {
+    const ptr_align = if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
+    if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
         memory.bytes = bytes;
         memory.len = len;
-        memory.attributes.align = align;
-        memory.is_const = false;
-        memory.is_comptime = false;
+        memory.attributes.alignment = alignment;
+        memory.attributes.is_const = false;
+        memory.attributes.is_comptime = false;
         return .OK;
     } else {
         return .Failure;
     }
 }
 
-fm freeFixedMemory(memory: *const Memory) callconv(.C) Result {
-    const align = memory.attributes.align;
-    const bytes = memory.bytes;
-    const len = memory.len;
-    const ptr_align = if (align != 0) std.math.log2_int(u8, align) else 0;
-    allocator.rawFree(bytes[0..len], ptr_align, 0);
-    return .OK;
+fn freeFixedMemory(memory: *const Memory) callconv(.C) Result {
+    if (memory.bytes) |bytes| {
+        const alignment = memory.attributes.alignment;
+        const len = memory.len;
+        const ptr_align = if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
+        allocator.rawFree(bytes[0..len], ptr_align, 0);
+        return .OK;
+    } else {
+        return .Failure;
+    }
 }
 
 // pointer table that's filled on the C++ side
@@ -217,7 +220,7 @@ const Exports = extern struct {
     allocate_fixed_memory: *const fn (usize, u8, *Memory) callconv(.C) Result,
     free_fixed_memory: *const fn (*const Memory) callconv(.C) Result,
 };
-const exports: Exports = {
+const exports: Exports = .{
     .allocate_fixed_memory = allocateFixedMemory,
     .free_fixed_memory = freeFixedMemory,
 };
