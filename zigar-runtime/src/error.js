@@ -200,6 +200,10 @@ export function throwMissingSentinel(structure, value, length) {
   throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}`);
 }
 
+export function throwAlignmentConflict(align1, align2) {
+  throw new TypeError(`Cannot simultaneously align memory to ${align2}-byte and ${align1}-byte boundary`);
+}
+
 export function throwAssigningToConstant(pointer) {
   const { constructor: { name } } = pointer;
   throw new TypeError(`${name} cannot be modified`);

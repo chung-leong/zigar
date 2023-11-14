@@ -40,10 +40,10 @@ static Result CallFunction(Call* call,
   return Result::OK;
 }
 
-static Result AllocateMemory(Call* call,
-                             size_t len,
-                             uint16_t align,
-                             Memory* dest) {
+static Result AllocateRelocatableMemory(Call* call,
+                                        size_t len,
+                                        uint16_t align,
+                                        Memory* dest) {
   auto isolate = call->isolate;
   auto fname = String::NewFromUtf8Literal(isolate, "allocateRelocatableMemory");
   Local<Value> args[] = {
@@ -64,9 +64,8 @@ static Result AllocateMemory(Call* call,
   return Result::OK;
 }
 
-static Result FreeMemory(Call* call,
-                         const Memory& memory,
-                         uint16_t align) {
+static Result FreeRelocatableMemory(Call* call,
+                                    const Memory& memory) {
   auto isolate = call->isolate;
   auto fname = String::NewFromUtf8Literal(isolate, "freeRelocatableMemory");
   auto address = reinterpret_cast<size_t>(memory.bytes);
@@ -369,11 +368,10 @@ static MaybeLocal<Value> LoadJavaScript(Isolate* isolate,
 static Local<DataView> CreateSharedView(Isolate* isolate,
                                         uint8_t* src_bytes,
                                         size_t len,
-                                        bool free,
                                         Local<External> module_data) {
   // create a reference to the module so that the shared library doesn't get unloaded
   // while the shared buffer is still around pointing to it
-  auto emd = new ExternalMemoryData(isolate, (free) ? src_bytes : null_ptr, module_data);
+  auto emd = new ExternalMemoryData(isolate, module_data);
   std::shared_ptr<BackingStore> store = SharedArrayBuffer::NewBackingStore(src_bytes, len, [](void*, size_t, void* deleter_data) {
     // get rid of the reference
     auto emd = reinterpret_cast<ExternalMemoryData*>(deleter_data);
@@ -413,7 +411,7 @@ static void OverrideEnvironmentFunctions(Isolate* isolate,
       info.GetReturnValue().Set(big_int);
     }
   }, 1);
-  add(String::NewFromUtf8Literal(isolate, "createFixedBuffer"), [](const FunctionCallbackInfo<Value>& info) {
+  add(String::NewFromUtf8Literal(isolate, "allocateFixedMemory"), [](const FunctionCallbackInfo<Value>& info) {
     auto isolate = info.GetIsolate();
     if (!info[0]->IsNumber()) {
       isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Length must be number").ToLocalChecked()));
@@ -424,13 +422,42 @@ static void OverrideEnvironmentFunctions(Isolate* isolate,
       return;
     }
     auto mde = info.Data().As<External>();
+    auto md = reinterpret_cast<ModuleData*>(mde->Value());
     auto len = info[0].As<Number>()->Value();
     auto align = info[1].As<Number>()->Value();
-    void *memory = aligned_alloc(align, len);
-    auto src_bytes = reinterpret_cast<uint8_t*>(memory);
-    auto dv = CreateSharedView(isolate, src_bytes, len, true, mde);
-    info.GetReturnValue().Set(dv);
+    Memory memory;
+    if (md->imports->allocate_fixed_memory(len, align, &memory) == Result::OK) {
+      auto dv = CreateSharedView(isolate, memory.bytes, memory.len, mde);
+      info.GetReturnValue().Set(dv);
+    }
+
   }, 2);
+  add(String::NewFromUtf8Literal(isolate, "freeFixedMemory"), [](const FunctionCallbackInfo<Value>& info) {
+    auto isolate = info.GetIsolate();
+    if (!info[0]->IsBigInt()) {
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Address must be bigInt").ToLocalChecked()));
+      return;
+    }
+    if (!info[1]->IsNumber()) {
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Length must be number").ToLocalChecked()));
+      return;
+    }
+    if (!info[2]->IsNumber()) {
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Align must be number").ToLocalChecked()));
+      return;
+    }
+    auto mde = info.Data().As<External>();
+    auto md = reinterpret_cast<ModuleData*>(mde->Value());
+    auto address = info[0].As<BigInt>()->Uint64Value();
+    auto len = info[1].As<Number>()->Value();
+    auto align = info[2].As<Number>()->Value();
+    Memory memory = {
+      reinterpret_cast<uint8_t*>(address),
+      len,
+      { align, false, false }
+    };
+    md->imports->free_fixed_memory(&memory);
+  }, 3);
   add(String::NewFromUtf8Literal(isolate, "obtainFixedView"), [](const FunctionCallbackInfo<Value>& info) {
     auto isolate = info.GetIsolate();
     if (!info[0]->IsBigInt()) {
@@ -445,7 +472,7 @@ static void OverrideEnvironmentFunctions(Isolate* isolate,
     auto address = info[0].As<BigInt>()->Uint64Value();
     auto len = info[1].As<Number>()->Value();
     auto src_bytes = reinterpret_cast<uint8_t*>(address);
-    auto dv = CreateSharedView(isolate, src_bytes, len, false, mde);
+    auto dv = CreateSharedView(isolate, src_bytes, len, mde);
     info.GetReturnValue().Set(dv);
   }, 2);
   add(String::NewFromUtf8Literal(isolate, "copyBytes"), [](const FunctionCallbackInfo<Value>& info) {
@@ -548,25 +575,25 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   }
   auto env_constructor = result.As<Function>();
 
-  // attach callbacks to module
+  // attach exports to module
   auto module = reinterpret_cast<::Module*>(symbol);
-  auto callbacks = module->callbacks;
-  callbacks->allocate_memory = AllocateMemory;
-  callbacks->free_memory = FreeMemory;
-  callbacks->create_string = CreateString;
-  callbacks->create_object = CreateObject;
-  callbacks->create_view = CreateView;
-  callbacks->cast_view = CastView;
-  callbacks->read_slot = ReadSlot;
-  callbacks->write_slot = WriteSlot;
-  callbacks->begin_structure = BeginStructure;
-  callbacks->attach_member = AttachMember;
-  callbacks->attach_method = AttachMethod;
-  callbacks->attach_template = AttachTemplate;
-  callbacks->finalize_structure = FinalizeStructure;
-  callbacks->create_template = CreateTemplate;
-  callbacks->write_to_console = WriteToConsole;
-  callbacks->flush_console = FlushConsole;
+  auto exports = module->exports;
+  exports->allocate_relocatable_memory = AllocateRelocatableMemory;
+  exports->free_relocatable_memory = FreeRelocatableMemory;
+  exports->create_string = CreateString;
+  exports->create_object = CreateObject;
+  exports->create_view = CreateView;
+  exports->cast_view = CastView;
+  exports->read_slot = ReadSlot;
+  exports->write_slot = WriteSlot;
+  exports->begin_structure = BeginStructure;
+  exports->attach_member = AttachMember;
+  exports->attach_method = AttachMethod;
+  exports->attach_template = AttachTemplate;
+  exports->finalize_structure = FinalizeStructure;
+  exports->create_template = CreateTemplate;
+  exports->write_to_console = WriteToConsole;
+  exports->flush_console = FlushConsole;
 
   // save handle to external object, along with options and AddonData
   auto options = Object::New(isolate);
@@ -574,7 +601,7 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
   auto runtime_safety = Boolean::New(isolate, module->attributes.runtime_safety);
   options->Set(context, String::NewFromUtf8Literal(isolate, "littleEndian"), little_endian).Check();
   options->Set(context, String::NewFromUtf8Literal(isolate, "runtimeSafety"), runtime_safety).Check();
-  auto md = new ModuleData(isolate, handle, options, ade);
+  auto md = new ModuleData(isolate, handle, module->imports, options, ade);
   auto mde = Local<External>::New(isolate, md->external);
 
   // add functions to Environment

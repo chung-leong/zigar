@@ -4,9 +4,9 @@ import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView }  from './data-view.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
 import { addSpecialAccessors } from './special.js';
-import { MEMORY, POINTER_VISITOR, SLOTS, MEMORY_COPIER, MEMORY_RESETTER, CHILD_VIVIFICATOR } from './symbol.js';
 import { throwNoInitializer } from './error.js';
 import { copyPointer, resetPointer } from './pointer.js';
+import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, MEMORY_RESETTER, POINTER_VISITOR, SLOTS } from './symbol.js';
 
 export function finalizeOptional(s, env) {
   const {

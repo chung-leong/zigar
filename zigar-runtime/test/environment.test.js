@@ -14,7 +14,6 @@ import {
   NodeEnvironment,
   WebAssemblyEnvironment,
   CallContext,
-  getExtraCount,
   findSortedIndex,
   isMisaligned,
 } from '../src/environment.js'
@@ -63,56 +62,42 @@ describe('Environment', function() {
         expect(env.context).to.equal(ctx1);
       })
     })
-    describe('rememberPointer', function() {
-      it('should return whether a pointer was seen before', function() {
-        const env = new Environment();
-        env.getAddress = () => 0x1000n;
-        const pointer = {
-          [MEMORY]: new DataView(new ArrayBuffer(8)),
-        };
-        env.startContext();
-        const result1 = env.rememberPointer(pointer);
-        expect(result1).to.be.false;
-        const result2 = env.rememberPointer(pointer);
-        expect(result2).to.be.true;
-      })
-    })
-    describe('importMemory', function() {
+    describe('registerMemory', function() {
       it('should return address of data view', function() {
         const env = new Environment();
-        env.getAddress = () => 0x1000n;
+        env.getBufferAddress = () => 0x1000n;
         const dv = new DataView(new ArrayBuffer(16), 8, 8);
         env.startContext();
-        const address = env.importMemory(dv);
+        const address = env.registerMemory(dv);
         expect(address).to.equal(0x1000n + 8n);
       })
       it('should return address as number when address is number', function() {
         const env = new Environment();
-        env.getAddress = () => 0x1000;
+        env.getBufferAddress = () => 0x1000;
         const dv = new DataView(new ArrayBuffer(16), 8, 8);
         env.startContext();
-        const address = env.importMemory(dv);
+        const address = env.registerMemory(dv);
         expect(address).to.equal(0x1000 + 8);
       })
       it('should not import same buffer twice', function() {
         const env = new Environment();
-        env.getAddress = () => 0x1000;
+        env.getBufferAddress = () => 0x1000;
         const dv = new DataView(new ArrayBuffer(16), 8, 8);
         env.startContext();
-        env.importMemory(dv);
-        env.importMemory(dv);
-        env.importMemory(dv);
+        env.registerMemory(dv);
+        env.registerMemory(dv);
+        env.registerMemory(dv);
         expect(env.context.memoryList).to.have.lengthOf(1);
       })
     })
     describe('findMemory', function() {
       it('should find previously imported buffer', function() {
         const env = new Environment();
-        env.obtainView = (address, len) => new DataView(new SharedArrayBuffer(len));
-        env.getAddress = () => 0x1000n;
+        env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
+        env.getBufferAddress = () => 0x1000n;
         const dv1 = new DataView(new ArrayBuffer(32));
         env.startContext();
-        const address = env.importMemory(dv1);
+        const address = env.registerMemory(dv1);
         const dv2 = env.findMemory(address, dv1.byteLength);
         expect(dv2).to.be.instanceOf(DataView);
         expect(dv2.buffer).to.equal(dv1.buffer);
@@ -120,11 +105,11 @@ describe('Environment', function() {
       })
       it('should find a subslice of previously imported buffer', function() {
         const env = new Environment();
-        env.obtainView = (address, len) => new DataView(new SharedArrayBuffer(len));
-        env.getAddress = () => 0x1000n;
+        env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
+        env.getBufferAddress = () => 0x1000n;
         const dv1 = new DataView(new ArrayBuffer(32));
         env.startContext();
-        const address = env.importMemory(dv1);
+        const address = env.registerMemory(dv1);
         const dv2 = env.findMemory(address + 8n, 8);
         expect(dv2).to.be.instanceOf(DataView);
         expect(dv2.buffer).to.equal(dv1.buffer);
@@ -132,11 +117,11 @@ describe('Environment', function() {
       })
       it('should return data view of shared memory if address is not known', function() {
         const env = new Environment();
-        env.obtainView = (address, len) => new DataView(new SharedArrayBuffer(len));
-        env.getAddress = () => 0x1000n;
+        env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
+        env.getBufferAddress = () => 0x1000n;
         const dv1 = new DataView(new ArrayBuffer(32));
         env.startContext();
-        const address = env.importMemory(dv1);
+        const address = env.registerMemory(dv1);
         const dv2 = env.findMemory(0xFF0000n, 8);
         expect(dv2).to.be.instanceOf(DataView);
         expect(dv2.buffer).to.be.instanceOf(SharedArrayBuffer);
@@ -145,7 +130,7 @@ describe('Environment', function() {
     describe('getViewAddress', function() {
       it('should return address of data view', function() {
         const env = new Environment();
-        env.getAddress = () => 0x1000n;
+        env.getBufferAddress = () => 0x1000n;
         const dv = new DataView(new ArrayBuffer(32), 8, 8);
         const address = env.getViewAddress(dv);
         expect(address).to.equal(0x1008n);
@@ -154,7 +139,7 @@ describe('Environment', function() {
     describe('createBuffer', function() {
       it('should return a data view of a newly created array buffer', function() {
         const env = new Environment();
-        env.getAddress = () => 0x10000;
+        env.getBufferAddress = () => 0x10000;
         const dv = env.createBuffer(32, 3);
         expect(dv).to.be.instanceOf(DataView);
         expect(dv.byteLength).to.equal(32);
@@ -162,7 +147,7 @@ describe('Environment', function() {
       })
       it('should create a larger buffer to prevent misalignment', function() {
         const env = new Environment();
-        env.getAddress = () => 0x10010;
+        env.getBufferAddress = () => 0x10010;
         const dv = env.createBuffer(32, 5);
         expect(dv).to.be.instanceOf(DataView);
         expect(dv.byteLength).to.equal(32);
@@ -170,12 +155,12 @@ describe('Environment', function() {
         expect(dv.buffer.byteLength).to.equal(64);
       })
     })
-    describe('allocMemory', function() {
+    describe('allocateRelocatableMemory', function() {
       it('should create a buffer that can be discovered later', function() {
         const env = new Environment();
-        env.getAddress = () => 0x10000n;
+        env.getBufferAddress = () => 0x10000n;
         env.startContext();
-        const dv1 = env.allocMemory(32, 3);
+        const dv1 = env.allocateRelocatableMemory(32, 3);
         expect(dv1).to.be.instanceOf(DataView);
         expect(dv1.byteLength).to.equal(32);
         const dv2 = env.findMemory(0x10000n, 32);
@@ -183,18 +168,18 @@ describe('Environment', function() {
         expect(dv2.byteLength).to.equal(32);
       })
     })
-    describe('freeMemory', function() {
+    describe('freeRelocatableMemory', function() {
       it('should remove buffer at indicated address', function() {
         const env = new Environment();
-        env.obtainView = () => null;
-        env.getAddress = () => 0x10010;
+        env.obtainFixedView = () => null;
+        env.getBufferAddress = () => 0x10010;
         env.startContext();
-        const dv = env.allocMemory(32, 5);
+        const dv = env.allocateRelocatableMemory(32, 5);
         expect(dv).to.be.instanceOf(DataView);
         expect(dv.byteLength).to.equal(32);
         expect(dv.byteOffset).to.equal(16);
         const address = env.getViewAddress(dv);
-        env.freeMemory(address, 32, 5);
+        env.freeRelocatableMemory(address, 32, 5);
         const bad = env.findMemory(address, 32);
         expect(bad).to.be.null;
       })
@@ -202,7 +187,7 @@ describe('Environment', function() {
     describe('createView', function() {
       it('should allocate new buffer and copy data using copyBytes', function() {
         const env = new Environment();
-        env.getAddress = () => 0x10000;
+        env.getBufferAddress = () => 0x10000;
         env.copyBytes = (dv, address, len) => {
           dv.setInt32(0, address, true);
           dv.setInt32(4, len, true);
@@ -212,10 +197,10 @@ describe('Environment', function() {
         expect(dv.getInt32(0, true)).to.equal(1234);
         expect(dv.getInt32(4, true)).to.equal(32);
       })
-      it('should get view of memory using obtainView', function() {
+      it('should get view of memory using obtainFixedView', function() {
         const env = new Environment();
-        env.getAddress = () => 0x10000;
-        env.obtainView = (address, len) => {
+        env.getBufferAddress = () => 0x10000;
+        env.obtainFixedView = (address, len) => {
           return { address, len };
         };
         const result = env.createView(1234, 32, 3, false);
@@ -566,11 +551,11 @@ describe('Environment', function() {
     })
   })
   describe('NodeEnvironment', function() {
-    describe('isShared', function() {
+    describe('isFixed', function() {
       it('should return true when view points to a SharedArrayBuffer', function() {
         const env = new NodeEnvironment();
         const dv = new DataView(new SharedArrayBuffer(16));
-        const result = env.isShared(dv);
+        const result = env.isFixed(dv);
         expect(result).to.be.true;
       })
     })
@@ -845,7 +830,7 @@ describe('Environment', function() {
       it('should export functions of the class needed by Zig code', function() {
         const env = new WebAssemblyEnvironment();
         const exports = env.exportFunctions();
-        expect(exports._allocMemory).to.be.a('function');
+        expect(exports._allocRelocatableMemory).to.be.a('function');
         expect(exports._beginStructure).to.be.a('function');
       })
     })
@@ -853,16 +838,16 @@ describe('Environment', function() {
       it('should create methods in the environment object', function() {
         const env = new WebAssemblyEnvironment();
         const exports = {
-          define: () => {},
-          alloc: () => {},
-          free: () => {},
-          run: () => {},
-          safe: () => {},
+          defineStructures: () => {},
+          allocateShadowMemory: () => {},
+          freeShadowMemory: () => {},
+          runThunk: () => {},
+          isRuntimeSafetyActive: () => {},
           garbage: () => {},
         };
         env.importFunctions(exports);
         expect(env.defineStructures).to.be.a('function');
-        expect(env.allocSharedMemory).to.be.a('function');
+        expect(env.allocateSharedMemory).to.be.a('function');
         expect(env.freeSharedMemory).to.be.a('function');
         expect(env.runThunk).to.be.a('function');
         expect(env.isRuntimeSafetyActive).to.be.a('function');
@@ -872,11 +857,11 @@ describe('Environment', function() {
       it('should replace imported functions with placeholders that throw', function() {
         const env = new WebAssemblyEnvironment();
         const exports = {
-          define: () => {},
-          alloc: () => {},
-          free: () => {},
-          run: () => {},
-          safe: () => {},
+          defineStructures: () => {},
+          allocateShadowMemory: () => {},
+          freeShadowMemory: () => {},
+          runThunk: () => {},
+          isRuntimeSafetyActive: () => {},
           garbage: () => {},
         };
         env.importFunctions(exports);
@@ -917,7 +902,7 @@ describe('Environment', function() {
 
       })
     })
-    describe('isShared', function() {
+    describe('isFixed', function() {
       it('should return true when view points to a WebAssembly memory', function() {
         const env = new WebAssemblyEnvironment();
         const memory = env.memory = new WebAssembly.Memory({
@@ -925,7 +910,7 @@ describe('Environment', function() {
           maximum: 1024,
         });
         const dv = new DataView(memory.buffer, 0, 8);
-        const result = env.isShared(dv);
+        const result = env.isFixed(dv);
         expect(result).to.be.true;
       })
     })
@@ -1015,19 +1000,6 @@ describe('Environment', function() {
     })
     describe('linkWebAssembly', function() {
       it('should link methods and variables')
-    })
-  })
-  describe('getExtraCount', function() {
-    it('should return 0 for alignment 16 and below', function() {
-      expect(getExtraCount(0)).to.equal(0);
-      expect(getExtraCount(2)).to.equal(0);
-      expect(getExtraCount(4)).to.equal(0);
-      expect(getExtraCount(8)).to.equal(0);
-      expect(getExtraCount(16)).to.equal(0);
-    })
-    it('should return byte size when alignment is 32 and above', function() {
-      expect(getExtraCount(32)).to.equal(32);
-      expect(getExtraCount(64)).to.equal(64);
     })
   })
   describe('findSortedIndex', function() {

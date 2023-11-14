@@ -1,11 +1,8 @@
 #include <node.h>
 #ifdef WIN32
   #include "dlfcn.win32.h"
-  #define aligned_alloc(align, size)  _aligned_malloc(size, align)
-  #define aligned_free(ptr)           _aligned_free(ptr)
 #else
   #include <dlfcn.h>
-  #define aligned_free(ptr)           free(ptr)
 #endif
 
 #if defined(__GNUC__) && __GNUC__ >= 8
@@ -116,18 +113,20 @@ struct ModuleAttributes {
   int :30;
 };
 
-struct Callbacks;
+struct Exports;
+struct Imports;
 
 struct Module {
   uint32_t version;
   ModuleAttributes attributes;
-  Callbacks* callbacks;
+  Exports* exports;
+  Imports* imports;
   Thunk factory;
 };
 
-struct Callbacks {
-  Result (*allocate_memory)(Call*, size_t, uint8_t, Memory*);
-  Result (*free_memory)(Call*, const Memory&, uint8_t);
+struct Exports {
+  Result (*allocate_relocatable_memory)(Call*, size_t, uint16_t, Memory*);
+  Result (*free_relocatable_memory)(Call*, const Memory&);
   Result (*create_string)(Call*, const Memory&, Local<Value>*);
   Result (*create_object)(Call*, Local<Object>, Local<Value>, Local<Object>*);
   Result (*create_view)(Call*, const Memory&, Local<DataView>*);
@@ -142,6 +141,11 @@ struct Callbacks {
   Result (*create_template)(Call*, Local<DataView>, Local<Object>*);
   Result (*write_to_console)(Call*, Local<DataView>);
   Result (*flush_console)(Call*);
+};
+
+struct Imports {
+  Result (*allocate_fixed_memory)(size_t, uint16_t, Memory*);
+  Result (*free_fixed_memory)(const Memory&);
 };
 
 struct ExternalData {
@@ -172,16 +176,19 @@ struct AddonData : public ExternalData {
 struct ModuleData : public ExternalData {
   static int count;
   void* so_handle;
+  const Imports* imports;
   Global<Object> js_options;
   Global<Object> global_slots;
   Global<External> addon_data;
 
   ModuleData(Isolate* isolate,
              void* so_handle,
+             const Imports* imports,
              Local<Object> js_options,
              Local<External> addon_data) :
     ExternalData(isolate),
     so_handle(so_handle),
+    imports(imports),
     js_options(isolate, js_options),
     global_slots(isolate, Object::New(isolate)),
     addon_data(isolate, addon_data) {
@@ -219,21 +226,15 @@ struct FunctionData : public ExternalData {
 struct ExternalMemoryData {
   static int count;
   Global<External> module_data;
-  void* memory;
 
   ExternalMemoryData(Isolate* isolate,
-                     void* memory,
                      Local<External> module_data) :
-    memory(memory),
     module_data(isolate, module_data) {
     count++;
   }
 
   ~ExternalMemoryData() {
     count--;
-    if (memory) {
-      aligned_free(memory);
-    }
   }
 };
 

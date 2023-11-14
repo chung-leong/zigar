@@ -2,7 +2,7 @@ import { defineProperties, getStructureFactory, getStructureName } from './struc
 import { decodeText } from './text.js';
 import { acquireTarget, updateAddress } from './pointer.js';
 import { initializeErrorSets } from './error-set.js';
-import { throwZigError } from './error.js';
+import { throwAlignmentConflict, throwZigError } from './error.js';
 import { ADDRESS_UPDATER, ALIGN, CHILD_VIVIFICATOR, ENVIRONMENT, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SLOTS,
   THUNK_REPLACER } from './symbol.js';
 import { getMemoryCopier } from './memory.js';
@@ -34,11 +34,17 @@ export class Environment {
   freeShadowMemory(address: bigInt|number, len: number, align: number): void {
     // free memory allocated for shadow
   }
-  createFixedBuffer(len: number, align: number): DataView {
-    // allocate fixed memory and remember its address
+  allocateFixedMemory(len: number, align: number): DataView {
+    // allocate fixed memory and keep a reference to it
+  }
+  freeFixedMemory(address: bigInt|number, len: number, align: number): void {
+    // free previously allocated fixed memory return the reference
   }
   obtainFixedView(address: bigInt|number, len: number): DataView {
     // obtain a data view of memory at given address
+  }
+  isFixed(dv: DataView): boolean {
+    // return true/false depending on whether view is point to shared memory
   }
   copyBytes(dst: DataView, address: bigInt|number, len: number): void {
     // copy memory at given address into destination view
@@ -46,8 +52,8 @@ export class Environment {
   findSentinel(address, bytes: DataView): number {
     // return offset where sentinel value is found
   }
-  isFixed(dv: DataView): boolean {
-    // return true/false depending on whether view is point to shared memory
+  getTargetAddress(target: object, cluster: object|undefined) {
+    // return the address of target's buffer if correctly aligned
   }
   */
 
@@ -62,28 +68,17 @@ export class Environment {
     this.context = this.contextStack.pop();
   }
 
-  getAlignmentExtra(align) {
-    return 0;
-  }
-
   createBuffer(len, align, fixed = false) {
     if (fixed) {
-      return this.createFixedBuffer(len, align);
+      return this.createFixedBuffer(len);
     } else {
       return this.createRelocatableBuffer(len, align);
     }
   }
 
-  createRelocatableBuffer(len, align) {
-    const extra = this.getAlignmentExtra(align);
-    const buffer = new ArrayBuffer(len + extra);
-    let offset = 0;
-    if (extra !== 0) {
-      const address = this.getBufferAddress(buffer);
-      const align = getAlignedAddress(address, align);
-      offset = aligned - address;
-    }
-    return new DataView(buffer, offset, len);
+  createRelocatableBuffer(len) {
+    const buffer = new ArrayBuffer(len);
+    return new DataView(buffer);
   }
 
   registerMemory(dv) {
@@ -92,7 +87,7 @@ export class Environment {
     const address = this.getViewAddress(buffer);
     const index = findMemoryIndex(memoryList, address);
     memoryList.splice(index, 0, { address, buffer, len: buffer.byteLength });
-    return addLength(address, dv.byteOffset);
+    return add(address, dv.byteOffset);
   }
 
   unregisterMemory(address) {
@@ -108,7 +103,7 @@ export class Environment {
       const { memoryList } = this.context;
       const index = findMemoryIndex(memoryList, address);
       const prev = memoryList[index - 1];
-      if (prev?.address <= address && address < addLength(prev.address, prev.len)) {
+      if (prev?.address <= address && address < add(prev.address, prev.len)) {
         const offset = Number(address - prev.address);
         return new DataView(prev.buffer, offset, len);
       }
@@ -119,7 +114,7 @@ export class Environment {
 
   getViewAddress(dv) {
     const address = this.getBufferAddress(dv.buffer);
-    return addLength(address, dv.byteOffset);
+    return add(address, dv.byteOffset);
   }
 
   createView(address, len, ptrAlign, copy) {
@@ -145,60 +140,6 @@ export class Environment {
   createObject(structure, arg) {
     const { constructor } = structure;
     return new constructor(arg);
-  }
-
-  addShadow(shadow, object) {
-    let { shadowMap } = this.context;
-    if (!shadowMap) {
-      shadowMap = this.context.shadowMap = new Map();
-    }
-    shadowMap.set(shadow, object);
-  }
-
-  createShadow(object) {
-    const dv = object[MEMORY]
-    const align = object.constructor[ALIGN];
-    const shadowDV = this.allocShadowMemory(dv.byteLength, align);
-    const shadow = { [MEMORY]: shadowDV };
-    object[MEMORY_COPIER].call(shadow, object);
-    this.addShadow(shadow, object);
-    return shadow;
-  }
-
-  createShadowForRange(sourceBuffer, startOffset, endOffset, aligns) {
-    let maxAlign = 0, maxAlignOffset;
-    for (const [ offset, align ] of Object.entries(aligns)) {
-      if (align > maxAlign) {
-        maxAlign = align;
-        maxAlignOffset = offset;
-      }
-    }
-    const len = endOffset - startOffset;
-    // make sure the shadow buffer is large enough
-    const { buffer } = this.allocShadowMemory(len + maxAlign, 0);
-    const address = this.getBufferAddress(buffer);
-    const maxAlignMask = ~(maxAlign - 1);
-    const maxAlignAddress = (add(address + maxAlignOffset) & maxAlignMask) + maxAlign;
-    const shadowAddress = maxAlignAddress
-
-    const shadow = {
-      constructor: { [ALIGN]: maxAlign },
-      [MEMORY]: shadowDV,
-
-    };
-
-
-  }
-
-  releaseShadows() {
-    for (const [ shadow, object ] of this.context.shadowMap) {
-      object[MEMORY_COPIER](shadow);
-      const shadowDV = shadow[MEMORY];
-      const address = this.getViewAddress(shadowDV);
-      const len = shadowDV.byteLength;
-      const align = object.constructor[ALIGN];
-      this.freeShadowMemory(address, len, align);
-    }
   }
 
   readSlot(target, slot) {
@@ -318,7 +259,6 @@ export class Environment {
     /* NODE-ONLY-END */
     return f;
   }
-  /* RUNTIME-ONLY-END */
 
   writeToConsole(dv) {
     try {
@@ -355,10 +295,11 @@ export class Environment {
     }
   }
 
-  collectPointers(args) {
+  updatePointerAddresses(args) {
+    // first, collect all the pointers
     const pointerMap = new Map();
     const bufferMap = new Map();
-    let buffersWithOverlaps = null;
+    const potentialClusters = [];
     const callback = function({ validate }) {
       if (!validate(this)) {
         return;
@@ -370,66 +311,195 @@ export class Environment {
       }
       const target = pointer['*'];
       if (target) {
+        pointerMap.set(pointer, target);
         const dv = target[MEMORY];
-        const info = {
-          const: pointer.constructor.const,
-          target,
-        };
-        pointerMap.set(pointer, info);
-        // see if the buffer is shared with other objects
-        const other = bufferMap.get(dv.buffer);
-        if (other) {
-          const { byteOffset } = dv;
-          const array = Array.isArray(other) ? other : [ other ];
-          const index = findSortedIndex(array, byteOffset, i => i.target[MEMORY].byteOffset);
-          const prev = array[index - 1];
-          if (prev) {
-            // see if the views overlap
-            const prevEnd = prev.target[MEMORY].byteOffset + prev.target[MEMORY].byteLength;
-            if (prevEnd > byteOffset) {
-              if (!buffersWithOverlaps) {
-                buffersWithOverlaps = [ dv.buffer ];
-              } else if (!buffersWithOverlaps.includes(dv.buffer)) {
-                buffersWithOverlaps.push(dv.buffer);
-              }
+        if (!this.isFixed(dv)) {
+          // see if the buffer is shared with other objects
+          const other = bufferMap.get(dv.buffer);
+          if (other) {
+            const array = Array.isArray(other) ? other : [ other ];
+            const index = findSortedIndex(array, dv.byteOffset, i => i.target[MEMORY].byteOffset);
+            array.splice(index, 0, info);
+            if (!Array.isArray(other)) {
+              bufferMap.set(dv.buffer, array);
+              potentialClusters.push(array);
             }
+            sharing = true;
+          } else {
+            bufferMap.set(dv.buffer, target);
           }
-          array.splice(index, 0, info);
-          if (!Array.isArray(other)) {
-            bufferMap.set(dv.buffer, other);
-          }
+          // scan pointers in target
+          target[POINTER_VISITOR]?.(callback);
         }
-        target[POINTER_VISITOR]?.(callback);
       }
     };
     args[POINTER_VISITOR](callback, {});
-    if (buffersWithOverlaps) {
-      for (const buffer of buffersWithOverlaps) {
-        // overlapping views needs be shadowed together
-        // attach an object into each of the pointers so we can allocate a single
-        // block with for all of them
-        const array = bufferMap.get(buffer);
-        const jointSource = {
-          aligns: {},
-          startOffset: 0,
-          endOffset: 0,
-          address: undefined,
-        };
-        for (const [ index, info ] of array.entries()) {
-          const { byteOffset, byteLength } = info.dataView;
-          jointSource.aligns[byteOffset] = info.target.constructor[ALIGN];
-          if (index === 0) {
-            jointSource.startOffset = byteOffset;
+    // find targets that overlap each other
+    const clusters = this.findTargetClusters(potentialClusters);
+    const clusterMap = new Map();
+    for (const cluster of clusters) {
+      for (const target of cluster.targets) {
+        clusterMap.set(target, cluster);
+      }
+    }
+    // process the pointers
+    for (const [ pointer, target ] of pointerMap) {
+      const cluster = clusterMap.get(target);
+      let address = this.getTargetAddress(target, cluster);
+      if (!address) {
+        // need to shadow the object
+        address = this.getShadowAddress(target, cluster);
+      }
+      // update the pointer
+      pointer[ADDRESS_UPDATER](address, target.length);
+    }
+  }
+
+  findTargetClusters(potentialClusters) {
+    const clusters = [];
+    for (const targets of potentialClusters) {
+      let prevTarget = null, prevDV = null, prevStart = 0, prevEnd = 0;
+      let currentCluster = null;
+      for (const target of targets) {
+        const dv = target[MEMORY];
+        const { byteOffset: start, byteLength } = dv;
+        const end = start + byteLength;
+        let forward = true;
+        if (prevTarget) {
+          if (prevEnd > start) {
+            // the previous target overlaps this one
+            if (!currentCluster) {
+              currentCluster = {
+                targets: [ prevTarget ],
+                start: prevStart,
+                end: prevEnd,
+                address: undefined,
+                misaligned: unfinded,
+              };
+              clusters.push(currentCluster);
+            }
+            currentCluster.targets.push(target);
+            if (end > prevEnd) {
+              // set cluster end offset to include this one
+              currentCluster.end = end;
+            } else {
+              // the previous target contains this one
+              forward = false;
+            }
+          } else {
+            currentCluster = null;
           }
-          if (index === array.length - 1) {
-            jointSource.endOffset = byteOffset + byteLength;
-          }
-          info.jointSource = jointSource;
+        }
+        if (forward) {
+          prevTarget = target;
+          prevDV = dv;
+          prevStart = start;
+          prevEnd = end;
         }
       }
     }
-    return pointerMap;
+    return clusters;
   }
+
+  getShadowAddress(target, cluster) {
+    if (cluster) {
+      const dv = target[MEMORY];
+      if (cluster.address === undefined) {
+        const shadow = createClusterShadow(clusters);
+        cluster.address = this.getViewAddress(shadow[MEMORY]);
+      }
+      return cluster.address + dv.byteOffset;
+    } else {
+      const shadow = this.createShadow(target);
+      return this.getViewAddress(shadow[MEMORY]);
+    }
+  }
+
+  createShadow(object) {
+    const dv = object[MEMORY]
+    const align = object.constructor[ALIGN];
+    const shadow = Object.create(object.constructor)
+    shadow[MEMORY] = this.allocShadowMemory(dv.byteLength, align);
+    shadow[MEMORY_COPIER](object);
+    return this.addShadow(shadow, object);
+  }
+
+  createClusterShadow(cluster) {
+    const { start, end, targets } = cluster;
+    // look for largest align
+    let maxAlign = 0, maxAlignOffset;
+    for (const target of targets) {
+      const offset = target[MEMORY].byteOffset;
+      const align = target.constructor[ALIGN];
+      if (align > maxAlign) {
+        maxAlign = align;
+        maxAlignOffset = offset;
+      }
+    }
+    // ensure the shadow buffer is large enough to accommodate necessary adjustments
+    const len = end - start;
+    const { buffer, byteOffset } = this.allocShadowMemory(len + maxAlign, 0);
+    const address = add(this.getBufferAddress(buffer), byteOffset);
+    const maxAlignAddress = getAlignedAddress(add(address, maxAlignOffset), maxAlign);
+    const shadowAddress = subtract(maxAlignAddress, maxAlignOffset);
+    // make sure that other pointers are correctly aligned also
+    for (const target of targets) {
+      const offset = target[MEMORY].byteOffset;
+      if (offset !== maxAlignOffset) {
+        const align = target.constructor[ALIGN];
+        if (isMisaligned(add(shadowAddress, offset), align)) {
+          throwAlignmentConflict(align, maxAlign);
+        }
+      }
+    }
+    // placeholder object type
+    const Range = function() {};
+    Range[ALIGN] = maxAlign;
+    Range.prototype[MEMORY_COPIER] = getMemoryCopier(len);
+    const source = Object.create(Range);
+    const shadow = Object.create(Range);
+    source[MEMORY] = new DataView(targets[0][MEMORY].buffer, start, len);
+    shadow[MEMORY] = new DataView(buffer, shadowAddress, len);
+    shadow[MEMORY_COPIER](object);
+    return this.addShadow(shadow, source);
+  }
+
+  addShadow(shadow, object) {
+    let { shadowMap } = this.context;
+    if (!shadowMap) {
+      shadowMap = this.context.shadowMap = new Map();
+    }
+    shadowMap.set(shadow, object);
+    return shadow;
+  }
+
+  removeShadow(dv) {
+    const { shadowMap } = this.context;
+    if (shadowMap) {
+      for (const [ shadow, object ] of shadowMap) {
+        if (shadow[MEMORY] === dv) {
+          shadowMap.delete(shadow);
+          break;
+        }
+      }
+    }
+  }
+
+  releaseShadows() {
+    for (const [ shadow, object ] of this.context.shadowMap) {
+      object[MEMORY_COPIER](shadow);
+      const shadowDV = shadow[MEMORY];
+      const address = this.getViewAddress(shadowDV);
+      const len = shadowDV.byteLength;
+      const align = object.constructor[ALIGN];
+      this.freeShadowMemory(address, len, align);
+    }
+  }
+
+  acquirePointerTargets(args) {
+    args[POINTER_VISITOR](acquireTarget, { vivificate: true });
+  }
+  /* RUNTIME-ONLY-END */
 }
 
 /* NODE-ONLY */
@@ -443,16 +513,12 @@ export class NodeEnvironment extends Environment {
   // copyBytes
   // findSentinel
 
-  isFixed(dv) {
-    return dv.buffer instanceof SharedArrayBuffer;
-  }
-
   getAlignmentExtra(align) {
     return (align <= 16) ? 0 : align;
   }
 
   allocateRelocatableMemory(len, align) {
-    const dv = this.createRelocatableBuffer(len, align);
+    const dv = this.createAlignedBuffer(len, align);
     this.registerMemory(dv);
     return dv;
   }
@@ -462,70 +528,57 @@ export class NodeEnvironment extends Environment {
   }
 
   allocateShadowMemory(len, align) {
-    return this.createRelocatableBuffer(len, align);
+    return createAlignedBuffer(len, align);
   }
 
   freeShadowMemory(address, len, align) {
     // nothing needs to happen
   }
 
-  updatePointerAddresses(args) {
-    // collect the pointers first
-    const map = this.collectPointers(args);
-    for (const [ pointer, info ] of map) {
-      const { target, jointSource } = info;
-      const dv = target[MEMORY];
-      let address;
-      if (jointSource) {
-        // pointer is pointing to buffer with overlapping views
-        if (jointSource.address === undefined) {
-          const baseAddress = this.getBufferAddress(dv.buffer);
-          let allAligned = true;
-          // ensure that all the pointers are properly aligned
-          for (const [ offset, align ] of Object.entries(jointSource.aligns)) {
-            const viewAddress = addLength(baseAddress, offset);
-            if (isMisaligned(viewAddress, align)) {
-              allAligned = false;
-              break;
-            }
-          }
-          if (allAligned) {
-            jointSource.address = baseAddress;
-          } else {
-            // allocate a
-            const { startOffset, endOffset } = jointSource;
-            const len = endOffset - startOffset;
-            const sourceDV = new DataView(dv.buffer, startOffset, len);
-            const source = {
-              constructor: {
-                [ALIGN]: maxAlign,
-              },
-              [MEMORY]: sourceDV,
-              [MEMORY_COPIER]: getMemoryCopier(len),
-            };
-            const sourceShadow = this.createShadow(source);
-            const shadowDV = sourceShadow[MEMORY];
-            const shadowAddress = this.getViewAddress(shadowDV);
+  isFixed(dv) {
+    return dv.buffer instanceof SharedArrayBuffer;
+  }
 
+  getTargetAddress(target, cluster) {
+    const dv = target[MEMORY];
+    if (cluster) {
+      // pointer is pointing to buffer with overlapping views
+      if (cluster.misaligned === undefined) {
+        const address = this.getBufferAddress(dv.buffer);
+        // ensure that all pointers are properly aligned
+        for (const target of cluster.targets) {
+          const offset = target[MEMORY].byteOffset;
+          const align = target.constructor[ALIGN];
+          const viewAddress = add(address, offset);
+          if (isMisaligned(viewAddress, align)) {
+            cluster.misaligned = true;
+            break;
           }
         }
-        address = jointSource.address + dv.byteOffset;
-      } else {
-        const align = target.constructor[ALIGN];
-        address = this.getViewAddress(dv);
-        if (isMisaligned(address, align)) {
-          // need to shadow the object
-          const shadow = this.createShadow(target);
-          address = this.getViewAddress(shadow[MEMORY]);
+        if (cluster.misaligned === undefined)  {
+          cluster.misaligned = false;
+          cluster.address = address;
         }
       }
-      // update the pointer
-      pointer[ADDRESS_UPDATER](address, target.length);
+      return (cluster.misaligned) ? 0 : cluster.address + dv.byteOffset;
+    } else {
+      const align = target.constructor[ALIGN];
+      const address = this.getViewAddress(dv);
+      return isMisaligned(address, align) ? 0 : address;
     }
   }
 
-  acquirePointerTargets(args) {
-    args[POINTER_VISITOR](acquireTarget, { vivificate: true });
+  createAlignedBuffer(len, align) {
+    // allocate extra memory for alignment purpose when align is larger than the default
+    const extra = (align > 16) ? align : 0;
+    const buffer = new ArrayBuffer(len + extra);
+    let offset = 0;
+    if (extra) {
+      const address = this.getBufferAddress(buffer);
+      const aligned = getAlignedAddress(address, align);
+      offset = aligned - address;
+    }
+    return new DataView(buffer, offset, len);
   }
 
   invokeFactory(thunk) {
@@ -656,10 +709,10 @@ export class NodeEnvironment extends Environment {
 export class WebAssemblyEnvironment extends Environment {
   imports = {
     defineStructures: { argType: '', returnType: 'v' },
-    allocateFixedMemory: { argType: 'iii', returnType: 'v' },
-    freeFixedMemory: { argType: 'iiii' },
-    allocateShadowMemory: { argType: 'ii', returnType: 'v' },
-    freeShadowMemory: { argType: 'iii' },
+    allocateFixedMemory: { argType: 'ii', returnType: 'v' },
+    freeFixedMemory: { argType: 'iii' },
+    allocateShadowMemory: { argType: 'cii', returnType: 'v' },
+    freeShadowMemory: { argType: 'ciii' },
     runThunk: { argType: 'iv', returnType: 'v' },
     isRuntimeSafetyActive: { argType: '', returnType: 'b' },
   };
@@ -694,13 +747,65 @@ export class WebAssemblyEnvironment extends Environment {
   /* COMPTIME-ONLY */
   structures = [];
   /* COMPTIME-ONLY-END */
-  /* RUNTIME-ONLY */
-  fixedBufferList = [];
-  fixedBufferInterval = 0;
-  /* RUNTIME-ONLY-END */
 
   constructor() {
     super();
+  }
+
+  allocateRelocatableMemory(len, align) {
+    // allocate memory in both JS and WASM space
+    const constructor = { [ALIGN]: align };
+    const copier = getMemoryCopier(len);
+    const dv = this.createBuffer(len);
+    const shadowDV = this.allocShadowMemory(len, align);
+    // create a shadow for the relocatable memory
+    const object = { constructor, [MEMORY]: dv, [MEMORY_COPIER]: copier };
+    const shadow = { constructor, [MEMORY]: shadowDV, [MEMORY_COPIER]: copier };
+    this.addShadow(shadow, object);
+    // remember and return the shadow address
+    this.registerMemory(shadowDV);
+    return shadowDV;
+  }
+
+  freeRelocatableMemory(address, len, align) {
+    const dv = this.findMemory(address, len);
+    this.removeShadow(dv);
+    this.unregisterMemory(address);
+    this.freeShadowMemory(address, len, align);
+  }
+
+  getBufferAddress(buffer) {
+    /* DEV-TEST */
+    if (buffer !== this.memory.buffer) {
+      throw new Error('Cannot obtain address of relocatable buffer');
+    }
+    /* DEV-TEST-END */
+    return 0;
+  }
+
+  obtainFixedView(address, len) {
+    const { buffer } = this.memory;
+    return new DataView(buffer, address, len);
+  }
+
+  isFixed(dv) {
+    return dv.buffer === this.memory.buffer;
+  }
+
+  createString(address, len) {
+    const { buffer } = this.memory;
+    const ta = new Uint8Array(buffer, address, len);
+    return decodeText(ta);
+  }
+
+  getTargetAddress(target, cluster) {
+    const dv = target[MEMORY];
+    if (this.isFixed(dv)) {
+      return this.getViewAddress(dv);
+    } else {
+      // relocatable buffers always need shadowing
+      return 0;
+    }
   }
 
   releaseObjects() {
@@ -747,8 +852,16 @@ export class WebAssemblyEnvironment extends Environment {
     if (!fn) {
       return () => {};
     }
+    let needCallContext = false;
+    if (argType.startsWith('c')) {
+      needCallContext = true;
+      argType = argType.slice(1);
+    }
     return (...args) => {
       args = args.map((arg, i) => this.fromWebAssembly(argType.charAt(i), arg));
+      if (needCallContext) {
+        args = [ this.context.call, ...args ];
+      }
       const retval = fn.apply(this, args);
       return this.toWebAssembly(returnType, retval);
     };
@@ -820,71 +933,9 @@ export class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  isFixed(dv) {
-    return dv.buffer === this.memory.buffer;
-  }
-
-  createBuffer(len, align) {
-    return new DataView(new ArrayBuffer(len));
-  }
-
-  getViewAddress(dv) {
-    const { buffer } = dv;
-    let address;
-    if (buffer !== this.memory.buffer) {
-
-    } else {
-      address = dv.byteOffset();
-    }
-    return address;
-  }
-
-  createFixedBuffer(len, align) {
-    const dv = this.allocateFixedMemory(len, align);
-    const ref = new WeakRef(dv);
-    const address = this.getViewAddress(dv);
-    this.fixedBufferList.push({ ref, address, len, align });
-    if (!this.fixedBufferInterval) {
-      this.fixedBufferInterval = setInterval(() => {
-        this.freeUnreferencedBuffers();
-        if (this.fixedBufferList.length === 0) {
-          clearInterval(this.fixedBufferInterval);
-          this.fixedBufferInterval = 0;
-        }
-      }, 500);
-    }
-    return dv;
-  }
-
-  freeUnreferencedBuffers() {
-    const bufferList = this.fixedBufferList;
-    for (let i = bufferList.length - 1; i >= 0; i--) {
-      const { ref, address, len, align } = bufferList[i];
-      if (!ref.deref()) {
-        // freeFixedMemory() would throw if the wasm instance was abandoned
-        try {
-          this.freeFixedMemory(address, len, align);
-        } catch (err) {
-        }
-        bufferList.splice(i, 1);
-      }
-    }
-  }
-
-  obtainFixedView(address, len) {
-    const { buffer } = this.memory;
-    return new DataView(buffer, address, len);
-  }
-
-  createString(address, len) {
-    const { buffer } = this.memory;
-    const ta = new Uint8Array(buffer, address, len);
-    return decodeText(ta);
-  }
-
   startCall(call, args) {
     this.startContext();
-    // call context, use by allocSharedMemory and freeSharedMemory
+    // call context, use by allocShadowMemory and freeShadowMemory
     this.context.call = call;
     if (!args) {
       // can't be 0 since that sets off Zig's runtime safety check
@@ -1073,6 +1124,9 @@ export class CallContext {
   pointerProcessed = new Map();
   memoryList = [];
   shadowMap = [];
+  /* WASM-ONLY */
+  call = 0;
+  /* WASM-ONLY-END */
 }
 
 export function findSortedIndex(array, value, cb) {
@@ -1097,8 +1151,12 @@ function findMemoryIndex(array, address) {
   return findSortedIndex(array, address, m => m.address);
 }
 
-function addLength(address, len) {
+function add(address, len) {
   return address + ((typeof(address) === 'bigint') ? BigInt(len) : len);
+}
+
+function subtract(address, len) {
+  return address - ((typeof(address) === 'bigint') ? BigInt(len) : len);
 }
 
 export function isMisaligned(address, align) {

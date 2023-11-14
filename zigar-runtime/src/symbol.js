@@ -20,6 +20,7 @@ export const MEMORY_RESETTER = Symbol('memoryResetter');
 export const CHILD_VIVIFICATOR = Symbol('childVivificator');
 export const POINTER_SELF = Symbol('pointer');
 export const POINTER_VISITOR = Symbol('pointerVisitor');
+export const SENTINEL = Symbol('sentinel');
 export const TARGET_ACQUIRER = Symbol('targetAcquirer');
 export const ADDRESS_UPDATER = Symbol('addressUpdater');
 export const THUNK_REPLACER = Symbol('releaseThunk');

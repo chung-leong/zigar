@@ -5,7 +5,7 @@ import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidInitializer, throwNoNewEnum } from './error.js';
-import { ENUM_INDEX, ENUM_NAME, ENUM_ITEMS, ENUM_ITEM, MEMORY } from './symbol.js';
+import { ALIGN, ENUM_INDEX, ENUM_NAME, ENUM_ITEMS, ENUM_ITEM, MEMORY } from './symbol.js';
 
 export function finalizeEnumeration(s, env) {
   const {

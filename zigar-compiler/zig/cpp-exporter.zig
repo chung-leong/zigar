@@ -41,21 +41,21 @@ pub const Host = struct {
 
     pub fn allocateMemory(self: Host, size: usize, align: u16) !Memory {
         var memory: Memory = undefined;
-        if (callbacks.allocate_memory(self.context, size, align, &memory) != .OK) {
+        if (imports.allocate_relocatable_memory(self.context, size, align, &memory) != .OK) {
             return Error.UnableToAllocateMemory;
         }
         return memory;
     }
 
-    pub fn freeMemory(self: Host, memory: Memory, align: u16) !void {
-        if (callbacks.free_memory(self.context, &memory, align) != .OK) {
+    pub fn freeMemory(self: Host, memory: Memory) !void {
+        if (imports.free_relocatable_memory(self.context, &memory) != .OK) {
             return Error.UnableToFreeMemory;
         }
     }
 
     pub fn createString(self: Host, memory: Memory) !Value {
         var value: Value = undefined;
-        if (callbacks.create_string(self.context, &memory, &value) != .OK) {
+        if (imports.create_string(self.context, &memory, &value) != .OK) {
             return Error.UnableToCreateObject;
         }
         return value;
@@ -63,7 +63,7 @@ pub const Host = struct {
 
     pub fn createObject(self: Host, structure: Value, arg: Value) !Value {
         var value: Value = undefined;
-        if (callbacks.create_object(self.context, structure, arg, &value) != .OK) {
+        if (imports.create_object(self.context, structure, arg, &value) != .OK) {
             return Error.UnableToCreateObject;
         }
         return value;
@@ -71,7 +71,7 @@ pub const Host = struct {
 
     pub fn createView(self: Host, memory: Memory) !Value {
         var value: Value = undefined;
-        if (callbacks.create_view(self.context, &memory, &value) != .OK) {
+        if (imports.create_view(self.context, &memory, &value) != .OK) {
             return Error.UnableToCreateDataView;
         }
         return value;
@@ -79,7 +79,7 @@ pub const Host = struct {
 
     pub fn castView(self: Host, structure: Value, dv: Value) !Value {
         var value: Value = undefined;
-        if (callbacks.cast_view(self.context, structure, dv, &value) != .OK) {
+        if (imports.cast_view(self.context, structure, dv, &value) != .OK) {
             return Error.UnableToCreateObject;
         }
         return value;
@@ -87,28 +87,28 @@ pub const Host = struct {
 
     pub fn readSlot(self: Host, target: ?Value, id: usize) !Value {
         var result: Value = undefined;
-        if (callbacks.read_slot(self.context, target, id, &result) != .OK) {
+        if (imports.read_slot(self.context, target, id, &result) != .OK) {
             return Error.UnableToRetrieveObject;
         }
         return result;
     }
 
     pub fn writeSlot(self: Host, target: ?Value, id: usize, value: ?Value) !void {
-        if (callbacks.write_slot(self.context, target, id, value) != .OK) {
+        if (imports.write_slot(self.context, target, id, value) != .OK) {
             return Error.UnableToInsertObject;
         }
     }
 
     pub fn beginStructure(self: Host, def: Structure) !Value {
         var structure: Value = undefined;
-        if (callbacks.begin_structure(self.context, &def, &structure) != .OK) {
+        if (imports.begin_structure(self.context, &def, &structure) != .OK) {
             return Error.UnableToStartStructureDefinition;
         }
         return structure;
     }
 
     pub fn attachMember(self: Host, structure: Value, member: Member, is_static: bool) !void {
-        if (callbacks.attach_member(self.context, structure, &member, is_static) != .OK) {
+        if (imports.attach_member(self.context, structure, &member, is_static) != .OK) {
             if (is_static) {
                 return Error.UnableToAddStaticMember;
             } else {
@@ -118,33 +118,33 @@ pub const Host = struct {
     }
 
     pub fn attachMethod(self: Host, structure: Value, method: Method, is_static_only: bool) !void {
-        if (callbacks.attach_method(self.context, structure, &method, is_static_only) != .OK) {
+        if (imports.attach_method(self.context, structure, &method, is_static_only) != .OK) {
             return Error.UnableToAddMethod;
         }
     }
 
     pub fn attachTemplate(self: Host, structure: Value, template: Value, is_static: bool) !void {
-        if (callbacks.attach_template(self.context, structure, template, is_static) != .OK) {
+        if (imports.attach_template(self.context, structure, template, is_static) != .OK) {
             return Error.UnableToAddStructureTemplate;
         }
     }
 
     pub fn finalizeStructure(self: Host, structure: Value) !void {
-        if (callbacks.finalize_structure(self.context, structure) != .OK) {
+        if (imports.finalize_structure(self.context, structure) != .OK) {
             return Error.UnableToDefineStructure;
         }
     }
 
     pub fn createTemplate(self: Host, dv: ?Value) !Value {
         var value: Value = undefined;
-        if (callbacks.create_template(self.context, dv, &value) != .OK) {
+        if (imports.create_template(self.context, dv, &value) != .OK) {
             return Error.UnableToCreateStructureTemplate;
         }
         return value;
     }
 
     pub fn writeToConsole(self: Host, dv: Value) !void {
-        if (callbacks.write_to_console(self.context, dv) != .OK) {
+        if (imports.write_to_console(self.context, dv) != .OK) {
             return Error.UnableToWriteToConsole;
         }
     }
@@ -164,10 +164,37 @@ pub const Host = struct {
     }
 };
 
+// allocator for fixed memory
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var allocator = gpa.allocator();
+
+fn allocateFixedMemory(len usize, align: u8, memory: *Memory) callconv(.C) Result {
+    const ptr_align = if (align != 0) std.math.log2_int(u8, align) else 0;
+    if (ctx.allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
+        memory.bytes = bytes;
+        memory.len = len;
+        memory.attributes.align = align;
+        memory.is_const = false;
+        memory.is_comptime = false;
+        return .OK;
+    } else {
+        return .Failure;
+    }
+}
+
+fm freeFixedMemory(memory: *const Memory) callconv(.C) Result {
+    const align = memory.attributes.align;
+    const bytes = memory.bytes;
+    const len = memory.len;
+    const ptr_align = if (align != 0) std.math.log2_int(u8, align) else 0;
+    allocator.rawFree(bytes[0..len], ptr_align, 0);
+    return .OK;
+}
+
 // pointer table that's filled on the C++ side
-const Callbacks = extern struct {
-    allocate_memory: *const fn (Call, usize, u8, *Memory) callconv(.C) Result,
-    free_memory: *const fn (Call, *const Memory, u8) callconv(.C) Result,
+const Imports = extern struct {
+    allocate_relocatable_memory: *const fn (Call, usize, u16, *Memory) callconv(.C) Result,
+    free_relocatable_memory: *const fn (Call, *const Memory) callconv(.C) Result,
     create_string: *const fn (Call, *const Memory, *Value) Result,
     create_object: *const fn (Call, Value, Value, *Value) Result,
     create_view: *const fn (Call, *const Memory, *Value) Result,
@@ -183,8 +210,17 @@ const Callbacks = extern struct {
     write_to_console: *const fn (Call, Value) callconv(.C) Result,
     flush_console: *const fn (Call) callconv(.C) Result,
 };
+var imports: Imports = undefined;
 
-var callbacks: Callbacks = undefined;
+// pointer table that's used on the C++ side
+const Exports = extern struct {
+    allocate_fixed_memory: *const fn (usize, u8, *Memory) callconv(.C) Result,
+    free_fixed_memory: *const fn (*const Memory) callconv(.C) Result,
+};
+const exports: Exports = {
+    .allocate_fixed_memory = allocateFixedMemory,
+    .free_fixed_memory = freeFixedMemory,
+};
 
 const ModuleAttributes = packed struct(u32) {
     little_endian: bool,
@@ -193,9 +229,10 @@ const ModuleAttributes = packed struct(u32) {
 };
 
 pub const Module = extern struct {
-    version: u32 = 1,
+    version: u32 = 2,
     attributes: ModuleAttributes,
-    callbacks: *Callbacks = &callbacks,
+    imports: *Imports = &imports,
+    exports: *const Exports = &exports,
     factory: Thunk,
 };
 

@@ -6,7 +6,7 @@ import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerT
   throwAssigningToConstant, throwConstantConstraint, throwNoInitializer,
   throwFixedMemoryTargetRequired, addArticle } from './error.js';
 import { ADDRESS_UPDATER, ALIGN, ENVIRONMENT, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR,
-  PARENT, PROXY, SLOTS, TARGET_ACQUIRER } from './symbol.js';
+  PARENT, PROXY, SLOTS, TARGET_ACQUIRER, SENTINEL } from './symbol.js';
 export function finalizePointer(s, env) {
   const {
     byteSize,
@@ -78,7 +78,7 @@ export function finalizePointer(s, env) {
   };
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      if (env.isShared(this[MEMORY])) {
+      if (env.isFixed(this[MEMORY])) {
         // initialize with the other pointer's target
         initializer.call(this, arg[SLOTS][0]);
       } else {
@@ -117,9 +117,9 @@ export function finalizePointer(s, env) {
             throwInvalidPointerTarget(s, arg);
           }
         }
-        if (env.isShared(this[MEMORY])) {
+        if (env.isFixed(this[MEMORY])) {
           // the pointer sits in shared memory--apply the change immediately
-          if (env.isShared(arg[MEMORY])) {
+          if (env.isFixed(arg[MEMORY])) {
             const address = env.getViewAddress(arg[MEMORY]);
             setAddress.call(this, address);
             if (setLength) {
@@ -133,50 +133,42 @@ export function finalizePointer(s, env) {
       }
     }
   };
-  const targetAcquirer = function() {
-    // obtain address (and possibly length) from memory
-    const address = getAddress.call(this);
-    const currentTarget = this[SLOTS][0];
-    if (currentTarget) {
-      const currentAddress = env.getViewAddress(currentTarget[MEMORY]);
-      if (address === currentAddress) {
-        // don't need to do anything
-        return;
-      }
-    }
-    let len = 1;
-    if (isTargetSlice) {
-      if (hasLength) {
-        len = getLength.call(this);
-      } else if (targetStructure.sentinel) {
-        len = env.findSentinel(address, targetStructure.sentinel.bytes) + 1;
-      } else {
-        len = 0;
-      }
-    }
-    // get view of memory that pointer points to
-    const dv = env.findMemory(address, len * targetStructure.byteSize);
-    // create the target
-    const Target = targetStructure.constructor;
-    const target = Target.call(this, dv);
-    this[SLOTS][0] = target;
-    if (target[POINTER_VISITOR]) {
-      // acquire objects pointed to by pointers in target
-      target[POINTER_VISITOR](acquireTarget, { vivificate: true });
-    }
-  };
-  const addressUpdater = function() {
-    if (env.rememberPointer(this)) {
-      // already processed
-      return;
-    }
-    const target = this[SLOTS][0];
-    if (target) {
-      const address = env.importMemory(target[MEMORY]);
-      setAddress.call(this, address);
-      if (hasLength) {
-        setLength.call(this, target.length);
-      }
+  // const targetAcquirer = function() {
+  //   // obtain address (and possibly length) from memory
+  //   const address = getAddress.call(this);
+  //   const currentTarget = this[SLOTS][0];
+  //   if (currentTarget) {
+  //     const currentAddress = env.getViewAddress(currentTarget[MEMORY]);
+  //     if (address === currentAddress) {
+  //       // don't need to do anything
+  //       return;
+  //     }
+  //   }
+  //   let len = 1;
+  //   if (isTargetSlice) {
+  //     if (hasLength) {
+  //       len = getLength.call(this);
+  //     } else if (targetStructure.sentinel) {
+  //       len = env.findSentinel(address, targetStructure.sentinel.bytes) + 1;
+  //     } else {
+  //       len = 0;
+  //     }
+  //   }
+  //   // get view of memory that pointer points to
+  //   const dv = env.findMemory(address, len * targetStructure.byteSize);
+  //   // create the target
+  //   const Target = targetStructure.constructor;
+  //   const target = Target.call(this, dv);
+  //   this[SLOTS][0] = target;
+  //   if (target[POINTER_VISITOR]) {
+  //     // acquire objects pointed to by pointers in target
+  //     target[POINTER_VISITOR](acquireTarget, { vivificate: true });
+  //   }
+  // };
+  const addressUpdater = function(address, len) {
+    setAddress.call(this, address);
+    if (hasLength) {
+      setLength.call(this, len);
     }
   };
   // return the proxy object if one is used
@@ -184,7 +176,6 @@ export function finalizePointer(s, env) {
     '*': { get: getTarget, set: (isConst) ? undefined : setTarget, configurable: true },
     '$': { get: getProxy, set: initializer, configurable: true, },
     'valueOf': { value: getTargetValue, configurable: true, writable: true },
-    [TARGET_ACQUIRER]: { value: targetAcquirer },
     [ADDRESS_UPDATER]: { value: addressUpdater },
     [POINTER_VISITOR]: { value: visitPointer },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
