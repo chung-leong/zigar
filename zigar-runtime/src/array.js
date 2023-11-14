@@ -147,13 +147,13 @@ export function getPointerVisitor(s) {
     const {
       source,
       vivificate = false,
-      validate,
+      isActive,
     } = options;
     const childOptions = {
       ...options,
-      validate: () => {
-        // make sure this object is valid
-        if (validate?.(this) === false) {
+      isActive: () => {
+        // make sure parent object is active
+        if (isActive?.(this) === false) {
           return false;
         }
         return true;

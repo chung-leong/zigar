@@ -217,7 +217,7 @@ export function finalizeUnion(s, env) {
       }
     }
   };
-  const validateChild = function(child) {
+  const isChildActive = function(child) {
     const name = getName.call(this);
     const active = this[name];
     return child === active;
@@ -227,7 +227,7 @@ export function finalizeUnion(s, env) {
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [ENUM_ITEM]: isTagged && { get: getEnumItem, configurable: true },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
-    [POINTER_VISITOR]: (hasPointer || hasInaccessiblePointer) && { value: getPointerVisitor(s, validateChild) },
+    [POINTER_VISITOR]: (hasPointer || hasInaccessiblePointer) && { value: getPointerVisitor(s, isChildActive) },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },

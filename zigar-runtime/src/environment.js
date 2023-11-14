@@ -303,8 +303,8 @@ export class Environment {
     const bufferMap = new Map();
     const potentialClusters = [];
     const env = this;
-    const callback = function({ validate }) {
-      if (!validate(this)) {
+    const callback = function({ isActive }) {
+      if (!isActive(this)) {
         return;
       }
       // bypass proxy

@@ -192,8 +192,8 @@ export function getProxy() {
   return this[PROXY];
 }
 
-export function copyPointer({ source, validate }) {
-  if (validate?.(this) !== false) {
+export function copyPointer({ source, isActive }) {
+  if (isActive?.(this) !== false) {
     this[SLOTS][0] = source[SLOTS][0];
   }
 }

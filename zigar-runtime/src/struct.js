@@ -166,24 +166,24 @@ export function getChildVivificators(s) {
   return vivificators;
 }
 
-export function getPointerVisitor(s, validateChild = null) {
+export function getPointerVisitor(s, isChildActive = null) {
   const { instance: { members } } = s;
   const pointerMembers = members.filter(m => m.structure.hasPointer);
   return function visitPointers(cb, options = {}) {
     const {
       source,
       vivificate = false,
-      validate,
+      isActive,
     } = options;
     const childOptions = {
       ...options,
-      validate: (object) => {
-        // make sure this object is valid
-        if (validate?.(this) === false) {
+      isActive: (object) => {
+        // make sure parent object is active
+        if (isActive?.(this) === false) {
           return false;
         }
-        // then check the validity of the child
-        if (validateChild?.call(this, object) === false) {
+        // then check whether the child is active
+        if (isChildActive?.call(this, object) === false) {
           return false;
         }
         return true;
