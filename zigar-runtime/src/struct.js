@@ -4,12 +4,12 @@ import { getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
-import { copyPointer } from './pointer.js';
+import { always, copyPointer } from './pointer.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer,
   throwNoProperty } from './error.js';
 import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR,
-  SLOTS } from './symbol.js';
+  SIZE, SLOTS } from './symbol.js';
 
 export function finalizeStruct(s, env) {
   const {
@@ -134,10 +134,11 @@ export function finalizeStruct(s, env) {
     '$': { get: getSelf, set: initializer, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
   });
   addSpecialAccessors(s, env);
   addStaticMembers(s, env);
@@ -166,33 +167,34 @@ export function getChildVivificators(s) {
   return vivificators;
 }
 
-export function getPointerVisitor(s, isChildActive = null) {
+export function getPointerVisitor(s, visitorOptions = {}) {
+  const {
+    isChildActive = always,
+    isChildMutable = always,
+  } = visitorOptions;
   const { instance: { members } } = s;
   const pointerMembers = members.filter(m => m.structure.hasPointer);
   return function visitPointers(cb, options = {}) {
     const {
       source,
       vivificate = false,
-      isActive,
+      isActive = always,
+      isMutatable = always,
     } = options;
     const childOptions = {
       ...options,
       isActive: (object) => {
-        // make sure parent object is active
-        if (isActive?.(this) === false) {
-          return false;
-        }
-        // then check whether the child is active
-        if (isChildActive?.call(this, object) === false) {
-          return false;
-        }
-        return true;
+        // make sure parent object is active, then check whether the child is active
+        return isActive(this) && isChildActive.call(this, object);
+      },
+      isMutatable: (object) => {
+        return isMutatable(this) && isChildMutable.call(this, object);
       },
     };
-    for (const { name, slot } of pointerMembers) {
+    for (const { slot } of pointerMembers) {
       if (source) {
         // when src is a the struct's template, most slots will likely be empty,
-        // since point fields aren't likely to have default values
+        // since pointer fields aren't likely to have default values
         const srcChild = source[SLOTS]?.[slot];
         if (!srcChild) {
           continue;

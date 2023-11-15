@@ -5,10 +5,11 @@ import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidInitializer, throwNoNewEnum } from './error.js';
-import { ALIGN, ENUM_INDEX, ENUM_NAME, ENUM_ITEMS, ENUM_ITEM, MEMORY } from './symbol.js';
+import { ALIGN, ENUM_INDEX, ENUM_NAME, ENUM_ITEMS, ENUM_ITEM, MEMORY, SIZE } from './symbol.js';
 
 export function finalizeEnumeration(s, env) {
   const {
+    byteSize,
     align,
     instance: {
       members,
@@ -104,6 +105,7 @@ export function finalizeEnumeration(s, env) {
     [MEMORY]: { value: template[MEMORY] },
     [ENUM_ITEMS]: { value: items },
     [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
   });
   addSpecialAccessors(s, env);
   addStaticMembers(s, env);

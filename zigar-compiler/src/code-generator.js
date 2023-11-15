@@ -53,7 +53,7 @@ export function generateCode(structures, params) {
     delete memberFeatures.useBool;
   }
   const features = [ ...Object.keys(structureFeatures), ...Object.keys(memberFeatures) ];
-  const imports = [ 'WebAssemblyEnvironment' ];
+  const imports = [ 'Environment' ];
   imports.push(...features);
   add(`import {`);
   for (const name of imports) {
@@ -130,7 +130,7 @@ export function generateCode(structures, params) {
     }
     add(`];`);
   }
-  add(`const env = new WebAssemblyEnvironment();`)
+  add(`const env = new Environment();`)
   add(`const { resolve, reject } = env.finalizeStructures(structures);`);
 
   // the root structure gets finalized last

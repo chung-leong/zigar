@@ -4,9 +4,9 @@ import { getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
-import { copyPointer, getProxy } from './pointer.js';
+import { always, copyPointer, getProxy } from './pointer.js';
 import { ALIGN, CHILD_VIVIFICATOR, COMPAT, GETTER, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR,
-  PROXY, SELF, SETTER, SLOTS } from './symbol.js';
+  PROXY, SELF, SETTER, SIZE, SLOTS } from './symbol.js';
 
 export function finalizeArray(s, env) {
   const {
@@ -120,6 +120,7 @@ export function finalizeArray(s, env) {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(s) },
     [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
   });
   addSpecialAccessors(s);
   return constructor;
@@ -147,17 +148,13 @@ export function getPointerVisitor(s) {
     const {
       source,
       vivificate = false,
-      isActive,
+      isActive = always,
+      isMutable = always,
     } = options;
     const childOptions = {
       ...options,
-      isActive: () => {
-        // make sure parent object is active
-        if (isActive?.(this) === false) {
-          return false;
-        }
-        return true;
-      },
+      isActive: () => isActive(this),
+      isMutable: () => isMutable(this),
     };
     for (let i = 0, len = this.length; i < len; i++) {
       // no need to check for empty slots, since that isn't possible

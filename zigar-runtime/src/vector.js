@@ -4,7 +4,7 @@ import { getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
-import { ALIGN, COMPAT, MEMORY, MEMORY_COPIER } from './symbol.js';
+import { ALIGN, COMPAT, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
 
 export function finalizeVector(s, env) {
   const {
@@ -86,6 +86,7 @@ export function finalizeVector(s, env) {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(s) },
     [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
   });
   addSpecialAccessors(s);
   return constructor;

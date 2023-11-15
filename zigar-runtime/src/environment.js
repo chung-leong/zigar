@@ -1,9 +1,9 @@
 import { defineProperties, getStructureFactory, getStructureName } from './structure.js';
 import { decodeText } from './text.js';
-import { acquireTarget, updateAddress } from './pointer.js';
 import { initializeErrorSets } from './error-set.js';
 import { throwAlignmentConflict, throwZigError } from './error.js';
-import { ADDRESS_UPDATER, ALIGN, CHILD_VIVIFICATOR, ENVIRONMENT, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SLOTS,
+import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, ENVIRONMENT, LENGTH_GETTER,
+  LENGTH_SETTER, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SIZE, SLOTS,
   THUNK_REPLACER } from './symbol.js';
 import { getMemoryCopier } from './memory.js';
 
@@ -81,11 +81,11 @@ export class Environment {
     return new DataView(buffer);
   }
 
-  registerMemory(dv) {
+  registerMemory(dv, shadowing = false) {
     const { memoryList } = this.context;
     const address = this.getViewAddress(dv);
     const index = findMemoryIndex(memoryList, address);
-    memoryList.splice(index, 0, { address, dv, len: dv.byteLength });
+    memoryList.splice(index, 0, { address, dv, len: dv.byteLength, shadowing });
     return address;
   }
 
@@ -100,14 +100,23 @@ export class Environment {
 
   findMemory(address, len) {
     if (this.context) {
-      const { memoryList } = this.context;
+      const { memoryList, shadowMap } = this.context;
       const index = findMemoryIndex(memoryList, address);
       const prev = memoryList[index - 1];
+      let dv;
       if (prev?.address === address && prev.len === len) {
-        return prev.dv;
+        dv = prev.dv;
       } else if (prev?.address <= address && address < add(prev.address, prev.len)) {
         const offset = Number(address - prev.address) + prev.dv.byteOffset;
-        return new DataView(prev.dv.buffer, offset, len);
+        dv = new DataView(prev.dv.buffer, offset, len);
+      }
+      if (dv) {
+        if (prev.shadowing) {
+          // return the view being shadowed
+          return shadowMap.get(dv);
+        } else {
+          return dv;
+        }
       }
     }
     // not found in any of the buffers we've seen--assume it's fixed memory
@@ -133,8 +142,8 @@ export class Environment {
     const { constructor, hasPointer } = structure;
     const object = constructor.call(ENVIRONMENT, dv);
     if (hasPointer) {
-      // vivificate pointers and acquire their targets
-      object[POINTER_VISITOR](acquireTarget, { vivificate: true });
+      // acquire targets of pointers
+      this.acquirePointerTargets(object);
     }
     return object;
   }
@@ -321,13 +330,12 @@ export class Environment {
           const other = bufferMap.get(dv.buffer);
           if (other) {
             const array = Array.isArray(other) ? other : [ other ];
-            const index = findSortedIndex(array, dv.byteOffset, i => i.target[MEMORY].byteOffset);
-            array.splice(index, 0, info);
+            const index = findSortedIndex(array, dv.byteOffset, t => t[MEMORY].byteOffset);
+            array.splice(index, 0, target);
             if (!Array.isArray(other)) {
               bufferMap.set(dv.buffer, array);
               potentialClusters.push(array);
             }
-            sharing = true;
           } else {
             bufferMap.set(dv.buffer, target);
           }
@@ -354,7 +362,8 @@ export class Environment {
         address = this.getShadowAddress(target, cluster);
       }
       // update the pointer
-      pointer[ADDRESS_UPDATER](address, target.length);
+      pointer[ADDRESS_SETTER](address);
+      pointer[LENGTH_SETTER]?.(target.length);
     }
   }
 
@@ -377,7 +386,7 @@ export class Environment {
                 start: prevStart,
                 end: prevEnd,
                 address: undefined,
-                misaligned: unfinded,
+                misaligned: undefined,
               };
               clusters.push(currentCluster);
             }
@@ -408,10 +417,10 @@ export class Environment {
     if (cluster) {
       const dv = target[MEMORY];
       if (cluster.address === undefined) {
-        const shadow = createClusterShadow(clusters);
+        const shadow = this.createClusterShadow(cluster);
         cluster.address = this.getViewAddress(shadow[MEMORY]);
       }
-      return cluster.address + dv.byteOffset;
+      return add(cluster.address, dv.byteOffset);
     } else {
       const shadow = this.createShadow(target);
       return this.getViewAddress(shadow[MEMORY]);
@@ -421,7 +430,7 @@ export class Environment {
   createShadow(object) {
     const dv = object[MEMORY]
     const align = object.constructor[ALIGN];
-    const shadow = Object.create(object.constructor)
+    const shadow = Object.create(object.constructor.prototype);
     shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
     shadow[MEMORY_COPIER](object);
     return this.addShadow(shadow, object);
@@ -456,14 +465,14 @@ export class Environment {
       }
     }
     // placeholder object type
-    const Range = function() {};
-    Range[ALIGN] = maxAlign;
-    Range.prototype[MEMORY_COPIER] = getMemoryCopier(len);
-    const source = Object.create(Range);
-    const shadow = Object.create(Range);
-    source[MEMORY] = new DataView(targets[0][MEMORY].buffer, start, len);
-    shadow[MEMORY] = new DataView(buffer, shadowAddress, len);
-    shadow[MEMORY_COPIER](object);
+    const prototype = {
+      [MEMORY_COPIER]: getMemoryCopier(len)
+    };
+    const source = Object.create(prototype);
+    const shadow = Object.create(prototype);
+    source[MEMORY] = new DataView(targets[0][MEMORY].buffer, Number(start), len);
+    shadow[MEMORY] = new DataView(buffer, Number(shadowAddress - address), len);
+    shadow[MEMORY_COPIER](source);
     return this.addShadow(shadow, source);
   }
 
@@ -473,6 +482,7 @@ export class Environment {
       shadowMap = this.context.shadowMap = new Map();
     }
     shadowMap.set(shadow, object);
+    this.registerMemory(shadow[MEMORY], true);
     return shadow;
   }
 
@@ -500,7 +510,47 @@ export class Environment {
   }
 
   acquirePointerTargets(args) {
-    //args[POINTER_VISITOR](acquireTarget, { vivificate: true });
+    const env = this;
+    const pointerMap = new Map();
+    const callback = function({ isActive, isMutatable }) {
+      const pointer = this[POINTER_SELF];
+      if (isActive(this) === false) {
+        pointer[SLOTS][0] = null;
+        return;
+      }
+      if (pointerMap.get(pointer)) {
+        return;
+      }
+      const Target = pointer.constructor.child;
+      let target = this[SLOTS][0];
+      if (target && !isMutatable(this)) {
+        // the target exists and cannot be changed--we're done
+        return;
+      }
+
+      // obtain address (and possibly length) from memory
+      const address = pointer[ADDRESS_GETTER]();
+      let len = pointer[LENGTH_GETTER]?.();
+      if (len === undefined) {
+        const sentinel = Target[SENTINEL];
+        if (sentinel) {
+          len = env.findSentinel(address, sentinel.bytes) + 1;
+        } else {
+          len = 1;
+        }
+      }
+      const byteSize = Target[SIZE];
+      // get view of memory that pointer points to
+      const dv = env.findMemory(address, len * byteSize);
+      // create the target
+      target = this[SLOTS][0] = Target.call(this, dv);
+      if (target[POINTER_VISITOR]) {
+        // acquire objects pointed to by pointers in target
+        const isMutatable = (pointer.constructor.const) ? () => false : () => true;
+        target[POINTER_VISITOR](callback, { vivificate: true, isMutatable });
+      }
+    }
+    args[POINTER_VISITOR](callback, { vivificate: true });
   }
   /* RUNTIME-ONLY-END */
 }
@@ -567,7 +617,11 @@ export class NodeEnvironment extends Environment {
     } else {
       const align = target.constructor[ALIGN];
       const address = this.getViewAddress(dv);
-      return isMisaligned(address, align) ? false : address;
+      if (isMisaligned(address, align)) {
+        return false;
+      }
+      this.registerMemory(dv);
+      return  address;
     }
   }
 
@@ -581,7 +635,7 @@ export class NodeEnvironment extends Environment {
       const aligned = getAlignedAddress(address, align);
       offset = aligned - address;
     }
-    return new DataView(buffer, offset, len);
+    return new DataView(buffer, Number(offset), len);
   }
 
   invokeFactory(thunk) {
@@ -618,6 +672,9 @@ export class NodeEnvironment extends Environment {
       err = thunk.call(this, args[MEMORY]);
       // create objects that pointers point to
       this.acquirePointerTargets(args);
+      if (this.context.shadowMap) {
+        this.releaseShadows();
+      }
       // restore the previous context if there's one
       this.endContext();
     } else {
@@ -766,8 +823,6 @@ export class WebAssemblyEnvironment extends Environment {
     const object = { constructor, [MEMORY]: dv, [MEMORY_COPIER]: copier };
     const shadow = { constructor, [MEMORY]: shadowDV, [MEMORY_COPIER]: copier };
     this.addShadow(shadow, object);
-    // remember and return the shadow address
-    this.registerMemory(shadowDV);
     return shadowDV;
   }
 
@@ -949,6 +1004,9 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   endCall(call, args) {
+    if (this.context.shadowMap) {
+      this.releaseShadows();
+    }
     this.endContext();
   }
 
@@ -1127,7 +1185,7 @@ export class WebAssemblyEnvironment extends Environment {
 export class CallContext {
   pointerProcessed = new Map();
   memoryList = [];
-  shadowMap = [];
+  shadowMap = null;
   /* WASM-ONLY */
   call = 0;
   /* WASM-ONLY-END */

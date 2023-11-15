@@ -9,7 +9,7 @@ import { addSpecialAccessors, checkDataView, getDataViewFromBase64, getDataViewF
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoProperty,
   throwMisplacedSentinel, throwMissingSentinel, throwNoInitializer } from './error.js';
 import { ALIGN, CHILD_VIVIFICATOR, COMPAT, GETTER, LENGTH, MEMORY, MEMORY_COPIER, POINTER_VISITOR,
-  SENTINEL, SETTER, SLOTS } from './symbol.js';
+  SENTINEL, SETTER, SIZE, SLOTS } from './symbol.js';
 
 export function finalizeSlice(s, env) {
   const {
@@ -189,6 +189,7 @@ export function finalizeSlice(s, env) {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(s) },
     [ALIGN]: { value: align },
+    [SIZE]: { value: elementSize },
     [SENTINEL]: sentinel && { value: sentinel },
   });
   addSpecialAccessors(s);

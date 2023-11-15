@@ -53,4 +53,4 @@ useSlice();
 useVector();
 useOpaque();
 
-export { NodeEnvironment } from '../../zigar-runtime/src/environment.js';
+export { NodeEnvironment as Environment } from '../../zigar-runtime/src/environment.js';

@@ -5,8 +5,9 @@ import { MemberType, getAccessors } from './member.js';
 import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerTarget,
   throwAssigningToConstant, throwConstantConstraint, throwNoInitializer,
   throwFixedMemoryTargetRequired, addArticle } from './error.js';
-import { ADDRESS_UPDATER, ALIGN, ENVIRONMENT, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR,
-  PARENT, PROXY, SLOTS, TARGET_ACQUIRER, SENTINEL } from './symbol.js';
+import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, ENVIRONMENT, LENGTH_GETTER, LENGTH_SETTER, MEMORY,
+  MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, PARENT, PROXY, SLOTS, SIZE } from './symbol.js';
+
 export function finalizePointer(s, env) {
   const {
     byteSize,
@@ -133,50 +134,14 @@ export function finalizePointer(s, env) {
       }
     }
   };
-  // const targetAcquirer = function() {
-  //   // obtain address (and possibly length) from memory
-  //   const address = getAddress.call(this);
-  //   const currentTarget = this[SLOTS][0];
-  //   if (currentTarget) {
-  //     const currentAddress = env.getViewAddress(currentTarget[MEMORY]);
-  //     if (address === currentAddress) {
-  //       // don't need to do anything
-  //       return;
-  //     }
-  //   }
-  //   let len = 1;
-  //   if (isTargetSlice) {
-  //     if (hasLength) {
-  //       len = getLength.call(this);
-  //     } else if (targetStructure.sentinel) {
-  //       len = env.findSentinel(address, targetStructure.sentinel.bytes) + 1;
-  //     } else {
-  //       len = 0;
-  //     }
-  //   }
-  //   // get view of memory that pointer points to
-  //   const dv = env.findMemory(address, len * targetStructure.byteSize);
-  //   // create the target
-  //   const Target = targetStructure.constructor;
-  //   const target = Target.call(this, dv);
-  //   this[SLOTS][0] = target;
-  //   if (target[POINTER_VISITOR]) {
-  //     // acquire objects pointed to by pointers in target
-  //     target[POINTER_VISITOR](acquireTarget, { vivificate: true });
-  //   }
-  // };
-  const addressUpdater = function(address, len) {
-    setAddress.call(this, address);
-    if (hasLength) {
-      setLength.call(this, len);
-    }
-  };
-  // return the proxy object if one is used
   defineProperties(constructor.prototype, {
     '*': { get: getTarget, set: (isConst) ? undefined : setTarget, configurable: true },
     '$': { get: getProxy, set: initializer, configurable: true, },
     'valueOf': { value: getTargetValue, configurable: true, writable: true },
-    [ADDRESS_UPDATER]: { value: addressUpdater },
+    [ADDRESS_GETTER]: { value: getAddress },
+    [ADDRESS_SETTER]: { value: setAddress },
+    [LENGTH_GETTER]: hasLength && { value: getLength },
+    [LENGTH_SETTER]: hasLength && { value: setLength },
     [POINTER_VISITOR]: { value: visitPointer },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
   });
@@ -184,6 +149,7 @@ export function finalizePointer(s, env) {
     child: { get: () => targetStructure.constructor },
     const: { value: isConst },
     [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
   });
   return constructor;
 }
@@ -192,25 +158,15 @@ export function getProxy() {
   return this[PROXY];
 }
 
-export function copyPointer({ source, isActive }) {
-  if (isActive?.(this) !== false) {
+export function copyPointer({ source, isActive = always }) {
+  if (isActive(this)) {
     this[SLOTS][0] = source[SLOTS][0];
   }
 }
 
-export function resetPointer() {
-  this[SLOTS][0] = null;
-}
-
-export function acquireTarget({ validate }) {
-  if (validate?.(this) !== false) {
-    this[TARGET_ACQUIRER]();
-  }
-}
-
-export function updateAddress({ validate }) {
-  if (validate?.(this) !== false) {
-    this[ADDRESS_UPDATER]();
+export function resetPointer({ isActive = always }) {
+  if (!isActive(this)) {
+    this[SLOTS][0] = null;
   }
 }
 
@@ -261,8 +217,10 @@ const isPointerKeys = {
   [SLOTS]: true,
   [MEMORY]: true,
   [PROXY]: true,
-  [TARGET_ACQUIRER]: true,
-  [ADDRESS_UPDATER]: true,
+  [ADDRESS_GETTER]: true,
+  [ADDRESS_SETTER]: true,
+  [LENGTH_GETTER]: true,
+  [LENGTH_SETTER]: true,
   [POINTER_VISITOR]: true,
   [Symbol.toStringTag]: true,
   [Symbol.toPrimitive]: true,
@@ -333,3 +291,7 @@ const constProxyHandlers = {
     /* c8 ignore next -- unreachable */
   },
 };
+
+export function always() {
+  return true;
+}

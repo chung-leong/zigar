@@ -18,7 +18,6 @@ import {
   isMisaligned,
 } from '../src/environment.js'
 import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, THUNK_REPLACER, CHILD_VIVIFICATOR } from '../src/symbol.js';
-import { acquireTarget } from '../src/pointer.js';
 
 describe('Environment', function() {
   beforeEach(function() {
@@ -188,7 +187,6 @@ describe('Environment', function() {
         };
         const dv = new DataView(new ArrayBuffer(8));
         const object = env.castView(structure, dv);
-        expect(visitor).to.equal(acquireTarget);
       })
     })
     describe('createObject', function() {

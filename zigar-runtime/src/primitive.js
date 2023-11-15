@@ -3,7 +3,7 @@ import { MemberType, isByteAligned, getAccessors } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getCompatibleTags, addTypedArray, requireDataView } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
-import { ALIGN, COMPAT, MEMORY, MEMORY_COPIER } from './symbol.js';
+import { ALIGN, COMPAT, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
 import { throwInvalidInitializer, throwNoInitializer, throwNoProperty } from './error.js';
 
 export function finalizePrimitive(s, env) {
@@ -76,6 +76,7 @@ export function finalizePrimitive(s, env) {
   defineProperties(constructor, {
     [COMPAT]: { value: getCompatibleTags(s) },
     [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
   });
   addSpecialAccessors(s);
   return constructor;

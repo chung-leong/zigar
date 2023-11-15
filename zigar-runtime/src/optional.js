@@ -6,7 +6,8 @@ import { getChildVivificators, getPointerVisitor } from './struct.js';
 import { addSpecialAccessors } from './special.js';
 import { throwNoInitializer } from './error.js';
 import { copyPointer, resetPointer } from './pointer.js';
-import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, MEMORY_RESETTER, POINTER_VISITOR, SLOTS } from './symbol.js';
+import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, MEMORY_RESETTER, POINTER_VISITOR, SIZE,
+  SLOTS } from './symbol.js';
 
 export function finalizeOptional(s, env) {
   const {
@@ -78,10 +79,11 @@ export function finalizeOptional(s, env) {
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [MEMORY_RESETTER]: { value: getMemoryResetter(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, check) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildActive: check }) },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
   });
   addSpecialAccessors(s);
   return constructor;

@@ -1494,7 +1494,8 @@ fn createAllocator(host_ptr: anytype) std.mem.Allocator {
     const VTable = struct {
         fn alloc(p: *anyopaque, size: usize, ptr_align: u8, _: usize) ?[*]u8 {
             const h: HostPtrT = @alignCast(@ptrCast(p));
-            return if (h.allocateMemory(size, 1 << ptr_align)) |m| m.bytes else |_| null;
+            const alignment = @as(u16, 1) << @as(u4, @truncate(ptr_align));
+            return if (h.allocateMemory(size, alignment)) |m| m.bytes else |_| null;
         }
 
         fn resize(_: *anyopaque, _: []u8, _: u8, _: usize, _: usize) bool {
@@ -1506,7 +1507,10 @@ fn createAllocator(host_ptr: anytype) std.mem.Allocator {
             h.freeMemory(.{
                 .bytes = @ptrCast(bytes.ptr),
                 .len = bytes.len,
-            }, 1 << ptr_align) catch {};
+                .attributes = .{
+                    .alignment = @as(u16, 1) << @as(u4, @truncate(ptr_align)),
+                },
+            }) catch {};
         }
 
         const instance: std.mem.Allocator.VTable = .{

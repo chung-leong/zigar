@@ -568,9 +568,9 @@ static void Load(const FunctionCallbackInfo<Value>& info) {
     return;
   }
   auto js_module = result.As<Object>();
-  // look for the NodeEnvironment class
-  if (!js_module->Get(context, String::NewFromUtf8Literal(isolate, "NodeEnvironment")).ToLocal(&result) || !result->IsObject()) {
-    Throw("Unable to find the class \"NodeEnvironment\"");
+  // look for the Environment class
+  if (!js_module->Get(context, String::NewFromUtf8Literal(isolate, "Environment")).ToLocal(&result) || !result->IsObject()) {
+    Throw("Unable to find the class \"Environment\"");
     return;
   }
   auto env_constructor = result.As<Function>();

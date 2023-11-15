@@ -30,4 +30,4 @@ export {
   useObject,
   useType,
 } from './member.js';
-export { WebAssemblyEnvironment } from './environment.js';
+export { WebAssemblyEnvironment as Environment } from './environment.js';

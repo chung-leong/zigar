@@ -2,7 +2,7 @@ import { defineProperties } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
 import { throwArgumentCountMismatch, rethrowArgumentError } from './error.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
-import { ALIGN, CHILD_VIVIFICATOR, MEMORY, POINTER_VISITOR, SLOTS } from './symbol.js';
+import { ALIGN, CHILD_VIVIFICATOR, MEMORY, POINTER_VISITOR, SIZE, SLOTS } from './symbol.js';
 
 export function finalizeArgStruct(s, env) {
   const {
@@ -41,13 +41,17 @@ export function finalizeArgStruct(s, env) {
   for (const member of members) {
     memberDescriptors[member.name] = getAccessors(member, options);
   }
+  const isChildMutable = function(object) {
+    return (object === this.retval);
+  };
   defineProperties(constructor.prototype, {
     ...memberDescriptors,
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildMutable }) },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
   });
   return constructor;
 }

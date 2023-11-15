@@ -10,6 +10,7 @@ import { throwInvalidInitializer, throwMissingUnionInitializer, throwMultipleUni
   throwNoProperty, throwInactiveUnionProperty, throwNoInitializer } from './error.js';
 import { copyPointer, disablePointer, resetPointer } from './pointer.js';
 import { ALIGN, CHILD_VIVIFICATOR, ENUM_ITEM, ENUM_NAME, MEMORY, MEMORY_COPIER, POINTER_VISITOR,
+  SIZE,
   SLOTS, TAG } from './symbol.js';
 
 export function finalizeUnion(s, env) {
@@ -222,15 +223,17 @@ export function finalizeUnion(s, env) {
     const active = this[name];
     return child === active;
   };
+  const hasAnyPointer = hasPointer || hasInaccessiblePointer;
   defineProperties(constructor.prototype, {
     '$': { get: getSelf, set: initializer, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [ENUM_ITEM]: isTagged && { get: getEnumItem, configurable: true },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
-    [POINTER_VISITOR]: (hasPointer || hasInaccessiblePointer) && { value: getPointerVisitor(s, isChildActive) },
+    [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor(s, { isChildActive }) },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
   });
   addSpecialAccessors(s, env);
   addStaticMembers(s, env);
