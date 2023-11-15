@@ -2,7 +2,8 @@ import { defineProperties } from './structure.js';
 import { MemberType, getAccessors } from './member.js';
 import { throwArgumentCountMismatch, rethrowArgumentError } from './error.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
-import { ALIGN, CHILD_VIVIFICATOR, MEMORY, POINTER_VISITOR, SIZE, SLOTS } from './symbol.js';
+import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SIZE, SLOTS } from './symbol.js';
+import { getMemoryCopier } from './memory.js';
 
 export function finalizeArgStruct(s, env) {
   const {
@@ -46,6 +47,7 @@ export function finalizeArgStruct(s, env) {
   };
   defineProperties(constructor.prototype, {
     ...memberDescriptors,
+    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildMutable }) },
   });

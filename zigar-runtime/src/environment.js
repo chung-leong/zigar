@@ -81,11 +81,11 @@ export class Environment {
     return new DataView(buffer);
   }
 
-  registerMemory(dv, shadowing = false) {
+  registerMemory(dv, targetDV = null) {
     const { memoryList } = this.context;
     const address = this.getViewAddress(dv);
     const index = findMemoryIndex(memoryList, address);
-    memoryList.splice(index, 0, { address, dv, len: dv.byteLength, shadowing });
+    memoryList.splice(index, 0, { address, dv, len: dv.byteLength, targetDV });
     return address;
   }
 
@@ -103,19 +103,14 @@ export class Environment {
       const { memoryList, shadowMap } = this.context;
       const index = findMemoryIndex(memoryList, address);
       const prev = memoryList[index - 1];
-      let dv;
       if (prev?.address === address && prev.len === len) {
-        dv = prev.dv;
+        return prev.targetDV ?? prev.dv;
       } else if (prev?.address <= address && address < add(prev.address, prev.len)) {
         const offset = Number(address - prev.address) + prev.dv.byteOffset;
-        dv = new DataView(prev.dv.buffer, offset, len);
-      }
-      if (dv) {
-        if (prev.shadowing) {
-          // return the view being shadowed
-          return shadowMap.get(dv);
+        if (prev.targetDV) {
+          return new DataView(prev.targetDV.buffer, prev.targetDV.byteOffset + offset, len);
         } else {
-          return dv;
+          return new DataView(prev.dv.buffer, prev.dv.byteOffset + offset, len);
         }
       }
     }
@@ -370,7 +365,7 @@ export class Environment {
   findTargetClusters(potentialClusters) {
     const clusters = [];
     for (const targets of potentialClusters) {
-      let prevTarget = null, prevDV = null, prevStart = 0, prevEnd = 0;
+      let prevTarget = null, prevStart = 0, prevEnd = 0;
       let currentCluster = null;
       for (const target of targets) {
         const dv = target[MEMORY];
@@ -404,7 +399,6 @@ export class Environment {
         }
         if (forward) {
           prevTarget = target;
-          prevDV = dv;
           prevStart = start;
           prevEnd = end;
         }
@@ -432,7 +426,6 @@ export class Environment {
     const align = object.constructor[ALIGN];
     const shadow = Object.create(object.constructor.prototype);
     shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
-    shadow[MEMORY_COPIER](object);
     return this.addShadow(shadow, object);
   }
 
@@ -472,7 +465,6 @@ export class Environment {
     const shadow = Object.create(prototype);
     source[MEMORY] = new DataView(targets[0][MEMORY].buffer, Number(start), len);
     shadow[MEMORY] = new DataView(buffer, Number(shadowAddress - address), len);
-    shadow[MEMORY_COPIER](source);
     return this.addShadow(shadow, source);
   }
 
@@ -482,7 +474,7 @@ export class Environment {
       shadowMap = this.context.shadowMap = new Map();
     }
     shadowMap.set(shadow, object);
-    this.registerMemory(shadow[MEMORY], true);
+    this.registerMemory(shadow[MEMORY], object[MEMORY]);
     return shadow;
   }
 
@@ -498,9 +490,32 @@ export class Environment {
     }
   }
 
-  releaseShadows() {
-    for (const [ shadow, object ] of this.context.shadowMap) {
+  updateShadows() {
+    const { shadowMap } = this.context;
+    if (!shadowMap) {
+      return;
+    }
+    for (const [ shadow, object ] of shadowMap) {
+      shadow[MEMORY_COPIER](object);
+    }
+  }
+
+  updateShadowTargets() {
+    const { shadowMap } = this.context;
+    if (!shadowMap) {
+      return;
+    }
+    for (const [ shadow, object ] of shadowMap) {
       object[MEMORY_COPIER](shadow);
+    }
+  }
+
+  releaseShadows() {
+    const { shadowMap } = this.context;
+    if (!shadowMap) {
+      return;
+    }
+    for (const [ shadow, object ] of shadowMap) {
       const shadowDV = shadow[MEMORY];
       const address = this.getViewAddress(shadowDV);
       const len = shadowDV.byteLength;
@@ -669,12 +684,12 @@ export class NodeEnvironment extends Environment {
       this.startContext();
       // copy addresses of garbage-collectible objects into memory
       this.updatePointerAddresses(args);
+      this.updateShadows();
       err = thunk.call(this, args[MEMORY]);
       // create objects that pointers point to
+      this.updateShadowTargets();
       this.acquirePointerTargets(args);
-      if (this.context.shadowMap) {
-        this.releaseShadows();
-      }
+      this.releaseShadows();
       // restore the previous context if there's one
       this.endContext();
     } else {
@@ -786,6 +801,7 @@ export class WebAssemblyEnvironment extends Environment {
     castView: { argType: 'vv', returnType: 'v' },
     readSlot: { argType: 'vi', returnType: 'v' },
     writeSlot: { argType: 'viv' },
+    getViewAddress: { argType: 'v', returnType: 'i' },
     beginDefinition: { returnType: 'v' },
     insertInteger: { argType: 'vsi', alias: 'insertProperty' },
     insertBoolean: { argType: 'vsb', alias: 'insertProperty' },
@@ -794,12 +810,12 @@ export class WebAssemblyEnvironment extends Environment {
     beginStructure: { argType: 'v', returnType: 'v' },
     attachMember: { argType: 'vvb' },
     attachMethod: { argType: 'vvb' },
-    createTemplate: { argType: 'v' },
+    createTemplate: { argType: 'v', returnType: 'v' },
     attachTemplate: { argType: 'vvb' },
     finalizeStructure: { argType: 'v' },
     writeToConsole: { argType: 'v' },
     startCall: { argType: 'iv', returnType: 'i' },
-    endCall: { argType: 'v', returnType: 'i' },
+    endCall: { argType: 'iv', returnType: 'i' },
   };
   nextValueIndex = 1;
   valueTable = { 0: null };
@@ -843,8 +859,10 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   obtainFixedView(address, len) {
-    const { buffer } = this.memory;
-    return new DataView(buffer, address, len);
+    const { memory } = this;
+    const dv = new DataView(memory.buffer, address, len);
+    dv[MEMORY] = { memory, address, len };
+    return dv;
   }
 
   isFixed(dv) {
@@ -861,6 +879,8 @@ export class WebAssemblyEnvironment extends Environment {
     const dv = target[MEMORY];
     if (this.isFixed(dv)) {
       return this.getViewAddress(dv);
+    } else if (dv.byteLength === 0) {
+      return 0;
     } else {
       // relocatable buffers always need shadowing
       return false;
@@ -911,24 +931,24 @@ export class WebAssemblyEnvironment extends Environment {
     if (!fn) {
       return () => {};
     }
-    let needCallContext = false;
-    if (argType.startsWith('c')) {
-      needCallContext = true;
-      argType = argType.slice(1);
-    }
     return (...args) => {
       args = args.map((arg, i) => this.fromWebAssembly(argType.charAt(i), arg));
-      if (needCallContext) {
-        args = [ this.context.call, ...args ];
-      }
       const retval = fn.apply(this, args);
       return this.toWebAssembly(returnType, retval);
     };
   }
 
   importFunction(fn, argType = '', returnType = '') {
+    let needCallContext = false;
+    if (argType.startsWith('c')) {
+      needCallContext = true;
+      argType = argType.slice(1);
+    }
     return (...args) => {
       args = args.map((arg, i) => this.toWebAssembly(argType.charAt(i), arg));
+      if (needCallContext) {
+        args = [ this.context.call, ...args ];
+      }
       const retval = fn.apply(this, args);
       return this.fromWebAssembly(returnType, retval);
     };
@@ -996,17 +1016,29 @@ export class WebAssemblyEnvironment extends Environment {
     this.startContext();
     // call context, use by allocateShadowMemory and freeShadowMemory
     this.context.call = call;
-    if (!args) {
-      // can't be 0 since that sets off Zig's runtime safety check
-      return 0xaaaaaaaa;
+    if (args) {
+      if (args[POINTER_VISITOR]) {
+        this.updatePointerAddresses(args);
+      }
+      // return address of shadow for argumnet struct
+      const address = this.getShadowAddress(args);
+      this.updateShadows();
+      return address;
     }
-    console.log({ args });
+    // can't be 0 since that sets off Zig's runtime safety check
+    return 0xaaaaaaaa;
   }
 
   endCall(call, args) {
-    if (this.context.shadowMap) {
+    if (args) {
+      this.updateShadowTargets();
+      if (args[POINTER_VISITOR]) {
+        debugger;
+        this.acquirePointerTargets(args);
+      }
       this.releaseShadows();
     }
+    // restore the previous context if there's one
     this.endContext();
   }
 
@@ -1019,8 +1051,8 @@ export class WebAssemblyEnvironment extends Environment {
       this.attachMethod = () => {};
     }
     const result = this.defineStructures();
-    if (result instanceof String) {
-      throwZigError(result.valueOf());
+    if (typeof(result) === 'string') {
+      throwZigError(result);
     }
     this.fixOverlappingMemory();
     return {
@@ -1080,8 +1112,8 @@ export class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  finalizeStructure(structure) {
-    this.structures.push(structure);
+  finalizeStructure(s) {
+    this.structures.push(s);
   }
   /* COMPTIME-ONLY-END */
 

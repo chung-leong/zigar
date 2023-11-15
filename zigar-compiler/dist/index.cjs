@@ -369,7 +369,6 @@ const STRUCTURE = Symbol('structure');
 const ALIGN = Symbol('align');
 const MEMORY_COPIER = Symbol('memoryCopier');
 const POINTER_VISITOR = Symbol('pointerVisitor');
-const TARGET_ACQUIRER = Symbol('targetAcquirer');
 const ENVIRONMENT = Symbol('environment');
 
 function getMemoryCopier(size, multiple = false) {
@@ -597,12 +596,6 @@ function decodeText(arrays, encoding = 'utf-8') {
   return decoder.decode(array);
 }
 
-function acquireTarget({ validate }) {
-  if (validate?.(this) !== false) {
-    this[TARGET_ACQUIRER]();
-  }
-}
-
 const StructureType = {
   Primitive: 0,
   Array: 1,
@@ -702,11 +695,11 @@ class Environment {
     return new DataView(buffer);
   }
 
-  registerMemory(dv) {
+  registerMemory(dv, targetDV = null) {
     const { memoryList } = this.context;
     const address = this.getViewAddress(dv);
     const index = findMemoryIndex(memoryList, address);
-    memoryList.splice(index, 0, { address, dv, len: dv.byteLength });
+    memoryList.splice(index, 0, { address, dv, len: dv.byteLength, targetDV });
     return address;
   }
 
@@ -721,14 +714,18 @@ class Environment {
 
   findMemory(address, len) {
     if (this.context) {
-      const { memoryList } = this.context;
+      const { memoryList, shadowMap } = this.context;
       const index = findMemoryIndex(memoryList, address);
       const prev = memoryList[index - 1];
       if (prev?.address === address && prev.len === len) {
-        return prev.dv;
+        return prev.targetDV ?? prev.dv;
       } else if (prev?.address <= address && address < add(prev.address, prev.len)) {
         const offset = Number(address - prev.address) + prev.dv.byteOffset;
-        return new DataView(prev.dv.buffer, offset, len);
+        if (prev.targetDV) {
+          return new DataView(prev.targetDV.buffer, prev.targetDV.byteOffset + offset, len);
+        } else {
+          return new DataView(prev.dv.buffer, prev.dv.byteOffset + offset, len);
+        }
       }
     }
     // not found in any of the buffers we've seen--assume it's fixed memory
@@ -754,8 +751,8 @@ class Environment {
     const { constructor, hasPointer } = structure;
     const object = constructor.call(ENVIRONMENT, dv);
     if (hasPointer) {
-      // vivificate pointers and acquire their targets
-      object[POINTER_VISITOR](acquireTarget, { vivificate: true });
+      // acquire targets of pointers
+      this.acquirePointerTargets(object);
     }
     return object;
   }
@@ -860,6 +857,7 @@ class WebAssemblyEnvironment extends Environment {
     castView: { argType: 'vv', returnType: 'v' },
     readSlot: { argType: 'vi', returnType: 'v' },
     writeSlot: { argType: 'viv' },
+    getViewAddress: { argType: 'v', returnType: 'i' },
     beginDefinition: { returnType: 'v' },
     insertInteger: { argType: 'vsi', alias: 'insertProperty' },
     insertBoolean: { argType: 'vsb', alias: 'insertProperty' },
@@ -868,12 +866,12 @@ class WebAssemblyEnvironment extends Environment {
     beginStructure: { argType: 'v', returnType: 'v' },
     attachMember: { argType: 'vvb' },
     attachMethod: { argType: 'vvb' },
-    createTemplate: { argType: 'v' },
+    createTemplate: { argType: 'v', returnType: 'v' },
     attachTemplate: { argType: 'vvb' },
     finalizeStructure: { argType: 'v' },
     writeToConsole: { argType: 'v' },
     startCall: { argType: 'iv', returnType: 'i' },
-    endCall: { argType: 'v', returnType: 'i' },
+    endCall: { argType: 'iv', returnType: 'i' },
   };
   nextValueIndex = 1;
   valueTable = { 0: null };
@@ -897,8 +895,6 @@ class WebAssemblyEnvironment extends Environment {
     const object = { constructor, [MEMORY]: dv, [MEMORY_COPIER]: copier };
     const shadow = { constructor, [MEMORY]: shadowDV, [MEMORY_COPIER]: copier };
     this.addShadow(shadow, object);
-    // remember and return the shadow address
-    this.registerMemory(shadowDV);
     return shadowDV;
   }
 
@@ -914,8 +910,10 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   obtainFixedView(address, len) {
-    const { buffer } = this.memory;
-    return new DataView(buffer, address, len);
+    const { memory } = this;
+    const dv = new DataView(memory.buffer, address, len);
+    dv[MEMORY] = { memory, address, len };
+    return dv;
   }
 
   isFixed(dv) {
@@ -932,6 +930,8 @@ class WebAssemblyEnvironment extends Environment {
     const dv = target[MEMORY];
     if (this.isFixed(dv)) {
       return this.getViewAddress(dv);
+    } else if (dv.byteLength === 0) {
+      return 0;
     } else {
       // relocatable buffers always need shadowing
       return false;
@@ -982,24 +982,24 @@ class WebAssemblyEnvironment extends Environment {
     if (!fn) {
       return () => {};
     }
-    let needCallContext = false;
-    if (argType.startsWith('c')) {
-      needCallContext = true;
-      argType = argType.slice(1);
-    }
     return (...args) => {
       args = args.map((arg, i) => this.fromWebAssembly(argType.charAt(i), arg));
-      if (needCallContext) {
-        args = [ this.context.call, ...args ];
-      }
       const retval = fn.apply(this, args);
       return this.toWebAssembly(returnType, retval);
     };
   }
 
   importFunction(fn, argType = '', returnType = '') {
+    let needCallContext = false;
+    if (argType.startsWith('c')) {
+      needCallContext = true;
+      argType = argType.slice(1);
+    }
     return (...args) => {
       args = args.map((arg, i) => this.toWebAssembly(argType.charAt(i), arg));
+      if (needCallContext) {
+        args = [ this.context.call, ...args ];
+      }
       const retval = fn.apply(this, args);
       return this.fromWebAssembly(returnType, retval);
     };
@@ -1067,14 +1067,29 @@ class WebAssemblyEnvironment extends Environment {
     this.startContext();
     // call context, use by allocateShadowMemory and freeShadowMemory
     this.context.call = call;
-    if (!args) {
-      // can't be 0 since that sets off Zig's runtime safety check
-      return 0xaaaaaaaa;
+    if (args) {
+      if (args[POINTER_VISITOR]) {
+        this.updatePointerAddresses(args);
+      }
+      // return address of shadow for argumnet struct
+      const address = this.getShadowAddress(args);
+      this.updateShadows();
+      return address;
     }
-    console.log({ args });
+    // can't be 0 since that sets off Zig's runtime safety check
+    return 0xaaaaaaaa;
   }
 
   endCall(call, args) {
+    if (args) {
+      this.updateShadowTargets();
+      if (args[POINTER_VISITOR]) {
+        debugger;
+        this.acquirePointerTargets(args);
+      }
+      this.releaseShadows();
+    }
+    // restore the previous context if there's one
     this.endContext();
   }
 
@@ -1087,8 +1102,8 @@ class WebAssemblyEnvironment extends Environment {
       this.attachMethod = () => {};
     }
     const result = this.defineStructures();
-    if (result instanceof String) {
-      throwZigError(result.valueOf());
+    if (typeof(result) === 'string') {
+      throwZigError(result);
     }
     this.fixOverlappingMemory();
     return {
@@ -1148,8 +1163,8 @@ class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  finalizeStructure(structure) {
-    this.structures.push(structure);
+  finalizeStructure(s) {
+    this.structures.push(s);
   }
   /* COMPTIME-ONLY-END */
 
@@ -1249,7 +1264,7 @@ class WebAssemblyEnvironment extends Environment {
 class CallContext {
   pointerProcessed = new Map();
   memoryList = [];
-  shadowMap = [];
+  shadowMap = null;
   /* WASM-ONLY */
   call = 0;
   /* WASM-ONLY-END */
@@ -1332,7 +1347,7 @@ function generateCode(structures, params) {
     delete memberFeatures.useBool;
   }
   const features = [ ...Object.keys(structureFeatures), ...Object.keys(memberFeatures) ];
-  const imports = [ 'WebAssemblyEnvironment' ];
+  const imports = [ 'Environment' ];
   imports.push(...features);
   add(`import {`);
   for (const name of imports) {
@@ -1409,7 +1424,7 @@ function generateCode(structures, params) {
     }
     add(`];`);
   }
-  add(`const env = new WebAssemblyEnvironment();`);
+  add(`const env = new Environment();`);
   add(`const { resolve, reject } = env.finalizeStructures(structures);`);
 
   // the root structure gets finalized last

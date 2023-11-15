@@ -1,7 +1,7 @@
 import { readFile } from 'fs/promises';
 import { basename } from 'path';
 import { compile } from './compiler.js';
-import { WebAssemblyEnvironment } from '../../zigar-runtime/src/index.js';
+import { Environment } from '../../zigar-runtime/src/index.js';
 import { generateCode } from './code-generator.js';
 import { stripUnused } from './wasm-stripper.js';
 
@@ -28,7 +28,7 @@ export async function transpile(path, options = {}) {
     platform: 'freestanding'
   });
   const content = await readFile(wasmPath);
-  const env = new WebAssemblyEnvironment();
+  const env = new Environment();
   await env.loadWebAssembly(content);
   const { structures, runtimeSafety } = env.runFactory({ omitFunctions });
   // all methods are static, so there's no need to check the instance methods

@@ -21,13 +21,14 @@ const CallContext = struct {
 };
 const Call = *const CallContext;
 
-extern fn _allocateRelocatableMemory(len: usize, align: u16) usize;
-extern fn _freeRelocatableMemory(address: usize, len: usize, align: u16) void;
+extern fn _allocateRelocatableMemory(len: usize, alignment: u16) usize;
+extern fn _freeRelocatableMemory(address: usize, len: usize, alignment: u16) void;
 extern fn _createString(address: usize, len: usize) usize;
 extern fn _createObject(structure: usize, dv: usize) usize;
 extern fn _createView(address: usize, len: usize) usize;
 extern fn _castView(structure: usize, dv: usize) usize;
 extern fn _readSlot(container: usize, slot: usize) usize;
+extern fn _getViewAddress(dv: usize) usize;
 extern fn _writeSlot(container: usize, slot: usize, object: usize) void;
 extern fn _beginDefinition() usize;
 extern fn _insertInteger(container: usize, key: usize, value: i32) void;
@@ -63,10 +64,14 @@ fn strlen(s: [*:0]const u8) usize {
 const allocator: std.mem.Allocator = .{
     .ptr = undefined,
     .vtable = &std.heap.WasmAllocator.vtable,
-},
+};
 
-pub fn allocateFixedMemory(len: usize, align: u16) usize {
-    const ptr_align = if (align != 0) std.math.log2_int(u8, align) else 0;
+pub fn getPtrAlign(alignment: u16) u8 {
+    return if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
+}
+
+pub fn allocateFixedMemory(len: usize, alignment: u16) usize {
+    const ptr_align = getPtrAlign(alignment);
     if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
         return _createView(@intFromPtr(bytes), len);
     } else {
@@ -74,15 +79,15 @@ pub fn allocateFixedMemory(len: usize, align: u16) usize {
     }
 }
 
-pub fn freeFixedMemory(bytes_addr: usize, len: usize, align: u16) void {
+pub fn freeFixedMemory(bytes_addr: usize, len: usize, alignment: u16) void {
     const bytes: [*]u8 = @ptrFromInt(bytes_addr);
-    const ptr_align = if (align != 0) std.math.log2_int(u8, align) else 0;
+    const ptr_align = getPtrAlign(alignment);
     allocator.rawFree(bytes[0..len], ptr_align, 0);
 }
 
-pub fn allocateShadowMemory(call_addr: usize, len: usize, align: u16) usize {
+pub fn allocateShadowMemory(call_addr: usize, len: usize, alignment: u16) usize {
     const ctx: Call = @ptrFromInt(call_addr);
-    const ptr_align = if (align != 0) std.math.log2_int(u8, align) else 0;
+    const ptr_align = getPtrAlign(alignment);
     if (ctx.allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
         return _createView(@intFromPtr(bytes), len);
     } else {
@@ -90,10 +95,10 @@ pub fn allocateShadowMemory(call_addr: usize, len: usize, align: u16) usize {
     }
 }
 
-pub fn freeShadowMemory(call_addr: usize, bytes_addr: usize, len: usize, align: u16) void {
+pub fn freeShadowMemory(call_addr: usize, bytes_addr: usize, len: usize, alignment: u16) void {
     const ctx: Call = @ptrFromInt(call_addr);
     const bytes: [*]u8 = @ptrFromInt(bytes_addr);
-    const ptr_align = if (align != 0) std.math.log2_int(u8, align) else 0;
+    const ptr_align = getPtrAlign(alignment);
     ctx.allocator.rawFree(bytes[0..len], ptr_align, 0);
 }
 
@@ -115,19 +120,20 @@ pub const Host = struct {
         }
     }
 
-    pub fn allocateMemory(_: Host, size: usize, ptr_align: u8) !Memory {
-        const address = _allocateRelocatableMemory(size, ptr_align);
-        if (address == 0) {
+    pub fn allocateMemory(_: Host, size: usize, alignment: u16) !Memory {
+        const dv_index = _allocateRelocatableMemory(size, alignment);
+        if (dv_index == 0) {
             return Error.UnableToAllocateMemory;
         }
+        const address = _getViewAddress(dv_index);
         return .{
             .bytes = @ptrFromInt(address),
             .len = size,
         };
     }
 
-    pub fn freeMemory(_: Host, memory: Memory, ptr_align: u8) !void {
-        _freeRelocatableMemory(@intFromPtr(memory.bytes), memory.len, ptr_align);
+    pub fn freeMemory(_: Host, memory: Memory) !void {
+        _freeRelocatableMemory(@intFromPtr(memory.bytes), memory.len, memory.attributes.alignment);
     }
 
     pub fn createString(_: Host, memory: Memory) !Value {
@@ -226,7 +232,7 @@ pub const Host = struct {
         insertProperty(structure, "type", def.structure_type);
         insertProperty(structure, "length", def.length);
         insertProperty(structure, "byteSize", def.byte_size);
-        insertProperty(structure, "align", def.ptr_align);
+        insertProperty(structure, "align", def.alignment);
         insertProperty(structure, "isConst", def.is_const);
         insertProperty(structure, "hasPointer", def.has_pointer);
         return ref(_beginStructure(index(structure)));
