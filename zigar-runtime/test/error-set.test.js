@@ -1,13 +1,7 @@
 import { expect } from 'chai';
 
-import {
-  MemberType,
-  useIntEx,
-} from '../src/member.js';
-import {
-  StructureType,
-  useErrorSet,
-} from '../src/structure.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { initializeErrorSets } from '../src/error-set.js';
 import { Environment } from '../src/environment.js'
 
@@ -15,8 +9,8 @@ describe('Error set functions', function() {
   const env = new Environment();
   describe('finalizeErrorSet', function() {
     beforeEach(function() {
-      useIntEx();
-      useErrorSet();
+      useAllMemberTypes();
+      useAllStructureTypes();
       initializeErrorSets();
     })
     it('should define an error set', function() {

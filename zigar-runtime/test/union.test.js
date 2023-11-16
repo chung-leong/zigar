@@ -1,44 +1,16 @@
 import { expect } from 'chai';
 
-import {
-  MemberType,
-  useBoolEx,
-  useIntEx,
-  useUintEx,
-  useObject,
-  useEnumerationItem,
-} from '../src/member.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
-import {
-  StructureType,
-  usePrimitive,
-  usePointer,
-  useStruct,
-  useArray,
-  useExternUnion,
-  useBareUnion,
-  useTaggedUnion,
-  useEnumeration,
-} from '../src/structure.js';
 import { NodeEnvironment } from '../src/environment.js'
 
 describe('Union functions', function() {
   const env = new NodeEnvironment();
   describe('finalizeUnion', function() {
     beforeEach(function() {
-      usePrimitive();
-      useExternUnion();
-      useBareUnion();
-      useTaggedUnion();
-      useEnumeration();
-      usePointer();
-      useStruct();
-      useArray();
-      useBoolEx();
-      useIntEx();
-      useUintEx();
-      useEnumerationItem();
-      useObject();
+      useAllMemberTypes();
+      useAllStructureTypes();
     })
     it('should define a simple extern union', function() {
       const structure = env.beginStructure({

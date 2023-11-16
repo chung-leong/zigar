@@ -1,27 +1,15 @@
 import { expect } from 'chai';
 
-import {
-  MemberType,
-  useFloatEx,
-  useIntEx,
-  useUintEx,
-} from '../src/member.js';
-import {
-  StructureType,
-  useVector,
-  useArray,
-} from '../src/structure.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { NodeEnvironment } from '../src/environment.js'
 
 describe('Vector functions', function() {
   const env = new NodeEnvironment();
   describe('finalizeVector', function() {
     beforeEach(function() {
-      useVector();
-      useArray();
-      useIntEx();
-      useUintEx();
-      useFloatEx();
+      useAllMemberTypes();
+      useAllStructureTypes();
     })
     it('should define structure for holding an int vector', function() {
       const structure = env.beginStructure({

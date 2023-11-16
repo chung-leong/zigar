@@ -136,3 +136,21 @@ export function defineProperties(object, descriptors) {
 export function getSelf() {
   return this;
 }
+
+export function useAllStructureTypes() {
+  usePrimitive();
+  useArray();
+  useStruct();
+  useArgStruct();
+  useExternUnion();
+  useBareUnion();
+  useTaggedUnion();
+  useErrorUnion();
+  useErrorSet();
+  useEnumeration();
+  useOptional();
+  usePointer();
+  useSlice();
+  useVector();
+  useOpaque();
+}

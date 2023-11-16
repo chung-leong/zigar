@@ -1,32 +1,16 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
 
-import {
-  MemberType,
-  useIntEx,
-  useUintEx,
-  useObject,
-} from '../src/member.js';
-import {
-  StructureType,
-  useArgStruct,
-  useStruct,
-  usePointer,
-  usePrimitive,
-} from '../src/structure.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { NodeEnvironment } from '../src/environment.js'
 
 describe('ArgStruct functions', function() {
   const env = new NodeEnvironment();
   describe('finalizeArgStruct', function() {
     beforeEach(function() {
-      useArgStruct();
-      usePointer();
-      usePrimitive();
-      useIntEx();
-      useUintEx();
-      useStruct();
-      useObject();
+      useAllMemberTypes();
+      useAllStructureTypes();
     })
     it('should define an argument struct', function() {
       const structure = env.beginStructure({

@@ -429,3 +429,14 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
     }
   }
 }
+
+export function useAllMemberTypes() {
+  useVoid();
+  useBoolEx();
+  useIntEx();
+  useUintEx();
+  useFloatEx();
+  useEnumerationItemEx();
+  useObject();
+  useType();
+}

@@ -194,7 +194,11 @@ function getTargetValue() {
 }
 
 function visitPointer(fn, options = {}) {
-  fn.call(this, options);
+  const {
+    isActive = always,
+    isMutable = always,
+  } = options;
+  fn.call(this, { isActive, isMutable });
 }
 
 function isPointerOf(arg, Target) {

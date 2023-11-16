@@ -1,33 +1,15 @@
 import { expect } from 'chai';
 
-import {
-  MemberType,
-  useBoolEx,
-  useIntEx,
-  useUintEx,
-  useObject,
-} from '../src/member.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
-import {
-  StructureType,
-  usePrimitive,
-  useStruct,
-  useEnumeration,
-  usePointer,
-} from '../src/structure.js';
 import { NodeEnvironment } from '../src/environment.js'
 
 describe('Static variable functions', function() {
   const env = new NodeEnvironment();
   beforeEach(function() {
-    useStruct();
-    usePointer();
-    usePrimitive();
-    useEnumeration();
-    useBoolEx();
-    useIntEx();
-    useUintEx();
-    useObject();
+    useAllMemberTypes();
+    useAllStructureTypes();
   })
   describe('Static variables', function() {
     it('should attach variables to a struct', function() {

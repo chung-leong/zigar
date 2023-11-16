@@ -1,20 +1,7 @@
 import { expect } from 'chai';
 
-import {
-  MemberType,
-  useIntEx,
-  useUintEx,
-  useObject,
-} from '../src/member.js';
-import {
-  StructureType,
-  usePrimitive,
-  useArray,
-  useSlice,
-  useStruct,
-  usePointer,
-  useVector,
-} from '../src/structure.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { MEMORY } from '../src/symbol.js';
 import { NodeEnvironment } from '../src/environment.js'
 
@@ -22,15 +9,8 @@ describe('Slice functions', function() {
   const env = new NodeEnvironment();
   describe('finalizeSlice', function() {
     beforeEach(function() {
-      usePrimitive();
-      useArray();
-      useStruct();
-      useSlice();
-      usePointer();
-      useVector();
-      useIntEx();
-      useUintEx();
-      useObject();
+      useAllMemberTypes();
+      useAllStructureTypes();
     })
     it('should define structure for holding an int slice', function() {
       const structure = env.beginStructure({

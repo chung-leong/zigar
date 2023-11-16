@@ -8,7 +8,7 @@ import {
 } from '../src/code-generator.js';
 import { StructureType } from '../../zigar-runtime/src/structure.js';
 import { MemberType } from '../../zigar-runtime/src/member.js';
-import { MEMORY, SLOTS, STRUCTURE } from '../../zigar-runtime/src/symbol.js';
+import { MEMORY, SLOTS } from '../../zigar-runtime/src/symbol.js';
 
 describe('Code generation', function() {
   describe('generateCode', function() {

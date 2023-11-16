@@ -1,21 +1,7 @@
 import { expect } from 'chai';
 
-import {
-  MemberType,
-  useIntEx,
-  useUintEx,
-  useFloatEx,
-  useObject,
-} from '../src/member.js';
-import {
-  StructureType,
-  usePrimitive,
-  useErrorSet,
-  useErrorUnion,
-  useStruct,
-  usePointer,
-  useSlice,
-} from '../src/structure.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { initializeErrorSets } from '../src/error-set.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
 import { NodeEnvironment } from '../src/environment.js'
@@ -24,15 +10,8 @@ describe('Error union functions', function() {
   const env = new NodeEnvironment();
   describe('finalizeErrorUnion', function() {
     beforeEach(function() {
-      usePrimitive();
-      useErrorUnion();
-      useErrorSet();
-      useStruct();
-      usePointer();
-      useSlice();
-      useIntEx();
-      useUintEx();
-      useObject();
+      useAllMemberTypes();
+      useAllStructureTypes();
       initializeErrorSets();
     })
     it('should define an error union', function() {

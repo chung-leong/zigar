@@ -2180,7 +2180,11 @@ function getTargetValue() {
 }
 
 function visitPointer(fn, options = {}) {
-  fn.call(this, options);
+  const {
+    isActive = always,
+    isMutable = always,
+  } = options;
+  fn.call(this, { isActive, isMutable });
 }
 
 function isPointerOf(arg, Target) {
@@ -4039,6 +4043,11 @@ class Environment {
     }
   }
 
+  createObject(structure, arg) {
+    const { constructor } = structure;
+    return new constructor(arg);
+  }
+
   castView(structure, dv) {
     const { constructor, hasPointer } = structure;
     const object = constructor.call(ENVIRONMENT, dv);
@@ -4047,11 +4056,6 @@ class Environment {
       this.acquirePointerTargets(object);
     }
     return object;
-  }
-
-  createObject(structure, arg) {
-    const { constructor } = structure;
-    return new constructor(arg);
   }
 
   readSlot(target, slot) {
@@ -4067,7 +4071,6 @@ class Environment {
   }
 
 
-  /* RUNTIME-ONLY */
   finalizeStructure(s) {
     try {
       const f = getStructureFactory(s.type);
@@ -4090,6 +4093,7 @@ class Environment {
     }
   }
 
+  /* RUNTIME-ONLY */
   createCaller(method, useThis) {
     let { name,  argStruct, thunk } = method;
     const { constructor } = argStruct;
@@ -4669,6 +4673,44 @@ class WebAssemblyEnvironment extends Environment {
 
   /* RUNTIME-ONLY */
   finalizeStructures(structures) {
+    const createTemplate = (placeholder) => {
+      const template = {};
+      if (placeholder.memory) {
+        const { array, offset, length } = placeholder.memory;
+        template[MEMORY] = new DataView(array.buffer, offset, length);
+      }
+      if (placeholder.slots) {
+        template[SLOTS] = insertObjects({}, placeholder.slots);
+      }
+      return template;
+    };
+    const insertObjects = (dest, placeholders) => {
+      for (const [ slot, placeholder ] of Object.entries(placeholders)) {
+        dest[slot] = createObject(placeholder);
+      }
+      return dest;
+    };
+    const createObject = (placeholder) => {
+      let dv;
+      if (placeholder.memory) {
+        const { array, offset, length } = placeholder.memory;
+        dv = new DataView(array.buffer, offset, length);
+      } else {
+        const { byteSize } = placeholder.structure;
+        dv = new DataView(new ArrayBuffer(byteSize));
+      }
+      const { constructor } = placeholder.structure;
+      const object = constructor.call(ENVIRONMENT, dv);
+      if (placeholder.slots) {
+        insertObjects(object[SLOTS], placeholder.slots);
+      }
+      if (placeholder.address !== undefined) {
+        // need to replace dataview with one pointing to WASM memory later,
+        // when the VM is up and running
+        this.variables.push({ address: placeholder.address, object });
+      }
+      return object;
+    };
     initializeErrorSets();
     for (const structure of structures) {
       for (const target of [ structure.static, structure.instance ]) {
@@ -4680,46 +4722,6 @@ class WebAssemblyEnvironment extends Environment {
       super.finalizeStructure(structure);
       // place structure into its assigned slot
       this.slots[structure.slot] = structure;
-    }
-
-    function createTemplate(placeholder) {
-      const template = {};
-      if (placeholder.memory) {
-        const { array, offset, length } = placeholder.memory;
-        template[MEMORY] = new DataView(array.buffer, offset, length);
-      }
-      if (placeholder.slots) {
-        template[SLOTS] = insertObjects({}, placeholder.slots);
-      }
-      return template;
-    }
-
-    function insertObjects(dest, placeholders) {
-      for (const [ slot, placeholder ] of Object.entries(placeholders)) {
-        dest[slot] = createObject(placeholder);
-      }
-      return dest;
-    }
-
-    function createObject(placeholder) {
-      let dv;
-      if (placeholder.memory) {
-        const { array, offset, length } = placeholder.memory;
-        dv = new DataView(array.buffer, offset, length);
-      } else {
-        const { byteSize } = placeholder.structure;
-        dv = new DataView(new ArrayBuffer(byteSize));
-      }
-      const object = this.castObject(placeholder.structure, dv);
-      if (placeholder.slots) {
-        insertObjects(object[SLOTS], placeholder.slots);
-      }
-      if (placeholder.address !== undefined) {
-        // need to replace dataview with one pointing to WASM memory later,
-        // when the VM is up and running
-        this.variables.push({ address: placeholder.address, object });
-      }
-      return object;
     }
 
     let resolve, reject;
@@ -4736,8 +4738,51 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   async linkWebAssembly(source, params) {
+    const {
+      writeBack = true,
+    } = params;
     const zigar = await this.loadWebAssembly(source);
+    this.linkVariables(writeBack);
     return zigar;
+  }
+
+  linkVariables(writeBack) {
+    for (const { object, address } of this.variables) {
+      this.linkObject(object, address, writeBack);
+    }
+  }
+
+  linkObject(object, address, writeBack) {
+    const len = object.constructor[SIZE];
+    if (len === 0) {
+      return;
+    }
+    const wasmDV = this.obtainFixedView(address, len);
+    if (writeBack) {
+      const dest = Object.create(object.constructor.prototype);
+      dest[MEMORY] = wasmDV;
+      dest[MEMORY_COPIER](object);
+    }
+    object[MEMORY] = wasmDV;
+  }
+
+  unlinkVariables() {
+    for (const { object } of this.variables) {
+      this.unlinkObject(object);
+    }
+  }
+
+  unlinkObject(object) {
+    const len = object.constructor[SIZE];
+    const align = object.constructor[ALIGN];
+    if (len === 0 || !this.isFixed(object[MEMORY])) {
+      return;
+    }
+    const relocDV = this.allocateRelocatableMemory(len, align);
+    const dest = Object.create(object.constructor.prototype);
+    dest[MEMORY] = relocDV;
+    dest[MEMORY_COPIER](object);
+    object[MEMORY] = relocDV;
   }
 
   invokeThunk(thunk, args) {

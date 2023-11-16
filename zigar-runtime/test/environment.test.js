@@ -1,14 +1,8 @@
 import { expect } from 'chai';
 import { readFile } from 'fs/promises';
 
-import {
-  MemberType,
-  useIntEx,
-} from '../src/member.js';
-import {
-  StructureType,
-  useStruct,
-} from '../src/structure.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import {
   Environment,
   NodeEnvironment,
@@ -21,8 +15,8 @@ import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, THUNK_REPLACER, CHILD_VIVI
 
 describe('Environment', function() {
   beforeEach(function() {
-    useStruct();
-    useIntEx();
+    useAllMemberTypes();
+    useAllStructureTypes();
   })
   describe('Base class', function() {
     describe('startContext', function() {

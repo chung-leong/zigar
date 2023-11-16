@@ -1,3 +1,11 @@
+/* COMPTIME-ONLY */
+import { useAllMemberTypes } from './member.js';
+import { useAllStructureTypes } from './structure.js';
+
+useAllMemberTypes();
+useAllStructureTypes();
+/* COMPTIME-ONLY-END */
+
 export {
   usePrimitive,
   useArray,

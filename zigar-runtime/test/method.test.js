@@ -1,31 +1,14 @@
 import { expect } from 'chai';
 
-import {
-  MemberType,
-  useBool,
-  useIntEx,
-  useUintEx,
-  useFloatEx,
-  useEnumerationItem,
-  useObject,
-} from '../src/member.js';
-import {
-  StructureType,
-  useStruct,
-  useEnumeration,
-} from '../src/structure.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
 import { NodeEnvironment } from '../src/environment.js'
 
 describe('Method functions', function() {
   beforeEach(function() {
-    useStruct();
-    useEnumeration();
-    useBool();
-    useIntEx();
-    useFloatEx();
-    useEnumerationItem();
-    useObject();
+    useAllMemberTypes();
+    useAllStructureTypes();
   })
   const env = new NodeEnvironment();
   describe('addMethods', function() {

@@ -1,32 +1,16 @@
 import { expect } from 'chai';
 
-import {
-  MemberType,
-  useBoolEx,
-  useIntEx,
-  useUintEx,
-  useObject,
-} from '../src/member.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
-import {
-  StructureType,
-  usePrimitive,
-  useStruct,
-  usePointer,
-} from '../src/structure.js';
 import { NodeEnvironment } from '../src/environment.js'
 
 describe('Struct functions', function() {
   const env = new NodeEnvironment();
   describe('finalizeStruct', function() {
     beforeEach(function() {
-      usePrimitive();
-      useStruct();
-      usePointer();
-      useBoolEx();
-      useIntEx();
-      useUintEx();
-      useObject();
+      useAllMemberTypes();
+      useAllStructureTypes();
     })
     it('should define a simple struct', function() {
       const structure = env.beginStructure({

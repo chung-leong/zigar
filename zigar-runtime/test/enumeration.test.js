@@ -1,14 +1,7 @@
 import { expect } from 'chai';
 
-import {
-  MemberType,
-  useIntEx,
-  useUintEx,
-} from '../src/member.js';
-import {
-  StructureType,
-  useEnumeration,
-} from '../src/structure.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
 import { NodeEnvironment } from '../src/environment.js'
 
@@ -16,9 +9,8 @@ describe('Enumeration functions', function() {
   const env = new NodeEnvironment();
   describe('finalizeErrorUnion', function() {
     beforeEach(function() {
-      useIntEx();
-      useUintEx();
-      useEnumeration();
+      useAllMemberTypes();
+      useAllStructureTypes();
     })
     it('should define an enum class', function() {
       const structure = env.beginStructure({

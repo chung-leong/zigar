@@ -1,4 +1,4 @@
-import { MEMORY, SLOTS, STRUCTURE } from '../../zigar-runtime/src/symbol.js';
+import { MEMORY, SLOTS } from '../../zigar-runtime/src/symbol.js';
 import { MemberType, getMemberFeature } from '../../zigar-runtime/src/member.js';
 import { StructureType, getStructureFeature } from '../../zigar-runtime/src/structure.js';
 
@@ -97,6 +97,7 @@ export function generateCode(structures, params) {
   addDefaultStructure();
   addDefaultMember();
   const structureNames = new Map();
+  const structureMap = new Map();
   const methodNames = new Map();
   const arrayBufferNames = new Map();
   let arrayBufferCount = 0;
@@ -106,6 +107,7 @@ export function generateCode(structures, params) {
   for (const [ index, structure ] of structures.entries()) {
     const varname = `s${index}`;
     structureNames.set(structure, varname);
+    structureMap.set(structure.constructor, structure);
   }
   const varnames = [ ...structureNames.values() ];
   const initializations = varnames.map(n => `${n} = {}`);
@@ -282,7 +284,8 @@ export function generateCode(structures, params) {
 
   function addObject(name, object) {
     if (object) {
-      const { [STRUCTURE]: structure, [MEMORY]: dv, [SLOTS]: slots } = object;
+      const structure = structureMap.get(object.constructor);
+      const { [MEMORY]: dv, [SLOTS]: slots } = object;
       add(`${name}: {`);
       if (structure) {
         add(`structure: ${structureNames.get(structure)},`);

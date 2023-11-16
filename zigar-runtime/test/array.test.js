@@ -1,21 +1,8 @@
 import { expect } from 'chai';
 
-import {
-  MemberType,
-  useIntEx,
-  useUintEx,
-  useObject,
-  getAccessors,
-} from '../src/member.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { MEMORY } from '../src/symbol.js';
-import {
-  StructureType,
-  useArray,
-  useStruct,
-  usePointer,
-  useSlice,
-  usePrimitive,
-} from '../src/structure.js';
 import {
   getArrayIterator,
   getArrayEntriesIterator,
@@ -27,14 +14,8 @@ describe('Array functions', function() {
   const env = new NodeEnvironment();
   describe('finalizeArray', function() {
     beforeEach(function() {
-      usePrimitive();
-      useArray();
-      useSlice();
-      usePointer();
-      useStruct();
-      useIntEx();
-      useUintEx();
-      useObject();
+      useAllMemberTypes();
+      useAllStructureTypes();
     })
     it('should define structure for holding an int array', function() {
       const structure = env.beginStructure({

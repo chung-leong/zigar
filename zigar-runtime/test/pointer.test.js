@@ -1,20 +1,7 @@
 import { expect } from 'chai';
 
-import {
-  MemberType,
-  useIntEx,
-  useUintEx,
-  useObject,
-  useBool,
-} from '../src/member.js';
-import {
-  StructureType,
-  usePrimitive,
-  usePointer,
-  useStruct,
-  useSlice,
-  useArray,
-} from '../src/structure.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { ENVIRONMENT, MEMORY } from '../src/symbol.js';
 import { NodeEnvironment } from '../src/environment.js'
 
@@ -22,15 +9,8 @@ describe('Pointer functions', function() {
   const env = new NodeEnvironment();
   describe('finalizePointer', function() {
     beforeEach(function() {
-      useIntEx();
-      useUintEx();
-      useBool();
-      useObject();
-      useStruct();
-      usePrimitive();
-      usePointer();
-      useSlice();
-      useArray();
+      useAllMemberTypes();
+      useAllStructureTypes();
     })
     it('should define a pointer for pointing to integers', function() {
       const intStructure = env.beginStructure({

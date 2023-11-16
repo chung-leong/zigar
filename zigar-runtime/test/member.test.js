@@ -1,44 +1,14 @@
 import { expect } from 'chai';
 
-import {
-  StructureType,
-  useStruct,
-  useOptional,
-} from '../src/structure.js';
+import { MemberType, useAllMemberTypes, isByteAligned, getAccessors, getMemberFeature } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { CHILD_VIVIFICATOR, MEMORY } from '../src/symbol.js';
-import {
-  MemberType,
-  isByteAligned,
-  getAccessors,
-  useVoid,
-  useBool,
-  useBoolEx,
-  useInt,
-  useIntEx,
-  useUint,
-  useUintEx,
-  useFloat,
-  useFloatEx,
-  useEnumerationItem,
-  useEnumerationItemEx,
-  useObject,
-  useType,
-  getMemberFeature,
-} from '../src/member.js';
 import { clearMethodCache } from '../src/data-view.js';
 
 describe('Member functions', function() {
   beforeEach(function() {
-    useVoid();
-    useBoolEx()
-    useIntEx();
-    useUintEx();
-    useFloatEx();
-    useEnumerationItemEx();
-    useObject();
-    useType();
-    useStruct();
-    useOptional();
+    useAllMemberTypes();
+    useAllStructureTypes()
   })
   describe('isByteAligned', function() {
     it('should return true when member is byte-aligned', function() {

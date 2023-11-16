@@ -1,13 +1,7 @@
 import { expect } from 'chai';
 
-import {
-  MemberType,
-  useIntEx,
-} from '../src/member.js';
-import {
-  StructureType,
-  usePrimitive,
-} from '../src/structure.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import {
   getIntRange,
   getPrimitiveClass,
@@ -19,8 +13,8 @@ describe('Primitive functions', function() {
   const env = new NodeEnvironment();
   describe('finalizePrimitive', function() {
     beforeEach(function() {
-      usePrimitive();
-      useIntEx();
+      useAllMemberTypes();
+      useAllStructureTypes();
     })
     it('should define a structure for holding a primitive', function() {
       const structure = env.beginStructure({

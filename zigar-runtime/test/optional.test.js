@@ -1,22 +1,7 @@
 import { expect } from 'chai';
 
-import {
-  MemberType,
-  useBool,
-  useIntEx,
-  useUintEx,
-  useFloatEx,
-  useObject,
-} from '../src/member.js';
-import {
-  StructureType,
-  usePrimitive,
-  useStruct,
-  useOptional,
-  usePointer,
-  useSlice,
-  useArray,
-} from '../src/structure.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
 import { NodeEnvironment } from '../src/environment.js'
 
@@ -24,17 +9,8 @@ describe('Optional functions', function() {
   const env = new NodeEnvironment();
   describe('finalizeOptional', function() {
     beforeEach(function() {
-      usePrimitive();
-      useOptional();
-      usePointer();
-      useStruct();
-      useArray();
-      useSlice();
-      useBool();
-      useIntEx();
-      useUintEx();
-      useFloatEx();
-      useObject();
+      useAllMemberTypes();
+      useAllStructureTypes();
     })
     it('should define a structure for storing an optional value', function() {
       const structure = env.beginStructure({
