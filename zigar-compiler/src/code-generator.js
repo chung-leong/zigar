@@ -221,6 +221,9 @@ export function generateCode(structures, params) {
     for (const [ name, value ] of Object.entries(structure)) {
       if (name !== 'options' && isDifferent(value, defaultStructure[name])) {
         switch (name) {
+          case 'constructor':
+          case 'sentinel':
+            break;
           case 'instance':
           case 'static':
             addStructureContent(name, value);

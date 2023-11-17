@@ -90,11 +90,10 @@ static Result CreateView(Call* call,
   Local<Value> args[] = {
     BigInt::NewFromUnsigned(isolate, address),
     Number::New(isolate, memory.len),
-    Uint32::NewFromUnsigned(isolate, memory.attributes.align),
     Boolean::New(isolate, memory.attributes.is_comptime),
   };
   Local<Value> result;
-  if (CallFunction(call, fname, 4, args, &result) != Result::OK || !result->IsDataView()) {
+  if (CallFunction(call, fname, 3, args, &result) != Result::OK || !result->IsDataView()) {
     return Result::Failure;
   }
   *dest = result.As<DataView>();

@@ -3929,7 +3929,7 @@ class Environment {
   /*
   Functions to be defined in subclass:
 
-  getBufferAddress(buffer: ArrayBuffer): bigInt|number {
+  getBufferAddress(buffer: ArrayBuffer): bigint|number {
     // return a buffer's address
   }
   allocateRelocatableMemory(len: number, align: number): DataView {
@@ -3938,25 +3938,25 @@ class Environment {
   allocateShadowMemory(len: number, align: number): DataView {
     // allocate memory for shadowing objects
   }
-  freeRelocatableMemory(address: bigInt|number, len: number, align: number): void {
+  freeRelocatableMemory(address: bigint|number, len: number, align: number): void {
     // free previously allocated memory
   }
-  freeShadowMemory(address: bigInt|number, len: number, align: number): void {
+  freeShadowMemory(address: bigint|number, len: number, align: number): void {
     // free memory allocated for shadow
   }
   allocateFixedMemory(len: number, align: number): DataView {
     // allocate fixed memory and keep a reference to it
   }
-  freeFixedMemory(address: bigInt|number, len: number, align: number): void {
+  freeFixedMemory(address: bigint|number, len: number, align: number): void {
     // free previously allocated fixed memory return the reference
   }
-  obtainFixedView(address: bigInt|number, len: number): DataView {
+  obtainFixedView(address: bigint|number, len: number): DataView {
     // obtain a data view of memory at given address
   }
   isFixed(dv: DataView): boolean {
     // return true/false depending on whether view is point to fixed memory
   }
-  copyBytes(dst: DataView, address: bigInt|number, len: number): void {
+  copyBytes(dst: DataView, address: bigint|number, len: number): void {
     // copy memory at given address into destination view
   }
   findSentinel(address, bytes: DataView): number {
@@ -4033,9 +4033,9 @@ class Environment {
     return add(address, dv.byteOffset);
   }
 
-  createView(address, len, ptrAlign, copy) {
+  createView(address, len, copy) {
     if (copy) {
-      const dv = this.createRelocatableBuffer(len, ptrAlign);
+      const dv = this.createRelocatableBuffer(len);
       this.copyBytes(dv, address, len);
       return dv;
     } else {
@@ -4433,7 +4433,7 @@ class WebAssemblyEnvironment extends Environment {
     freeRelocatableMemory: { argType: 'iii' },
     createString: { argType: 'ii', returnType: 'v' },
     createObject: { argType: 'vv', returnType: 's' },
-    createView: { argType: 'ii', returnType: 'v' },
+    createView: { argType: 'iib', returnType: 'v' },
     castView: { argType: 'vv', returnType: 'v' },
     readSlot: { argType: 'vi', returnType: 'v' },
     writeSlot: { argType: 'viv' },
@@ -4501,11 +4501,32 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   copyBytes(dst, address, len) {
-    const src = this.obtainFixedView(address, len);
+    const { memory } = this;
+    const src = new DataView(memory.buffer, address, len);
     const copy = getCopyFunction(len);
     copy(dst, src);
   }
 
+  findSentinel(address, bytes) {
+    const { memory } = this;
+    const len = bytes.byteLength;
+    const end = memory.buffer.byteLength - len + 1;
+    for (let i = address; i < end; i += len) {
+      const dv = new DataView(memory.buffer, i, len);
+      let match = true;
+      for (let j = 0; j < len; j++) {
+        const a = dv.getUint8(j);
+        const b = bytes.getUint8(j);
+        if (a !== b) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        return (i - address) / len;
+      }
+    }
+  }
 
   createString(address, len) {
     const { buffer } = this.memory;
@@ -4671,7 +4692,6 @@ class WebAssemblyEnvironment extends Environment {
     if (args) {
       this.updateShadowTargets();
       if (args[POINTER_VISITOR]) {
-        debugger;
         this.acquirePointerTargets(args);
       }
       this.releaseShadows();
@@ -4763,17 +4783,23 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   linkObject(object, address, writeBack) {
-    const len = object.constructor[SIZE];
-    if (len === 0) {
+    const dv = object[MEMORY];
+    if (dv.byteLength === 0 || this.isFixed(dv)) {
       return;
     }
-    const wasmDV = this.obtainFixedView(address, len);
+    const wasmDV = this.obtainFixedView(address, dv.byteLength);
     if (writeBack) {
       const dest = Object.create(object.constructor.prototype);
       dest[MEMORY] = wasmDV;
       dest[MEMORY_COPIER](object);
     }
     object[MEMORY] = wasmDV;
+    if (object[ADDRESS_GETTER]) {
+      // link target
+      const address = object[ADDRESS_GETTER]();
+      const target = object[SLOTS][0];
+      this.linkObject(target, address, writeBack);
+    }
   }
 
   unlinkVariables() {
@@ -4783,15 +4809,19 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   unlinkObject(object) {
-    const len = object.constructor[SIZE];
-    if (len === 0 || !this.isFixed(object[MEMORY])) {
+    const dv = object[MEMORY];
+    if (dv.byteLength === 0 || !this.isFixed(dv)) {
       return;
     }
-    const relocDV = this.createRelocatableBuffer(len);
+    const relocDV = this.createRelocatableBuffer(dv.byteLength);
     const dest = Object.create(object.constructor.prototype);
     dest[MEMORY] = relocDV;
     dest[MEMORY_COPIER](object);
     object[MEMORY] = relocDV;
+    if (object[ADDRESS_GETTER]) {
+      const target = object[SLOTS][0];
+      this.unlinkObject(target);
+    }
   }
 
   invokeThunk(thunk, args) {

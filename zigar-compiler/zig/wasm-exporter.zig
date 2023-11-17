@@ -25,7 +25,7 @@ extern fn _allocateRelocatableMemory(len: usize, alignment: u16) usize;
 extern fn _freeRelocatableMemory(address: usize, len: usize, alignment: u16) void;
 extern fn _createString(address: usize, len: usize) usize;
 extern fn _createObject(structure: usize, dv: usize) usize;
-extern fn _createView(address: usize, len: usize) usize;
+extern fn _createView(address: usize, len: usize, copy: bool) usize;
 extern fn _castView(structure: usize, dv: usize) usize;
 extern fn _readSlot(container: usize, slot: usize) usize;
 extern fn _getViewAddress(dv: usize) usize;
@@ -73,7 +73,7 @@ pub fn getPtrAlign(alignment: u16) u8 {
 pub fn allocateFixedMemory(len: usize, alignment: u16) usize {
     const ptr_align = getPtrAlign(alignment);
     if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
-        return _createView(@intFromPtr(bytes), len);
+        return _createView(@intFromPtr(bytes), len, false);
     } else {
         return 0;
     }
@@ -89,7 +89,7 @@ pub fn allocateShadowMemory(call_addr: usize, len: usize, alignment: u16) usize 
     const ctx: Call = @ptrFromInt(call_addr);
     const ptr_align = getPtrAlign(alignment);
     if (ctx.allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
-        return _createView(@intFromPtr(bytes), len);
+        return _createView(@intFromPtr(bytes), len, false);
     } else {
         return 0;
     }
@@ -159,7 +159,8 @@ pub const Host = struct {
         const bytes = memory.bytes;
         const len = memory.len;
         const address = @intFromPtr(bytes);
-        const dv_index = _createView(address, len);
+        const copy = memory.attributes.is_comptime;
+        const dv_index = _createView(address, len, copy);
         if (dv_index == 0) {
             return Error.UnableToCreateDataView;
         }
