@@ -4526,6 +4526,68 @@ class Environment {
     }
   }
 
+  createCaller(method, useThis) {
+    let { name,  argStruct, thunk } = method;
+    const { constructor } = argStruct;
+    const self = this;
+    let f;
+    if (useThis) {
+      f = function(...args) {
+        return self.invokeThunk(thunk, new constructor([ this, ...args ]));
+      };
+    } else {
+      f = function(...args) {
+        return self.invokeThunk(thunk, new constructor(args));
+      };
+    }
+    Object.defineProperty(f, 'name', { value: name });
+    return f;
+  }
+
+
+  acquirePointerTargets(args) {
+    const env = this;
+    const pointerMap = new Map();
+    const callback = function({ isActive, isMutatable }) {
+      const pointer = this[POINTER_SELF];
+      if (isActive(this) === false) {
+        pointer[SLOTS][0] = null;
+        return;
+      }
+      if (pointerMap.get(pointer)) {
+        return;
+      }
+      const Target = pointer.constructor.child;
+      let target = this[SLOTS][0];
+      if (target && !isMutatable(this)) {
+        // the target exists and cannot be changed--we're done
+        return;
+      }
+
+      // obtain address (and possibly length) from memory
+      const address = pointer[ADDRESS_GETTER]();
+      let len = pointer[LENGTH_GETTER]?.();
+      if (len === undefined) {
+        const sentinel = Target[SENTINEL];
+        if (sentinel) {
+          len = env.findSentinel(address, sentinel.bytes) + 1;
+        } else {
+          len = 1;
+        }
+      }
+      const byteSize = Target[SIZE];
+      // get view of memory that pointer points to
+      const dv = env.findMemory(address, len * byteSize);
+      // create the target
+      target = this[SLOTS][0] = Target.call(this, dv);
+      if (target[POINTER_VISITOR]) {
+        // acquire objects pointed to by pointers in target
+        const isMutatable = (pointer.constructor.const) ? () => false : () => true;
+        target[POINTER_VISITOR](callback, { vivificate: true, isMutatable });
+      }
+    };
+    args[POINTER_VISITOR](callback, { vivificate: true });
+  }
 }
 
 
@@ -4611,6 +4673,23 @@ class WebAssemblyEnvironment extends Environment {
   isFixed(dv) {
     return dv.buffer === this.memory.buffer;
   }
+
+  copyBytes(dst, address, len) {
+    const src = this.obtainFixedView(address, len);
+    const copy = getCopyFunction(len);
+    copy(dst, src);
+  }
+
+  /* COMPTIME-ONLY */
+  createView(address, len, ptrAlign, copy) {
+    const dv = this.createRelocatableBuffer(len, ptrAlign);
+    this.copyBytes(dv, address, len);
+    if (!copy) {
+      dv.address = address;
+    }
+    return dv;
+  }
+  /* COMPTIME-ONLY-END */
 
   createString(address, len) {
     const { buffer } = this.memory;
@@ -4745,9 +4824,9 @@ class WebAssemblyEnvironment extends Environment {
     const weakRef = new WeakRef(instance);
     return {
       abandon: () => {
-        this.memory = null;
         this.releaseFunctions();
         this.unlinkVariables();
+        this.memory = null;
       },
       released: () => {
         return !weakRef.deref();
@@ -4793,6 +4872,7 @@ class WebAssemblyEnvironment extends Environment {
     if (omitFunctions) {
       this.attachMethod = () => {};
     }
+    initializeErrorSets();
     const result = this.defineStructures();
     if (typeof(result) === 'string') {
       throwZigError(result);
@@ -4964,11 +5044,10 @@ class WebAssemblyEnvironment extends Environment {
 
   unlinkObject(object) {
     const len = object.constructor[SIZE];
-    const align = object.constructor[ALIGN];
     if (len === 0 || !this.isFixed(object[MEMORY])) {
       return;
     }
-    const relocDV = this.allocateRelocatableMemory(len, align);
+    const relocDV = this.createRelocatableBuffer(len);
     const dest = Object.create(object.constructor.prototype);
     dest[MEMORY] = relocDV;
     dest[MEMORY_COPIER](object);

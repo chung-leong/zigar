@@ -4093,7 +4093,6 @@ class Environment {
     }
   }
 
-  /* RUNTIME-ONLY */
   createCaller(method, useThis) {
     let { name,  argStruct, thunk } = method;
     const { constructor } = argStruct;
@@ -4112,6 +4111,7 @@ class Environment {
     return f;
   }
 
+  /* RUNTIME-ONLY */
   writeToConsole(dv) {
     try {
       const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
@@ -4369,6 +4369,7 @@ class Environment {
       this.freeShadowMemory(address, len, align);
     }
   }
+  /* RUNTIME-ONLY-END */
 
   acquirePointerTargets(args) {
     const env = this;
@@ -4413,7 +4414,6 @@ class Environment {
     };
     args[POINTER_VISITOR](callback, { vivificate: true });
   }
-  /* RUNTIME-ONLY-END */
 }
 
 
@@ -4457,6 +4457,9 @@ class WebAssemblyEnvironment extends Environment {
   valueTable = { 0: null };
   valueIndices = new Map;
   memory = null;
+  /* RUNTIME-ONLY */
+  variables = [];
+  /* RUNTIME-ONLY-END */
 
   constructor() {
     super();
@@ -4496,6 +4499,13 @@ class WebAssemblyEnvironment extends Environment {
   isFixed(dv) {
     return dv.buffer === this.memory.buffer;
   }
+
+  copyBytes(dst, address, len) {
+    const src = this.obtainFixedView(address, len);
+    const copy = getCopyFunction(len);
+    copy(dst, src);
+  }
+
 
   createString(address, len) {
     const { buffer } = this.memory;
@@ -4630,9 +4640,9 @@ class WebAssemblyEnvironment extends Environment {
     const weakRef = new WeakRef(instance);
     return {
       abandon: () => {
-        this.memory = null;
         this.releaseFunctions();
         this.unlinkVariables();
+        this.memory = null;
       },
       released: () => {
         return !weakRef.deref();
@@ -4774,11 +4784,10 @@ class WebAssemblyEnvironment extends Environment {
 
   unlinkObject(object) {
     const len = object.constructor[SIZE];
-    const align = object.constructor[ALIGN];
     if (len === 0 || !this.isFixed(object[MEMORY])) {
       return;
     }
-    const relocDV = this.allocateRelocatableMemory(len, align);
+    const relocDV = this.createRelocatableBuffer(len);
     const dest = Object.create(object.constructor.prototype);
     dest[MEMORY] = relocDV;
     dest[MEMORY_COPIER](object);

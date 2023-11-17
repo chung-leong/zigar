@@ -5,7 +5,7 @@ import { throwAlignmentConflict, throwZigError } from './error.js';
 import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, ENVIRONMENT, LENGTH_GETTER,
   LENGTH_SETTER, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SIZE, SLOTS,
   THUNK_REPLACER } from './symbol.js';
-import { getMemoryCopier } from './memory.js';
+import { getCopyFunction, getMemoryCopier } from './memory.js';
 
 const defAlign = 16;
 
@@ -242,7 +242,6 @@ export class Environment {
     }
   }
 
-  /* RUNTIME-ONLY */
   createCaller(method, useThis) {
     let { name,  argStruct, thunk } = method;
     const { constructor } = argStruct;
@@ -266,6 +265,7 @@ export class Environment {
     return f;
   }
 
+  /* RUNTIME-ONLY */
   writeToConsole(dv) {
     try {
       const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
@@ -523,6 +523,7 @@ export class Environment {
       this.freeShadowMemory(address, len, align);
     }
   }
+  /* RUNTIME-ONLY-END */
 
   acquirePointerTargets(args) {
     const env = this;
@@ -567,7 +568,6 @@ export class Environment {
     }
     args[POINTER_VISITOR](callback, { vivificate: true });
   }
-  /* RUNTIME-ONLY-END */
 }
 
 /* NODE-ONLY */
@@ -824,6 +824,9 @@ export class WebAssemblyEnvironment extends Environment {
   /* COMPTIME-ONLY */
   structures = [];
   /* COMPTIME-ONLY-END */
+  /* RUNTIME-ONLY */
+  variables = [];
+  /* RUNTIME-ONLY-END */
 
   constructor() {
     super();
@@ -868,6 +871,23 @@ export class WebAssemblyEnvironment extends Environment {
   isFixed(dv) {
     return dv.buffer === this.memory.buffer;
   }
+
+  copyBytes(dst, address, len) {
+    const src = this.obtainFixedView(address, len);
+    const copy = getCopyFunction(len);
+    copy(dst, src);
+  }
+
+  /* COMPTIME-ONLY */
+  createView(address, len, ptrAlign, copy) {
+    const dv = this.createRelocatableBuffer(len, ptrAlign);
+    this.copyBytes(dv, address, len);
+    if (!copy) {
+      dv.address = address;
+    }
+    return dv;
+  }
+  /* COMPTIME-ONLY-END */
 
   createString(address, len) {
     const { buffer } = this.memory;
@@ -1002,9 +1022,9 @@ export class WebAssemblyEnvironment extends Environment {
     const weakRef = new WeakRef(instance);
     return {
       abandon: () => {
-        this.memory = null;
         this.releaseFunctions();
         this.unlinkVariables();
+        this.memory = null;
       },
       released: () => {
         return !weakRef.deref();
@@ -1050,6 +1070,7 @@ export class WebAssemblyEnvironment extends Environment {
     if (omitFunctions) {
       this.attachMethod = () => {};
     }
+    initializeErrorSets();
     const result = this.defineStructures();
     if (typeof(result) === 'string') {
       throwZigError(result);
@@ -1221,11 +1242,10 @@ export class WebAssemblyEnvironment extends Environment {
 
   unlinkObject(object) {
     const len = object.constructor[SIZE];
-    const align = object.constructor[ALIGN];
     if (len === 0 || !this.isFixed(object[MEMORY])) {
       return;
     }
-    const relocDV = this.allocateRelocatableMemory(len, align);
+    const relocDV = this.createRelocatableBuffer(len);
     const dest = Object.create(object.constructor.prototype);
     dest[MEMORY] = relocDV;
     dest[MEMORY_COPIER](object);
