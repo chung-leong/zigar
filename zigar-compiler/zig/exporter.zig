@@ -878,7 +878,7 @@ test "getUnionSelectorOffset" {
 
 fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
     return switch (@typeInfo(T)) {
-        .Bool, .Int, .Float, .Void => addPrimitiveMember(host, structure, T),
+        .Bool, .Int, .Float, .Void, .Type => addPrimitiveMember(host, structure, T),
         .Array => addArrayMember(host, structure, T),
         .Pointer => addPointerMember(host, structure, T),
         .Struct => addStructMember(host, structure, T),
@@ -973,6 +973,70 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
     }, false);
 }
 
+fn hasComptimeFields(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Struct => |st| find_comptime: {
+            inline for (st.fields) |field| {
+                if (field.is_comptime) {
+                    return true;
+                }
+            }
+            break :find_comptime false;
+        },
+        else => false,
+    };
+}
+
+fn WithoutComptimeFields(comptime T: type) type {
+    if (!hasComptimeFields(T)) {
+        return T;
+    }
+    const fields = @typeInfo(T).Struct.fields;
+    var new_fields: [fields.len]std.builtin.Type.StructField = undefined;
+    var count = 0;
+    for (fields) |field| {
+        if (!field.is_comptime) {
+            new_fields[count] = field;
+            count += 1;
+        }
+    }
+    return @Type(.{
+        .Struct = .{
+            .layout = .Auto,
+            .decls = &.{},
+            .fields = fields[0..count],
+            .is_tuple = false,
+        },
+    });
+}
+
+test "WithoutComptimeFields" {
+    const S1 = struct {
+        number1: i32,
+        number2: i32,
+    };
+    const WC1 = WithoutComptimeFields(S1);
+    const S2 = struct {
+        comptime number1: i32 = 0,
+        number2: i32,
+    };
+    const WC2 = WithoutComptimeFields(S2);
+    const S3 = struct {
+        comptime number1: i32 = 0,
+        number2: i32,
+        comptime number_type: type = i32,
+    };
+    const WC3 = WithoutComptimeFields(S3);
+    const S4 = comptime_int;
+    const WC4 = WithoutComptimeFields(S4);
+    assert(WC1 == S1);
+    assert(WC2 != S2);
+    assert(@typeInfo(WC2).Struct.fields.len == 1);
+    assert(WC3 != S3);
+    assert(@typeInfo(WC3).Struct.fields.len == 1);
+    assert(WC4 == S4);
+}
+
 fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
     const st = @typeInfo(T).Struct;
     // pre-allocate relocatable slots for fields that always need them
@@ -1018,10 +1082,11 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
             }
         }
     }
-    if (!isArgumentStruct(T) and @sizeOf(T) > 0) {
+    if (!isArgumentStruct(T) and (@sizeOf(T) > 0 or hasComptimeFields(T))) {
         // obtain byte array containing data of default values
         // can't use std.mem.zeroInit() here, since it'd fail with unions
-        var values: T = undefined;
+        // structs with comptime fields have issues--not sure why
+        var values: WithoutComptimeFields(T) = undefined;
         const bytes: []u8 = std.mem.asBytes(&values);
         for (bytes) |*byte_ptr| {
             byte_ptr.* = 0;
@@ -1040,7 +1105,7 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
         const template = try host.createTemplate(dv);
         inline for (st.fields, 0..) |field, index| {
             if (field.default_value) |opaque_ptr| {
-                if (field.is_comptime) {
+                if (field.is_comptime and field.type != type) {
                     // comptime members aren't stored in the struct's memory
                     // their values are stored in separate object, which are then
                     // referred by pointers in the struct template's slots

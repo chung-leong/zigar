@@ -30,7 +30,6 @@ export function finalizeStruct(s, env) {
       const pointer = template[SLOTS][slot];
       const value = pointer['*'];
       descriptors[member.name] = { value, configurable: true, enumerable: true };
-      delete template[SLOTS][slot];
     } else {
       const { get, set } = getAccessors(member, options);
       descriptors[member.name] = { get, set, configurable: true, enumerable: true };

@@ -1169,7 +1169,7 @@ export class WebAssemblyEnvironment extends Environment {
     };
     const insertObjects = (dest, placeholders) => {
       for (const [ slot, placeholder ] of Object.entries(placeholders)) {
-        dest[slot] = createObject(placeholder);
+        dest[slot] = placeholder ? createObject(placeholder) : null;
       }
       return dest;
     };
@@ -1247,12 +1247,6 @@ export class WebAssemblyEnvironment extends Environment {
       dest[MEMORY_COPIER](object);
     }
     object[MEMORY] = wasmDV;
-    if (object[ADDRESS_GETTER]) {
-      // link target
-      const address = object[ADDRESS_GETTER]();
-      const target = object[SLOTS][0];
-      this.linkObject(target, address, writeBack);
-    }
   }
 
   unlinkVariables() {
@@ -1271,10 +1265,6 @@ export class WebAssemblyEnvironment extends Environment {
     dest[MEMORY] = relocDV;
     dest[MEMORY_COPIER](object);
     object[MEMORY] = relocDV;
-    if (object[ADDRESS_GETTER]) {
-      const target = object[SLOTS][0];
-      this.unlinkObject(target);
-    }
   }
 
   invokeThunk(thunk, args) {

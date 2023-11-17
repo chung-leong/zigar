@@ -64,6 +64,9 @@ pub fn getPtrAlign(alignment: u16) u8 {
 }
 
 pub fn allocateFixedMemory(len: usize, alignment: u16) ?Value {
+    if (len == 0) {
+        return _createView(null, len, false);
+    }
     const ptr_align = getPtrAlign(alignment);
     if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
         return _createView(bytes, len, false);
@@ -73,11 +76,17 @@ pub fn allocateFixedMemory(len: usize, alignment: u16) ?Value {
 }
 
 pub fn freeFixedMemory(bytes: [*]u8, len: usize, alignment: u16) void {
+    if (len == 0) {
+        return;
+    }
     const ptr_align = getPtrAlign(alignment);
     allocator.rawFree(bytes[0..len], ptr_align, 0);
 }
 
 pub fn allocateShadowMemory(call: Call, len: usize, alignment: u16) ?Value {
+    if (len == 0) {
+        return _createView(null, len, false);
+    }
     const ptr_align = getPtrAlign(alignment);
     if (call.allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
         return _createView(bytes, len, false);
@@ -87,6 +96,9 @@ pub fn allocateShadowMemory(call: Call, len: usize, alignment: u16) ?Value {
 }
 
 pub fn freeShadowMemory(call: Call, bytes: [*]u8, len: usize, alignment: u16) void {
+    if (len == 0) {
+        return;
+    }
     const ptr_align = getPtrAlign(alignment);
     call.allocator.rawFree(bytes[0..len], ptr_align, 0);
 }

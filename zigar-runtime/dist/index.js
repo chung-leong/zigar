@@ -2645,7 +2645,6 @@ function finalizeStruct(s, env) {
       const pointer = template[SLOTS][slot];
       const value = pointer['*'];
       descriptors[member.name] = { value, configurable: true, enumerable: true };
-      delete template[SLOTS][slot];
     } else {
       const { get, set } = getAccessors(member, options);
       descriptors[member.name] = { get, set, configurable: true, enumerable: true };
@@ -4716,7 +4715,7 @@ class WebAssemblyEnvironment extends Environment {
     };
     const insertObjects = (dest, placeholders) => {
       for (const [ slot, placeholder ] of Object.entries(placeholders)) {
-        dest[slot] = createObject(placeholder);
+        dest[slot] = placeholder ? createObject(placeholder) : null;
       }
       return dest;
     };
@@ -4794,12 +4793,6 @@ class WebAssemblyEnvironment extends Environment {
       dest[MEMORY_COPIER](object);
     }
     object[MEMORY] = wasmDV;
-    if (object[ADDRESS_GETTER]) {
-      // link target
-      const address = object[ADDRESS_GETTER]();
-      const target = object[SLOTS][0];
-      this.linkObject(target, address, writeBack);
-    }
   }
 
   unlinkVariables() {
@@ -4818,10 +4811,6 @@ class WebAssemblyEnvironment extends Environment {
     dest[MEMORY] = relocDV;
     dest[MEMORY_COPIER](object);
     object[MEMORY] = relocDV;
-    if (object[ADDRESS_GETTER]) {
-      const target = object[SLOTS][0];
-      this.unlinkObject(target);
-    }
   }
 
   invokeThunk(thunk, args) {
