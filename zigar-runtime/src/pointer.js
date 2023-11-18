@@ -79,7 +79,7 @@ export function finalizePointer(s, env) {
   };
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      if (env.isFixed(this[MEMORY])) {
+      if (env.inFixedMemory(this)) {
         // initialize with the other pointer's target
         initializer.call(this, arg[SLOTS][0]);
       } else {
@@ -118,9 +118,9 @@ export function finalizePointer(s, env) {
             throwInvalidPointerTarget(s, arg);
           }
         }
-        if (env.isFixed(this[MEMORY])) {
+        if (env.inFixedMemory(this)) {
           // the pointer sits in shared memory--apply the change immediately
-          if (env.isFixed(arg[MEMORY])) {
+          if (env.inFixedMemory(arg)) {
             const address = env.getViewAddress(arg[MEMORY]);
             setAddress.call(this, address);
             if (setLength) {

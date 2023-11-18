@@ -282,8 +282,10 @@ export function addTests(importModule, options) {
       const lines = await capture(() => {
         printText();
         const text = allocText("This is a test");
+        debugger;
         module.text = text;
         printText();
+        debugger;
         module.text = module.alt_text;
         printText();
         freeText(text);
@@ -896,8 +898,6 @@ export function addTests(importModule, options) {
         expect(line).to.equal(refLines[index]);
       }
     })
-    // skipping this one, as current implementation doesn't handle pointer so well
-    skip.
     it('should produce the right results for the k-nucleotide example', async function() {
       this.timeout(60000);
       const { kNucleotide } = await importModule(resolve('./zig-samples/benchmarks-game/k-nucleotide.zig'));

@@ -623,6 +623,10 @@ export class NodeEnvironment extends Environment {
     return dv.buffer instanceof SharedArrayBuffer;
   }
 
+  inFixedMemory(object) {
+    return this.isFixed(object[MEMORY]);
+  }
+
   getTargetAddress(target, cluster) {
     const dv = target[MEMORY];
     if (cluster) {
@@ -894,6 +898,12 @@ export class WebAssemblyEnvironment extends Environment {
     return dv.buffer === this.memory.buffer;
   }
 
+  inFixedMemory(object) {
+    // reconnect any detached buffer before checking
+    restoreMemory.call(object);
+    return this.isFixed(object[MEMORY]);
+  }
+
   copyBytes(dst, address, len) {
     const { memory } = this;
     const src = new DataView(memory.buffer, address, len);
@@ -929,13 +939,11 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   getTargetAddress(target, cluster) {
-    // restore potentially detached buffer first
-    restoreMemory.call(target);
-    const dv = target[MEMORY];
-    if (this.isFixed(dv)) {
-      return this.getViewAddress(dv);
+    if (this.inFixedMemory(target)) {
+      return this.getViewAddress(target[MEMORY]);
     }
-    if (dv.byteLength === 0) {
+    if (target[MEMORY].byteLength === 0) {
+      // it's a null pointer/empty slice
       return 0;
     }
     // relocatable buffers always need shadowing
@@ -1270,17 +1278,19 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   linkObject(object, address, writeBack) {
-    const dv = object[MEMORY];
-    if (dv.byteLength === 0 || this.isFixed(dv)) {
+    if (this.inFixedMemory(object)) {
       return;
     }
-    const wasmDV = this.obtainFixedView(address, dv.byteLength);
-    if (writeBack) {
-      const dest = Object.create(object.constructor.prototype);
-      dest[MEMORY] = wasmDV;
-      dest[MEMORY_COPIER](object);
+    const dv = object[MEMORY];
+    if (dv.byteLength !== 0) {
+      const wasmDV = this.obtainFixedView(address, dv.byteLength);
+      if (writeBack) {
+        const dest = Object.create(object.constructor.prototype);
+        dest[MEMORY] = wasmDV;
+        dest[MEMORY_COPIER](object);
+      }
+      object[MEMORY] = wasmDV;
     }
-    object[MEMORY] = wasmDV;
   }
 
   unlinkVariables() {
@@ -1290,10 +1300,10 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   unlinkObject(object) {
-    const dv = object[MEMORY];
-    if (dv.byteLength === 0 || !this.isFixed(dv)) {
+    if (!this.inFixedMemory(object)) {
       return;
     }
+    const dv = object[MEMORY];
     const relocDV = this.createRelocatableBuffer(dv.byteLength);
     const dest = Object.create(object.constructor.prototype);
     dest[MEMORY] = relocDV;
