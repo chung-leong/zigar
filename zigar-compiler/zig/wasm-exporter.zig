@@ -22,7 +22,7 @@ const CallContext = struct {
     allocator: std.mem.Allocator,
 };
 
-extern fn _allocateRelocatableMemory(len: usize, alignment: u16) usize;
+extern fn _allocateRelocatableMemory(len: usize, alignment: u16) ?Value;
 extern fn _freeRelocatableMemory(bytes: [*]u8, len: usize, alignment: u16) void;
 extern fn _createString(bytes: ?[*]const u8, len: usize) ?Value;
 extern fn _createObject(structure: Value, dv: Value) ?Value;

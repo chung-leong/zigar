@@ -3,7 +3,7 @@ import { decodeText } from './text.js';
 import { initializeErrorSets } from './error-set.js';
 import { throwAlignmentConflict, throwZigError } from './error.js';
 import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, ENVIRONMENT, LENGTH_GETTER,
-  LENGTH_SETTER, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SIZE, SLOTS,
+  LENGTH_SETTER, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES, SIZE, SLOTS,
   THUNK_REPLACER } from './symbol.js';
 import { getCopyFunction, getMemoryCopier, restoreMemory } from './memory.js';
 
@@ -426,7 +426,12 @@ export class Environment {
     const dv = object[MEMORY]
     const align = object.constructor[ALIGN];
     const shadow = Object.create(object.constructor.prototype);
-    shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
+    const shadowDV = shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
+    shadow[SHADOW_ATTRIBUTES] = {
+      address: this.getViewAddress(shadowDV),
+      len: shadowDV.byteLength,
+      align: align,
+    };
     return this.addShadow(shadow, object);
   }
 
@@ -444,10 +449,12 @@ export class Environment {
     }
     // ensure the shadow buffer is large enough to accommodate necessary adjustments
     const len = end - start;
-    const { buffer, byteOffset } = this.allocateShadowMemory(len + maxAlign, 0);
-    const address = add(this.getBufferAddress(buffer), byteOffset);
-    const maxAlignAddress = getAlignedAddress(add(address, maxAlignOffset), maxAlign);
+    const unalignedShadowDV = this.allocateShadowMemory(len + maxAlign, 1);
+    const unalignedAddress = this.getViewAddress(unalignedShadowDV);
+    const maxAlignAddress = getAlignedAddress(add(unalignedAddress, maxAlignOffset), maxAlign);
     const shadowAddress = subtract(maxAlignAddress, maxAlignOffset);
+    const shadowOffset = unalignedShadowDV.byteOffset + Number(shadowAddress - unalignedAddress);
+    const shadowDV = new DataView(unalignedShadowDV.buffer, shadowOffset, len);
     // make sure that other pointers are correctly aligned also
     for (const target of targets) {
       const offset = target[MEMORY].byteOffset;
@@ -465,7 +472,12 @@ export class Environment {
     const source = Object.create(prototype);
     const shadow = Object.create(prototype);
     source[MEMORY] = new DataView(targets[0][MEMORY].buffer, Number(start), len);
-    shadow[MEMORY] = new DataView(buffer, Number(shadowAddress - address), len);
+    shadow[MEMORY] = shadowDV;
+    shadow[SHADOW_ATTRIBUTES] = {
+      address: unalignedAddress,
+      len: unalignedShadowDV.byteLength,
+      align: 1,
+    };
     return this.addShadow(shadow, source);
   }
 
@@ -482,7 +494,7 @@ export class Environment {
   removeShadow(dv) {
     const { shadowMap } = this.context;
     if (shadowMap) {
-      for (const [ shadow, object ] of shadowMap) {
+      for (const [ shadow ] of shadowMap) {
         if (shadow[MEMORY] === dv) {
           shadowMap.delete(shadow);
           break;
@@ -516,11 +528,8 @@ export class Environment {
     if (!shadowMap) {
       return;
     }
-    for (const [ shadow, object ] of shadowMap) {
-      const shadowDV = shadow[MEMORY];
-      const address = this.getViewAddress(shadowDV);
-      const len = shadowDV.byteLength;
-      const align = object.constructor[ALIGN];
+    for (const [ shadow ] of shadowMap) {
+      const { address, len, align } = shadow[SHADOW_ATTRIBUTES];
       this.freeShadowMemory(address, len, align);
     }
   }
@@ -867,6 +876,7 @@ export class WebAssemblyEnvironment extends Environment {
     // create a shadow for the relocatable memory
     const object = { constructor, [MEMORY]: dv, [MEMORY_COPIER]: copier };
     const shadow = { constructor, [MEMORY]: shadowDV, [MEMORY_COPIER]: copier };
+    shadow[SHADOW_ATTRIBUTES] = { address: this.getViewAddress(shadowDV), len, align };
     this.addShadow(shadow, object);
     return shadowDV;
   }

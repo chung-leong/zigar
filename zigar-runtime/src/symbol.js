@@ -27,3 +27,4 @@ export const LENGTH_SETTER = Symbol('lengthSetter');
 export const SENTINEL = Symbol('sentinel');
 export const THUNK_REPLACER = Symbol('releaseThunk');
 export const ENVIRONMENT = Symbol('environment');
+export const SHADOW_ATTRIBUTES = Symbol('shadowAttributes');

@@ -391,6 +391,7 @@ const LENGTH_GETTER = Symbol('lengthGetter');
 const LENGTH_SETTER = Symbol('lengthSetter');
 const SENTINEL = Symbol('sentinel');
 const ENVIRONMENT = Symbol('environment');
+const SHADOW_ATTRIBUTES = Symbol('shadowAttributes');
 
 function getBitAlignFunction(bitPos, bitSize, toAligned) {
   if (bitPos + bitSize <= 8) {
@@ -4665,6 +4666,7 @@ class WebAssemblyEnvironment extends Environment {
     // create a shadow for the relocatable memory
     const object = { constructor, [MEMORY]: dv, [MEMORY_COPIER]: copier };
     const shadow = { constructor, [MEMORY]: shadowDV, [MEMORY_COPIER]: copier };
+    shadow[SHADOW_ATTRIBUTES] = { address: this.getViewAddress(shadowDV), len, align };
     this.addShadow(shadow, object);
     return shadowDV;
   }
