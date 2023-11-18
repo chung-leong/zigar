@@ -222,8 +222,7 @@ export class Environment {
 
   finalizeStructure(s) {
     try {
-      const { type, name, hasPointer, instance: { template } } = s;
-      const f = getStructureFactory(type);
+      const f = getStructureFactory(s.type);
       const constructor = f(s, this);
       if (typeof(constructor) === 'function') {
         defineProperties(constructor, {
@@ -231,16 +230,9 @@ export class Environment {
         });
         if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
           defineProperties(constructor.prototype, {
-            [Symbol.toStringTag]: { value: name, configurable: true, writable: false }
+            [Symbol.toStringTag]: { value: s.name, configurable: true, writable: false }
           });
         }
-      }
-      if (hasPointer && template && template[MEMORY]) {
-        // create a placeholder for retrieving default pointers
-        const placeholder = Object.create(constructor.prototype);
-        placeholder[MEMORY] = template[MEMORY];
-        placeholder[SLOTS] = template[SLOTS];
-        this.acquirePointerTargets(placeholder);
       }
       return constructor;
       /* c8 ignore next 4 */
@@ -579,6 +571,19 @@ export class Environment {
     }
     args[POINTER_VISITOR](callback, { vivificate: true });
   }
+
+  /* COMPTIME-ONLY */
+  acquireDefaultPointers(s) {
+    const { constructor, hasPointer, instance: { template } } = s;
+    if (hasPointer && template && template[MEMORY]) {
+      // create a placeholder for retrieving default pointers
+      const placeholder = Object.create(constructor.prototype);
+      placeholder[MEMORY] = template[MEMORY];
+      placeholder[SLOTS] = template[SLOTS];
+      this.acquirePointerTargets(placeholder);
+    }
+  }
+  /* COMPTIME-ONLY-END */
 }
 
 /* NODE-ONLY */
@@ -649,6 +654,12 @@ export class NodeEnvironment extends Environment {
       this.registerMemory(dv);
       return  address;
     }
+  }
+
+  finalizeStructure(s) {
+    const constructor = super.finalizeStructure(s);
+    this.acquireDefaultPointers(s);
+    return constructor;
   }
 
   createAlignedBuffer(len, align) {
@@ -1158,12 +1169,21 @@ export class WebAssemblyEnvironment extends Environment {
       }
     }
   }
+  /* COMPTIME-ONLY-END */
 
   finalizeStructure(s) {
-    super.finalizeStructure(s);
+    /* COMPTIME-ONLY */
+    const constructor = super.finalizeStructure(s);
+    // remember the structure
     this.structures.push(s);
+    // acquire default pointers
+    this.acquireDefaultPointers(s);
+    return constructor;
+    /* COMPTIME-ONLY-END */
+    /* RUNTIME-ONLY */
+    return super.finalizeStructure(s);
+    /* RUNTIME-ONLY-END */
   }
-  /* COMPTIME-ONLY-END */
 
   /* RUNTIME-ONLY */
   finalizeStructures(structures) {

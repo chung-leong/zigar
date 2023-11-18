@@ -4073,8 +4073,7 @@ class Environment {
 
   finalizeStructure(s) {
     try {
-      const { type, name, hasPointer, instance: { template } } = s;
-      const f = getStructureFactory(type);
+      const f = getStructureFactory(s.type);
       const constructor = f(s, this);
       if (typeof(constructor) === 'function') {
         defineProperties(constructor, {
@@ -4082,16 +4081,9 @@ class Environment {
         });
         if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
           defineProperties(constructor.prototype, {
-            [Symbol.toStringTag]: { value: name, configurable: true, writable: false }
+            [Symbol.toStringTag]: { value: s.name, configurable: true, writable: false }
           });
         }
-      }
-      if (hasPointer && template && template[MEMORY]) {
-        // create a placeholder for retrieving default pointers
-        const placeholder = Object.create(constructor.prototype);
-        placeholder[MEMORY] = template[MEMORY];
-        placeholder[SLOTS] = template[SLOTS];
-        this.acquirePointerTargets(placeholder);
       }
       return constructor;
       /* c8 ignore next 4 */
@@ -4425,6 +4417,7 @@ class Environment {
     };
     args[POINTER_VISITOR](callback, { vivificate: true });
   }
+
 }
 
 
@@ -4711,6 +4704,12 @@ class WebAssemblyEnvironment extends Environment {
     this.endContext();
   }
 
+
+  finalizeStructure(s) {
+    /* RUNTIME-ONLY */
+    return super.finalizeStructure(s);
+    /* RUNTIME-ONLY-END */
+  }
 
   /* RUNTIME-ONLY */
   finalizeStructures(structures) {
