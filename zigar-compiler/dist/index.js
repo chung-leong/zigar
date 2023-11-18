@@ -4724,15 +4724,17 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   getTargetAddress(target, cluster) {
+    // restore potentially detached buffer first
+    restoreMemory.call(target);
     const dv = target[MEMORY];
     if (this.isFixed(dv)) {
       return this.getViewAddress(dv);
-    } else if (dv.byteLength === 0) {
-      return 0;
-    } else {
-      // relocatable buffers always need shadowing
-      return false;
     }
+    if (dv.byteLength === 0) {
+      return 0;
+    }
+    // relocatable buffers always need shadowing
+    return false;
   }
 
   releaseObjects() {
@@ -4865,6 +4867,7 @@ class WebAssemblyEnvironment extends Environment {
     // call context, use by allocateShadowMemory and freeShadowMemory
     this.context.call = call;
     if (args) {
+      debugger
       if (args[POINTER_VISITOR]) {
         this.updatePointerAddresses(args);
       }

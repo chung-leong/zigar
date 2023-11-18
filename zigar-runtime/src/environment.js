@@ -5,7 +5,7 @@ import { throwAlignmentConflict, throwZigError } from './error.js';
 import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, ENVIRONMENT, LENGTH_GETTER,
   LENGTH_SETTER, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SIZE, SLOTS,
   THUNK_REPLACER } from './symbol.js';
-import { getCopyFunction, getMemoryCopier } from './memory.js';
+import { getCopyFunction, getMemoryCopier, restoreMemory } from './memory.js';
 
 const defAlign = 16;
 
@@ -929,15 +929,17 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   getTargetAddress(target, cluster) {
+    // restore potentially detached buffer first
+    restoreMemory.call(target);
     const dv = target[MEMORY];
     if (this.isFixed(dv)) {
       return this.getViewAddress(dv);
-    } else if (dv.byteLength === 0) {
-      return 0;
-    } else {
-      // relocatable buffers always need shadowing
-      return false;
     }
+    if (dv.byteLength === 0) {
+      return 0;
+    }
+    // relocatable buffers always need shadowing
+    return false;
   }
 
   releaseObjects() {
@@ -1070,6 +1072,7 @@ export class WebAssemblyEnvironment extends Environment {
     // call context, use by allocateShadowMemory and freeShadowMemory
     this.context.call = call;
     if (args) {
+      debugger
       if (args[POINTER_VISITOR]) {
         this.updatePointerAddresses(args);
       }
