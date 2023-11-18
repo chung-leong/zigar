@@ -178,7 +178,7 @@ export function getPointerVisitor(s, visitorOptions = {}) {
       source,
       vivificate = false,
       isActive = always,
-      isMutatable = always,
+      isMutable = always,
     } = options;
     const childOptions = {
       ...options,
@@ -186,8 +186,8 @@ export function getPointerVisitor(s, visitorOptions = {}) {
         // make sure parent object is active, then check whether the child is active
         return isActive(this) && isChildActive.call(this, object);
       },
-      isMutatable: (object) => {
-        return isMutatable(this) && isChildMutable.call(this, object);
+      isMutable: (object) => {
+        return isMutable(this) && isChildMutable.call(this, object);
       },
     };
     for (const { slot } of pointerMembers) {

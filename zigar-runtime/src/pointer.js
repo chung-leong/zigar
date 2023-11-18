@@ -180,7 +180,7 @@ export function disablePointer() {
 
 function getTarget() {
   const object = this[SLOTS][0];
-  return object.$;
+  return object?.$ ?? null;
 }
 
 function setTarget(value) {
@@ -195,10 +195,11 @@ function getTargetValue() {
 
 function visitPointer(fn, options = {}) {
   const {
+    source,
     isActive = always,
     isMutable = always,
   } = options;
-  fn.call(this, { isActive, isMutable });
+  fn.call(this, { source, isActive, isMutable });
 }
 
 function isPointerOf(arg, Target) {

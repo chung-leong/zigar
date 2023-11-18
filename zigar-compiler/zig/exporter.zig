@@ -1083,10 +1083,10 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
         }
     }
     if (!isArgumentStruct(T) and (@sizeOf(T) > 0 or hasComptimeFields(T))) {
-        // obtain byte array containing data of default values
-        // can't use std.mem.zeroInit() here, since it'd fail with unions
         // structs with comptime fields have issues--not sure why
         var values: WithoutComptimeFields(T) = undefined;
+        // obtain byte array containing data of default values
+        // can't use std.mem.zeroInit() here, since it'd fail with unions
         const bytes: []u8 = std.mem.asBytes(&values);
         for (bytes) |*byte_ptr| {
             byte_ptr.* = 0;

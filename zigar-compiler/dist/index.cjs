@@ -2165,7 +2165,7 @@ function disablePointer() {
 
 function getTarget() {
   const object = this[SLOTS][0];
-  return object.$;
+  return object?.$ ?? null;
 }
 
 function setTarget(value) {
@@ -2180,10 +2180,11 @@ function getTargetValue() {
 
 function visitPointer(fn, options = {}) {
   const {
+    source,
     isActive = always,
     isMutable = always,
   } = options;
-  fn.call(this, { isActive, isMutable });
+  fn.call(this, { source, isActive, isMutable });
 }
 
 function isPointerOf(arg, Target) {
@@ -2792,7 +2793,7 @@ function getPointerVisitor(s, visitorOptions = {}) {
       source,
       vivificate = false,
       isActive = always,
-      isMutatable = always,
+      isMutable = always,
     } = options;
     const childOptions = {
       ...options,
@@ -2800,8 +2801,8 @@ function getPointerVisitor(s, visitorOptions = {}) {
         // make sure parent object is active, then check whether the child is active
         return isActive(this) && isChildActive.call(this, object);
       },
-      isMutatable: (object) => {
-        return isMutatable(this) && isChildMutable.call(this, object);
+      isMutable: (object) => {
+        return isMutable(this) && isChildMutable.call(this, object);
       },
     };
     for (const { slot } of pointerMembers) {
@@ -4507,7 +4508,8 @@ class Environment {
 
   finalizeStructure(s) {
     try {
-      const f = getStructureFactory(s.type);
+      const { type, name, hasPointer, instance: { template } } = s;
+      const f = getStructureFactory(type);
       const constructor = f(s, this);
       if (typeof(constructor) === 'function') {
         defineProperties(constructor, {
@@ -4515,9 +4517,16 @@ class Environment {
         });
         if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
           defineProperties(constructor.prototype, {
-            [Symbol.toStringTag]: { value: s.name, configurable: true, writable: false }
+            [Symbol.toStringTag]: { value: name, configurable: true, writable: false }
           });
         }
+      }
+      if (hasPointer && template && template[MEMORY]) {
+        // create a placeholder for retrieving default pointers
+        const placeholder = Object.create(constructor.prototype);
+        placeholder[MEMORY] = template[MEMORY];
+        placeholder[SLOTS] = template[SLOTS];
+        this.acquirePointerTargets(placeholder);
       }
       return constructor;
       /* c8 ignore next 4 */
@@ -4549,7 +4558,7 @@ class Environment {
   acquirePointerTargets(args) {
     const env = this;
     const pointerMap = new Map();
-    const callback = function({ isActive, isMutatable }) {
+    const callback = function({ isActive, isMutable }) {
       const pointer = this[POINTER_SELF];
       if (isActive(this) === false) {
         pointer[SLOTS][0] = null;
@@ -4560,13 +4569,15 @@ class Environment {
       }
       const Target = pointer.constructor.child;
       let target = this[SLOTS][0];
-      if (target && !isMutatable(this)) {
+      if (target && !isMutable(this)) {
         // the target exists and cannot be changed--we're done
         return;
       }
-
       // obtain address (and possibly length) from memory
       const address = pointer[ADDRESS_GETTER]();
+      if (!address) {
+        return;
+      }
       let len = pointer[LENGTH_GETTER]?.();
       if (len === undefined) {
         const sentinel = Target[SENTINEL];
@@ -4583,8 +4594,8 @@ class Environment {
       target = this[SLOTS][0] = Target.call(this, dv);
       if (target[POINTER_VISITOR]) {
         // acquire objects pointed to by pointers in target
-        const isMutatable = (pointer.constructor.const) ? () => false : () => true;
-        target[POINTER_VISITOR](callback, { vivificate: true, isMutatable });
+        const isMutable = (pointer.constructor.const) ? () => false : () => true;
+        target[POINTER_VISITOR](callback, { vivificate: true, isMutable });
       }
     };
     args[POINTER_VISITOR](callback, { vivificate: true });
