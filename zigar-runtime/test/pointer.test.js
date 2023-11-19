@@ -1311,7 +1311,6 @@ describe('Pointer functions', function() {
       dv1.setBigInt64(8, 3n, true);
       const pointer1 = HelloPtr.call(ENVIRONMENT, dv1);
       const pointer2 = HelloPtr.call(ENVIRONMENT, dv2);
-      debugger;
       pointer2.$ = pointer1;
       expect(dv2.getBigUint64(0, true)).to.equal(0xbbbbbbbbn);
       expect(dv2.getBigUint64(8, true)).to.equal(3n);

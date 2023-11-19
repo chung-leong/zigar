@@ -282,10 +282,8 @@ export function addTests(importModule, options) {
       const lines = await capture(() => {
         printText();
         const text = allocText("This is a test");
-        debugger;
         module.text = text;
         printText();
-        debugger;
         module.text = module.alt_text;
         printText();
         freeText(text);
@@ -743,8 +741,6 @@ export function addTests(importModule, options) {
       const pointer1 = optional.$;
       // change the optional thru Zig
       setOptionalNull(optional);
-      // give the optional a chance to notice that it's now null and should therefore release the pointer
-      expect(optional.$).to.be.null;
       // the pointer object should have released the object it was pointer to
       expect(pointer1[SLOTS][0]).to.be.null;
       const errorUnion = new ErrorOrString('Hello world');
@@ -752,14 +748,10 @@ export function addTests(importModule, options) {
       const pointer2 = errorUnion.$;
       // change the error union thru Zig
       setErrorUnion(errorUnion);
-      // give the error union a chance to release its pointer
-      expect(() => errorUnion.$).to.throw(Error);
       expect(pointer2[SLOTS][0]).to.be.null;
       const union = new StringOrNumber({ String: 'Hello world' });
       const pointer3 = union.String;
       setUnionNumber(union);
-      // setters also perform pointer clean up
-      union.Number = 0;
       expect(pointer3[SLOTS][0]).to.be.null;
     })
     it('should free pointer array after Zig functions made it invalid', async function() {
@@ -775,8 +767,6 @@ export function addTests(importModule, options) {
       const pointers = optional.$;
       // change the optional thru Zig
       setOptionalNull(optional);
-      // give the optional a chance to notice that it's now null and should therefore release the pointer
-      expect(optional.$).to.be.null;
       expect(pointers[0][SLOTS][0]).to.be.null;
       expect(pointers[1][SLOTS][0]).to.be.null;
     })

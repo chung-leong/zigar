@@ -1617,9 +1617,6 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
   } else {
     if (access === 'get') {
       return function(index) {
-        if (this.source) {
-          debugger;
-        }
         try {
           return accessor.call(this[MEMORY], index * byteSize, littleEndian);
         } catch (err) {
@@ -4128,15 +4125,15 @@ class Environment {
   /* RUNTIME-ONLY */
   writeToConsole(dv) {
     try {
-      const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+      // make copy of array, in case incoming buffer is pointing to stack memory
+      const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice();
       // send text up to the last newline character
       const index = array.lastIndexOf(0x0a);
       if (index === -1) {
-        // make copy of array, in case incoming buffer is pointing to stack memory
-        this.consolePending.push(array.slice());
+        this.consolePending.push(array);
       } else {
         const beginning = array.subarray(0, index);
-        const remaining = array.slice(index + 1);
+        const remaining = array.subarray(index + 1);
         const list = [ ...this.consolePending, beginning ];
         console.log(decodeText(list));
         this.consolePending = (remaining.length > 0) ? [ remaining ] : [];
@@ -4200,7 +4197,7 @@ class Environment {
         }
       }
     };
-    args[POINTER_VISITOR](callback, {});
+    args[POINTER_VISITOR](callback);
     // find targets that overlap each other
     const clusters = this.findTargetClusters(potentialClusters);
     const clusterMap = new Map();
@@ -4399,6 +4396,7 @@ class Environment {
     const env = this;
     const pointerMap = new Map();
     const callback = function({ isActive, isMutable }) {
+      debugger;
       const pointer = this[POINTER_SELF];
       if (isActive(this) === false) {
         pointer[SLOTS][0] = null;
@@ -4409,29 +4407,27 @@ class Environment {
       }
       const Target = pointer.constructor.child;
       let target = this[SLOTS][0];
-      if (target && !isMutable(this)) {
-        // the target exists and cannot be changed--we're done
-        return;
-      }
-      // obtain address (and possibly length) from memory
-      const address = pointer[ADDRESS_GETTER]();
-      let len = pointer[LENGTH_GETTER]?.();
-      if (len === undefined) {
-        const sentinel = Target[SENTINEL];
-        if (sentinel) {
-          if (address === 0) {
-            throwNullPointer(address);
+      if (!target || isMutable(this)) {
+        // obtain address (and possibly length) from memory
+        const address = pointer[ADDRESS_GETTER]();
+        let len = pointer[LENGTH_GETTER]?.();
+        if (len === undefined) {
+          const sentinel = Target[SENTINEL];
+          if (sentinel) {
+            if (address === 0) {
+              throwNullPointer(address);
+            }
+            len = env.findSentinel(address, sentinel.bytes) + 1;
+          } else {
+            len = 1;
           }
-          len = env.findSentinel(address, sentinel.bytes) + 1;
-        } else {
-          len = 1;
         }
+        const byteSize = Target[SIZE];
+        // get view of memory that pointer points to
+        const dv = env.findMemory(address, len * byteSize);
+        // create the target
+        target = this[SLOTS][0] = Target.call(this, dv);
       }
-      const byteSize = Target[SIZE];
-      // get view of memory that pointer points to
-      const dv = env.findMemory(address, len * byteSize);
-      // create the target
-      target = this[SLOTS][0] = Target.call(this, dv);
       if (target[POINTER_VISITOR]) {
         // acquire objects pointed to by pointers in target
         const isMutable = (pointer.constructor.const) ? () => false : () => true;
@@ -4710,7 +4706,6 @@ class WebAssemblyEnvironment extends Environment {
     // call context, use by allocateShadowMemory and freeShadowMemory
     this.context.call = call;
     if (args) {
-      debugger
       if (args[POINTER_VISITOR]) {
         this.updatePointerAddresses(args);
       }
