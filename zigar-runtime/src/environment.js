@@ -276,15 +276,15 @@ export class Environment {
   /* RUNTIME-ONLY */
   writeToConsole(dv) {
     try {
-      const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+      // make copy of array, in case incoming buffer is pointing to stack memory
+      const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice();
       // send text up to the last newline character
       const index = array.lastIndexOf(0x0a);
       if (index === -1) {
-        // make copy of array, in case incoming buffer is pointing to stack memory
-        this.consolePending.push(array.slice());
+        this.consolePending.push(array);
       } else {
         const beginning = array.subarray(0, index);
-        const remaining = array.slice(index + 1);
+        const remaining = array.subarray(index + 1);
         const list = [ ...this.consolePending, beginning ];
         console.log(decodeText(list));
         this.consolePending = (remaining.length > 0) ? [ remaining ] : [];
@@ -325,7 +325,7 @@ export class Environment {
       if (pointerMap.get(pointer)) {
         return;
       }
-      const target = pointer['*'];
+      const target = pointer[SLOTS][0];
       if (target) {
         pointerMap.set(pointer, target);
         const dv = target[MEMORY];

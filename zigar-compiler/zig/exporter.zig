@@ -1601,8 +1601,8 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
     const S = struct {
         fn tryFunction(host: HostT, arg_ptr: *ArgT) !void {
             // extract arguments from argument struct
-            var args: Args = undefined;
             if (@sizeOf(ArgT) != 0) {
+                var args: Args = undefined;
                 const fields = @typeInfo(Args).Struct.fields;
                 comptime var index = 0;
                 inline for (fields, 0..) |field, i| {
@@ -1620,7 +1620,7 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
                 // never inline the function so its name would show up in the trace
                 arg_ptr.*.retval = @call(.never_inline, function, args);
             } else {
-                @call(.never_inline, function, args);
+                @call(.never_inline, function, .{});
             }
         }
 

@@ -4177,7 +4177,7 @@ class Environment {
       if (pointerMap.get(pointer)) {
         return;
       }
-      const target = pointer['*'];
+      const target = pointer[SLOTS][0];
       if (target) {
         pointerMap.set(pointer, target);
         const dv = target[MEMORY];

@@ -9,9 +9,11 @@ static Local<Function> CreateThunk(Isolate* isolate,
     void *arg_ptr = nullptr;
     if (info[0]->IsDataView()) {
       auto dv = info[0].As<DataView>();
-      auto store = dv->Buffer()->GetBackingStore();
-      auto bytes = reinterpret_cast<uint8_t*>(store->Data()) + dv->ByteOffset();
-      arg_ptr = bytes;
+      if (dv->ByteLength() > 0) {
+        auto store = dv->Buffer()->GetBackingStore();
+        auto bytes = reinterpret_cast<uint8_t*>(store->Data()) + dv->ByteOffset();
+        arg_ptr = bytes;
+      }
     }
     auto result = ctx.function_data->thunk(&ctx, arg_ptr);
     if (!result.IsEmpty()) {
