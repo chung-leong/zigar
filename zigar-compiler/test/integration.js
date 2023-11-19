@@ -780,13 +780,22 @@ export function addTests(importModule, options) {
       expect(pointers[0][SLOTS][0]).to.be.null;
       expect(pointers[1][SLOTS][0]).to.be.null;
     })
+    it('should flush console after function exits', async function() {
+      this.timeout(60000);
+      const { print } = await importModule(resolve('./zig-samples/basic/function-printing-string-without-linefeed.zig'));
+      const lines = await capture(() => print())
+      expect(lines[0]).to.equal('Hello world');
+    })
+
     it('should not export function with illegal name', async function() {
       this.timeout(60000);
-      const { default: module } = await importModule(resolve('./zig-samples/basic/function-with-illegal-name.zig'));
-      const lines = await capture(() => {
-        const name = ' \nthis is a totally weird function name!! :-)';
-        module[name]();
-      })
+      const exports = await importModule(resolve('./zig-samples/basic/function-with-illegal-name.zig'));
+      const { default: module } = exports;
+      const name = ' \nthis is a totally weird function name!! :-)';
+      const f = module[name];
+      expect(f).to.be.a('function');
+      expect(exports[name]).to.be.undefined;
+      const lines = await capture(() => f())
       expect(lines[0]).to.equal('Hello world');
     })
   })

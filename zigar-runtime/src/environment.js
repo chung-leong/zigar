@@ -739,7 +739,9 @@ export class NodeEnvironment extends Environment {
       // don't need to do any of that if there're no pointers
       err = thunk.call(this, args[MEMORY]);
     }
-
+    if (!this.context) {
+      this.flushConsole();
+    }
     // errors returned by exported Zig functions are normally written into the
     // argument object and get thrown when we access its retval property (a zig error union)
     // error strings returned by the thunk are due to problems in the thunking process
@@ -1336,7 +1338,9 @@ export class WebAssemblyEnvironment extends Environment {
     // memory from the WebAssembly allocator; point target acquisition will happen in
     // endCall()
     const err = this.runThunk(thunk, args);
-
+    if (!this.context) {
+      this.flushConsole();
+    }
     // errors returned by exported Zig functions are normally written into the
     // argument object and get thrown when we access its retval property (a zig error union)
     // error strings returned by the thunk are due to problems in the thunking process
