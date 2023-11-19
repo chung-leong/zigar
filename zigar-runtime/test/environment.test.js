@@ -524,11 +524,13 @@ describe('Environment', function() {
         expect(bad).to.be.null;
       })
     })
-    describe('isFixed', function() {
+    describe('inFixedMemory', function() {
       it('should return true when view points to a SharedArrayBuffer', function() {
         const env = new NodeEnvironment();
-        const dv = new DataView(new SharedArrayBuffer(16));
-        const result = env.isFixed(dv);
+        const object = {
+          [MEMORY]: new DataView(new SharedArrayBuffer(16)),
+        };
+        const result = env.inFixedMemory(object);
         expect(result).to.be.true;
       })
     })
@@ -875,15 +877,17 @@ describe('Environment', function() {
 
       })
     })
-    describe('isFixed', function() {
+    describe('inFixedMemory', function() {
       it('should return true when view points to a WebAssembly memory', function() {
         const env = new WebAssemblyEnvironment();
         const memory = env.memory = new WebAssembly.Memory({
           initial: 128,
           maximum: 1024,
         });
-        const dv = new DataView(memory.buffer, 0, 8);
-        const result = env.isFixed(dv);
+        const object = {
+          [MEMORY]: new DataView(memory.buffer, 0, 8),
+        };
+        const result = env.inFixedMemory(object);
         expect(result).to.be.true;
       })
     })

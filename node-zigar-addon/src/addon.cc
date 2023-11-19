@@ -366,10 +366,10 @@ static MaybeLocal<Value> LoadJavaScript(Isolate* isolate,
   return script->Run(context);
 }
 
-static Local<DataView> CreateSharedView(Isolate* isolate,
-                                        uint8_t* src_bytes,
-                                        size_t len,
-                                        Local<External> module_data) {
+static Local<SharedArrayBuffer> CreateSharedBuffer(Isolate* isolate,
+                                                   uint8_t* src_bytes,
+                                                   size_t len,
+                                                   Local<External> module_data) {
   // create a reference to the module so that the shared library doesn't get unloaded
   // while the shared buffer is still around pointing to it
   auto emd = new ExternalMemoryData(isolate, module_data);
@@ -378,8 +378,7 @@ static Local<DataView> CreateSharedView(Isolate* isolate,
     auto emd = reinterpret_cast<ExternalMemoryData*>(deleter_data);
     delete emd;
   }, emd);
-  auto buffer = SharedArrayBuffer::New(isolate, store);
-  return DataView::New(buffer, 0, len);
+  return SharedArrayBuffer::New(isolate, store);
 }
 
 static void OverrideEnvironmentFunctions(Isolate* isolate,
@@ -392,27 +391,31 @@ static void OverrideEnvironmentFunctions(Isolate* isolate,
     auto function = tmpl->GetFunction(isolate->GetCurrentContext()).ToLocalChecked();
     prototype->Set(context, name, function).Check();
   };
-  add(String::NewFromUtf8Literal(isolate, "getBufferAddress"), [](const FunctionCallbackInfo<Value>& info) {
+  add(String::NewFromUtf8Literal(isolate, "getNormalBufferAddress"), [](const FunctionCallbackInfo<Value>& info) {
     auto isolate = info.GetIsolate();
-    if (!(info[0]->IsArrayBuffer() || info[0]->IsSharedArrayBuffer())) {
-      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Argument must be ArrayBuffer or SharedArrayBuffer").ToLocalChecked()));
+    if (!info[0]->IsArrayBuffer()) {
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Argument must be ArrayBuffer").ToLocalChecked()));
       return;
     }
-    if (info[0]->IsArrayBuffer()) {
-      auto buffer = info[0].As<ArrayBuffer>();
-      auto store = buffer->GetBackingStore();
-      auto address = reinterpret_cast<size_t>(store->Data());
-      auto big_int = BigInt::NewFromUnsigned(isolate, address);
-      info.GetReturnValue().Set(big_int);
-    } else {
-      auto buffer = info[0].As<SharedArrayBuffer>();
-      auto store = buffer->GetBackingStore();
-      auto address = reinterpret_cast<size_t>(store->Data());
-      auto big_int = BigInt::NewFromUnsigned(isolate, address);
-      info.GetReturnValue().Set(big_int);
-    }
+    auto buffer = info[0].As<ArrayBuffer>();
+    auto store = buffer->GetBackingStore();
+    auto address = reinterpret_cast<size_t>(store->Data());
+    auto big_int = BigInt::NewFromUnsigned(isolate, address);
+    info.GetReturnValue().Set(big_int);
   }, 1);
-  add(String::NewFromUtf8Literal(isolate, "allocateFixedMemory"), [](const FunctionCallbackInfo<Value>& info) {
+  add(String::NewFromUtf8Literal(isolate, "getSharedBufferAddress"), [](const FunctionCallbackInfo<Value>& info) {
+    auto isolate = info.GetIsolate();
+    if (!info[0]->IsSharedArrayBuffer()) {
+      isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Argument must be SharedArrayBuffer").ToLocalChecked()));
+      return;
+    }
+    auto buffer = info[0].As<SharedArrayBuffer>();
+    auto store = buffer->GetBackingStore();
+    auto address = reinterpret_cast<size_t>(store->Data());
+    auto big_int = BigInt::NewFromUnsigned(isolate, address);
+    info.GetReturnValue().Set(big_int);
+  }, 1);
+  add(String::NewFromUtf8Literal(isolate, "allocateSharedMemory"), [](const FunctionCallbackInfo<Value>& info) {
     auto isolate = info.GetIsolate();
     if (!info[0]->IsNumber()) {
       isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Length must be number").ToLocalChecked()));
@@ -428,12 +431,11 @@ static void OverrideEnvironmentFunctions(Isolate* isolate,
     auto align = info[1].As<Number>()->Value();
     Memory memory;
     if (md->imports->allocate_fixed_memory(len, align, &memory) == Result::OK) {
-      auto dv = CreateSharedView(isolate, memory.bytes, memory.len, mde);
-      info.GetReturnValue().Set(dv);
+      auto buffer = CreateSharedBuffer(isolate, memory.bytes, memory.len, mde);
+      info.GetReturnValue().Set(buffer);
     }
-
   }, 2);
-  add(String::NewFromUtf8Literal(isolate, "freeFixedMemory"), [](const FunctionCallbackInfo<Value>& info) {
+  add(String::NewFromUtf8Literal(isolate, "freeSharedMemory"), [](const FunctionCallbackInfo<Value>& info) {
     auto isolate = info.GetIsolate();
     if (!info[0]->IsBigInt()) {
       isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Address must be bigInt").ToLocalChecked()));
@@ -459,7 +461,7 @@ static void OverrideEnvironmentFunctions(Isolate* isolate,
     };
     md->imports->free_fixed_memory(memory);
   }, 3);
-  add(String::NewFromUtf8Literal(isolate, "obtainFixedView"), [](const FunctionCallbackInfo<Value>& info) {
+  add(String::NewFromUtf8Literal(isolate, "obtainSharedBuffer"), [](const FunctionCallbackInfo<Value>& info) {
     auto isolate = info.GetIsolate();
     if (!info[0]->IsBigInt()) {
       isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Address must be bigInt").ToLocalChecked()));
@@ -473,8 +475,8 @@ static void OverrideEnvironmentFunctions(Isolate* isolate,
     auto address = info[0].As<BigInt>()->Uint64Value();
     auto len = info[1].As<Number>()->Value();
     auto src_bytes = reinterpret_cast<uint8_t*>(address);
-    auto dv = CreateSharedView(isolate, src_bytes, len, mde);
-    info.GetReturnValue().Set(dv);
+    auto buffer = CreateSharedBuffer(isolate, src_bytes, len, mde);
+    info.GetReturnValue().Set(buffer);
   }, 2);
   add(String::NewFromUtf8Literal(isolate, "copyBytes"), [](const FunctionCallbackInfo<Value>& info) {
     auto isolate = info.GetIsolate();

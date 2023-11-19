@@ -4333,8 +4333,8 @@ class Environment {
   obtainFixedView(address: bigint|number, len: number): DataView {
     // obtain a data view of memory at given address
   }
-  isFixed(dv: DataView): boolean {
-    // return true/false depending on whether view is point to fixed memory
+  inFixedMemory(object: object): boolean {
+    // return true/false depending on whether object is in fixed memory
   }
   copyBytes(dst: DataView, address: bigint|number, len: number): void {
     // copy memory at given address into destination view
@@ -4389,12 +4389,9 @@ class Environment {
   }
 
   findMemory(address, len) {
-    if (address === 0) {
-      if (len === 0) {
-        return this.emptyView;
-      } else {
-        throwNullPointer(len);
-      }
+    // check for null address (=== can't be used since address can be both number and bigint)
+    if (!address) {
+      return this.emptyView;
     }
     if (this.context) {
       const { memoryList, shadowMap } = this.context;
@@ -4562,7 +4559,6 @@ class Environment {
     const env = this;
     const pointerMap = new Map();
     const callback = function({ isActive, isMutable }) {
-      debugger;
       const pointer = this[POINTER_SELF];
       if (isActive(this) === false) {
         pointer[SLOTS][0] = null;
@@ -4588,13 +4584,15 @@ class Environment {
             len = 1;
           }
         }
-        const byteSize = Target[SIZE];
         // get view of memory that pointer points to
-        const dv = env.findMemory(address, len * byteSize);
-        // create the target
-        target = this[SLOTS][0] = Target.call(this, dv);
+        const byteLength = len * Target[SIZE];
+        const dv = env.findMemory(address, byteLength);
+        if (dv !== env.emptyView || byteLength == 0) {
+          // create the target
+          target = this[SLOTS][0] = Target.call(this, dv);
+        }
       }
-      if (target[POINTER_VISITOR]) {
+      if (target?.[POINTER_VISITOR]) {
         // acquire objects pointed to by pointers in target
         const isMutable = (pointer.constructor.const) ? () => false : () => true;
         target[POINTER_VISITOR](callback, { vivificate: true, isMutable });
@@ -4698,14 +4696,10 @@ class WebAssemblyEnvironment extends Environment {
     return dv;
   }
 
-  isFixed(dv) {
-    return dv.buffer === this.memory.buffer;
-  }
-
   inFixedMemory(object) {
     // reconnect any detached buffer before checking
     restoreMemory.call(object);
-    return this.isFixed(object[MEMORY]);
+    return object[MEMORY].buffer === this.memory.buffer;
   }
 
   copyBytes(dst, address, len) {
@@ -4944,8 +4938,8 @@ class WebAssemblyEnvironment extends Environment {
         return;
       }
       if (object[MEMORY]) {
-        const dv = object[MEMORY];
-        if (this.isFixed(dv)) {
+        if (this.inFixedMemory(object)) {
+          const dv = object[MEMORY];
           // replace fixed memory
           const address = dv.byteOffset;
           const len = dv.byteLength;
