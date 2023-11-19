@@ -874,6 +874,11 @@ function throwInaccessiblePointer() {
   throw new TypeError(`Pointers within an untagged union are not accessible`);
 }
 
+function throwNullPointer(len) {
+  const expected = (typeof(len) === 'object') ? `sentinel` : `${len} byte${len === 1 ? '' : 's'}`;
+  throw new Error(`Null pointer encountered (${expected} expected)`);
+}
+
 function throwInvalidPointerTarget(structure, arg) {
   const name = getStructureName(structure);
   let target;
@@ -4299,7 +4304,8 @@ class Environment {
   contextStack = [];
   consolePending = [];
   consoleTimeout = 0;
-  slots = {}
+  slots = {};
+  emptyView = new DataView(new ArrayBuffer(0));
 
   /*
   Functions to be defined in subclass:
@@ -4384,6 +4390,13 @@ class Environment {
   }
 
   findMemory(address, len) {
+    if (address === 0) {
+      if (len === 0) {
+        return this.emptyView;
+      } else {
+        throwNullPointer(len);
+      }
+    }
     if (this.context) {
       const { memoryList, shadowMap } = this.context;
       const index = findMemoryIndex(memoryList, address);
@@ -4566,13 +4579,13 @@ class Environment {
       }
       // obtain address (and possibly length) from memory
       const address = pointer[ADDRESS_GETTER]();
-      if (!address) {
-        return;
-      }
       let len = pointer[LENGTH_GETTER]?.();
       if (len === undefined) {
         const sentinel = Target[SENTINEL];
         if (sentinel) {
+          if (address === 0) {
+            throwNullPointer(address);
+          }
           len = env.findSentinel(address, sentinel.bytes) + 1;
         } else {
           len = 1;

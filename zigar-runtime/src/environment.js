@@ -1,7 +1,7 @@
 import { defineProperties, getStructureFactory, getStructureName } from './structure.js';
 import { decodeText } from './text.js';
 import { initializeErrorSets } from './error-set.js';
-import { throwAlignmentConflict, throwZigError } from './error.js';
+import { throwAlignmentConflict, throwNullPointer, throwZigError } from './error.js';
 import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, ENVIRONMENT, LENGTH_GETTER,
   LENGTH_SETTER, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES, SIZE, SLOTS,
   THUNK_REPLACER } from './symbol.js';
@@ -14,7 +14,8 @@ export class Environment {
   contextStack = [];
   consolePending = [];
   consoleTimeout = 0;
-  slots = {}
+  slots = {};
+  emptyView = new DataView(new ArrayBuffer(0));
 
   /*
   Functions to be defined in subclass:
@@ -99,6 +100,13 @@ export class Environment {
   }
 
   findMemory(address, len) {
+    if (address === 0) {
+      if (len === 0) {
+        return this.emptyView;
+      } else {
+        throwNullPointer(len);
+      }
+    }
     if (this.context) {
       const { memoryList, shadowMap } = this.context;
       const index = findMemoryIndex(memoryList, address);
@@ -555,13 +563,13 @@ export class Environment {
       }
       // obtain address (and possibly length) from memory
       const address = pointer[ADDRESS_GETTER]();
-      if (!address) {
-        return;
-      }
       let len = pointer[LENGTH_GETTER]?.();
       if (len === undefined) {
         const sentinel = Target[SENTINEL];
         if (sentinel) {
+          if (address === 0) {
+            throwNullPointer(address, sentinel);
+          }
           len = env.findSentinel(address, sentinel.bytes) + 1;
         } else {
           len = 1;
