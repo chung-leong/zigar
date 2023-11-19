@@ -721,9 +721,9 @@ export class NodeEnvironment extends Environment {
 
   invokeThunk(thunk, args) {
     let err;
+    // create an object where information concerning pointers can be stored
+    this.startContext();
     if (args[POINTER_VISITOR]) {
-      // create an object where information concerning pointers can be stored
-      this.startContext();
       // copy addresses of garbage-collectible objects into memory
       this.updatePointerAddresses(args);
       this.updateShadows();
@@ -732,12 +732,12 @@ export class NodeEnvironment extends Environment {
       this.updateShadowTargets();
       this.acquirePointerTargets(args);
       this.releaseShadows();
-      // restore the previous context if there's one
-      this.endContext();
     } else {
       // don't need to do any of that if there're no pointers
       err = thunk.call(this, args[MEMORY]);
     }
+    // restore the previous context if there's one
+    this.endContext();
     if (!this.context) {
       this.flushConsole();
     }
