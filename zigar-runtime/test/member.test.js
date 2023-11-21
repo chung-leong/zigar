@@ -1,9 +1,20 @@
 import { expect } from 'chai';
 
-import { MemberType, useAllMemberTypes, isByteAligned, getDescriptor, getMemberFeature } from '../src/member.js';
-import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { CHILD_VIVIFICATOR, MEMORY } from '../src/symbol.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { clearMethodCache } from '../src/data-view.js';
+import {
+  MemberType,
+  useAllMemberTypes,
+  useBool,
+  useInt,
+  useFloat,
+  useUint,
+  useEnumerationItem,
+  isByteAligned,
+  getDescriptor,
+  getMemberFeature
+} from '../src/member.js';
 
 describe('Member functions', function() {
   beforeEach(function() {
@@ -468,7 +479,6 @@ describe('Member functions', function() {
       expect(() => get.call(object)).to.throw();
     })
     it('should return type accessors', function() {
-      useType();
       const DummyClass = function(value) {};
       const member = {
         type: MemberType.Type,
@@ -483,7 +493,6 @@ describe('Member functions', function() {
       expect(set).to.be.undefined;
     })
     it('should return int array accessors', function() {
-      useInt();
       const member = {
         type: MemberType.Int,
         bitSize: 32,
@@ -509,7 +518,6 @@ describe('Member functions', function() {
       expect(dv.getInt32(8, true)).to.equal(5);
     })
     it('should return big int array accessors', function() {
-      useInt();
       const member = {
         type: MemberType.Int,
         bitSize: 64,

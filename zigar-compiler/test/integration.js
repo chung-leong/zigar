@@ -22,7 +22,6 @@ export function addTests(importModule, options) {
     it('should import integer variables', async function() {
       this.timeout(60000);
       const { default: module, int4, int8, int16 } = await importModule(resolve('./zig-samples/basic/integers.zig'));
-      console.log(module.int16);
       expect(module.private).to.be.undefined;
       expect(module.int4).to.equal(7);
       expect(int4).to.be.undefined;
@@ -313,6 +312,8 @@ export function addTests(importModule, options) {
       expect(object.number3).to.eql(0x1000000000000n);
       expect(object.string.string).to.equal('Hello');
       expect(object.number_type).to.be.an('function');
+      expect(object.literal).to.be.a('string');
+      expect(object.literal).to.eql('donut');
       expect(new object.number_type(0)).to.be.an('i32');
       expect(() => object.number2 = 0).to.throw(Error);
       expect(() => object.$ = { number1: 88 }).to.not.throw();
@@ -336,10 +337,21 @@ export function addTests(importModule, options) {
       const object = new Vector3(undefined);
       expect(object.length).to.equal(3);
     })
-    it('should import enum literal', async function() {
+    it('should import enum literals', async function() {
       this.timeout(60000);
-      const { hello } = await importModule(resolve('./zig-samples/basic/enum-literal.zig'));
+      const { hello, world } = await importModule(resolve('./zig-samples/basic/enum-literals.zig'));
       expect(hello).to.equal('hello');
+      expect(world.valueOf()).to.eql({
+        0: 'Asgard',
+        1: 'Midgard',
+        2: 'Jotunheim',
+        3: 'Svartalfheim',
+        4: 'Vanaheim',
+        5: 'Muspelheim',
+        6: 'Niflheim',
+        7: 'Alfheim',
+        8: 'Nidavellir',
+      });
     })
   })
   describe('Methods', function() {

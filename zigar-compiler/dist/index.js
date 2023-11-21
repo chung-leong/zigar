@@ -363,6 +363,7 @@ function absolute(relpath) {
 
 const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
+const TEMPLATE_SLOTS = Symbol('templateSlots');
 const PARENT = Symbol('parent');
 const ENUM_NAME = Symbol('enumName');
 const ENUM_INDEX = Symbol('enumIndex');
@@ -1859,7 +1860,9 @@ function getDataViewFromTypedArray(ta, TypedArray) {
 function getValueOf() {
   const map = new WeakMap();
   function extract(object) {
-    if (object[Symbol.iterator]) {
+    if (typeof(object) === 'string') {
+      return object;
+    } else if (object[Symbol.iterator]) {
       const array = [];
       for (const element of object) {
         array.push(extract(element));
@@ -1946,7 +1949,7 @@ function finalizePrimitive(s, env) {
       }
     }
   };
-  const { get, set } = getAccessors(member, options);
+  const { get, set } = getDescriptor(member, options);
   defineProperties(constructor.prototype, {
     $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
@@ -2015,14 +2018,14 @@ function finalizePointer(s, env) {
   const isTargetPointer = (targetStructure.type === StructureType.Pointer);
   const hasLength = isTargetSlice && !targetStructure.sentinel;
   const addressSize = (hasLength) ? byteSize / 2 : byteSize;
-  const { get: getAddress, set: setAddress } = getAccessors({
+  const { get: getAddress, set: setAddress } = getDescriptor({
     type: MemberType.Uint,
     bitOffset: 0,
     bitSize: addressSize * 8,
     byteSize: addressSize,
     structure: { byteSize: addressSize },
   }, options);
-  const { get: getLength, set: setLength } = (hasLength) ? getAccessors({
+  const { get: getLength, set: setLength } = (hasLength) ? getDescriptor({
     type: MemberType.Uint,
     bitOffset: addressSize * 8,
     bitSize: addressSize * 8,
@@ -2377,7 +2380,7 @@ function finalizeArray(s, env) {
       }
     }
   };
-  const { get, set } = getAccessors(member, options);
+  const { get, set } = getDescriptor(member, options);
   defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
@@ -2591,27 +2594,15 @@ function addStaticMembers(s, env) {
     },
     options,
   } = s;
-  const vivificators = {};
+  const descriptors = {};
   for (const member of members) {
-    // static members are either Pointer or Type
-    let { get, set } = getAccessors(member, options);
-    const { type, slot, structure: { isConst } } = member;
-    if (type === MemberType.Object) {
-      const getPtr = get;
-      get = function() {
-        // dereference pointer
-        const ptr = getPtr.call(this);
-        return ptr['*'];
-      };
-      set = (isConst) ? undefined : function(value) {
-        const ptr = getPtr.call(this);
-        ptr['*'] = value;
-      };
-      vivificators[slot] = () => template[SLOTS][slot];
-    }
-    Object.defineProperty(constructor, member.name, { get, set, configurable: true, enumerable: true });
+    descriptors[member.name] = getDescriptor(member, options);
   }
-  Object.defineProperty(constructor, CHILD_VIVIFICATOR, { value: vivificators });
+  defineProperties(constructor, {
+    ...descriptors,
+    // static variables are objects stored in the static template's slots
+    [TEMPLATE_SLOTS]: template?.[SLOTS] && { value: template[SLOTS] },
+  });
 }
 
 function addMethods(s, env) {
@@ -2643,16 +2634,7 @@ function finalizeStruct(s, env) {
   } = s;
   const descriptors = {};
   for (const member of members) {
-    if (member.type === MemberType.Comptime) {
-      // extract value of comptime field from template
-      const { slot } = member;
-      const pointer = template[SLOTS][slot];
-      const value = pointer['*'];
-      descriptors[member.name] = { value, configurable: true, enumerable: true };
-    } else {
-      const { get, set } = getAccessors(member, options);
-      descriptors[member.name] = { get, set, configurable: true, enumerable: true };
-    }
+    descriptors[member.name] = getDescriptor(member, options);
   }
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
@@ -2753,6 +2735,8 @@ function finalizeStruct(s, env) {
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
+    // struct can have comptime members, which are stored in the template's slots
+    [TEMPLATE_SLOTS]: template?.[SLOTS] && { value: template[SLOTS] },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },
@@ -2851,7 +2835,7 @@ function finalizeUnion(s, env) {
   if (exclusion) {
     valueMembers = members.slice(0, -1);
     const selectorMember = members[members.length - 1];
-    const { get: getSelector, set: setSelector } = getAccessors(selectorMember, options);
+    const { get: getSelector, set: setSelector } = getDescriptor(selectorMember, options);
     if (type === StructureType.TaggedUnion) {
       const { structure: { constructor } } = selectorMember;
       getEnumItem = getSelector;
@@ -2875,7 +2859,7 @@ function finalizeUnion(s, env) {
     }
     for (const member of valueMembers) {
       const { name, slot, structure: { hasPointer } } = member;
-      const { get: getValue, set: setValue } = getAccessors(member, options);
+      const { get: getValue, set: setValue } = getDescriptor(member, options);
       const update = (isTagged) ? function(name) {
         if (this[TAG]?.name !== name) {
           this[TAG]?.clear?.();
@@ -2919,7 +2903,7 @@ function finalizeUnion(s, env) {
     // extern union
     valueMembers = members;
     for (const member of members) {
-      const { get, set } = getAccessors(member, options);
+      const { get, set } = getDescriptor(member, options);
       descriptors[member.name] = { get, set, init: set, configurable: true, enumerable: true };
     }
   }
@@ -3070,8 +3054,8 @@ function finalizeErrorUnion(s, env) {
     options,
     hasPointer,
   } = s;
-  const { get: getValue, set: setValue } = getAccessors(members[0], options);
-  const { get: getError, set: setError } = getAccessors(members[1], options);
+  const { get: getValue, set: setValue } = getDescriptor(members[0], options);
+  const { get: getError, set: setError } = getDescriptor(members[1], options);
   const { structure: errorStructure } = members[1];
   const { constructor: ErrorSet } = errorStructure;
   const set = function(value) {
@@ -3239,7 +3223,7 @@ function finalizeEnumeration(s, env) {
     options,
   } = s;
   const Primitive = getPrimitiveClass(members[0]);
-  const { get: getValue } = getAccessors(members[0], options);
+  const { get: getValue } = getDescriptor(members[0], options);
   const count = members.length;
   const items = {};
   const constructor = s.constructor = function(arg) {
@@ -3335,8 +3319,8 @@ function finalizeOptional(s, env) {
     options,
     hasPointer,
   } = s;
-  const { get: getValue, set: setValue } = getAccessors(members[0], options);
-  const { get: getPresent, set: setPresent } = getAccessors(members[1], options);
+  const { get: getValue, set: setValue } = getDescriptor(members[0], options);
+  const { get: getPresent, set: setPresent } = getDescriptor(members[1], options);
   const get = function() {
     const present = getPresent.call(this);
     if (present) {
@@ -3560,7 +3544,7 @@ function finalizeSlice(s, env) {
       }
     }
   };
-  const { get, set } = getAccessors(member, options);
+  const { get, set } = getDescriptor(member, options);
   defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
@@ -3598,9 +3582,9 @@ function getSentinel(structure, options) {
   if (!sentinel) {
     return;
   }
-  const { get: getSentinelValue } = getAccessors(sentinel, options);
+  const { get: getSentinelValue } = getDescriptor(sentinel, options);
   const value = getSentinelValue.call(template, 0);
-  const { get } = getAccessors(member, options);
+  const { get } = getDescriptor(member, options);
   const validateValue = (runtimeSafety) ? function(v, i, l) {
     if (v === value && i !== l - 1) {
       throwMisplacedSentinel(structure, v, i, l);
@@ -3690,7 +3674,7 @@ function finalizeVector(s, env) {
   };
   const elementDescriptors = {};
   for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
-    const { get, set } = getAccessors({ ...member, bitOffset }, options);
+    const { get, set } = getDescriptor({ ...member, bitOffset }, options);
     elementDescriptors[i] = { get, set, configurable: true };
   }
   defineProperties(constructor.prototype, {
@@ -3791,7 +3775,7 @@ function finalizeArgStruct(s, env) {
   };
   const memberDescriptors = {};
   for (const member of members) {
-    memberDescriptors[member.name] = getAccessors(member, options);
+    memberDescriptors[member.name] = getDescriptor(member, options);
   }
   const isChildMutable = function(object) {
     return (object === this.retval);
@@ -3956,40 +3940,54 @@ const MemberType = {
   Object: 6,
   Type: 7,
   Comptime: 8,
+  Static: 9,
+  Literal: 10,
 };
 
 const factories = Array(Object.values(MemberType).length);
 
 function useVoid() {
-  factories[MemberType.Void] = getVoidAccessor;
+  factories[MemberType.Void] = getVoidDescriptor;
 }
 
 function useBoolEx() {
-  factories[MemberType.Bool] = getBoolAccessorEx;
+  factories[MemberType.Bool] = getBoolDescriptorEx;
 }
 
 function useIntEx() {
-  factories[MemberType.Int] = getIntAccessorEx;
+  factories[MemberType.Int] = getIntDescriptorEx;
 }
 
 function useUintEx() {
-  factories[MemberType.Uint] = getUintAccessorEx;
+  factories[MemberType.Uint] = getUintDescriptorEx;
 }
 
 function useFloatEx() {
-  factories[MemberType.Float] = getFloatAccessorEx;
+  factories[MemberType.Float] = getFloatDescriptorEx;
 }
 
 function useEnumerationItemEx() {
-  factories[MemberType.EnumerationItem] = getEnumerationItemAccessorEx;
+  factories[MemberType.EnumerationItem] = getEnumerationItemDescriptorEx;
 }
 
 function useObject() {
-  factories[MemberType.Object] = getObjectAccessor;
+  factories[MemberType.Object] = getObjectDescriptor;
 }
 
 function useType() {
-  factories[MemberType.Type] = getTypeAccessor;
+  factories[MemberType.Type] = getTypeDescriptor;
+}
+
+function useComptime() {
+  factories[MemberType.Comptime] = getComptimeDescriptor;
+}
+
+function useStatic() {
+  factories[MemberType.Static] = getStaticDescriptor;
+}
+
+function useLiteral() {
+  factories[MemberType.Literal] = getLiteralDescriptor;
 }
 
 function getMemberFeature(member) {
@@ -4031,6 +4029,12 @@ function getMemberFeature(member) {
       return 'useVoid';
     case MemberType.Type:
       return 'useType';
+    case MemberType.Comptime:
+      return 'useComptime';
+    case MemberType.Comptime:
+      return 'useStatic';
+    case MemberType.Literal:
+      return 'useLiteral';
   }
 }
 
@@ -4038,45 +4042,39 @@ function isByteAligned({ bitOffset, bitSize, byteSize }) {
   return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
 }
 
-function getAccessors(member, options = {}) {
+function getDescriptor(member, options = {}) {
   const f = factories[member.type];
-  return {
-    get: f('get', member, options),
-    set: f('set', member, options)
-  };
+  return { ...f(member, options), configurable: true, enumerable: true };
 }
 
-function getVoidAccessor(type, member, options) {
+function getVoidDescriptor(member, options) {
   const { runtimeSafety } = options;
-  if (type === 'get') {
-    return function() {
+  return {
+    get: function() {
       return null;
-    };
-  } else {
-    if (runtimeSafety) {
-      return function(value) {
+    },
+    set: (runtimeSafety)
+    ? function(value) {
         if (value != null) {
           throwNotNull(member);
         }
-      };
-      } else {
-      return function() {};
-    }
+      }
+    : function() {},
   }
 }
 
-function getBoolAccessorEx(access, member, options) {
-  return getAccessorUsing(access, member, options, getDataViewBoolAccessorEx)
+function getBoolDescriptorEx(member, options) {
+  return getDescriptorUsing(member, options, getDataViewBoolAccessorEx)
 }
 
-function getIntAccessorEx(access, member, options) {
+function getIntDescriptorEx(member, options) {
   const getDataViewAccessor = addRuntimeCheck(options, getDataViewIntAccessorEx);
-  return getAccessorUsing(access, member, options, getDataViewAccessor)
+  return getDescriptorUsing(member, options, getDataViewAccessor)
 }
 
-function getUintAccessorEx(access, member, options) {
+function getUintDescriptorEx(member, options) {
   const getDataViewAccessor = addRuntimeCheck(options, getDataViewUintAccessorEx);
-  return getAccessorUsing(access, member, options, getDataViewAccessor)
+  return getDescriptorUsing(member, options, getDataViewAccessor)
 }
 
 function addRuntimeCheck(options, getDataViewAccessor) {
@@ -4098,13 +4096,13 @@ function addRuntimeCheck(options, getDataViewAccessor) {
   };
 }
 
-function getFloatAccessorEx(access, member, options) {
-  return getAccessorUsing(access, member, options, getDataViewFloatAccessorEx)
+function getFloatDescriptorEx(member, options) {
+  return getDescriptorUsing(member, options, getDataViewFloatAccessorEx)
 }
 
-function getEnumerationItemAccessorEx(access, member, options) {
+function getEnumerationItemDescriptorEx(member, options) {
   const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessorEx);
-  return getAccessorUsing(access, member, options, getDataViewAccessor) ;
+  return getDescriptorUsing(member, options, getDataViewAccessor) ;
 }
 
 function addEnumerationLookup(getDataViewIntAccessor) {
@@ -4146,101 +4144,138 @@ function addEnumerationLookup(getDataViewIntAccessor) {
   };
 }
 
-function getObjectAccessor(access, member, options) {
-  const { structure, slot } = member;
-  let returnValue = false;
+function isValueExpected(structure) {
   switch (structure.type) {
+    case StructureType.Primitive:
     case StructureType.ErrorUnion:
     case StructureType.Optional:
-      returnValue = true;
-      break;
-  }
-  if (slot !== undefined) {
-    if (access === 'get') {
-      if (returnValue) {
-        return function getValue() {
-          const object = this[CHILD_VIVIFICATOR][slot].call(this);
-          return object.$;
-        };
-      } else {
-        return function getObject() {
-          const object = this[CHILD_VIVIFICATOR][slot].call(this);
-          return object;
-        };
-      }
-    } else {
-      return function setValue(value) {
-        const object = this[CHILD_VIVIFICATOR][slot].call(this);
-        object.$ = value;
-      };
-    }
-  } else {
-    // array accessors
-    if (access === 'get') {
-      if (returnValue) {
-        return function getValue(index) {
-          const object = this[CHILD_VIVIFICATOR](index);
-          return object.$;
-        };
-      } else {
-        return function getObject(index) {
-          const object = this[CHILD_VIVIFICATOR](index);
-          return object;
-        };
-      }
-    } else {
-      return function setValue(index, value) {
-        const object = this[CHILD_VIVIFICATOR](index);
-        object.$ = value;
-      };
-    }
+      return true;
+    default:
+      return false;
   }
 }
 
-function getTypeAccessor(type, member, options) {
-  const { structure } = member;
-  if (type === 'get') {
-    return function() {
-      const { constructor } = structure;
-      return constructor;
+function getObjectDescriptor(member, options) {
+  const { structure, slot } = member;
+  if (slot !== undefined) {
+    return {
+      get: (isValueExpected(structure))
+      ? function getValue() {
+        const object = this[CHILD_VIVIFICATOR][slot].call(this);
+        return object.$;
+      }
+      : function getObject() {
+        const object = this[CHILD_VIVIFICATOR][slot].call(this);
+        return object;
+      },
+      set: function setValue(value) {
+        const object = this[CHILD_VIVIFICATOR][slot].call(this);
+        object.$ = value;
+      },
+    };
+  } else {
+    // array accessors
+    return {
+      get: (isValueExpected(structure))
+      ? function getValue(index) {
+        const object = this[CHILD_VIVIFICATOR](index);
+        return object.$;
+      }
+      : function getObject(index) {
+        const object = this[CHILD_VIVIFICATOR](index);
+        return object;
+      },
+      set: function setValue(index, value) {
+        const object = this[CHILD_VIVIFICATOR](index);
+        object.$ = value;
+      },
     };
   }
 }
 
-function getAccessorUsing(access, member, options, getDataViewAccessor) {
+function getTypeDescriptor(member, options) {
+  const { slot } = member;
+  return {
+    get: function getType() {
+      // unsupported types will have undefined structure
+      const structure = this[TEMPLATE_SLOTS][slot];
+      return structure?.constructor;
+    },
+    // no setter
+  };
+}
+
+function getComptimeDescriptor(member, options) {
+  const { slot, structure } = member;
+  return {
+    get: (isValueExpected(structure))
+    ? function getValue() {
+      const object = this[TEMPLATE_SLOTS][slot];
+      return object.$;
+    }
+    : function getObject() {
+      const object = this[TEMPLATE_SLOTS][slot];
+      return object;
+    },
+  };
+}
+
+function getStaticDescriptor(member, options) {
+  const { slot } = member;
+  return {
+    ...getComptimeDescriptor(member),
+    set: function setValue(value) {
+      const object = this[TEMPLATE_SLOTS][slot];
+      object.$ = value;
+    },
+  };
+}
+
+function getLiteralDescriptor(member, options) {
+  const { slot } = member;
+  return {
+    get: function getType() {
+      const object = this[TEMPLATE_SLOTS][slot];
+      return object.string;
+    },
+    // no setter
+  };
+}
+
+function getDescriptorUsing(member, options, getDataViewAccessor) {
   const {
     littleEndian = true,
   } = options;
   const { bitOffset, byteSize } = member;
-  const accessor = getDataViewAccessor(access, member);
+  const getter = getDataViewAccessor('get', member);
+  const setter = getDataViewAccessor('set', member);
   if (bitOffset !== undefined) {
     const offset = bitOffset >> 3;
-    if (access === 'get') {
-      return function() {
+    return {
+      get: function getValue() {
         /* WASM-ONLY */
         try {
         /* WASM-ONLY-END*/
-          return accessor.call(this[MEMORY], offset, littleEndian);
+          return getter.call(this[MEMORY], offset, littleEndian);
         /* WASM-ONLY */
         } catch (err) {
           if (err instanceof TypeError && restoreMemory.call(this)) {
-            return accessor.call(this[MEMORY], offset, littleEndian);
+            return getter.call(this[MEMORY], offset, littleEndian);
           } else {
             throw err;
           }
         }
         /* WASM-ONLY-END*/
-      };
-    } else {
-      return function(value) {
+      },
+      set: function setValue(value) {
         /* WASM-ONLY */
         try {
         /* WASM-ONLY-END*/
-        return accessor.call(this[MEMORY], offset, value, littleEndian);
+        return setter.call(this[MEMORY], offset, value, littleEndian);
         /* WASM-ONLY */
         } catch (err) {
           if (err instanceof TypeError && restoreMemory.call(this)) {
-            return accessor.call(this[MEMORY], offset, value, littleEndian);
+            return setter.call(this[MEMORY], offset, value, littleEndian);
           } else {
             throw err;
           }
@@ -4249,14 +4284,14 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
       }
     }
   } else {
-    if (access === 'get') {
-      return function(index) {
+    return {
+      get: function getElement(index) {
         try {
-          return accessor.call(this[MEMORY], index * byteSize, littleEndian);
+          return getter.call(this[MEMORY], index * byteSize, littleEndian);
         } catch (err) {
           /* WASM-ONLY */
           if (err instanceof TypeError && restoreMemory.call(this)) {
-            return accessor.call(this[MEMORY], index * byteSize, littleEndian);
+            return getter.call(this[MEMORY], index * byteSize, littleEndian);
           } else {
           /* WASM-ONLY-END */
             rethrowRangeError(member, index, err);
@@ -4264,23 +4299,22 @@ function getAccessorUsing(access, member, options, getDataViewAccessor) {
           }
           /* WASM-ONLY-END */
         }
-      };
-    } else {
-      return function(index, value) {
+      },
+      set: function setElement(index, value) {
         /* WASM-ONLY */
         try {
         /* WASM-ONLY-END */
-          return accessor.call(this[MEMORY], index * byteSize, value, littleEndian);
+          return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
         /* WASM-ONLY */
         } catch (err) {
           if (err instanceof TypeError && restoreMemory.call(this)) {
-            return accessor.call(this[MEMORY], index * byteSize, value, littleEndian);
+            return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
           } else {
             rethrowRangeError(member, index, err);
           }
         }
         /* WASM-ONLY-END */
-      }
+      },
     }
   }
 }
@@ -4294,6 +4328,9 @@ function useAllMemberTypes() {
   useEnumerationItemEx();
   useObject();
   useType();
+  useComptime();
+  useStatic();
+  useLiteral();
 }
 
 class Environment {

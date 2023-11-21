@@ -37,5 +37,8 @@ export {
   useEnumerationItemEx,
   useObject,
   useType,
+  useComptime,
+  useStatic,
+  useLiteral,
 } from './member.js';
 export { WebAssemblyEnvironment as Environment } from './environment.js';

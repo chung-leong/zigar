@@ -1,14 +1,14 @@
 import { expect } from 'chai';
 
-import { MemberType, useAllMemberTypes } from '../src/member.js';
-import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { MEMORY } from '../src/symbol.js';
+import { MemberType, useAllMemberTypes, getDescriptor } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
+import { NodeEnvironment } from '../src/environment.js'
 import {
   getArrayIterator,
   getArrayEntriesIterator,
   createArrayEntries,
 } from '../src/array.js';
-import { NodeEnvironment } from '../src/environment.js'
 
 describe('Array functions', function() {
   const env = new NodeEnvironment();
@@ -877,9 +877,6 @@ describe('Array functions', function() {
     })
   })
   describe('getArrayIterator', function() {
-    beforeEach(function() {
-      useIntEx();
-    })
     it('should return a iterator', function() {
       const member = {
         type: MemberType.Int,
@@ -913,9 +910,6 @@ describe('Array functions', function() {
     })
   })
   describe('getArrayEntriesIterator', function() {
-    beforeEach(function() {
-      useIntEx();
-    })
     it('should return a iterator', function() {
       const member = {
         type: MemberType.Int,

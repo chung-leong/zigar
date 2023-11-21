@@ -479,7 +479,15 @@ test "isSupported" {
 
 fn getStructureType(comptime T: type) StructureType {
     return switch (@typeInfo(T)) {
-        .Bool, .Int, .Float, .Void, .Type, .EnumLiteral => .Primitive,
+        .Bool,
+        .Int,
+        .ComptimeInt,
+        .Float,
+        .ComptimeFloat,
+        .Void,
+        .Type,
+        .EnumLiteral,
+        => .Primitive,
         .Struct => if (isArgumentStruct(T)) .ArgStruct else .Struct,
         .Union => |un| switch (un.layout) {
             .Extern => .ExternUnion,
@@ -1089,10 +1097,7 @@ test "getComptimeMemberType" {
 fn getComptimeStructure(host: anytype, comptime T: type) !?Value {
     return switch (@typeInfo(T)) {
         .Type, .EnumLiteral => null,
-        else => create: {
-            std.debug.print("{s}\n", .{@typeName(T)});
-            break :create if (isSupported(T)) getStructure(host, T) else null;
-        },
+        else => getStructure(host, T),
     };
 }
 
@@ -1100,14 +1105,14 @@ fn exportPointerTarget(host: anytype, comptime ptr: anytype, is_comptime: bool) 
     const T = @TypeOf(ptr.*);
     if (T == type) {
         const FT = ptr.*;
-        if (isSupported(FT)) {
+        if (comptime isSupported(FT)) {
             return getStructure(host, FT);
         }
     } else if (isSupported(T)) {
         const value_ptr = switch (@typeInfo(T)) {
             .EnumLiteral => @tagName(ptr.*),
             .ComptimeInt, .ComptimeFloat => rt_ptr: {
-                const rt_value: RuntimeType(T) = ptr.*;
+                const rt_value: RuntimeType(ptr.*) = ptr.*;
                 break :rt_ptr &rt_value;
             },
             else => ptr,
@@ -1353,10 +1358,8 @@ test "containsSupported" {
 }
 
 fn getStaticMemberType(comptime T: type, comptime is_const: bool) MemberType {
-    switch (@typeInfo(T)) {
-        .Type, .EnumLiteral => getComptimeMemberType(T),
-        else => if (is_const) .Static else .Comptime,
-    }
+    const member_type = getComptimeMemberType(T);
+    return if (member_type == .Comptime and !is_const) .Static else member_type;
 }
 
 fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
@@ -1376,18 +1379,20 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
     inline for (decls, 0..) |decl, index| {
         const decl_value_ptr = &@field(T, decl.name);
         const DT = @TypeOf(decl_value_ptr.*);
-        if (comptime !isSupported(DT)) {
-            continue;
+        if (comptime isSupported(DT)) {
+            const is_const = comptime isConst(@TypeOf(decl_value_ptr));
+            // can't pass decl_value_ptr.* to RuntimeType when it's var
+            const RT = if (is_const) RuntimeType(decl_value_ptr.*) else DT;
+            const slot = getObjectSlot(Static, index);
+            try host.attachMember(structure, .{
+                .name = getCString(decl.name),
+                .member_type = getStaticMemberType(RT, is_const),
+                .slot = slot,
+                .structure = try getComptimeStructure(host, RT),
+            }, true);
+            const value_obj = try exportPointerTarget(host, decl_value_ptr, is_const);
+            try host.writeSlot(template, slot, value_obj);
         }
-        const slot = getObjectSlot(Static, index);
-        try host.attachMember(structure, .{
-            .name = getCString(decl.name),
-            .member_type = getComptimeMemberType(DT),
-            .slot = slot,
-            .structure = try getComptimeStructure(host, DT),
-        }, true);
-        const value_obj = try exportPointerTarget(host, decl_value_ptr, false);
-        try host.writeSlot(template, slot, value_obj);
     }
     try host.attachTemplate(structure, template, true);
 }

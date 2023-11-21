@@ -4,6 +4,7 @@ pub const StructA = struct {
     comptime number_type: type = i32,
     comptime string: []const u8 = "Hello",
     comptime number3: comptime_int = 0x10_0000_0000_000,
+    comptime literal: @TypeOf(.donut) = .donut,
 };
 
 pub const StructB = struct {

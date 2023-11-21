@@ -24,20 +24,7 @@ export function finalizeStruct(s, env) {
   } = s;
   const descriptors = {};
   for (const member of members) {
-    if (member.type === MemberType.Comptime) {
-      // extract value of comptime field from template
-      const { slot } = member;
-      const pointer = template[SLOTS][slot];
-      const value = pointer['*'];
-      descriptors[member.name] = { value, configurable: true, enumerable: true };
-    } else if (member.type === MemberType.EnumerationLiteral) {
-      const { slot } = member;
-      const object = template[SLOTS][slot];
-      console.log(object);
-    } else {
-      const { get, set } = getDescriptor(member, options);
-      descriptors[member.name] = { get, set, configurable: true, enumerable: true };
-    }
+    descriptors[member.name] = getDescriptor(member, options);
   }
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);

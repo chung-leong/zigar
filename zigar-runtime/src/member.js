@@ -92,6 +92,10 @@ export function useComptime() {
   factories[MemberType.Comptime] = getComptimeDescriptor;
 }
 
+export function useStatic() {
+  factories[MemberType.Static] = getStaticDescriptor;
+}
+
 export function useLiteral() {
   factories[MemberType.Literal] = getLiteralDescriptor;
 }
@@ -137,6 +141,8 @@ export function getMemberFeature(member) {
       return 'useType';
     case MemberType.Comptime:
       return 'useComptime';
+    case MemberType.Comptime:
+      return 'useStatic';
     case MemberType.Literal:
       return 'useLiteral';
   }
@@ -236,12 +242,12 @@ export function getFloatDescriptorEx(member, options) {
 
 export function getEnumerationItemDescriptor(member, options) {
   const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessor);
-  return getDescriptorUsing(access, member, options, getDataViewAccessor) ;
+  return getDescriptorUsing(member, options, getDataViewAccessor) ;
 }
 
-export function getEnumerationItemDescriptorEx(access, member, options) {
+export function getEnumerationItemDescriptorEx(member, options) {
   const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessorEx);
-  return getDescriptorUsing(access, member, options, getDataViewAccessor) ;
+  return getDescriptorUsing(member, options, getDataViewAccessor) ;
 }
 
 function addEnumerationLookup(getDataViewIntAccessor) {
@@ -320,7 +326,7 @@ export function getObjectDescriptor(member, options) {
   } else {
     // array accessors
     return {
-      get: (returnValue)
+      get: (isValueExpected(structure))
       ? function getValue(index) {
         const object = this[CHILD_VIVIFICATOR](index);
         return object.$;
@@ -341,8 +347,9 @@ export function getTypeDescriptor(member, options) {
   const { slot } = member;
   return {
     get: function getType() {
+      // unsupported types will have undefined structure
       const structure = this[TEMPLATE_SLOTS][slot];
-      return structure.constructor;
+      return structure?.constructor;
     },
     // no setter
   };
@@ -360,8 +367,13 @@ export function getComptimeDescriptor(member, options) {
       const object = this[TEMPLATE_SLOTS][slot];
       return object;
     },
-    // static variables are exported as comptime member so we need to have a setter;
-    // if it's actually const, its $ descriptor wouldn't have a setter
+  };
+}
+
+export function getStaticDescriptor(member, options) {
+  const { slot } = member;
+  return {
+    ...getComptimeDescriptor(member, options),
     set: function setValue(value) {
       const object = this[TEMPLATE_SLOTS][slot];
       object.$ = value;
@@ -473,5 +485,6 @@ export function useAllMemberTypes() {
   useObject();
   useType();
   useComptime();
+  useStatic();
   useLiteral();
 }
