@@ -1,5 +1,5 @@
 import { defineProperties, getSelf } from './structure.js';
-import { getAccessors } from './member.js';
+import { getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors } from './special.js';
@@ -71,7 +71,7 @@ export function finalizeVector(s, env) {
   };
   const elementDescriptors = {};
   for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
-    const { get, set } = getAccessors({ ...member, bitOffset }, options);
+    const { get, set } = getDescriptor({ ...member, bitOffset }, options);
     elementDescriptors[i] = { get, set, configurable: true };
   }
   defineProperties(constructor.prototype, {

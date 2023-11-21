@@ -266,7 +266,7 @@ test "createModule" {
         }
     };
     const module = createModule(Test);
-    assert(module.version == 1);
+    assert(module.version == 2);
     assert(module.attributes.little_endian == (builtin.target.cpu.arch.endian() == .Little));
     switch (@typeInfo(@TypeOf(module.factory))) {
         .Pointer => |pt| {

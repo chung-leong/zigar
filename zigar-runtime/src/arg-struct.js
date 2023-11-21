@@ -1,5 +1,5 @@
 import { defineProperties } from './structure.js';
-import { MemberType, getAccessors } from './member.js';
+import { MemberType, getDescriptor } from './member.js';
 import { throwArgumentCountMismatch, rethrowArgumentError } from './error.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
 import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SIZE, SLOTS } from './symbol.js';
@@ -40,7 +40,7 @@ export function finalizeArgStruct(s, env) {
   };
   const memberDescriptors = {};
   for (const member of members) {
-    memberDescriptors[member.name] = getAccessors(member, options);
+    memberDescriptors[member.name] = getDescriptor(member, options);
   }
   const isChildMutable = function(object) {
     return (object === this.retval);

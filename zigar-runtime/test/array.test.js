@@ -891,7 +891,7 @@ describe('Array functions', function() {
       dv.setInt32(4, -2, true);
       dv.setInt32(8, -1, true);
       const object = { [MEMORY]: dv };
-      const { get } = getAccessors(member, {});
+      const { get } = getDescriptor(member, {});
       Object.defineProperty(object, 'get', { value: get });
       Object.defineProperty(object, 'length', {
         get: function() {
@@ -927,7 +927,7 @@ describe('Array functions', function() {
       dv.setInt32(4, -2, true);
       dv.setInt32(8, -1, true);
       const object = { [MEMORY]: dv };
-      const { get } = getAccessors(member, {});
+      const { get } = getDescriptor(member, {});
       Object.defineProperty(object, 'get', { value: get });
       Object.defineProperty(object, 'length', {
         get: function() {
@@ -965,7 +965,7 @@ describe('Array functions', function() {
       dv.setInt32(4, -2, true);
       dv.setInt32(8, -1, true);
       const object = { [MEMORY]: dv };
-      const { get } = getAccessors(member, {});
+      const { get } = getDescriptor(member, {});
       Object.defineProperty(object, 'get', { value: get });
       Object.defineProperty(object, 'length', {
         get: function() {

@@ -22,6 +22,7 @@ export function addTests(importModule, options) {
     it('should import integer variables', async function() {
       this.timeout(60000);
       const { default: module, int4, int8, int16 } = await importModule(resolve('./zig-samples/basic/integers.zig'));
+      console.log(module.int16);
       expect(module.private).to.be.undefined;
       expect(module.int4).to.equal(7);
       expect(int4).to.be.undefined;
@@ -334,6 +335,11 @@ export function addTests(importModule, options) {
       const { Vector3 } = await importModule(resolve('./zig-samples/basic/vector-three-wide.zig'));
       const object = new Vector3(undefined);
       expect(object.length).to.equal(3);
+    })
+    it('should import enum literal', async function() {
+      this.timeout(60000);
+      const { hello } = await importModule(resolve('./zig-samples/basic/enum-literal.zig'));
+      expect(hello).to.equal('hello');
     })
   })
   describe('Methods', function() {

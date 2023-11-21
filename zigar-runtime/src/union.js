@@ -1,5 +1,5 @@
 import { StructureType, defineProperties, getSelf } from './structure.js';
-import { MemberType, getAccessors } from './member.js';
+import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
@@ -10,8 +10,7 @@ import { throwInvalidInitializer, throwMissingUnionInitializer, throwMultipleUni
   throwNoProperty, throwInactiveUnionProperty, throwNoInitializer } from './error.js';
 import { copyPointer, disablePointer, resetPointer } from './pointer.js';
 import { ALIGN, CHILD_VIVIFICATOR, ENUM_ITEM, ENUM_NAME, MEMORY, MEMORY_COPIER, POINTER_VISITOR,
-  SIZE,
-  SLOTS, TAG } from './symbol.js';
+  SIZE, SLOTS, TAG } from './symbol.js';
 
 export function finalizeUnion(s, env) {
   const {
@@ -37,7 +36,7 @@ export function finalizeUnion(s, env) {
   if (exclusion) {
     valueMembers = members.slice(0, -1);
     const selectorMember = members[members.length - 1];
-    const { get: getSelector, set: setSelector } = getAccessors(selectorMember, options);
+    const { get: getSelector, set: setSelector } = getDescriptor(selectorMember, options);
     if (type === StructureType.TaggedUnion) {
       const { structure: { constructor } } = selectorMember;
       getEnumItem = getSelector;
@@ -61,7 +60,7 @@ export function finalizeUnion(s, env) {
     }
     for (const member of valueMembers) {
       const { name, slot, structure: { hasPointer } } = member;
-      const { get: getValue, set: setValue } = getAccessors(member, options);
+      const { get: getValue, set: setValue } = getDescriptor(member, options);
       const update = (isTagged) ? function(name) {
         if (this[TAG]?.name !== name) {
           this[TAG]?.clear?.();
@@ -105,7 +104,7 @@ export function finalizeUnion(s, env) {
     // extern union
     valueMembers = members;
     for (const member of members) {
-      const { get, set } = getAccessors(member, options);
+      const { get, set } = getDescriptor(member, options);
       descriptors[member.name] = { get, set, init: set, configurable: true, enumerable: true };
     }
   }

@@ -1,5 +1,5 @@
 import { defineProperties } from './structure.js';
-import { MemberType, getAccessors } from './member.js';
+import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { addSpecialAccessors, getSpecialKeys } from './special.js';
@@ -104,7 +104,7 @@ export function finalizeArray(s, env) {
       }
     }
   };
-  const { get, set } = getAccessors(member, options);
+  const { get, set } = getDescriptor(member, options);
   defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },

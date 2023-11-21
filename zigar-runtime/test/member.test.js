@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { MemberType, useAllMemberTypes, isByteAligned, getAccessors, getMemberFeature } from '../src/member.js';
+import { MemberType, useAllMemberTypes, isByteAligned, getDescriptor, getMemberFeature } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { CHILD_VIVIFICATOR, MEMORY } from '../src/symbol.js';
 import { clearMethodCache } from '../src/data-view.js';
@@ -31,7 +31,7 @@ describe('Member functions', function() {
       }
     })
   })
-  describe('getAccessors', function() {
+  describe('getDescriptor', function() {
     it('should return void accessors', function() {
       const member = {
         type: MemberType.Void,
@@ -40,11 +40,11 @@ describe('Member functions', function() {
       };
       const dv = new DataView(new ArrayBuffer(12));
       const object = { [MEMORY]: dv };
-      const { get, set } = getAccessors(member, { runtimeSafety: true });
+      const { get, set } = getDescriptor(member, { runtimeSafety: true });
       expect(get.call(object)).to.be.null;
       expect(() => set.call(object, null)).to.not.throw();
       expect(() => set.call(object, 0)).to.throw();
-      const { set: setNoCheck } = getAccessors(member, { runtimeSafety: false });
+      const { set: setNoCheck } = getDescriptor(member, { runtimeSafety: false });
       expect(() => setNoCheck.call(object, null)).to.not.throw();
     })
     it('should return bool accessors', function() {
@@ -61,7 +61,7 @@ describe('Member functions', function() {
         bitOffset: 32,
         byteSize: 1,
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get.call(object)).to.equal(true);
       set.call(object, false);
       expect(get.call(object)).to.equal(false);
@@ -75,7 +75,7 @@ describe('Member functions', function() {
         bitSize: 1,
         bitOffset: 33,
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get.call(object)).to.equal(true);
       set.call(object, false);
       expect(get.call(object)).to.equal(false);
@@ -89,7 +89,7 @@ describe('Member functions', function() {
         bitSize: 1,
         bitOffset: 33,
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get).to.be.undefined;
       expect(set).to.be.undefined;
     })
@@ -107,7 +107,7 @@ describe('Member functions', function() {
         bitOffset: 32,
         byteSize: 4,
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get.call(object)).to.equal(1234);
       set.call(object, 3456);
       expect(get.call(object)).to.equal(3456);
@@ -126,7 +126,7 @@ describe('Member functions', function() {
         bitOffset: 32,
         byteSize: 4,
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get.call(object)).to.equal(1234);
       set.call(object, 3456);
       expect(get.call(object)).to.equal(3456);
@@ -147,7 +147,7 @@ describe('Member functions', function() {
         bitOffset: 32,
         byteSize: 4,
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get.call(object)).to.equal(1234);
       set.call(object, 3456);
       expect(get.call(object)).to.equal(3456);
@@ -168,7 +168,7 @@ describe('Member functions', function() {
         bitOffset: 32,
         byteSize: 4,
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get.call(object)).to.equal(1234);
       set.call(object, 3456);
       expect(get.call(object)).to.equal(3456);
@@ -182,12 +182,12 @@ describe('Member functions', function() {
         bitSize: 4,
         bitOffset: 33,
       };
-      const { get, set } = getAccessors(member, { runtimeSafety: true });
+      const { get, set } = getDescriptor(member, { runtimeSafety: true });
       expect(get.call(object)).to.equal(3);
       set.call(object, -6);
       expect(get.call(object)).to.equal(-6);
       expect(() => set.call(object, 15)).to.throw();
-      const { set: setNoCheck } = getAccessors(member, { runtimeSafety: false });
+      const { set: setNoCheck } = getDescriptor(member, { runtimeSafety: false });
       expect(() => setNoCheck.call(object, 15)).to.not.throw();
     })
     it('should return small uint accessors', function() {
@@ -199,12 +199,12 @@ describe('Member functions', function() {
         bitSize: 4,
         bitOffset: 33,
       };
-      const { get, set } = getAccessors(member, { runtimeSafety: true });
+      const { get, set } = getDescriptor(member, { runtimeSafety: true });
       expect(get.call(object)).to.equal(3);
       set.call(object, 15);
       expect(get.call(object)).to.equal(15);
       expect(() => set.call(object, 32)).to.throw();
-      const { set: setNoCheck } = getAccessors(member, { runtimeSafety: false });
+      const { set: setNoCheck } = getDescriptor(member, { runtimeSafety: false });
       expect(() => setNoCheck.call(object, 32)).to.not.throw();
     })
     it('should not return small int accessors when useIntEx is not active', function() {
@@ -215,7 +215,7 @@ describe('Member functions', function() {
         bitSize: 4,
         bitOffset: 33,
       };
-      const { get, set } = getAccessors(member, { runtimeSafety: true });
+      const { get, set } = getDescriptor(member, { runtimeSafety: true });
       expect(get).to.be.undefined;
       expect(set).to.be.undefined;
     })
@@ -227,7 +227,7 @@ describe('Member functions', function() {
         bitSize: 4,
         bitOffset: 33,
       };
-      const { get, set } = getAccessors(member, { runtimeSafety: true });
+      const { get, set } = getDescriptor(member, { runtimeSafety: true });
       expect(get).to.be.undefined;
       expect(set).to.be.undefined;
     })
@@ -245,7 +245,7 @@ describe('Member functions', function() {
         bitOffset: 0,
         byteSize: 8,
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get.call(object)).to.equal(3.14);
       set.call(object, 1234.5678);
       expect(get.call(object)).to.equal(1234.5678);
@@ -263,7 +263,7 @@ describe('Member functions', function() {
         bitOffset: 4,
         byteSize: 8,
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get.call(object)).to.equal(0);
       set.call(object, 3.5);
       expect(get.call(object)).to.equal(3.5);
@@ -277,7 +277,7 @@ describe('Member functions', function() {
         bitOffset: 4,
         byteSize: 8,
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get).to.be.undefined;
       expect(set).to.be.undefined;
     })
@@ -311,7 +311,7 @@ describe('Member functions', function() {
           constructor: DummyEnum
         },
       };
-      const { get, set } = getAccessors(member, { runtimeSafety: false });
+      const { get, set } = getDescriptor(member, { runtimeSafety: false });
       expect(get.call(object)).to.equal(DummyValue1);
       set.call(object, DummyEnum(2));
       expect(dv.getUint32(4, true)).to.equal(2);
@@ -346,7 +346,7 @@ describe('Member functions', function() {
         bitOffset: 32,
         structure: { type: StructureType.Enumeration, constructor: DummyEnum },
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get.call(object)).to.equal(DummyValue1);
       set.call(object, DummyEnum(2));
       expect(dv.getUint32(4, true)).to.equal(2);
@@ -361,7 +361,7 @@ describe('Member functions', function() {
         bitOffset: 32,
         structure: {},
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get).to.be.undefined;
       expect(set).to.be.undefined;
     })
@@ -395,7 +395,7 @@ describe('Member functions', function() {
       const object = {
         [CHILD_VIVIFICATOR]: { 4: () => dummyObject },
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get.call(object)).to.equal(dummyObject);
       set.call(object, 456);
       expect(get.call(object)).to.equal(dummyObject);
@@ -426,7 +426,7 @@ describe('Member functions', function() {
       const object = {
         [CHILD_VIVIFICATOR]: { 4: () => dummyObject },
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get.call(object)).to.equal(123);
       set.call(object, 456);
       expect(get.call(object)).to.equal(456);
@@ -462,7 +462,7 @@ describe('Member functions', function() {
       const object = {
         [CHILD_VIVIFICATOR]: { 4: () => dummyObject },
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get.call(object)).to.equal(123);
       set.call(object, new Error('Pants on fire'));
       expect(() => get.call(object)).to.throw();
@@ -478,7 +478,7 @@ describe('Member functions', function() {
         },
       };
       const object = {};
-      const { get, set } = getAccessors(member, { autoDeref: true });
+      const { get, set } = getDescriptor(member, { autoDeref: true });
       expect(get.call(object)).to.equal(DummyClass);
       expect(set).to.be.undefined;
     })
@@ -494,7 +494,7 @@ describe('Member functions', function() {
       dv.setInt32(4, -2, true);
       dv.setInt32(8, -1, true);
       const object = { [MEMORY]: dv };
-      const { get, set } = getAccessors(member);
+      const { get, set } = getDescriptor(member);
       const res1 = get.call(object, 0);
       const res2 = get.call(object, 1);
       const res3 = get.call(object, 2);
@@ -520,7 +520,7 @@ describe('Member functions', function() {
       dv.setBigInt64(8, -2n, true);
       dv.setBigInt64(16, -1n, true);
       const object = { [MEMORY]: dv };
-      const { set, get } = getAccessors(member);
+      const { set, get } = getDescriptor(member);
       const res1 = get.call(object, 0);
       const res2 = get.call(object, 1);
       const res3 = get.call(object, 2);
@@ -569,7 +569,7 @@ describe('Member functions', function() {
       const object = {
         [CHILD_VIVIFICATOR]: index => slots[index],
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get.call(object, 0)).to.equal(dummyObject1);
       expect(get.call(object, 1)).to.equal(dummyObject2);
       expect(get.call(object, 2)).to.equal(dummyObject3);
@@ -613,7 +613,7 @@ describe('Member functions', function() {
       const object = {
         [CHILD_VIVIFICATOR]: index => slots[index],
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(get.call(object, 0)).to.equal(123);
       expect(get.call(object, 1)).to.equal(456);
       expect(get.call(object, 2)).to.equal(789);
@@ -635,7 +635,7 @@ describe('Member functions', function() {
       dv.setInt32(4, -2, true);
       dv.setInt32(8, -1, true);
       const object = { [MEMORY]: dv };
-      const { get, set } = getAccessors(member);
+      const { get, set } = getDescriptor(member);
       expect(() => get.call(object, -1)).to.throw();
       expect(() => get.call(object, 4)).to.throw();
       expect(() => set.call(object, -1, 0)).to.throw();
@@ -652,7 +652,7 @@ describe('Member functions', function() {
       dv.setInt32(4, -2, false);
       dv.setInt32(8, -1, false);
       const object = { [MEMORY]: dv };
-      const { get, set } = getAccessors(member, { littleEndian: false });
+      const { get, set } = getDescriptor(member, { littleEndian: false });
       expect(get.call(object, 0)).to.equal(1234);
       expect(get.call(object, 1)).to.equal(-2);
       expect(get.call(object, 2)).to.equal(-1);
@@ -679,7 +679,7 @@ describe('Member functions', function() {
         bitOffset: 32,
         byteSize: 4,
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       set.call(object, 123);
       memory.grow(1);
       expect(get.call(object)).to.equal(123);
@@ -705,7 +705,7 @@ describe('Member functions', function() {
         bitSize: 32,
         byteSize: 4,
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       set.call(object, 0, 123);
       memory.grow(1);
       expect(get.call(object, 0)).to.equal(123);
@@ -733,7 +733,7 @@ describe('Member functions', function() {
         bitOffset: 32,
         byteSize: 4,
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       expect(() => set.call(object, 123n)).to.throw(TypeError);
       // force a specific error
       Object.defineProperty(object, MEMORY, {
@@ -759,7 +759,7 @@ describe('Member functions', function() {
         bitSize: 32,
         byteSize: 4,
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       memory.grow(1);
       expect(() => set.call(object, 4, 123)).to.throw(RangeError);
       // do it a second time to hit different branch
@@ -779,7 +779,7 @@ describe('Member functions', function() {
         bitOffset: 0,
         byteSize: 4,
       };
-      const { get, set } = getAccessors(member, {});
+      const { get, set } = getDescriptor(member, {});
       set.call(object, 123);
       expect(get.call(object)).to.equal(123);
       expect(() => set.call(object, 123n)).to.throw(TypeError);

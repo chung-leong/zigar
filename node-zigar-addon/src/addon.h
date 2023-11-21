@@ -49,6 +49,8 @@ enum class MemberType : uint32_t {
   Object,
   Type,
   Comptime,
+  Static,
+  Literal,
 };
 
 struct Structure {

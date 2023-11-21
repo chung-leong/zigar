@@ -1,5 +1,5 @@
 import { defineProperties } from './structure.js';
-import { getAccessors } from './member.js';
+import { getDescriptor } from './member.js';
 import { getPrimitiveClass } from './primitive.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
@@ -25,7 +25,7 @@ export function finalizeEnumeration(s, env) {
   }
   /* DEV-TEST-END */
   const Primitive = getPrimitiveClass(members[0]);
-  const { get: getValue } = getAccessors(members[0], options);
+  const { get: getValue } = getDescriptor(members[0], options);
   const count = members.length;
   const items = {};
   const constructor = s.constructor = function(arg) {

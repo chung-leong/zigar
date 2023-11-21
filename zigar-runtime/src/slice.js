@@ -1,5 +1,5 @@
 import { defineProperties, getSelf } from './structure.js';
-import { MemberType, getAccessors } from './member.js';
+import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, checkDataViewSize, getCompatibleTags } from './data-view.js';
 import { getArrayIterator, createProxy, createArrayEntries, getChildVivificator, getPointerVisitor } from './array.js';
@@ -173,7 +173,7 @@ export function finalizeSlice(s, env) {
       }
     }
   };
-  const { get, set } = getAccessors(member, options);
+  const { get, set } = getDescriptor(member, options);
   defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
@@ -217,9 +217,9 @@ export function getSentinel(structure, options) {
     throw new Error(`bitOffset must be 0 for sentinel member`);
   }
   /* DEV-TEST-END */
-  const { get: getSentinelValue } = getAccessors(sentinel, options);
+  const { get: getSentinelValue } = getDescriptor(sentinel, options);
   const value = getSentinelValue.call(template, 0);
-  const { get } = getAccessors(member, options);
+  const { get } = getDescriptor(member, options);
   const validateValue = (runtimeSafety) ? function(v, i, l) {
     if (v === value && i !== l - 1) {
       throwMisplacedSentinel(structure, v, i, l);

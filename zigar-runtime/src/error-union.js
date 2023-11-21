@@ -1,5 +1,5 @@
 import { defineProperties } from './structure.js';
-import { MemberType, getAccessors } from './member.js';
+import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView } from './data-view.js';
 import { addSpecialAccessors } from './special.js';
@@ -18,8 +18,8 @@ export function finalizeErrorUnion(s, env) {
     options,
     hasPointer,
   } = s;
-  const { get: getValue, set: setValue } = getAccessors(members[0], options);
-  const { get: getError, set: setError } = getAccessors(members[1], options);
+  const { get: getValue, set: setValue } = getDescriptor(members[0], options);
+  const { get: getError, set: setError } = getDescriptor(members[1], options);
   const { structure: errorStructure } = members[1];
   const { constructor: ErrorSet } = errorStructure;
   const set = function(value) {

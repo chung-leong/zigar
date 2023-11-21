@@ -1,7 +1,7 @@
 import { StructureType, defineProperties } from './structure.js';
 import { getMemoryCopier } from './memory.js';
 import { requireDataView, getDataView, isCompatible, isBuffer } from './data-view.js';
-import { MemberType, getAccessors } from './member.js';
+import { MemberType, getDescriptor } from './member.js';
 import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerTarget,
   throwAssigningToConstant, throwConstantConstraint, throwNoInitializer,
   throwFixedMemoryTargetRequired, addArticle } from './error.js';
@@ -26,14 +26,14 @@ export function finalizePointer(s, env) {
   const isTargetPointer = (targetStructure.type === StructureType.Pointer);
   const hasLength = isTargetSlice && !targetStructure.sentinel;
   const addressSize = (hasLength) ? byteSize / 2 : byteSize;
-  const { get: getAddress, set: setAddress } = getAccessors({
+  const { get: getAddress, set: setAddress } = getDescriptor({
     type: MemberType.Uint,
     bitOffset: 0,
     bitSize: addressSize * 8,
     byteSize: addressSize,
     structure: { byteSize: addressSize },
   }, options);
-  const { get: getLength, set: setLength } = (hasLength) ? getAccessors({
+  const { get: getLength, set: setLength } = (hasLength) ? getDescriptor({
     type: MemberType.Uint,
     bitOffset: addressSize * 8,
     bitSize: addressSize * 8,

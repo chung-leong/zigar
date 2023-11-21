@@ -1,5 +1,5 @@
 import { defineProperties, getSelf } from './structure.js';
-import { MemberType, getAccessors } from './member.js';
+import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { addStaticMembers } from './static.js';
@@ -9,7 +9,7 @@ import { addSpecialAccessors, getSpecialKeys } from './special.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer,
   throwNoProperty } from './error.js';
 import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR,
-  SIZE, SLOTS } from './symbol.js';
+  SIZE, SLOTS, TEMPLATE_SLOTS } from './symbol.js';
 
 export function finalizeStruct(s, env) {
   const {
@@ -30,8 +30,12 @@ export function finalizeStruct(s, env) {
       const pointer = template[SLOTS][slot];
       const value = pointer['*'];
       descriptors[member.name] = { value, configurable: true, enumerable: true };
+    } else if (member.type === MemberType.EnumerationLiteral) {
+      const { slot } = member;
+      const object = template[SLOTS][slot];
+      console.log(object);
     } else {
-      const { get, set } = getAccessors(member, options);
+      const { get, set } = getDescriptor(member, options);
       descriptors[member.name] = { get, set, configurable: true, enumerable: true };
     }
   }
@@ -134,6 +138,8 @@ export function finalizeStruct(s, env) {
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
+    // struct can have comptime members, which are stored in the template's slots
+    [TEMPLATE_SLOTS]: template?.[SLOTS] && { value: template[SLOTS] },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },

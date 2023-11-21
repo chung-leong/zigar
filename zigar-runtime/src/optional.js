@@ -1,5 +1,5 @@
 import { defineProperties } from './structure.js';
-import { MemberType, getAccessors } from './member.js';
+import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView }  from './data-view.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
@@ -17,8 +17,8 @@ export function finalizeOptional(s, env) {
     options,
     hasPointer,
   } = s;
-  const { get: getValue, set: setValue } = getAccessors(members[0], options);
-  const { get: getPresent, set: setPresent } = getAccessors(members[1], options);
+  const { get: getValue, set: setValue } = getDescriptor(members[0], options);
+  const { get: getPresent, set: setPresent } = getDescriptor(members[1], options);
   const get = function() {
     const present = getPresent.call(this);
     if (present) {
