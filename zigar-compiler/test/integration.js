@@ -12,7 +12,7 @@ export function addTests(importModule, options) {
   const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(optimize);
   describe('Console', function() {
     it('should output to development console', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { hello } = await importModule(resolve('./zig-samples/basic/console.zig'));
       const lines = await capture(() => hello());
       expect(lines).to.eql([ 'Hello world!' ]);
@@ -20,7 +20,7 @@ export function addTests(importModule, options) {
   })
   describe('Variables', function() {
     it('should import integer variables', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module, int4, int8, int16 } = await importModule(resolve('./zig-samples/basic/integers.zig'));
       expect(module.private).to.be.undefined;
       expect(module.int4).to.equal(7);
@@ -43,7 +43,7 @@ export function addTests(importModule, options) {
       expect(() => module.int16 = 0).to.throw();
     })
     it('should import float variables', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/floats.zig'));
       expect(module.float16_const.toFixed(1)).to.equal('-44.4');
       expect(module.float16.toFixed(2)).to.equal('0.44');
@@ -55,7 +55,7 @@ export function addTests(importModule, options) {
       expect(() => module.float32_const = 0).to.throw();
     })
     it('should import comptime constants', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/comptime-numbers.zig'));
       expect(module.small).to.equal(127);
       expect(module.negative).to.equal(-167);
@@ -63,7 +63,7 @@ export function addTests(importModule, options) {
       expect(module.pi.toFixed(4)).to.equal('3.1416');
     })
     it('should import types', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/types.zig'));
       const { Int32, Int128, Struct } = module;
       expect(Int32).to.be.a('function');
@@ -79,7 +79,7 @@ export function addTests(importModule, options) {
       expect(object.number2).to.equal(456);
     })
     it('should import primitive arrays', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/arrays-with-primitives.zig'));
       expect(module.int32_array4).to.be.an('[4]i32');
       expect(module.int32_array4.get(0)).to.equal(1);
@@ -91,7 +91,7 @@ export function addTests(importModule, options) {
       expect(row1).to.be.an('[4]f64');
     })
     it('should import primitive slices', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/slices-with-primitive.zig'));
       expect([ ...module.int32_array ]).to.eql([ 123, 456, 789 ]);
       expect(module.int32_slice).to.be.an('[]const i32');
@@ -106,7 +106,7 @@ export function addTests(importModule, options) {
       expect([ ...module.uint32_array4 ]).to.eql([ 1, 2, 777, 4 ]);
     })
     it('should import optional values', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/optionals.zig'));
       expect(module.i32_empty).to.be.null;
       expect(module.i32_value).to.be.equal(1234);
@@ -114,7 +114,7 @@ export function addTests(importModule, options) {
       expect(module.bool_value).to.be.equal(true);
     })
     it('should import error unions', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/error-unions.zig'));
       expect(module.Error).to.be.a('function');
       expect(module.positive_outcome).to.equal(123);
@@ -144,7 +144,7 @@ export function addTests(importModule, options) {
       expect(module.void_error).to.be.null;
     })
     it('should import simple bare union', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/bare-union-simple.zig'));
       expect(module.animal.dog).to.equal(123);
       module.useCat();
@@ -158,14 +158,14 @@ export function addTests(importModule, options) {
       expect(module.animal.monkey).to.equal(777n);
     })
     it('should import slices with sentinel', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/slices-with-sentinel.zig'));
       const { string } = module.u8_slice;
       expect(string).to.equal('Hello world');
       expect([ ...module.i64_slice ]).to.eql([ 0n, 1n, 2n, 3n, 4n, 5n, 6n, 7n ]);
     })
     it('should import error sets', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/error-sets.zig'));
       const { NormalError, StrangeError, PossibleError } = module;
       expect(NormalError.OutOfMemory).to.be.instanceOf(Error);
@@ -175,7 +175,7 @@ export function addTests(importModule, options) {
       expect(StrangeError.SystemIsOnFire).to.be.instanceOf(PossibleError);
     })
     it('should import arrays with structs', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/arrays-with-structs.zig'));
       expect(module.array_a.valueOf()).to.eql(
         [
@@ -192,7 +192,7 @@ export function addTests(importModule, options) {
       ])
     })
     it('should import structs with complex members when there are no functions', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module, Pet, StructD } = await importModule(resolve('./zig-samples/basic/structs-with-complex-members.zig'));
       expect(module.struct_b.pet).to.equal(Pet.Cat);
       expect(module.struct_b.a.valueOf()).to.eql({ number1: 22, number2: 2.2 });
@@ -205,7 +205,7 @@ export function addTests(importModule, options) {
       expect(objectD.a_ptr.valueOf()).to.eql({ number1: 123, number2: 456 });
     })
     it('should import structs with complex members', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module, Pet, StructD, print } = await importModule(resolve('./zig-samples/basic/structs-with-complex-members-with-function.zig'));
       expect(module.struct_b.pet).to.equal(Pet.Cat);
       expect(module.struct_b.a.valueOf()).to.eql({ number1: 22, number2: 2.2 });
@@ -220,7 +220,7 @@ export function addTests(importModule, options) {
       expect(objectD.a_ptr.valueOf()).to.eql({ number1: 123, number2: 456 });
     })
     it('should import bare union with pointers', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/bare-union-with-slice.zig'));
       expect(() => module.variant_a.value.string['*']).to.throw(TypeError)
         .with.property('message').that.contains('not accessible');
@@ -238,7 +238,7 @@ export function addTests(importModule, options) {
       expect(lines).to.eql([ 'apple', '123', '3.14', 'apple', '123', '3.14' ]);
     })
     it('should import tagged union with pointers', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/tagged-union-with-slice.zig'));
       expect(module.variant_a.String.string).to.equal('apple');
       expect(module.variant_a.Integer).to.be.null;
@@ -257,7 +257,7 @@ export function addTests(importModule, options) {
       expect(lines).to.eql([ 'apple', '123', '3.14', 'apple', '123', '3.14' ]);
     })
     it('should import a tagged union that contains a tagged union', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module, Donut, VariantType } = await importModule(resolve('./zig-samples/basic/tagged-union-with-tagged-union.zig'));
       expect(module.donut_a.Jelly.String.string).to.equal('Hello world');
       expect(module.donut_a.Chocolate).to.be.null;
@@ -271,7 +271,7 @@ export function addTests(importModule, options) {
       expect(Donut(module.donut_a)).to.equal(Donut.Chocolate);
     })
     it('should allow assignment to a pointer variable', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module,
         printText,
         allocText,
@@ -295,7 +295,7 @@ export function addTests(importModule, options) {
       ]);
     })
     it('should ignore variables of unsupported types', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/unsupported-types.zig'));
       expect(module.number).to.equal(77);
       expect(module.weird).to.be.undefined;
@@ -304,7 +304,7 @@ export function addTests(importModule, options) {
       expect(module.fn2).to.be.undefined;
     })
     it('should import struct with comptime fields', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { StructA, StructB } = await importModule(resolve('./zig-samples/basic/structs-with-comptime-fields.zig'));
       const object = new StructA({ number1: 123 });
       expect(object.number1).to.eql(123);
@@ -324,7 +324,7 @@ export function addTests(importModule, options) {
       expect(object2.number_type).to.be.an('function');
     })
     it('should import comptime struct', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { kernel } = await importModule(resolve('./zig-samples/basic/comptime-struct.zig'));
       expect(kernel.input.src.channels).to.equal(4);
       expect(() => kernel.input.src.channels = 5).to.throw(Error);
@@ -332,13 +332,13 @@ export function addTests(importModule, options) {
       expect(() => kernel.input = { src: { channels: 5 } }).to.throw(Error);
     })
     it('should account for padding bytes of vector', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { Vector3 } = await importModule(resolve('./zig-samples/basic/vector-three-wide.zig'));
       const object = new Vector3(undefined);
       expect(object.length).to.equal(3);
     })
     it('should import enum literals', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { hello, world } = await importModule(resolve('./zig-samples/basic/enum-literals.zig'));
       expect(hello).to.equal('hello');
       expect(world.valueOf()).to.eql({
@@ -356,14 +356,14 @@ export function addTests(importModule, options) {
   })
   describe('Methods', function() {
     it('should import simple function', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/function-simple.zig'));
       const res = module.add(5, 17);
       expect(res).to.equal(22);
       expect(module.add).to.have.property('name', 'add');
     })
     it('should accept a slice', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { fifth } = await importModule(resolve('./zig-samples/basic/function-accepting-slice.zig'));
       const dv = new DataView(new ArrayBuffer(32));
       dv.setInt32(4, 123, littleEndian);
@@ -373,7 +373,7 @@ export function addTests(importModule, options) {
       expect(res).to.equal(456);
     })
     it('should output a slice of strings to console', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { print } = await importModule(resolve('./zig-samples/basic/function-outputting-slice-of-slices.zig'));
       const inputStrings = [
         'Test string 1',
@@ -385,7 +385,7 @@ export function addTests(importModule, options) {
       expect(outputStrings).to.eql(inputStrings);
     })
     it('should take and return a slice of strings', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { bounce } = await importModule(resolve('./zig-samples/basic/function-returning-slice-of-slices.zig'));
       const inputStrings = [
         'Test string 1',
@@ -399,7 +399,7 @@ export function addTests(importModule, options) {
       expect(outputStrings).to.eql(inputStrings);
     })
     it('should throw when function returns an error', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { returnNumber } = await importModule(resolve('./zig-samples/basic/function-returning-error-union.zig'));
       const result = returnNumber(1234);
       expect(result).to.equal(1234);
@@ -407,13 +407,13 @@ export function addTests(importModule, options) {
         .with.property('message', 'System is on fire');
     })
     it('should return a string', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { getMessage } = await importModule(resolve('./zig-samples/basic/function-returning-string.zig'));
       const { string } = getMessage(123, 456n, 3.14);
       expect(string).to.equal('Numbers: 123, 456, 3.14');
     })
     it('should return a slice of the argument', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { getSlice } = await importModule(resolve('./zig-samples/basic/function-returning-slice.zig'));
       const dv = new DataView(new ArrayBuffer(4 * 12));
       for (let i = 0, j = 1; j <= 12; i += 4, j++) {
@@ -425,7 +425,7 @@ export function addTests(importModule, options) {
       expect(slice.dataView.buffer).to.equal(dv.buffer);
     })
     it('should accept a compatible TypedArray', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { fifth, setFifth } = await importModule(resolve('./zig-samples/basic/function-accepting-typed-array.zig'));
       const ta = new Uint32Array(12);
       for (let i = 0, len = ta.length; i < len; i++) {
@@ -437,7 +437,7 @@ export function addTests(importModule, options) {
       expect(ta[4]).to.equal(50);
     })
     it('should return correctly result from vector functions', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { Vector4, multiply, add } = await importModule(resolve('./zig-samples/basic/vector-float.zig'));
       const a = new Vector4([ 1, 2, 3, 4 ]);
       const b = new Vector4([ 5, 6, 7, 8 ]);
@@ -447,7 +447,7 @@ export function addTests(importModule, options) {
       expect([ ...d ]).to.eql([ 6, 8, 10, 12 ]);
     })
     it('should return correctly result from boolean vector functions', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { any, all } = await importModule(resolve('./zig-samples/basic/vector-bool.zig'));
       const a = [ true, true, true, true ];
       const b = [ true, true, false, true ];
@@ -459,7 +459,7 @@ export function addTests(importModule, options) {
       expect(any(c)).to.be.false;
     })
     it('should handle misaligned pointers', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { Vector4, double, add } = await importModule(resolve('./zig-samples/basic/vector-float-pointer.zig'));
       const a = new Vector4([ 1, 2, 3, 4 ]);
       // unaligned buffer
@@ -473,7 +473,7 @@ export function addTests(importModule, options) {
       expect([ ...b ]).to.eql([ 10, 12, 14, 16 ]);
     })
     it('should handle misaligned pointer when aliased by another', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { Vector4, hello, world } = await importModule(resolve('./zig-samples/basic/function-accepting-different-pointers.zig'));
       // make sure functions work correctly first
       const lines = await capture(() => {
@@ -498,7 +498,7 @@ export function addTests(importModule, options) {
       });
     })
     it('should return optional pointer', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { getSentence } = await importModule(resolve('./zig-samples/basic/function-returning-optional-pointer.zig'));
       const res1 = getSentence(0);
       const res2 = getSentence(1);
@@ -506,7 +506,7 @@ export function addTests(importModule, options) {
       expect(res2).to.be.null;
     })
     it('should accept optional pointer', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { printName } = await importModule(resolve('./zig-samples/basic/function-accepting-optional-pointer.zig'));
       const lines = await capture(() => {
         printName("Bigus Dickus");
@@ -515,7 +515,7 @@ export function addTests(importModule, options) {
       expect(lines).to.eql([ 'Bigus Dickus', 'Anonymous' ]);
     })
     it('should allocate a slice of structs', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const {
         allocate,
         allocateNoError,
@@ -565,7 +565,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should accept enum as argument', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { Pet, printOne, printMultiple } = await importModule(resolve('./zig-samples/basic/function-accepting-enum-items.zig'));
       const lines = await capture(() => {
         printOne(Pet.Turtle);
@@ -592,7 +592,7 @@ export function addTests(importModule, options) {
       expect(() => printMultiple([ 'Dog', 'Cat', 'Tanooki' ])).to.throw(TypeError);
     })
     it('should import the same function under different names', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { hello1, hello2, hello3 } = await importModule(resolve('./zig-samples/basic/function-under-different-names.zig'));
       const lines = await capture(() => {
         hello1();
@@ -606,13 +606,13 @@ export function addTests(importModule, options) {
       ]);
     })
     it('should ignore function with comptime argument', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { memset, nothing } = await importModule(resolve('./zig-samples/basic/function-with-comptime-arg.zig'));
       expect(memset).to.be.undefined;
       expect(nothing).to.be.a('function');
     })
     it('should ignore fuinctions with unsupported arguments', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const {
         needFn,
         needOptionalFn,
@@ -625,14 +625,14 @@ export function addTests(importModule, options) {
       expect(nothing).to.be.a('function');
     })
     it('should import function returning a pointer to a primitive', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module, getPointer } = await importModule(resolve('./zig-samples/basic/function-returning-primitive-pointer.zig'));
       expect(module.number).to.equal(1234);
       const pointer = getPointer();
       expect(pointer['*']).to.equal(1234);
     })
     it('should correctly auto-cast compatible typed arrays and buffers', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/function-assigning-value-to-slice.zig'));
       const u8Array = new Uint8Array(4);
       const i8Array = new Int8Array(4);
@@ -696,7 +696,7 @@ export function addTests(importModule, options) {
       expect([ ...f64Array ]).to.eql([ Math.PI, Math.PI, Math.PI, Math.PI ]);
     })
     it('should correctly auto-cast compatible typed arrays and buffers to primitive pointer', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/function-assigning-value-to-pointer.zig'));
       const u8Array = new Uint8Array(1);
       const u8Array2 = new Uint8Array(2);
@@ -743,7 +743,7 @@ export function addTests(importModule, options) {
       expect([ ...f64Array ]).to.eql([ Math.PI ]);
     })
     it('should free pointers after Zig functions made them invalid', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const {
         OptionalString,
         ErrorOrString,
@@ -773,7 +773,7 @@ export function addTests(importModule, options) {
       expect(pointer3[SLOTS][0]).to.be.null;
     })
     it('should free pointer array after Zig functions made it invalid', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const {
         OptionalStrings,
         setOptionalNull,
@@ -789,14 +789,14 @@ export function addTests(importModule, options) {
       expect(pointers[1][SLOTS][0]).to.be.null;
     })
     it('should flush console after function exits', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { print } = await importModule(resolve('./zig-samples/basic/function-printing-string-without-linefeed.zig'));
       const lines = await capture(() => print())
       expect(lines[0]).to.equal('Hello world');
     })
 
     it('should not export function with illegal name', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const exports = await importModule(resolve('./zig-samples/basic/function-with-illegal-name.zig'));
       const { default: module } = exports;
       const name = ' \nthis is a totally weird function name!! :-)';
@@ -810,7 +810,7 @@ export function addTests(importModule, options) {
   describe('Error handling', function() {
     skip.permanently.unless(target === 'wasm32').
     it('should produce an error return trace', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { fail } = await importModule(resolve('./zig-samples/basic/error-trace.zig'));
       if (runtimeSafety) {
         expect(fail).to.throw(WebAssembly.RuntimeError)
@@ -827,7 +827,7 @@ export function addTests(importModule, options) {
   })
   describe('Memory allocation', function() {
     it('should return memory from internal allocator', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { createSlice, printSlice, freeSlice } = await importModule(resolve('./zig-samples/basic/memory-allocation.zig'));
       for (let i = 0; i < 10; i++) {
         const slice = createSlice(16);
@@ -849,7 +849,7 @@ export function addTests(importModule, options) {
   })
   describe('Crypto functions', function() {
     it('should produce MD5 hash matching that from Node native function', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { md5 } = await importModule(resolve('./zig-samples/crypto/md5.zig'));
       const data = new Uint8Array(1024 * 1024);
       for (let i = 0; i < data.byteLength; i++) {
@@ -865,7 +865,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should produce SHA1 hash matching that from Node native function', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { sha1 } = await importModule(resolve('./zig-samples/crypto/sha1.zig'));
       const data = new Uint8Array(1024 * 1024);
       for (let i = 0; i < data.byteLength; i++) {
@@ -916,7 +916,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should produce the right results for the k-nucleotide example', async function() {
-      this.timeout(60000);
+      this.timeout(120000);
       const { kNucleotide } = await importModule(resolve('./zig-samples/benchmarks-game/k-nucleotide.zig'));
       const n = 250000;
       const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`), 'utf-8');

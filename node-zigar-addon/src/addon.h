@@ -82,10 +82,15 @@ enum class MemoryDisposition : uint32_t {
 };
 
 struct MemoryAttributes {
-  uint16_t align: 16;
-  bool is_const: 1;
-  bool is_comptime: 1;
-  int :14;
+  // need to structure the fields in this manner for the sake of VC++
+  union {
+    struct {
+      uint16_t align: 16;
+      bool is_const: 1;
+      bool is_comptime: 1;
+    };
+    uint32_t _;
+  };
 };
 
 struct Memory {
@@ -98,8 +103,12 @@ struct Call;
 typedef Local<Value> (*Thunk)(Call*, void*);
 
 struct MethodAttributes {
-  bool has_pointer: 1;
-  int :31;
+  union {
+    struct {
+      bool has_pointer: 1;
+    };
+    uint32_t _;
+  };
 };
 
 struct Method {
@@ -110,9 +119,13 @@ struct Method {
 };
 
 struct ModuleAttributes {
-  bool little_endian: 1;
-  bool runtime_safety: 1;
-  int :30;
+  union {
+    struct {
+      bool little_endian: 1;
+      bool runtime_safety: 1;
+    };
+    uint32_t _;
+  };
 };
 
 struct Exports;

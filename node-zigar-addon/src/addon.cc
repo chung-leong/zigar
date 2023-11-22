@@ -197,7 +197,7 @@ static Result WriteSlot(Call* call,
 static Result BeginStructure(Call* call,
                              const Structure& structure,
                              Local<Object>* dest) {
-  auto isolate = call->isolate;
+    auto isolate = call->isolate;
   auto context = call->context;
   auto def = Object::New(isolate);
   auto type = Int32::New(isolate, static_cast<int32_t>(structure.type));

@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { exec } from 'child_process';
+import { fileURLToPath } from 'url';
 import { join, resolve, parse, basename } from 'path';
 import os, { tmpdir } from 'os';
 import { stat, lstat, readdir, writeFile, open, rename, readFile, chmod, utimes, unlink, mkdir, rmdir } from 'fs/promises';
@@ -29,7 +30,7 @@ async function compile(path, options = {}) {
     exporterPath: absolute(`../zig/${prefix}-exporter.zig`),
     stubPath: absolute(`../zig/${prefix}-stub.zig`),
     buildFilePath: absolute(`../zig/build.zig`),
-    useLibC: false,
+    useLibC: (platform === 'win32') ? true : false,
   };
   const soName = getLibraryName(rootFile.name, platform, arch);
   const soDir = join(cacheDir, platform, arch, optimize);
@@ -64,14 +65,15 @@ async function compile(path, options = {}) {
     }
   });
   if (!changed) {
-    const { pathname } = new URL('../zig', import.meta.url);
+    const zigFolder = absolute('../zig');
     // rebuild when source files have changed
-    await scanDirectory(pathname, /\.zig$/i, (dir, name, { mtime }) => {
+    await scanDirectory(zigFolder, /\.zig$/i, (dir, name, { mtime }) => {
       if (!(soMTime > mtime)) {
         changed = true;
       }
     });
   }
+  console.log({ changed });
   if (!changed) {
     return soPath;
   }
@@ -117,7 +119,7 @@ function getLibraryName(name, platform, arch) {
       switch (platform) {
         case 'darwin':
           return `lib${name}.dylib`;
-        case 'windows':          return `lib${name}.dll`;
+        case 'win32':          return `${name}.dll`;
         default:
           return `lib${name}.so`;
       }
@@ -358,7 +360,7 @@ async function delay(ms) {
 }
 
 function absolute(relpath) {
-  return (new URL(relpath, import.meta.url)).pathname;
+  return fileURLToPath(new URL(relpath, import.meta.url));
 }
 
 const MEMORY = Symbol('memory');
