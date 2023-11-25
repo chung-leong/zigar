@@ -191,4 +191,6 @@ struct call {
   function_data* fn_data;
 };
 
+const size_t missing = SIZE_MAX;
+
 #endif

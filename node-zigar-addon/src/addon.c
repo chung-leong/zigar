@@ -39,27 +39,26 @@ bool load_javascript(napi_env env,
         && napi_run_script(env, string, dest) == napi_ok;
 }
 
-const char *js_function_names[env_method_count] = {
-    "allocateRelocatableMemory",
-    "freeRelocatableMemory",
-    "createView",
-    "castView",
-    "createObject",
-    "createTemplate",
-    "readSlot",
-    "writeSlot",
-    "attachMember",
-    "attachTemplate",
-    "finalizeStructure",
-    "writeToConsole",
-    "flushConsole",
-};
-
 bool call_js_function(call* ctx,
                       js_function fn_index,
                       size_t argc,
                       const napi_value* argv,
                       napi_value* dest) {
+    static const char *js_function_names[env_method_count] = {
+        "allocateRelocatableMemory",
+        "freeRelocatableMemory",
+        "createView",
+        "castView",
+        "createObject",
+        "createTemplate",
+        "readSlot",
+        "writeSlot",
+        "attachMember",
+        "attachTemplate",
+        "finalizeStructure",
+        "writeToConsole",
+        "flushConsole",
+    };
     napi_env env = ctx->env;
     module_data* md = ctx->fn_data->mod_data;
     if (!md->js_fn_table[fn_index]) {
@@ -184,6 +183,148 @@ result write_slot(call* ctx,
     return Failure;
 }
 
+result begin_structure(call* ctx,
+                       const structure* s,
+                       napi_value* dest) {
+    napi_env env = ctx->env;
+    napi_value args[2];
+    napi_value type, length, byte_size, align, is_const, has_pointer, name;
+    bool no_length = !(s->type == Array || s->type == Vector);
+    if (napi_create_object(env, &args[0]) == napi_ok
+     && napi_create_uint32(env, s->type, &type) == napi_ok
+     && napi_set_named_property(env, args[0], "type", type) == napi_ok
+     && (no_length || napi_create_uint32(env, s->length, &length) == napi_ok)
+     && (no_length || napi_set_named_property(env, args[0], "length", length) == napi_ok)
+     && napi_create_uint32(env, s->byte_size, &byte_size) == napi_ok
+     && napi_set_named_property(env, args[0], "byteSize", byte_size) == napi_ok
+     && napi_create_uint32(env, s->align, &align) == napi_ok
+     && napi_set_named_property(env, args[0], "align", align) == napi_ok
+     && napi_get_boolean(env, s->is_const, &is_const) == napi_ok
+     && napi_set_named_property(env, args[0], "isConst", is_const) == napi_ok
+     && napi_get_boolean(env, s->has_pointer, &has_pointer) == napi_ok
+     && napi_set_named_property(env, args[0], "hasPointer", has_pointer) == napi_ok
+     && (!s->name || napi_create_string_utf8(env, s->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
+     && (!s->name || napi_set_named_property(env, args[1], "name", name) == napi_ok)
+     && call_js_function(ctx, beginStructure, 2, args, dest)) {
+        return OK;
+     }
+     return Failure;
+}
+
+result attach_member(call* ctx,
+                     napi_value structure,
+                     const member* m,
+                     bool is_static) {
+    napi_env env = ctx->env;
+    napi_value args[3] = { structure };
+    napi_value result;
+    napi_value type, is_required, bit_size, bit_offset, byte_size, slot, name;
+    if (napi_create_object(env, &args[1]) == napi_ok
+     && napi_create_uint32(env, m->type, &type) == napi_ok
+     && napi_set_named_property(env, args[1], "type", type) == napi_ok
+     && napi_get_boolean(env, m->is_required, &is_required) == napi_ok
+     && napi_set_named_property(env, args[1], "isRequired", is_required) == napi_ok
+     && (m->bit_size == missing || napi_create_uint32(env, m->bit_size, &bit_size) == napi_ok)
+     && (m->bit_size == missing || napi_set_named_property(env, args[1], "bitSize", bit_size) == napi_ok)
+     && (m->bit_offset == missing || napi_create_uint32(env, m->bit_offset, &bit_offset) == napi_ok)
+     && (m->bit_offset == missing || napi_set_named_property(env, args[1], "bitOffset", bit_offset) == napi_ok)
+     && (m->byte_size == missing || napi_create_uint32(env, m->byte_size, &byte_size) == napi_ok)
+     && (m->byte_size == missing || napi_set_named_property(env, args[1], "byteSize", byte_size) == napi_ok)
+     && (m->slot == missing || napi_create_uint32(env, m->slot, &slot) == napi_ok)
+     && (m->slot == missing || napi_set_named_property(env, args[1], "slot", slot) == napi_ok)
+     && (!m->name || napi_create_string_utf8(env, m->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
+     && (!m->name || napi_set_named_property(env, args[1], "name", name) == napi_ok)
+     && (!m->structure || napi_set_named_property(env, args[1], "structure", m->structure) == napi_ok)
+     && call_js_function(ctx, attachMember, 3, args, &result)) {
+        return OK;
+     }
+     return Failure;
+}
+
+bool create_thunk(napi_env env,
+                  thunk zig_fn,
+                  napi_value* dest) {
+
+}
+
+result attach_method(call* ctx,
+                     napi_value structure,
+                     const method* m,
+                     bool is_static_only) {
+    napi_env env = ctx->env;
+    napi_value args[3] = { structure };
+    napi_value result;
+    napi_value name, fn;
+    if (napi_create_object(env, &args[1]) == napi_ok
+     && napi_set_named_property(env, args[1], "argStruct", m->structure) == napi_ok
+     && create_thunk(env, m->thunk, &fn)
+     && napi_set_named_property(env, args[1], "thunk", fn) == napi_ok
+     && (!m->name || napi_create_string_utf8(env, m->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
+     && (!m->name || napi_set_named_property(env, args[1], "name", name) == napi_ok)
+     && napi_get_boolean(env, is_static_only, &args[2]) == napi_ok
+     && call_js_function(ctx, attachMethod, 3, args, &result)) {
+        return OK;
+     }
+     return Failure;
+}
+
+result attach_template(call* ctx,
+                       napi_value structure,
+                       napi_value template_obj,
+                       bool is_static) {
+    napi_env env = ctx->env;
+    napi_value args[3] = { structure, template_obj };
+    napi_value result;
+    if (napi_get_boolean(env, is_static, &args[2]) == napi_ok
+     && call_js_function(ctx, attachTemplate, 1, args, &result)) {
+        return OK;
+    }
+    return Failure;
+}
+
+result finalize_structure(call* ctx,
+                          napi_value structure) {
+    napi_env env = ctx->env;
+    napi_value args[1] = { structure };
+    napi_value result;
+    if (call_js_function(ctx, finalizeStructure, 1, args, &result)) {
+        return OK;
+    }
+    return Failure;
+}
+
+result create_template(call* ctx,
+                       napi_value dv,
+                       napi_value* dest) {
+    napi_env env = ctx->env;
+    napi_value args[1] = { dv };
+    if ((args[0] || napi_get_null(env, &args[0]) == napi_ok)
+     && call_js_function(ctx, createTemplate, 1, args, dest)) {
+        return OK;
+    }
+    return Failure;
+}
+
+result write_to_console(call* ctx,
+                        napi_value dv) {
+    napi_env env = ctx->env;
+    napi_value args[1] = { dv };
+    napi_value result;
+    if (call_js_function(ctx, writeToConsole, 1, args, &result)) {
+        return OK;
+    }
+    return Failure;
+}
+
+result flush_console(call* ctx) {
+    napi_env env = ctx->env;
+    napi_value result;
+    if (call_js_function(ctx, flushConsole, 0, NULL, &result)) {
+        return OK;
+    }
+    return Failure;
+}
+
 napi_value load_module(napi_env env, napi_callback_info info) {
     void* data;
     size_t argc = 1;
@@ -238,15 +379,14 @@ napi_value load_module(napi_env env, napi_callback_info info) {
     exports->cast_view = cast_view;
     exports->read_slot = read_slot;
     exports->write_slot = write_slot;
-    // exports->begin_structure = BeginStructure;
-    // exports->attach_member = AttachMember;
-    // exports->attach_method = AttachMethod;
-    // exports->attach_template = AttachTemplate;
-    // exports->finalize_structure = FinalizeStructure;
-    // exports->create_template = CreateTemplate;
-    // exports->write_to_console = WriteToConsole;
-    // exports->flush_console = FlushConsole;
-
+    exports->begin_structure = begin_structure;
+    exports->attach_member = attach_member;
+    exports->attach_method = attach_method;
+    exports->attach_template = attach_template;
+    exports->finalize_structure = finalize_structure;
+    exports->create_template = create_template;
+    exports->write_to_console = write_to_console;
+    exports->flush_console = flush_console;
     return NULL;
 }
 
