@@ -12,12 +12,11 @@
     "test:gc": "node --expose-gc ./node_modules/mocha/bin/mocha.js -- test/gc/*.test.js",
     "debug": "node --inspect-brk ./node_modules/mocha/bin/mocha.js -- test/*.test.js",
     "coverage": "node ./node_modules/c8/bin/c8.js ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.js",
-    "build": "npm run rollup && node-gyp build",
-    "install": "node-gyp rebuild",
+    "build": "npm run rollup && cmake-js compile",
+    "install": "cmake-js compile",
     "rollup": "rollup -c rollup.config.js"
   },
   "files": [
-    "binding.gyp",
     "src/*",
     "dist/*"
   ],
@@ -31,7 +30,6 @@
   ],
   "author": "Chung Leong",
   "license": "MIT",
-  "gypfile": true,
   "bugs": {
     "url": "https://github.com/chung-leong/zigar/issues"
   },
@@ -44,5 +42,8 @@
     "mocha-skip-if": "^1.0.4",
     "rollup": "^3.23.0",
     "rollup-plugin-strip-code": "^0.2.7"
+  },
+  "dependencies": {
+    "cmake-js": "^7.2.1"
   }
 }

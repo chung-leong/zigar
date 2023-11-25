@@ -1,26 +1,23 @@
-#include <node.h>
+#ifndef _ADDON_H_
+#define _ADDON_H_
+#include <js_native_api.h>
 #ifdef WIN32
   #include "dlfcn.win32.h"
 #else
   #include <dlfcn.h>
 #endif
+#include <stdlib.h>
 
-#if defined(__GNUC__) && __GNUC__ >= 8
-#define DISABLE_WCAST_FUNCTION_TYPE _Pragma("GCC diagnostic push") _Pragma("GCC diagnostic ignored \"-Wcast-function-type\"")
-#define DISABLE_WCAST_FUNCTION_TYPE_END _Pragma("GCC diagnostic pop")
-#else
-#define DISABLE_WCAST_FUNCTION_TYPE
-#define DISABLE_WCAST_FUNCTION_TYPE_END
-#endif
+napi_value create_addon(napi_env env);
 
-using namespace v8;
-
-enum class Result : int {
+typedef uint32_t result;
+enum {
   OK,
   Failure,
 };
 
-enum class StructureType : uint32_t {
+typedef uint32_t structure_type;
+enum {
   Primitive,
   Array,
   Struct,
@@ -39,7 +36,8 @@ enum class StructureType : uint32_t {
   Function,
 };
 
-enum class MemberType : uint32_t {
+typedef uint32_t member_type;
+enum {
   Void,
   Bool,
   Int,
@@ -53,35 +51,29 @@ enum class MemberType : uint32_t {
   Literal,
 };
 
-struct Structure {
+typedef struct {
   const char* name;
-  StructureType type;
+  structure_type type;
   size_t length;
   size_t byte_size;
   uint16_t align;
   bool is_const;
   bool has_pointer;
-};
+} structure;
 
-struct Member {
+typedef struct {
   const char* name;
-  MemberType type;
+  member_type type;
   bool is_required;
   bool is_signed;
   size_t bit_offset;
   size_t bit_size;
   size_t byte_size;
   size_t slot;
-  Local<Value> structure;
-};
+  napi_value structure;
+} member;
 
-enum class MemoryDisposition : uint32_t {
-  Auto,
-  Copy,
-  Link,
-};
-
-struct MemoryAttributes {
+typedef struct  {
   // need to structure the fields in this manner for the sake of VC++
   union {
     struct {
@@ -91,34 +83,79 @@ struct MemoryAttributes {
     };
     uint32_t _;
   };
-};
+} memory_attributes;
 
-struct Memory {
+typedef struct {
   uint8_t* bytes;
   size_t len;
-  MemoryAttributes attributes;
-};
+  memory_attributes attributes;
+} memory;
 
-struct Call;
-typedef Local<Value> (*Thunk)(Call*, void*);
+typedef struct call call;
+typedef napi_value (*thunk)(call*, void*);
 
-struct MethodAttributes {
+typedef struct {
   union {
     struct {
       bool has_pointer: 1;
     };
     uint32_t _;
   };
-};
+} method_attributes;
 
-struct Method {
+typedef struct {
   const char* name;
-  Thunk thunk;
-  Local<Value> structure;
-  MethodAttributes attributes;
-};
+  thunk thunk;
+  napi_value structure;
+  method_attributes attributes;
+} method;
 
-struct ModuleAttributes {
+typedef struct {
+  result (*allocate_relocatable_memory)(call*, size_t, uint16_t, memory*);
+  result (*free_relocatable_memory)(call*, const memory*);
+  result (*create_string)(call*, const memory*, napi_value*);
+  result (*create_object)(call*, napi_value, napi_value, napi_value*);
+  result (*create_view)(call*, const memory*, napi_value*);
+  result (*cast_view)(call*, napi_value, napi_value, napi_value*);
+  result (*read_slot)(call*, napi_value, size_t, napi_value*);
+  result (*write_slot)(call*, napi_value, size_t, napi_value);
+  result (*begin_structure)(call*, const structure*, napi_value*);
+  result (*attach_member)(call*, napi_value, const member*, bool);
+  result (*attach_method)(call*, napi_value, const method*, bool);
+  result (*attach_template)(call*, napi_value, napi_value, bool);
+  result (*finalize_structure)(call*, napi_value);
+  result (*create_template)(call*, napi_value, napi_value*);
+  result (*write_to_console)(call*, napi_value);
+  result (*flush_console)(call*);
+} export_table;
+
+typedef enum {
+  allocateRelocatableMemory,
+  freeRelocatableMemory,
+  createString,
+  createObject,
+  createView,
+  castView,
+  readSlot,
+  writeSlot,
+  beginStructure,
+  attachMember,
+  attachMethod,
+  attachTemplate,
+  finalizeStructure,
+  createTemplate,
+  writeToConsole,
+  flushConsole,
+
+  env_method_count,
+} js_function;
+
+typedef struct {
+  result (*allocate_fixed_memory)(size_t, uint16_t, memory*);
+  result (*free_fixed_memory)(const memory*);
+} import_table;
+
+typedef struct {
   union {
     struct {
       bool little_endian: 1;
@@ -126,148 +163,32 @@ struct ModuleAttributes {
     };
     uint32_t _;
   };
-};
+} module_attributes;
 
-struct Exports;
-struct Imports;
-
-struct Module {
+typedef struct {
   uint32_t version;
-  ModuleAttributes attributes;
-  Exports* exports;
-  Imports* imports;
-  Thunk factory;
-};
+  module_attributes attributes;
+  export_table* exports;
+  import_table* imports;
+  thunk factory;
+} module;
 
-struct Exports {
-  Result (*allocate_relocatable_memory)(Call*, size_t, uint16_t, Memory*);
-  Result (*free_relocatable_memory)(Call*, const Memory&);
-  Result (*create_string)(Call*, const Memory&, Local<Value>*);
-  Result (*create_object)(Call*, Local<Object>, Local<Value>, Local<Object>*);
-  Result (*create_view)(Call*, const Memory&, Local<DataView>*);
-  Result (*cast_view)(Call*, Local<Object>, Local<DataView>, Local<Object>*);
-  Result (*read_slot)(Call*, Local<Object>, size_t, Local<Value>*);
-  Result (*write_slot)(Call*, Local<Object>, size_t, Local<Value>);
-  Result (*begin_structure)(Call*, const Structure&, Local<Object>*);
-  Result (*attach_member)(Call*, Local<Object>, const Member&, bool);
-  Result (*attach_method)(Call*, Local<Object>, const Method&, bool);
-  Result (*attach_template)(Call*, Local<Object>, Local<Object>, bool);
-  Result (*finalize_structure)(Call*, Local<Object>);
-  Result (*create_template)(Call*, Local<DataView>, Local<Object>*);
-  Result (*write_to_console)(Call*, Local<DataView>);
-  Result (*flush_console)(Call*);
-};
-
-struct Imports {
-  Result (*allocate_fixed_memory)(size_t, uint16_t, Memory*);
-  Result (*free_fixed_memory)(const Memory&);
-};
-
-struct ExternalData {
-  Global<External> external;
-
-  ExternalData(Isolate* isolate) :
-    external(isolate, External::New(isolate, this)) {
-    external.template SetWeak<ExternalData>(this,
-      [](const v8::WeakCallbackInfo<ExternalData>& data) {
-        auto self = data.GetParameter();
-        delete self;
-      }, WeakCallbackType::kParameter);
-  }
-
-  virtual ~ExternalData() {};
-};
-
-struct AddonData : public ExternalData {
-  static int script_count;
-  Global<Script> js_script;
-
-  AddonData(Isolate* isolate) :
-    ExternalData(isolate) {}
-
-  ~AddonData() {}
-};
-
-struct ModuleData : public ExternalData {
-  static int count;
+typedef struct {
   void* so_handle;
-  const Imports* imports;
-  Global<Object> js_options;
-  Global<Object> global_slots;
-  Global<External> addon_data;
+  const import_table* imports;
+  napi_ref js_fn_table[env_method_count];
+} module_data;
 
-  ModuleData(Isolate* isolate,
-             void* so_handle,
-             const Imports* imports,
-             Local<Object> js_options,
-             Local<External> addon_data) :
-    ExternalData(isolate),
-    so_handle(so_handle),
-    imports(imports),
-    js_options(isolate, js_options),
-    global_slots(isolate, Object::New(isolate)),
-    addon_data(isolate, addon_data) {
-    count++;
-  }
+typedef struct {
+  thunk zig_fn;
+  method_attributes attributes;
+  module_data* mod_data;
+} function_data;
 
-  ~ModuleData() {
-    dlclose(so_handle);
-    count--;
-  }
+struct call {
+  napi_env env;
+  napi_value js_env;
+  function_data* fn_data;
 };
 
-struct FunctionData : public ExternalData {
-  static int count;
-  Thunk thunk;
-  MethodAttributes attributes;
-  Global<External> module_data;
-
-  FunctionData(Isolate* isolate,
-               Thunk thunk,
-               MethodAttributes attributes,
-               Local<External> module_data) :
-    ExternalData(isolate),
-    thunk(thunk),
-    attributes(attributes),
-    module_data(isolate, module_data) {
-    count++;
-  }
-
-  ~FunctionData() {
-    count--;
-  }
-};
-
-struct ExternalMemoryData {
-  static int count;
-  Global<External> module_data;
-
-  ExternalMemoryData(Isolate* isolate,
-                     Local<External> module_data) :
-    module_data(isolate, module_data) {
-    count++;
-  }
-
-  ~ExternalMemoryData() {
-    count--;
-  }
-};
-
-struct Call {
-  Isolate* isolate;
-  Local<Context> context;
-  Local<Object> env;
-  Local<Object> js_module;
-  Local<Object> global_slots;
-  FunctionData* function_data;
-
-  Call(Isolate* isolate,
-       Local<Object> env,
-       Local<External> function_data) :
-    isolate(isolate),
-    context(isolate->GetCurrentContext()),
-    env(env),
-    function_data(reinterpret_cast<FunctionData*>(function_data->Value())) {}
-};
-
-const size_t missing = SIZE_MAX;
+#endif
