@@ -1,13 +1,17 @@
 #include "addon.h"
 
+int32_t module_count = 0;
+int32_t function_count = 0;
+int32_t buffer_count = 0;
+
 module_data* create_module_data(void* so_handle,
                                 module_attributes attributes,
                                 import_table* imports) {
     module_data* md = (module_data*) calloc(1, sizeof(module_data));
-    md->ref_count = 1;
     md->so_handle = so_handle;
     md->attributes = attributes;
     md->imports = imports;
+    module_count++;
     return md;
 }
 
@@ -17,9 +21,10 @@ void reference_module_data(module_data* md) {
 
 void release_module_data(module_data* md) {
     md->ref_count--;
-    if (md->ref_count <= 0) {
+    if (md->ref_count == 0) {
         dlclose(md->so_handle);
         free(md);
+        module_count--;
     }
 }
 
@@ -31,28 +36,33 @@ function_data* create_function_data(thunk zig_fn,
     fd->attributes = attributes;
     fd->mod_data = md;
     reference_module_data(md);
+    function_count++;
     return fd;
 }
 
 void free_function_data(function_data* fd) {
     release_module_data(fd->mod_data);
     free(fd);
+    function_count--;
 }
 
-void finalize_shared_buffer(napi_env env,
-                            void* finalize_data,
-                            void* finalize_hint) {
+void finalize_external_buffer(napi_env env,
+                              void* finalize_data,
+                              void* finalize_hint) {
     release_module_data((module_data*) finalize_hint);
+    buffer_count--;
 }
 
-bool create_shared_buffer(napi_env env,
-                          uint8_t* bytes,
-                          size_t len,
-                          module_data* md,
-                          napi_value* dest) {
+bool create_external_buffer(napi_env env,
+                            uint8_t* bytes,
+                            size_t len,
+                            module_data* md,
+                            napi_value* dest) {
+    reference_module_data(md);
+    buffer_count++;
     /* create a reference to the module so that the shared library doesn't get unloaded
-       while the shared buffer is still around pointing to it */
-    return napi_create_external_arraybuffer(env, bytes, len, finalize_shared_buffer, md, dest) == napi_ok;
+       while the external buffer is still around pointing to it */
+    return napi_create_external_arraybuffer(env, bytes, len, finalize_external_buffer, md, dest) == napi_ok;
 }
 
 napi_value call_zig_function(napi_env env,
@@ -70,6 +80,12 @@ napi_value call_zig_function(napi_env env,
     return fd->zig_fn(&ctx, arg_ptr);
 }
 
+void finalize_function(napi_env env,
+                       void* finalize_data,
+                       void* finalize_hint) {
+    free_function_data((function_data*) finalize_hint);
+}
+
 bool create_thunk_caller_ex(napi_env env,
                             thunk zig_fn,
                             method_attributes attributes,
@@ -77,10 +93,13 @@ bool create_thunk_caller_ex(napi_env env,
                             napi_value* dest,
                             function_data** dest2) {
     function_data* fd = create_function_data(zig_fn, attributes, md);
-    if (napi_create_function(env, "thunk", 5, call_zig_function, fd, dest) != napi_ok) {
+    napi_value fn;
+    if (napi_create_function(env, "thunk", 5, call_zig_function, fd, &fn) != napi_ok
+     || napi_add_finalizer(env, fn, NULL, finalize_function, fd, NULL) != napi_ok) {
         free_function_data(fd);
         return false;
     }
+    *dest = fn;
     if (dest2) {
         *dest2 = fd;
     }
@@ -256,6 +275,11 @@ result write_slot(call* ctx,
                   size_t slot,
                   napi_value value) {
     napi_env env = ctx->env;
+    if (!value) {
+        if (napi_get_null(env, &value) != napi_ok) {
+            return Failure;
+        }
+    }
     napi_value args[3] = { object, NULL, value };
     napi_value result;
     if ((args[0] || napi_get_null(env, &args[0]) == napi_ok)
@@ -343,12 +367,6 @@ result attach_member(call* ctx,
      return Failure;
 }
 
-bool create_thunk(napi_env env,
-                  thunk zig_fn,
-                  napi_value* dest) {
-
-}
-
 result attach_method(call* ctx,
                      napi_value structure,
                      const method* m,
@@ -357,10 +375,11 @@ result attach_method(call* ctx,
     napi_value args[3] = { structure };
     napi_value result;
     napi_value name, fn;
+    module_data* md = ctx->fn_data->mod_data;
     if (napi_create_object(env, &args[1]) == napi_ok
      && napi_get_boolean(env, is_static_only, &args[2]) == napi_ok
      && napi_set_named_property(env, args[1], "argStruct", m->structure) == napi_ok
-     && create_thunk(env, m->thunk, &fn)
+     && create_thunk_caller(env, m->thunk, m->attributes, md, &fn)
      && napi_set_named_property(env, args[1], "thunk", fn) == napi_ok
      && (!m->name || napi_create_string_utf8(env, m->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
      && (!m->name || napi_set_named_property(env, args[1], "name", name) == napi_ok)
@@ -431,7 +450,7 @@ napi_value throw_error(napi_env env,
                        const char *err_message) {
     napi_value last;
     napi_get_and_clear_last_exception(env, &last);
-    napi_throw_error((env), NULL, err_message);
+    napi_throw_error((env), NULL, err_message ? err_message : "Unknown error");
     return NULL;
 }
 
@@ -441,8 +460,8 @@ napi_value throw_last_error(napi_env env) {
     return throw_error(env, error_info->error_message);
 }
 
-napi_value get_normal_buffer_address(napi_env env,
-                                     napi_callback_info info) {
+napi_value extract_buffer_address(napi_env env,
+                                  napi_callback_info info) {
     size_t argc = 1;
     napi_value arg0;
     void* data;
@@ -452,19 +471,14 @@ napi_value get_normal_buffer_address(napi_env env,
         return throw_error(env, "Argument must be ArrayBuffer");
     }
     napi_value address;
-    if (napi_create_bigint_uint64(env, (uintptr_t) data, &address) == napi_ok) {
+    if (napi_create_bigint_uint64(env, (uintptr_t) data, &address) != napi_ok) {
         return throw_last_error(env);
     }
     return address;
 }
 
-napi_value get_shared_buffer_address(napi_env env,
-                                     napi_callback_info info) {
-    return get_normal_buffer_address(env, info);
-}
-
-napi_value allocate_shared_memory(napi_env env,
-                                  napi_callback_info info) {
+napi_value allocate_external_memory(napi_env env,
+                                    napi_callback_info info) {
     size_t argc = 2;
     napi_value args[2];
     void* data;
@@ -482,14 +496,15 @@ napi_value allocate_shared_memory(napi_env env,
         return throw_error(env, "Unable to allocate fixed memory");
     }
     napi_value buffer;
-    if (!create_shared_buffer(env, mem.bytes, mem.len, md, &buffer)) {
+    if (!create_external_buffer(env, mem.bytes, mem.len, md, &buffer)) {
         return throw_last_error(env);
     }
     return buffer;
 }
 
-napi_value free_shared_memory(napi_env env,
-                              napi_callback_info info) {
+napi_value free_external_memory(napi_env env,
+                                napi_callback_info info) {
+    return NULL;
     size_t argc = 3;
     napi_value args[3];
     void* data;
@@ -510,8 +525,8 @@ napi_value free_shared_memory(napi_env env,
     md->imports->free_fixed_memory(&mem);
 }
 
-napi_value obtain_shared_buffer(napi_env env,
-                                napi_callback_info info) {
+napi_value obtain_external_buffer(napi_env env,
+                                  napi_callback_info info) {
     size_t argc = 2;
     napi_value args[2];
     void* data;
@@ -526,7 +541,7 @@ napi_value obtain_shared_buffer(napi_env env,
     }
     module_data* md = (module_data*) data;
     napi_value buffer;
-    if (!create_shared_buffer(env, (uint8_t*) address, len, md, &buffer)) {
+    if (!create_external_buffer(env, (uint8_t*) address, len, md, &buffer)) {
         return throw_last_error(env);
     }
     return buffer;
@@ -600,11 +615,10 @@ bool override_environment_functions(napi_env env,
                                     module_data* md) {
     napi_value prototype;
     return napi_get_named_property(env, env_constructor, "prototype", &prototype) == napi_ok
-        && add_function(env, prototype, "getNormalBufferAddress", get_normal_buffer_address, md)
-        && add_function(env, prototype, "getSharedBufferAddress", get_shared_buffer_address, md)
-        && add_function(env, prototype, "allocateSharedMemory", allocate_shared_memory, md)
-        && add_function(env, prototype, "freeSharedMemory", free_shared_memory, md)
-        && add_function(env, prototype, "obtainSharedBuffer", obtain_shared_buffer, md)
+        && add_function(env, prototype, "extractBufferAddress", extract_buffer_address, md)
+        && add_function(env, prototype, "allocateExternalMemory", allocate_external_memory, md)
+        && add_function(env, prototype, "freeExternalMemory", free_external_memory, md)
+        && add_function(env, prototype, "obtainExternalBuffer", obtain_external_buffer, md)
         && add_function(env, prototype, "copyBytes", copy_bytes, md)
         && add_function(env, prototype, "findSentinel", find_sentinel, md);
 }
@@ -702,7 +716,19 @@ napi_value load_module(napi_env env,
 
 napi_value get_gc_statistics(napi_env env,
                              napi_callback_info info) {
-    return NULL;
+    napi_value stats;
+    napi_value modules, functions, buffers;
+    bool success = napi_create_object(env, &stats) == napi_ok
+                && napi_create_int32(env, module_count, &modules) == napi_ok
+                && napi_set_named_property(env, stats, "modules", modules) == napi_ok
+                && napi_create_int32(env, function_count, &functions) == napi_ok
+                && napi_set_named_property(env, stats, "functions", functions) == napi_ok
+                && napi_create_int32(env, buffer_count, &buffers) == napi_ok
+                && napi_set_named_property(env, stats, "buffers", buffers) == napi_ok;
+    if (!success) {
+        return throw_last_error(env);
+    }
+    return stats;
 }
 
 napi_value create_addon(napi_env env) {

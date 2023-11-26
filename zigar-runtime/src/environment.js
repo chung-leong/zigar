@@ -609,20 +609,19 @@ export class NodeEnvironment extends Environment {
   addressMap = new WeakMap();
   // C++ code will patch in these functions:
   //
-  // getNormalBufferAddress
-  // getSharedBufferAddress
-  // allocateSharedMemory
-  // freeSharedMemory
-  // obtainSharedBuffer
+  // extractBufferAddress
+  // allocateExternalMemory
+  // freeExternalMemory
+  // obtainExternalBuffer
   // copyBytes
   // findSentinel
 
   getBufferAddress(buffer) {
-    if (buffer instanceof ArrayBuffer) {
-      return this.getNormalBufferAddress(buffer);
-    } else {
-      return this.addressMap.get(buffer);
+    let address = this.addressMap.get(buffer);
+    if (address === undefined) {
+      address = this.extractBufferAddress(buffer);
     }
+    return address;
   }
 
   allocateRelocatableMemory(len, align) {
@@ -644,24 +643,24 @@ export class NodeEnvironment extends Environment {
   }
 
   allocateFixedMemory(len, align) {
-    const buffer = this.allocateSharedMemory(len, align);
-    const address = this.getSharedBufferAddress(buffer);
+    const buffer = this.allocateExternalMemory(len, align);
+    const address = this.extractBufferAddress(buffer);
     this.addressMap.set(buffer, address);
     return new DataView(buffer);
   }
 
   freeFixedMemory(address, len, align) {
-    this.freeSharedMemory(address, len, align);
+    this.freeExternalMemory(address, len, align);
   }
 
   obtainFixedView(address, len) {
-    const buffer = this.obtainSharedBuffer(address, len);
+    const buffer = this.obtainExternalBuffer(address, len);
     this.addressMap.set(buffer, address);
     return new DataView(buffer);
   }
 
   inFixedMemory(object) {
-    return object[MEMORY].buffer instanceof SharedArrayBuffer;
+    return this.addressMap.has(object[MEMORY].buffer);
   }
 
   getTargetAddress(target, cluster) {
@@ -816,9 +815,9 @@ export class NodeEnvironment extends Environment {
         return;
       }
       released.set(obj, true);
-      const dv = obj[MEMORY];
-      if (dv.buffer instanceof SharedArrayBuffer) {
+      if (this.inFixedMemory(obj)) {
         // create new buffer and copy content from fixed memory
+        const dv = obj[MEMORY];
         const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
         const ta2 = new Uint8Array(ta);
         const dv2 = new DataView(ta2.buffer);
