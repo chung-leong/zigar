@@ -309,30 +309,8 @@ pub fn getOS() type {
             const fd_t = target.fd_t;
             const return_t = @typeInfo(@TypeOf(target.write)).Fn.return_type orelse usize;
             const substitutes = switch (builtin.os.tag) {
-                .windows => create: {
-                    var stdout: ?fd_t = null;
-                    var stderr: ?fd_t = null;
-
-                    break :create struct {
-                        pub fn write(f: fd_t, ptr: [*]const u8, len: usize) return_t {
-                            const stdout_handle = stdout orelse retrieve: {
-                                const handle = std.os.windows.GetStdHandle(std.os.windows.STD_OUTPUT_HANDLE);
-                                stdout = handle;
-                                break :retrieve handle;
-                            };
-                            const stderr_handle = stderr orelse retrieve: {
-                                const handle = std.os.windows.GetStdHandle(std.os.windows.STD_ERROR_HANDLE);
-                                stderr = handle;
-                                break :retrieve handle;
-                            };
-                            if (f == stdout_handle or f == stderr_handle) {
-                                if (Host.write(ptr, len)) {
-                                    return @intCast(len);
-                                } else |_| {}
-                            }
-                            return target.write(f, ptr, len);
-                        }
-                    };
+                .windows => struct {
+                    // can't override write on Windows
                 },
                 else => struct {
                     pub fn write(f: fd_t, ptr: [*]const u8, len: usize) return_t {
