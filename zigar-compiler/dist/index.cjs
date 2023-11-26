@@ -75,7 +75,6 @@ async function compile(path$1, options = {}) {
       }
     });
   }
-  console.log({ changed });
   if (!changed) {
     return soPath;
   }

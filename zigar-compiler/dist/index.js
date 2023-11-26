@@ -73,7 +73,6 @@ async function compile(path, options = {}) {
       }
     });
   }
-  console.log({ changed });
   if (!changed) {
     return soPath;
   }

@@ -7,6 +7,9 @@
   #include <dlfcn.h>
 #endif
 #include <stdlib.h>
+#include <string.h>
+
+#define MISSING   SIZE_MAX
 
 napi_value create_addon(napi_env env);
 
@@ -146,6 +149,7 @@ typedef enum {
   createTemplate,
   writeToConsole,
   flushConsole,
+  invokeFactory,
 
   env_method_count,
 } js_function;
@@ -173,24 +177,29 @@ typedef struct {
   thunk factory;
 } module;
 
-typedef struct {
+typedef struct module_data module_data;
+typedef struct function_data function_data;
+
+struct module_data {
+  int ref_count;
   void* so_handle;
   const import_table* imports;
-  napi_ref js_fn_table[env_method_count];
-} module_data;
+  module_attributes attributes;
+  napi_ref options;
+  napi_ref js_fn_refs[env_method_count];
+};
 
-typedef struct {
+struct function_data {
   thunk zig_fn;
   method_attributes attributes;
   module_data* mod_data;
-} function_data;
+};
 
 struct call {
   napi_env env;
   napi_value js_env;
+  napi_value options;
   function_data* fn_data;
 };
-
-const size_t missing = SIZE_MAX;
 
 #endif
