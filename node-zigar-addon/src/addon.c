@@ -117,11 +117,16 @@ bool create_thunk_caller(napi_env env,
 bool load_javascript(napi_env env,
                      napi_value *dest) {
     /* compile the code */
-    const char addon_js_txt[] = (
+    static const char* addon_js_txt = (
         #include "addon.js.txt"
     );
+    /* getting the length of the string this way due to VC throwing "compiler is out of heap space" error 
+       when addon_js_txt is a char array instead of a pointer */
+    static size_t addon_js_txt_len = sizeof(
+        #include "addon.js.txt"
+    ) - 1;
     napi_value string;
-    return napi_create_string_utf8(env, addon_js_txt, sizeof(addon_js_txt) - 1, &string) == napi_ok
+    return napi_create_string_utf8(env, addon_js_txt, addon_js_txt_len, &string) == napi_ok
         && napi_run_script(env, string, dest) == napi_ok;
 }
 
@@ -568,6 +573,7 @@ napi_value copy_bytes(napi_env env,
     }
     void* src = (void*) address;
     memcpy(dest, src, dest_len);
+    return NULL;
 }
 
 napi_value find_sentinel(napi_env env,
@@ -598,6 +604,7 @@ napi_value find_sentinel(napi_env env,
         }
       }
     }
+    return NULL;
 }
 
 bool add_function(napi_env env,

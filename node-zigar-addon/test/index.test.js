@@ -1,31 +1,36 @@
 import { expect } from 'chai';
 import os from 'os';
+import { fileURLToPath } from 'url';
 
 import {
   load,
 } from '../dist/index.js';
 
-function getLibraryExt(platform) {
+function getSOFilename(name, platform) {
   switch (platform) {
-    case 'darwin': return 'dylib';
-    case 'windows': return 'dll';
-    default: return 'so';
+    case 'darwin': return `${name}.dylib`;
+    case 'win32': return `${name}.dll`;
+    default: return `lib${name}.so`
   }
 }
 
 describe('Module loading', function() {
   const arch = os.arch();
   const platform = os.platform();
-  const ext = getLibraryExt(platform);
   it('should load module', async function() {
-    const { pathname } = new URL(`./so-samples/${platform}/${arch}/libintegers.${ext}`, import.meta.url);
-    const module = await load(pathname);
+    const filename = getSOFilename('integers', platform);
+    const url = new URL(`./so-samples/${platform}/${arch}/${filename}`, import.meta.url);
+    const path = fileURLToPath(url);
+    const module = await load(path);
+    expect(module.int32).to.equal(1234);
   })
   it('should throw when module is missing', async function() {
-    const { pathname } = new URL(`./so-samples/${platform}/${arch}/missing.${ext}`, import.meta.url);
+    const filename = getSOFilename('missing', platform);
+    const url = new URL(`./so-samples/${platform}/${arch}/${filename}`, import.meta.url);
+    const path = fileURLToPath(url);
     let error;
     try {
-      await load(pathname);
+      await load(path);
     } catch (err) {
       error = err;
     }
