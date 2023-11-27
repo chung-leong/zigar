@@ -315,12 +315,15 @@ pub const Host = struct {
     }
 };
 
-pub fn runThunk(thunk: Thunk, arg_struct: ?Value) ?Value {
+pub fn runThunk(thunk_id: usize, arg_struct: ?Value) ?Value {
     // note that std.debug.print() doesn't work here since the initial context is not set
     var call_ctx: CallContext = .{
         .allocator = .{ .ptr = undefined, .vtable = &std.heap.WasmAllocator.vtable },
     };
     const arg_ptr = _startCall(&call_ctx, arg_struct);
+    // function pointers in WASM are indices into function table 0
+    // so the thunk_id is really the thunk itself
+    const thunk: Thunk = @ptrFromInt(thunk_id);
     defer _endCall(&call_ctx, arg_struct);
     if (thunk(@ptrCast(&call_ctx), arg_ptr)) |result| {
         return result;

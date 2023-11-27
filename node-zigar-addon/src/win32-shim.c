@@ -3,18 +3,6 @@
 #include "./win32-shim.h"
 
 override_callback override = NULL;
-void* override_opaque = NULL;
-
-void override_write_file(override_callback cb, 
-                         void* opaque) {
-    override = cb;
-    override_opaque = opaque;
-}
-
-void end_override() {
-    override = NULL;
-    override_opaque = NULL;
-}
 
 BOOL WINAPI write_file_hook(HANDLE handle,
                             LPCVOID buffer,
@@ -28,8 +16,9 @@ BOOL WINAPI write_file_hook(HANDLE handle,
     if (!handle2) {
         handle2 = GetStdHandle(STD_ERROR_HANDLE);
     }
-    if (override && (handle == handle1 || handle == handle2)) {
-        if (override(override_opaque, buffer, len)) {
+    if (handle == handle1 || handle == handle2) {
+        /* return value of zero means success */
+        if (override(override_opaque, buffer, len) == 0) {
             *written = len;
             if (overlapped) {
                 SetEvent(overlapped->hEvent);
@@ -40,7 +29,8 @@ BOOL WINAPI write_file_hook(HANDLE handle,
     return WriteFile(handle, buffer, len, written, overlapped);
 }
 
-void patch_import_directory(HMODULE handle) {
+void patch_import_directory(void* handle,
+                            override_callback cb) {
     PBYTE bytes = (PBYTE) handle;
     /* find IAT */ 
     ULONG size;
@@ -61,6 +51,7 @@ void patch_import_directory(HMODULE handle) {
                     if (VirtualProtect(mbi.BaseAddress, mbi.RegionSize, protect, &mbi.Protect)) {
                         /* replace with hook */
                         *fn_pointer = (PROC) write_file_hook;
+                        override = cb;
                         /* restore original flags */
                         VirtualProtect(mbi.BaseAddress, mbi.RegionSize, mbi.Protect, &protect);
                     }
@@ -72,22 +63,4 @@ void patch_import_directory(HMODULE handle) {
             break;
         }
     }
-}
-
-void* dlopen(const char* filename, 
-             int flags) {
-    HMODULE handle = LoadLibraryA(filename);
-    if (handle) {
-        patch_import_directory(handle);
-    }
-    return (void*) handle;
-}
-
-void* dlsym(void* handle, 
-            const char* symbol) {
-    return GetProcAddress((HMODULE) handle, symbol);
-}
-
-int dlclose(void* handle) {
-    return FreeLibrary((HMODULE) handle) ? 0 : 1;
 }

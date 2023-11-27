@@ -684,7 +684,7 @@ fn getStructure(host: anytype, comptime T: type) Error!Value {
         try addMembers(host, structure, T);
         try addStaticMembers(host, structure, T);
         try addMethods(host, structure, T);
-        try host.finalizeStructure(structure);
+        try host.endStructure(structure);
         break :undefined structure;
     };
 }
@@ -983,7 +983,7 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
                 const template = try host.createTemplate(dv);
                 try host.attachTemplate(slice_structure, template, false);
             }
-            try host.finalizeStructure(slice_structure);
+            try host.endStructure(slice_structure);
             break :slice slice_structure;
         },
     };

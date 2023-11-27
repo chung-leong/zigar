@@ -5,12 +5,23 @@
 #define RTLD_LAZY   0
 #define RTLD_NOW    0
 
-void* dlopen(const char* filename, int flags);
-void* dlsym(void* handle, const char* symbol);
-int dlclose(void* handle);
+inline void* dlopen(const char* filename, 
+                    int flags) {
+    return (void*) LoadLibraryA(filename);
+}
 
-typedef bool (*override_callback)(void*, const void*, size_t);
-void override_write_file(override_callback cb, void* opaque);
-void end_override();
+inline void* dlsym(void* handle, 
+                   const char* symbol) {
+    return GetProcAddress((HMODULE) handle, symbol);
+}
+
+inline int dlclose(void* handle) {
+    return FreeLibrary((HMODULE) handle) ? 0 : 1;
+}
+
+typedef int (*override_callback)(const void*, size_t);
+
+void patch_write_file(void* handle,
+                      override_callback cb);
 
 #endif

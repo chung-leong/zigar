@@ -3,8 +3,8 @@ import { decodeText } from './text.js';
 import { initializeErrorSets } from './error-set.js';
 import { throwAlignmentConflict, throwNullPointer, throwZigError } from './error.js';
 import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, ENVIRONMENT, LENGTH_GETTER,
-  LENGTH_SETTER, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES, SIZE, SLOTS,
-  THUNK_REPLACER } from './symbol.js';
+  LENGTH_SETTER, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES, 
+  SIZE, SLOTS } from './symbol.js';
 import { getCopyFunction, getMemoryCopier, restoreMemory } from './memory.js';
 
 const defAlign = 16;
@@ -16,6 +16,7 @@ export class Environment {
   consoleTimeout = 0;
   slots = {};
   emptyView = new DataView(new ArrayBuffer(0));
+  structures = [];
 
   /*
   Functions to be defined in subclass:
@@ -223,6 +224,13 @@ export class Environment {
     const target = (isStatic) ? s.static : s.instance;
     target.template = template;
   }
+
+  endStructure(s) {
+    const constructor = super.finalizeStructure(s);
+    this.structures.push(s);
+    this.acquireDefaultPointers(s);
+    return constructor;
+  }
   /* COMPTIME-ONLY-END */
 
   finalizeStructure(s) {
@@ -262,11 +270,6 @@ export class Environment {
       }
     }
     Object.defineProperty(f, 'name', { value: name });
-    /* NODE-ONLY */
-    // need to set the local variables as well as the property of the method object
-    /* c8 ignore next */
-    f[THUNK_REPLACER] = r => thunk = argStruct = method.thunk = r;
-    /* NODE-ONLY-END */
     return f;
   }
 
@@ -729,9 +732,6 @@ export class NodeEnvironment extends Environment {
     module.__zigar = {
       init: () => initPromise,
       abandon: () => initPromise.then(() => {
-        if (module) {
-          this.releaseModule(module);
-        }
         module = null;
       }),
       released: () => initPromise.then(() => !module),
@@ -771,77 +771,6 @@ export class NodeEnvironment extends Environment {
     return args.retval;
   }
 
-  releaseModule(module) {
-    const released = new Map();
-    const replacement = function() {
-      throw new Error(`Shared library was abandoned`);
-    };
-    const releaseClass = (cls) => {
-      if (!cls || released.get(cls)) {
-        return;
-      }
-      released.set(cls, true);
-      // release static variables--vivificators return pointers
-      const vivificators = cls[CHILD_VIVIFICATOR];
-      if (vivificators) {
-        for (const vivificator of Object.values(vivificators)) {
-          const ptr = vivificator.call(cls);
-          if (ptr) {
-            releaseObject(ptr);
-          }
-        }
-      }
-      for (const [ name, { value, get, set }  ] of Object.entries(Object.getOwnPropertyDescriptors(cls))) {
-        if (typeof(value) === 'function') {
-          // release thunk of static function
-          value[THUNK_REPLACER]?.(replacement);
-        } else if (get && !set) {
-          // the getter might return a type/class/constuctor
-          const child = cls[name];
-          if (typeof(child) === 'function') {
-            releaseClass(child);
-          }
-        }
-      }
-      for (const { value } of Object.values(Object.getOwnPropertyDescriptors(cls.prototype))) {
-        if (typeof(value) === 'function') {
-          // release thunk of instance function
-          value[THUNK_REPLACER]?.(replacement);
-        }
-      }
-    };
-    const releaseObject = (obj) => {
-      if (!obj || released.get(obj)) {
-        return;
-      }
-      released.set(obj, true);
-      if (this.inFixedMemory(obj)) {
-        // create new buffer and copy content from fixed memory
-        const dv = obj[MEMORY];
-        const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
-        const ta2 = new Uint8Array(ta);
-        const dv2 = new DataView(ta2.buffer);
-        obj[MEMORY] = dv2;
-      }
-      const slots = obj[SLOTS];
-      if (slots) {
-        for (const child of Object.values(slots)) {
-          // deal with pointers in structs
-          if (child.hasOwnProperty(POINTER_VISITOR)) {
-            releaseObject(child);
-          }
-        }
-        if (obj.hasOwnProperty(POINTER_VISITOR)) {
-          // a pointer--release what it's pointing to
-          releaseObject(obj[SLOTS][0]);
-        } else {
-          // force recreation of child objects so they'll use non-fixed memory
-          obj[SLOTS] = {};
-        }
-      }
-    };
-    releaseClass(module);
-  }
 }
 /* NODE-ONLY-END */
 
@@ -1215,20 +1144,6 @@ export class WebAssemblyEnvironment extends Environment {
     }
   }
   /* COMPTIME-ONLY-END */
-
-  finalizeStructure(s) {
-    /* COMPTIME-ONLY */
-    const constructor = super.finalizeStructure(s);
-    // remember the structure
-    this.structures.push(s);
-    // acquire default pointers
-    this.acquireDefaultPointers(s);
-    return constructor;
-    /* COMPTIME-ONLY-END */
-    /* RUNTIME-ONLY */
-    return super.finalizeStructure(s);
-    /* RUNTIME-ONLY-END */
-  }
 
   /* RUNTIME-ONLY */
   finalizeStructures(structures) {

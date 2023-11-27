@@ -1,130 +1,44 @@
 #include "addon.h"
 
 int32_t module_count = 0;
-int32_t function_count = 0;
 int32_t buffer_count = 0;
 
-module_data* create_module_data(void* so_handle,
-                                module_attributes attributes,
-                                import_table* imports) {
-    module_data* md = (module_data*) calloc(1, sizeof(module_data));
-    md->so_handle = so_handle;
-    md->attributes = attributes;
-    md->imports = imports;
-    module_count++;
-    return md;
+int reference_module(module* mod) {
+    /* TODO: use atomic increment */
+    return ++mod->ref_count;
 }
 
-void reference_module_data(module_data* md) {
-    md->ref_count++;
-}
-
-void release_module_data(module_data* md) {
-    md->ref_count--;
-    if (md->ref_count == 0) {
-        dlclose(md->so_handle);
-        free(md);
+void release_module(module* mod) {
+    mod->ref_count--;
+    if (mod->ref_count == 0) {
+        dlclose(mod->base_address);
         module_count--;
     }
 }
 
-function_data* create_function_data(thunk zig_fn,
-                                    method_attributes attributes,
-                                    module_data* md) {
-    function_data* fd = (function_data*) calloc(1, sizeof(function_data));
-    fd->zig_fn = zig_fn;
-    fd->attributes = attributes;
-    fd->mod_data = md;
-    reference_module_data(md);
-    function_count++;
-    return fd;
-}
-
-void free_function_data(function_data* fd) {
-    release_module_data(fd->mod_data);
-    free(fd);
-    function_count--;
+void finalize_module(napi_env env,
+                     void* finalize_data,
+                     void* finalize_hint) {
+    release_module((module*) finalize_hint);
 }
 
 void finalize_external_buffer(napi_env env,
                               void* finalize_data,
                               void* finalize_hint) {
-    release_module_data((module_data*) finalize_hint);
+    release_module((module*) finalize_hint);
     buffer_count--;
 }
 
 bool create_external_buffer(napi_env env,
                             uint8_t* bytes,
                             size_t len,
-                            module_data* md,
+                            module* mod,
                             napi_value* dest) {
-    reference_module_data(md);
+    reference_module(mod);
     buffer_count++;
     /* create a reference to the module so that the shared library doesn't get unloaded
        while the external buffer is still around pointing to it */
     return napi_create_external_arraybuffer(env, bytes, len, finalize_external_buffer, md, dest) == napi_ok;
-}
-
-#ifdef WIN32
-bool redirect_to_console(void* opaque, const void* data, size_t len);
-#endif
-
-napi_value call_zig_function(napi_env env,
-                             napi_callback_info info) {
-    size_t argc = 1;
-    napi_value arg0, this;
-    void* data;
-    if (napi_get_cb_info(env, info, &argc, &arg0, &this, &data) != napi_ok) {
-        return NULL;
-    }
-    function_data* fd = (function_data*) data;
-    void* arg_ptr = NULL;
-    napi_get_dataview_info(env, arg0, NULL, &arg_ptr, NULL, NULL);
-    call ctx = { env, this, NULL, fd };
-#ifdef WIN32
-    /* we can't redirect output stdout/stderr the normal way in Windows
-       we need to intercept calls to WriteFile() instead by patching the DLL import table */
-    override_write_file(redirect_to_console, &ctx);
-    napi_value result = fd->zig_fn(&ctx, arg_ptr);
-    end_override();
-    return result;
-#else
-    return fd->zig_fn(&ctx, arg_ptr);
-#endif
-}
-
-void finalize_function(napi_env env,
-                       void* finalize_data,
-                       void* finalize_hint) {
-    free_function_data((function_data*) finalize_hint);
-}
-
-bool create_thunk_caller_ex(napi_env env,
-                            thunk zig_fn,
-                            method_attributes attributes,
-                            module_data* md,
-                            napi_value* dest,
-                            function_data** dest2) {
-    function_data* fd = create_function_data(zig_fn, attributes, md);
-    napi_value fn;
-    if (napi_create_function(env, "thunk", 5, call_zig_function, fd, &fn) != napi_ok
-     || napi_add_finalizer(env, fn, NULL, finalize_function, fd, NULL) != napi_ok) {
-        free_function_data(fd);
-        return false;
-    }
-    *dest = fn;
-    if (dest2) {
-        *dest2 = fd;
-    }
-    return true;
-}
-
-bool create_thunk_caller(napi_env env,
-                         thunk zig_fn,
-                         method_attributes attributes,
-                         module_data* md,
-                         napi_value* dest) {
-    return create_thunk_caller_ex(env, zig_fn, attributes, md, dest, NULL);
 }
 
 bool load_javascript(napi_env env,
@@ -143,48 +57,18 @@ bool load_javascript(napi_env env,
         && napi_run_script(env, string, dest) == napi_ok;
 }
 
-bool call_js_function(call* ctx,
-                      js_function fn_index,
+bool call_js_function(call ctx,
+                      const char* fn_name,
                       size_t argc,
                       const napi_value* argv,
                       napi_value* dest) {
-    static const char *js_function_names[env_method_count] = {
-        "allocateRelocatableMemory",
-        "freeRelocatableMemory",
-        "createString",
-        "createObject",
-        "createView",
-        "castView",
-        "readSlot",
-        "writeSlot",
-        "beginStructure",
-        "attachMember",
-        "attachMethod",
-        "attachTemplate",
-        "finalizeStructure",
-        "createTemplate",
-        "writeToConsole",
-        "flushConsole",
-        "invokeFactory",
-    };
     napi_env env = ctx->env;
-    module_data* md = ctx->fn_data->mod_data;
     napi_value fn;
-    if (md->js_fn_refs[fn_index]) {
-        if (napi_get_reference_value(env, md->js_fn_refs[fn_index], &fn) != napi_ok) {
-            return false;
-        }
-    } else {
-        const char *js_function_name = js_function_names[fn_index];
-        if (napi_get_named_property(env, ctx->js_env, js_function_name, &fn) != napi_ok
-         || napi_create_reference(env, fn, 0, &md->js_fn_refs[fn_index]) != napi_ok) {
-            return false;
-        }
-    }
-    return napi_call_function(env, ctx->js_env, fn, argc, argv, dest) == napi_ok;
+    return napi_get_named_property(env, ctx->js_env, fn_name, &fn) != napi_ok
+        && napi_call_function(env, ctx->js_env, fn, argc, argv, dest) == napi_ok;
 }
 
-result allocate_relocatable_memory(call* ctx,
+result allocate_relocatable_memory(call ctx,
                                    size_t len,
                                    uint16_t align,
                                    memory* dest) {
@@ -206,7 +90,7 @@ result allocate_relocatable_memory(call* ctx,
     return Failure;
 }
 
-result free_relocatable_memory(call* ctx,
+result free_relocatable_memory(call ctx,
                                const memory* mem) {
     napi_env env = ctx->env;
     napi_value args[3];
@@ -220,7 +104,7 @@ result free_relocatable_memory(call* ctx,
     return Failure;
 }
 
-result create_string(call* ctx,
+result create_string(call ctx,
                      const memory* mem,
                      napi_value* dest) {
     napi_env env = ctx->env;
@@ -230,7 +114,7 @@ result create_string(call* ctx,
     return Failure;
 }
 
-result create_object(call* ctx,
+result create_object(call ctx,
                      napi_value structure,
                      napi_value arg,
                      napi_value* dest) {
@@ -242,7 +126,7 @@ result create_object(call* ctx,
     return Failure;
 }
 
-result create_view(call* ctx,
+result create_view(call ctx,
                    const memory* mem,
                    napi_value* dest) {
     napi_env env = ctx->env;
@@ -257,7 +141,7 @@ result create_view(call* ctx,
     return Failure;
 }
 
-result cast_view(call* ctx,
+result cast_view(call ctx,
                  napi_value structure,
                  napi_value dv,
                  napi_value* dest) {
@@ -269,7 +153,7 @@ result cast_view(call* ctx,
     return Failure;
 }
 
-result read_slot(call* ctx,
+result read_slot(call ctx,
                  napi_value object,
                  size_t slot,
                  napi_value* dest) {
@@ -288,7 +172,7 @@ result read_slot(call* ctx,
     return Failure;
 }
 
-result write_slot(call* ctx,
+result write_slot(call ctx,
                   napi_value object,
                   size_t slot,
                   napi_value value) {
@@ -319,14 +203,13 @@ bool create_options(napi_env env,
         && napi_set_named_property(env, *dest, "runtimeSafety", runtime_safety) == napi_ok;
 }
 
-result begin_structure(call* ctx,
+result begin_structure(call ctx,
                        const structure* s,
                        napi_value* dest) {
     napi_env env = ctx->env;
     if (!ctx->options) {
         /* since options are the same for all structures, we can reuse the same object */
-        module_attributes attributes = ctx->fn_data->mod_data->attributes;
-        if (!create_options(env, attributes, &ctx->options)) {
+        if (!create_options(env, ctx->mod->attributes, ctx->options)) {
             return Failure;
         }
     }
@@ -354,7 +237,7 @@ result begin_structure(call* ctx,
      return Failure;
 }
 
-result attach_member(call* ctx,
+result attach_member(call ctx,
                      napi_value structure,
                      const member* m,
                      bool is_static) {
@@ -385,20 +268,19 @@ result attach_member(call* ctx,
      return Failure;
 }
 
-result attach_method(call* ctx,
+result attach_method(call ctx,
                      napi_value structure,
                      const method* m,
                      bool is_static_only) {
     napi_env env = ctx->env;
     napi_value args[3] = { structure };
     napi_value result;
-    napi_value name, fn;
-    module_data* md = ctx->fn_data->mod_data;
+    napi_value name, thunk_id;
     if (napi_create_object(env, &args[1]) == napi_ok
      && napi_get_boolean(env, is_static_only, &args[2]) == napi_ok
      && napi_set_named_property(env, args[1], "argStruct", m->structure) == napi_ok
-     && create_thunk_caller(env, m->thunk, m->attributes, md, &fn)
-     && napi_set_named_property(env, args[1], "thunk", fn) == napi_ok
+     && napi_create_uint32(env, m->thunk_id, &thunk_id) == napi_ok
+     && napi_set_named_property(env, args[1], "thunkId", thunk_id) == napi_ok
      && (!m->name || napi_create_string_utf8(env, m->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
      && (!m->name || napi_set_named_property(env, args[1], "name", name) == napi_ok)
      && call_js_function(ctx, attachMethod, 3, args, &result)) {
@@ -407,7 +289,7 @@ result attach_method(call* ctx,
      return Failure;
 }
 
-result attach_template(call* ctx,
+result attach_template(call ctx,
                        napi_value structure,
                        napi_value template_obj,
                        bool is_static) {
@@ -421,18 +303,18 @@ result attach_template(call* ctx,
     return Failure;
 }
 
-result finalize_structure(call* ctx,
-                          napi_value structure) {
+result end_structure(call ctx,
+                     napi_value structure) {
     napi_env env = ctx->env;
     napi_value args[1] = { structure };
     napi_value result;
-    if (call_js_function(ctx, finalizeStructure, 1, args, &result)) {
+    if (call_js_function(ctx, endStructure, 1, args, &result)) {
         return OK;
     }
     return Failure;
 }
 
-result create_template(call* ctx,
+result create_template(call ctx,
                        napi_value dv,
                        napi_value* dest) {
     napi_env env = ctx->env;
@@ -444,37 +326,12 @@ result create_template(call* ctx,
     return Failure;
 }
 
-result write_to_console(call* ctx,
+result write_to_console(call ctx,
                         napi_value dv) {
     napi_env env = ctx->env;
     napi_value args[1] = { dv };
     napi_value result;
     if (call_js_function(ctx, writeToConsole, 1, args, &result)) {
-        return OK;
-    }
-    return Failure;
-}
-
-#ifdef WIN32
-bool redirect_to_console(void* opaque, 
-                         const void* data,
-                         size_t len) {
-    call* ctx = (call*) opaque;
-    module_data* md = ctx->fn_data->mod_data;
-    napi_env env = ctx->env;
-    napi_value buffer, dv;
-    if (!create_external_buffer(env, (uint8_t*) data, len, md, &buffer)
-      || napi_create_dataview(env, len, buffer, 0, &dv) != napi_ok) {
-        return false;
-    }
-    return write_to_console(ctx, dv) == OK;
-}
-#endif
-
-result flush_console(call* ctx) {
-    napi_env env = ctx->env;
-    napi_value result;
-    if (call_js_function(ctx, flushConsole, 0, NULL, &result)) {
         return OK;
     }
     return Failure;
@@ -524,13 +381,13 @@ napi_value allocate_external_memory(napi_env env,
     } else if (napi_get_value_uint32(env, args[1], &align) != napi_ok) {
         return throw_error(env, "Align must be number");
     }
-    module_data* md = (module_data*) data;
+    module* mod = (module*) data;
     memory mem;
-    if (md->imports->allocate_fixed_memory(len, align, &mem) != OK) {
+    if (mod->imports->allocate_fixed_memory(len, align, &mem) != OK) {
         return throw_error(env, "Unable to allocate fixed memory");
     }
     napi_value buffer;
-    if (!create_external_buffer(env, mem.bytes, mem.len, md, &buffer)) {
+    if (!create_external_buffer(env, mem.bytes, mem.len, mod, &buffer)) {
         return throw_last_error(env);
     }
     return buffer;
@@ -554,9 +411,9 @@ napi_value free_external_memory(napi_env env,
     } else if (napi_get_value_uint32(env, args[2], &align) != napi_ok) {
         return throw_error(env, "Align must be number");
     }
-    module_data* md = (module_data*) data;
+    module* mod = (module*) data;
     memory mem = { (void*) address, len, { align, false, false } };
-    md->imports->free_fixed_memory(&mem);
+    mod->imports->free_fixed_memory(&mem);
 }
 
 napi_value obtain_external_buffer(napi_env env,
@@ -573,9 +430,9 @@ napi_value obtain_external_buffer(napi_env env,
     } else if (napi_get_value_double(env, args[1], &len) != napi_ok) {
         return throw_error(env, "Length must be number");
     }
-    module_data* md = (module_data*) data;
+    module* mod = (module*) data;
     napi_value buffer;
-    if (!create_external_buffer(env, (uint8_t*) address, len, md, &buffer)) {
+    if (!create_external_buffer(env, (uint8_t*) address, len, mod, &buffer)) {
         return throw_last_error(env);
     }
     return buffer;
@@ -648,15 +505,15 @@ bool add_function(napi_env env,
 
 bool override_environment_functions(napi_env env,
                                     napi_value env_constructor,
-                                    module_data* md) {
+                                    module* mod) {
     napi_value prototype;
     return napi_get_named_property(env, env_constructor, "prototype", &prototype) == napi_ok
-        && add_function(env, prototype, "extractBufferAddress", extract_buffer_address, md)
-        && add_function(env, prototype, "allocateExternalMemory", allocate_external_memory, md)
-        && add_function(env, prototype, "freeExternalMemory", free_external_memory, md)
-        && add_function(env, prototype, "obtainExternalBuffer", obtain_external_buffer, md)
-        && add_function(env, prototype, "copyBytes", copy_bytes, md)
-        && add_function(env, prototype, "findSentinel", find_sentinel, md);
+        && add_function(env, prototype, "extractBufferAddress", extract_buffer_address, mod)
+        && add_function(env, prototype, "allocateExternalMemory", allocate_external_memory, mod)
+        && add_function(env, prototype, "freeExternalMemory", free_external_memory, mod)
+        && add_function(env, prototype, "obtainExternalBuffer", obtain_external_buffer, mod)
+        && add_function(env, prototype, "copyBytes", copy_bytes, mod)
+        && add_function(env, prototype, "findSentinel", find_sentinel, mod);
 }
 
 napi_value load_module(napi_env env,
@@ -685,6 +542,40 @@ napi_value load_module(napi_env env,
     if (!symbol) {
         return throw_error(env, "Unable to find the symbol \"zig_module\"");
     }
+    module* mod = (module*) symbol;
+    if (mod->version != 2) {
+        return throw_error(env, "Cached module is compiled for a different version of Zigar");
+    }
+    int ref_count = reference_module(mod);
+    if (ref_count == 1) {
+        mod->base_address = symbol;
+#ifdef WIN32
+        /* we can't override write() the normal way on Windows 
+           need to intercept the call to kernel32.dll instead */
+        patch_write_file(handle, mod->imports->override_write);
+#endif
+    } else {
+        /* decrement the ref count if the library was already loaded */
+        dlclose(handle);
+    }
+
+    /* attach exports to module */
+    export_table* exports = mod->exports;
+    exports->allocate_relocatable_memory = allocate_relocatable_memory;
+    exports->free_relocatable_memory = free_relocatable_memory;
+    exports->create_string = create_string;
+    exports->create_object = create_object;
+    exports->create_view = create_view;
+    exports->cast_view = cast_view;
+    exports->read_slot = read_slot;
+    exports->write_slot = write_slot;
+    exports->begin_structure = begin_structure;
+    exports->attach_member = attach_member;
+    exports->attach_method = attach_method;
+    exports->attach_template = attach_template;
+    exports->end_structure = end_structure;
+    exports->create_template = create_template;
+    exports->write_to_console = write_to_console;
 
     /* compile embedded JavaScript */
     napi_value js_module;
@@ -700,32 +591,8 @@ napi_value load_module(napi_env env,
         return throw_error(env, "Unable to find the class \"Environment\"");
     }
 
-    /* attach exports to module */
-    module* mod = (module*) symbol;
-    if (mod->version != 2) {
-        return throw_error(env, "Cached module is compiled for a different version of Zigar");
-    }
-    export_table* exports = mod->exports;
-    exports->allocate_relocatable_memory = allocate_relocatable_memory;
-    exports->free_relocatable_memory = free_relocatable_memory;
-    exports->create_string = create_string;
-    exports->create_object = create_object;
-    exports->create_view = create_view;
-    exports->cast_view = cast_view;
-    exports->read_slot = read_slot;
-    exports->write_slot = write_slot;
-    exports->begin_structure = begin_structure;
-    exports->attach_member = attach_member;
-    exports->attach_method = attach_method;
-    exports->attach_template = attach_template;
-    exports->finalize_structure = finalize_structure;
-    exports->create_template = create_template;
-    exports->write_to_console = write_to_console;
-    exports->flush_console = flush_console;
-
     /* add functions to Environment class */
-    module_data* md = create_module_data(handle, mod->attributes, mod->imports);
-    if (!override_environment_functions(env, env_constructor, md)) {
+    if (!override_environment_functions(env, env_constructor, mod)) {
         return throw_error(env, "Unable to modify runtime environment");
     }
 
@@ -735,19 +602,14 @@ napi_value load_module(napi_env env,
         return throw_error(env, "Unable to create runtime environment");
     }
 
-    /* invoke the factory thunk through JavaScript */
-    method_attributes factory_attrs = { false };
-    napi_value caller, result;
-    function_data* fd;
-    if (!create_thunk_caller_ex(env, mod->factory, factory_attrs, md, &caller, &fd)) {
-        return throw_last_error(env);
+    /* create dummy object for keeping reference on module */
+    napi_value module_holder;
+    if (napi_create_object(env, &module_holder) != napi_ok
+     || napi_add_finalizer(env, module_holder, NULL, finalize_module, mod, NULL) != napi_ok
+     || napi_set_named_property(env, js_env, "module", module_holder) != napi_ok) {
+        return throw_error(env, "Unable to assign module to runtime environment");
     }
-    call ctx = { env, js_env, NULL, fd };
-    if (!call_js_function(&ctx, invokeFactory, 1, &caller, &result)) {
-        /* an error should have been thrown already */
-        return NULL;
-    }
-    return result;
+    return js_env;
 }
 
 napi_value get_gc_statistics(napi_env env,
@@ -757,8 +619,6 @@ napi_value get_gc_statistics(napi_env env,
     bool success = napi_create_object(env, &stats) == napi_ok
                 && napi_create_int32(env, module_count, &modules) == napi_ok
                 && napi_set_named_property(env, stats, "modules", modules) == napi_ok
-                && napi_create_int32(env, function_count, &functions) == napi_ok
-                && napi_set_named_property(env, stats, "functions", functions) == napi_ok
                 && napi_create_int32(env, buffer_count, &buffers) == napi_ok
                 && napi_set_named_property(env, stats, "buffers", buffers) == napi_ok;
     if (!success) {

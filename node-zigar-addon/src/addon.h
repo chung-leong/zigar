@@ -5,7 +5,9 @@
   #include "win32-shim.h"
 #else
   #include <dlfcn.h>
-  #define __cdecl
+#endif
+#ifdef __GNUC__
+  #define __cdecl __attribute__((__cdecl__))
 #endif
 #include <stdlib.h>
 #include <string.h>
@@ -95,8 +97,7 @@ typedef struct {
   memory_attributes attributes;
 } memory;
 
-typedef struct call call;
-typedef napi_value (__cdecl *thunk)(call*, void*);
+typedef struct call_context* call;
 
 typedef struct {
   union {
@@ -109,28 +110,27 @@ typedef struct {
 
 typedef struct {
   const char* name;
-  thunk thunk;
+  size_t thunk_id;
   napi_value structure;
   method_attributes attributes;
 } method;
 
 typedef struct {
-  result (*allocate_relocatable_memory)(call*, size_t, uint16_t, memory*);
-  result (*free_relocatable_memory)(call*, const memory*);
-  result (*create_string)(call*, const memory*, napi_value*);
-  result (*create_object)(call*, napi_value, napi_value, napi_value*);
-  result (*create_view)(call*, const memory*, napi_value*);
-  result (*cast_view)(call*, napi_value, napi_value, napi_value*);
-  result (*read_slot)(call*, napi_value, size_t, napi_value*);
-  result (*write_slot)(call*, napi_value, size_t, napi_value);
-  result (*begin_structure)(call*, const structure*, napi_value*);
-  result (*attach_member)(call*, napi_value, const member*, bool);
-  result (*attach_method)(call*, napi_value, const method*, bool);
-  result (*attach_template)(call*, napi_value, napi_value, bool);
-  result (*finalize_structure)(call*, napi_value);
-  result (*create_template)(call*, napi_value, napi_value*);
-  result (*write_to_console)(call*, napi_value);
-  result (*flush_console)(call*);
+  result (*__cdecl allocate_relocatable_memory)(call, size_t, uint16_t, memory*);
+  result (*__cdecl free_relocatable_memory)(call, const memory*);
+  result (*__cdecl create_string)(call, const memory*, napi_value*);
+  result (*__cdecl create_object)(call, napi_value, napi_value, napi_value*);
+  result (*__cdecl create_view)(call, const memory*, napi_value*);
+  result (*__cdecl cast_view)(call, napi_value, napi_value, napi_value*);
+  result (*__cdecl read_slot)(call, napi_value, size_t, napi_value*);
+  result (*__cdecl write_slot)(call, napi_value, size_t, napi_value);
+  result (*__cdecl begin_structure)(call, const structure*, napi_value*);
+  result (*__cdecl attach_member)(call, napi_value, const member*, bool);
+  result (*__cdecl attach_method)(call, napi_value, const method*, bool);
+  result (*__cdecl attach_template)(call, napi_value, napi_value, bool);
+  result (*__cdecl end_structure)(call, napi_value);
+  result (*__cdecl create_template)(call, napi_value, napi_value*);
+  result (*__cdecl write_to_console)(call, napi_value);
 } export_table;
 
 typedef enum {
@@ -146,18 +146,20 @@ typedef enum {
   attachMember,
   attachMethod,
   attachTemplate,
-  finalizeStructure,
+  endStructure,
   createTemplate,
   writeToConsole,
-  flushConsole,
   invokeFactory,
 
   env_method_count,
 } js_function;
 
 typedef struct {
-  result (*allocate_fixed_memory)(size_t, uint16_t, memory*);
-  result (*free_fixed_memory)(const memory*);
+  result (*__cdecl allocate_fixed_memory)(size_t, uint16_t, memory*);
+  result (*__cdecl free_fixed_memory)(const memory*);
+  result (*__cdecl define_structures)();
+  result (*__cdecl run_thunk)(size_t, void*);
+  result (*__cdecl override_write)(const void*, size_t);
 } import_table;
 
 typedef struct {
@@ -175,32 +177,15 @@ typedef struct {
   module_attributes attributes;
   export_table* exports;
   import_table* imports;
-  thunk factory;
+  void* base_address;
+  size_t ref_count;
 } module;
 
-typedef struct module_data module_data;
-typedef struct function_data function_data;
-
-struct module_data {
-  int ref_count;
-  void* so_handle;
-  const import_table* imports;
-  module_attributes attributes;
-  napi_ref options;
-  napi_ref js_fn_refs[env_method_count];
-};
-
-struct function_data {
-  thunk zig_fn;
-  method_attributes attributes;
-  module_data* mod_data;
-};
-
-struct call {
+typedef struct call_context {
   napi_env env;
   napi_value js_env;
   napi_value options;
-  function_data* fn_data;
-};
+  module* mod;
+} call_context;
 
 #endif

@@ -3,7 +3,6 @@ const exporter = @import("exporter");
 const package = @import("package");
 
 const Value = exporter.Value;
-const Thunk = exporter.Thunk;
 const Call = exporter.Call;
 
 pub const os = exporter.getOS();
@@ -28,8 +27,8 @@ export fn defineStructures() ?Value {
     return exporter.defineStructures(package);
 }
 
-export fn runThunk(thunk: Thunk, arg_struct: ?Value) ?Value {
-    return exporter.runThunk(thunk, arg_struct);
+export fn runThunk(thunk_id: usize, arg_struct: ?Value) ?Value {
+    return exporter.runThunk(thunk_id, arg_struct);
 }
 
 export fn isRuntimeSafetyActive() bool {

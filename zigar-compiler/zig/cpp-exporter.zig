@@ -129,8 +129,8 @@ pub const Host = struct {
         }
     }
 
-    pub fn finalizeStructure(self: Host, structure: Value) !void {
-        if (imports.finalize_structure(self.context, structure) != .OK) {
+    pub fn endStructure(self: Host, structure: Value) !void {
+        if (imports.end_structure(self.context, structure) != .OK) {
             return Error.UnableToDefineStructure;
         }
     }
@@ -208,10 +208,9 @@ const Imports = extern struct {
     attach_member: *const fn (Call, Value, *const Member, bool) callconv(.C) Result,
     attach_method: *const fn (Call, Value, *const Method, bool) callconv(.C) Result,
     attach_template: *const fn (Call, Value, Value, bool) callconv(.C) Result,
-    finalize_structure: *const fn (Call, Value) callconv(.C) Result,
+    end_structure: *const fn (Call, Value) callconv(.C) Result,
     create_template: *const fn (Call, ?Value, *Value) callconv(.C) Result,
     write_to_console: *const fn (Call, Value) callconv(.C) Result,
-    flush_console: *const fn (Call) callconv(.C) Result,
 };
 var imports: Imports = undefined;
 
@@ -236,7 +235,8 @@ pub const Module = extern struct {
     attributes: ModuleAttributes,
     imports: *Imports = &imports,
     exports: *const Exports = &exports,
-    factory: Thunk,
+    base_address: ?*anyopaque = null,
+    ref_count: usize = 0,
 };
 
 pub fn createModule(comptime T: type) Module {
