@@ -5,6 +5,7 @@
   #include "win32-shim.h"
 #else
   #include <dlfcn.h>
+  #define __cdecl
 #endif
 #include <stdlib.h>
 #include <string.h>
