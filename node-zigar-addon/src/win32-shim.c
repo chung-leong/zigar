@@ -53,7 +53,7 @@ void patch_import_directory(HMODULE handle) {
             PIMAGE_THUNK_DATA thunk = (PIMAGE_THUNK_DATA) (bytes + iat_entry->FirstThunk);
             while (thunk->u1.Function) {
                 PROC* fn_pointer = (PROC*) &thunk->u1.Function;
-                if (*fn_pointer == WriteFile) {
+                if (*fn_pointer == (PROC) WriteFile) {
                     /* make page writable */ 
                     MEMORY_BASIC_INFORMATION mbi;
                     DWORD protect = PAGE_READWRITE;
@@ -77,7 +77,9 @@ void patch_import_directory(HMODULE handle) {
 void* dlopen(const char* filename, 
              int flags) {
     HMODULE handle = LoadLibraryA(filename);
-    patch_import_directory(handle);
+    if (handle) {
+        patch_import_directory(handle);
+    }
     return (void*) handle;
 }
 

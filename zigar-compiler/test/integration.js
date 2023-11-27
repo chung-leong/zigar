@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { readFile } from 'fs/promises';
+import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
 import 'mocha-skip-if';
 
@@ -888,7 +889,8 @@ export function addTests(importModule, options) {
       const { binaryTree } = await importModule(resolve('./zig-samples/benchmarks-game/binary-trees.zig'));
       const n = 12;
       const lines = await capture(() => binaryTree(n));
-      const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/binary-trees-${n}.txt`), 'utf-8');
+      const textPath = fileURLToPath(resolve(`./zig-samples/benchmarks-game/data/binary-trees-${n}.txt`));
+      const text = await readFile(textPath, 'utf-8');
       const refLines = text.split(/\r?\n/);
       expect(lines.length).to.not.equal(0);
       for (const [ index, line ] of lines.entries()) {
@@ -908,7 +910,8 @@ export function addTests(importModule, options) {
       const { fasta } = await importModule(resolve('./zig-samples/benchmarks-game/fasta.zig'));
       const n = 250000;
       const lines = await capture(() => fasta(n));
-      const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`), 'utf-8');
+      const textPath = fileURLToPath(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`));
+      const text = await readFile(textPath, 'utf-8');
       const refLines = text.split(/\r?\n/);
       expect(lines.length).to.not.equal(0);
       for (const [ index, line ] of lines.entries()) {
@@ -919,7 +922,8 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { kNucleotide } = await importModule(resolve('./zig-samples/benchmarks-game/k-nucleotide.zig'));
       const n = 250000;
-      const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`), 'utf-8');
+      const textPath = fileURLToPath(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`));
+      const text = await readFile(textPath, 'utf-8');
       const lines = text.trim().split(/\r?\n/);
       const start = lines.findIndex(l => l.startsWith('>THREE'));
       if (start === -1) {
@@ -928,7 +932,8 @@ export function addTests(importModule, options) {
       const input = lines.slice(start + 1);
       const output = kNucleotide(input);
       const outputLines = [ ...output ].map(a => a.string.split(/\n/)).flat();
-      const refText = await readFile(resolve(`./zig-samples/benchmarks-game/data/k-nucleotide-${n}.txt`), 'utf-8');
+      const textPath2 = fileURLToPath(resolve(`./zig-samples/benchmarks-game/data/k-nucleotide-${n}.txt`));
+      const refText = await readFile(textPath2, 'utf-8');
       const refLines = refText.trim().split(/\r?\n/);
       expect(outputLines).to.eql(refLines);
     })
@@ -937,7 +942,8 @@ export function addTests(importModule, options) {
       const { mandelbrot } = await importModule(resolve('./zig-samples/benchmarks-game/mandelbrot.zig'));
       const n = 2000;
       const lines = await capture(() => mandelbrot(n));
-      const text = await readFile(resolve(`./zig-samples/benchmarks-game/data/mandelbrot-${n}.txt`), 'utf-8');
+      const textPath = fileURLToPath(resolve(`./zig-samples/benchmarks-game/data/mandelbrot-${n}.txt`));
+      const text = await readFile(textPath, 'utf-8');
       const refLines = text.split(/\r?\n/);
       expect(lines.length).to.not.equal(0);
       for (const [ index, line ] of lines.entries()) {
@@ -1015,9 +1021,11 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { reverseComplement } = await importModule(resolve('./zig-samples/benchmarks-game/reverse-complement.zig'));
       const n = 250000;
-      const data = await readFile(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`));
+      const textPath = fileURLToPath(resolve(`./zig-samples/benchmarks-game/data/fasta-${n}.txt`));
+      const data = await readFile(textPath);
       reverseComplement(data);
-      const refData = await readFile(resolve(`./zig-samples/benchmarks-game/data/reverse-complement-${n}.txt`));
+      const textPath2 = fileURLToPath(resolve(`./zig-samples/benchmarks-game/data/reverse-complement-${n}.txt`));
+      const refData = await readFile(textPath2);
       let different = false;
       for (let i = 0; i < refData.byteLength; i++) {
         if (data[i] !== refData[i]) {
@@ -1039,7 +1047,7 @@ export function addTests(importModule, options) {
 }
 
 function resolve(relPath) {
-  return new URL(relPath, import.meta.url).pathname;
+  return new URL(relPath, import.meta.url).href;
 }
 
 async function capture(cb) {

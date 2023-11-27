@@ -28,7 +28,7 @@ async function loadZig(url) {
     }
   }
   // variables from URL
-  for (const [ name, value ] of new URL(url).searchParams) {
+  for (const [ name, value ] of searchParams) {
     // convert snake_case to camelCase
     options[name.replace(/_(\w)/g, (m0, m1) => m1.toUpperCase())] = value;
   }
