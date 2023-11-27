@@ -65,6 +65,10 @@ bool create_external_buffer(napi_env env,
     return napi_create_external_arraybuffer(env, bytes, len, finalize_external_buffer, md, dest) == napi_ok;
 }
 
+#ifdef WIN32
+bool redirect_to_console(void* opaque, const void* data, size_t len);
+#endif
+
 napi_value call_zig_function(napi_env env,
                              napi_callback_info info) {
     size_t argc = 1;
@@ -77,7 +81,16 @@ napi_value call_zig_function(napi_env env,
     void* arg_ptr = NULL;
     napi_get_dataview_info(env, arg0, NULL, &arg_ptr, NULL, NULL);
     call ctx = { env, this, NULL, fd };
+#ifdef WIN32
+    /* we can't redirect output stdout/stderr the normal way in Windows
+       we need to intercept calls to WriteFile() instead by patching the DLL import table */
+    override_write_file(redirect_to_console, &ctx);
+    napi_value result = fd->zig_fn(&ctx, arg_ptr);
+    end_override();
+    return result;
+#else
     return fd->zig_fn(&ctx, arg_ptr);
+#endif
 }
 
 void finalize_function(napi_env env,
@@ -441,6 +454,22 @@ result write_to_console(call* ctx,
     }
     return Failure;
 }
+
+#ifdef WIN32
+bool redirect_to_console(void* opaque, 
+                         const void* data,
+                         size_t len) {
+    call* ctx = (call*) opaque;
+    module_data* md = ctx->fn_data->mod_data;
+    napi_env env = ctx->env;
+    napi_value buffer, dv;
+    if (!create_external_buffer(env, (uint8_t*) data, len, md, &buffer)
+      || napi_create_dataview(env, len, buffer, 0, &dv) != napi_ok) {
+        return false;
+    }
+    return write_to_console(ctx, dv) == OK;
+}
+#endif
 
 result flush_console(call* ctx) {
     napi_env env = ctx->env;

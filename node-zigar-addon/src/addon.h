@@ -2,7 +2,7 @@
 #define _ADDON_H_
 #include <js_native_api.h>
 #ifdef WIN32
-  #include "dlfcn.win32.h"
+  #include "win32-shim.h"
 #else
   #include <dlfcn.h>
 #endif
@@ -95,7 +95,7 @@ typedef struct {
 } memory;
 
 typedef struct call call;
-typedef napi_value (*thunk)(call*, void*);
+typedef napi_value (__cdecl *thunk)(call*, void*);
 
 typedef struct {
   union {
