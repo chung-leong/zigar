@@ -274,6 +274,112 @@ export class Environment {
   }
 
   /* RUNTIME-ONLY */
+  recreateStructures(structures) {
+    const createTemplate = (placeholder) => {
+      const template = {};
+      if (placeholder.memory) {
+        const { array, offset, length } = placeholder.memory;
+        template[MEMORY] = new DataView(array.buffer, offset, length);
+      }
+      if (placeholder.slots) {
+        template[SLOTS] = insertObjects({}, placeholder.slots);
+      }
+      return template;
+    };
+    const insertObjects = (dest, placeholders) => {
+      for (const [ slot, placeholder ] of Object.entries(placeholders)) {
+        dest[slot] = placeholder ? createObject(placeholder) : null;
+      }
+      return dest;
+    };
+    const createObject = (placeholder) => {
+      let dv;
+      if (placeholder.memory) {
+        const { array, offset, length } = placeholder.memory;
+        dv = new DataView(array.buffer, offset, length);
+      } else {
+        const { byteSize } = placeholder.structure;
+        dv = new DataView(new ArrayBuffer(byteSize));
+      }
+      const { constructor } = placeholder.structure;
+      const object = constructor.call(ENVIRONMENT, dv);
+      if (placeholder.slots) {
+        insertObjects(object[SLOTS], placeholder.slots);
+      }
+      if (placeholder.address !== undefined) {
+        // need to replace dataview with one pointing to WASM memory later,
+        // when the VM is up and running
+        this.variables.push({ address: placeholder.address, object });
+      }
+      return object;
+    };
+    initializeErrorSets();
+    for (const structure of structures) {
+      for (const target of [ structure.static, structure.instance ]) {
+        // first create the actual template using the provided placeholder
+        if (target.template) {
+          target.template = createTemplate(target.template);
+        }
+      }
+      super.finalizeStructure(structure);
+      // place structure into its assigned slot
+      this.slots[structure.slot] = structure;
+    }
+
+    let resolve, reject;
+    const promise = new Promise((r1, r2) => {
+      resolve = r1;
+      reject = r2;
+    });
+    this.runThunk = function(index, argStruct) {
+      // wait for linking to occur, then call function again
+      // this.runThunk should have been replaced
+      return promise.then(() => this.runThunk(index, argStruct));
+    };
+    return { resolve, reject };
+  }
+
+  linkVariables(writeBack) {
+    for (const { object, offset } of this.variables) {
+      this.linkObject(object, offset, writeBack);
+    }
+  }
+
+  linkObject(object, offset, writeBack) {
+    if (this.inFixedMemory(object)) {
+      return;
+    }
+    const dv = object[MEMORY];
+    if (dv.byteLength !== 0) {
+      const address = this.recreateAddress(offset);
+      const wasmDV = this.obtainFixedView(address, dv.byteLength);
+      if (writeBack) {
+        const dest = Object.create(object.constructor.prototype);
+        dest[MEMORY] = wasmDV;
+        dest[MEMORY_COPIER](object);
+      }
+      object[MEMORY] = wasmDV;
+    }
+  }
+
+  unlinkVariables() {
+    for (const { object } of this.variables) {
+      this.unlinkObject(object);
+    }
+  }
+
+  unlinkObject(object) {
+    if (!this.inFixedMemory(object)) {
+      return;
+    }
+    const dv = object[MEMORY];
+    const relocDV = this.createRelocatableBuffer(dv.byteLength);
+    const dest = Object.create(object.constructor.prototype);
+    dest[MEMORY] = relocDV;
+    dest[MEMORY_COPIER](object);
+    object[MEMORY] = relocDV;
+  }
+
   writeToConsole(dv) {
     try {
       // make copy of array, in case incoming buffer is pointing to stack memory
@@ -914,7 +1020,7 @@ export class WebAssemblyEnvironment extends Environment {
     return false;
   }
 
-  releaseObjects() {
+  clearExchangeTable() {
     if (this.nextValueIndex !== 1) {
       this.nextValueIndex = 1;
       this.valueTable = { 0: null };
@@ -1004,7 +1110,7 @@ export class WebAssemblyEnvironment extends Environment {
     const throwError = function() {
       throw new Error('WebAssembly instance was abandoned');
     };
-    for (const { name } of Object.values(this.imports)) {
+    for (const name of Object.keys(this.imports)) {
       if (this[name]) {
         this[name] = throwError;
       }
@@ -1146,71 +1252,6 @@ export class WebAssemblyEnvironment extends Environment {
   /* COMPTIME-ONLY-END */
 
   /* RUNTIME-ONLY */
-  finalizeStructures(structures) {
-    const createTemplate = (placeholder) => {
-      const template = {};
-      if (placeholder.memory) {
-        const { array, offset, length } = placeholder.memory;
-        template[MEMORY] = new DataView(array.buffer, offset, length);
-      }
-      if (placeholder.slots) {
-        template[SLOTS] = insertObjects({}, placeholder.slots);
-      }
-      return template;
-    };
-    const insertObjects = (dest, placeholders) => {
-      for (const [ slot, placeholder ] of Object.entries(placeholders)) {
-        dest[slot] = placeholder ? createObject(placeholder) : null;
-      }
-      return dest;
-    };
-    const createObject = (placeholder) => {
-      let dv;
-      if (placeholder.memory) {
-        const { array, offset, length } = placeholder.memory;
-        dv = new DataView(array.buffer, offset, length);
-      } else {
-        const { byteSize } = placeholder.structure;
-        dv = new DataView(new ArrayBuffer(byteSize));
-      }
-      const { constructor } = placeholder.structure;
-      const object = constructor.call(ENVIRONMENT, dv);
-      if (placeholder.slots) {
-        insertObjects(object[SLOTS], placeholder.slots);
-      }
-      if (placeholder.address !== undefined) {
-        // need to replace dataview with one pointing to WASM memory later,
-        // when the VM is up and running
-        this.variables.push({ address: placeholder.address, object });
-      }
-      return object;
-    };
-    initializeErrorSets();
-    for (const structure of structures) {
-      for (const target of [ structure.static, structure.instance ]) {
-        // first create the actual template using the provided placeholder
-        if (target.template) {
-          target.template = createTemplate(target.template);
-        }
-      }
-      super.finalizeStructure(structure);
-      // place structure into its assigned slot
-      this.slots[structure.slot] = structure;
-    }
-
-    let resolve, reject;
-    const promise = new Promise((r1, r2) => {
-      resolve = r1;
-      reject = r2;
-    });
-    this.runThunk = function(index, argStruct) {
-      // wait for linking to occur, then call function again
-      // this.runThunk should have been replaced
-      return promise.then(() => this.runThunk(index, argStruct));
-    };
-    return { resolve, reject };
-  }
-
   async linkWebAssembly(source, params) {
     const {
       writeBack = true,
@@ -1220,44 +1261,9 @@ export class WebAssemblyEnvironment extends Environment {
     return zigar;
   }
 
-  linkVariables(writeBack) {
-    for (const { object, address } of this.variables) {
-      this.linkObject(object, address, writeBack);
-    }
-  }
-
-  linkObject(object, address, writeBack) {
-    if (this.inFixedMemory(object)) {
-      return;
-    }
-    const dv = object[MEMORY];
-    if (dv.byteLength !== 0) {
-      const wasmDV = this.obtainFixedView(address, dv.byteLength);
-      if (writeBack) {
-        const dest = Object.create(object.constructor.prototype);
-        dest[MEMORY] = wasmDV;
-        dest[MEMORY_COPIER](object);
-      }
-      object[MEMORY] = wasmDV;
-    }
-  }
-
-  unlinkVariables() {
-    for (const { object } of this.variables) {
-      this.unlinkObject(object);
-    }
-  }
-
-  unlinkObject(object) {
-    if (!this.inFixedMemory(object)) {
-      return;
-    }
-    const dv = object[MEMORY];
-    const relocDV = this.createRelocatableBuffer(dv.byteLength);
-    const dest = Object.create(object.constructor.prototype);
-    dest[MEMORY] = relocDV;
-    dest[MEMORY_COPIER](object);
-    object[MEMORY] = relocDV;
+  recreateAddress(offset) {
+    // WASM address space starts at 0
+    return offset;
   }
 
   invokeThunk(thunk, args) {
