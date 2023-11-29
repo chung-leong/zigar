@@ -12,22 +12,6 @@ export function addTests(importModule, options) {
   } = options;
   const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(optimize);
   describe('Variables', function() {
-    it('should import types', async function() {
-      this.timeout(120000);
-      const { default: module } = await importModule(resolve('./zig-samples/basic/types.zig'));
-      const { Int32, Int128, Struct } = module;
-      expect(Int32).to.be.a('function');
-      const int32 = new Int32(undefined);
-      int32.$ = 1234;
-      expect(int32.$).to.equal(1234);
-      expect(Int128).to.be.a('function');
-      const int128 = new Int128(0n);
-      int128.$ = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn;
-      expect(int128.$).to.equal(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn);
-      const object = new Struct({});
-      expect(object.number1).to.equal(123);
-      expect(object.number2).to.equal(456);
-    })
     it('should import primitive arrays', async function() {
       this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/arrays-with-primitives.zig'));
@@ -75,16 +59,6 @@ export function addTests(importModule, options) {
       const { string } = module.u8_slice;
       expect(string).to.equal('Hello world');
       expect([ ...module.i64_slice ]).to.eql([ 0n, 1n, 2n, 3n, 4n, 5n, 6n, 7n ]);
-    })
-    it('should import error sets', async function() {
-      this.timeout(120000);
-      const { default: module } = await importModule(resolve('./zig-samples/basic/error-sets.zig'));
-      const { NormalError, StrangeError, PossibleError } = module;
-      expect(NormalError.OutOfMemory).to.be.instanceOf(Error);
-      expect(NormalError.OutOfMemory).to.be.instanceOf(NormalError);
-      expect(PossibleError.OutOfMemory).to.be.instanceOf(PossibleError);
-      expect(StrangeError.SystemIsOnFire).to.equal(PossibleError.SystemIsOnFire);
-      expect(StrangeError.SystemIsOnFire).to.be.instanceOf(PossibleError);
     })
     it('should import arrays with structs', async function() {
       this.timeout(120000);
@@ -248,22 +222,6 @@ export function addTests(importModule, options) {
       const { Vector3 } = await importModule(resolve('./zig-samples/basic/vector-three-wide.zig'));
       const object = new Vector3(undefined);
       expect(object.length).to.equal(3);
-    })
-    it('should import enum literals', async function() {
-      this.timeout(120000);
-      const { hello, world } = await importModule(resolve('./zig-samples/basic/enum-literals.zig'));
-      expect(hello).to.equal('hello');
-      expect(world.valueOf()).to.eql({
-        0: 'Asgard',
-        1: 'Midgard',
-        2: 'Jotunheim',
-        3: 'Svartalfheim',
-        4: 'Vanaheim',
-        5: 'Muspelheim',
-        6: 'Niflheim',
-        7: 'Alfheim',
-        8: 'Nidavellir',
-      });
     })
   })
   describe('Methods', function() {
@@ -710,24 +668,6 @@ export function addTests(importModule, options) {
       expect(exports[name]).to.be.undefined;
       const lines = await capture(() => f())
       expect(lines[0]).to.equal('Hello world');
-    })
-  })
-  describe('Error handling', function() {
-    skip.permanently.unless(target === 'wasm32').
-    it('should produce an error return trace', async function() {
-      this.timeout(120000);
-      const { fail } = await importModule(resolve('./zig-samples/basic/error-trace.zig'));
-      if (runtimeSafety) {
-        expect(fail).to.throw(WebAssembly.RuntimeError)
-          .with.property('stack')
-            .that.contains('error-trace.fail')
-            .and.contains('error-trace.a')
-            .and.contains('error-trace.b')
-            .and.contains('error-trace.c')
-            .and.contains('error-trace.d');
-      } else {
-        expect(fail).to.not.throw();
-      }
     })
   })
 }
