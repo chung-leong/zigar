@@ -193,28 +193,11 @@ result write_slot(call ctx,
     return Failure;
 }
 
-bool create_options(napi_env env,
-                    module_attributes attributes,
-                    napi_value* dest) {
-    napi_value little_endian, runtime_safety;
-    return napi_create_object(env, dest) == napi_ok
-        && napi_get_boolean(env, attributes.little_endian, &little_endian) == napi_ok
-        && napi_set_named_property(env, *dest, "littleEndian", little_endian) == napi_ok
-        && napi_get_boolean(env, attributes.runtime_safety, &runtime_safety) == napi_ok
-        && napi_set_named_property(env, *dest, "runtimeSafety", runtime_safety) == napi_ok;
-}
-
 result begin_structure(call ctx,
                        const structure* s,
                        napi_value* dest) {
     napi_env env = ctx->env;
-    if (!ctx->options) {
-        /* since options are the same for all structures, we can reuse the same object */
-        if (!create_options(env, ctx->mod->attributes, ctx->options)) {
-            return Failure;
-        }
-    }
-    napi_value args[2] = { NULL, ctx->options};
+    napi_value args[1];
     napi_value type, length, byte_size, align, is_const, has_pointer, name;
     bool no_length = !(s->type == Array || s->type == Vector);
     if (napi_create_object(env, &args[0]) == napi_ok
@@ -232,7 +215,7 @@ result begin_structure(call ctx,
      && napi_set_named_property(env, args[0], "hasPointer", has_pointer) == napi_ok
      && (napi_create_string_utf8(env, s->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
      && (napi_set_named_property(env, args[0], "name", name) == napi_ok)
-     && call_js_function(ctx, beginStructure, 2, args, dest)) {
+     && call_js_function(ctx, beginStructure, 1, args, dest)) {
         return OK;
      }
      return Failure;
@@ -356,14 +339,14 @@ napi_value extract_buffer_address(napi_env env,
                                   napi_callback_info info) {
     size_t argc = 1;
     napi_value arg0;
-    void* data;
+    void* bytes;
     /* check arguments */
-    if (napi_get_cb_info(env, info, &argc, &arg0, NULL, &data) != napi_ok
-     || napi_get_arraybuffer_info(env, arg0, &data, NULL) != napi_ok) {
+    if (napi_get_cb_info(env, info, &argc, &arg0, NULL, NULL) != napi_ok
+     || napi_get_arraybuffer_info(env, arg0, &bytes, NULL) != napi_ok) {
         return throw_error(env, "Argument must be ArrayBuffer");
     }
     napi_value address;
-    if (napi_create_bigint_uint64(env, (uintptr_t) data, &address) != napi_ok) {
+    if (napi_create_bigint_uint64(env, (uintptr_t) bytes, &address) != napi_ok) {
         return throw_last_error(env);
     }
     return address;
@@ -527,6 +510,17 @@ bool export_functions(napi_env env,
         && export_function(env, js_env, "findSentinel", find_sentinel, md);
 }
 
+bool set_attributes(napi_env env,
+                    napi_value js_env,
+                    module_data* md) {
+    module_attributes attributes = md->mod->attributes;
+    napi_value little_endian, runtime_safety;
+    return napi_get_boolean(env, attributes.little_endian, &little_endian) == napi_ok
+        && napi_set_named_property(env, js_env, "littleEndian", little_endian) == napi_ok
+        && napi_get_boolean(env, attributes.runtime_safety, &runtime_safety) == napi_ok
+        && napi_set_named_property(env, js_env, "runtimeSafety", runtime_safety) == napi_ok;
+}
+
 napi_value load_module(napi_env env,
                        napi_callback_info info) {
     void* data;
@@ -611,8 +605,8 @@ napi_value load_module(napi_env env,
         return throw_error(env, "Unable to save runtime environment");
     }
 
-    /* add functions to environment */
-    if (!export_functions(env, js_env, md)) {
+    /* add functions and attributes to environment */
+    if (!export_functions(env, js_env, md) || !set_attributes(env, js_env, md)) {
         return throw_error(env, "Unable to modify runtime environment");
     }
     return js_env;

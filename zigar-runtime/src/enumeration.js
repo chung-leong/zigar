@@ -15,7 +15,6 @@ export function finalizeEnumeration(s, env) {
       members,
       template,
     },
-    options,
   } = s;
   /* DEV-TEST */
   for (const member of members) {
@@ -25,7 +24,7 @@ export function finalizeEnumeration(s, env) {
   }
   /* DEV-TEST-END */
   const Primitive = getPrimitiveClass(members[0]);
-  const { get: getValue } = getDescriptor(members[0], options);
+  const { get: getValue } = getDescriptor(members[0], env);
   const count = members.length;
   const items = {};
   const constructor = s.constructor = function(arg) {

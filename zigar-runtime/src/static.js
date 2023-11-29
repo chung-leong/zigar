@@ -9,11 +9,10 @@ export function addStaticMembers(s, env) {
       members,
       template,
     },
-    options,
   } = s;
   const descriptors = {};
   for (const member of members) {
-    descriptors[member.name] = getDescriptor(member, options);
+    descriptors[member.name] = getDescriptor(member, env);
   }
   defineProperties(constructor, {
     ...descriptors,

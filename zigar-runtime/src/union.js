@@ -21,12 +21,9 @@ export function finalizeUnion(s, env) {
       members,
       template,
     },
-    options,
     hasPointer,
   } = s;
-  const {
-    runtimeSafety = true,
-  } = options;
+  const { runtimeSafety } = env;
   const descriptors = {};
   let getEnumItem;
   let valueMembers;

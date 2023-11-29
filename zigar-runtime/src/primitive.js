@@ -13,7 +13,6 @@ export function finalizePrimitive(s, env) {
     instance: {
       members: [ member ],
     },
-    options,
   } = s;
   addTypedArray(s);
   const constructor = s.constructor = function(arg) {
@@ -67,7 +66,7 @@ export function finalizePrimitive(s, env) {
       }
     }
   };
-  const { get, set } = getDescriptor(member, options);
+  const { get, set } = getDescriptor(member, env);
   defineProperties(constructor.prototype, {
     $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },

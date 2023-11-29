@@ -18,7 +18,6 @@ export function finalizeSlice(s, env) {
       members: [ member ],
     },
     hasPointer,
-    options,
   } = s;
   const typedArray = addTypedArray(s);
   /* DEV-TEST */
@@ -200,10 +199,10 @@ function getLength() {
   return this[LENGTH];
 }
 
-export function getSentinel(structure, options) {
+export function getSentinel(structure, env) {
   const {
     runtimeSafety = true,
-  } = options;
+  } = env;
   const {
     byteSize,
     instance: { members: [ member, sentinel ], template },
@@ -217,9 +216,9 @@ export function getSentinel(structure, options) {
     throw new Error(`bitOffset must be 0 for sentinel member`);
   }
   /* DEV-TEST-END */
-  const { get: getSentinelValue } = getDescriptor(sentinel, options);
+  const { get: getSentinelValue } = getDescriptor(sentinel, env);
   const value = getSentinelValue.call(template, 0);
-  const { get } = getDescriptor(member, options);
+  const { get } = getDescriptor(member, env);
   const validateValue = (runtimeSafety) ? function(v, i, l) {
     if (v === value && i !== l - 1) {
       throwMisplacedSentinel(structure, v, i, l);

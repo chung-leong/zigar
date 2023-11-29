@@ -14,7 +14,6 @@ export function finalizeVector(s, env) {
     instance: {
       members: [ member ],
     },
-    options,
   } = s;
   addTypedArray(s);
   /* DEV-TEST */
@@ -71,7 +70,7 @@ export function finalizeVector(s, env) {
   };
   const elementDescriptors = {};
   for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
-    const { get, set } = getDescriptor({ ...member, bitOffset }, options);
+    const { get, set } = getDescriptor({ ...member, bitOffset }, env);
     elementDescriptors[i] = { get, set, configurable: true };
   }
   defineProperties(constructor.prototype, {

@@ -20,11 +20,10 @@ export function finalizeStruct(s, env) {
       template,
     },
     hasPointer,
-    options,
   } = s;
   const descriptors = {};
   for (const member of members) {
-    descriptors[member.name] = getDescriptor(member, options);
+    descriptors[member.name] = getDescriptor(member, env);
   }
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);

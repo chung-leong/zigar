@@ -14,11 +14,10 @@ export function finalizeOptional(s, env) {
     byteSize,
     align,
     instance: { members },
-    options,
     hasPointer,
   } = s;
-  const { get: getValue, set: setValue } = getDescriptor(members[0], options);
-  const { get: getPresent, set: setPresent } = getDescriptor(members[1], options);
+  const { get: getValue, set: setValue } = getDescriptor(members[0], env);
+  const { get: getPresent, set: setPresent } = getDescriptor(members[1], env);
   const get = function() {
     const present = getPresent.call(this);
     if (present) {

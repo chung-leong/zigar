@@ -15,11 +15,10 @@ export function finalizeErrorUnion(s, env) {
     byteSize,
     align,
     instance: { members },
-    options,
     hasPointer,
   } = s;
-  const { get: getValue, set: setValue } = getDescriptor(members[0], options);
-  const { get: getError, set: setError } = getDescriptor(members[1], options);
+  const { get: getValue, set: setValue } = getDescriptor(members[0], env);
+  const { get: getError, set: setError } = getDescriptor(members[1], env);
   const { structure: errorStructure } = members[1];
   const { constructor: ErrorSet } = errorStructure;
   const set = function(value) {

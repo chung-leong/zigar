@@ -28,7 +28,6 @@ export function generateStructureDefinitions(structures, params) {
       methods: [],
       template: null,
     },
-    options: { littleEndian, runtimeSafety },
   };
   const defaultMember = {
     type: MemberType.Void,
@@ -183,7 +182,7 @@ export function generateStructureDefinitions(structures, params) {
     add(`Object.assign(${varname}, {`);
     add(`...s,`);
     for (const [ name, value ] of Object.entries(structure)) {
-      if (name !== 'options' && isDifferent(value, defaultStructure[name])) {
+      if (isDifferent(value, defaultStructure[name])) {
         switch (name) {
           case 'constructor':
           case 'sentinel':
@@ -222,6 +221,22 @@ function generateWASMImports(structures, params) {
   } = params;
   const lines = [];
   const add = manageIndentation(lines);
+  const imports = [ 'Environment' ];
+  imports.push(...features);
+  add(`import {`);
+  for (const name of imports) {
+    add(`${name},`);
+  }
+  add(`} from ${JSON.stringify(runtimeURL)};`);
+
+  add(`\n// activate features`);
+  for (const feature of features) {
+    add(`${feature}();`);
+  }
+  return lines.join;
+}
+
+function getStructureFeatures(structures) {
   const structureFeatures = {}, memberFeatures = {};
   for (const structure of structures) {
     structureFeatures[ getStructureFeature(structure) ] = true;
@@ -253,68 +268,11 @@ function generateWASMImports(structures, params) {
   if (memberFeatures.useBoolEx) {
     delete memberFeatures.useBool;
   }
-  const features = [ ...Object.keys(structureFeatures), ...Object.keys(memberFeatures) ];
-  const imports = [ 'Environment' ];
-  imports.push(...features);
-  add(`import {`);
-  for (const name of imports) {
-    add(`${name},`);
-  }
-  add(`} from ${JSON.stringify(runtimeURL)};`);
-
-  add(`\n// activate features`);
-  for (const feature of features) {
-    add(`${feature}();`);
-  }
-  return lines.join;
+  return [ ...Object.keys(structureFeatures), ...Object.keys(memberFeatures) ];
 }
 
-function generateNodeImports() {
-  return [
-    'import { }'
-  ];
-}
-
-export function generateCode(structures, params) {
-  const {
-    runtimeURL,
-    loadWASM,
-    topLevelAwait,
-    omitExports,
-    runtimeSafety,
-  } = params;
-
-
-
-  add(`const env = new Environment();`)
-  add(`const { resolve, reject } = env.finalizeStructures(structures);`);
-
-  // the root structure gets finalized last
+function getExports(structures) {
   const root = structures[structures.length - 1];
-  add(`const module = ${structureNames.get(root)}.constructor;`);
-
-  if (loadWASM) {
-    add(`\n// initiate loading and compilation of WASM bytecodes`);
-    add(`const wasmPromise = ${loadWASM};`);
-    add(`const initPromise = env.linkWebAssembly(wasmPromise, { writeBack: ${!topLevelAwait} });`);
-    add(`initPromise.then(resolve, reject);`);
-  } else {
-    add(`\n// no need to use WASM binary`);
-    add(`const initPromise = Promise.resolve();`);
-  }
-  add(`const __zigar = {`);
-  add(`init: () => initPromise,`);
-  add(`abandon: () => initPromise.then(res => res?.abandon()),`);
-  add(`released: () => initPromise.then(res => res?.released() ?? false),`);
-  add(`};`)
-
-  add(`\n// export functions, types, and constants`);
-  const exportables = [];
-  for (const method of root.static.methods) {
-    if (/^[$\w]+$/.test(method.name)) {
-      exportables.push(method.name);
-    }
-  }
   for (const member of root.static.members) {
     // only read-only properties are exportable
     let readOnly = false;
@@ -329,31 +287,7 @@ export function generateCode(structures, params) {
       exportables.push(member.name);
     }
   }
-  add(`const {`);
-  for (const name of exportables) {
-    add(`${name},`);
-  }
-  add(`} = module;`);
-  if (!omitExports) {
-    add(`export {`);
-    for (const name of [ 'module as default', ...exportables, '__zigar' ]) {
-      add(`${name},`);
-    }
-    add(`};`);
-  }
-  if (topLevelAwait && loadWASM) {
-    add(`\n// await initialization`);
-    add(`await initPromise`);
-  }
-  add(``);
-  const exports = [ 'default', ...exportables, '__zigar' ];
-  const code = lines.join('\n');
-  return { code, exports, structures };
-
-
-
-
-
+  return [ 'default', ...exportables, '__zigar' ];
 }
 
 function manageIndentation(lines) {

@@ -17,7 +17,6 @@ export function finalizeArray(s, env) {
       members: [ member ],
     },
     hasPointer,
-    options,
   } = s;
   /* DEV-TEST */
   /* c8 ignore next 6 */
@@ -104,7 +103,7 @@ export function finalizeArray(s, env) {
       }
     }
   };
-  const { get, set } = getDescriptor(member, options);
+  const { get, set } = getDescriptor(member, env);
   defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },

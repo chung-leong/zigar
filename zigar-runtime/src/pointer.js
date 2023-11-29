@@ -16,11 +16,10 @@ export function finalizePointer(s, env) {
       members: [ member ],
     },
     isConst,
-    options,
   } = s;
   const {
     runtimeSafety = true,
-  } = options;
+  } = env;
   const { structure: targetStructure } = member;
   const isTargetSlice = (targetStructure.type === StructureType.Slice);
   const isTargetPointer = (targetStructure.type === StructureType.Pointer);
@@ -32,14 +31,14 @@ export function finalizePointer(s, env) {
     bitSize: addressSize * 8,
     byteSize: addressSize,
     structure: { byteSize: addressSize },
-  }, options);
+  }, env);
   const { get: getLength, set: setLength } = (hasLength) ? getDescriptor({
     type: MemberType.Uint,
     bitOffset: addressSize * 8,
     bitSize: addressSize * 8,
     byteSize: addressSize,
     structure: { name: 'usize', byteSize: addressSize },
-  }, options) : {};
+  }, env) : {};
   const constructor = s.constructor = function(arg) {
     const calledFromEnviroment = this === ENVIRONMENT;
     const calledFromParent = this === PARENT;

@@ -190,7 +190,6 @@ typedef struct {
 typedef struct call_context {
   napi_env env;
   napi_value js_env;
-  napi_value options;
   module_data *mod_data;
 } call_context;
 

@@ -20,6 +20,8 @@ export class Environment {
   initPromise = Promise.resolve();
   abandoned = false;
   released = false;
+  littleEndian;
+  runtimeSafety;
 
   /*
   Functions to be defined in subclass:
@@ -177,7 +179,7 @@ export class Environment {
     };
   }
 
-  beginStructure(def, options = {}) {
+  beginStructure(def) {
     const {
       type,
       name,
@@ -207,7 +209,6 @@ export class Environment {
         methods: [],
         template: null,
       },
-      options,
     };
   }
 
@@ -234,7 +235,78 @@ export class Environment {
     this.acquireDefaultPointers(s);
     return constructor;
   }
+
+  acquireStructures(options) {
+    const {
+      omitFunctions = false,
+    } = options;
+    if (omitFunctions) {
+      this.attachMethod = () => {};
+    }
+    initializeErrorSets();
+    const result = this.defineStructures();
+    if (typeof(result) === 'string') {
+      throwZigError(result);
+    }
+  }
+
+  exportStructures() {
+    this.replaceFixedMemory();
+    return {
+      structures: this.structures,
+      options: this.getOptions(),
+    };    
+  }
+
+  replaceFixedMemory() {
+    // look for buffers that requires linkage
+    const list = [];
+    const find = (object) => {
+      if (!object) {
+        return;
+      }
+      if (object[MEMORY]) {
+        if (this.inFixedMemory(object)) {
+          const dv = object[MEMORY];
+          // replace fixed memory
+          const address = dv.byteOffset;
+          const len = dv.byteLength;
+          const relocDV = this.createView(address, len, true);
+          relocDV.address = address;
+          object[MEMORY] = relocDV;
+          list.push({ address, len, owner: object, replaced: false });
+        }
+      }
+      if (object[SLOTS]) {
+        for (const child of Object.values(object[SLOTS])) {
+          find(child);
+        }
+      }
+    };
+    for (const structure of this.structures) {
+      find(structure.instance.template);
+      find(structure.static.template);
+    }
+    // larger memory blocks come first
+    list.sort((a, b) => b.len - a.len);
+    for (const a of list) {
+      for (const b of list) {
+        if (a !== b && !a.replaced) {
+          if (a.address <= b.address && b.address + b.len <= a.address + a.len) {
+            // B is inside A--replace it with a view of A's buffer
+            const dv = a.owner[MEMORY];
+            const offset = b.address - a.address + dv.byteOffset;
+            const newDV = new DataView(dv.buffer, offset, b.len);
+            newDV.address = b.address;
+            b.owner[MEMORY] = newDV;
+            b.replaced = true;
+          }
+        }
+      }
+    }
+  }
   /* COMPTIME-ONLY-END */
+
 
   finalizeStructure(s) {
     try {
@@ -309,10 +381,10 @@ export class Environment {
       if (placeholder.slots) {
         insertObjects(object[SLOTS], placeholder.slots);
       }
-      if (placeholder.address !== undefined) {
-        // need to replace dataview with one pointing to WASM memory later,
+      if (placeholder.offset !== undefined) {
+        // need to replace dataview with one pointing to fixed memory later,
         // when the VM is up and running
-        this.variables.push({ address: placeholder.address, object });
+        this.variables.push({ offset: placeholder.offset, object });
       }
       return object;
     };
@@ -1186,79 +1258,12 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   /* COMPTIME-ONLY */
-  runFactory(options) {
-    const {
-      omitFunctions = false
-    } = options;
-    if (omitFunctions) {
-      this.attachMethod = () => {};
-    }
-    initializeErrorSets();
-    const result = this.defineStructures();
-    if (typeof(result) === 'string') {
-      throwZigError(result);
-    }
-    this.replaceFixedMemory();
-    return {
-      structures: this.structures,
-      runtimeSafety: this.isRuntimeSafetyActive(),
-    };
-  }
-
   beginDefinition() {
     return {};
   }
 
   insertProperty(def, name, value) {
     def[name] = value;
-  }
-
-  replaceFixedMemory() {
-    // look for buffers that requires linkage
-    const list = [];
-    const find = (object) => {
-      if (!object) {
-        return;
-      }
-      if (object[MEMORY]) {
-        if (this.inFixedMemory(object)) {
-          const dv = object[MEMORY];
-          // replace fixed memory
-          const address = dv.byteOffset;
-          const len = dv.byteLength;
-          const relocDV = this.createView(address, len, true);
-          relocDV.address = address;
-          object[MEMORY] = relocDV;
-          list.push({ address, len, owner: object, replaced: false });
-        }
-      }
-      if (object[SLOTS]) {
-        for (const child of Object.values(object[SLOTS])) {
-          find(child);
-        }
-      }
-    };
-    for (const structure of this.structures) {
-      find(structure.instance.template);
-      find(structure.static.template);
-    }
-    // larger memory blocks come first
-    list.sort((a, b) => b.len - a.len);
-    for (const a of list) {
-      for (const b of list) {
-        if (a !== b && !a.replaced) {
-          if (a.address <= b.address && b.address + b.len <= a.address + a.len) {
-            // B is inside A--replace it with a view of A's buffer
-            const dv = a.owner[MEMORY];
-            const offset = b.address - a.address + dv.byteOffset;
-            const newDV = new DataView(dv.buffer, offset, b.len);
-            newDV.address = b.address;
-            b.owner[MEMORY] = newDV;
-            b.replaced = true;
-          }
-        }
-      }
-    }
   }
   /* COMPTIME-ONLY-END */
 

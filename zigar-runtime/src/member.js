@@ -152,7 +152,7 @@ export function isByteAligned({ bitOffset, bitSize, byteSize }) {
   return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
 }
 
-export function getDescriptor(member, options = {}) {
+export function getDescriptor(member, env) {
   const f = factories[member.type];
   /* DEV-TEST */
   /* c8 ignore next 4 */
@@ -161,11 +161,11 @@ export function getDescriptor(member, options = {}) {
     throw new Error(`No factory for ${name}: ${member.name}`);
   }
   /* DEV-TEST-END */
-  return { ...f(member, options), configurable: true, enumerable: true };
+  return { ...f(member, env), configurable: true, enumerable: true };
 }
 
-export function getVoidDescriptor(member, options) {
-  const { runtimeSafety } = options;
+export function getVoidDescriptor(member, env) {
+  const { runtimeSafety } = env;
   return {
     get: function() {
       return null;
@@ -180,39 +180,39 @@ export function getVoidDescriptor(member, options) {
   }
 }
 
-export function getBoolDescriptor(member, options) {
-  return getDescriptorUsing(member, options, getDataViewBoolAccessor)
+export function getBoolDescriptor(member, env) {
+  return getDescriptorUsing(member, env, getDataViewBoolAccessor)
 }
 
-export function getBoolDescriptorEx(member, options) {
-  return getDescriptorUsing(member, options, getDataViewBoolAccessorEx)
+export function getBoolDescriptorEx(member, env) {
+  return getDescriptorUsing(member, env, getDataViewBoolAccessorEx)
 }
 
-export function getIntDescriptor(member, options) {
-  const getDataViewAccessor = addRuntimeCheck(options, getDataViewIntAccessor);
-  return getDescriptorUsing(member, options, getDataViewAccessor)
+export function getIntDescriptor(member, env) {
+  const getDataViewAccessor = addRuntimeCheck(env, getDataViewIntAccessor);
+  return getDescriptorUsing(member, env, getDataViewAccessor)
 }
 
-export function getIntDescriptorEx(member, options) {
-  const getDataViewAccessor = addRuntimeCheck(options, getDataViewIntAccessorEx);
-  return getDescriptorUsing(member, options, getDataViewAccessor)
+export function getIntDescriptorEx(member, env) {
+  const getDataViewAccessor = addRuntimeCheck(env, getDataViewIntAccessorEx);
+  return getDescriptorUsing(member, env, getDataViewAccessor)
 }
 
-export function getUintDescriptor(member, options) {
-  const getDataViewAccessor = addRuntimeCheck(options, getDataViewUintAccessor);
-  return getDescriptorUsing(member, options, getDataViewAccessor)
+export function getUintDescriptor(member, env) {
+  const getDataViewAccessor = addRuntimeCheck(env, getDataViewUintAccessor);
+  return getDescriptorUsing(member, env, getDataViewAccessor)
 }
 
-export function getUintDescriptorEx(member, options) {
-  const getDataViewAccessor = addRuntimeCheck(options, getDataViewUintAccessorEx);
-  return getDescriptorUsing(member, options, getDataViewAccessor)
+export function getUintDescriptorEx(member, env) {
+  const getDataViewAccessor = addRuntimeCheck(env, getDataViewUintAccessorEx);
+  return getDescriptorUsing(member, env, getDataViewAccessor)
 }
 
-function addRuntimeCheck(options, getDataViewAccessor) {
+function addRuntimeCheck(env, getDataViewAccessor) {
   return function (access, member) {
     const {
       runtimeSafety = true,
-    } = options;
+    } = env;
     const accessor = getDataViewAccessor(access, member);
     /* DEV-TEST */
     if (!accessor) {
@@ -232,22 +232,22 @@ function addRuntimeCheck(options, getDataViewAccessor) {
   };
 }
 
-export function getFloatDescriptor(member, options) {
-  return getDescriptorUsing(member, options, getDataViewFloatAccessor)
+export function getFloatDescriptor(member, env) {
+  return getDescriptorUsing(member, env, getDataViewFloatAccessor)
 }
 
-export function getFloatDescriptorEx(member, options) {
-  return getDescriptorUsing(member, options, getDataViewFloatAccessorEx)
+export function getFloatDescriptorEx(member, env) {
+  return getDescriptorUsing(member, env, getDataViewFloatAccessorEx)
 }
 
-export function getEnumerationItemDescriptor(member, options) {
+export function getEnumerationItemDescriptor(member, env) {
   const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessor);
-  return getDescriptorUsing(member, options, getDataViewAccessor) ;
+  return getDescriptorUsing(member, env, getDataViewAccessor) ;
 }
 
-export function getEnumerationItemDescriptorEx(member, options) {
+export function getEnumerationItemDescriptorEx(member, env) {
   const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessorEx);
-  return getDescriptorUsing(member, options, getDataViewAccessor) ;
+  return getDescriptorUsing(member, env, getDataViewAccessor) ;
 }
 
 function addEnumerationLookup(getDataViewIntAccessor) {
@@ -305,7 +305,7 @@ function isValueExpected(structure) {
   }
 }
 
-export function getObjectDescriptor(member, options) {
+export function getObjectDescriptor(member, env) {
   const { structure, slot } = member;
   if (slot !== undefined) {
     return {
@@ -343,7 +343,7 @@ export function getObjectDescriptor(member, options) {
   }
 }
 
-export function getTypeDescriptor(member, options) {
+export function getTypeDescriptor(member, env) {
   const { slot } = member;
   return {
     get: function getType() {
@@ -355,7 +355,7 @@ export function getTypeDescriptor(member, options) {
   };
 }
 
-export function getComptimeDescriptor(member, options) {
+export function getComptimeDescriptor(member, env) {
   const { slot, structure } = member;
   return {
     get: (isValueExpected(structure))
@@ -370,10 +370,10 @@ export function getComptimeDescriptor(member, options) {
   };
 }
 
-export function getStaticDescriptor(member, options) {
+export function getStaticDescriptor(member, env) {
   const { slot } = member;
   return {
-    ...getComptimeDescriptor(member, options),
+    ...getComptimeDescriptor(member, env),
     set: function setValue(value) {
       const object = this[TEMPLATE_SLOTS][slot];
       object.$ = value;
@@ -381,7 +381,7 @@ export function getStaticDescriptor(member, options) {
   };
 }
 
-export function getLiteralDescriptor(member, options) {
+export function getLiteralDescriptor(member, env) {
   const { slot } = member;
   return {
     get: function getType() {
@@ -392,10 +392,10 @@ export function getLiteralDescriptor(member, options) {
   };
 }
 
-function getDescriptorUsing(member, options, getDataViewAccessor) {
+function getDescriptorUsing(member, env, getDataViewAccessor) {
   const {
     littleEndian = true,
-  } = options;
+  } = env;
   const { bitOffset, byteSize } = member;
   const getter = getDataViewAccessor('get', member);
   const setter = getDataViewAccessor('set', member);
