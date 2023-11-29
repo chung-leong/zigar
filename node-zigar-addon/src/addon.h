@@ -178,14 +178,20 @@ typedef struct {
   export_table* exports;
   import_table* imports;
   void* base_address;
-  size_t ref_count;
 } module;
+
+typedef struct {
+  int ref_count;
+  module *mod;
+  void* so_handle;
+  napi_ref js_env;
+} module_data;
 
 typedef struct call_context {
   napi_env env;
   napi_value js_env;
   napi_value options;
-  module* mod;
+  module_data *mod_data;
 } call_context;
 
 #endif

@@ -3,38 +3,39 @@
 int32_t module_count = 0;
 int32_t buffer_count = 0;
 
-int reference_module(module* mod) {
-    /* TODO: use atomic increment */
-    return ++mod->ref_count;
+void reference_module(module_data* md) {
+    return md->ref_count++;
 }
 
-void release_module(module* mod) {
-    mod->ref_count--;
-    if (mod->ref_count == 0) {
-        dlclose(mod->base_address);
+void release_module(napi_env env,
+                    module_data* md) {
+    md->ref_count--;
+    if (md->ref_count == 0) {
+        napi_value js_env, released;
+        if (napi_get_reference_value(env, md->js_env, &js_env) == napi_ok
+         && napi_get_boolean(env, true, &released) == napi_ok) {
+            /* indicate to the environment that the shared lib has been released */
+            napi_set_named_property(env, js_env, "released", released);
+        }
+        dlclose(md->so_handle);
+        free(md);
         module_count--;
     }
-}
-
-void finalize_module(napi_env env,
-                     void* finalize_data,
-                     void* finalize_hint) {
-    release_module((module*) finalize_hint);
 }
 
 void finalize_external_buffer(napi_env env,
                               void* finalize_data,
                               void* finalize_hint) {
-    release_module((module*) finalize_hint);
+    release_module(env, (module_data*) finalize_hint);
     buffer_count--;
 }
 
 bool create_external_buffer(napi_env env,
                             uint8_t* bytes,
                             size_t len,
-                            module* mod,
+                            module_data* md,
                             napi_value* dest) {
-    reference_module(mod);
+    reference_module(md);
     buffer_count++;
     /* create a reference to the module so that the shared library doesn't get unloaded
        while the external buffer is still around pointing to it */
@@ -381,9 +382,9 @@ napi_value allocate_external_memory(napi_env env,
     } else if (napi_get_value_uint32(env, args[1], &align) != napi_ok) {
         return throw_error(env, "Align must be number");
     }
-    module* mod = (module*) data;
+    module_data* md = (module_data*) data;
     memory mem;
-    if (mod->imports->allocate_fixed_memory(len, align, &mem) != OK) {
+    if (md->mod->imports->allocate_fixed_memory(len, align, &mem) != OK) {
         return throw_error(env, "Unable to allocate fixed memory");
     }
     napi_value buffer;
@@ -411,9 +412,9 @@ napi_value free_external_memory(napi_env env,
     } else if (napi_get_value_uint32(env, args[2], &align) != napi_ok) {
         return throw_error(env, "Align must be number");
     }
-    module* mod = (module*) data;
+    module_data* md = (module_data*) data;
     memory mem = { (void*) address, len, { align, false, false } };
-    mod->imports->free_fixed_memory(&mem);
+    md->mod->imports->free_fixed_memory(&mem);
 }
 
 napi_value obtain_external_buffer(napi_env env,
@@ -430,9 +431,9 @@ napi_value obtain_external_buffer(napi_env env,
     } else if (napi_get_value_double(env, args[1], &len) != napi_ok) {
         return throw_error(env, "Length must be number");
     }
-    module* mod = (module*) data;
+    module_data* md = (module_data*) data;
     napi_value buffer;
-    if (!create_external_buffer(env, (uint8_t*) address, len, mod, &buffer)) {
+    if (!create_external_buffer(env, (uint8_t*) address, len, md, &buffer)) {
         return throw_last_error(env);
     }
     return buffer;
@@ -493,27 +494,37 @@ napi_value find_sentinel(napi_env env,
     return NULL;
 }
 
-bool add_function(napi_env env,
-                  napi_value target,
-                  const char* name,
-                  napi_callback cb,
-                  void* data) {
-    napi_value function;
-    return napi_create_function(env, name, NAPI_AUTO_LENGTH, cb, data, &function) == napi_ok
-        && napi_set_named_property(env, target, name, function) == napi_ok;
+void finalize_function(napi_env env,
+                       void* finalize_data,
+                       void* finalize_hint) {
+    release_module(env, (module_data*) finalize_hint);
 }
 
-bool override_environment_functions(napi_env env,
-                                    napi_value env_constructor,
-                                    module* mod) {
-    napi_value prototype;
-    return napi_get_named_property(env, env_constructor, "prototype", &prototype) == napi_ok
-        && add_function(env, prototype, "extractBufferAddress", extract_buffer_address, mod)
-        && add_function(env, prototype, "allocateExternalMemory", allocate_external_memory, mod)
-        && add_function(env, prototype, "freeExternalMemory", free_external_memory, mod)
-        && add_function(env, prototype, "obtainExternalBuffer", obtain_external_buffer, mod)
-        && add_function(env, prototype, "copyBytes", copy_bytes, mod)
-        && add_function(env, prototype, "findSentinel", find_sentinel, mod);
+bool export_function(napi_env env,
+                     napi_value js_env,
+                     const char* name,
+                     napi_callback cb,
+                     module_data* md) {
+    napi_value function;
+    bool success = napi_create_function(env, name, NAPI_AUTO_LENGTH, cb, md, &function) == napi_ok
+                && napi_add_finalizer(env, function, NULL, finalize_function, md, NULL)
+                && napi_set_named_property(env, js_env, name, function) == napi_ok;
+    if (success) {
+        /* maintain a reference on the module */
+        reference_module(md);
+    }
+    return false;
+}
+
+bool export_functions(napi_env env,
+                      napi_value js_env,
+                      module_data* md) {
+    return export_function(env, js_env, "extractBufferAddress", extract_buffer_address, md)
+        && export_function(env, js_env, "allocateExternalMemory", allocate_external_memory, md)
+        && export_function(env, js_env, "freeExternalMemory", free_external_memory, md)
+        && export_function(env, js_env, "obtainExternalBuffer", obtain_external_buffer, md)
+        && export_function(env, js_env, "copyBytes", copy_bytes, md)
+        && export_function(env, js_env, "findSentinel", find_sentinel, md);
 }
 
 napi_value load_module(napi_env env,
@@ -546,18 +557,12 @@ napi_value load_module(napi_env env,
     if (mod->version != 2) {
         return throw_error(env, "Cached module is compiled for a different version of Zigar");
     }
-    int ref_count = reference_module(mod);
-    if (ref_count == 1) {
-        mod->base_address = symbol;
+    mod->base_address = symbol;
 #ifdef WIN32
-        /* we can't override write() the normal way on Windows 
-           need to intercept the call to kernel32.dll instead */
-        patch_write_file(handle, mod->imports->override_write);
+    /* we can't override write() the normal way on Windows 
+        need to intercept the call to kernel32.dll instead */
+    patch_write_file(handle, mod->imports->override_write);
 #endif
-    } else {
-        /* decrement the ref count if the library was already loaded */
-        dlclose(handle);
-    }
 
     /* attach exports to module */
     export_table* exports = mod->exports;
@@ -591,23 +596,24 @@ napi_value load_module(napi_env env,
         return throw_error(env, "Unable to find the class \"Environment\"");
     }
 
-    /* add functions to Environment class */
-    if (!override_environment_functions(env, env_constructor, mod)) {
-        return throw_error(env, "Unable to modify runtime environment");
-    }
-
     /* create the environment */
     napi_value js_env;
     if (napi_new_instance(env, env_constructor, 0, NULL, &js_env) != napi_ok) {
         return throw_error(env, "Unable to create runtime environment");
     }
 
-    /* create dummy object for keeping reference on module */
-    napi_value module_holder;
-    if (napi_create_object(env, &module_holder) != napi_ok
-     || napi_add_finalizer(env, module_holder, NULL, finalize_module, mod, NULL) != napi_ok
-     || napi_set_named_property(env, js_env, "module", module_holder) != napi_ok) {
-        return throw_error(env, "Unable to assign module to runtime environment");
+    /* tie environment to module using an ref-counted object */
+    module_data* md = (module_data*) calloc(1, sizeof(module_data));
+    md->mod = mod;
+    md->so_handle = handle;
+    if (napi_create_reference(env, js_env, 0, &md->js_env) != napi_ok) {
+        free(md);
+        return throw_error(env, "Unable to save runtime environment");
+    }
+
+    /* add functions to environment */
+    if (!export_functions(env, js_env, md)) {
+        return throw_error(env, "Unable to modify runtime environment");
     }
     return js_env;
 }
@@ -627,10 +633,20 @@ napi_value get_gc_statistics(napi_env env,
     return stats;
 }
 
+bool add_function(napi_env env,
+                  napi_value target,
+                  const char* name,
+                  napi_callback cb,
+                  void* data) {
+    napi_value function;
+    return napi_create_function(env, name, NAPI_AUTO_LENGTH, cb, data, &function) == napi_ok
+        && napi_set_named_property(env, target, name, function) == napi_ok;
+}
+
 napi_value create_addon(napi_env env) {
     napi_value exports;
     bool success = napi_create_object(env, &exports) == napi_ok
-                && add_function(env, exports, "load", load_module, NULL)
+                && add_function(env, exports, "loadModule", load_module, NULL)
                 && add_function(env, exports, "getGCStatistics", get_gc_statistics, NULL);
     if (!success) {
         return throw_last_error(env);

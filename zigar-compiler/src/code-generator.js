@@ -2,25 +2,226 @@ import { MEMORY, SLOTS } from '../../zigar-runtime/src/symbol.js';
 import { MemberType, getMemberFeature } from '../../zigar-runtime/src/member.js';
 import { StructureType, getStructureFeature } from '../../zigar-runtime/src/structure.js';
 
-export function generateCode(structures, params) {
+export function generateStructureDefinitions(structures, params) {
   const {
-    runtimeURL,
-    loadWASM,
-    topLevelAwait,
-    omitExports,
+    littleEndian,
     runtimeSafety,
   } = params;
   const lines = [];
-  let indent = 0;
-  function add(s) {
-    if (/^\s*[\]\}]/.test(s)) {
-      indent--;
-    }
-    lines.push(' '.repeat(indent * 2) + s);
-    if (/[\[\{]\s*$/.test(s)) {
-      indent++;
+  const add = manageIndentation(lines);
+  const defaultStructure = {
+    constructor: null,
+    typedArray: null,
+    type: StructureType.Primitive,
+    name: undefined,
+    byteSize: 4,
+    align: 2,
+    isConst: false,
+    hasPointer: false,
+    instance: {
+      members: [],
+      methods: [],
+      template: null,
+    },
+    static: {
+      members: [],
+      methods: [],
+      template: null,
+    },
+    options: { littleEndian, runtimeSafety },
+  };
+  const defaultMember = {
+    type: MemberType.Void,
+    isRequired: true,
+  };
+  add(`\n// define structures`);
+  // default structure
+  add(`const s = {`);
+  for (const [ name, value ] of Object.entries(defaultStructure)) {
+    switch (name) {
+      case 'instance':
+      case 'static':
+        addStructureContent(name, value);
+        break;
+      default:
+        add(`${name}: ${JSON.stringify(value)},`);
     }
   }
+  add(`};`);
+  // default member
+  add(`const m = {`);
+  for (const [ name, value ] of Object.entries(defaultMember)) {
+    add(`${name}: ${JSON.stringify(value)},`);
+  }
+  add(`};`);
+
+  // create empty objects first, to allow structs to reference themselves
+  const structureNames = new Map();
+  const structureMap = new Map();
+  const methodNames = new Map();
+  const arrayBufferNames = new Map();
+  let arrayBufferCount = 0;
+  let methodCount = 0;
+  for (const [ index, structure ] of structures.entries()) {
+    const varname = `s${index}`;
+    structureNames.set(structure, varname);
+    structureMap.set(structure.constructor, structure);
+  }
+  const varnames = [ ...structureNames.values() ];
+  const initializations = varnames.map(n => `${n} = {}`);
+  for (let i = 0; i < initializations.length; i += 10) {
+    const slice = initializations.slice(i, i + 10);
+    add(`const ${slice.join(', ')};`);
+  }
+
+  const addBuffers = (object) => {
+    if (object) {
+      const { [MEMORY]: dv, [SLOTS]: slots } = object;
+      if (dv && !arrayBufferNames.get(dv.buffer)) {
+        const varname = `a${arrayBufferCount++}`;
+        arrayBufferNames.set(dv.buffer, varname);
+        if (dv.byteLength > 0) {
+          const ta = new Uint8Array(dv.buffer);
+          add(`const ${varname} = new Uint8Array([ ${ta.join(', ')} ]);`);
+        } else {
+          add(`const ${varname} = new Uint8Array();`);
+        }
+      }
+      if (slots) {
+        for (const [ slot, child ] of Object.entries(slots)) {
+          addBuffers(child);
+        }
+      }
+    }
+  };
+  const addObject = (name, object) => {
+    if (object) {
+      const structure = structureMap.get(object.constructor);
+      const { [MEMORY]: dv, [SLOTS]: slots } = object;
+      add(`${name}: {`);
+      if (structure) {
+        add(`structure: ${structureNames.get(structure)},`);
+      }
+      if (dv) {
+        const buffer = arrayBufferNames.get(dv.buffer);
+        const pairs = [ `array: ${buffer}` ];
+        if (dv.byteLength < dv.buffer.byteLength) {
+          pairs.push(`offset: ${dv.byteOffset}`);
+          pairs.push(`length: ${dv.byteLength}`);
+        }
+        add(`memory: { ${pairs.join(', ')} },`);
+        if (dv.hasOwnProperty('address')) {
+          add(`address: ${dv.address},`);
+        }
+      }
+      if (slots && Object.keys(slots).length > 0) {
+        add(`slots: {`);
+        for (const [ slot, child ] of Object.entries(slots)) {
+          addObject(slot, child);
+        }
+        add(`},`);
+      }
+      add(`},`);
+    } else {
+      add(`${name}: null`);
+    }
+  };
+  const addStructureContent = (name, { members, methods, template }) => {
+    add(`${name}: {`);
+    if (members.length > 0) {
+      add(`members: [`);
+      for (const member of members) {
+        add(`{`);
+        add(`...m,`);
+        for (const [ name, value ] of Object.entries(member)) {
+          if (isDifferent(value, defaultMember[name])) {
+            switch (name) {
+              case 'structure':
+                add(`${name}: ${structureNames.get(value)},`);
+                break;
+              default:
+                add(`${name}: ${JSON.stringify(value)},`);
+            }
+          }
+        }
+        add(`},`);
+      }
+      add(`],`);
+    } else {
+      add(`members: [],`);
+    }
+    const list = methods.map(m => methodNames.get(m));
+    if (list.length > 0) {
+      add(`methods: [ ${list.join(', ')} ],`);
+    } else {
+      add(`methods: [],`);
+    }
+    addObject('template', template);
+    add(`},`);
+  };
+  const addStructure = (varname, structure) => {
+    addBuffers(structure.instance.template);
+    addBuffers(structure.static.template);
+    // add static members; instance methods are also static methods, so
+    // we don't need to add them separately
+    for (const method of structure.static.methods) {
+      const varname = `f${methodCount++}`;
+      methodNames.set(method, varname);
+      add(`const ${varname} = {`);
+      for (const [ name, value ] of Object.entries(method)) {
+        switch (name) {
+          case 'argStruct':
+            add(`${name}: ${structureNames.get(value)},`);
+            break;
+          default:
+            add(`${name}: ${JSON.stringify(value)},`);
+        }
+      }
+      add(`};`);
+    }
+    //  no need to add them separately
+    add(`Object.assign(${varname}, {`);
+    add(`...s,`);
+    for (const [ name, value ] of Object.entries(structure)) {
+      if (name !== 'options' && isDifferent(value, defaultStructure[name])) {
+        switch (name) {
+          case 'constructor':
+          case 'sentinel':
+            break;
+          case 'instance':
+          case 'static':
+            addStructureContent(name, value);
+            break;
+          default:
+            add(`${name}: ${JSON.stringify(value)},`);
+        }
+      }
+    }
+    add(`});`);
+  };
+  for (const [ index, structure ] of structures.entries()) {
+    const varname = structureNames.get(structure);
+    addStructure(varname, structure);
+  }
+  if (varnames.length <= 10) {
+    add(`const structures = [ ${varnames.join(', ') } ];`);
+  } else {
+    add(`const structures = [`);
+    for (let i = 0; i < varnames.length; i += 10) {
+      const slice = varnames.slice(i, i + 10);
+      add(`${slice.join(', ')},`);
+    }
+    add(`];`);
+  }
+  return lines;
+} 
+
+function generateWASMImports(structures, params) {
+  const {
+    runtimeURL,
+  } = params;
+  const lines = [];
+  const add = manageIndentation(lines);
   const structureFeatures = {}, memberFeatures = {};
   for (const structure of structures) {
     structureFeatures[ getStructureFeature(structure) ] = true;
@@ -65,73 +266,26 @@ export function generateCode(structures, params) {
   for (const feature of features) {
     add(`${feature}();`);
   }
+  return lines.join;
+}
 
-  const defaultStructure = {
-    constructor: null,
-    typedArray: null,
-    type: StructureType.Primitive,
-    name: undefined,
-    byteSize: 4,
-    align: 2,
-    isConst: false,
-    hasPointer: false,
-    instance: {
-      members: [],
-      methods: [],
-      template: null,
-    },
-    static: {
-      members: [],
-      methods: [],
-      template: null,
-    },
-    options: { runtimeSafety },
-  };
+function generateNodeImports() {
+  return [
+    'import { }'
+  ];
+}
 
-  const defaultMember = {
-    type: MemberType.Void,
-    isRequired: true,
-  };
+export function generateCode(structures, params) {
+  const {
+    runtimeURL,
+    loadWASM,
+    topLevelAwait,
+    omitExports,
+    runtimeSafety,
+  } = params;
 
-  add(`\n// define structures`);
-  addDefaultStructure();
-  addDefaultMember();
-  const structureNames = new Map();
-  const structureMap = new Map();
-  const methodNames = new Map();
-  const arrayBufferNames = new Map();
-  let arrayBufferCount = 0;
-  let methodCount = 0;
 
-  // create empty objects first, to allow structs to reference themselves
-  for (const [ index, structure ] of structures.entries()) {
-    const varname = `s${index}`;
-    structureNames.set(structure, varname);
-    structureMap.set(structure.constructor, structure);
-  }
-  const varnames = [ ...structureNames.values() ];
-  const initializations = varnames.map(n => `${n} = {}`);
-  for (let i = 0; i < initializations.length; i += 10) {
-    const slice = initializations.slice(i, i + 10);
-    add(`const ${slice.join(', ')};`);
-  }
 
-  for (const [ index, structure ] of structures.entries()) {
-    const varname = structureNames.get(structure);
-    addStructure(varname, structure);
-  }
-
-  add(`\n// finalize structures`);
-  if (varnames.length <= 10) {
-    add(`const structures = [ ${varnames.join(', ') } ];`);
-  } else {
-    add(`const structures = [`);
-    for (let i = 0; i < varnames.length; i += 10) {
-      const slice = varnames.slice(i, i + 10);
-      add(`${slice.join(', ')},`);
-    }
-    add(`];`);
-  }
   add(`const env = new Environment();`)
   add(`const { resolve, reject } = env.finalizeStructures(structures);`);
 
@@ -196,180 +350,23 @@ export function generateCode(structures, params) {
   const code = lines.join('\n');
   return { code, exports, structures };
 
-  function addDefaultStructure() {
-    add(`const s = {`);
-    for (const [ name, value ] of Object.entries(defaultStructure)) {
-      switch (name) {
-        case 'instance':
-        case 'static':
-          addStructureContent(name, value);
-          break;
-        default:
-          add(`${name}: ${JSON.stringify(value)},`);
-      }
+
+
+
+
+}
+
+function manageIndentation(lines) {
+  let indent = 0;
+  return (s) => {
+    if (/^\s*[\]\}]/.test(s)) {
+      indent--;
     }
-    add(`};`);
-  }
-
-  function addStructure(varname, structure) {
-    addBuffers(structure.instance.template);
-    addBuffers(structure.static.template);
-    // instance methods are also static methods, so no need to add them separately
-    addMethods(structure.static.methods);
-    add(`Object.assign(${varname}, {`);
-    add(`...s,`);
-    for (const [ name, value ] of Object.entries(structure)) {
-      if (name !== 'options' && isDifferent(value, defaultStructure[name])) {
-        switch (name) {
-          case 'constructor':
-          case 'sentinel':
-            break;
-          case 'instance':
-          case 'static':
-            addStructureContent(name, value);
-            break;
-          default:
-            add(`${name}: ${JSON.stringify(value)},`);
-        }
-      }
+    lines.push(' '.repeat(indent * 2) + s);
+    if (/[\[\{]\s*$/.test(s)) {
+      indent++;
     }
-    add(`});`);
-  }
-
-  function addStructureContent(name, { members, methods, template }) {
-    add(`${name}: {`);
-    addMembers(members);
-    addMethodRefs(methods);
-    addTemplate(template);
-    add(`},`);
-  }
-
-  function addDefaultMember() {
-    add(`const m = {`);
-    for (const [ name, value ] of Object.entries(defaultMember)) {
-      add(`${name}: ${JSON.stringify(value)},`);
-    }
-    add(`};`);
-  }
-
-  function addMembers(members) {
-    if (members.length > 0) {
-      add(`members: [`);
-      for (const member of members) {
-        addMember(member);
-      }
-      add(`],`);
-    } else {
-      add(`members: [],`);
-    }
-  }
-
-  function addMember(member) {
-    add(`{`);
-    add(`...m,`);
-    for (const [ name, value ] of Object.entries(member)) {
-      if (isDifferent(value, defaultMember[name])) {
-        switch (name) {
-          case 'structure':
-            add(`${name}: ${structureNames.get(value)},`);
-            break;
-          default:
-            add(`${name}: ${JSON.stringify(value)},`);
-        }
-      }
-    }
-    add(`},`);
-  }
-
-  function addTemplate(template) {
-    addObject('template', template);
-  }
-
-  function addObject(name, object) {
-    if (object) {
-      const structure = structureMap.get(object.constructor);
-      const { [MEMORY]: dv, [SLOTS]: slots } = object;
-      add(`${name}: {`);
-      if (structure) {
-        add(`structure: ${structureNames.get(structure)},`);
-      }
-      if (dv) {
-        const buffer = arrayBufferNames.get(dv.buffer);
-        const pairs = [ `array: ${buffer}` ];
-        if (dv.byteLength < dv.buffer.byteLength) {
-          pairs.push(`offset: ${dv.byteOffset}`);
-          pairs.push(`length: ${dv.byteLength}`);
-        }
-        add(`memory: { ${pairs.join(', ')} },`);
-        if (dv.hasOwnProperty('address')) {
-          add(`address: ${dv.address},`);
-        }
-      }
-      if (slots && Object.keys(slots).length > 0) {
-        add(`slots: {`);
-        for (const [ slot, child ] of Object.entries(slots)) {
-          addObject(slot, child);
-        }
-        add(`},`);
-      }
-      add(`},`);
-    } else {
-      add(`${name}: null`);
-    }
-  }
-
-  function addBuffers(object) {
-    if (object) {
-      const { [MEMORY]: dv, [SLOTS]: slots } = object;
-      if (dv && !arrayBufferNames.get(dv.buffer)) {
-        const varname = `a${arrayBufferCount++}`;
-        arrayBufferNames.set(dv.buffer, varname);
-        if (dv.byteLength > 0) {
-          const ta = new Uint8Array(dv.buffer);
-          add(`const ${varname} = new Uint8Array([ ${ta.join(', ')} ]);`);
-        } else {
-          add(`const ${varname} = new Uint8Array();`);
-        }
-      }
-      if (slots) {
-        for (const [ slot, child ] of Object.entries(slots)) {
-          addBuffers(child);
-        }
-      }
-    }
-  }
-
-  function addMethods(methods) {
-    for (const method of methods) {
-      const varname = `f${methodCount++}`;
-      methodNames.set(method, varname);
-      addMethod(varname, method);
-    }
-  }
-
-  function addMethodRefs(methods) {
-    const list = methods.map(m => methodNames.get(m));
-    if (list.length > 0) {
-      add(`methods: [ ${list.join(', ')} ],`);
-    } else {
-      add(`methods: [],`);
-    }
-  }
-
-  function addMethod(varname, method) {
-    add(`const ${varname} = {`);
-    for (const [ name, value ] of Object.entries(method)) {
-      switch (name) {
-        case 'argStruct':
-          add(`${name}: ${structureNames.get(value)},`);
-          break;
-        default:
-          add(`${name}: ${JSON.stringify(value)},`);
-      }
-    }
-    add(`};`);
-  }
-  // return occurs higher up, before the definition of addDefaultStructure
+  };
 }
 
 function isDifferent(value, def) {

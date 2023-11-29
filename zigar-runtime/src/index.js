@@ -1,11 +1,19 @@
 /* COMPTIME-ONLY */
 import { useAllMemberTypes } from './member.js';
 import { useAllStructureTypes } from './structure.js';
+import { WebAssemblyEnvironment } from './environment.js';
 
 useAllMemberTypes();
 useAllStructureTypes();
 /* COMPTIME-ONLY-END */
 
+export function loadModule(source) {
+  const env = new WebAssemblyEnvironment();
+  env.loadModule(source);
+  return;
+}
+
+/* RUNTIME-ONLY */
 export {
   usePrimitive,
   useArray,
@@ -41,4 +49,4 @@ export {
   useStatic,
   useLiteral,
 } from './member.js';
-export { WebAssemblyEnvironment as Environment } from './environment.js';
+/* RUNTIME-ONLY-END */

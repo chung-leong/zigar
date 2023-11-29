@@ -8,19 +8,13 @@ async function loadModule(libPath) {
 }
 
 export async function importModule(libPath) {
-  const env = loadModule(libPath);
+  const env = await loadModule(libPath);
   env.defineStructures();
-  const root = env.getRootConstructor();
+  return env.getRootModule();
 }
 
 export async function exportStructures(libPath) {
-  const env = loadModule(libPath);
+  const env = await loadModule(libPath);
   env.defineStructures();
   return env.exportStructures();
-}
-
-export async function recreateStructures(libPath, structures) {
-  const env = loadModule(libPath);
-  env.recreateStructures(structures);
-  env.linkVariables(false);
 }

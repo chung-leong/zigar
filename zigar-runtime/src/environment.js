@@ -17,6 +17,9 @@ export class Environment {
   slots = {};
   emptyView = new DataView(new ArrayBuffer(0));
   structures = [];
+  initPromise = Promise.resolve();
+  abandoned = false;
+  released = false;
 
   /*
   Functions to be defined in subclass:
@@ -378,6 +381,27 @@ export class Environment {
     dest[MEMORY] = relocDV;
     dest[MEMORY_COPIER](object);
     object[MEMORY] = relocDV;
+  }
+
+  getRootModule() {
+    const root = this.structures[this.structures.length - 1];
+    return root.constructor;
+  }
+
+  getControlObject() {
+    return {
+      init: () => this.initPromise,
+      abandon: () => this.abandon(),
+      released: () => this.released,
+    }
+  }
+
+  abandon() {
+    if (!this.abandoned) {
+      this.releaseFunctions();
+      this.unlinkVariables();
+      this.abandoned = true;
+    }
   }
 
   writeToConsole(dv) {
@@ -876,7 +900,6 @@ export class NodeEnvironment extends Environment {
     }
     return args.retval;
   }
-
 }
 /* NODE-ONLY-END */
 
@@ -1131,18 +1154,6 @@ export class WebAssemblyEnvironment extends Environment {
     const { instance } = await this.instantiateWebAssembly(source);
     this.memory = instance.exports.memory;
     this.importFunctions(instance.exports);
-    // create a WeakRef so that we know whether the instance is gc'ed or not
-    const weakRef = new WeakRef(instance);
-    return {
-      abandon: () => {
-        this.releaseFunctions();
-        this.unlinkVariables();
-        this.memory = null;
-      },
-      released: () => {
-        return !weakRef.deref();
-      }
-    }
   }
 
   startCall(call, args) {
