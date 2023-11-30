@@ -55,12 +55,12 @@ export function generateCodeForNode(structures, params) {
   return { code, exports, structures };  
 }
 
-function generateLoadStatements(source, writeback) {
+function generateLoadStatements(source, writeBack) {
   const lines = [];
   const add = manageIndentation(lines);
   add(`const env = loadModule(${source});`);
   add(`env.recreateStructures(structures);`);
-  add(`env.linkVariables(${writeback});`);
+  add(`env.linkVariables(${writeBack});`);
   add(`const __zigar = env.getControlObject();`);
   return lines;
 }

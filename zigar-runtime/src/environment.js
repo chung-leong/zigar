@@ -15,7 +15,7 @@ export class Environment {
   consolePending = [];
   consoleTimeout = 0;
   emptyView = new DataView(new ArrayBuffer(0));
-  initPromise = Promise.resolve();
+  initPromise;
   abandoned = false;
   released = false;
   littleEndian;
@@ -433,7 +433,7 @@ export class Environment {
   linkVariables(writeBack) {
     for (const { object, offset } of this.variables) {
       this.linkObject(object, offset, writeBack);
-    }
+    }  
   }
 
   linkObject(object, offset, writeBack) {
@@ -484,7 +484,7 @@ export class Environment {
 
   getControlObject() {
     return {
-      init: () => this.initPromise,
+      init: () => this.initPromise ?? Promise.resolve(),
       abandon: () => this.abandon(),
       released: () => this.released,
     }
@@ -921,12 +921,6 @@ export class NodeEnvironment extends Environment {
     }
   }
 
-  finalizeStructure(s) {
-    const constructor = super.finalizeStructure(s);
-    this.acquireDefaultPointers(s);
-    return constructor;
-  }
-
   createAlignedBuffer(len, align) {
     // allocate extra memory for alignment purpose when align is larger than the default
     const extra = (align > 16) ? align : 0;
@@ -938,27 +932,6 @@ export class NodeEnvironment extends Environment {
       offset = aligned - address;
     }
     return new DataView(buffer, Number(offset), len);
-  }
-
-  invokeFactory(thunk) {
-    initializeErrorSets();
-    const result = thunk.call(this);
-    if (typeof(result) === 'string') {
-      // an error message
-      throwZigError(result);
-    }
-    // factory function returns a structure object
-    let module = result.constructor;
-    // attach __zigar object
-    const initPromise = Promise.resolve();
-    module.__zigar = {
-      init: () => initPromise,
-      abandon: () => initPromise.then(() => {
-        module = null;
-      }),
-      released: () => initPromise.then(() => !module),
-    };
-    return module;
   }
 
   invokeThunk(thunk, args) {
@@ -1225,15 +1198,30 @@ export class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  async loadWebAssembly(source) {
-    const { instance } = await this.instantiateWebAssembly(source);
-    this.memory = instance.exports.memory;
-    this.importFunctions(instance.exports);
+  async loadModule(source) {
+    this.initPromise = (async () => {
+      const { instance } = await this.instantiateWebAssembly(source);    
+      this.memory = instance.exports.memory;
+      this.importFunctions(instance.exports);
+      this.trackInstance(instance);
+    })();
+    return this.initPromise;
+  }
+
+  trackInstance(instance) {
+    // use WeakRef to detect whether web-assembly instance has been gc'ed
+    const ref = new WeakRef(instance);
+    Object.defineProperties(this, 'released', { get: () => !ref.deref(), enumerable: true });
+  }
+
+  linkVariables(writeBack) {
+    // linkage occurs when WASM compilation is complete and functions have been imported
+    this.initPromise = this.initPromise.then(() => super.linkVariables(writeBack));
   }
 
   startCall(call, args) {
     this.startContext();
-    // call context, use by allocateShadowMemory and freeShadowMemory
+    // call context, used by allocateShadowMemory and freeShadowMemory
     this.context.call = call;
     if (args) {
       if (args[POINTER_VISITOR]) {
@@ -1271,15 +1259,6 @@ export class WebAssemblyEnvironment extends Environment {
   /* COMPTIME-ONLY-END */
 
   /* RUNTIME-ONLY */
-  async linkWebAssembly(source, params) {
-    const {
-      writeBack = true,
-    } = params;
-    const zigar = await this.loadWebAssembly(source);
-    this.linkVariables(writeBack);
-    return zigar;
-  }
-
   getMemoryOffset(address) {
     // WASM address space starts at 0
     return address;
