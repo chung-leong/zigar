@@ -2,11 +2,91 @@ import { MEMORY, SLOTS } from '../../zigar-runtime/src/symbol.js';
 import { MemberType, getMemberFeature } from '../../zigar-runtime/src/member.js';
 import { StructureType, getStructureFeature } from '../../zigar-runtime/src/structure.js';
 
-export function generateStructureDefinitions(structures, params) {
+export function generateCodeForWASM(structures, params) {
   const {
-    littleEndian,
-    runtimeSafety,
+    runtimeURL,
+    loadWASM,
+    topLevelAwait = true,
+    omitExports = false,
   } = params;
+  const features = getStructureFeatures(structures);
+  const exports = getExports(structures);
+  const lines = [];
+  const add = manageIndentation(lines);
+  add(`import {`);
+  for (const name of [ 'loadModule', ...features ]) {
+    add(`${name},`);
+  }
+  add(`} from ${JSON.stringify(runtimeURL)};`);
+  // reduce file size by only including code of features actually used
+  // dead-code remover will take out code not referenced here
+  add(`\n// activate features`);
+  for (const feature of features) {
+    add(`${feature}();`);
+  }
+  add(`\n// initiate loading and compilation of WASM bytecodes`);
+  add(`const source = ${loadWASM ?? null};`);
+  // write out the structures as object literals 
+  lines.push(...generateStructureDefinitions(structures));
+  lines.push(...generateLoadStatements('source', JSON.stringify(!topLevelAwait)));
+  lines.push(...generateExportStatements(exports, omitExports));
+  if (topLevelAwait && loadWASM) {
+    add(`await __zigar.init();`);
+  }
+  const code = lines.join;
+  return { code, exports, structures };
+}
+
+export function generateCodeForNode(structures, params) {
+  const {
+    runtimeURL,
+    libPath,
+    omitExports = false,
+  } = params;
+  const exports = getExports(structures);
+  const lines = [];
+  const add = manageIndentation(lines);
+  add(`import { loadModule } from ${JSON.stringify(runtimeURL)}`);
+  // all features are enabled by default for Node
+  lines.push(...generateStructureDefinitions(structures));
+  lines.push(...generateLoadStatements(JSON.stringify(libPath), 'false'));
+  lines.push(...generateExportStatements(exports, omitExports));
+  const code = lines.join;
+  return { code, exports, structures };  
+}
+
+function generateLoadStatements(source, writeback) {
+  const lines = [];
+  const add = manageIndentation(lines);
+  add(`const env = loadModule(${source});`);
+  add(`env.recreateStructures(structures);`);
+  add(`env.linkVariables(${writeback});`);
+  add(`const __module = env.getRootModule();`);
+  add(`const __zigar = env.getControlObject();`);
+  return lines;
+}
+
+function generateExportStatements(exports, omitExports) {
+  const lines = [];
+  const add = manageIndentation(lines);
+  add(`const {`);
+  // the first export is always default, and the last __zigar
+  for (const name of exports.slice(1, -1)) {
+    add(`${name},`);
+  }
+  add(`} = module;`);
+  if (!omitExports) {
+    add(`export {`);
+    add(`__module as default`);
+    for (const name of exports.slice(1)) {
+      add(`${name},`);
+    }
+    add(`};`);
+  }
+  return lines;
+}
+
+function generateStructureDefinitions(structures, params) {
   const lines = [];
   const add = manageIndentation(lines);
   const defaultStructure = {
@@ -214,27 +294,6 @@ export function generateStructureDefinitions(structures, params) {
   }
   return lines;
 } 
-
-function generateWASMImports(structures, params) {
-  const {
-    runtimeURL,
-  } = params;
-  const lines = [];
-  const add = manageIndentation(lines);
-  const imports = [ 'Environment' ];
-  imports.push(...features);
-  add(`import {`);
-  for (const name of imports) {
-    add(`${name},`);
-  }
-  add(`} from ${JSON.stringify(runtimeURL)};`);
-
-  add(`\n// activate features`);
-  for (const feature of features) {
-    add(`${feature}();`);
-  }
-  return lines.join;
-}
 
 function getStructureFeatures(structures) {
   const structureFeatures = {}, memberFeatures = {};
