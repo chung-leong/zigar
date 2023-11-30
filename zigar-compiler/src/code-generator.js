@@ -61,7 +61,6 @@ function generateLoadStatements(source, writeback) {
   add(`const env = loadModule(${source});`);
   add(`env.recreateStructures(structures);`);
   add(`env.linkVariables(${writeback});`);
-  add(`const __module = env.getRootModule();`);
   add(`const __zigar = env.getControlObject();`);
   return lines;
 }
@@ -292,6 +291,8 @@ function generateStructureDefinitions(structures, params) {
     }
     add(`];`);
   }
+  const root = structures[structures.length - 1];
+  add(`const __module = ${structureNames.get(root)}.constructor;`);
   return lines;
 } 
 

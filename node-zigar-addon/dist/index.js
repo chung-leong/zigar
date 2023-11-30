@@ -9,12 +9,12 @@ async function loadModule(libPath) {
 
 export async function importModule(libPath) {
   const env = await loadModule(libPath);
-  env.defineStructures();
+  env.acquireStructures();
   return env.getRootModule();
 }
 
 export async function exportStructures(libPath) {
   const env = await loadModule(libPath);
-  env.defineStructures();
+  env.acquireStructures();
   return env.exportStructures();
 }

@@ -477,6 +477,48 @@ napi_value find_sentinel(napi_env env,
     return NULL;
 }
 
+napi_value get_memory_offset(napi_value env,
+                             napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+    void* data;
+    uint64_t address;
+    bool lossless;
+    if (napi_get_cb_info(env, info, &argc, args[0], NULL, &data) != napi_ok
+     || napi_get_value_bigint_uint64(env, args[0], &address, &lossless) != napi_ok) {
+        return throw_error(env, "Address must be bigint");
+    }
+    module_data* md = (module_data*) data;
+    size_t base = (size_t) md->mod->base_address;
+    if (address < base) {
+        return throw_error(env, "Invalid address");
+    } 
+    napi_value offset;
+    if (napi_create_double(env, address - base, &offset) != napi_ok) {
+        return throw_last_error(env);
+    }
+    return offset;
+}
+
+napi_value recreate_address(napi_value env,
+                            napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+    void* data;
+    double offset;
+    if (napi_get_cb_info(env, info, &argc, args[0], NULL, &data) != napi_ok
+     || napi_get_value_double(env, args[0], &offset) != napi_ok) {
+        return throw_error(env, "Offset must be a number");
+    }
+    module_data* md = (module_data*) data;
+    size_t base = (size_t) md->mod->base_address;
+    napi_value address;
+    if (napi_create_bigint_uint64(env, base + offset, &address) != napi_ok) {
+        return throw_last_error(env);
+    }
+    return address;
+}
+
 void finalize_function(napi_env env,
                        void* finalize_data,
                        void* finalize_hint) {
@@ -508,6 +550,8 @@ bool export_functions(napi_env env,
         && export_function(env, js_env, "obtainExternalBuffer", obtain_external_buffer, md)
         && export_function(env, js_env, "copyBytes", copy_bytes, md)
         && export_function(env, js_env, "findSentinel", find_sentinel, md);
+        && export_function(env, js_env, "getMemoryOffset", get_memory_offset, md);
+        && export_function(env, js_env, "recreateAddress", recreate_address, md);
 }
 
 bool set_attributes(napi_env env,

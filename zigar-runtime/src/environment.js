@@ -14,14 +14,20 @@ export class Environment {
   contextStack = [];
   consolePending = [];
   consoleTimeout = 0;
-  slots = {};
   emptyView = new DataView(new ArrayBuffer(0));
-  structures = [];
   initPromise = Promise.resolve();
   abandoned = false;
   released = false;
   littleEndian;
   runtimeSafety;
+  /* COMPTIME-ONLY */
+  slots = {};
+  structures = [];
+  /* COMPTIME-ONLY-END */
+  /* RUNTIME-ONLY */
+  variables = [];
+  /* RUNTIME-ONLY-END */
+  imports;
 
   /*
   Functions to be defined in subclass:
@@ -56,9 +62,16 @@ export class Environment {
   copyBytes(dst: DataView, address: bigint|number, len: number): void {
     // copy memory at given address into destination view
   }
-  findSentinel(address, bytes: DataView): number {
+  findSentinel(address: bigint|number, bytes: DataView): number {
     // return offset where sentinel value is found
   }
+  getMemoryOffset(address: bigint|number) number {
+    // return offset of address relative to start of module memory
+  }
+  recreateAddress(offset: number) number {
+    // recreate address of memory belonging to module
+  }
+
   getTargetAddress(target: object, cluster: object|undefined) {
     // return the address of target's buffer if correctly aligned
   }
@@ -159,6 +172,7 @@ export class Environment {
     return object;
   }
 
+  /* COMPTIME-ONLY */
   readSlot(target, slot) {
     const slots = target ? target[SLOTS] : this.slots;
     return slots?.[slot];
@@ -171,7 +185,6 @@ export class Environment {
     }
   }
 
-  /* COMPTIME-ONLY */
   createTemplate(dv) {
     return {
       [MEMORY]: dv,
@@ -250,6 +263,11 @@ export class Environment {
     }
   }
 
+  getRootModule() {
+    const root = this.structures[this.structures.length - 1];
+    return root.constructor;
+  }
+
   exportStructures() {
     this.replaceFixedMemory();
     return {
@@ -269,12 +287,13 @@ export class Environment {
         if (this.inFixedMemory(object)) {
           const dv = object[MEMORY];
           // replace fixed memory
-          const address = dv.byteOffset;
+          const address = this.getViewAddress(dv);
+          const offset = this.getOffset(address);
           const len = dv.byteLength;
           const relocDV = this.createView(address, len, true);
-          relocDV.address = address;
+          relocDV.offset = offset;
           object[MEMORY] = relocDV;
-          list.push({ address, len, owner: object, replaced: false });
+          list.push({ offset, len, owner: object, replaced: false });
         }
       }
       if (object[SLOTS]) {
@@ -292,12 +311,12 @@ export class Environment {
     for (const a of list) {
       for (const b of list) {
         if (a !== b && !a.replaced) {
-          if (a.address <= b.address && b.address + b.len <= a.address + a.len) {
+          if (a.offset <= b.offset && b.offset + b.len <= a.offset + a.len) {
             // B is inside A--replace it with a view of A's buffer
             const dv = a.owner[MEMORY];
-            const offset = b.address - a.address + dv.byteOffset;
-            const newDV = new DataView(dv.buffer, offset, b.len);
-            newDV.address = b.address;
+            const pos = b.offset - a.offset + dv.byteOffset;
+            const newDV = new DataView(dv.buffer, pos, b.len);
+            newDV.offset = b.offset;
             b.owner[MEMORY] = newDV;
             b.replaced = true;
           }
@@ -306,7 +325,6 @@ export class Environment {
     }
   }
   /* COMPTIME-ONLY-END */
-
 
   finalizeStructure(s) {
     try {
@@ -397,8 +415,6 @@ export class Environment {
         }
       }
       super.finalizeStructure(structure);
-      // place structure into its assigned slot
-      this.slots[structure.slot] = structure;
     }
 
     let resolve, reject;
@@ -455,9 +471,15 @@ export class Environment {
     object[MEMORY] = relocDV;
   }
 
-  getRootModule() {
-    const root = this.structures[this.structures.length - 1];
-    return root.constructor;
+  releaseFunctions() {
+    const throwError = function() {
+      throw new Error(`Module was abandoned`);
+    };
+    for (const name of Object.keys(this.imports)) {
+      if (this[name]) {
+        this[name] = throwError;
+      }
+    }
   }
 
   getControlObject() {
@@ -807,19 +829,17 @@ export class Environment {
 
 /* NODE-ONLY */
 export class NodeEnvironment extends Environment {
-  // use a weak map to store the addresses of shared buffer, so that we can
-  // Zig code can free the underlying memory without leading to a crash
-  // basically, we don't want to ask V8 to return the buffer's backing store
-  // if there's a chance that the memory is no longer there
-  addressMap = new WeakMap();
-  // C++ code will patch in these functions:
-  //
-  // extractBufferAddress
-  // allocateExternalMemory
-  // freeExternalMemory
-  // obtainExternalBuffer
-  // copyBytes
-  // findSentinel
+  // C code will patch in these functions:
+  imports = {
+    extractBufferAddress: null,  
+    allocateExternalMemory: null,  
+    freeExternalMemory: null,  
+    obtainExternalBuffer: null,  
+    copyBytes: null,  
+    findSentinel: null,
+    getMemoryOffset: null,
+    recreateAddress: null,  
+  };
 
   getBufferAddress(buffer) {
     let address = this.addressMap.get(buffer);
@@ -1015,12 +1035,6 @@ export class WebAssemblyEnvironment extends Environment {
   valueTable = { 0: null };
   valueIndices = new Map;
   memory = null;
-  /* COMPTIME-ONLY */
-  structures = [];
-  /* COMPTIME-ONLY-END */
-  /* RUNTIME-ONLY */
-  variables = [];
-  /* RUNTIME-ONLY-END */
 
   constructor() {
     super();
@@ -1201,17 +1215,6 @@ export class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  releaseFunctions() {
-    const throwError = function() {
-      throw new Error('WebAssembly instance was abandoned');
-    };
-    for (const name of Object.keys(this.imports)) {
-      if (this[name]) {
-        this[name] = throwError;
-      }
-    }
-  }
-
   async instantiateWebAssembly(source) {
     const env = this.exportFunctions();
     if (source[Symbol.toStringTag] === 'Response') {
@@ -1277,8 +1280,12 @@ export class WebAssemblyEnvironment extends Environment {
     return zigar;
   }
 
-  recreateAddress(offset) {
+  getMemoryOffset(address) {
     // WASM address space starts at 0
+    return address;
+  }
+
+  recreateAddress(offset) {
     return offset;
   }
 
