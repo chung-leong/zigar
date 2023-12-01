@@ -7,14 +7,14 @@ async function loadModule(libPath) {
   return loadModule(libPath);
 }
 
-export async function importModule(libPath) {
+export async function importModule(libPath, options = {}) {
   const env = await loadModule(libPath);
-  env.acquireStructures();
+  env.acquireStructures(options);
   return env.getRootModule();
 }
 
-export async function exportStructures(libPath) {
+export async function exportStructures(libPath, options = {}) {
   const env = await loadModule(libPath);
-  env.acquireStructures();
+  env.acquireStructures(options);
   return env.exportStructures();
 }

@@ -40,7 +40,7 @@ extern fn _beginStructure(def: Value) ?Value;
 extern fn _attachMember(structure: Value, def: Value, is_static: bool) void;
 extern fn _attachMethod(structure: Value, def: Value, is_static_only: bool) void;
 extern fn _attachTemplate(structure: Value, def: Value, is_static: bool) void;
-extern fn _finalizeStructure(structure: Value) void;
+extern fn _endStructure(structure: Value) void;
 extern fn _createTemplate(buffer: ?Value) ?Value;
 extern fn _writeToConsole(dv: Value) bool;
 extern fn _startCall(call: Call, arg_struct: ?Value) *anyopaque;
@@ -103,12 +103,13 @@ pub fn freeShadowMemory(call: Call, bytes: [*]u8, len: usize, alignment: u16) vo
     call.allocator.rawFree(bytes[0..len], ptr_align, 0);
 }
 
+var initial_context: ?Call = null;
+
 pub const Host = struct {
     context: Call,
 
-    var initial_context: ?Call = null;
-
-    pub fn init(context: Call) Host {
+    pub fn init(ptr: *anyopaque) Host {
+        const context: Call = @ptrCast(@alignCast(ptr));
         if (initial_context == null) {
             initial_context = context;
         }
@@ -282,8 +283,8 @@ pub const Host = struct {
         _attachTemplate(structure, template, is_static);
     }
 
-    pub fn finalizeStructure(_: Host, structure: Value) !void {
-        _finalizeStructure(structure);
+    pub fn endStructure(_: Host, structure: Value) !void {
+        _endStructure(structure);
     }
 
     pub fn createTemplate(_: Host, dv: ?Value) !Value {
@@ -334,7 +335,8 @@ pub fn runThunk(thunk_id: usize, arg_struct: ?Value) ?Value {
 
 pub fn defineStructures(comptime T: type) ?Value {
     const factory = exporter.createRootFactory(Host, T);
-    return runThunk(factory, null);
+    const factory_id = @intFromPtr(factory);
+    return runThunk(factory_id, null);
 }
 
 pub fn isRuntimeSafetyActive() bool {

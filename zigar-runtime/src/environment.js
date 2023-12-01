@@ -3,7 +3,7 @@ import { decodeText } from './text.js';
 import { initializeErrorSets } from './error-set.js';
 import { throwAlignmentConflict, throwNullPointer, throwZigError } from './error.js';
 import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, ENVIRONMENT, LENGTH_GETTER,
-  LENGTH_SETTER, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES, 
+  LENGTH_SETTER, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES,
   SIZE, SLOTS } from './symbol.js';
 import { getCopyFunction, getMemoryCopier, restoreMemory } from './memory.js';
 
@@ -243,7 +243,7 @@ export class Environment {
   }
 
   endStructure(s) {
-    const constructor = super.finalizeStructure(s);
+    const constructor = this.finalizeStructure(s);
     this.structures.push(s);
     this.acquireDefaultPointers(s);
     return constructor;
@@ -270,10 +270,7 @@ export class Environment {
 
   exportStructures() {
     this.replaceFixedMemory();
-    return {
-      structures: this.structures,
-      options: this.getOptions(),
-    };    
+    return this.structures;
   }
 
   replaceFixedMemory() {
@@ -288,7 +285,7 @@ export class Environment {
           const dv = object[MEMORY];
           // replace fixed memory
           const address = this.getViewAddress(dv);
-          const offset = this.getOffset(address);
+          const offset = this.getMemoryOffset(address);
           const len = dv.byteLength;
           const relocDV = this.createView(address, len, true);
           relocDV.offset = offset;
@@ -433,7 +430,7 @@ export class Environment {
   linkVariables(writeBack) {
     for (const { object, offset } of this.variables) {
       this.linkObject(object, offset, writeBack);
-    }  
+    }
   }
 
   linkObject(object, offset, writeBack) {
@@ -831,14 +828,14 @@ export class Environment {
 export class NodeEnvironment extends Environment {
   // C code will patch in these functions:
   imports = {
-    extractBufferAddress: null,  
-    allocateExternalMemory: null,  
-    freeExternalMemory: null,  
-    obtainExternalBuffer: null,  
-    copyBytes: null,  
+    extractBufferAddress: null,
+    allocateExternalMemory: null,
+    freeExternalMemory: null,
+    obtainExternalBuffer: null,
+    copyBytes: null,
     findSentinel: null,
     getMemoryOffset: null,
-    recreateAddress: null,  
+    recreateAddress: null,
   };
   // use a weak map to store the addresses of shared buffer, so that we can
   // Zig code can free the underlying memory without leading to a crash
@@ -1004,7 +1001,7 @@ export class WebAssemblyEnvironment extends Environment {
     attachMethod: { argType: 'vvb' },
     createTemplate: { argType: 'v', returnType: 'v' },
     attachTemplate: { argType: 'vvb' },
-    finalizeStructure: { argType: 'v' },
+    endStructure: { argType: 'v' },
     writeToConsole: { argType: 'v' },
     startCall: { argType: 'iv', returnType: 'i' },
     endCall: { argType: 'iv', returnType: 'i' },
@@ -1207,18 +1204,18 @@ export class WebAssemblyEnvironment extends Environment {
 
   async loadModule(source) {
     return this.initPromise = (async () => {
-      const { instance } = await this.instantiateWebAssembly(source);    
+      const { instance } = await this.instantiateWebAssembly(source);
       this.memory = instance.exports.memory;
       this.importFunctions(instance.exports);
       this.trackInstance(instance);
-      this.runtimeSafety = this.isRuntimeSafetyActive
+      this.runtimeSafety = this.isRuntimeSafetyActive();
     })();
   }
 
   trackInstance(instance) {
     // use WeakRef to detect whether web-assembly instance has been gc'ed
     const ref = new WeakRef(instance);
-    Object.defineProperties(this, 'released', { get: () => !ref.deref(), enumerable: true });
+    Object.defineProperty(this, 'released', { get: () => !ref.deref(), enumerable: true });
   }
 
   linkVariables(writeBack) {

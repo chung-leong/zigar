@@ -33,8 +33,8 @@ describe('Compilation', function() {
       expect(name).to.equal('libhello.dylib');
     })
     it('should return the correct name for Windows', function() {
-      const name = getLibraryName('hello', 'windows', 'x64');
-      expect(name).to.equal('libhello.dll');
+      const name = getLibraryName('hello', 'win32', 'x64');
+      expect(name).to.equal('hello.dll');
     })
     it('should return the correct name for WASM', function() {
       const name = getLibraryName('hello', 'freestanding', 'wasm32');
@@ -152,7 +152,7 @@ describe('Compilation', function() {
     })
   })
   describe('compile', function() {
-    it('should compile zig source code for C++ extension', async function() {
+    it('should compile zig source code for C addon', async function() {
       this.timeout(60000);
       const { pathname } = new URL('./zig-samples/basic/integers.zig', import.meta.url);
       const libpath = await compile(pathname);

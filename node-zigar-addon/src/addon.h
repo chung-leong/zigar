@@ -157,8 +157,8 @@ typedef enum {
 typedef struct {
   result (*__cdecl allocate_fixed_memory)(size_t, uint16_t, memory*);
   result (*__cdecl free_fixed_memory)(const memory*);
-  result (*__cdecl define_structures)();
-  result (*__cdecl run_thunk)(size_t, void*);
+  result (*__cdecl define_structures)(call, void*, napi_value*);
+  result (*__cdecl run_thunk)(call, size_t, void*, napi_value*);
   result (*__cdecl override_write)(const void*, size_t);
 } import_table;
 

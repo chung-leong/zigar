@@ -755,7 +755,7 @@ fn getStructureName(comptime T: type) [*:0]const u8 {
 }
 
 test "getStructureName" {
-    const S = struct {
+    const ns = struct {
         fn hello(number: i32) !i32 {
             return number + 2;
         }
@@ -768,20 +768,20 @@ test "getStructureName" {
     assert(name1[0] == '[');
     assert(name1[1] == ']');
     assert(name1[4] == 0);
-    const ArgT = ArgumentStruct(S.hello);
+    const ArgT = ArgumentStruct(ns.hello);
     const name2 = getStructureName(ArgT);
     assert(name2[0] == 'h');
     assert(name2[1] == 'e');
     assert(name2[5] == 0);
-    const name3 = getStructureName(@TypeOf(S.cow));
+    const name3 = getStructureName(@TypeOf(ns.cow));
     assert(name3[0] == 'S');
     assert(name3[1] == 't');
     assert(name3[9] == '0');
-    const name4 = getStructureName(@TypeOf(S.pig));
+    const name4 = getStructureName(@TypeOf(ns.pig));
     assert(name4[0] == 'S');
     assert(name4[1] == 't');
     assert(name4[9] == '1');
-    const name5 = getStructureName(@typeInfo(@TypeOf(S.hello)).Fn.return_type orelse void);
+    const name5 = getStructureName(@typeInfo(@TypeOf(ns.hello)).Fn.return_type orelse void);
     assert(name5[0] == 'E');
     assert(name5[1] == 'r');
     assert(name5[11] == '0');
@@ -1640,7 +1640,7 @@ fn createErrorMessage(host: anytype, err: anyerror) !Value {
 
 fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: type) Thunk {
     const Args = std.meta.ArgsTuple(@TypeOf(function));
-    const S = struct {
+    const ns = struct {
         fn tryFunction(host: HostT, arg_ptr: *ArgT) !void {
             // extract arguments from argument struct
             if (@sizeOf(ArgT) != 0) {
@@ -1667,7 +1667,7 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
         }
 
         fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
-            const host = HostT.init(@ptrCast(@alignCast(ptr)));
+            const host = HostT.init(ptr);
             defer host.release();
             tryFunction(host, @ptrCast(@alignCast(arg_ptr))) catch |err| {
                 return createErrorMessage(host, err) catch null;
@@ -1675,7 +1675,7 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
             return null;
         }
     };
-    return S.invokeFunction;
+    return ns.invokeFunction;
 }
 
 test "createThunk" {

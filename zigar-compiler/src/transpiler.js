@@ -1,8 +1,8 @@
 import { readFile } from 'fs/promises';
 import { basename } from 'path';
 import { compile } from './compiler.js';
-import { Environment } from '../../zigar-runtime/src/index.js';
-import { generateCode } from './code-generator.js';
+import { loadModule } from '../../zigar-runtime/src/index.js';
+import { generateCodeForWASM } from './code-generator.js';
 import { stripUnused } from './wasm-stripper.js';
 
 export async function transpile(path, options = {}) {
@@ -28,9 +28,9 @@ export async function transpile(path, options = {}) {
     platform: 'freestanding'
   });
   const content = await readFile(wasmPath);
-  const env = new Environment();
-  await env.loadWebAssembly(content);
-  const { structures, runtimeSafety } = env.runFactory({ omitFunctions });
+  const env = await loadModule(content);
+  env.acquireStructures({ omitFunctions });
+  const structures = env.exportStructures();
   // all methods are static, so there's no need to check the instance methods
   const hasMethods = !!structures.find(s => s.static.methods.length > 0);
   const runtimeURL = moduleResolver('zigar-runtime');
@@ -46,10 +46,9 @@ export async function transpile(path, options = {}) {
       loadWASM = await wasmLoader(path, dv);
     }
   }
-  return generateCode(structures, {
+  return generateCodeForWASM(structures, {
     runtimeURL,
     loadWASM,
-    runtimeSafety,
     topLevelAwait,
     omitExports,
   });
