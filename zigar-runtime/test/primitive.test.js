@@ -8,6 +8,7 @@ import {
   isExtendedType,
 } from '../src/primitive.js';
 import { NodeEnvironment } from '../src/environment.js'
+import { encodeBase64 } from '../src/text.js';
 
 describe('Primitive functions', function() {
   const env = new NodeEnvironment();
@@ -117,7 +118,7 @@ describe('Primitive functions', function() {
       });
       const I64 = env.finalizeStructure(structure);
       const str = '\u0001\u0000\u0000\u0000\u0000\u0000\u0000\u0000';
-      const base64 = btoa(str);
+      const base64 = encodeBase64(Buffer.from(str));
       const int = new I64({ base64 });
       expect(int.$).to.equal(1n);
     })
@@ -136,7 +137,7 @@ describe('Primitive functions', function() {
       const I64 = env.finalizeStructure(structure);
       const str = '\u0001\u0000\u0000\u0000\u0000\u0000\u0000\u0000';
       const int = new I64(0n);
-      int.base64 = btoa(str);
+      int.base64 = encodeBase64(Buffer.from(str));
       expect(int.$).to.equal(1n);
     })
     it('should accept typed array as initializer', function() {

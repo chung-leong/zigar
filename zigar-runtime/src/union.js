@@ -33,7 +33,7 @@ export function finalizeUnion(s, env) {
   if (exclusion) {
     valueMembers = members.slice(0, -1);
     const selectorMember = members[members.length - 1];
-    const { get: getSelector, set: setSelector } = getDescriptor(selectorMember, options);
+    const { get: getSelector, set: setSelector } = getDescriptor(selectorMember, env);
     if (type === StructureType.TaggedUnion) {
       const { structure: { constructor } } = selectorMember;
       getEnumItem = getSelector;
@@ -57,7 +57,7 @@ export function finalizeUnion(s, env) {
     }
     for (const member of valueMembers) {
       const { name, slot, structure: { hasPointer } } = member;
-      const { get: getValue, set: setValue } = getDescriptor(member, options);
+      const { get: getValue, set: setValue } = getDescriptor(member, env);
       const update = (isTagged) ? function(name) {
         if (this[TAG]?.name !== name) {
           this[TAG]?.clear?.();
@@ -101,7 +101,7 @@ export function finalizeUnion(s, env) {
     // extern union
     valueMembers = members;
     for (const member of members) {
-      const { get, set } = getDescriptor(member, options);
+      const { get, set } = getDescriptor(member, env);
       descriptors[member.name] = { get, set, init: set, configurable: true, enumerable: true };
     }
   }

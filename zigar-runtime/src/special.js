@@ -1,7 +1,7 @@
 import { StructureType } from './structure.js';
 import { MemberType } from './member.js';
 import { restoreMemory } from './memory.js';
-import { decodeText, encodeText } from './text.js';
+import { decodeBase64, decodeText, encodeBase64, encodeText } from './text.js';
 import { throwBufferSizeMismatch, throwTypeMismatch } from './error.js';
 import { MEMORY, MEMORY_COPIER } from './symbol.js';
 import { isTypedArray } from './data-view.js';
@@ -88,27 +88,15 @@ export function checkDataView(dv) {
 export function getBase64Accessors() {
   return {
     get() {
-      const dv = this.dataView;
-      const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
-      const bstr = String.fromCharCode.apply(null, ta);
-      return btoa(bstr);
+      return encodeBase64(this.dataView);
     },
     set(str) {
-      this.dataView = getDataViewFromBase64(str);
+      if (typeof(str) !== 'string') {
+        throwTypeMismatch('a string', str);
+      }
+      this.dataView = decodeBase64(str);
     }
   }
-}
-
-export function getDataViewFromBase64(str) {
-  if (typeof(str) !== 'string') {
-    throwTypeMismatch('a string', str);
-  }
-  const bstr = atob(str);
-  const ta = new Uint8Array(bstr.length);
-  for (let i = 0; i < ta.byteLength; i++) {
-    ta[i] = bstr.charCodeAt(i);
-  }
-  return new DataView(ta.buffer);
 }
 
 export function getStringAccessors(structure) {

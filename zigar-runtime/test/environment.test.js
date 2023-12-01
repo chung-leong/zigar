@@ -11,7 +11,7 @@ import {
   findSortedIndex,
   isMisaligned,
 } from '../src/environment.js'
-import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, THUNK_REPLACER, CHILD_VIVIFICATOR } from '../src/symbol.js';
+import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CHILD_VIVIFICATOR } from '../src/symbol.js';
 
 describe('Environment', function() {
   beforeEach(function() {
@@ -264,7 +264,6 @@ describe('Environment', function() {
     describe('beginStructure', function() {
       it('should return a structure object', function() {
         const env = new Environment();
-        const options = {};
         const s = env.beginStructure({
           type: StructureType.Struct,
           name: 'Hello',
@@ -273,7 +272,7 @@ describe('Environment', function() {
           align: 3,
           isConst: false,
           hasPointer: false,
-        }, options);
+        });
         expect(s.type).to.equal(StructureType.Struct);
         expect(s.name).to.equal('Hello');
         expect(s.byteSize).to.equal(16);
@@ -282,7 +281,6 @@ describe('Environment', function() {
     describe('attachMember', function() {
       it('should add instance member', function() {
         const env = new Environment();
-        const options = {};
         const s = env.beginStructure({
           type: StructureType.Struct,
           name: 'Hello',
@@ -291,7 +289,7 @@ describe('Environment', function() {
           align: 3,
           isConst: false,
           hasPointer: false,
-        }, options);
+        });
         env.attachMember(s, {
           type: MemberType.Int,
           name: 'number',
@@ -309,7 +307,6 @@ describe('Environment', function() {
       })
       it('should add static member', function() {
         const env = new Environment();
-        const options = {};
         const s = env.beginStructure({
           type: StructureType.Struct,
           name: 'Hello',
@@ -318,7 +315,7 @@ describe('Environment', function() {
           align: 3,
           isConst: false,
           hasPointer: false,
-        }, options);
+        });
         env.attachMember(s, {
           type: MemberType.Int,
           name: 'number',
@@ -341,7 +338,6 @@ describe('Environment', function() {
         const method = {
           name: 'say',
         };
-        const options = {};
         const s = env.beginStructure({
           type: StructureType.Struct,
           name: 'Hello',
@@ -350,7 +346,7 @@ describe('Environment', function() {
           align: 3,
           isConst: false,
           hasPointer: false,
-        }, options);
+        });
         env.attachMethod(s, method, true);
         expect(s.static.methods[0]).to.eql(method);
       })
@@ -359,7 +355,6 @@ describe('Environment', function() {
         const method = {
           name: 'say',
         };
-        const options = {};
         const s = env.beginStructure({
           type: StructureType.Struct,
           name: 'Hello',
@@ -368,7 +363,7 @@ describe('Environment', function() {
           align: 3,
           isConst: false,
           hasPointer: false,
-        }, options);
+        });
         env.attachMethod(s, method, false);
         expect(s.static.methods[0]).to.eql(method);
         expect(s.instance.methods[0]).to.eql(method);
@@ -387,7 +382,6 @@ describe('Environment', function() {
         const env = new Environment();
         const dv = new DataView(new ArrayBuffer(8));
         const templ = env.createTemplate(dv);
-        const options = {};
         const s = env.beginStructure({
           type: StructureType.Struct,
           name: 'Hello',
@@ -396,7 +390,7 @@ describe('Environment', function() {
           align: 3,
           isConst: false,
           hasPointer: false,
-        }, options);
+        });
         env.attachTemplate(s, templ, false);
         expect(s.instance.template).to.equal(templ);
       })
@@ -404,7 +398,6 @@ describe('Environment', function() {
         const env = new Environment();
         const dv = new DataView(new ArrayBuffer(8));
         const templ = env.createTemplate(dv);
-        const options = {};
         const s = env.beginStructure({
           type: StructureType.Struct,
           name: 'Hello',
@@ -413,7 +406,7 @@ describe('Environment', function() {
           align: 3,
           isConst: false,
           hasPointer: false,
-        }, options);
+        });
         env.attachTemplate(s, templ, true);
         expect(s.static.template).to.equal(templ);
       })
@@ -421,7 +414,6 @@ describe('Environment', function() {
     describe('finalizeStructure', function() {
       it('should generate constructor for a struct', function() {
         const env = new Environment();
-        const options = {};
         const s = env.beginStructure({
           type: StructureType.Struct,
           name: 'Hello',
@@ -430,7 +422,7 @@ describe('Environment', function() {
           align: 3,
           isConst: false,
           hasPointer: false,
-        }, options);
+        });
         env.attachMember(s, {
           type: MemberType.Int,
           name: 'number',
@@ -577,7 +569,6 @@ describe('Environment', function() {
         }
         let t = () => console.log('hello');
         constructor.hello = function() { t() };
-        constructor.hello[THUNK_REPLACER] = (r) => t = r;
         const constructor2 = function() {};
         Object.defineProperty(constructor, 'submodule', { get: () => constructor2 });
         Object.defineProperty(constructor, 'self', { get: () => constructor });

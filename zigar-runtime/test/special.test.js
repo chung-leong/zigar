@@ -23,7 +23,6 @@ import {
   getTypedArrayAccessors,
   getValueOf,
   checkDataView,
-  getDataViewFromBase64,
   getDataViewFromUTF8,
   getDataViewFromTypedArray,
 } from '../src/special.js';
@@ -449,18 +448,6 @@ describe('Special property functions', function() {
       expect(() => checkDataView(1)).to.throw(TypeError);
       expect(() => checkDataView(null)).to.throw(TypeError);
       expect(() => checkDataView(undefined)).to.throw(TypeError);
-    })
-  })
-  describe('getDataViewFromBase64', function() {
-    it('should return a data view with decoded data from a base64 string', function() {
-      const bstr = btoa('\u0001\u0002\u0003\u0004');
-      const dv = getDataViewFromBase64(bstr);
-      for (let i = 0; i < 4; i++) {
-        expect(dv.getUint8(i)).to.equal(i + 1);
-      }
-    })
-    it('should throw when it does not get a string', function() {
-      expect(() => getDataViewFromBase64(1)).to.throw(TypeError);
     })
   })
   describe('getDataViewFromUTF8', function() {

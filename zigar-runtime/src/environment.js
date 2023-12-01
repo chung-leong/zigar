@@ -18,8 +18,8 @@ export class Environment {
   initPromise;
   abandoned = false;
   released = false;
-  littleEndian;
-  runtimeSafety;
+  littleEndian = true;
+  runtimeSafety = true;
   /* COMPTIME-ONLY */
   slots = {};
   structures = [];
@@ -840,6 +840,11 @@ export class NodeEnvironment extends Environment {
     getMemoryOffset: null,
     recreateAddress: null,  
   };
+  // use a weak map to store the addresses of shared buffer, so that we can
+  // Zig code can free the underlying memory without leading to a crash
+  // basically, we don't want to ask V8 to return the buffer's backing store
+  // if there's a chance that the memory is no longer there
+  addressMap = new WeakMap();
 
   getBufferAddress(buffer) {
     let address = this.addressMap.get(buffer);
@@ -1008,6 +1013,8 @@ export class WebAssemblyEnvironment extends Environment {
   valueTable = { 0: null };
   valueIndices = new Map;
   memory = null;
+  // WASM is always little endian
+  littleEndian = true;
 
   constructor() {
     super();
@@ -1199,13 +1206,13 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   async loadModule(source) {
-    this.initPromise = (async () => {
+    return this.initPromise = (async () => {
       const { instance } = await this.instantiateWebAssembly(source);    
       this.memory = instance.exports.memory;
       this.importFunctions(instance.exports);
       this.trackInstance(instance);
+      this.runtimeSafety = this.isRuntimeSafetyActive
     })();
-    return this.initPromise;
   }
 
   trackInstance(instance) {

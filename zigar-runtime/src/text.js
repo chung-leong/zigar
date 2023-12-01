@@ -47,3 +47,29 @@ export function encodeText(text, encoding = 'utf-8') {
     }
   }
 }
+
+export function encodeBase64(dv) {
+  /* NODE-ONLY */
+  if (typeof(process) === 'object' && process[Symbol.toStringTag] === 'process') {
+    return Buffer.from(dv.buffer, dv.byteOffset, dv.byteLength).toString('base64');
+  }
+  /* NODE-ONLY-END */
+  const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+  const bstr = String.fromCharCode.apply(null, ta);
+  return btoa(bstr);
+}
+
+export function decodeBase64(str) {
+  /* NODE-ONLY */
+  if (typeof(Buffer) === 'function' && Buffer.prototype instanceof Uint8Array) {
+    const b = Buffer.from(str, 'base64');
+    return new DataView(b.buffer, b.byteOffset, b.byteLength);
+  }
+  /* NODE-ONLY-END */
+  const bstr = atob(str);
+  const ta = new Uint8Array(bstr.length);
+  for (let i = 0; i < ta.byteLength; i++) {
+    ta[i] = bstr.charCodeAt(i);
+  }
+  return new DataView(ta.buffer);  
+}

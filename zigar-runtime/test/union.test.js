@@ -4,6 +4,7 @@ import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
 import { NodeEnvironment } from '../src/environment.js'
+import { encodeBase64 } from '../src/text.js';
 
 describe('Union functions', function() {
   const env = new NodeEnvironment();
@@ -290,10 +291,11 @@ describe('Union functions', function() {
         structure: {},
       });
       const Hello = env.finalizeStructure(structure);
-      const str = '\u0001\u0000\u0000\u0000\u0000\u0000';
-      const base64 = btoa(str);
+      const dv = new DataView(new ArrayBuffer(6));
+      dv.setUint32(0, 1234, true);
+      const base64 = encodeBase64(dv);
       const object = new Hello({ base64 });
-      expect(object.dog).to.equal(1);
+      expect(object.dog).to.equal(1234);
       expect(() => object.cat).to.throw();
     })
 
@@ -330,9 +332,10 @@ describe('Union functions', function() {
       const Hello = env.finalizeStructure(structure);
       const object = new Hello({ cat: 5 });
       expect(object.cat).to.equal(5);
-      const str = '\u0001\u0000\u0000\u0000\u0000\u0000';
-      object.base64 = btoa(str);
-      expect(object.dog).to.equal(1);
+      const dv = new DataView(new ArrayBuffer(6))
+      dv.setUint32(0, 1234, true);
+      object.base64 = encodeBase64(dv);
+      expect(object.dog).to.equal(1234);
       expect(() => object.cat).to.throw();
     })
     it('should define a bare union containing a struct', function() {

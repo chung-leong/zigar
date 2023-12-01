@@ -4,6 +4,7 @@ import { MEMORY } from '../src/symbol.js';
 import { MemberType, useAllMemberTypes, getDescriptor } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { NodeEnvironment } from '../src/environment.js'
+import { encodeBase64 } from '../src/text.js';
 import {
   getArrayIterator,
   getArrayEntriesIterator,
@@ -392,7 +393,7 @@ describe('Array functions', function() {
       });
       const U8Array = env.finalizeStructure(structure);
       const str = 'Hello world';
-      const base64 = btoa(str);
+      const base64 = encodeBase64(Buffer.from(str));
       const array = new U8Array({ base64 });
       expect(array).to.have.lengthOf(str.length);
       for (let i = 0; i < str.length; i++) {
@@ -415,7 +416,7 @@ describe('Array functions', function() {
       const U8Array = env.finalizeStructure(structure);
       const array = new U8Array('Hello world');
       const str = 'World war z';
-      array.base64 = btoa(str);
+      array.base64 = encodeBase64(Buffer.from(str));
       for (let i = 0; i < str.length; i++) {
         expect(array[i]).to.equal(str.charCodeAt(i));
       }

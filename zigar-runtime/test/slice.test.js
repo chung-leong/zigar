@@ -4,6 +4,7 @@ import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { MEMORY } from '../src/symbol.js';
 import { NodeEnvironment } from '../src/environment.js'
+import { encodeBase64 } from '../src/text.js';
 
 describe('Slice functions', function() {
   const env = new NodeEnvironment();
@@ -352,7 +353,7 @@ describe('Slice functions', function() {
       });
       const U8Slice = env.finalizeStructure(structure);
       const str = 'Hello world';
-      const base64 = btoa(str);
+      const base64 = encodeBase64(Buffer.from(str));
       const slice = new U8Slice({ base64 });
       expect(slice).to.have.lengthOf(str.length);
       for (let i = 0; i < str.length; i++) {
@@ -374,7 +375,7 @@ describe('Slice functions', function() {
       const U8Slice = env.finalizeStructure(structure);
       const slice = new U8Slice('Hello world');
       const str = 'World war z';
-      slice.base64 = btoa(str);
+      slice.base64 = encodeBase64(Buffer.from(str));
       for (let i = 0; i < str.length; i++) {
         expect(slice[i]).to.equal(str.charCodeAt(i));
       }

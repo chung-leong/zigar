@@ -13,7 +13,6 @@ export function finalizeArgStruct(s, env) {
       members,
     },
     hasPointer,
-    options,
   } = s;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const constructor = s.constructor = function(args) {
@@ -40,7 +39,7 @@ export function finalizeArgStruct(s, env) {
   };
   const memberDescriptors = {};
   for (const member of members) {
-    memberDescriptors[member.name] = getDescriptor(member, options);
+    memberDescriptors[member.name] = getDescriptor(member, env);
   }
   const isChildMutable = function(object) {
     return (object === this.retval);

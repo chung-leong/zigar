@@ -4,6 +4,7 @@ import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
 import { NodeEnvironment } from '../src/environment.js'
+import { encodeBase64 } from '../src/text.js';
 
 describe('Struct functions', function() {
   const env = new NodeEnvironment();
@@ -128,11 +129,13 @@ describe('Struct functions', function() {
       expect(() => new Hello).to.throw(TypeError);
     })
     it('should work correctly with big-endian data', function() {
+      const env = new NodeEnvironment();
+      env.littleEndian = false;
       const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 4 * 2,
-      }, { littleEndian: false });
+      });
       env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
@@ -270,11 +273,13 @@ describe('Struct functions', function() {
       expect(() => object.dog = 0x1FFFFFFFF).to.throw(TypeError);
     })
     it('should permit overflow when runtime safety is off', function () {
+      const env = new NodeEnvironment();
+      env.runtimeSafety = false;
       const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 4 * 2,
-      }, { runtimeSafety: false });
+      });
       env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Int,
@@ -535,8 +540,10 @@ describe('Struct functions', function() {
         bitOffset: 32,
       });
       const Hello = env.finalizeStructure(structure);
-      const str = '\u0001\u0000\u0000\u0000\u0007\u0000\u0000\u0000';
-      const base64 = btoa(str);
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setUint32(0, 1, true);
+      dv.setUint32(4, 7, true);
+      const base64 = encodeBase64(dv);
       const object = new Hello({ base64 });
       expect(object.dog).to.equal(1);
       expect(object.cat).to.equal(7);
@@ -563,8 +570,10 @@ describe('Struct functions', function() {
       });
       const Hello = env.finalizeStructure(structure);
       const object = new Hello(undefined);
-      const str = '\u000f\u0000\u0000\u0000\u000a\u0000\u0000\u0000';
-      object.base64 = btoa(str);
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setUint32(0, 15, true);
+      dv.setUint32(4, 10, true);
+      object.base64 = encodeBase64(dv);
       expect(object.dog).to.equal(15);
       expect(object.cat).to.equal(10);
     })

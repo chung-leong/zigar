@@ -4,12 +4,13 @@ import { getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, checkDataViewSize, getCompatibleTags } from './data-view.js';
 import { getArrayIterator, createProxy, createArrayEntries, getChildVivificator, getPointerVisitor } from './array.js';
 import { copyPointer } from './pointer.js';
-import { addSpecialAccessors, checkDataView, getDataViewFromBase64, getDataViewFromTypedArray,
-  getDataViewFromUTF8, getSpecialKeys } from './special.js';
+import { addSpecialAccessors, checkDataView, getDataViewFromTypedArray, getDataViewFromUTF8, 
+  getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoProperty,
   throwMisplacedSentinel, throwMissingSentinel, throwNoInitializer } from './error.js';
 import { ALIGN, CHILD_VIVIFICATOR, COMPAT, GETTER, LENGTH, MEMORY, MEMORY_COPIER, POINTER_VISITOR,
   SENTINEL, SETTER, SIZE, SLOTS } from './symbol.js';
+import { decodeBase64 } from './text.js';
 
 export function finalizeSlice(s, env) {
   const {
@@ -31,7 +32,7 @@ export function finalizeSlice(s, env) {
   /* DEV-TEST-END */
   const hasObject = (member.type === MemberType.Object);
   const { byteSize: elementSize, structure: elementStructure } = member;
-  const sentinel = getSentinel(s, options);
+  const sentinel = getSentinel(s, env);
   if (sentinel) {
     // zero-terminated strings aren't expected to be commonly used
     // so we're not putting this prop into the standard structure
@@ -146,7 +147,7 @@ export function finalizeSlice(s, env) {
                   dup = false;
                   break;
                 case 'base64':
-                  dv = getDataViewFromBase64(arg[key]);
+                  dv = decodeBase64(arg[key]);
                   dup = false;
                   break;
               }
@@ -172,7 +173,7 @@ export function finalizeSlice(s, env) {
       }
     }
   };
-  const { get, set } = getDescriptor(member, options);
+  const { get, set } = getDescriptor(member, env);
   defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
