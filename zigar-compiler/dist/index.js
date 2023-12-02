@@ -1703,6 +1703,21 @@ function encodeText(text, encoding = 'utf-8') {
   }
 }
 
+function encodeBase64(dv) {
+  const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+  const bstr = String.fromCharCode.apply(null, ta);
+  return btoa(bstr);
+}
+
+function decodeBase64(str) {
+  const bstr = atob(str);
+  const ta = new Uint8Array(bstr.length);
+  for (let i = 0; i < ta.byteLength; i++) {
+    ta[i] = bstr.charCodeAt(i);
+  }
+  return new DataView(ta.buffer);  
+}
+
 function addSpecialAccessors(s) {
   const {
     constructor,
@@ -1785,27 +1800,15 @@ function checkDataView(dv) {
 function getBase64Accessors() {
   return {
     get() {
-      const dv = this.dataView;
-      const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
-      const bstr = String.fromCharCode.apply(null, ta);
-      return btoa(bstr);
+      return encodeBase64(this.dataView);
     },
     set(str) {
-      this.dataView = getDataViewFromBase64(str);
+      if (typeof(str) !== 'string') {
+        throwTypeMismatch('a string', str);
+      }
+      this.dataView = decodeBase64(str);
     }
   }
-}
-
-function getDataViewFromBase64(str) {
-  if (typeof(str) !== 'string') {
-    throwTypeMismatch('a string', str);
-  }
-  const bstr = atob(str);
-  const ta = new Uint8Array(bstr.length);
-  for (let i = 0; i < ta.byteLength; i++) {
-    ta[i] = bstr.charCodeAt(i);
-  }
-  return new DataView(ta.buffer);
 }
 
 function getStringAccessors(structure) {
@@ -1896,7 +1899,6 @@ function finalizePrimitive(s, env) {
     instance: {
       members: [ member ],
     },
-    options,
   } = s;
   addTypedArray(s);
   const constructor = s.constructor = function(arg) {
@@ -1950,7 +1952,7 @@ function finalizePrimitive(s, env) {
       }
     }
   };
-  const { get, set } = getDescriptor(member, options);
+  const { get, set } = getDescriptor(member, env);
   defineProperties(constructor.prototype, {
     $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
@@ -2009,11 +2011,10 @@ function finalizePointer(s, env) {
       members: [ member ],
     },
     isConst,
-    options,
   } = s;
   const {
     runtimeSafety = true,
-  } = options;
+  } = env;
   const { structure: targetStructure } = member;
   const isTargetSlice = (targetStructure.type === StructureType.Slice);
   const isTargetPointer = (targetStructure.type === StructureType.Pointer);
@@ -2025,14 +2026,14 @@ function finalizePointer(s, env) {
     bitSize: addressSize * 8,
     byteSize: addressSize,
     structure: { byteSize: addressSize },
-  }, options);
+  }, env);
   const { get: getLength, set: setLength } = (hasLength) ? getDescriptor({
     type: MemberType.Uint,
     bitOffset: addressSize * 8,
     bitSize: addressSize * 8,
     byteSize: addressSize,
     structure: { name: 'usize', byteSize: addressSize },
-  }, options) : {};
+  }, env) : {};
   const constructor = s.constructor = function(arg) {
     const calledFromEnviroment = this === ENVIRONMENT;
     const calledFromParent = this === PARENT;
@@ -2303,7 +2304,6 @@ function finalizeArray(s, env) {
       members: [ member ],
     },
     hasPointer,
-    options,
   } = s;
   addTypedArray(s);
   const hasObject = (member.type === MemberType.Object);
@@ -2381,7 +2381,7 @@ function finalizeArray(s, env) {
       }
     }
   };
-  const { get, set } = getDescriptor(member, options);
+  const { get, set } = getDescriptor(member, env);
   defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
@@ -2593,11 +2593,10 @@ function addStaticMembers(s, env) {
       members,
       template,
     },
-    options,
   } = s;
   const descriptors = {};
   for (const member of members) {
-    descriptors[member.name] = getDescriptor(member, options);
+    descriptors[member.name] = getDescriptor(member, env);
   }
   defineProperties(constructor, {
     ...descriptors,
@@ -2631,11 +2630,10 @@ function finalizeStruct(s, env) {
       template,
     },
     hasPointer,
-    options,
   } = s;
   const descriptors = {};
   for (const member of members) {
-    descriptors[member.name] = getDescriptor(member, options);
+    descriptors[member.name] = getDescriptor(member, env);
   }
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
@@ -2744,7 +2742,7 @@ function finalizeStruct(s, env) {
     [SIZE]: { value: byteSize },
   });
   addSpecialAccessors(s);
-  addStaticMembers(s);
+  addStaticMembers(s, env);
   addMethods(s, env);
   return constructor;
 }
@@ -2821,12 +2819,9 @@ function finalizeUnion(s, env) {
       members,
       template,
     },
-    options,
     hasPointer,
   } = s;
-  const {
-    runtimeSafety = true,
-  } = options;
+  const { runtimeSafety } = env;
   const descriptors = {};
   let getEnumItem;
   let valueMembers;
@@ -2836,7 +2831,7 @@ function finalizeUnion(s, env) {
   if (exclusion) {
     valueMembers = members.slice(0, -1);
     const selectorMember = members[members.length - 1];
-    const { get: getSelector, set: setSelector } = getDescriptor(selectorMember, options);
+    const { get: getSelector, set: setSelector } = getDescriptor(selectorMember, env);
     if (type === StructureType.TaggedUnion) {
       const { structure: { constructor } } = selectorMember;
       getEnumItem = getSelector;
@@ -2860,7 +2855,7 @@ function finalizeUnion(s, env) {
     }
     for (const member of valueMembers) {
       const { name, slot, structure: { hasPointer } } = member;
-      const { get: getValue, set: setValue } = getDescriptor(member, options);
+      const { get: getValue, set: setValue } = getDescriptor(member, env);
       const update = (isTagged) ? function(name) {
         if (this[TAG]?.name !== name) {
           this[TAG]?.clear?.();
@@ -2904,7 +2899,7 @@ function finalizeUnion(s, env) {
     // extern union
     valueMembers = members;
     for (const member of members) {
-      const { get, set } = getDescriptor(member, options);
+      const { get, set } = getDescriptor(member, env);
       descriptors[member.name] = { get, set, init: set, configurable: true, enumerable: true };
     }
   }
@@ -3035,7 +3030,7 @@ function finalizeUnion(s, env) {
     [SIZE]: { value: byteSize },
   });
   addSpecialAccessors(s);
-  addStaticMembers(s);
+  addStaticMembers(s, env);
   addMethods(s, env);
   return constructor;
 }
@@ -3052,11 +3047,10 @@ function finalizeErrorUnion(s, env) {
     byteSize,
     align,
     instance: { members },
-    options,
     hasPointer,
   } = s;
-  const { get: getValue, set: setValue } = getDescriptor(members[0], options);
-  const { get: getError, set: setError } = getDescriptor(members[1], options);
+  const { get: getValue, set: setValue } = getDescriptor(members[0], env);
+  const { get: getError, set: setError } = getDescriptor(members[1], env);
   const { structure: errorStructure } = members[1];
   const { constructor: ErrorSet } = errorStructure;
   const set = function(value) {
@@ -3221,10 +3215,9 @@ function finalizeEnumeration(s, env) {
       members,
       template,
     },
-    options,
   } = s;
   const Primitive = getPrimitiveClass(members[0]);
-  const { get: getValue } = getDescriptor(members[0], options);
+  const { get: getValue } = getDescriptor(members[0], env);
   const count = members.length;
   const items = {};
   const constructor = s.constructor = function(arg) {
@@ -3307,7 +3300,7 @@ function finalizeEnumeration(s, env) {
     [SIZE]: { value: byteSize },
   });
   addSpecialAccessors(s);
-  addStaticMembers(s);
+  addStaticMembers(s, env);
   addMethods(s, env);
   return constructor;
 }
@@ -3317,11 +3310,10 @@ function finalizeOptional(s, env) {
     byteSize,
     align,
     instance: { members },
-    options,
     hasPointer,
   } = s;
-  const { get: getValue, set: setValue } = getDescriptor(members[0], options);
-  const { get: getPresent, set: setPresent } = getDescriptor(members[1], options);
+  const { get: getValue, set: setValue } = getDescriptor(members[0], env);
+  const { get: getPresent, set: setPresent } = getDescriptor(members[1], env);
   const get = function() {
     const present = getPresent.call(this);
     if (present) {
@@ -3399,12 +3391,11 @@ function finalizeSlice(s, env) {
       members: [ member ],
     },
     hasPointer,
-    options,
   } = s;
   const typedArray = addTypedArray(s);
   const hasObject = (member.type === MemberType.Object);
   const { byteSize: elementSize, structure: elementStructure } = member;
-  const sentinel = getSentinel(s, options);
+  const sentinel = getSentinel(s, env);
   if (sentinel) {
     // zero-terminated strings aren't expected to be commonly used
     // so we're not putting this prop into the standard structure
@@ -3519,7 +3510,7 @@ function finalizeSlice(s, env) {
                   dup = false;
                   break;
                 case 'base64':
-                  dv = getDataViewFromBase64(arg[key]);
+                  dv = decodeBase64(arg[key]);
                   dup = false;
                   break;
               }
@@ -3545,7 +3536,7 @@ function finalizeSlice(s, env) {
       }
     }
   };
-  const { get, set } = getDescriptor(member, options);
+  const { get, set } = getDescriptor(member, env);
   defineProperties(constructor.prototype, {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
@@ -3572,10 +3563,10 @@ function getLength() {
   return this[LENGTH];
 }
 
-function getSentinel(structure, options) {
+function getSentinel(structure, env) {
   const {
     runtimeSafety = true,
-  } = options;
+  } = env;
   const {
     byteSize,
     instance: { members: [ member, sentinel ], template },
@@ -3583,9 +3574,9 @@ function getSentinel(structure, options) {
   if (!sentinel) {
     return;
   }
-  const { get: getSentinelValue } = getDescriptor(sentinel, options);
+  const { get: getSentinelValue } = getDescriptor(sentinel, env);
   const value = getSentinelValue.call(template, 0);
-  const { get } = getDescriptor(member, options);
+  const { get } = getDescriptor(member, env);
   const validateValue = (runtimeSafety) ? function(v, i, l) {
     if (v === value && i !== l - 1) {
       throwMisplacedSentinel(structure, v, i, l);
@@ -3627,7 +3618,6 @@ function finalizeVector(s, env) {
     instance: {
       members: [ member ],
     },
-    options,
   } = s;
   addTypedArray(s);
   const constructor = s.constructor = function(arg) {
@@ -3675,7 +3665,7 @@ function finalizeVector(s, env) {
   };
   const elementDescriptors = {};
   for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
-    const { get, set } = getDescriptor({ ...member, bitOffset }, options);
+    const { get, set } = getDescriptor({ ...member, bitOffset }, env);
     elementDescriptors[i] = { get, set, configurable: true };
   }
   defineProperties(constructor.prototype, {
@@ -3749,7 +3739,6 @@ function finalizeArgStruct(s, env) {
       members,
     },
     hasPointer,
-    options,
   } = s;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const constructor = s.constructor = function(args) {
@@ -3776,7 +3765,7 @@ function finalizeArgStruct(s, env) {
   };
   const memberDescriptors = {};
   for (const member of members) {
-    memberDescriptors[member.name] = getDescriptor(member, options);
+    memberDescriptors[member.name] = getDescriptor(member, env);
   }
   const isChildMutable = function(object) {
     return (object === this.retval);
@@ -4043,13 +4032,13 @@ function isByteAligned({ bitOffset, bitSize, byteSize }) {
   return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
 }
 
-function getDescriptor(member, options = {}) {
+function getDescriptor(member, env) {
   const f = factories[member.type];
-  return { ...f(member, options), configurable: true, enumerable: true };
+  return { ...f(member, env), configurable: true, enumerable: true };
 }
 
-function getVoidDescriptor(member, options) {
-  const { runtimeSafety } = options;
+function getVoidDescriptor(member, env) {
+  const { runtimeSafety } = env;
   return {
     get: function() {
       return null;
@@ -4064,25 +4053,25 @@ function getVoidDescriptor(member, options) {
   }
 }
 
-function getBoolDescriptorEx(member, options) {
-  return getDescriptorUsing(member, options, getDataViewBoolAccessorEx)
+function getBoolDescriptorEx(member, env) {
+  return getDescriptorUsing(member, env, getDataViewBoolAccessorEx)
 }
 
-function getIntDescriptorEx(member, options) {
-  const getDataViewAccessor = addRuntimeCheck(options, getDataViewIntAccessorEx);
-  return getDescriptorUsing(member, options, getDataViewAccessor)
+function getIntDescriptorEx(member, env) {
+  const getDataViewAccessor = addRuntimeCheck(env, getDataViewIntAccessorEx);
+  return getDescriptorUsing(member, env, getDataViewAccessor)
 }
 
-function getUintDescriptorEx(member, options) {
-  const getDataViewAccessor = addRuntimeCheck(options, getDataViewUintAccessorEx);
-  return getDescriptorUsing(member, options, getDataViewAccessor)
+function getUintDescriptorEx(member, env) {
+  const getDataViewAccessor = addRuntimeCheck(env, getDataViewUintAccessorEx);
+  return getDescriptorUsing(member, env, getDataViewAccessor)
 }
 
-function addRuntimeCheck(options, getDataViewAccessor) {
+function addRuntimeCheck(env, getDataViewAccessor) {
   return function (access, member) {
     const {
       runtimeSafety = true,
-    } = options;
+    } = env;
     const accessor = getDataViewAccessor(access, member);
     if (runtimeSafety && access === 'set') {
       const { min, max } = getIntRange(member);
@@ -4097,13 +4086,13 @@ function addRuntimeCheck(options, getDataViewAccessor) {
   };
 }
 
-function getFloatDescriptorEx(member, options) {
-  return getDescriptorUsing(member, options, getDataViewFloatAccessorEx)
+function getFloatDescriptorEx(member, env) {
+  return getDescriptorUsing(member, env, getDataViewFloatAccessorEx)
 }
 
-function getEnumerationItemDescriptorEx(member, options) {
+function getEnumerationItemDescriptorEx(member, env) {
   const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessorEx);
-  return getDescriptorUsing(member, options, getDataViewAccessor) ;
+  return getDescriptorUsing(member, env, getDataViewAccessor) ;
 }
 
 function addEnumerationLookup(getDataViewIntAccessor) {
@@ -4156,7 +4145,7 @@ function isValueExpected(structure) {
   }
 }
 
-function getObjectDescriptor(member, options) {
+function getObjectDescriptor(member, env) {
   const { structure, slot } = member;
   if (slot !== undefined) {
     return {
@@ -4194,7 +4183,7 @@ function getObjectDescriptor(member, options) {
   }
 }
 
-function getTypeDescriptor(member, options) {
+function getTypeDescriptor(member, env) {
   const { slot } = member;
   return {
     get: function getType() {
@@ -4206,7 +4195,7 @@ function getTypeDescriptor(member, options) {
   };
 }
 
-function getComptimeDescriptor(member, options) {
+function getComptimeDescriptor(member, env) {
   const { slot, structure } = member;
   return {
     get: (isValueExpected(structure))
@@ -4221,7 +4210,7 @@ function getComptimeDescriptor(member, options) {
   };
 }
 
-function getStaticDescriptor(member, options) {
+function getStaticDescriptor(member, env) {
   const { slot } = member;
   return {
     ...getComptimeDescriptor(member),
@@ -4232,7 +4221,7 @@ function getStaticDescriptor(member, options) {
   };
 }
 
-function getLiteralDescriptor(member, options) {
+function getLiteralDescriptor(member, env) {
   const { slot } = member;
   return {
     get: function getType() {
@@ -4243,10 +4232,10 @@ function getLiteralDescriptor(member, options) {
   };
 }
 
-function getDescriptorUsing(member, options, getDataViewAccessor) {
+function getDescriptorUsing(member, env, getDataViewAccessor) {
   const {
     littleEndian = true,
-  } = options;
+  } = env;
   const { bitOffset, byteSize } = member;
   const getter = getDataViewAccessor('get', member);
   const setter = getDataViewAccessor('set', member);
@@ -4339,8 +4328,17 @@ class Environment {
   contextStack = [];
   consolePending = [];
   consoleTimeout = 0;
-  slots = {};
   emptyView = new DataView(new ArrayBuffer(0));
+  initPromise;
+  abandoned = false;
+  released = false;
+  littleEndian = true;
+  runtimeSafety = true;
+  /* COMPTIME-ONLY */
+  slots = {};
+  structures = [];
+  /* COMPTIME-ONLY-END */
+  imports;
 
   /*
   Functions to be defined in subclass:
@@ -4375,9 +4373,16 @@ class Environment {
   copyBytes(dst: DataView, address: bigint|number, len: number): void {
     // copy memory at given address into destination view
   }
-  findSentinel(address, bytes: DataView): number {
+  findSentinel(address: bigint|number, bytes: DataView): number {
     // return offset where sentinel value is found
   }
+  getMemoryOffset(address: bigint|number) number {
+    // return offset of address relative to start of module memory
+  }
+  recreateAddress(offset: number) number {
+    // recreate address of memory belonging to module
+  }
+
   getTargetAddress(target: object, cluster: object|undefined) {
     // return the address of target's buffer if correctly aligned
   }
@@ -4478,6 +4483,7 @@ class Environment {
     return object;
   }
 
+  /* COMPTIME-ONLY */
   readSlot(target, slot) {
     const slots = target ? target[SLOTS] : this.slots;
     return slots?.[slot];
@@ -4490,7 +4496,6 @@ class Environment {
     }
   }
 
-  /* COMPTIME-ONLY */
   createTemplate(dv) {
     return {
       [MEMORY]: dv,
@@ -4498,7 +4503,7 @@ class Environment {
     };
   }
 
-  beginStructure(def, options = {}) {
+  beginStructure(def) {
     const {
       type,
       name,
@@ -4528,7 +4533,6 @@ class Environment {
         methods: [],
         template: null,
       },
-      options,
     };
   }
 
@@ -4547,6 +4551,86 @@ class Environment {
   attachTemplate(s, template, isStatic = false) {
     const target = (isStatic) ? s.static : s.instance;
     target.template = template;
+  }
+
+  endStructure(s) {
+    const constructor = this.finalizeStructure(s);
+    this.structures.push(s);
+    this.acquireDefaultPointers(s);
+    return constructor;
+  }
+
+  acquireStructures(options) {
+    const {
+      omitFunctions = false,
+    } = options;
+    if (omitFunctions) {
+      this.attachMethod = () => {};
+    }
+    initializeErrorSets();
+    const result = this.defineStructures();
+    if (typeof(result) === 'string') {
+      throwZigError(result);
+    }
+  }
+
+  getRootModule() {
+    const root = this.structures[this.structures.length - 1];
+    return root.constructor;
+  }
+
+  exportStructures() {
+    this.replaceFixedMemory();
+    return this.structures;
+  }
+
+  replaceFixedMemory() {
+    // look for buffers that requires linkage
+    const list = [];
+    const find = (object) => {
+      if (!object) {
+        return;
+      }
+      if (object[MEMORY]) {
+        if (this.inFixedMemory(object)) {
+          const dv = object[MEMORY];
+          // replace fixed memory
+          const address = this.getViewAddress(dv);
+          const offset = this.getMemoryOffset(address);
+          const len = dv.byteLength;
+          const relocDV = this.createView(address, len, true);
+          relocDV.offset = offset;
+          object[MEMORY] = relocDV;
+          list.push({ offset, len, owner: object, replaced: false });
+        }
+      }
+      if (object[SLOTS]) {
+        for (const child of Object.values(object[SLOTS])) {
+          find(child);
+        }
+      }
+    };
+    for (const structure of this.structures) {
+      find(structure.instance.template);
+      find(structure.static.template);
+    }
+    // larger memory blocks come first
+    list.sort((a, b) => b.len - a.len);
+    for (const a of list) {
+      for (const b of list) {
+        if (a !== b && !a.replaced) {
+          if (a.offset <= b.offset && b.offset + b.len <= a.offset + a.len) {
+            // B is inside A--replace it with a view of A's buffer
+            const dv = a.owner[MEMORY];
+            const pos = b.offset - a.offset + dv.byteOffset;
+            const newDV = new DataView(dv.buffer, pos, b.len);
+            newDV.offset = b.offset;
+            b.owner[MEMORY] = newDV;
+            b.replaced = true;
+          }
+        }
+      }
+    }
   }
   /* COMPTIME-ONLY-END */
 
@@ -4573,17 +4657,17 @@ class Environment {
   }
 
   createCaller(method, useThis) {
-    let { name,  argStruct, thunk } = method;
+    let { name,  argStruct, thunkId } = method;
     const { constructor } = argStruct;
     const self = this;
     let f;
     if (useThis) {
       f = function(...args) {
-        return self.invokeThunk(thunk, new constructor([ this, ...args ]));
+        return self.invokeThunk(thunkId, new constructor([ this, ...args ]));
       };
     } else {
       f = function(...args) {
-        return self.invokeThunk(thunk, new constructor(args));
+        return self.invokeThunk(thunkId, new constructor(args));
       };
     }
     Object.defineProperty(f, 'name', { value: name });
@@ -4683,7 +4767,7 @@ class WebAssemblyEnvironment extends Environment {
     attachMethod: { argType: 'vvb' },
     createTemplate: { argType: 'v', returnType: 'v' },
     attachTemplate: { argType: 'vvb' },
-    finalizeStructure: { argType: 'v' },
+    endStructure: { argType: 'v' },
     writeToConsole: { argType: 'v' },
     startCall: { argType: 'iv', returnType: 'i' },
     endCall: { argType: 'iv', returnType: 'i' },
@@ -4692,9 +4776,8 @@ class WebAssemblyEnvironment extends Environment {
   valueTable = { 0: null };
   valueIndices = new Map;
   memory = null;
-  /* COMPTIME-ONLY */
-  structures = [];
-  /* COMPTIME-ONLY-END */
+  // WASM is always little endian
+  littleEndian = true;
 
   constructor() {
     super();
@@ -4784,7 +4867,7 @@ class WebAssemblyEnvironment extends Environment {
     return false;
   }
 
-  releaseObjects() {
+  clearExchangeTable() {
     if (this.nextValueIndex !== 1) {
       this.nextValueIndex = 1;
       this.valueTable = { 0: null };
@@ -4870,17 +4953,6 @@ class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  releaseFunctions() {
-    const throwError = function() {
-      throw new Error('WebAssembly instance was abandoned');
-    };
-    for (const { name } of Object.values(this.imports)) {
-      if (this[name]) {
-        this[name] = throwError;
-      }
-    }
-  }
-
   async instantiateWebAssembly(source) {
     const env = this.exportFunctions();
     if (source[Symbol.toStringTag] === 'Response') {
@@ -4891,27 +4963,30 @@ class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  async loadWebAssembly(source) {
-    const { instance } = await this.instantiateWebAssembly(source);
-    this.memory = instance.exports.memory;
-    this.importFunctions(instance.exports);
-    // create a WeakRef so that we know whether the instance is gc'ed or not
-    const weakRef = new WeakRef(instance);
-    return {
-      abandon: () => {
-        this.releaseFunctions();
-        this.unlinkVariables();
-        this.memory = null;
-      },
-      released: () => {
-        return !weakRef.deref();
-      }
-    }
+  async loadModule(source) {
+    return this.initPromise = (async () => {
+      const { instance } = await this.instantiateWebAssembly(source);
+      this.memory = instance.exports.memory;
+      this.importFunctions(instance.exports);
+      this.trackInstance(instance);
+      this.runtimeSafety = this.isRuntimeSafetyActive();
+    })();
+  }
+
+  trackInstance(instance) {
+    // use WeakRef to detect whether web-assembly instance has been gc'ed
+    const ref = new WeakRef(instance);
+    Object.defineProperty(this, 'released', { get: () => !ref.deref(), enumerable: true });
+  }
+
+  linkVariables(writeBack) {
+    // linkage occurs when WASM compilation is complete and functions have been imported
+    this.initPromise = this.initPromise.then(() => super.linkVariables(writeBack));
   }
 
   startCall(call, args) {
     this.startContext();
-    // call context, use by allocateShadowMemory and freeShadowMemory
+    // call context, used by allocateShadowMemory and freeShadowMemory
     this.context.call = call;
     if (args) {
       if (args[POINTER_VISITOR]) {
@@ -4939,25 +5014,6 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   /* COMPTIME-ONLY */
-  runFactory(options) {
-    const {
-      omitFunctions = false
-    } = options;
-    if (omitFunctions) {
-      this.attachMethod = () => {};
-    }
-    initializeErrorSets();
-    const result = this.defineStructures();
-    if (typeof(result) === 'string') {
-      throwZigError(result);
-    }
-    this.replaceFixedMemory();
-    return {
-      structures: this.structures,
-      runtimeSafety: this.isRuntimeSafetyActive(),
-    };
-  }
-
   beginDefinition() {
     return {};
   }
@@ -4965,189 +5021,24 @@ class WebAssemblyEnvironment extends Environment {
   insertProperty(def, name, value) {
     def[name] = value;
   }
-
-  replaceFixedMemory() {
-    // look for buffers that requires linkage
-    const list = [];
-    const find = (object) => {
-      if (!object) {
-        return;
-      }
-      if (object[MEMORY]) {
-        if (this.inFixedMemory(object)) {
-          const dv = object[MEMORY];
-          // replace fixed memory
-          const address = dv.byteOffset;
-          const len = dv.byteLength;
-          const relocDV = this.createView(address, len, true);
-          relocDV.address = address;
-          object[MEMORY] = relocDV;
-          list.push({ address, len, owner: object, replaced: false });
-        }
-      }
-      if (object[SLOTS]) {
-        for (const child of Object.values(object[SLOTS])) {
-          find(child);
-        }
-      }
-    };
-    for (const structure of this.structures) {
-      find(structure.instance.template);
-      find(structure.static.template);
-    }
-    // larger memory blocks come first
-    list.sort((a, b) => b.len - a.len);
-    for (const a of list) {
-      for (const b of list) {
-        if (a !== b && !a.replaced) {
-          if (a.address <= b.address && b.address + b.len <= a.address + a.len) {
-            // B is inside A--replace it with a view of A's buffer
-            const dv = a.owner[MEMORY];
-            const offset = b.address - a.address + dv.byteOffset;
-            const newDV = new DataView(dv.buffer, offset, b.len);
-            newDV.address = b.address;
-            b.owner[MEMORY] = newDV;
-            b.replaced = true;
-          }
-        }
-      }
-    }
-  }
   /* COMPTIME-ONLY-END */
 
-  finalizeStructure(s) {
-    /* COMPTIME-ONLY */
-    const constructor = super.finalizeStructure(s);
-    // remember the structure
-    this.structures.push(s);
-    // acquire default pointers
-    this.acquireDefaultPointers(s);
-    return constructor;
-    /* COMPTIME-ONLY-END */
-  }
-
   /* RUNTIME-ONLY */
-  finalizeStructures(structures) {
-    const createTemplate = (placeholder) => {
-      const template = {};
-      if (placeholder.memory) {
-        const { array, offset, length } = placeholder.memory;
-        template[MEMORY] = new DataView(array.buffer, offset, length);
-      }
-      if (placeholder.slots) {
-        template[SLOTS] = insertObjects({}, placeholder.slots);
-      }
-      return template;
-    };
-    const insertObjects = (dest, placeholders) => {
-      for (const [ slot, placeholder ] of Object.entries(placeholders)) {
-        dest[slot] = placeholder ? createObject(placeholder) : null;
-      }
-      return dest;
-    };
-    const createObject = (placeholder) => {
-      let dv;
-      if (placeholder.memory) {
-        const { array, offset, length } = placeholder.memory;
-        dv = new DataView(array.buffer, offset, length);
-      } else {
-        const { byteSize } = placeholder.structure;
-        dv = new DataView(new ArrayBuffer(byteSize));
-      }
-      const { constructor } = placeholder.structure;
-      const object = constructor.call(ENVIRONMENT, dv);
-      if (placeholder.slots) {
-        insertObjects(object[SLOTS], placeholder.slots);
-      }
-      if (placeholder.address !== undefined) {
-        // need to replace dataview with one pointing to WASM memory later,
-        // when the VM is up and running
-        this.variables.push({ address: placeholder.address, object });
-      }
-      return object;
-    };
-    initializeErrorSets();
-    for (const structure of structures) {
-      for (const target of [ structure.static, structure.instance ]) {
-        // first create the actual template using the provided placeholder
-        if (target.template) {
-          target.template = createTemplate(target.template);
-        }
-      }
-      super.finalizeStructure(structure);
-      // place structure into its assigned slot
-      this.slots[structure.slot] = structure;
-    }
-
-    let resolve, reject;
-    const promise = new Promise((r1, r2) => {
-      resolve = r1;
-      reject = r2;
-    });
-    this.runThunk = function(index, argStruct) {
-      // wait for linking to occur, then call function again
-      // this.runThunk should have been replaced
-      return promise.then(() => this.runThunk(index, argStruct));
-    };
-    return { resolve, reject };
+  getMemoryOffset(address) {
+    // WASM address space starts at 0
+    return address;
   }
 
-  async linkWebAssembly(source, params) {
-    const {
-      writeBack = true,
-    } = params;
-    const zigar = await this.loadWebAssembly(source);
-    this.linkVariables(writeBack);
-    return zigar;
+  recreateAddress(offset) {
+    return offset;
   }
 
-  linkVariables(writeBack) {
-    for (const { object, address } of this.variables) {
-      this.linkObject(object, address, writeBack);
-    }
-  }
-
-  linkObject(object, address, writeBack) {
-    if (this.inFixedMemory(object)) {
-      return;
-    }
-    const dv = object[MEMORY];
-    if (dv.byteLength !== 0) {
-      const wasmDV = this.obtainFixedView(address, dv.byteLength);
-      if (writeBack) {
-        const dest = Object.create(object.constructor.prototype);
-        dest[MEMORY] = wasmDV;
-        dest[MEMORY_COPIER](object);
-      }
-      object[MEMORY] = wasmDV;
-    }
-  }
-
-  unlinkVariables() {
-    for (const { object } of this.variables) {
-      this.unlinkObject(object);
-    }
-  }
-
-  unlinkObject(object) {
-    if (!this.inFixedMemory(object)) {
-      return;
-    }
-    const dv = object[MEMORY];
-    const relocDV = this.createRelocatableBuffer(dv.byteLength);
-    const dest = Object.create(object.constructor.prototype);
-    dest[MEMORY] = relocDV;
-    dest[MEMORY_COPIER](object);
-    object[MEMORY] = relocDV;
-  }
-
-  invokeThunk(thunk, args) {
-    // WASM thunks aren't functions--they're indices into the function table 0
+  invokeThunk(thunkId, args) {
     // wasm-exporter.zig will invoke startCall() with the context address and the args
     // we can't do pointer fix up here since we need the context in order to allocate
-    // memory from the WebAssembly allocator; point target acquisition will happen in
+    // memory from the WebAssembly allocator; pointer target acquisition will happen in
     // endCall()
-    const err = this.runThunk(thunk, args);
+    const err = this.runThunk(thunkId, args);
     if (!this.context) {
       this.flushConsole();
     }
@@ -5203,225 +5094,131 @@ function add(address, len) {
 
 useAllMemberTypes();
 useAllStructureTypes();
+/* COMPTIME-ONLY-END */
 
-function generateCode(structures, params) {
+async function loadModule(source) {
+  const env = new WebAssemblyEnvironment();
+  if (source) {
+    await env.loadModule(source);
+  }
+  return env;
+}
+
+function generateCodeForWASM(structures, params) {
   const {
     runtimeURL,
     loadWASM,
-    topLevelAwait,
-    omitExports,
-    runtimeSafety,
+    topLevelAwait = true,
+    omitExports = false,
   } = params;
+  const features = getStructureFeatures(structures);
+  const exports = getExports(structures);
   const lines = [];
-  let indent = 0;
-  function add(s) {
-    if (/^\s*[\]\}]/.test(s)) {
-      indent--;
-    }
-    lines.push(' '.repeat(indent * 2) + s);
-    if (/[\[\{]\s*$/.test(s)) {
-      indent++;
-    }
-  }
-  const structureFeatures = {}, memberFeatures = {};
-  for (const structure of structures) {
-    structureFeatures[ getStructureFeature(structure) ] = true;
-    for (const members of [ structure.instance.members, structure.static.members ]) {
-      for (const member of members) {
-        const feature = getMemberFeature(member);
-        if (feature) {
-          memberFeatures[feature] = true;
-        }
-      }
-    }
-    if (structure.type === StructureType.Pointer) {
-      // pointer need uint support
-      memberFeatures.useUint = true;
-    }
-  }
-  if (memberFeatures.useIntEx) {
-    delete memberFeatures.useInt;
-  }
-  if (memberFeatures.useUintEx) {
-    delete memberFeatures.useUint;
-  }
-  if (memberFeatures.useEnumerationItemEx) {
-    delete memberFeatures.useEnumerationItem;
-  }
-  if (memberFeatures.useFloatEx) {
-    delete memberFeatures.useFloat;
-  }
-  if (memberFeatures.useBoolEx) {
-    delete memberFeatures.useBool;
-  }
-  const features = [ ...Object.keys(structureFeatures), ...Object.keys(memberFeatures) ];
-  const imports = [ 'Environment' ];
-  imports.push(...features);
+  const add = manageIndentation(lines);
   add(`import {`);
-  for (const name of imports) {
+  for (const name of [ 'loadModule', ...features ]) {
     add(`${name},`);
   }
   add(`} from ${JSON.stringify(runtimeURL)};`);
-
+  // reduce file size by only including code of features actually used
+  // dead-code remover will take out code not referenced here
   add(`\n// activate features`);
   for (const feature of features) {
     add(`${feature}();`);
   }
-
-  const defaultStructure = {
-    constructor: null,
-    typedArray: null,
-    type: StructureType.Primitive,
-    name: undefined,
-    byteSize: 4,
-    align: 2,
-    isConst: false,
-    hasPointer: false,
-    instance: {
-      members: [],
-      methods: [],
-      template: null,
-    },
-    static: {
-      members: [],
-      methods: [],
-      template: null,
-    },
-    options: { runtimeSafety },
-  };
-
-  const defaultMember = {
-    type: MemberType.Void,
-    isRequired: true,
-  };
-
-  add(`\n// define structures`);
-  addDefaultStructure();
-  addDefaultMember();
-  const structureNames = new Map();
-  const structureMap = new Map();
-  const methodNames = new Map();
-  const arrayBufferNames = new Map();
-  let arrayBufferCount = 0;
-  let methodCount = 0;
-
-  // create empty objects first, to allow structs to reference themselves
-  for (const [ index, structure ] of structures.entries()) {
-    const varname = `s${index}`;
-    structureNames.set(structure, varname);
-    structureMap.set(structure.constructor, structure);
-  }
-  const varnames = [ ...structureNames.values() ];
-  const initializations = varnames.map(n => `${n} = {}`);
-  for (let i = 0; i < initializations.length; i += 10) {
-    const slice = initializations.slice(i, i + 10);
-    add(`const ${slice.join(', ')};`);
-  }
-
-  for (const [ index, structure ] of structures.entries()) {
-    const varname = structureNames.get(structure);
-    addStructure(varname, structure);
-  }
-
-  add(`\n// finalize structures`);
-  if (varnames.length <= 10) {
-    add(`const structures = [ ${varnames.join(', ') } ];`);
-  } else {
-    add(`const structures = [`);
-    for (let i = 0; i < varnames.length; i += 10) {
-      const slice = varnames.slice(i, i + 10);
-      add(`${slice.join(', ')},`);
-    }
-    add(`];`);
-  }
-  add(`const env = new Environment();`);
-  add(`const { resolve, reject } = env.finalizeStructures(structures);`);
-
-  // the root structure gets finalized last
-  const root = structures[structures.length - 1];
-  add(`const module = ${structureNames.get(root)}.constructor;`);
-
-  if (loadWASM) {
-    add(`\n// initiate loading and compilation of WASM bytecodes`);
-    add(`const wasmPromise = ${loadWASM};`);
-    add(`const initPromise = env.linkWebAssembly(wasmPromise, { writeBack: ${!topLevelAwait} });`);
-    add(`initPromise.then(resolve, reject);`);
-  } else {
-    add(`\n// no need to use WASM binary`);
-    add(`const initPromise = Promise.resolve();`);
-  }
-  add(`const __zigar = {`);
-  add(`init: () => initPromise,`);
-  add(`abandon: () => initPromise.then(res => res?.abandon()),`);
-  add(`released: () => initPromise.then(res => res?.released() ?? false),`);
-  add(`};`);
-
-  add(`\n// export functions, types, and constants`);
-  const exportables = [];
-  for (const method of root.static.methods) {
-    if (/^[$\w]+$/.test(method.name)) {
-      exportables.push(method.name);
-    }
-  }
-  for (const member of root.static.members) {
-    // only read-only properties are exportable
-    let readOnly = false;
-    if (member.type === MemberType.Type) {
-      readOnly = true;
-    } else if (member.type === MemberType.Object && member.structure.type === StructureType.Pointer) {
-      if (member.structure.isConst) {
-        readOnly = true;
-      }
-    }
-    if (readOnly && /^[$\w]+$/.test(member.name)) {
-      exportables.push(member.name);
-    }
-  }
-  add(`const {`);
-  for (const name of exportables) {
-    add(`${name},`);
-  }
-  add(`} = module;`);
-  if (!omitExports) {
-    add(`export {`);
-    for (const name of [ 'module as default', ...exportables, '__zigar' ]) {
-      add(`${name},`);
-    }
-    add(`};`);
-  }
+  add(`\n// initiate loading and compilation of WASM bytecodes`);
+  add(`const source = ${loadWASM ?? null};`);
+  // write out the structures as object literals
+  lines.push(...generateStructureDefinitions(structures));
+  lines.push(...generateLoadStatements('source', JSON.stringify(!topLevelAwait)));
+  lines.push(...generateExportStatements(exports, omitExports));
   if (topLevelAwait && loadWASM) {
-    add(`\n// await initialization`);
-    add(`await initPromise`);
+    add(`await __zigar.init();`);
   }
-  add(``);
-  const exports = [ 'default', ...exportables, '__zigar' ];
   const code = lines.join('\n');
   return { code, exports, structures };
+}
 
-  function addDefaultStructure() {
-    add(`const s = {`);
-    for (const [ name, value ] of Object.entries(defaultStructure)) {
-      switch (name) {
-        case 'instance':
-        case 'static':
-          addStructureContent(name, value);
-          break;
-        default:
-          add(`${name}: ${JSON.stringify(value)},`);
+function generateCodeForNode(structures, params) {
+  const {
+    runtimeURL,
+    libPath,
+    omitExports = false,
+  } = params;
+  const exports = getExports(structures);
+  const lines = [];
+  const add = manageIndentation(lines);
+  add(`import { loadModule } from ${JSON.stringify(runtimeURL)};`);
+  // all features are enabled by default for Node
+  lines.push(...generateStructureDefinitions(structures));
+  lines.push(...generateLoadStatements(JSON.stringify(libPath), 'false'));
+  lines.push(...generateExportStatements(exports, omitExports));
+  const code = lines.join('\n');
+  return { code, exports, structures };
+}
+
+function generateLoadStatements(source, writeBack) {
+  const lines = [];
+  const add = manageIndentation(lines);
+  add(`// create runtime environment`);
+  add(`const env = await loadModule(${source});`);
+  add(`const __zigar = env.getControlObject();`);
+  add(`env.recreateStructures(structures);`);
+  add(`env.linkVariables(${writeBack});`);
+  add(``);
+  return lines;
+}
+
+function generateExportStatements(exports, omitExports) {
+  const lines = [];
+  const add = manageIndentation(lines);
+  add(`const { constructor } = root;`);
+  if (!omitExports) {
+    add(`export { constructor as default, __zigar }`);
+    // the first two exports are default and __zigar
+    const exportables = exports.slice(2);
+    if (exportables.length > 0) {
+      const oneLine = exportables.join(', ');
+      if (oneLine.length < 70) {
+        add(`export const { ${oneLine} } = constructor;`);
+      } else {
+        add(`export const {`);
+        for (const name of exportables) {
+          add(`${name},`);
+        }
+        add(`} = constructor;`);
       }
     }
-    add(`};`);
   }
+  return lines;
+}
 
+function generateStructureDefinitions(structures, params) {
   function addStructure(varname, structure) {
     addBuffers(structure.instance.template);
     addBuffers(structure.static.template);
-    // instance methods are also static methods, so no need to add them separately
-    addMethods(structure.static.methods);
+    // add static members; instance methods are also static methods, so
+    // we don't need to add them separately
+    for (const method of structure.static.methods) {
+      const varname = `f${methodCount++}`;
+      methodNames.set(method, varname);
+      add(`const ${varname} = {`);
+      for (const [ name, value ] of Object.entries(method)) {
+        switch (name) {
+          case 'argStruct':
+            add(`${name}: ${structureNames.get(value)},`);
+            break;
+          default:
+            add(`${name}: ${JSON.stringify(value)},`);
+        }
+      }
+      add(`};`);
+    }
+    //  no need to add them separately
     add(`Object.assign(${varname}, {`);
     add(`...s,`);
     for (const [ name, value ] of Object.entries(structure)) {
-      if (name !== 'options' && isDifferent(value, defaultStructure[name])) {
+      if (isDifferent(value, defaultStructure[name])) {
         switch (name) {
           case 'constructor':
           case 'sentinel':
@@ -5437,56 +5234,59 @@ function generateCode(structures, params) {
     }
     add(`});`);
   }
-
   function addStructureContent(name, { members, methods, template }) {
     add(`${name}: {`);
-    addMembers(members);
-    addMethodRefs(methods);
-    addTemplate(template);
-    add(`},`);
-  }
-
-  function addDefaultMember() {
-    add(`const m = {`);
-    for (const [ name, value ] of Object.entries(defaultMember)) {
-      add(`${name}: ${JSON.stringify(value)},`);
-    }
-    add(`};`);
-  }
-
-  function addMembers(members) {
     if (members.length > 0) {
       add(`members: [`);
       for (const member of members) {
-        addMember(member);
+        add(`{`);
+        add(`...m,`);
+        for (const [ name, value ] of Object.entries(member)) {
+          if (isDifferent(value, defaultMember[name])) {
+            switch (name) {
+              case 'structure':
+                add(`${name}: ${structureNames.get(value)},`);
+                break;
+              default:
+                add(`${name}: ${JSON.stringify(value)},`);
+            }
+          }
+        }
+        add(`},`);
       }
       add(`],`);
     } else {
       add(`members: [],`);
     }
+    const list = methods.map(m => methodNames.get(m));
+    if (list.length > 0) {
+      add(`methods: [ ${list.join(', ')} ],`);
+    } else {
+      add(`methods: [],`);
+    }
+    addObject('template', template);
+    add(`},`);
   }
-
-  function addMember(member) {
-    add(`{`);
-    add(`...m,`);
-    for (const [ name, value ] of Object.entries(member)) {
-      if (isDifferent(value, defaultMember[name])) {
-        switch (name) {
-          case 'structure':
-            add(`${name}: ${structureNames.get(value)},`);
-            break;
-          default:
-            add(`${name}: ${JSON.stringify(value)},`);
+  function addBuffers(object) {
+    if (object) {
+      const { [MEMORY]: dv, [SLOTS]: slots } = object;
+      if (dv && !arrayBufferNames.get(dv.buffer)) {
+        const varname = `a${arrayBufferCount++}`;
+        arrayBufferNames.set(dv.buffer, varname);
+        if (dv.byteLength > 0) {
+          const ta = new Uint8Array(dv.buffer);
+          add(`const ${varname} = new Uint8Array([ ${ta.join(', ')} ]);`);
+        } else {
+          add(`const ${varname} = new Uint8Array();`);
+        }
+      }
+      if (slots) {
+        for (const [ slot, child ] of Object.entries(slots)) {
+          addBuffers(child);
         }
       }
     }
-    add(`},`);
   }
-
-  function addTemplate(template) {
-    addObject('template', template);
-  }
-
   function addObject(name, object) {
     if (object) {
       const structure = structureMap.get(object.constructor);
@@ -5520,58 +5320,164 @@ function generateCode(structures, params) {
     }
   }
 
-  function addBuffers(object) {
-    if (object) {
-      const { [MEMORY]: dv, [SLOTS]: slots } = object;
-      if (dv && !arrayBufferNames.get(dv.buffer)) {
-        const varname = `a${arrayBufferCount++}`;
-        arrayBufferNames.set(dv.buffer, varname);
-        if (dv.byteLength > 0) {
-          const ta = new Uint8Array(dv.buffer);
-          add(`const ${varname} = new Uint8Array([ ${ta.join(', ')} ]);`);
-        } else {
-          add(`const ${varname} = new Uint8Array();`);
+  const lines = [];
+  const add = manageIndentation(lines);
+  const defaultStructure = {
+    constructor: null,
+    typedArray: null,
+    type: StructureType.Primitive,
+    name: undefined,
+    byteSize: 4,
+    align: 2,
+    isConst: false,
+    hasPointer: false,
+    instance: {
+      members: [],
+      methods: [],
+      template: null,
+    },
+    static: {
+      members: [],
+      methods: [],
+      template: null,
+    },
+  };
+  const defaultMember = {
+    type: MemberType.Void,
+    isRequired: true,
+  };
+  add(`\n// define structures`);
+  // default structure
+  add(`const s = {`);
+  for (const [ name, value ] of Object.entries(defaultStructure)) {
+    switch (name) {
+      case 'instance':
+      case 'static':
+        addStructureContent(name, value);
+        break;
+      default:
+        add(`${name}: ${JSON.stringify(value)},`);
+    }
+  }
+  add(`};`);
+  // default member
+  add(`const m = {`);
+  for (const [ name, value ] of Object.entries(defaultMember)) {
+    add(`${name}: ${JSON.stringify(value)},`);
+  }
+  add(`};`);
+
+  // create empty objects first, to allow structs to reference themselves
+  const structureNames = new Map();
+  const structureMap = new Map();
+  const methodNames = new Map();
+  const arrayBufferNames = new Map();
+  let arrayBufferCount = 0;
+  let methodCount = 0;
+  for (const [ index, structure ] of structures.entries()) {
+    const varname = `s${index}`;
+    structureNames.set(structure, varname);
+    structureMap.set(structure.constructor, structure);
+  }
+  const varnames = [ ...structureNames.values() ];
+  const initializations = varnames.map(n => `${n} = {}`);
+  for (let i = 0; i < initializations.length; i += 10) {
+    const slice = initializations.slice(i, i + 10);
+    add(`const ${slice.join(', ')};`);
+  }
+  for (const [ index, structure ] of structures.entries()) {
+    const varname = structureNames.get(structure);
+    addStructure(varname, structure);
+  }
+  if (varnames.length <= 10) {
+    add(`const structures = [ ${varnames.join(', ') } ];`);
+  } else {
+    add(`const structures = [`);
+    for (let i = 0; i < varnames.length; i += 10) {
+      const slice = varnames.slice(i, i + 10);
+      add(`${slice.join(', ')},`);
+    }
+    add(`];`);
+  }
+  const root = structures[structures.length - 1];
+  add(`const root = ${structureNames.get(root)};`);
+  add(``);
+  return lines;
+}
+
+function getStructureFeatures(structures) {
+  const structureFeatures = {}, memberFeatures = {};
+  for (const structure of structures) {
+    structureFeatures[ getStructureFeature(structure) ] = true;
+    for (const members of [ structure.instance.members, structure.static.members ]) {
+      for (const member of members) {
+        const feature = getMemberFeature(member);
+        if (feature) {
+          memberFeatures[feature] = true;
         }
       }
-      if (slots) {
-        for (const [ slot, child ] of Object.entries(slots)) {
-          addBuffers(child);
-        }
+    }
+    if (structure.type === StructureType.Pointer) {
+      // pointer need uint support
+      memberFeatures.useUint = true;
+    }
+  }
+  if (memberFeatures.useIntEx) {
+    delete memberFeatures.useInt;
+  }
+  if (memberFeatures.useUintEx) {
+    delete memberFeatures.useUint;
+  }
+  if (memberFeatures.useEnumerationItemEx) {
+    delete memberFeatures.useEnumerationItem;
+  }
+  if (memberFeatures.useFloatEx) {
+    delete memberFeatures.useFloat;
+  }
+  if (memberFeatures.useBoolEx) {
+    delete memberFeatures.useBool;
+  }
+  return [ ...Object.keys(structureFeatures), ...Object.keys(memberFeatures) ];
+}
+
+function getExports(structures) {
+  const root = structures[structures.length - 1];
+  const exportables = [];
+  // export only members whose names are legal JS identifiers
+  const legal = /^[$\w]+$/;
+  for (const method of root.static.methods) {
+    if (legal.test(method.name)) {
+      exportables.push(method.name);
+    }
+  }
+  for (const member of root.static.members) {
+    // only read-only properties are exportable
+    let readOnly = false;
+    if (member.type === MemberType.Type) {
+      readOnly = true;
+    } else if (member.type === MemberType.Object && member.structure.type === StructureType.Pointer) {
+      if (member.structure.isConst) {
+        readOnly = true;
       }
     }
-  }
-
-  function addMethods(methods) {
-    for (const method of methods) {
-      const varname = `f${methodCount++}`;
-      methodNames.set(method, varname);
-      addMethod(varname, method);
+    if (readOnly && legal.test(member.name)) {
+      exportables.push(member.name);
     }
   }
+  return [ 'default', '__zigar', ...exportables ];
+}
 
-  function addMethodRefs(methods) {
-    const list = methods.map(m => methodNames.get(m));
-    if (list.length > 0) {
-      add(`methods: [ ${list.join(', ')} ],`);
-    } else {
-      add(`methods: [],`);
+function manageIndentation(lines) {
+  let indent = 0;
+  return (s) => {
+    if (/^\s*[\]\}]/.test(s)) {
+      indent--;
     }
-  }
-
-  function addMethod(varname, method) {
-    add(`const ${varname} = {`);
-    for (const [ name, value ] of Object.entries(method)) {
-      switch (name) {
-        case 'argStruct':
-          add(`${name}: ${structureNames.get(value)},`);
-          break;
-        default:
-          add(`${name}: ${JSON.stringify(value)},`);
-      }
+    lines.push(' '.repeat(indent * 2) + s);
+    if (/[\[\{]\s*$/.test(s)) {
+      indent++;
     }
-    add(`};`);
-  }
-  // return occurs higher up, before the definition of addDefaultStructure
+  };
 }
 
 function isDifferent(value, def) {
@@ -6888,9 +6794,9 @@ async function transpile(path, options = {}) {
     platform: 'freestanding'
   });
   const content = await readFile(wasmPath);
-  const env = new WebAssemblyEnvironment();
-  await env.loadWebAssembly(content);
-  const { structures, runtimeSafety } = env.runFactory({ omitFunctions });
+  const env = await loadModule(content);
+  env.acquireStructures({ omitFunctions });
+  const structures = env.exportStructures();
   // all methods are static, so there's no need to check the instance methods
   const hasMethods = !!structures.find(s => s.static.methods.length > 0);
   const runtimeURL = moduleResolver('zigar-runtime');
@@ -6906,10 +6812,9 @@ async function transpile(path, options = {}) {
       loadWASM = await wasmLoader(path, dv);
     }
   }
-  return generateCode(structures, {
+  return generateCodeForWASM(structures, {
     runtimeURL,
     loadWASM,
-    runtimeSafety,
     topLevelAwait,
     omitExports,
   });
@@ -6928,4 +6833,4 @@ function embed(path, dv) {
 })()`;
 }
 
-export { compile, transpile };
+export { compile, generateCodeForNode, transpile };

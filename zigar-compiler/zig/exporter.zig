@@ -175,7 +175,7 @@ pub const MethodAttributes = packed struct {
 
 pub const Method = extern struct {
     name: ?[*:0]const u8 = null,
-    thunk: Thunk,
+    thunk_id: usize,
     structure: Value,
     attributes: MethodAttributes,
 };
@@ -1467,7 +1467,7 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
                 };
                 try host.attachMethod(structure, .{
                     .name = getCString(decl.name),
-                    .thunk = @ptrCast(createThunk(@TypeOf(host), function, ArgT)),
+                    .thunk_id = @intFromPtr(createThunk(@TypeOf(host), function, ArgT)),
                     .structure = arg_structure,
                     .attributes = .{ .has_pointer = hasPointerArguments(ArgT) },
                 }, is_static_only);

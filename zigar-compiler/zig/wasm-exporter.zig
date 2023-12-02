@@ -272,7 +272,7 @@ pub const Host = struct {
     pub fn attachMethod(_: Host, structure: Value, method: Method, is_static_only: bool) !void {
         const def = beginDefinition();
         try insertProperty(def, "argStruct", method.structure);
-        try insertProperty(def, "thunk", @intFromPtr(method.thunk));
+        try insertProperty(def, "thunkId", method.thunk_id);
         if (method.name) |name| {
             try insertProperty(def, "name", name);
         }

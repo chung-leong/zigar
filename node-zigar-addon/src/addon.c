@@ -4,7 +4,7 @@ int32_t module_count = 0;
 int32_t buffer_count = 0;
 
 void reference_module(module_data* md) {
-    return md->ref_count++;
+    md->ref_count++;
 }
 
 void release_module(napi_env env,
@@ -48,7 +48,7 @@ bool load_javascript(napi_env env,
     static const char* addon_js_txt = (
         #include "addon.js.txt"
     );
-    /* getting the length of the string this way due to VC throwing "compiler is out of heap space" error 
+    /* getting the length of the string this way due to VC throwing "compiler is out of heap space" error
        when addon_js_txt is a char array instead of a pointer */
     static size_t addon_js_txt_len = sizeof(
         #include "addon.js.txt"
@@ -65,7 +65,7 @@ bool call_js_function(call ctx,
                       napi_value* dest) {
     napi_env env = ctx->env;
     napi_value fn;
-    return napi_get_named_property(env, ctx->js_env, fn_name, &fn) != napi_ok
+    return napi_get_named_property(env, ctx->js_env, fn_name, &fn) == napi_ok
         && napi_call_function(env, ctx->js_env, fn, argc, argv, dest) == napi_ok;
 }
 
@@ -79,7 +79,7 @@ result allocate_relocatable_memory(call ctx,
     void* data;
     if (napi_create_uint32(env, len, &args[0]) == napi_ok
      && napi_create_uint32(env, align, &args[1]) == napi_ok
-     && call_js_function(ctx, allocateRelocatableMemory, 2, args, &result)
+     && call_js_function(ctx, "allocateRelocatableMemory", 2, args, &result)
      && napi_get_dataview_info(env, result, NULL, &data, NULL, NULL) == napi_ok) {
         dest->bytes = (uint8_t*) data;
         dest->len = len;
@@ -99,7 +99,7 @@ result free_relocatable_memory(call ctx,
     if (napi_create_bigint_uint64(env, (uintptr_t) mem->bytes, &args[0]) == napi_ok
      && napi_create_uint32(env, mem->len, &args[1]) == napi_ok
      && napi_create_uint32(env, mem->attributes.align, &args[2]) == napi_ok
-     && call_js_function(ctx, freeRelocatableMemory, 3, args, &result)) {
+     && call_js_function(ctx, "freeRelocatableMemory", 3, args, &result)) {
         return OK;
     }
     return Failure;
@@ -121,7 +121,7 @@ result create_object(call ctx,
                      napi_value* dest) {
     napi_env env = ctx->env;
     napi_value args[2] = { structure, arg };
-    if (call_js_function(ctx, castView, 2, args, dest)) {
+    if (call_js_function(ctx, "castView", 2, args, dest)) {
         return OK;
     }
     return Failure;
@@ -136,7 +136,7 @@ result create_view(call ctx,
     if (napi_create_bigint_uint64(env, (uintptr_t) mem->bytes, &args[0]) == napi_ok
      && napi_create_uint32(env, mem->len, &args[1]) == napi_ok
      && napi_get_boolean(env, mem->attributes.is_comptime, &args[2]) == napi_ok
-     && call_js_function(ctx, createView, 3, args, dest)) {
+     && call_js_function(ctx, "createView", 3, args, dest)) {
         return OK;
     }
     return Failure;
@@ -148,7 +148,7 @@ result cast_view(call ctx,
                  napi_value* dest) {
     napi_env env = ctx->env;
     napi_value args[2] = { structure, dv };
-    if (call_js_function(ctx, castView, 2, args, dest)) {
+    if (call_js_function(ctx, "castView", 2, args, dest)) {
         return OK;
     }
     return Failure;
@@ -164,7 +164,7 @@ result read_slot(call ctx,
     napi_valuetype type;
     if ((args[0] || napi_get_null(env, &args[0]) == napi_ok)
      && napi_create_uint32(env, slot, &args[1]) == napi_ok
-     && call_js_function(ctx, readSlot, 2, args, &result)
+     && call_js_function(ctx, "readSlot", 2, args, &result)
      && napi_typeof(env, result, &type) == napi_ok
      && type != napi_undefined) {
         *dest = result;
@@ -187,7 +187,7 @@ result write_slot(call ctx,
     napi_value result;
     if ((args[0] || napi_get_null(env, &args[0]) == napi_ok)
      && napi_create_uint32(env, slot, &args[1]) == napi_ok
-     && call_js_function(ctx, writeSlot, 3, args, &result)) {
+     && call_js_function(ctx, "writeSlot", 3, args, &result)) {
         return OK;
     }
     return Failure;
@@ -215,9 +215,10 @@ result begin_structure(call ctx,
      && napi_set_named_property(env, args[0], "hasPointer", has_pointer) == napi_ok
      && (napi_create_string_utf8(env, s->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
      && (napi_set_named_property(env, args[0], "name", name) == napi_ok)
-     && call_js_function(ctx, beginStructure, 1, args, dest)) {
+     && call_js_function(ctx, "beginStructure", 1, args, dest)) {
         return OK;
      }
+     printf("Doh!\n");
      return Failure;
 }
 
@@ -246,7 +247,7 @@ result attach_member(call ctx,
      && (!m->name || napi_create_string_utf8(env, m->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
      && (!m->name || napi_set_named_property(env, args[1], "name", name) == napi_ok)
      && (!m->structure || napi_set_named_property(env, args[1], "structure", m->structure) == napi_ok)
-     && call_js_function(ctx, attachMember, 3, args, &result)) {
+     && call_js_function(ctx, "attachMember", 3, args, &result)) {
         return OK;
      }
      return Failure;
@@ -260,14 +261,16 @@ result attach_method(call ctx,
     napi_value args[3] = { structure };
     napi_value result;
     napi_value name, thunk_id;
+    // thunk_id from Zig is the function's address--make it relative to the base address
+    size_t adjusted_thunk_id = m->thunk_id - ctx->mod_data->base_address;
     if (napi_create_object(env, &args[1]) == napi_ok
      && napi_get_boolean(env, is_static_only, &args[2]) == napi_ok
      && napi_set_named_property(env, args[1], "argStruct", m->structure) == napi_ok
-     && napi_create_uint32(env, m->thunk_id, &thunk_id) == napi_ok
+     && napi_create_double(env, adjusted_thunk_id, &thunk_id) == napi_ok
      && napi_set_named_property(env, args[1], "thunkId", thunk_id) == napi_ok
      && (!m->name || napi_create_string_utf8(env, m->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
      && (!m->name || napi_set_named_property(env, args[1], "name", name) == napi_ok)
-     && call_js_function(ctx, attachMethod, 3, args, &result)) {
+     && call_js_function(ctx, "attachMethod", 3, args, &result)) {
         return OK;
      }
      return Failure;
@@ -281,7 +284,7 @@ result attach_template(call ctx,
     napi_value args[3] = { structure, template_obj };
     napi_value result;
     if (napi_get_boolean(env, is_static, &args[2]) == napi_ok
-     && call_js_function(ctx, attachTemplate, 3, args, &result)) {
+     && call_js_function(ctx, "attachTemplate", 3, args, &result)) {
         return OK;
     }
     return Failure;
@@ -292,7 +295,7 @@ result end_structure(call ctx,
     napi_env env = ctx->env;
     napi_value args[1] = { structure };
     napi_value result;
-    if (call_js_function(ctx, endStructure, 1, args, &result)) {
+    if (call_js_function(ctx, "endStructure", 1, args, &result)) {
         return OK;
     }
     return Failure;
@@ -304,7 +307,7 @@ result create_template(call ctx,
     napi_env env = ctx->env;
     napi_value args[1] = { dv };
     if ((args[0] || napi_get_null(env, &args[0]) == napi_ok)
-     && call_js_function(ctx, createTemplate, 1, args, dest)) {
+     && call_js_function(ctx, "createTemplate", 1, args, dest)) {
         return OK;
     }
     return Failure;
@@ -315,7 +318,7 @@ result write_to_console(call ctx,
     napi_env env = ctx->env;
     napi_value args[1] = { dv };
     napi_value result;
-    if (call_js_function(ctx, writeToConsole, 1, args, &result)) {
+    if (call_js_function(ctx, "writeToConsole", 1, args, &result)) {
         return OK;
     }
     return Failure;
@@ -338,11 +341,11 @@ napi_value throw_last_error(napi_env env) {
 napi_value extract_buffer_address(napi_env env,
                                   napi_callback_info info) {
     size_t argc = 1;
-    napi_value arg0;
+    napi_value args[1];
     void* bytes;
     /* check arguments */
-    if (napi_get_cb_info(env, info, &argc, &arg0, NULL, NULL) != napi_ok
-     || napi_get_arraybuffer_info(env, arg0, &bytes, NULL) != napi_ok) {
+    if (napi_get_cb_info(env, info, &argc, &args[0], NULL, NULL) != napi_ok
+     || napi_get_arraybuffer_info(env, args[0], &bytes, NULL) != napi_ok) {
         return throw_error(env, "Argument must be ArrayBuffer");
     }
     napi_value address;
@@ -371,7 +374,7 @@ napi_value allocate_external_memory(napi_env env,
         return throw_error(env, "Unable to allocate fixed memory");
     }
     napi_value buffer;
-    if (!create_external_buffer(env, mem.bytes, mem.len, mod, &buffer)) {
+    if (!create_external_buffer(env, mem.bytes, mem.len, md, &buffer)) {
         return throw_last_error(env);
     }
     return buffer;
@@ -477,22 +480,64 @@ napi_value find_sentinel(napi_env env,
     return NULL;
 }
 
-napi_value get_memory_offset(napi_value env,
+napi_value define_structures(napi_env env,
+                             napi_callback_info info) {
+    napi_value js_env;
+    void* data;
+    if (napi_get_cb_info(env, info, NULL, NULL, &js_env, &data) != napi_ok) {
+        return throw_last_error(env);
+    }
+    module_data* md = (module_data*) data;
+    call_context ctx = { env, js_env, md };
+    napi_value result;
+    void* arg_addr = (void*) 0xAAAAAAAA;
+    if (md->mod->imports->define_structures(&ctx, arg_addr, &result) != OK) {
+        return throw_error(env, "Unable to define structures");
+    }
+    return result;
+}
+
+napi_value run_thunk(napi_env env,
+                     napi_callback_info info) {
+    size_t argc = 2;
+    napi_value args[2];
+    napi_value js_env;
+    void* data;
+    double thunk_id;
+    size_t args_len;
+    void* args_ptr;
+    if (napi_get_cb_info(env, info, &argc, args, &js_env, &data) != napi_ok
+     || napi_get_value_double(env, args[0], &thunk_id) != napi_ok) {
+        return throw_error(env, "Thunk id must be a number");
+    } else if (napi_get_dataview_info(env, args[1], &args_len, &args_ptr, NULL, NULL) != napi_ok) {
+        return throw_error(env, "Arguments must be a DataView");
+    }
+    module_data* md = (module_data*) data;
+    call_context ctx = { env, js_env, md };
+    size_t thunk_address = md->base_address + thunk_id;
+    napi_value result;
+    if (md->mod->imports->run_thunk(&ctx, thunk_address, args_ptr, &result) != OK) {
+        return throw_error(env, "Unable to execute function");
+    }
+    return result;
+}
+
+napi_value get_memory_offset(napi_env env,
                              napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1];
     void* data;
     uint64_t address;
     bool lossless;
-    if (napi_get_cb_info(env, info, &argc, args[0], NULL, &data) != napi_ok
+    if (napi_get_cb_info(env, info, &argc, &args[0], NULL, &data) != napi_ok
      || napi_get_value_bigint_uint64(env, args[0], &address, &lossless) != napi_ok) {
         return throw_error(env, "Address must be bigint");
     }
     module_data* md = (module_data*) data;
-    size_t base = (size_t) md->mod->base_address;
+    size_t base = md->base_address;
     if (address < base) {
         return throw_error(env, "Invalid address");
-    } 
+    }
     napi_value offset;
     if (napi_create_double(env, address - base, &offset) != napi_ok) {
         return throw_last_error(env);
@@ -500,18 +545,18 @@ napi_value get_memory_offset(napi_value env,
     return offset;
 }
 
-napi_value recreate_address(napi_value env,
+napi_value recreate_address(napi_env env,
                             napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1];
     void* data;
     double offset;
-    if (napi_get_cb_info(env, info, &argc, args[0], NULL, &data) != napi_ok
+    if (napi_get_cb_info(env, info, &argc, &args[0], NULL, &data) != napi_ok
      || napi_get_value_double(env, args[0], &offset) != napi_ok) {
         return throw_error(env, "Offset must be a number");
     }
     module_data* md = (module_data*) data;
-    size_t base = (size_t) md->mod->base_address;
+    size_t base = md->base_address;
     napi_value address;
     if (napi_create_bigint_uint64(env, base + offset, &address) != napi_ok) {
         return throw_last_error(env);
@@ -532,11 +577,12 @@ bool export_function(napi_env env,
                      module_data* md) {
     napi_value function;
     bool success = napi_create_function(env, name, NAPI_AUTO_LENGTH, cb, md, &function) == napi_ok
-                && napi_add_finalizer(env, function, NULL, finalize_function, md, NULL)
+                && napi_add_finalizer(env, function, NULL, finalize_function, md, NULL) == napi_ok
                 && napi_set_named_property(env, js_env, name, function) == napi_ok;
     if (success) {
         /* maintain a reference on the module */
         reference_module(md);
+        return true;
     }
     return false;
 }
@@ -549,8 +595,10 @@ bool export_functions(napi_env env,
         && export_function(env, js_env, "freeExternalMemory", free_external_memory, md)
         && export_function(env, js_env, "obtainExternalBuffer", obtain_external_buffer, md)
         && export_function(env, js_env, "copyBytes", copy_bytes, md)
-        && export_function(env, js_env, "findSentinel", find_sentinel, md);
-        && export_function(env, js_env, "getMemoryOffset", get_memory_offset, md);
+        && export_function(env, js_env, "findSentinel", find_sentinel, md)
+        && export_function(env, js_env, "defineStructures", define_structures, md)
+        && export_function(env, js_env, "runThunk", run_thunk, md)
+        && export_function(env, js_env, "getMemoryOffset", get_memory_offset, md)
         && export_function(env, js_env, "recreateAddress", recreate_address, md);
 }
 
@@ -570,16 +618,16 @@ napi_value load_module(napi_env env,
     void* data;
     size_t argc = 1;
     size_t path_len;
-    napi_value arg0;
+    napi_value args[1];
     /* check arguments */
-    if (napi_get_cb_info(env, info, &argc, &arg0, NULL, &data) != napi_ok
-     || napi_get_value_string_utf8(env, arg0, NULL, 0, &path_len) != napi_ok) {
+    if (napi_get_cb_info(env, info, &argc, args, NULL, &data) != napi_ok
+     || napi_get_value_string_utf8(env, args[0], NULL, 0, &path_len) != napi_ok) {
         return throw_error(env, "Invalid arguments");
     }
 
     /* load the shared library */
     char* path = malloc(path_len + 1);
-    napi_get_value_string_utf8(env, arg0, path, path_len + 1, &path_len);
+    napi_get_value_string_utf8(env, args[0], path, path_len + 1, &path_len);
     void* handle = dlopen(path, RTLD_NOW);
     free(path);
     if (!handle) {
@@ -595,9 +643,8 @@ napi_value load_module(napi_env env,
     if (mod->version != 2) {
         return throw_error(env, "Cached module is compiled for a different version of Zigar");
     }
-    mod->base_address = symbol;
 #ifdef WIN32
-    /* we can't override write() the normal way on Windows 
+    /* we can't override write() the normal way on Windows
         need to intercept the call to kernel32.dll instead */
     patch_write_file(handle, mod->imports->override_write);
 #endif
@@ -644,6 +691,11 @@ napi_value load_module(napi_env env,
     module_data* md = (module_data*) calloc(1, sizeof(module_data));
     md->mod = mod;
     md->so_handle = handle;
+    Dl_info dl_info;
+    if (!dladdr(symbol, &dl_info)) {
+        return throw_error(env, "Unable to obtain address of shared library");
+    }
+    md->base_address = (size_t) dl_info.dli_fbase;
     if (napi_create_reference(env, js_env, 0, &md->js_env) != napi_ok) {
         free(md);
         return throw_error(env, "Unable to save runtime environment");

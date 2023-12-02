@@ -252,7 +252,7 @@ pub const Module = extern struct {
     exports: *const Exports,
 };
 
-pub fn createDescribeStructures(comptime T: type) *const fn (Call, *anyopaque, *?Value) callconv(.C) Result {
+pub fn createDescribeStructures(comptime T: type) fn (Call, *anyopaque, *?Value) callconv(.C) Result {
     const ns = struct {
         fn describeStructures(call: Call, args: *anyopaque, dest: *?Value) callconv(.C) Result {
             const factory = exporter.createRootFactory(Host, T);

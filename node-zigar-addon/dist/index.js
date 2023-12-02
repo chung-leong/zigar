@@ -1,4 +1,4 @@
-async function loadModule(libPath) {
+export async function loadModule(libPath) {
   const { createRequire } = await import('module');
   const { fileURLToPath } = await import('url');
   const require = createRequire(import.meta.url);

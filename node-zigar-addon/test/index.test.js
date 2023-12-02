@@ -3,7 +3,7 @@ import os from 'os';
 import { fileURLToPath } from 'url';
 
 import {
-  load,
+  importModule,
 } from '../dist/index.js';
 
 function getSOFilename(name, platform) {
@@ -21,7 +21,7 @@ describe('Module loading', function() {
     const filename = getSOFilename('integers', platform);
     const url = new URL(`./so-samples/${platform}/${arch}/${filename}`, import.meta.url);
     const path = fileURLToPath(url);
-    const module = await load(path);
+    const module = await importModule(path);
     expect(module.int32).to.equal(1234);
   })
   it('should throw when module is missing', async function() {
@@ -30,7 +30,7 @@ describe('Module loading', function() {
     const path = fileURLToPath(url);
     let error;
     try {
-      await load(path);
+      await importModule(path);
     } catch (err) {
       error = err;
     }

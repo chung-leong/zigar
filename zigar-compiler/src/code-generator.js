@@ -46,7 +46,7 @@ export function generateCodeForNode(structures, params) {
   const exports = getExports(structures);
   const lines = [];
   const add = manageIndentation(lines);
-  add(`import { loadModule } from ${JSON.stringify(runtimeURL)}`);
+  add(`import { loadModule } from ${JSON.stringify(runtimeURL)};`);
   // all features are enabled by default for Node
   lines.push(...generateStructureDefinitions(structures));
   lines.push(...generateLoadStatements(JSON.stringify(libPath), 'false'));
@@ -59,8 +59,8 @@ function generateLoadStatements(source, writeBack) {
   const lines = [];
   const add = manageIndentation(lines);
   add(`// create runtime environment`);
-  add(`const env = loadModule(${source});`);
-  add(`const z = env.getControlObject();`);
+  add(`const env = await loadModule(${source});`);
+  add(`const __zigar = env.getControlObject();`);
   add(`env.recreateStructures(structures);`);
   add(`env.linkVariables(${writeBack});`);
   add(``);
@@ -70,15 +70,23 @@ function generateLoadStatements(source, writeBack) {
 function generateExportStatements(exports, omitExports) {
   const lines = [];
   const add = manageIndentation(lines);
-  // the first export is always default, and the last __zigar
+  add(`const { constructor } = root;`);
   if (!omitExports) {
-    add(`export {`);
-    add(`c as default`);
-    for (const name of exports.slice(1, -1)) {
-      add(`c.${name} as ${name},`);
+    add(`export { constructor as default, __zigar }`);
+    // the first two exports are default and __zigar
+    const exportables = exports.slice(2);
+    if (exportables.length > 0) {
+      const oneLine = exportables.join(', ');
+      if (oneLine.length < 70) {
+        add(`export const { ${oneLine} } = constructor;`);
+      } else {
+        add(`export const {`)
+        for (const name of exportables) {
+          add(`${name},`);
+        }
+        add(`} = constructor;`);
+      }
     }
-    add(`z as __zigar`);
-    add(`};`);
   }
   return lines;
 }
@@ -290,7 +298,7 @@ function generateStructureDefinitions(structures, params) {
     add(`];`);
   }
   const root = structures[structures.length - 1];
-  add(`const { constructor: c } = ${structureNames.get(root)};`);
+  add(`const root = ${structureNames.get(root)};`);
   add(``);
   return lines;
 }
@@ -354,7 +362,7 @@ function getExports(structures) {
       exportables.push(member.name);
     }
   }
-  return [ 'default', ...exportables, '__zigar' ];
+  return [ 'default', '__zigar', ...exportables ];
 }
 
 function manageIndentation(lines) {

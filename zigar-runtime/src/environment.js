@@ -346,17 +346,17 @@ export class Environment {
   }
 
   createCaller(method, useThis) {
-    let { name,  argStruct, thunk } = method;
+    let { name,  argStruct, thunkId } = method;
     const { constructor } = argStruct;
     const self = this;
     let f;
     if (useThis) {
       f = function(...args) {
-        return self.invokeThunk(thunk, new constructor([ this, ...args ]));
+        return self.invokeThunk(thunkId, new constructor([ this, ...args ]));
       }
     } else {
       f = function(...args) {
-        return self.invokeThunk(thunk, new constructor(args));
+        return self.invokeThunk(thunkId, new constructor(args));
       }
     }
     Object.defineProperty(f, 'name', { value: name });
@@ -411,20 +411,8 @@ export class Environment {
           target.template = createTemplate(target.template);
         }
       }
-      super.finalizeStructure(structure);
+      this.finalizeStructure(structure);
     }
-
-    let resolve, reject;
-    const promise = new Promise((r1, r2) => {
-      resolve = r1;
-      reject = r2;
-    });
-    this.runThunk = function(index, argStruct) {
-      // wait for linking to occur, then call function again
-      // this.runThunk should have been replaced
-      return promise.then(() => this.runThunk(index, argStruct));
-    };
-    return { resolve, reject };
   }
 
   linkVariables(writeBack) {
@@ -936,7 +924,7 @@ export class NodeEnvironment extends Environment {
     return new DataView(buffer, Number(offset), len);
   }
 
-  invokeThunk(thunk, args) {
+  invokeThunk(thunkId, args) {
     let err;
     // create an object where information concerning pointers can be stored
     this.startContext();
@@ -944,14 +932,14 @@ export class NodeEnvironment extends Environment {
       // copy addresses of garbage-collectible objects into memory
       this.updatePointerAddresses(args);
       this.updateShadows();
-      err = thunk.call(this, args[MEMORY]);
+      err = this.runThunk(thunkId, args[MEMORY]);
       // create objects that pointers point to
       this.updateShadowTargets();
       this.acquirePointerTargets(args);
       this.releaseShadows();
     } else {
       // don't need to do any of that if there're no pointers
-      err = thunk.call(this, args[MEMORY]);
+      err = this.runThunk(thunkId, args[MEMORY]);
     }
     // restore the previous context if there's one
     this.endContext();
@@ -963,6 +951,7 @@ export class NodeEnvironment extends Environment {
     // error strings returned by the thunk are due to problems in the thunking process
     // (i.e. bugs in export.zig)
     if (err) {
+      console.log({ err });
       throwZigError(err);
     }
     return args.retval;
@@ -1272,13 +1261,12 @@ export class WebAssemblyEnvironment extends Environment {
     return offset;
   }
 
-  invokeThunk(thunk, args) {
-    // WASM thunks aren't functions--they're indices into the function table 0
+  invokeThunk(thunkId, args) {
     // wasm-exporter.zig will invoke startCall() with the context address and the args
     // we can't do pointer fix up here since we need the context in order to allocate
-    // memory from the WebAssembly allocator; point target acquisition will happen in
+    // memory from the WebAssembly allocator; pointer target acquisition will happen in
     // endCall()
-    const err = this.runThunk(thunk, args);
+    const err = this.runThunk(thunkId, args);
     if (!this.context) {
       this.flushConsole();
     }

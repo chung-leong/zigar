@@ -1,7 +1,8 @@
 import { cwd } from 'process';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { compile } from 'zigar-compiler';
-import { load as loadModule } from 'node-zigar-addon';
+import { createRequire } from 'module';
+import { compile, generateCodeForNode } from 'zigar-compiler';
+import { exportStructures } from 'node-zigar-addon';
 
 const baseURL = pathToFileURL(`${cwd()}/`).href;
 const extensionsRegex = /\.zig$/;
@@ -24,46 +25,44 @@ async function loadZig(url) {
   // variables from environment
   for (const [ name, value ] of Object.entries(process.env)) {
     if (name.startsWith('ZIGAR_')) {
-      options[name.slice(6).toLowerCase()] = value;
+      const key = camelCase(name.slice(6));
+      options[key] = convertValue(key, value);
     }
   }
   // variables from URL
   for (const [ name, value ] of searchParams) {
-    // convert snake_case to camelCase
-    options[name.replace(/_(\w)/g, (m0, m1) => m1.toUpperCase())] = value;
+    const key = camelCase(name);
+    options[key] = convertValue(key, value);
   }
-  if (typeof(options.clean) !== 'boolean') {
-    options.clean = !!parseInt(options.clean);
-  }
-  const soPath = await compile(zigPath, options);
-  const module = await loadModule(soPath);
-  const descriptors = Object.getOwnPropertyDescriptors(module);
-  const names = [];
-  for (const [ name, { get, set } ] of Object.entries(descriptors)) {
-    if (/^[$\w]+$/.test(name)) {
-      // any prop with a setter needs to be involved through the object
-      if (!set) {
-        names.push(name);
-      }
-    }
-  }
-  // temporarily save the object in global
-  const globalName = `__zigar_module_${nextModuleId}`;
-  global[globalName] = module;
-  // in the "transpiled" source, we get the object back, destructure the exportable propertie
-  // and export them for ease of use while making the module itself available as the default
-  const source = `
-    const module = global['${globalName}'];
-    delete global['${globalName}'];
-    const { ${names.join(', ')} } = module;
-    export { ${names.join(', ')} };
-    export default module;
-  `;
+  const {
+    omitFunctions = false,
+    ...compileOptions
+  } = options;
+  const libPath = await compile(zigPath, compileOptions);
+  const structures = await exportStructures(libPath, { omitFunctions });
+  const require = createRequire(import.meta.url);
+  // get the absolute path to node-zigar-addon so the "transpiled" code can find it
+  const runtimeURL = require.resolve('node-zigar-addon');
+  const { code } = generateCodeForNode(structures, { runtimeURL, libPath });
   return {
     format: 'module',
     shortCircuit: true,
-    source,
+    source: code,
   };
+}
+
+const boolFields = [ 'clean', 'omitFunctions' ];
+
+function camelCase(name) {
+  return name.toLowerCase().replace(/_(\w)/g, (m0, m1) => m1.toUpperCase());
+}
+
+function convertValue(key, string) {
+  if (boolFields.includes(key)) {
+    return !!parseInt(string);
+  } else {
+    return string;
+  }
 }
 
 export function resolve(specifier, context, nextResolve) {
