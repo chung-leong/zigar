@@ -24,7 +24,10 @@ export function finalizeEnumeration(s, env) {
   }
   /* DEV-TEST-END */
   const Primitive = getPrimitiveClass(members[0]);
-  const { get: getValue } = getDescriptor(members[0], env);
+  // for retrieving the value of enum during construction of enum set
+  const { get: getEnumValue } = getDescriptor(members[0], env);
+  // for retrieving the value where casting data view to enum
+  const { get: getItemValue } = getDescriptor({ ...members[0], byteOffset: 0, bitOffset: 0 }, env);
   const count = members.length;
   const items = {};
   const constructor = s.constructor = function(arg) {
@@ -43,7 +46,7 @@ export function finalizeEnumeration(s, env) {
         // values aren't sequential, so we need to compare values
         const given = Primitive(arg);
         for (let i = 0; i < count; i++) {
-          const value = getValue.call(constructor, i);
+          const value = getEnumValue.call(constructor, i);
           if (value === given) {
             index = i;
             break;
@@ -58,12 +61,20 @@ export function finalizeEnumeration(s, env) {
     } else if (typeof(arg)  === 'string') {
       return constructor[arg];
     } else {
-      throwInvalidInitializer(s, [ 'number', 'string', 'tagged union' ], arg);
+      // casting from data view occurs when we recreate a comptime value
+      // stored in a template's slots
+      const dv = getDataView(s, arg);
+      if (dv) {
+        const index = getItemValue.call({ [MEMORY]: dv });
+        return constructor(index);
+      } else {
+        throwInvalidInitializer(s, [ 'number', 'string', 'tagged union' ], arg);
+      }
     }
   };
   const valueOf = function() {
     const index = this[ENUM_INDEX] ;
-    return getValue.call(constructor, index);
+    return getEnumValue.call(constructor, index);
   };
   defineProperties(constructor.prototype, {
     [Symbol.toPrimitive]: { value: valueOf, configurable: true, writable: true },
@@ -75,7 +86,7 @@ export function finalizeEnumeration(s, env) {
     // try-block in the event that the enum has bigInt items
     try {
       for (let i = 0; i < count; i++) {
-        if (getValue.call(constructor, i) !== i) {
+        if (getEnumValue.call(constructor, i) !== i) {
           return false;
         }
       }

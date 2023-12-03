@@ -216,32 +216,6 @@ test "IntType" {
     assert(IntType(u8, 123) == u8);
 }
 
-fn EnumType(comptime T: type) type {
-    var IT = i32;
-    var all_fit = false;
-    while (!all_fit) {
-        all_fit = true;
-        inline for (@typeInfo(T).Enum.fields) |field| {
-            if (!isInRangeOf(field.value, IT)) {
-                all_fit = false;
-                break;
-            }
-        }
-        if (!all_fit) {
-            IT = NextIntType(IT);
-        }
-    }
-    return IT;
-}
-
-test "EnumType" {
-    const Test = enum(u128) {
-        Dog = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF,
-        Cat = 0,
-    };
-    assert(EnumType(Test) == u128);
-}
-
 fn isInRangeOf(comptime n: comptime_int, comptime T: type) bool {
     return std.math.minInt(T) <= n and n <= std.math.maxInt(T);
 }
@@ -1239,7 +1213,7 @@ fn addUnionMember(host: anytype, structure: Value, comptime T: type) !void {
 fn addEnumMember(host: anytype, structure: Value, comptime T: type) !void {
     const en = @typeInfo(T).Enum;
     // find a type that fit all values
-    const IT = EnumType(T);
+    const IT = en.tag_type;
     var values: [en.fields.len]IT = undefined;
     inline for (en.fields, 0..) |field, index| {
         values[index] = field.value;

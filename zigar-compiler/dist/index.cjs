@@ -1067,7 +1067,7 @@ function getDataViewFloatAccessorEx(access, member) {
   });
 }
 
-function getDataView(structure, arg) {
+function getDataView$1(structure, arg) {
   const { type, byteSize, typedArray } = structure;
   let dv;
   // not using instanceof just in case we're getting objects created in other contexts
@@ -1121,7 +1121,7 @@ function findElements(arg, Child) {
 }
 
 function requireDataView(structure, arg) {
-  const dv = getDataView(structure, arg);
+  const dv = getDataView$1(structure, arg);
   if (!dv) {
     throwBufferExpected(structure);
   }
@@ -2094,7 +2094,7 @@ function finalizePointer(s, env) {
         if (!(arg instanceof Target)) {
           if (isCompatible(arg, Target)) {
             // autocast to target type
-            const dv = getDataView(targetStructure, arg);
+            const dv = getDataView$1(targetStructure, arg);
             arg = Target(dv);
           } else if (isTargetSlice) {
             // autovivificate target object
@@ -2650,7 +2650,7 @@ function finalizeStruct(s, env) {
       dv = env.createBuffer(byteSize, align);
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView(s, arg);
+      dv = getDataView$1(s, arg);
     }
     self[MEMORY] = dv;
     Object.defineProperties(self, descriptors);
@@ -2925,7 +2925,7 @@ function finalizeUnion(s, env) {
       dv = env.createBuffer(byteSize, align);
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView(s, arg);
+      dv = getDataView$1(s, arg);
     }
     self[MEMORY] = dv;
     defineProperties(self, descriptors);
@@ -3219,7 +3219,10 @@ function finalizeEnumeration(s, env) {
     },
   } = s;
   const Primitive = getPrimitiveClass(members[0]);
-  const { get: getValue } = getDescriptor(members[0], env);
+  // for retrieving the value of enum during construction of enum set
+  const { get: getEnumValue } = getDescriptor(members[0], env);
+  // for retrieving the value where casting data view to enum
+  const { get: getItemValue } = getDescriptor({ ...members[0], byteOffset: 0, bitOffset: 0 }, env);
   const count = members.length;
   const items = {};
   const constructor = s.constructor = function(arg) {
@@ -3238,7 +3241,7 @@ function finalizeEnumeration(s, env) {
         // values aren't sequential, so we need to compare values
         const given = Primitive(arg);
         for (let i = 0; i < count; i++) {
-          const value = getValue.call(constructor, i);
+          const value = getEnumValue.call(constructor, i);
           if (value === given) {
             index = i;
             break;
@@ -3253,12 +3256,20 @@ function finalizeEnumeration(s, env) {
     } else if (typeof(arg)  === 'string') {
       return constructor[arg];
     } else {
-      throwInvalidInitializer(s, [ 'number', 'string', 'tagged union' ], arg);
+      // casting from data view occurs when we recreate a comptime value
+      // stored in a template's slots
+      const dv = getDataView(s, arg);
+      if (dv) {
+        const index = getItemValue.call({ [MEMORY]: dv });
+        return constructor(index);
+      } else {
+        throwInvalidInitializer(s, [ 'number', 'string', 'tagged union' ], arg);
+      }
     }
   };
   const valueOf = function() {
     const index = this[ENUM_INDEX] ;
-    return getValue.call(constructor, index);
+    return getEnumValue.call(constructor, index);
   };
   defineProperties(constructor.prototype, {
     [Symbol.toPrimitive]: { value: valueOf, configurable: true, writable: true },
@@ -3270,7 +3281,7 @@ function finalizeEnumeration(s, env) {
     // try-block in the event that the enum has bigInt items
     try {
       for (let i = 0; i < count; i++) {
-        if (getValue.call(constructor, i) !== i) {
+        if (getEnumValue.call(constructor, i) !== i) {
           return false;
         }
       }
@@ -3936,6 +3947,17 @@ const MemberType = {
   Literal: 10,
 };
 
+function isReadOnly(type) {
+  switch (type) {
+    case MemberType.Type:
+    case MemberType.Comptime:
+    case MemberType.Literal:
+      return true;
+    default:
+      return false;
+  }
+}
+
 const factories = Array(Object.values(MemberType).length);
 
 function useVoid() {
@@ -4582,34 +4604,37 @@ class Environment {
   }
 
   exportStructures() {
-    this.replaceFixedMemory();
+    this.prepareObjectsForExport();
     return this.structures;
   }
 
-  replaceFixedMemory() {
-    // look for buffers that requires linkage
+  prepareObjectsForExport() {
     const list = [];
     const find = (object) => {
       if (!object) {
         return;
       }
       if (object[MEMORY]) {
+        let dv = object[MEMORY];
         if (this.inFixedMemory(object)) {
-          const dv = object[MEMORY];
           // replace fixed memory
           const address = this.getViewAddress(dv);
           const offset = this.getMemoryOffset(address);
           const len = dv.byteLength;
           const relocDV = this.createView(address, len, true);
           relocDV.offset = offset;
-          object[MEMORY] = relocDV;
+          dv = relocDV;
           list.push({ offset, len, owner: object, replaced: false });
         }
+        // use regular property since symbols are private to module
+        object.memory = dv;
       }
       if (object[SLOTS]) {
+        const slots = object[SLOTS];
         for (const child of Object.values(object[SLOTS])) {
           find(child);
         }
+        object.slots = slots;
       }
     };
     for (const structure of this.structures) {
@@ -4623,11 +4648,11 @@ class Environment {
         if (a !== b && !a.replaced) {
           if (a.offset <= b.offset && b.offset + b.len <= a.offset + a.len) {
             // B is inside A--replace it with a view of A's buffer
-            const dv = a.owner[MEMORY];
+            const dv = a.owner.memory;
             const pos = b.offset - a.offset + dv.byteOffset;
             const newDV = new DataView(dv.buffer, pos, b.len);
             newDV.offset = b.offset;
-            b.owner[MEMORY] = newDV;
+            b.owner.memory = newDV;
             b.replaced = true;
           }
         }
@@ -5271,7 +5296,7 @@ function generateStructureDefinitions(structures, params) {
   }
   function addBuffers(object) {
     if (object) {
-      const { [MEMORY]: dv, [SLOTS]: slots } = object;
+      const { memory: dv, slots: slots } = object;
       if (dv && !arrayBufferNames.get(dv.buffer)) {
         const varname = `a${arrayBufferCount++}`;
         arrayBufferNames.set(dv.buffer, varname);
@@ -5283,7 +5308,7 @@ function generateStructureDefinitions(structures, params) {
         }
       }
       if (slots) {
-        for (const [ slot, child ] of Object.entries(slots)) {
+        for (const child of Object.values(slots)) {
           addBuffers(child);
         }
       }
@@ -5292,7 +5317,7 @@ function generateStructureDefinitions(structures, params) {
   function addObject(name, object) {
     if (object) {
       const structure = structureMap.get(object.constructor);
-      const { [MEMORY]: dv, [SLOTS]: slots } = object;
+      const { memory: dv, slots: slots } = object;
       add(`${name}: {`);
       if (structure) {
         add(`structure: ${structureNames.get(structure)},`);
@@ -5454,15 +5479,7 @@ function getExports(structures) {
   }
   for (const member of root.static.members) {
     // only read-only properties are exportable
-    let readOnly = false;
-    if (member.type === MemberType.Type) {
-      readOnly = true;
-    } else if (member.type === MemberType.Object && member.structure.type === StructureType.Pointer) {
-      if (member.structure.isConst) {
-        readOnly = true;
-      }
-    }
-    if (readOnly && legal.test(member.name)) {
+    if (isReadOnly(member.type) && legal.test(member.name)) {
       exportables.push(member.name);
     }
   }

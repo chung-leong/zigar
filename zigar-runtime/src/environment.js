@@ -269,34 +269,37 @@ export class Environment {
   }
 
   exportStructures() {
-    this.replaceFixedMemory();
+    this.prepareObjectsForExport();
     return this.structures;
   }
 
-  replaceFixedMemory() {
-    // look for buffers that requires linkage
+  prepareObjectsForExport() {
     const list = [];
     const find = (object) => {
       if (!object) {
         return;
       }
       if (object[MEMORY]) {
+        let dv = object[MEMORY];
         if (this.inFixedMemory(object)) {
-          const dv = object[MEMORY];
           // replace fixed memory
           const address = this.getViewAddress(dv);
           const offset = this.getMemoryOffset(address);
           const len = dv.byteLength;
           const relocDV = this.createView(address, len, true);
           relocDV.offset = offset;
-          object[MEMORY] = relocDV;
+          dv = relocDV;
           list.push({ offset, len, owner: object, replaced: false });
         }
+        // use regular property since symbols are private to module
+        object.memory = dv;
       }
       if (object[SLOTS]) {
+        const slots = object[SLOTS];
         for (const child of Object.values(object[SLOTS])) {
           find(child);
         }
+        object.slots = slots;
       }
     };
     for (const structure of this.structures) {
@@ -310,11 +313,11 @@ export class Environment {
         if (a !== b && !a.replaced) {
           if (a.offset <= b.offset && b.offset + b.len <= a.offset + a.len) {
             // B is inside A--replace it with a view of A's buffer
-            const dv = a.owner[MEMORY];
+            const dv = a.owner.memory;
             const pos = b.offset - a.offset + dv.byteOffset;
             const newDV = new DataView(dv.buffer, pos, b.len);
             newDV.offset = b.offset;
-            b.owner[MEMORY] = newDV;
+            b.owner.memory = newDV;
             b.replaced = true;
           }
         }

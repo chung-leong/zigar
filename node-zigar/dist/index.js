@@ -12,8 +12,6 @@ function isZig(url) {
   return extensionsRegex.test(pathname);
 }
 
-let nextModuleId = 1;
-
 async function loadZig(url) {
   // compile the file if it or any of its dependencies has changed
   const { searchParams } = new URL(url);

@@ -34,6 +34,17 @@ export const MemberType = {
   Literal: 10,
 };
 
+export function isReadOnly(type) {
+  switch (type) {
+    case MemberType.Type:
+    case MemberType.Comptime:
+    case MemberType.Literal:
+      return true;
+    default:
+      return false;
+  }
+}
+
 const factories = Array(Object.values(MemberType).length);
 
 export function useVoid() {

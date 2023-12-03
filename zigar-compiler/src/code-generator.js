@@ -1,5 +1,4 @@
-import { MEMORY, SLOTS } from '../../zigar-runtime/src/symbol.js';
-import { MemberType, getMemberFeature } from '../../zigar-runtime/src/member.js';
+import { MemberType, getMemberFeature, isReadOnly } from '../../zigar-runtime/src/member.js';
 import { StructureType, getStructureFeature } from '../../zigar-runtime/src/structure.js';
 
 export function generateCodeForWASM(structures, params) {
@@ -167,7 +166,7 @@ function generateStructureDefinitions(structures, params) {
   }
   function addBuffers(object) {
     if (object) {
-      const { [MEMORY]: dv, [SLOTS]: slots } = object;
+      const { memory: dv, slots: slots } = object;
       if (dv && !arrayBufferNames.get(dv.buffer)) {
         const varname = `a${arrayBufferCount++}`;
         arrayBufferNames.set(dv.buffer, varname);
@@ -179,7 +178,7 @@ function generateStructureDefinitions(structures, params) {
         }
       }
       if (slots) {
-        for (const [ slot, child ] of Object.entries(slots)) {
+        for (const child of Object.values(slots)) {
           addBuffers(child);
         }
       }
@@ -188,7 +187,7 @@ function generateStructureDefinitions(structures, params) {
   function addObject(name, object) {
     if (object) {
       const structure = structureMap.get(object.constructor);
-      const { [MEMORY]: dv, [SLOTS]: slots } = object;
+      const { memory: dv, slots: slots } = object;
       add(`${name}: {`);
       if (structure) {
         add(`structure: ${structureNames.get(structure)},`);
@@ -350,15 +349,7 @@ function getExports(structures) {
   }
   for (const member of root.static.members) {
     // only read-only properties are exportable
-    let readOnly = false;
-    if (member.type === MemberType.Type) {
-      readOnly = true;
-    } else if (member.type === MemberType.Object && member.structure.type === StructureType.Pointer) {
-      if (member.structure.isConst) {
-        readOnly = true;
-      }
-    }
-    if (readOnly && legal.test(member.name)) {
+    if (isReadOnly(member.type) && legal.test(member.name)) {
       exportables.push(member.name);
     }
   }
