@@ -5348,7 +5348,7 @@ function generateStructureDefinitions(structures, params) {
       }
       add(`},`);
     } else {
-      add(`${name}: null`);
+      add(`${name}: null,`);
     }
   }
 
