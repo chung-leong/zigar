@@ -218,6 +218,8 @@ const isPointerKeys = {
   '*': true,
   constructor: true,
   valueOf: true,
+  memory: true,
+  slots: true,
   [SLOTS]: true,
   [MEMORY]: true,
   [PROXY]: true,

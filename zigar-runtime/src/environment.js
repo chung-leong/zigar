@@ -2,9 +2,9 @@ import { defineProperties, getStructureFactory, getStructureName } from './struc
 import { decodeText } from './text.js';
 import { initializeErrorSets } from './error-set.js';
 import { throwAlignmentConflict, throwNullPointer, throwZigError } from './error.js';
-import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, ENVIRONMENT, LENGTH_GETTER,
-  LENGTH_SETTER, MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES,
-  SIZE, SLOTS } from './symbol.js';
+import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, ENVIRONMENT, LENGTH_GETTER, LENGTH_SETTER, MEMORY,
+  MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES, SIZE, SLOTS
+} from './symbol.js';
 import { getCopyFunction, getMemoryCopier, restoreMemory } from './memory.js';
 
 const defAlign = 16;

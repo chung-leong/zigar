@@ -6,6 +6,7 @@ import { addMethods } from './method.js';
 import { addSpecialAccessors } from './special.js';
 import { throwInvalidInitializer, throwNoNewEnum } from './error.js';
 import { ALIGN, ENUM_INDEX, ENUM_NAME, ENUM_ITEMS, ENUM_ITEM, MEMORY, SIZE } from './symbol.js';
+import { getDataView } from './data-view.js';
 
 export function finalizeEnumeration(s, env) {
   const {
