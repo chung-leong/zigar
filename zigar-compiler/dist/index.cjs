@@ -1067,7 +1067,7 @@ function getDataViewFloatAccessorEx(access, member) {
   });
 }
 
-function getDataView$1(structure, arg) {
+function getDataView(structure, arg) {
   const { type, byteSize, typedArray } = structure;
   let dv;
   // not using instanceof just in case we're getting objects created in other contexts
@@ -1121,7 +1121,7 @@ function findElements(arg, Child) {
 }
 
 function requireDataView(structure, arg) {
-  const dv = getDataView$1(structure, arg);
+  const dv = getDataView(structure, arg);
   if (!dv) {
     throwBufferExpected(structure);
   }
@@ -2094,7 +2094,7 @@ function finalizePointer(s, env) {
         if (!(arg instanceof Target)) {
           if (isCompatible(arg, Target)) {
             // autocast to target type
-            const dv = getDataView$1(targetStructure, arg);
+            const dv = getDataView(targetStructure, arg);
             arg = Target(dv);
           } else if (isTargetSlice) {
             // autovivificate target object
@@ -2215,6 +2215,8 @@ const isPointerKeys = {
   '*': true,
   constructor: true,
   valueOf: true,
+  memory: true,
+  slots: true,
   [SLOTS]: true,
   [MEMORY]: true,
   [PROXY]: true,
@@ -2650,7 +2652,7 @@ function finalizeStruct(s, env) {
       dv = env.createBuffer(byteSize, align);
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView$1(s, arg);
+      dv = getDataView(s, arg);
     }
     self[MEMORY] = dv;
     Object.defineProperties(self, descriptors);
@@ -2925,7 +2927,7 @@ function finalizeUnion(s, env) {
       dv = env.createBuffer(byteSize, align);
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView$1(s, arg);
+      dv = getDataView(s, arg);
     }
     self[MEMORY] = dv;
     defineProperties(self, descriptors);
@@ -4836,6 +4838,9 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   obtainFixedView(address, len) {
+    if (len === 0) {
+      return this.emptyView;
+    }
     const { memory } = this;
     const dv = new DataView(memory.buffer, address, len);
     dv[MEMORY] = { memory, address, len };

@@ -872,6 +872,9 @@ export class NodeEnvironment extends Environment {
   }
 
   obtainFixedView(address, len) {
+    if (len === 0) {
+      return this.emptyView;
+    }
     const buffer = this.obtainExternalBuffer(address, len);
     this.addressMap.set(buffer, address);
     return new DataView(buffer);
@@ -1040,6 +1043,9 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   obtainFixedView(address, len) {
+    if (len === 0) {
+      return this.emptyView;
+    }
     const { memory } = this;
     const dv = new DataView(memory.buffer, address, len);
     dv[MEMORY] = { memory, address, len };
