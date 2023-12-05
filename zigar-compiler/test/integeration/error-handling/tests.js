@@ -1,0 +1,30 @@
+import { expect } from 'chai';
+import 'mocha-skip-if';
+
+export function addTests(importModule, options) {
+  const {
+    runtimeSafety,
+  } = options;
+  const importTest = async (name) => {
+    const url = new URL(`./${name}.zig`, import.meta.url).href;
+    return importModule(url);
+  };
+  describe('Error handling', function() {
+    skip.permanently.unless(target === 'wasm32').
+    it('should produce an error return trace', async function() {
+      this.timeout(120000);
+      const { fail } = await importTest('wasm-error-trace');
+      if (runtimeSafety) {
+        expect(fail).to.throw(WebAssembly.RuntimeError)
+          .with.property('stack')
+            .that.contains('error-trace.fail')
+            .and.contains('error-trace.a')
+            .and.contains('error-trace.b')
+            .and.contains('error-trace.c')
+            .and.contains('error-trace.d');
+      } else {
+        expect(fail).to.not.throw();
+      }
+    })
+  })
+}
