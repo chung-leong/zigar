@@ -386,25 +386,23 @@ export class Environment {
       return dest;
     };
     const createObject = (placeholder) => {
-      let dv;
       if (placeholder.memory) {
         const { array, offset, length } = placeholder.memory;
-        dv = new DataView(array.buffer, offset, length);
+        const dv = new DataView(array.buffer, offset, length);
+        const { constructor } = placeholder.structure;
+        const object = constructor.call(ENVIRONMENT, dv);
+        if (placeholder.slots) {
+          insertObjects(object[SLOTS], placeholder.slots);
+        }
+        if (placeholder.offset !== undefined) {
+          // need to replace dataview with one pointing to fixed memory later,
+          // when the VM is up and running
+          this.variables.push({ offset: placeholder.offset, object });
+        }
+        return object;  
       } else {
-        const { byteSize } = placeholder.structure;
-        dv = new DataView(new ArrayBuffer(byteSize));
+        return placeholder.structure;
       }
-      const { constructor } = placeholder.structure;
-      const object = constructor.call(ENVIRONMENT, dv);
-      if (placeholder.slots) {
-        insertObjects(object[SLOTS], placeholder.slots);
-      }
-      if (placeholder.offset !== undefined) {
-        // need to replace dataview with one pointing to fixed memory later,
-        // when the VM is up and running
-        this.variables.push({ offset: placeholder.offset, object });
-      }
-      return object;
     };
     initializeErrorSets();
     for (const structure of structures) {

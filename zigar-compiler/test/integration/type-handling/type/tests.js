@@ -6,7 +6,7 @@ export function addTests(importModule, options) {
       return importModule(url);
   };    
   describe('Type', function() {
-    it('should import type as variables', async function() {
+    it('should import type as static variables', async function() {
       this.timeout(120000);
       const { default: module } = await importTest('as-static-variables');
       const { Int32, Int128, Struct } = module;

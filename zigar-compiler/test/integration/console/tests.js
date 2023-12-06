@@ -14,7 +14,7 @@ export function addTests(importModule, options) {
     })
     it('should flush console after function exits', async function() {
       this.timeout(120000);
-      const { print } = await importTest('print-no-newline.zig');
+      const { print } = await importTest('print-no-newline');
       const lines = await capture(() => print())
       expect(lines[0]).to.equal('Hello world');
     })

@@ -6,7 +6,7 @@ export function addTests(importModule, options) {
       return importModule(url);
   };    
   describe('Error union', function() {
-    it('should import error union as variables', async function() {
+    it('should import error union as static variables', async function() {
       this.timeout(120000);
       const { default: module } = await importTest('as-static-variables');
       expect(module.Error).to.be.a('function');

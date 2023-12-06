@@ -6,7 +6,7 @@ export function addTests(importModule, options) {
       return importModule(url);
   };    
   describe('Int', function() {
-    it('should import int variables', async function() {
+    it('should import int as static variables', async function() {
       this.timeout(120000);
       const { default: module, int4, int8, int16 } = await importTest('as-static-variables');
       expect(module.private).to.be.undefined;

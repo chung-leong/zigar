@@ -218,7 +218,6 @@ result begin_structure(call ctx,
      && call_js_function(ctx, "beginStructure", 1, args, dest)) {
         return OK;
      }
-     printf("Doh!\n");
      return Failure;
 }
 

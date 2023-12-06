@@ -6,7 +6,7 @@ export function addTests(importModule, options) {
       return importModule(url);
   };    
   describe('Optional', function() {
-    it('should import optional as variables', async function() {
+    it('should import optional as static variables', async function() {
       this.timeout(120000);
       const { default: module, float_value } = await importTest('as-static-variables');
       expect(module.i32_empty).to.be.null;

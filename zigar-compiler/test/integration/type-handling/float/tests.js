@@ -6,7 +6,7 @@ export function addTests(importModule, options) {
       return importModule(url);
   };    
   describe('Float', function() {
-    it('should import float as variables', async function() {
+    it('should import float as static variables', async function() {
       this.timeout(120000);
       const { default: module } = await importTest('as-static-variables');
       expect(module.float16_const.toFixed(1)).to.equal('-44.4');
