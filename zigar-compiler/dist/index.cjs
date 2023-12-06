@@ -34,8 +34,9 @@ async function compile(path$1, options = {}) {
     buildFilePath: absolute(`../zig/build.zig`),
     useLibC: (platform === 'win32') ? true : false,
   };
+  const dirHash = md5(rootFile.dir);
   const soName = getLibraryName(rootFile.name, platform, arch);
-  const soDir = path.join(cacheDir, platform, arch, optimize);
+  const soDir = path.join(cacheDir, platform, arch, optimize, dirHash);
   const soPath = path.join(soDir, soName);
   const soMTime = (await findFile(soPath))?.mtime;
   if (!buildDir || !cacheDir || !zigCmd) {
