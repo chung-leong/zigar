@@ -1,21 +1,19 @@
-import ComptimeFloatTests from './comptime-float/tests.js';
-import ComptimeIntTests from './comptime-int/tests.js';
-import EnumTests from './enum/tests.js';
-import EnumLiteralTests from './enum-literal/tests.js';
-import ErrorSetTests from './error-set/tests.js';
-import ErrorUnionTests from './error-union/tests.js';
-import FloatTests from './float/tests.js';
-import FnTestTests from './fn/tests.js';
-import IntTests from './int/tests.js';
-import NoReturnTests from './no-return/tests.js';
-import NullTests from './null/tests.js';
-import OptionalTests from './optional/tests.js';
-import TypeTests from './type/tests.js';
-import UndefinedTests from './undefined/tests.js';
-import VectorTests from './vector/tests.js';
-import VoidTests from './void/tests.js';
-
-import IntTests from './int/tests.js';
+import * as ComptimeFloatTests from './comptime-float/tests.js';
+import * as ComptimeIntTests from './comptime-int/tests.js';
+import * as EnumTests from './enum/tests.js';
+import * as EnumLiteralTests from './enum-literal/tests.js';
+import * as ErrorSetTests from './error-set/tests.js';
+import * as ErrorUnionTests from './error-union/tests.js';
+import * as FloatTests from './float/tests.js';
+import * as FnTestTests from './fn/tests.js';
+import * as IntTests from './int/tests.js';
+import * as NoReturnTests from './no-return/tests.js';
+import * as NullTests from './null/tests.js';
+import * as OptionalTests from './optional/tests.js';
+import * as TypeTests from './type/tests.js';
+import * as UndefinedTests from './undefined/tests.js';
+import * as VectorTests from './vector/tests.js';
+import * as VoidTests from './void/tests.js';
 
 export function addTests(importModule, options) {
   describe('Type handling', function() {
