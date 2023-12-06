@@ -1,5 +1,3 @@
-#include <windows.h>
-#include <imagehlp.h>
 #include "./win32-shim.h"
 
 override_callback override = NULL;
@@ -18,7 +16,7 @@ BOOL WINAPI write_file_hook(HANDLE handle,
     }
     if (handle == handle1 || handle == handle2) {
         /* return value of zero means success */
-        if (override(override_opaque, buffer, len) == 0) {
+        if (override(buffer, len) == 0) {
             *written = len;
             if (overlapped) {
                 SetEvent(overlapped->hEvent);
@@ -29,8 +27,8 @@ BOOL WINAPI write_file_hook(HANDLE handle,
     return WriteFile(handle, buffer, len, written, overlapped);
 }
 
-void patch_import_directory(void* handle,
-                            override_callback cb) {
+void patch_write_file(void* handle,
+                      override_callback cb) {
     PBYTE bytes = (PBYTE) handle;
     /* find IAT */ 
     ULONG size;

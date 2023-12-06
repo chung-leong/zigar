@@ -16,7 +16,6 @@
 #endif
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 
 #define MISSING   SIZE_MAX
 
@@ -122,21 +121,21 @@ typedef struct {
 } method;
 
 typedef struct {
-    result (*__cdecl allocate_relocatable_memory)(call, size_t, uint16_t, memory*);
-    result (*__cdecl free_relocatable_memory)(call, const memory*);
-    result (*__cdecl create_string)(call, const memory*, napi_value*);
-    result (*__cdecl create_object)(call, napi_value, napi_value, napi_value*);
-    result (*__cdecl create_view)(call, const memory*, napi_value*);
-    result (*__cdecl cast_view)(call, napi_value, napi_value, napi_value*);
-    result (*__cdecl read_slot)(call, napi_value, size_t, napi_value*);
-    result (*__cdecl write_slot)(call, napi_value, size_t, napi_value);
-    result (*__cdecl begin_structure)(call, const structure*, napi_value*);
-    result (*__cdecl attach_member)(call, napi_value, const member*, bool);
-    result (*__cdecl attach_method)(call, napi_value, const method*, bool);
-    result (*__cdecl attach_template)(call, napi_value, napi_value, bool);
-    result (*__cdecl end_structure)(call, napi_value);
-    result (*__cdecl create_template)(call, napi_value, napi_value*);
-    result (*__cdecl write_to_console)(call, napi_value);
+    result (__cdecl *allocate_relocatable_memory)(call, size_t, uint16_t, memory*);
+    result (__cdecl *free_relocatable_memory)(call, const memory*);
+    result (__cdecl *create_string)(call, const memory*, napi_value*);
+    result (__cdecl *create_object)(call, napi_value, napi_value, napi_value*);
+    result (__cdecl *create_view)(call, const memory*, napi_value*);
+    result (__cdecl *cast_view)(call, napi_value, napi_value, napi_value*);
+    result (__cdecl *read_slot)(call, napi_value, size_t, napi_value*);
+    result (__cdecl *write_slot)(call, napi_value, size_t, napi_value);
+    result (__cdecl *begin_structure)(call, const structure*, napi_value*);
+    result (__cdecl *attach_member)(call, napi_value, const member*, bool);
+    result (__cdecl *attach_method)(call, napi_value, const method*, bool);
+    result (__cdecl *attach_template)(call, napi_value, napi_value, bool);
+    result (__cdecl *end_structure)(call, napi_value);
+    result (__cdecl *create_template)(call, napi_value, napi_value*);
+    result (__cdecl *write_to_console)(call, napi_value);
 } export_table;
 
 typedef enum {
@@ -161,11 +160,11 @@ typedef enum {
 } js_function;
 
 typedef struct {
-    result (*__cdecl allocate_fixed_memory)(size_t, uint16_t, memory*);
-    result (*__cdecl free_fixed_memory)(const memory*);
-    result (*__cdecl define_structures)(call, void*, napi_value*);
-    result (*__cdecl run_thunk)(call, size_t, void*, napi_value*);
-    result (*__cdecl override_write)(const void*, size_t);
+    result (__cdecl *  allocate_fixed_memory)(size_t, uint16_t, memory*);
+    result (__cdecl *  free_fixed_memory)(const memory*);
+    result (__cdecl *  define_structures)(call, void*, napi_value*);
+    result (__cdecl *  run_thunk)(call, size_t, void*, napi_value*);
+    result (__cdecl *  override_write)(const void*, size_t);
 } import_table;
 
 typedef struct {

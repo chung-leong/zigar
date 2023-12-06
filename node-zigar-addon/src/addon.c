@@ -490,8 +490,7 @@ napi_value define_structures(napi_env env,
     module_data* md = (module_data*) data;
     call_context ctx = { env, js_env, md };
     napi_value result;
-    void* arg_addr = (void*) 0xAAAAAAAA;
-    if (md->mod->imports->define_structures(&ctx, arg_addr, &result) != OK) {
+    if (md->mod->imports->define_structures(&ctx, NULL, &result) != OK) {
         return throw_error(env, "Unable to define structures");
     }
     return result;

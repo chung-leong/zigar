@@ -1,5 +1,7 @@
 #ifndef _WIN32_SHIM_H_
 #define _WIN32_SHIM_H_
+#include <windows.h>
+#include <ImageHlp.h>
 #include <stdbool.h>
 
 #define RTLD_LAZY   0
@@ -26,15 +28,15 @@ inline int dlclose(void* handle) {
     return FreeLibrary((HMODULE) handle) ? 0 : 1;
 }
 
-inline int dladdr(const void *addr, Dl_info *info) {
+inline int dladdr(const void *addr, Dl_info *dest) {
     MEMORY_BASIC_INFORMATION info;
     if (VirtualQuery(addr, &info, sizeof(info)) != sizeof(info)) {
         return 0;
     }
-    info->dli_fname = NULL;
-    info->dli_fbase = info.AllocationBase;
-    info->dli_sname = NULL;
-    info->dli_saddr = addr;
+    dest->dli_fname = NULL;
+    dest->dli_fbase = info.AllocationBase;
+    dest->dli_sname = NULL;
+    dest->dli_saddr = (void*) addr;
     return 1;
 }
 
