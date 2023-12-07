@@ -2,16 +2,15 @@ import { defineProperties, getSelf } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
-import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { always, copyPointer } from './pointer.js';
-import { addSpecialAccessors, getSpecialKeys } from './special.js';
+import { getSpecialKeys } from './special.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer,
   throwNoProperty } from './error.js';
 import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR,
   SIZE, SLOTS, TEMPLATE_SLOTS } from './symbol.js';
 
-export function finalizeStruct(s, env) {
+export function defineStructShape(s, env) {
   const {
     byteSize,
     align,
@@ -131,9 +130,6 @@ export function finalizeStruct(s, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
-  addSpecialAccessors(s, env);
-  addStaticMembers(s, env);
-  addMethods(s, env);
   return constructor;
 }
 

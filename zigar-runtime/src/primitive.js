@@ -2,11 +2,11 @@ import { defineProperties } from './structure.js';
 import { MemberType, isByteAligned, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getCompatibleTags, addTypedArray, requireDataView } from './data-view.js';
-import { addSpecialAccessors, getSpecialKeys } from './special.js';
+import { getSpecialKeys } from './special.js';
 import { ALIGN, COMPAT, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
 import { throwInvalidInitializer, throwNoInitializer, throwNoProperty } from './error.js';
 
-export function finalizePrimitive(s, env) {
+export function definePrimitive(s, env) {
   const {
     byteSize,
     align,
@@ -77,7 +77,6 @@ export function finalizePrimitive(s, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
-  addSpecialAccessors(s);
   return constructor;
 };
 

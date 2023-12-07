@@ -1,15 +1,15 @@
-import { finalizePrimitive } from './primitive.js';
-import { finalizeArray } from './array.js';
-import { finalizeStruct } from './struct.js';
-import { finalizeUnion } from './union.js';
-import { finalizeErrorUnion } from './error-union.js'
-import { finalizeErrorSet } from './error-set.js';
-import { finalizeEnumeration } from './enumeration.js';
-import { finalizeOptional } from './optional.js';
-import { finalizePointer } from './pointer.js';
-import { finalizeSlice } from './slice.js';
-import { finalizeVector } from './vector.js';
-import { finalizeArgStruct } from './arg-struct.js';
+import { definePrimitive } from './primitive.js';
+import { defineArray } from './array.js';
+import { defineStructShape } from './struct.js';
+import { defineUnionShape } from './union.js';
+import { defineErrorUnion } from './error-union.js'
+import { defineErrorSet } from './error-set.js';
+import { defineEnumerationShape } from './enumeration.js';
+import { defineOptional } from './optional.js';
+import { definePointer } from './pointer.js';
+import { defineSlice } from './slice.js';
+import { defineVector } from './vector.js';
+import { defineArgStruct } from './arg-struct.js';
 
 export const StructureType = {
   Primitive: 0,
@@ -33,63 +33,63 @@ export const StructureType = {
 const factories = Array(Object.values(StructureType).length);
 
 export function usePrimitive() {
-  factories[StructureType.Primitive] = finalizePrimitive;
+  factories[StructureType.Primitive] = definePrimitive;
 }
 
 export function useArray() {
-  factories[StructureType.Array] = finalizeArray;
+  factories[StructureType.Array] = defineArray;
 }
 
 export function useStruct() {
-  factories[StructureType.Struct] = finalizeStruct;
+  factories[StructureType.Struct] = defineStructShape;
 }
 
 export function useExternUnion() {
-  factories[StructureType.ExternUnion] = finalizeUnion;
+  factories[StructureType.ExternUnion] = defineUnionShape;
 }
 
 export function useBareUnion() {
-  factories[StructureType.BareUnion] = finalizeUnion;
+  factories[StructureType.BareUnion] = defineUnionShape;
 }
 
 export function useTaggedUnion() {
-  factories[StructureType.TaggedUnion] = finalizeUnion;
+  factories[StructureType.TaggedUnion] = defineUnionShape;
 }
 
 export function useErrorUnion() {
-  factories[StructureType.ErrorUnion] = finalizeErrorUnion;
+  factories[StructureType.ErrorUnion] = defineErrorUnion;
 }
 
 export function useErrorSet() {
-  factories[StructureType.ErrorSet] = finalizeErrorSet;
+  factories[StructureType.ErrorSet] = defineErrorSet;
 }
 
 export function useEnumeration() {
-  factories[StructureType.Enumeration] = finalizeEnumeration;
+  factories[StructureType.Enumeration] = defineEnumerationShape;
 }
 
 export function useOptional() {
-  factories[StructureType.Optional] = finalizeOptional;
+  factories[StructureType.Optional] = defineOptional;
 }
 
 export function usePointer() {
-  factories[StructureType.Pointer] = finalizePointer;
+  factories[StructureType.Pointer] = definePointer;
 }
 
 export function useSlice() {
-  factories[StructureType.Slice] = finalizeSlice;
+  factories[StructureType.Slice] = defineSlice;
 }
 
 export function useVector() {
-  factories[StructureType.Vector] = finalizeVector;
+  factories[StructureType.Vector] = defineVector;
 }
 
 export function useOpaque() {
-  factories[StructureType.Opaque] = finalizeStruct;
+  factories[StructureType.Opaque] = defineStructShape;
 }
 
 export function useArgStruct() {
-  factories[StructureType.ArgStruct] = finalizeArgStruct;
+  factories[StructureType.ArgStruct] = defineArgStruct;
 }
 
 export function getStructureName(s, full = false) {

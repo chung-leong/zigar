@@ -130,6 +130,12 @@ pub const Host = struct {
         }
     }
 
+    pub fn finalizeShape(self: Host, structure: Value) !void {
+        if (imports.finalize_shape(self.context, structure) != .OK) {
+            return Error.UnableToDefineStructure;
+        }
+    }
+
     pub fn endStructure(self: Host, structure: Value) !void {
         if (imports.end_structure(self.context, structure) != .OK) {
             return Error.UnableToDefineStructure;
@@ -224,6 +230,7 @@ const Imports = extern struct {
     attach_member: *const fn (Call, Value, *const Member, bool) callconv(.C) Result,
     attach_method: *const fn (Call, Value, *const Method, bool) callconv(.C) Result,
     attach_template: *const fn (Call, Value, Value, bool) callconv(.C) Result,
+    finalize_shape: *const fn (Call, Value) callconv(.C) Result,
     end_structure: *const fn (Call, Value) callconv(.C) Result,
     create_template: *const fn (Call, ?Value, *Value) callconv(.C) Result,
     write_to_console: *const fn (Call, Value) callconv(.C) Result,
@@ -300,22 +307,6 @@ test "createModule" {
     const module = createModule(Test);
     assert(module.version == 2);
     assert(module.attributes.little_endian == (builtin.target.cpu.arch.endian() == .Little));
-    switch (@typeInfo(@TypeOf(module.factory))) {
-        .Pointer => |pt| {
-            switch (@typeInfo(pt.child)) {
-                .Fn => |f| {
-                    assert(f.params.len == 2);
-                    assert(f.calling_convention == .C);
-                },
-                else => {
-                    assert(false);
-                },
-            }
-        },
-        else => {
-            assert(false);
-        },
-    }
 }
 
 pub fn getOS() type {

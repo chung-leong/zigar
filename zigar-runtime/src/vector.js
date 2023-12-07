@@ -2,11 +2,10 @@ import { defineProperties, getSelf } from './structure.js';
 import { getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
-import { addSpecialAccessors } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
 import { ALIGN, COMPAT, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
 
-export function finalizeVector(s, env) {
+export function defineVector(s, env) {
   const {
     length,
     byteSize,
@@ -87,7 +86,6 @@ export function finalizeVector(s, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
-  addSpecialAccessors(s);
   return constructor;
 }
 

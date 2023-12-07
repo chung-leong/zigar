@@ -289,6 +289,17 @@ result attach_template(call ctx,
     return Failure;
 }
 
+result finalize_shape(call ctx,
+                      napi_value structure) {
+    napi_env env = ctx->env;
+    napi_value args[1] = { structure };
+    napi_value result;
+    if (call_js_function(ctx, "finalizeShape", 1, args, &result)) {
+        return OK;
+    }
+    return Failure;
+}
+
 result end_structure(call ctx,
                      napi_value structure) {
     napi_env env = ctx->env;
@@ -661,6 +672,7 @@ napi_value load_module(napi_env env,
     exports->attach_member = attach_member;
     exports->attach_method = attach_method;
     exports->attach_template = attach_template;
+    exports->finalize_shape = finalize_shape;
     exports->end_structure = end_structure;
     exports->create_template = create_template;
     exports->write_to_console = write_to_console;

@@ -2,13 +2,13 @@ import { defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
-import { addSpecialAccessors, getSpecialKeys } from './special.js';
+import { getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
 import { always, copyPointer, getProxy } from './pointer.js';
 import { ALIGN, CHILD_VIVIFICATOR, COMPAT, GETTER, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR,
   PROXY, SELF, SETTER, SIZE, SLOTS } from './symbol.js';
 
-export function finalizeArray(s, env) {
+export function defineArray(s, env) {
   const {
     length,
     byteSize,
@@ -121,7 +121,6 @@ export function finalizeArray(s, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
-  addSpecialAccessors(s);
   return constructor;
 }
 

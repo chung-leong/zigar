@@ -3,13 +3,12 @@ import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView }  from './data-view.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
-import { addSpecialAccessors } from './special.js';
 import { throwNoInitializer } from './error.js';
 import { copyPointer, resetPointer } from './pointer.js';
 import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, MEMORY_RESETTER, POINTER_VISITOR, SIZE,
   SLOTS } from './symbol.js';
 
-export function finalizeOptional(s, env) {
+export function defineOptional(s, env) {
   const {
     byteSize,
     align,
@@ -84,6 +83,5 @@ export function finalizeOptional(s, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
-  addSpecialAccessors(s);
   return constructor;
 }

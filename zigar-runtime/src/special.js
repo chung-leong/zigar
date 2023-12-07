@@ -7,12 +7,7 @@ import { MEMORY, MEMORY_COPIER } from './symbol.js';
 import { isTypedArray } from './data-view.js';
 
 export function addSpecialAccessors(s) {
-  const {
-    constructor,
-    instance: {
-      members,
-    },
-  } = s;
+  const { constructor } = s;
   Object.defineProperties(constructor.prototype, {
     dataView: { ...getDataViewAccessors(s), configurable: true },
     base64: { ...getBase64Accessors(), configurable: true },

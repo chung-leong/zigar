@@ -1,20 +1,17 @@
 import { defineProperties } from './structure.js';
-import { getDescriptor } from './member.js';
-import { getPrimitiveClass } from './primitive.js';
-import { addStaticMembers } from './static.js';
+import { MemberType, getDescriptor } from './member.js';
+import { getMemoryCopier } from './memory.js';
 import { addMethods } from './method.js';
-import { addSpecialAccessors } from './special.js';
 import { throwInvalidInitializer, throwNoNewEnum } from './error.js';
-import { ALIGN, ENUM_INDEX, ENUM_NAME, ENUM_ITEMS, ENUM_ITEM, MEMORY, SIZE } from './symbol.js';
-import { getDataView } from './data-view.js';
+import { ALIGN, ENUM_ITEM, ENVIRONMENT, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
+import { requireDataView } from './data-view.js';
 
-export function finalizeEnumeration(s, env) {
+export function defineEnumerationShape(s, env) {
   const {
     byteSize,
     align,
     instance: {
-      members,
-      template,
+      members: [ member ],
     },
   } = s;
   /* DEV-TEST */
@@ -24,13 +21,7 @@ export function finalizeEnumeration(s, env) {
     }
   }
   /* DEV-TEST-END */
-  const Primitive = getPrimitiveClass(members[0]);
-  // for retrieving the value of enum during construction of enum set
-  const { get: getEnumValue } = getDescriptor(members[0], env);
-  // for retrieving the value where casting data view to enum
-  const { get: getItemValue } = getDescriptor({ ...members[0], byteOffset: 0, bitOffset: 0 }, env);
-  const count = members.length;
-  const items = {};
+  const byIndex = {};
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     if (creating) {
@@ -38,89 +29,46 @@ export function finalizeEnumeration(s, env) {
       // new enum items cannot be created
       throwNoNewEnum(s);
     }
-    if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
-      let index = -1;
-      if (isSequential) {
-        // normal enums start at 0 and go up, so the value is the index
-        index = Number(arg);
+    if (this === ENVIRONMENT) {
+      // called by Environment.castView() or recreateStructures()
+      // the only time when individual enum items are created
+      const self = Object.create(constructor.prototype);
+      const dv = requireDataView(s, arg);
+      self[MEMORY] = dv;
+      // add item to hash
+      const index = self.valueOf();
+      if (byIndex[index]) {
+        // already defined--returning existing object
+        return byIndex[index];
       } else {
-        // values aren't sequential, so we need to compare values
-        const given = Primitive(arg);
-        for (let i = 0; i < count; i++) {
-          const value = getEnumValue.call(constructor, i);
-          if (value === given) {
-            index = i;
-            break;
-          }
-        }
+        byIndex[index] = self;
+        return self; 
       }
-      // return the enum object (created down below)
-      return items[index];
+    }
+    if (typeof(arg)  === 'string') {
+      return constructor[arg];
+    } else if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+      return byIndex[arg];
     } else if (arg && typeof(arg) === 'object' && arg[ENUM_ITEM]) {
       // a tagged union, return the active tag
       return arg[ENUM_ITEM];
-    } else if (typeof(arg)  === 'string') {
-      return constructor[arg];
     } else {
-      // casting from data view occurs when we recreate a comptime value
-      // stored in a template's slots
-      const dv = getDataView(s, arg);
-      if (dv) {
-        const index = getItemValue.call({ [MEMORY]: dv });
-        return constructor(index);
-      } else {
-        throwInvalidInitializer(s, [ 'number', 'string', 'tagged union' ], arg);
-      }
+      throwInvalidInitializer(s, [ 'string', 'number', 'tagged union' ], arg);
     }
   };
-  const valueOf = function() {
-    const index = this[ENUM_INDEX] ;
-    return getEnumValue.call(constructor, index);
-  };
+  const { get: getIndex } = getDescriptor(member, env);
+  // get the enum descriptor instead of the int/uint descriptor
+  const { get } = getDescriptor({ ...member, structure: s, type: MemberType.EnumerationItem }, env);
   defineProperties(constructor.prototype, {
-    [Symbol.toPrimitive]: { value: valueOf, configurable: true, writable: true },
-    $: { get: valueOf, configurable: true },
+    $: { get, configurable: true },
+    valueOf: { value: getIndex, configurable: true, writable: true },
+    [Symbol.toPrimitive]: { value: getIndex, configurable: true, writable: true },
+    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
   });
-  // now that the class has the right hidden properties, getValue() will work
-  // scan the array to see if the enum's numeric representation is sequential
-  const isSequential = (() => {
-    // try-block in the event that the enum has bigInt items
-    try {
-      for (let i = 0; i < count; i++) {
-        if (getEnumValue.call(constructor, i) !== i) {
-          return false;
-        }
-      }
-      return true;
-      /* c8 ignore next 3 */
-    } catch (err) {
-      return false;
-    }
-  })();
-  // attach the enum items to the constructor
-  const itemDescriptors = {};
-  for (const [ index, { name } ] of members.entries()) {
-    // can't use the constructor since it would throw
-    const item = Object.create(constructor.prototype);
-    defineProperties(item, {
-      [ENUM_INDEX]: { value: index },
-      [ENUM_NAME]: { value: name },
-    });
-    itemDescriptors[name] = { value: item, configurable: true, enumerable: true, writable: true };
-    items[index] = item;
-  }
-  // attach the numeric values to the class as its binary data
-  // this allows us to reuse the array getter
   defineProperties(constructor, {
-    ...itemDescriptors,
-    [MEMORY]: { value: template[MEMORY] },
-    [ENUM_ITEMS]: { value: items },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
-  addSpecialAccessors(s, env);
-  addStaticMembers(s, env);
-  addMethods(s, env);
   return constructor;
 };
 

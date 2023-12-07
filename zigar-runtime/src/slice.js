@@ -4,15 +4,14 @@ import { getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, checkDataViewSize, getCompatibleTags } from './data-view.js';
 import { getArrayIterator, createProxy, createArrayEntries, getChildVivificator, getPointerVisitor } from './array.js';
 import { copyPointer } from './pointer.js';
-import { addSpecialAccessors, checkDataView, getDataViewFromTypedArray, getDataViewFromUTF8, 
-  getSpecialKeys } from './special.js';
+import { checkDataView, getDataViewFromTypedArray, getDataViewFromUTF8, getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoProperty,
   throwMisplacedSentinel, throwMissingSentinel, throwNoInitializer } from './error.js';
 import { ALIGN, CHILD_VIVIFICATOR, COMPAT, GETTER, LENGTH, MEMORY, MEMORY_COPIER, POINTER_VISITOR,
   SENTINEL, SETTER, SIZE, SLOTS } from './symbol.js';
 import { decodeBase64 } from './text.js';
 
-export function finalizeSlice(s, env) {
+export function defineSlice(s, env) {
   const {
     align,
     instance: {
@@ -192,7 +191,6 @@ export function finalizeSlice(s, env) {
     [SIZE]: { value: elementSize },
     [SENTINEL]: sentinel && { value: sentinel },
   });
-  addSpecialAccessors(s);
   return constructor;
 }
 

@@ -8,7 +8,7 @@ import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerT
 import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, ENVIRONMENT, LENGTH_GETTER, LENGTH_SETTER, MEMORY,
   MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, PARENT, PROXY, SLOTS, SIZE } from './symbol.js';
 
-export function finalizePointer(s, env) {
+export function definePointer(s, env) {
   const {
     byteSize,
     align,

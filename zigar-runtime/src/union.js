@@ -2,9 +2,8 @@ import { StructureType, defineProperties, getSelf } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
-import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
-import { addSpecialAccessors, getSpecialKeys } from './special.js';
+import { getSpecialKeys } from './special.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
 import { throwInvalidInitializer, throwMissingUnionInitializer, throwMultipleUnionInitializers,
   throwNoProperty, throwInactiveUnionProperty, throwNoInitializer } from './error.js';
@@ -12,7 +11,7 @@ import { copyPointer, disablePointer, resetPointer } from './pointer.js';
 import { ALIGN, CHILD_VIVIFICATOR, ENUM_ITEM, ENUM_NAME, MEMORY, MEMORY_COPIER, POINTER_VISITOR,
   SIZE, SLOTS, TAG } from './symbol.js';
 
-export function finalizeUnion(s, env) {
+export function defineUnionShape(s, env) {
   const {
     type,
     byteSize,
@@ -231,9 +230,6 @@ export function finalizeUnion(s, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
-  addSpecialAccessors(s, env);
-  addStaticMembers(s, env);
-  addMethods(s, env);
   return constructor;
 };
 

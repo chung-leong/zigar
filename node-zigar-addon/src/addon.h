@@ -133,6 +133,7 @@ typedef struct {
     result (__cdecl *attach_member)(call, napi_value, const member*, bool);
     result (__cdecl *attach_method)(call, napi_value, const method*, bool);
     result (__cdecl *attach_template)(call, napi_value, napi_value, bool);
+    result (__cdecl *finalize_shape)(call, napi_value);
     result (__cdecl *end_structure)(call, napi_value);
     result (__cdecl *create_template)(call, napi_value, napi_value*);
     result (__cdecl *write_to_console)(call, napi_value);

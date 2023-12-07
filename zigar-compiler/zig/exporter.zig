@@ -501,11 +501,23 @@ fn getStructureSize(comptime T: type) usize {
     };
 }
 
+test "getStructureSize" {
+    assert(getStructureSize(void) == 0);
+    assert(getStructureSize(@TypeOf(null)) == 0);
+    assert(getStructureSize(u8) == 1);
+}
+
 fn getStructureBitSize(comptime T: type) usize {
     return switch (@typeInfo(T)) {
         .Null => 0,
         else => return @bitSizeOf(T),
     };
+}
+
+test "getStructureBitSize" {
+    assert(getStructureBitSize(void) == 0);
+    assert(getStructureBitSize(@TypeOf(null)) == 0);
+    assert(getStructureBitSize(u8) == 8);
 }
 
 fn getStructureLength(comptime T: type) usize {
@@ -672,6 +684,8 @@ fn getStructure(host: anytype, comptime T: type) Error!Value {
         try host.writeSlot(null, s_slot, structure);
         // define the shape of the structure
         try addMembers(host, structure, T);
+        // finalize the shape so that static members can be instances of the structure
+        try host.finalizeShape(structure);
         try addStaticMembers(host, structure, T);
         try addMethods(host, structure, T);
         try host.endStructure(structure);
@@ -1228,25 +1242,31 @@ fn addUnionMember(host: anytype, structure: Value, comptime T: type) !void {
     }
 }
 
+fn StandardInt(comptime T: type) type {
+    const int = @typeInfo(T).Int;
+    return @Type(.{
+        .Int = .{
+            .signedness = int.signedness,
+            .bits = @sizeOf(T) * 8,
+        },
+    });
+}
+
+test "StandardInt" {
+    assert(StandardInt(u2) == u8);
+    assert(StandardInt(i5) == i8);
+    assert(StandardInt(i127) == i128);
+}
+
 fn addEnumMember(host: anytype, structure: Value, comptime T: type) !void {
-    const en = @typeInfo(T).Enum;
-    // find a type that fit all values
-    const IT = en.tag_type;
-    var values: [en.fields.len]IT = undefined;
-    inline for (en.fields, 0..) |field, index| {
-        values[index] = field.value;
-        try host.attachMember(structure, .{
-            .name = getCString(field.name),
-            .member_type = getMemberType(IT),
-            .bit_size = @bitSizeOf(IT),
-            .byte_size = @sizeOf(IT),
-            .structure = try getStructure(host, IT),
-        }, false);
-    }
-    const memory = toMemory(&values, true);
-    const dv = try host.createView(memory);
-    const template = try host.createTemplate(dv);
-    try host.attachTemplate(structure, template, false);
+    const IT = StandardInt(@typeInfo(T).Enum.tag_type);
+    try host.attachMember(structure, .{
+        .member_type = getMemberType(IT),
+        .bit_size = getStructureBitSize(IT),
+        .bit_offset = 0,
+        .byte_size = getStructureSize(IT),
+        .structure = null,
+    }, false);
 }
 
 fn addOptionalMember(host: anytype, structure: Value, comptime T: type) !void {
@@ -1355,8 +1375,16 @@ fn getStaticMemberType(comptime T: type, comptime is_const: bool) MemberType {
 }
 
 fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
-    if (!containsSupported(T)) {
-        return;
+    switch (@typeInfo(T)) {
+        .Enum => {
+            // enum always has a static template due to implicit members
+        },
+        else => {
+            // while other structure types might not
+            if (!containsSupported(T)) {
+                return;
+            }
+        },
     }
     const decls = switch (@typeInfo(T)) {
         .Struct => |st| st.decls,
@@ -1385,6 +1413,25 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
             const value_obj = try exportPointerTarget(host, decl_value_ptr, is_const);
             try host.writeSlot(template, slot, value_obj);
         }
+    }
+    // add implicit static members
+    switch (@typeInfo(T)) {
+        .Enum => |en| {
+            // add fields as static members
+            inline for (en.fields, 0..) |field, index| {
+                const value = @field(T, field.name);
+                const slot = getObjectSlot(Static, decls.len + index);
+                try host.attachMember(structure, .{
+                    .name = getCString(field.name),
+                    .member_type = getStaticMemberType(T, true),
+                    .slot = slot,
+                    .structure = structure,
+                }, true);
+                const value_obj = try exportPointerTarget(host, &value, true);
+                try host.writeSlot(template, slot, value_obj);
+            }
+        },
+        else => {},
     }
     try host.attachTemplate(structure, template, true);
 }

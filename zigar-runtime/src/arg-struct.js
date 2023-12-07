@@ -5,7 +5,7 @@ import { getChildVivificators, getPointerVisitor } from './struct.js';
 import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SIZE, SLOTS } from './symbol.js';
 import { getMemoryCopier } from './memory.js';
 
-export function finalizeArgStruct(s, env) {
+export function defineArgStruct(s, env) {
   const {
     byteSize,
     align,

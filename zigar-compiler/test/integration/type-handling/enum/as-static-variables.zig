@@ -1,3 +1,5 @@
+const std = @import("std");
+
 pub const Pet = enum {
     Dog,
     Cat,
@@ -10,3 +12,7 @@ pub const Donut = enum(u128) {
 };
 
 pub var pet: Pet = .Cat;
+
+pub fn print() void {
+    std.debug.print("{any}\n", .{pet});
+}

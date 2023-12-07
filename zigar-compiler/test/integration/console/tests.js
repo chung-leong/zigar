@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import { capture } from '../capture.js';
 
 export function addTests(importModule, options) {
   const importTest = async (name) => {
@@ -19,24 +20,4 @@ export function addTests(importModule, options) {
       expect(lines[0]).to.equal('Hello world');
     })
   })
-}
-
-async function capture(cb) {
-  const logFn = console.log;
-  const lines = [];
-  try {
-    console.log = (text) => {
-      if (typeof(text) === 'string') {
-        for (const line of text.split(/\r?\n/)) {
-          lines.push(line)
-        }
-      } else {
-        logFn.call(console, text);
-      }
-    };
-    await cb();
-  } finally {
-    console.log = logFn;
-  }
-  return lines;
 }

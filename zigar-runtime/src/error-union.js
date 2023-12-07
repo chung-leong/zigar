@@ -2,7 +2,6 @@ import { defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView } from './data-view.js';
-import { addSpecialAccessors } from './special.js';
 import { throwNoInitializer, throwNotInErrorSet, throwUnknownErrorNumber } from './error.js';
 import { copyPointer, resetPointer } from './pointer.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
@@ -10,7 +9,7 @@ import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, MEMORY_RESETTER, POINT
   SIZE,
   SLOTS } from './symbol.js';
 
-export function finalizeErrorUnion(s, env) {
+export function defineErrorUnion(s, env) {
   const {
     byteSize,
     align,
@@ -97,7 +96,6 @@ export function finalizeErrorUnion(s, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   })
-  addSpecialAccessors(s);
   return constructor;
 }
 

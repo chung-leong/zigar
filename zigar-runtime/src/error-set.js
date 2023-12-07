@@ -4,7 +4,7 @@ import { ERROR_INDEX } from './symbol.js';
 
 let currentErrorSets;
 
-export function finalizeErrorSet(s, env) {
+export function defineErrorSet(s, env) {
   const {
     name,
     instance: {

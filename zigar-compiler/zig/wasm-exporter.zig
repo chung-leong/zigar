@@ -40,6 +40,7 @@ extern fn _beginStructure(def: Value) ?Value;
 extern fn _attachMember(structure: Value, def: Value, is_static: bool) void;
 extern fn _attachMethod(structure: Value, def: Value, is_static_only: bool) void;
 extern fn _attachTemplate(structure: Value, def: Value, is_static: bool) void;
+extern fn _finalizeShape(structure: Value) void;
 extern fn _endStructure(structure: Value) void;
 extern fn _createTemplate(buffer: ?Value) ?Value;
 extern fn _writeToConsole(dv: Value) bool;

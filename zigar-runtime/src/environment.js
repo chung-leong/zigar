@@ -6,6 +6,9 @@ import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, ENVIRONMENT, LENGTH_GETTER, LENG
   MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES, SIZE, SLOTS
 } from './symbol.js';
 import { getCopyFunction, getMemoryCopier, restoreMemory } from './memory.js';
+import { addStaticMembers } from './static.js';
+import { addMethods } from './method.js';
+import { addSpecialAccessors } from './special.js';
 
 const defAlign = 16;
 
@@ -243,10 +246,8 @@ export class Environment {
   }
 
   endStructure(s) {
-    const constructor = this.finalizeStructure(s);
     this.structures.push(s);
     this.acquireDefaultPointers(s);
-    return constructor;
   }
 
   acquireStructures(options) {
@@ -326,7 +327,7 @@ export class Environment {
   }
   /* COMPTIME-ONLY-END */
 
-  finalizeStructure(s) {
+  finalizeShape(s) {
     try {
       const f = getStructureFactory(s.type);
       const constructor = f(s, this);
@@ -340,12 +341,17 @@ export class Environment {
           });
         }
       }
-      return constructor;
       /* c8 ignore next 4 */
     } catch (err) {
       console.error(err);
       throw err;
     }
+  }
+
+  finalizeStructure(s) {
+    addStaticMembers(s, this);
+    addMethods(s, this);
+    addSpecialAccessors(this);
   }
 
   createCaller(method, useThis) {
@@ -385,6 +391,11 @@ export class Environment {
       }
       return dest;
     };
+    const recreateScope = (scope) => {
+      if (scope.template) {
+        scope.template = createTemplate(scope.template);
+      }
+    };
     const createObject = (placeholder) => {
       if (placeholder.memory) {
         const { array, offset, length } = placeholder.memory;
@@ -406,12 +417,13 @@ export class Environment {
     };
     initializeErrorSets();
     for (const structure of structures) {
-      for (const target of [ structure.static, structure.instance ]) {
-        // first create the actual template using the provided placeholder
-        if (target.template) {
-          target.template = createTemplate(target.template);
-        }
-      }
+      // first create the actual template using the provided placeholder
+      recreateScope(structure.instance);
+      // finalize the shape before we recreate the static template as 
+      // the template can have objects of this structure 
+      this.finalizeShape(structure);
+      recreateScope(structure.static);
+      // add static members, methods, etc.
       this.finalizeStructure(structure);
     }
   }
@@ -994,6 +1006,7 @@ export class WebAssemblyEnvironment extends Environment {
     attachMethod: { argType: 'vvb' },
     createTemplate: { argType: 'v', returnType: 'v' },
     attachTemplate: { argType: 'vvb' },
+    finalizeShape: { argType: 'v' },
     endStructure: { argType: 'v' },
     writeToConsole: { argType: 'v' },
     startCall: { argType: 'iv', returnType: 'i' },
