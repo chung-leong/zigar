@@ -1,6 +1,6 @@
 import { defineProperties } from './structure.js';
 import { getDescriptor } from './member.js';
-import { SLOTS, TEMPLATE_SLOTS } from './symbol.js';
+import { SLOTS } from './symbol.js';
 
 export function addStaticMembers(s, env) {
   const {
@@ -17,6 +17,6 @@ export function addStaticMembers(s, env) {
   defineProperties(constructor, {
     ...descriptors,
     // static variables are objects stored in the static template's slots
-    [TEMPLATE_SLOTS]: template?.[SLOTS] && { value: template[SLOTS] },
+    [SLOTS]: template?.[SLOTS] && { value: template[SLOTS] },
   });
 }

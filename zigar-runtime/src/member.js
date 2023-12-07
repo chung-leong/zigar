@@ -18,7 +18,7 @@ import {
   rethrowRangeError,
 } from './error.js';
 import { restoreMemory } from './memory.js';
-import { MEMORY, CHILD_VIVIFICATOR, TEMPLATE_SLOTS } from './symbol.js';
+import { MEMORY, CHILD_VIVIFICATOR, SLOTS } from './symbol.js';
 
 export const MemberType = {
   Void: 0,
@@ -359,7 +359,7 @@ export function getTypeDescriptor(member, env) {
   return {
     get: function getType() {
       // unsupported types will have undefined structure
-      const structure = this[TEMPLATE_SLOTS][slot];
+      const structure = this[SLOTS][slot];
       return structure?.constructor;
     },
     // no setter
@@ -371,11 +371,11 @@ export function getComptimeDescriptor(member, env) {
   return {
     get: (isValueExpected(structure))
     ? function getValue() {
-      const object = this[TEMPLATE_SLOTS][slot];
+      const object = this[SLOTS][slot];
       return object.$;
     }
     : function getObject() {
-      const object = this[TEMPLATE_SLOTS][slot];
+      const object = this[SLOTS][slot];
       return object;
     },
   };
@@ -386,7 +386,7 @@ export function getStaticDescriptor(member, env) {
   return {
     ...getComptimeDescriptor(member, env),
     set: function setValue(value) {
-      const object = this[TEMPLATE_SLOTS][slot];
+      const object = this[SLOTS][slot];
       object.$ = value;
     },
   };
@@ -396,7 +396,7 @@ export function getLiteralDescriptor(member, env) {
   const { slot } = member;
   return {
     get: function getType() {
-      const object = this[TEMPLATE_SLOTS][slot];
+      const object = this[SLOTS][slot];
       return object.string;
     },
     // no setter

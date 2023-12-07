@@ -2,13 +2,12 @@ import { defineProperties, getSelf } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
-import { addMethods } from './method.js';
 import { always, copyPointer } from './pointer.js';
 import { getSpecialKeys } from './special.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer,
   throwNoProperty } from './error.js';
-import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR,
-  SIZE, SLOTS, TEMPLATE_SLOTS } from './symbol.js';
+import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR, SIZE, SLOTS
+} from './symbol.js';
 
 export function defineStructShape(s, env) {
   const {
@@ -123,8 +122,6 @@ export function defineStructShape(s, env) {
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
-    // struct can have comptime members, which are stored in the template's slots
-    [TEMPLATE_SLOTS]: template?.[SLOTS] && { value: template[SLOTS] },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },
