@@ -406,6 +406,7 @@ fn isSupported(comptime T: type) bool {
         .Float,
         .ComptimeFloat,
         .Void,
+        .Null,
         .ErrorSet,
         .Enum,
         .Opaque,
@@ -458,6 +459,7 @@ fn getStructureType(comptime T: type) StructureType {
         .ComptimeInt,
         .Float,
         .ComptimeFloat,
+        .Null,
         .Void,
         .Type,
         .EnumLiteral,
@@ -490,6 +492,20 @@ test "getStructureType" {
     assert(getStructureType(union {}) == .BareUnion);
     assert(getStructureType(TaggedUnion) == .TaggedUnion);
     assert(getStructureType(extern union {}) == .ExternUnion);
+}
+
+fn getStructureSize(comptime T: type) usize {
+    return switch (@typeInfo(T)) {
+        .Null => 0,
+        else => return @sizeOf(T),
+    };
+}
+
+fn getStructureBitSize(comptime T: type) usize {
+    return switch (@typeInfo(T)) {
+        .Null => 0,
+        else => return @bitSizeOf(T),
+    };
 }
 
 fn getStructureLength(comptime T: type) usize {
@@ -559,8 +575,8 @@ pub fn toMemory(ptr: anytype, is_comptime: bool) Memory {
         return .{};
     }
     const len = switch (pt.size) {
-        .One => @sizeOf(pt.child),
-        .Slice => @sizeOf(pt.child) * ptr.len,
+        .One => getStructureSize(pt.child),
+        .Slice => getStructureSize(pt.child) * ptr.len,
         .Many => if (getSentinel(PtrT)) |sentinel| find: {
             var len: usize = 0;
             while (ptr[len] != sentinel) {
@@ -645,7 +661,7 @@ fn getStructure(host: anytype, comptime T: type) Error!Value {
             .name = getStructureName(T),
             .structure_type = getStructureType(T),
             .length = getStructureLength(T),
-            .byte_size = @sizeOf(T),
+            .byte_size = getStructureSize(T),
             .alignment = @alignOf(T),
             .is_const = isConst(T),
             .has_pointer = hasPointer(T),
@@ -875,7 +891,7 @@ test "getUnionSelectorOffset" {
 
 fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
     return switch (@typeInfo(T)) {
-        .Bool, .Int, .Float, .Void, .Type => addPrimitiveMember(host, structure, T),
+        .Bool, .Int, .Float, .Void, .Null, .Type => addPrimitiveMember(host, structure, T),
         .Array => addArrayMember(host, structure, T),
         .Pointer => addPointerMember(host, structure, T),
         .Struct => addStructMember(host, structure, T),
@@ -892,9 +908,9 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
 fn addPrimitiveMember(host: anytype, structure: Value, comptime T: type) !void {
     try host.attachMember(structure, .{
         .member_type = getMemberType(T),
-        .bit_size = @bitSizeOf(T),
+        .bit_size = getStructureBitSize(T),
         .bit_offset = 0,
-        .byte_size = @sizeOf(T),
+        .byte_size = getStructureSize(T),
         .structure = try getStructure(host, T),
     }, false);
 }
@@ -903,19 +919,21 @@ fn addArrayMember(host: anytype, structure: Value, comptime T: type) !void {
     const ar = @typeInfo(T).Array;
     try host.attachMember(structure, .{
         .member_type = getMemberType(ar.child),
-        .bit_size = @bitSizeOf(ar.child),
-        .byte_size = @sizeOf(ar.child),
+        .bit_size = getStructureBitSize(ar.child),
+        .byte_size = getStructureSize(ar.child),
         .structure = try getStructure(host, ar.child),
     }, false);
 }
 
 fn addVectorMember(host: anytype, structure: Value, comptime T: type) !void {
     const ve = @typeInfo(T).Vector;
+    const child_size = getStructureSize(ve.child);
+    const is_bitfields = child_size * ve.len > getStructureSize(T);
     try host.attachMember(structure, .{
         .member_type = getMemberType(ve.child),
-        .bit_size = @bitSizeOf(ve.child),
+        .bit_size = getStructureBitSize(ve.child),
         // byte_size is missing when it's a vector of bools (i.e. bits)
-        .byte_size = if (@sizeOf(T) >= @sizeOf(ve.child) * ve.len) @sizeOf(ve.child) else missing,
+        .byte_size = if (is_bitfields) missing else child_size,
         .structure = try getStructure(host, ve.child),
     }, false);
 }
