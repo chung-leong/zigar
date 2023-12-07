@@ -11,6 +11,9 @@ export function addStaticMembers(s, env) {
       template,
     },
   } = s;
+  if (members.length === 0) {
+    return;
+  }
   const descriptors = {};
   for (const member of members) {
     descriptors[member.name] = getDescriptor(member, env);
@@ -18,8 +21,8 @@ export function addStaticMembers(s, env) {
   defineProperties(constructor, {
     ...descriptors,
     // static variables are objects stored in the static template's slots
-    [SLOTS]: template?.[SLOTS] && { value: template[SLOTS] },
-  });  
+    [SLOTS]: { value: template[SLOTS] },
+  });
   if (type === StructureType.Enumeration) {
     const byIndex = constructor[ENUM_ITEMS];
     for (const { name } of members) {

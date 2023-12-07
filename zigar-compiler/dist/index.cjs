@@ -1721,22 +1721,16 @@ function decodeBase64(str) {
 
 function addSpecialAccessors(s) {
   const { constructor } = s;
-  Object.defineProperties(constructor.prototype, {
+  // use toPrimitive() as valueOf() when there's one
+  const valueOf = constructor.prototype[Symbol.toPrimitive] ?? getValueOf;
+  defineProperties(constructor.prototype, {
     dataView: { ...getDataViewAccessors(s), configurable: true },
     base64: { ...getBase64Accessors(), configurable: true },
-    toJSON: { value: getValueOf, configurable: true, writable: true },
-    valueOf: { value: getValueOf, configurable: true, writable: true },
+    toJSON: { value: valueOf, configurable: true, writable: true },
+    valueOf:{ value: valueOf, configurable: true, writable: true },
+    string: canBeString(s) && { ...getStringAccessors(s), configurable: true },
+    typedArray: canBeTypedArray(s) && { ...getTypedArrayAccessors(s), configurable: true },
   });
-  if (canBeString(s)) {
-    Object.defineProperty(constructor.prototype, 'string', {
-      ...getStringAccessors(s), configurable: true
-    });
-  }
-  if (canBeTypedArray(s)) {
-    Object.defineProperty(constructor.prototype, 'typedArray', {
-      ...getTypedArrayAccessors(s), configurable: true
-    });
-  }
 }
 
 function canBeString(s) {
@@ -2320,9 +2314,7 @@ function defineArray(s, env) {
     self[MEMORY] = dv;
     self[GETTER] = null;
     self[SETTER] = null;
-    if (hasObject) {
-      self[SLOTS] = {};
-    }
+    self[SLOTS] = hasObject ? {} : undefined;
     if (creating) {
       initializer.call(self, arg);
     }
@@ -2598,6 +2590,7 @@ function defineStructShape(s, env) {
   }
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const slots = template?.[SLOTS];
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -2612,10 +2605,10 @@ function defineStructShape(s, env) {
       dv = getDataView(s, arg);
     }
     self[MEMORY] = dv;
+    // comptime fields are stored in the template slots, so slots might be used present even
+    // when the struct has no objects
+    self[SLOTS] = hasObject ? { ...slots } : slots;
     Object.defineProperties(self, descriptors);
-    if (hasObject) {
-      self[SLOTS] = {};
-    }
     if (creating) {
       initializer.call(self, arg);
     } else {
@@ -2766,22 +2759,6 @@ function getPointerVisitor(s, visitorOptions = {}) {
   };
 }
 
-function addMethods(s, env) {
-  const {
-    constructor,
-    instance: { methods: instanceMembers },
-    static: { methods: staticMethods },
-  } = s;
-  for (const method of staticMethods) {
-    const f = env.createCaller(method, false);
-    Object.defineProperty(constructor, f.name, { value: f, configurable: true, writable: true });
-  }
-  for (const method of instanceMembers) {
-    const f = env.createCaller(method, true);
-    Object.defineProperty(Object.prototype, f.name, { value: f, configurable: true, writable: true });
-  }
-}
-
 function defineUnionShape(s, env) {
   const {
     type,
@@ -2898,13 +2875,11 @@ function defineUnionShape(s, env) {
       dv = getDataView(s, arg);
     }
     self[MEMORY] = dv;
+    self[SLOTS] = hasObject ? {} : undefined;
     defineProperties(self, descriptors);
-    if (hasObject) {
-      self[SLOTS] = {};
-      if (hasInaccessiblePointer) {
-        // make pointer access throw
-        self[POINTER_VISITOR](disablePointer, { vivificate: true });
-      }
+    if (hasInaccessiblePointer) {
+      // make pointer access throw
+      self[POINTER_VISITOR](disablePointer, { vivificate: true });
     }
     if (creating) {
       initializer.call(self, arg);
@@ -3066,9 +3041,7 @@ function defineErrorUnion(s, env) {
       dv = requireDataView(s, arg);
     }
     self[MEMORY] = dv;
-    if (hasObject) {
-      self[SLOTS] = {};
-    }
+    self[SLOTS] = hasObject ? {} : undefined;
     if (creating) {
       initializer.call(this, arg);
     } else {
@@ -3216,7 +3189,6 @@ function defineEnumerationShape(s, env) {
   const { get } = getDescriptor(enumMember, env);
   defineProperties(constructor.prototype, {
     $: { get, configurable: true },
-    valueOf: { value: getIndex, configurable: true, writable: true },
     [Symbol.toPrimitive]: { value: getIndex, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
   });
@@ -3270,9 +3242,7 @@ function defineOptional(s, env) {
       dv = requireDataView(s, arg);
     }
     self[MEMORY] = dv;
-    if (hasObject) {
-      self[SLOTS] = {};
-    }
+    self[SLOTS] = hasObject ? {} : undefined;
     if (creating) {
       initializer.call(self, arg);
     } else {
@@ -4118,6 +4088,7 @@ function getTypeDescriptor(member, env) {
   const { slot } = member;
   return {
     get: function getType() {
+      debugger;
       // unsupported types will have undefined structure
       const structure = this[SLOTS][slot];
       return structure?.constructor;
@@ -4282,6 +4253,9 @@ function addStaticMembers(s, env) {
       template,
     },
   } = s;
+  if (members.length === 0) {
+    return;
+  }
   const descriptors = {};
   for (const member of members) {
     descriptors[member.name] = getDescriptor(member, env);
@@ -4289,8 +4263,8 @@ function addStaticMembers(s, env) {
   defineProperties(constructor, {
     ...descriptors,
     // static variables are objects stored in the static template's slots
-    [SLOTS]: template?.[SLOTS] && { value: template[SLOTS] },
-  });  
+    [SLOTS]: { value: template[SLOTS] },
+  });
   if (type === StructureType.Enumeration) {
     const byIndex = constructor[ENUM_ITEMS];
     for (const { name } of members) {
@@ -4301,6 +4275,22 @@ function addStaticMembers(s, env) {
       // attach name to item so tagged union code can quickly find it
       defineProperties(item, { [ENUM_NAME]: { value: name } });
     }
+  }
+}
+
+function addMethods(s, env) {
+  const {
+    constructor,
+    instance: { methods: instanceMembers },
+    static: { methods: staticMethods },
+  } = s;
+  for (const method of staticMethods) {
+    const f = env.createCaller(method, false);
+    Object.defineProperty(constructor, f.name, { value: f, configurable: true, writable: true });
+  }
+  for (const method of instanceMembers) {
+    const f = env.createCaller(method, true);
+    Object.defineProperty(Object.prototype, f.name, { value: f, configurable: true, writable: true });
   }
 }
 

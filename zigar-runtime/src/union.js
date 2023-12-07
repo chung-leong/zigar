@@ -126,13 +126,11 @@ export function defineUnionShape(s, env) {
       dv = getDataView(s, arg);
     }
     self[MEMORY] = dv;
+    self[SLOTS] = hasObject ? {} : undefined;
     defineProperties(self, descriptors);
-    if (hasObject) {
-      self[SLOTS] = {};
-      if (hasInaccessiblePointer) {
-        // make pointer access throw
-        self[POINTER_VISITOR](disablePointer, { vivificate: true });
-      }
+    if (hasInaccessiblePointer) {
+      // make pointer access throw
+      self[POINTER_VISITOR](disablePointer, { vivificate: true });
     }
     if (creating) {
       initializer.call(self, arg);

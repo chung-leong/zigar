@@ -25,6 +25,7 @@ export function defineStructShape(s, env) {
   }
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const slots = template?.[SLOTS];
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     let self, dv;
@@ -39,10 +40,10 @@ export function defineStructShape(s, env) {
       dv = getDataView(s, arg);
     }
     self[MEMORY] = dv;
+    // comptime fields are stored in the template slots, so slots might be used present even
+    // when the struct has no objects
+    self[SLOTS] = hasObject ? { ...slots } : slots;
     Object.defineProperties(self, descriptors);
-    if (hasObject) {
-      self[SLOTS] = {};
-    }
     if (creating) {
       initializer.call(self, arg);
     } else {

@@ -50,9 +50,7 @@ export function defineOptional(s, env) {
       dv = requireDataView(s, arg);
     }
     self[MEMORY] = dv;
-    if (hasObject) {
-      self[SLOTS] = {};
-    }
+    self[SLOTS] = hasObject ? {} : undefined;
     if (creating) {
       initializer.call(self, arg);
     } else {

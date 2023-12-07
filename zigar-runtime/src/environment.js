@@ -351,7 +351,7 @@ export class Environment {
   finalizeStructure(s) {
     addStaticMembers(s, this);
     addMethods(s, this);
-    addSpecialAccessors(this);
+    addSpecialAccessors(s, this);
   }
 
   createCaller(method, useThis) {

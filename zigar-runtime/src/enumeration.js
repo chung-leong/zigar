@@ -53,7 +53,6 @@ export function defineEnumerationShape(s, env) {
   const { get } = getDescriptor(enumMember, env);
   defineProperties(constructor.prototype, {
     $: { get, configurable: true },
-    valueOf: { value: getIndex, configurable: true, writable: true },
     [Symbol.toPrimitive]: { value: getIndex, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
   });

@@ -1,4 +1,4 @@
-import { StructureType } from './structure.js';
+import { StructureType, defineProperties } from './structure.js';
 import { MemberType } from './member.js';
 import { restoreMemory } from './memory.js';
 import { decodeBase64, decodeText, encodeBase64, encodeText } from './text.js';
@@ -8,22 +8,16 @@ import { isTypedArray } from './data-view.js';
 
 export function addSpecialAccessors(s) {
   const { constructor } = s;
-  Object.defineProperties(constructor.prototype, {
+  // use toPrimitive() as valueOf() when there's one
+  const valueOf = constructor.prototype[Symbol.toPrimitive] ?? getValueOf;
+  defineProperties(constructor.prototype, {
     dataView: { ...getDataViewAccessors(s), configurable: true },
     base64: { ...getBase64Accessors(), configurable: true },
-    toJSON: { value: getValueOf, configurable: true, writable: true },
-    valueOf: { value: getValueOf, configurable: true, writable: true },
+    toJSON: { value: valueOf, configurable: true, writable: true },
+    valueOf:{ value: valueOf, configurable: true, writable: true },
+    string: canBeString(s) && { ...getStringAccessors(s), configurable: true },
+    typedArray: canBeTypedArray(s) && { ...getTypedArrayAccessors(s), configurable: true },
   });
-  if (canBeString(s)) {
-    Object.defineProperty(constructor.prototype, 'string', {
-      ...getStringAccessors(s), configurable: true
-    });
-  }
-  if (canBeTypedArray(s)) {
-    Object.defineProperty(constructor.prototype, 'typedArray', {
-      ...getTypedArrayAccessors(s), configurable: true
-    });
-  }
 }
 
 function canBeString(s) {

@@ -45,9 +45,7 @@ export function defineArray(s, env) {
     self[MEMORY] = dv;
     self[GETTER] = null;
     self[SETTER] = null;
-    if (hasObject) {
-      self[SLOTS] = {};
-    }
+    self[SLOTS] = hasObject ? {} : undefined;
     if (creating) {
       initializer.call(self, arg);
     }
