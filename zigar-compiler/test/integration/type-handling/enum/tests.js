@@ -27,13 +27,12 @@ export function addTests(importModule, options) {
         print();
       });
       expect(before).to.equal('as-static-variables.Pet.Cat');
-      // TODO: #232
-      // module.pet = Pet.Dog;
-      // expect(module.pet).to.be.equal(Pet.Dog);
-      // const [ after ] = await capture(() => {
-      //   print();
-      // });
-      // expect(after).to.equal('as-static-variables.Pet.Dog');
+      module.pet = Pet.Dog;
+      expect(module.pet).to.be.equal(Pet.Dog);
+      const [ after ] = await capture(() => {
+        print();
+      });
+      expect(after).to.equal('as-static-variables.Pet.Dog');
     })
   })
 }

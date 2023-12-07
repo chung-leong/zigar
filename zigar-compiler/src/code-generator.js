@@ -200,8 +200,8 @@ function generateStructureDefinitions(structures, params) {
           pairs.push(`length: ${dv.byteLength}`);
         }
         add(`memory: { ${pairs.join(', ')} },`);
-        if (dv.hasOwnProperty('address')) {
-          add(`address: ${dv.address},`);
+        if (dv.hasOwnProperty('reloc')) {
+          add(`reloc: ${dv.reloc},`);
         }
       }
       if (slots && Object.keys(slots).length > 0) {

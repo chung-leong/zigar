@@ -1,9 +1,8 @@
 import { defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { addMethods } from './method.js';
 import { throwInvalidInitializer, throwNoNewEnum } from './error.js';
-import { ALIGN, ENUM_ITEM, ENVIRONMENT, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
+import { ALIGN, ENUM_ITEM, ENUM_ITEMS, ENVIRONMENT, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
 import { requireDataView } from './data-view.js';
 
 export function defineEnumerationShape(s, env) {
@@ -35,15 +34,7 @@ export function defineEnumerationShape(s, env) {
       const self = Object.create(constructor.prototype);
       const dv = requireDataView(s, arg);
       self[MEMORY] = dv;
-      // add item to hash
-      const index = self.valueOf();
-      if (byIndex[index]) {
-        // already defined--returning existing object
-        return byIndex[index];
-      } else {
-        byIndex[index] = self;
-        return self; 
-      }
+      return self; 
     }
     if (typeof(arg)  === 'string') {
       return constructor[arg];
@@ -58,7 +49,8 @@ export function defineEnumerationShape(s, env) {
   };
   const { get: getIndex } = getDescriptor(member, env);
   // get the enum descriptor instead of the int/uint descriptor
-  const { get } = getDescriptor({ ...member, structure: s, type: MemberType.EnumerationItem }, env);
+  const enumMember = { ...member, structure: s, type: MemberType.EnumerationItem };
+  const { get } = getDescriptor(enumMember, env);
   defineProperties(constructor.prototype, {
     $: { get, configurable: true },
     valueOf: { value: getIndex, configurable: true, writable: true },
@@ -68,6 +60,7 @@ export function defineEnumerationShape(s, env) {
   defineProperties(constructor, {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [ENUM_ITEMS]: { value: byIndex },
   });
   return constructor;
 };

@@ -559,15 +559,15 @@ napi_value recreate_address(napi_env env,
     size_t argc = 1;
     napi_value args[1];
     void* data;
-    double offset;
+    double reloc;
     if (napi_get_cb_info(env, info, &argc, &args[0], NULL, &data) != napi_ok
-     || napi_get_value_double(env, args[0], &offset) != napi_ok) {
+     || napi_get_value_double(env, args[0], &reloc) != napi_ok) {
         return throw_error(env, "Offset must be a number");
     }
     module_data* md = (module_data*) data;
     size_t base = md->base_address;
     napi_value address;
-    if (napi_create_bigint_uint64(env, base + offset, &address) != napi_ok) {
+    if (napi_create_bigint_uint64(env, base + reloc, &address) != napi_ok) {
         return throw_last_error(env);
     }
     return address;

@@ -382,14 +382,33 @@ export function getComptimeDescriptor(member, env) {
 }
 
 export function getStaticDescriptor(member, env) {
-  const { slot } = member;
-  return {
-    ...getComptimeDescriptor(member, env),
-    set: function setValue(value) {
-      const object = this[SLOTS][slot];
-      object.$ = value;
-    },
-  };
+  const { slot, structure } = member;
+  if (structure.type === StructureType.Enumeration) {
+    // enum needs to be dealt with separately, since the object reference changes
+    const { 
+      instance: { members: [ member ] },
+    } = structure;
+    const enumMember = { ...member, structure, type: MemberType.EnumerationItem };
+    const { get, set } = getDescriptor(enumMember, env);
+    return {
+      get: function getEnum() {
+        const object = this[SLOTS][slot];
+        return get.call(object);
+      },
+      set: function setEnum(arg) {
+        const object = this[SLOTS][slot];
+        return set.call(object, arg);
+      },
+    };
+  } else {
+    return {
+      ...getComptimeDescriptor(member, env),
+      set: function setValue(value) {
+        const object = this[SLOTS][slot];
+        object.$ = value;
+      },
+    };  
+  }
 }
 
 export function getLiteralDescriptor(member, env) {

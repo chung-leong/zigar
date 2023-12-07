@@ -71,7 +71,7 @@ export class Environment {
   getMemoryOffset(address: bigint|number) number {
     // return offset of address relative to start of module memory
   }
-  recreateAddress(offset: number) number {
+  recreateAddress(reloc: number) number {
     // recreate address of memory belonging to module
   }
 
@@ -288,7 +288,7 @@ export class Environment {
           const offset = this.getMemoryOffset(address);
           const len = dv.byteLength;
           const relocDV = this.createView(address, len, true);
-          relocDV.offset = offset;
+          relocDV.reloc = offset;
           dv = relocDV;
           list.push({ offset, len, owner: object, replaced: false });
         }
@@ -317,7 +317,7 @@ export class Environment {
             const dv = a.owner.memory;
             const pos = b.offset - a.offset + dv.byteOffset;
             const newDV = new DataView(dv.buffer, pos, b.len);
-            newDV.offset = b.offset;
+            newDV.reloc = b.reloc;
             b.owner.memory = newDV;
             b.replaced = true;
           }
@@ -405,10 +405,10 @@ export class Environment {
         if (placeholder.slots) {
           insertObjects(object[SLOTS], placeholder.slots);
         }
-        if (placeholder.offset !== undefined) {
+        if (placeholder.hasOwnProperty('reloc')) {
           // need to replace dataview with one pointing to fixed memory later,
           // when the VM is up and running
-          this.variables.push({ offset: placeholder.offset, object });
+          this.variables.push({ reloc: placeholder.reloc, object });
         }
         return object;  
       } else {
@@ -429,18 +429,18 @@ export class Environment {
   }
 
   linkVariables(writeBack) {
-    for (const { object, offset } of this.variables) {
-      this.linkObject(object, offset, writeBack);
+    for (const { object, reloc } of this.variables) {
+      this.linkObject(object, reloc, writeBack);
     }
   }
 
-  linkObject(object, offset, writeBack) {
+  linkObject(object, reloc, writeBack) {
     if (this.inFixedMemory(object)) {
       return;
     }
     const dv = object[MEMORY];
     if (dv.byteLength !== 0) {
-      const address = this.recreateAddress(offset);
+      const address = this.recreateAddress(reloc);
       const wasmDV = this.obtainFixedView(address, dv.byteLength);
       if (writeBack) {
         const dest = Object.create(object.constructor.prototype);
@@ -1277,8 +1277,8 @@ export class WebAssemblyEnvironment extends Environment {
     return address;
   }
 
-  recreateAddress(offset) {
-    return offset;
+  recreateAddress(reloc) {
+    return reloc;
   }
 
   invokeThunk(thunkId, args) {

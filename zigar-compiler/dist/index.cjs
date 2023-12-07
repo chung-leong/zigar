@@ -367,13 +367,11 @@ function absolute(relpath) {
 
 const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
-const TEMPLATE_SLOTS = Symbol('templateSlots');
 const PARENT = Symbol('parent');
 const ENUM_NAME = Symbol('enumName');
-const ENUM_INDEX = Symbol('enumIndex');
+const ENUM_ITEM = Symbol('enumItem');
 const ENUM_ITEMS = Symbol('enumItems');
 const ERROR_INDEX = Symbol('errorIndex');
-const ENUM_ITEM = Symbol('enumItem');
 const TAG = Symbol('TAG');
 const GETTER = Symbol('getter');
 const SETTER = Symbol('setter');
@@ -1722,12 +1720,7 @@ function decodeBase64(str) {
 }
 
 function addSpecialAccessors(s) {
-  const {
-    constructor,
-    instance: {
-      members,
-    },
-  } = s;
+  const { constructor } = s;
   Object.defineProperties(constructor.prototype, {
     dataView: { ...getDataViewAccessors(s), configurable: true },
     base64: { ...getBase64Accessors(), configurable: true },
@@ -1895,7 +1888,7 @@ function getValueOf() {
   }  return extract(this.$);
 }
 
-function finalizePrimitive(s, env) {
+function definePrimitive(s, env) {
   const {
     byteSize,
     align,
@@ -1966,7 +1959,6 @@ function finalizePrimitive(s, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
-  addSpecialAccessors(s);
   return constructor;
 }
 function getIntRange(member) {
@@ -2006,7 +1998,7 @@ function getPrimitiveType(member) {
   }
 }
 
-function finalizePointer(s, env) {
+function definePointer(s, env) {
   const {
     byteSize,
     align,
@@ -2300,7 +2292,7 @@ function always() {
   return true;
 }
 
-function finalizeArray(s, env) {
+function defineArray(s, env) {
   const {
     length,
     byteSize,
@@ -2404,7 +2396,6 @@ function finalizeArray(s, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
-  addSpecialAccessors(s);
   return constructor;
 }
 
@@ -2591,42 +2582,7 @@ const proxyHandlers = {
   },
 };
 
-function addStaticMembers(s, env) {
-  const {
-    constructor,
-    static: {
-      members,
-      template,
-    },
-  } = s;
-  const descriptors = {};
-  for (const member of members) {
-    descriptors[member.name] = getDescriptor(member, env);
-  }
-  defineProperties(constructor, {
-    ...descriptors,
-    // static variables are objects stored in the static template's slots
-    [TEMPLATE_SLOTS]: template?.[SLOTS] && { value: template[SLOTS] },
-  });
-}
-
-function addMethods(s, env) {
-  const {
-    constructor,
-    instance: { methods: instanceMembers },
-    static: { methods: staticMethods },
-  } = s;
-  for (const method of staticMethods) {
-    const f = env.createCaller(method, false);
-    Object.defineProperty(constructor, f.name, { value: f, configurable: true, writable: true });
-  }
-  for (const method of instanceMembers) {
-    const f = env.createCaller(method, true);
-    Object.defineProperty(Object.prototype, f.name, { value: f, configurable: true, writable: true });
-  }
-}
-
-function finalizeStruct(s, env) {
+function defineStructShape(s, env) {
   const {
     byteSize,
     align,
@@ -2739,16 +2695,11 @@ function finalizeStruct(s, env) {
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
-    // struct can have comptime members, which are stored in the template's slots
-    [TEMPLATE_SLOTS]: template?.[SLOTS] && { value: template[SLOTS] },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
-  addSpecialAccessors(s);
-  addStaticMembers(s, env);
-  addMethods(s, env);
   return constructor;
 }
 
@@ -2815,7 +2766,23 @@ function getPointerVisitor(s, visitorOptions = {}) {
   };
 }
 
-function finalizeUnion(s, env) {
+function addMethods(s, env) {
+  const {
+    constructor,
+    instance: { methods: instanceMembers },
+    static: { methods: staticMethods },
+  } = s;
+  for (const method of staticMethods) {
+    const f = env.createCaller(method, false);
+    Object.defineProperty(constructor, f.name, { value: f, configurable: true, writable: true });
+  }
+  for (const method of instanceMembers) {
+    const f = env.createCaller(method, true);
+    Object.defineProperty(Object.prototype, f.name, { value: f, configurable: true, writable: true });
+  }
+}
+
+function defineUnionShape(s, env) {
   const {
     type,
     byteSize,
@@ -3034,9 +3001,6 @@ function finalizeUnion(s, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
-  addSpecialAccessors(s);
-  addStaticMembers(s, env);
-  addMethods(s, env);
   return constructor;
 }
 const taggedProxyHandlers = {
@@ -3047,7 +3011,7 @@ const taggedProxyHandlers = {
   },
 };
 
-function finalizeErrorUnion(s, env) {
+function defineErrorUnion(s, env) {
   const {
     byteSize,
     align,
@@ -3134,13 +3098,12 @@ function finalizeErrorUnion(s, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
-  addSpecialAccessors(s);
   return constructor;
 }
 
 let currentErrorSets;
 
-function finalizeErrorSet(s, env) {
+function defineErrorSet(s, env) {
   const {
     name,
     instance: {
@@ -3212,22 +3175,15 @@ function initializeErrorSets() {
   currentErrorSets = {};
 }
 
-function finalizeEnumeration(s, env) {
+function defineEnumerationShape(s, env) {
   const {
     byteSize,
     align,
     instance: {
-      members,
-      template,
+      members: [ member ],
     },
   } = s;
-  const Primitive = getPrimitiveClass(members[0]);
-  // for retrieving the value of enum during construction of enum set
-  const { get: getEnumValue } = getDescriptor(members[0], env);
-  // for retrieving the value where casting data view to enum
-  const { get: getItemValue } = getDescriptor({ ...members[0], byteOffset: 0, bitOffset: 0 }, env);
-  const count = members.length;
-  const items = {};
+  const byIndex = {};
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     if (creating) {
@@ -3235,93 +3191,44 @@ function finalizeEnumeration(s, env) {
       // new enum items cannot be created
       throwNoNewEnum(s);
     }
-    if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
-      let index = -1;
-      if (isSequential) {
-        // normal enums start at 0 and go up, so the value is the index
-        index = Number(arg);
-      } else {
-        // values aren't sequential, so we need to compare values
-        const given = Primitive(arg);
-        for (let i = 0; i < count; i++) {
-          const value = getEnumValue.call(constructor, i);
-          if (value === given) {
-            index = i;
-            break;
-          }
-        }
-      }
-      // return the enum object (created down below)
-      return items[index];
+    if (this === ENVIRONMENT) {
+      // called by Environment.castView() or recreateStructures()
+      // the only time when individual enum items are created
+      const self = Object.create(constructor.prototype);
+      const dv = requireDataView(s, arg);
+      self[MEMORY] = dv;
+      return self; 
+    }
+    if (typeof(arg)  === 'string') {
+      return constructor[arg];
+    } else if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+      return byIndex[arg];
     } else if (arg && typeof(arg) === 'object' && arg[ENUM_ITEM]) {
       // a tagged union, return the active tag
       return arg[ENUM_ITEM];
-    } else if (typeof(arg)  === 'string') {
-      return constructor[arg];
     } else {
-      // casting from data view occurs when we recreate a comptime value
-      // stored in a template's slots
-      const dv = getDataView(s, arg);
-      if (dv) {
-        const index = getItemValue.call({ [MEMORY]: dv });
-        return constructor(index);
-      } else {
-        throwInvalidInitializer(s, [ 'number', 'string', 'tagged union' ], arg);
-      }
+      throwInvalidInitializer(s, [ 'string', 'number', 'tagged union' ], arg);
     }
   };
-  const valueOf = function() {
-    const index = this[ENUM_INDEX] ;
-    return getEnumValue.call(constructor, index);
-  };
+  const { get: getIndex } = getDescriptor(member, env);
+  // get the enum descriptor instead of the int/uint descriptor
+  const enumMember = { ...member, structure: s, type: MemberType.EnumerationItem };
+  const { get } = getDescriptor(enumMember, env);
   defineProperties(constructor.prototype, {
-    [Symbol.toPrimitive]: { value: valueOf, configurable: true, writable: true },
-    $: { get: valueOf, configurable: true },
+    $: { get, configurable: true },
+    valueOf: { value: getIndex, configurable: true, writable: true },
+    [Symbol.toPrimitive]: { value: getIndex, configurable: true, writable: true },
+    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
   });
-  // now that the class has the right hidden properties, getValue() will work
-  // scan the array to see if the enum's numeric representation is sequential
-  const isSequential = (() => {
-    // try-block in the event that the enum has bigInt items
-    try {
-      for (let i = 0; i < count; i++) {
-        if (getEnumValue.call(constructor, i) !== i) {
-          return false;
-        }
-      }
-      return true;
-      /* c8 ignore next 3 */
-    } catch (err) {
-      return false;
-    }
-  })();
-  // attach the enum items to the constructor
-  const itemDescriptors = {};
-  for (const [ index, { name } ] of members.entries()) {
-    // can't use the constructor since it would throw
-    const item = Object.create(constructor.prototype);
-    defineProperties(item, {
-      [ENUM_INDEX]: { value: index },
-      [ENUM_NAME]: { value: name },
-    });
-    itemDescriptors[name] = { value: item, configurable: true, enumerable: true, writable: true };
-    items[index] = item;
-  }
-  // attach the numeric values to the class as its binary data
-  // this allows us to reuse the array getter
   defineProperties(constructor, {
-    ...itemDescriptors,
-    [MEMORY]: { value: template[MEMORY] },
-    [ENUM_ITEMS]: { value: items },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [ENUM_ITEMS]: { value: byIndex },
   });
-  addSpecialAccessors(s);
-  addStaticMembers(s, env);
-  addMethods(s, env);
   return constructor;
 }
 
-function finalizeOptional(s, env) {
+function defineOptional(s, env) {
   const {
     byteSize,
     align,
@@ -3396,11 +3303,10 @@ function finalizeOptional(s, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
-  addSpecialAccessors(s);
   return constructor;
 }
 
-function finalizeSlice(s, env) {
+function defineSlice(s, env) {
   const {
     align,
     instance: {
@@ -3571,7 +3477,6 @@ function finalizeSlice(s, env) {
     [SIZE]: { value: elementSize },
     [SENTINEL]: sentinel && { value: sentinel },
   });
-  addSpecialAccessors(s);
   return constructor;
 }
 
@@ -3626,7 +3531,7 @@ function getSentinel(structure, env) {
   return { value, bytes, validateValue, validateData };
 }
 
-function finalizeVector(s, env) {
+function defineVector(s, env) {
   const {
     length,
     byteSize,
@@ -3698,7 +3603,6 @@ function finalizeVector(s, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
-  addSpecialAccessors(s);
   return constructor;
 }
 
@@ -3747,7 +3651,7 @@ function createVectorEntries() {
   };
 }
 
-function finalizeArgStruct(s, env) {
+function defineArgStruct(s, env) {
   const {
     byteSize,
     align,
@@ -3821,63 +3725,63 @@ const StructureType = {
 const factories$1 = Array(Object.values(StructureType).length);
 
 function usePrimitive() {
-  factories$1[StructureType.Primitive] = finalizePrimitive;
+  factories$1[StructureType.Primitive] = definePrimitive;
 }
 
 function useArray() {
-  factories$1[StructureType.Array] = finalizeArray;
+  factories$1[StructureType.Array] = defineArray;
 }
 
 function useStruct() {
-  factories$1[StructureType.Struct] = finalizeStruct;
+  factories$1[StructureType.Struct] = defineStructShape;
 }
 
 function useExternUnion() {
-  factories$1[StructureType.ExternUnion] = finalizeUnion;
+  factories$1[StructureType.ExternUnion] = defineUnionShape;
 }
 
 function useBareUnion() {
-  factories$1[StructureType.BareUnion] = finalizeUnion;
+  factories$1[StructureType.BareUnion] = defineUnionShape;
 }
 
 function useTaggedUnion() {
-  factories$1[StructureType.TaggedUnion] = finalizeUnion;
+  factories$1[StructureType.TaggedUnion] = defineUnionShape;
 }
 
 function useErrorUnion() {
-  factories$1[StructureType.ErrorUnion] = finalizeErrorUnion;
+  factories$1[StructureType.ErrorUnion] = defineErrorUnion;
 }
 
 function useErrorSet() {
-  factories$1[StructureType.ErrorSet] = finalizeErrorSet;
+  factories$1[StructureType.ErrorSet] = defineErrorSet;
 }
 
 function useEnumeration() {
-  factories$1[StructureType.Enumeration] = finalizeEnumeration;
+  factories$1[StructureType.Enumeration] = defineEnumerationShape;
 }
 
 function useOptional() {
-  factories$1[StructureType.Optional] = finalizeOptional;
+  factories$1[StructureType.Optional] = defineOptional;
 }
 
 function usePointer() {
-  factories$1[StructureType.Pointer] = finalizePointer;
+  factories$1[StructureType.Pointer] = definePointer;
 }
 
 function useSlice() {
-  factories$1[StructureType.Slice] = finalizeSlice;
+  factories$1[StructureType.Slice] = defineSlice;
 }
 
 function useVector() {
-  factories$1[StructureType.Vector] = finalizeVector;
+  factories$1[StructureType.Vector] = defineVector;
 }
 
 function useOpaque() {
-  factories$1[StructureType.Opaque] = finalizeStruct;
+  factories$1[StructureType.Opaque] = defineStructShape;
 }
 
 function useArgStruct() {
-  factories$1[StructureType.ArgStruct] = finalizeArgStruct;
+  factories$1[StructureType.ArgStruct] = defineArgStruct;
 }
 
 function getStructureName(s, full = false) {
@@ -4215,7 +4119,7 @@ function getTypeDescriptor(member, env) {
   return {
     get: function getType() {
       // unsupported types will have undefined structure
-      const structure = this[TEMPLATE_SLOTS][slot];
+      const structure = this[SLOTS][slot];
       return structure?.constructor;
     },
     // no setter
@@ -4227,32 +4131,51 @@ function getComptimeDescriptor(member, env) {
   return {
     get: (isValueExpected(structure))
     ? function getValue() {
-      const object = this[TEMPLATE_SLOTS][slot];
+      const object = this[SLOTS][slot];
       return object.$;
     }
     : function getObject() {
-      const object = this[TEMPLATE_SLOTS][slot];
+      const object = this[SLOTS][slot];
       return object;
     },
   };
 }
 
 function getStaticDescriptor(member, env) {
-  const { slot } = member;
-  return {
-    ...getComptimeDescriptor(member),
-    set: function setValue(value) {
-      const object = this[TEMPLATE_SLOTS][slot];
-      object.$ = value;
-    },
-  };
+  const { slot, structure } = member;
+  if (structure.type === StructureType.Enumeration) {
+    // enum needs to be dealt with separately, since the object reference changes
+    const { 
+      instance: { members: [ member ] },
+    } = structure;
+    const enumMember = { ...member, structure, type: MemberType.EnumerationItem };
+    const { get, set } = getDescriptor(enumMember, env);
+    return {
+      get: function getEnum() {
+        const object = this[SLOTS][slot];
+        return get.call(object);
+      },
+      set: function setEnum(arg) {
+        const object = this[SLOTS][slot];
+        return set.call(object, arg);
+      },
+    };
+  } else {
+    return {
+      ...getComptimeDescriptor(member),
+      set: function setValue(value) {
+        const object = this[SLOTS][slot];
+        object.$ = value;
+      },
+    };  
+  }
 }
 
 function getLiteralDescriptor(member, env) {
   const { slot } = member;
   return {
     get: function getType() {
-      const object = this[TEMPLATE_SLOTS][slot];
+      const object = this[SLOTS][slot];
       return object.string;
     },
     // no setter
@@ -4350,6 +4273,37 @@ function useAllMemberTypes() {
   useLiteral();
 }
 
+function addStaticMembers(s, env) {
+  const {
+    type,
+    constructor,
+    static: {
+      members,
+      template,
+    },
+  } = s;
+  const descriptors = {};
+  for (const member of members) {
+    descriptors[member.name] = getDescriptor(member, env);
+  }
+  defineProperties(constructor, {
+    ...descriptors,
+    // static variables are objects stored in the static template's slots
+    [SLOTS]: template?.[SLOTS] && { value: template[SLOTS] },
+  });  
+  if (type === StructureType.Enumeration) {
+    const byIndex = constructor[ENUM_ITEMS];
+    for (const { name } of members) {
+      // place item in hash to facilitate lookup
+      const item = constructor[name];
+      const index = item.valueOf();
+      byIndex[index] = item;
+      // attach name to item so tagged union code can quickly find it
+      defineProperties(item, { [ENUM_NAME]: { value: name } });
+    }
+  }
+}
+
 class Environment {
   context;
   contextStack = [];
@@ -4406,7 +4360,7 @@ class Environment {
   getMemoryOffset(address: bigint|number) number {
     // return offset of address relative to start of module memory
   }
-  recreateAddress(offset: number) number {
+  recreateAddress(reloc: number) number {
     // recreate address of memory belonging to module
   }
 
@@ -4581,10 +4535,8 @@ class Environment {
   }
 
   endStructure(s) {
-    const constructor = this.finalizeStructure(s);
     this.structures.push(s);
     this.acquireDefaultPointers(s);
-    return constructor;
   }
 
   acquireStructures(options) {
@@ -4625,7 +4577,7 @@ class Environment {
           const offset = this.getMemoryOffset(address);
           const len = dv.byteLength;
           const relocDV = this.createView(address, len, true);
-          relocDV.offset = offset;
+          relocDV.reloc = offset;
           dv = relocDV;
           list.push({ offset, len, owner: object, replaced: false });
         }
@@ -4654,7 +4606,7 @@ class Environment {
             const dv = a.owner.memory;
             const pos = b.offset - a.offset + dv.byteOffset;
             const newDV = new DataView(dv.buffer, pos, b.len);
-            newDV.offset = b.offset;
+            newDV.reloc = b.reloc;
             b.owner.memory = newDV;
             b.replaced = true;
           }
@@ -4664,7 +4616,7 @@ class Environment {
   }
   /* COMPTIME-ONLY-END */
 
-  finalizeStructure(s) {
+  finalizeShape(s) {
     try {
       const f = getStructureFactory(s.type);
       const constructor = f(s, this);
@@ -4678,12 +4630,17 @@ class Environment {
           });
         }
       }
-      return constructor;
       /* c8 ignore next 4 */
     } catch (err) {
       console.error(err);
       throw err;
     }
+  }
+
+  finalizeStructure(s) {
+    addStaticMembers(s, this);
+    addMethods(s, this);
+    addSpecialAccessors(this);
   }
 
   createCaller(method, useThis) {
@@ -4797,6 +4754,7 @@ class WebAssemblyEnvironment extends Environment {
     attachMethod: { argType: 'vvb' },
     createTemplate: { argType: 'v', returnType: 'v' },
     attachTemplate: { argType: 'vvb' },
+    finalizeShape: { argType: 'v' },
     endStructure: { argType: 'v' },
     writeToConsole: { argType: 'v' },
     startCall: { argType: 'iv', returnType: 'i' },
@@ -5062,8 +5020,8 @@ class WebAssemblyEnvironment extends Environment {
     return address;
   }
 
-  recreateAddress(offset) {
-    return offset;
+  recreateAddress(reloc) {
+    return reloc;
   }
 
   invokeThunk(thunkId, args) {
@@ -5336,8 +5294,8 @@ function generateStructureDefinitions(structures, params) {
           pairs.push(`length: ${dv.byteLength}`);
         }
         add(`memory: { ${pairs.join(', ')} },`);
-        if (dv.hasOwnProperty('address')) {
-          add(`address: ${dv.address},`);
+        if (dv.hasOwnProperty('reloc')) {
+          add(`reloc: ${dv.reloc},`);
         }
       }
       if (slots && Object.keys(slots).length > 0) {
