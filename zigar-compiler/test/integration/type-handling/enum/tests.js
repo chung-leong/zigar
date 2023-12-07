@@ -23,15 +23,11 @@ export function addTests(importModule, options) {
       expect(Pet('Bear')).to.be.undefined;
       expect(module.pet).to.be.instanceOf(Pet);
       expect(module.pet).to.be.equal(Pet.Cat);
-      const [ before ] = await capture(() => {
-        print();
-      });
+      const [ before ] = await capture(() => print());
       expect(before).to.equal('as-static-variables.Pet.Cat');
       module.pet = Pet.Dog;
       expect(module.pet).to.be.equal(Pet.Dog);
-      const [ after ] = await capture(() => {
-        print();
-      });
+      const [ after ] = await capture(() => print());
       expect(after).to.equal('as-static-variables.Pet.Dog');
     })
   })
