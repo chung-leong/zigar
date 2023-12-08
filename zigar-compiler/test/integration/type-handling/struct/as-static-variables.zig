@@ -1,10 +1,19 @@
 const std = @import("std");
 
-pub var bool1: bool = true;
-pub var bool2: bool = false;
-pub const bool3: bool = true;
-pub const bool4: bool = false;
+pub const StructA = struct {
+    number1: i32,
+    number2: i32,
+};
+
+pub const constant: StructA = .{ .number1 = 123, .number2 = 456 };
+pub var variable: StructA = .{ .number1 = 1, .number2 = 2 };
+
+pub const comptime_struct = struct {
+    pub const input = .{
+        .src = .{ .channels = 4 },
+    };
+};
 
 pub fn print() void {
-    std.debug.print("{s}", .{if (bool1) "yes" else "no"});
+    std.debug.print("{any}\n", .{variable});
 }

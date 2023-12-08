@@ -12,27 +12,6 @@ export function addTests(importModule, options) {
   } = options;
   const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(optimize);
   describe('Variables', function() {
-    it('should import simple bare union', async function() {
-      this.timeout(120000);
-      const { default: module } = await importModule(resolve('./zig-samples/basic/bare-union-simple.zig'));
-      expect(module.animal.dog).to.equal(123);
-      module.useCat();
-      expect(module.animal.cat).to.equal(777);
-      if (runtimeSafety) {
-        expect(() => module.animal.dog).to.throw(TypeError);
-      } else {
-        expect(module.animal.dog).to.equal(777);
-      }
-      module.useMonkey();
-      expect(module.animal.monkey).to.equal(777n);
-    })
-    it('should import slices with sentinel', async function() {
-      this.timeout(120000);
-      const { default: module } = await importModule(resolve('./zig-samples/basic/slices-with-sentinel.zig'));
-      const { string } = module.u8_slice;
-      expect(string).to.equal('Hello world');
-      expect([ ...module.i64_slice ]).to.eql([ 0n, 1n, 2n, 3n, 4n, 5n, 6n, 7n ]);
-    })
     it('should import structs with complex members when there are no functions', async function() {
       this.timeout(120000);
       const { default: module, Pet, StructD } = await importModule(resolve('./zig-samples/basic/structs-with-complex-members.zig'));
@@ -68,25 +47,6 @@ export function addTests(importModule, options) {
         .with.property('message').that.contains('not accessible');
       expect(module.variant_b.value.integer).to.equal(123);
       expect(module.variant_c.value.float).to.equal(3.14);
-      const { printVariant, printVariantPtr } = module;
-      const lines = await capture(() => {
-        printVariant(module.variant_a);
-        printVariant(module.variant_b);
-        printVariant(module.variant_c);
-        printVariantPtr(module.variant_a);
-        printVariantPtr(module.variant_b);
-        printVariantPtr(module.variant_c);
-      });
-      expect(lines).to.eql([ 'apple', '123', '3.14', 'apple', '123', '3.14' ]);
-    })
-    it('should import tagged union with pointers', async function() {
-      this.timeout(120000);
-      const { default: module } = await importModule(resolve('./zig-samples/basic/tagged-union-with-slice.zig'));
-      expect(module.variant_a.String.string).to.equal('apple');
-      expect(module.variant_a.Integer).to.be.null;
-      expect(module.variant_a.Float).to.be.null;
-      expect(module.variant_b.Integer).to.equal(123);
-      expect(module.variant_c.Float).to.equal(3.14);
       const { printVariant, printVariantPtr } = module;
       const lines = await capture(() => {
         printVariant(module.variant_a);
@@ -140,14 +100,6 @@ export function addTests(importModule, options) {
       expect(object2.number1).to.eql(77);
       expect(object2.number2).to.eql(123);
       expect(object2.number_type).to.be.an('function');
-    })
-    it('should import comptime struct', async function() {
-      this.timeout(120000);
-      const { kernel } = await importModule(resolve('./zig-samples/basic/comptime-struct.zig'));
-      expect(kernel.input.src.channels).to.equal(4);
-      expect(() => kernel.input.src.channels = 5).to.throw(Error);
-      expect(() => kernel.input.src = { channels: 5 }).to.throw(Error);
-      expect(() => kernel.input = { src: { channels: 5 } }).to.throw(Error);
     })
     it('should account for padding bytes of vector', async function() {
       this.timeout(120000);

@@ -6,22 +6,40 @@ export function addTests(importModule, options) {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
   };    
-  describe('Int', function() {
-    it('should import bool as static variables', async function() {
+  describe('Union', function() {
+    it('should import union as static variables', async function() {
       this.timeout(120000);
-      const { default: module, bool3, bool4, print } = await importTest('as-static-variables');
-      expect(module.bool1).to.be.true;
-      expect(module.bool2).to.be.false;
-      expect(module.bool3).to.be.true;
-      expect(module.bool4).to.be.false;
-      expect(bool3).to.be.true;
-      expect(bool4).to.be.false;
-      const [ before ] = await capture(() => print());
-      expect(before).to.equal('yes');
-      module.bool1 = false;
-      expect(module.bool1).to.be.false;
-      const [ after ] = await capture(() => print());
-      expect(after).to.equal('no');
+      const { 
+        default: module, 
+        printVariant, 
+        printVariantPtr,
+      } = await importTest('as-static-variables');
+      expect(module.variant_a.String.string).to.equal('apple');
+      expect(module.variant_a.Integer).to.be.null;
+      expect(module.variant_a.Float).to.be.null;
+      expect(module.variant_b.Integer).to.equal(123);
+      expect(module.variant_c.Float).to.equal(3.14);
+      const lines = await capture(() => {
+        printVariant(module.variant_a);
+        printVariant(module.variant_b);
+        printVariant(module.variant_c);
+        printVariantPtr(module.variant_a);
+        printVariantPtr(module.variant_b);
+        printVariantPtr(module.variant_c);
+      });
+      expect(lines).to.eql([ 'apple', '123', '3.14', 'apple', '123', '3.14' ]);
+      expect(module.extern_union.cat).to.equal(100);
+      expect(module.extern_union.dog).to.equal(100);
+      expect(module.bare_union.dog).to.equal(123);
+      module.useCat();
+      expect(module.bare_union.cat).to.equal(777);
+      if (options.runtimeSafety) {
+        expect(() => module.bare_union.dog).to.throw(TypeError);
+      } else {
+        expect(module.bare_union.dog).to.equal(777);
+      }
+      module.useMonkey();
+      expect(module.bare_union.monkey).to.equal(777n);
     })
   })
 }

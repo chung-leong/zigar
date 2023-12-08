@@ -14,8 +14,10 @@ import * as NullTests from './null/tests.js';
 import * as OpaqueTests from './opaque/tests.js';
 import * as OptionalTests from './optional/tests.js';
 import * as PointerTests from './pointer/tests.js';
+import * as StructTests from './struct/tests.js';
 import * as TypeTests from './type/tests.js';
 import * as UndefinedTests from './undefined/tests.js';
+import * as UnionTests from './union/tests.js';
 import * as VectorTests from './vector/tests.js';
 import * as VoidTests from './void/tests.js';
 
@@ -37,8 +39,10 @@ export function addTests(importModule, options) {
     OpaqueTests.addTests(importModule, options);
     OptionalTests.addTests(importModule, options);
     PointerTests.addTests(importModule, options);
+    StructTests.addTests(importModule, options);
     TypeTests.addTests(importModule, options);
     UndefinedTests.addTests(importModule, options);
+    UnionTests.addTests(importModule, options);
     VectorTests.addTests(importModule, options);
     VoidTests.addTests(importModule, options);
   })
