@@ -496,7 +496,7 @@ test "getStructureType" {
 
 fn getStructureSize(comptime T: type) usize {
     return switch (@typeInfo(T)) {
-        .Null => 0,
+        .Null, .Opaque => 0,
         else => return @sizeOf(T),
     };
 }
@@ -509,7 +509,7 @@ test "getStructureSize" {
 
 fn getStructureBitSize(comptime T: type) usize {
     return switch (@typeInfo(T)) {
-        .Null => 0,
+        .Null, .Opaque => 0,
         else => return @bitSizeOf(T),
     };
 }

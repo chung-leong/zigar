@@ -9,6 +9,7 @@ import * as FnTestTests from './fn/tests.js';
 import * as IntTests from './int/tests.js';
 import * as NoReturnTests from './no-return/tests.js';
 import * as NullTests from './null/tests.js';
+import * as OpaqueTests from './opaque/tests.js';
 import * as OptionalTests from './optional/tests.js';
 import * as TypeTests from './type/tests.js';
 import * as UndefinedTests from './undefined/tests.js';
@@ -28,6 +29,7 @@ export function addTests(importModule, options) {
     IntTests.addTests(importModule, options);
     NoReturnTests.addTests(importModule, options);
     NullTests.addTests(importModule, options);
+    OpaqueTests.addTests(importModule, options);
     OptionalTests.addTests(importModule, options);
     TypeTests.addTests(importModule, options);
     UndefinedTests.addTests(importModule, options);
