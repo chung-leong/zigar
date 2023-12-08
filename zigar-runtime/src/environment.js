@@ -317,7 +317,7 @@ export class Environment {
             const dv = a.owner.memory;
             const pos = b.offset - a.offset + dv.byteOffset;
             const newDV = new DataView(dv.buffer, pos, b.len);
-            newDV.reloc = b.reloc;
+            newDV.reloc = b.offset;
             b.owner.memory = newDV;
             b.replaced = true;
           }
@@ -328,23 +328,17 @@ export class Environment {
   /* COMPTIME-ONLY-END */
 
   finalizeShape(s) {
-    try {
-      const f = getStructureFactory(s.type);
-      const constructor = f(s, this);
-      if (typeof(constructor) === 'function') {
-        defineProperties(constructor, {
-          name: { value: getStructureName(s), writable: false }
+    const f = getStructureFactory(s.type);
+    const constructor = f(s, this);
+    if (typeof(constructor) === 'function') {
+      defineProperties(constructor, {
+        name: { value: getStructureName(s), writable: false }
+      });
+      if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
+        defineProperties(constructor.prototype, {
+          [Symbol.toStringTag]: { value: s.name, configurable: true, writable: false }
         });
-        if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
-          defineProperties(constructor.prototype, {
-            [Symbol.toStringTag]: { value: s.name, configurable: true, writable: false }
-          });
-        }
       }
-      /* c8 ignore next 4 */
-    } catch (err) {
-      console.error(err);
-      throw err;
     }
   }
 
@@ -778,6 +772,9 @@ export class Environment {
         return;
       }
       const Target = pointer.constructor.child;
+      if (!Target) {
+        console.log({ pointer });
+      }
       let target = this[SLOTS][0];
       if (!target || isMutable(this)) {
         // obtain address (and possibly length) from memory

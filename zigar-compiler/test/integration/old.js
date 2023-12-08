@@ -12,33 +12,6 @@ export function addTests(importModule, options) {
   } = options;
   const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(optimize);
   describe('Variables', function() {
-    it('should import primitive arrays', async function() {
-      this.timeout(120000);
-      const { default: module } = await importModule(resolve('./zig-samples/basic/arrays-with-primitives.zig'));
-      expect(module.int32_array4).to.be.an('[4]i32');
-      expect(module.int32_array4.get(0)).to.equal(1);
-      expect([ ...module.int32_array4 ]).to.eql([ 1, 2, 3, 4 ]);
-      module.int32_array4.set(1, 123);
-      expect([ ...module.int32_array4 ]).to.eql([ 1, 123, 3, 4 ]);
-      expect(module.float64_array4x4).to.be.an('[4][4]f64');
-      const row1 = module.float64_array4x4.get(1);
-      expect(row1).to.be.an('[4]f64');
-    })
-    it('should import primitive slices', async function() {
-      this.timeout(120000);
-      const { default: module } = await importModule(resolve('./zig-samples/basic/slices-with-primitive.zig'));
-      expect([ ...module.int32_array ]).to.eql([ 123, 456, 789 ]);
-      expect(module.int32_slice).to.be.an('[]const i32');
-      expect(module.int32_slice.get(0)).to.equal(123);
-      expect([ ...module.int32_slice ]).to.eql([ 123, 456, 789 ]);
-      expect(module.u8_slice).to.have.lengthOf(11);
-      expect(module.u8_slice.get(0)).to.equal('H'.charCodeAt(0));
-      expect([ ...module.uint32_array4 ]).to.eql([ 1, 2, 3, 4 ]);
-      expect([ ...module.uint32_slice ]).to.eql([ 2, 3, 4 ]);
-      module.uint32_slice.set(1, 777);
-      expect([ ...module.uint32_slice ]).to.eql([ 2, 777, 4 ]);
-      expect([ ...module.uint32_array4 ]).to.eql([ 1, 2, 777, 4 ]);
-    })
     it('should import simple bare union', async function() {
       this.timeout(120000);
       const { default: module } = await importModule(resolve('./zig-samples/basic/bare-union-simple.zig'));
@@ -59,23 +32,6 @@ export function addTests(importModule, options) {
       const { string } = module.u8_slice;
       expect(string).to.equal('Hello world');
       expect([ ...module.i64_slice ]).to.eql([ 0n, 1n, 2n, 3n, 4n, 5n, 6n, 7n ]);
-    })
-    it('should import arrays with structs', async function() {
-      this.timeout(120000);
-      const { default: module } = await importModule(resolve('./zig-samples/basic/arrays-with-structs.zig'));
-      expect(module.array_a.valueOf()).to.eql(
-        [
-          { number1: 1, number2: 2 },
-          { number1: 3, number2: 4 },
-          { number1: 5, number2: 6 },
-          { number1: 7, number2: 8 },
-        ]
-      );
-      expect(module.array_b.valueOf()).to.eql([
-        { good: true, numbers: [ 1, 2, 3, 4 ] },
-        { good: false, numbers: [ 3, 4, 5, 6 ] },
-        { good: false, numbers: [ 2, 2, 7, 7 ] },
-      ])
     })
     it('should import structs with complex members when there are no functions', async function() {
       this.timeout(120000);
@@ -155,30 +111,6 @@ export function addTests(importModule, options) {
       expect(module.donut_a.Jelly).to.be.null;
       expect(module.donut_a.Chocolate).to.equal(5678);
       expect(Donut(module.donut_a)).to.equal(Donut.Chocolate);
-    })
-    it('should allow assignment to a pointer variable', async function() {
-      this.timeout(120000);
-      const { default: module,
-        printText,
-        allocText,
-        freeText,
-      } = await importModule(resolve('./zig-samples/basic/slice-variable.zig'));
-      // this shouln't work
-      expect(() => module.text = "This is a test").to.throw(TypeError);
-      const lines = await capture(() => {
-        printText();
-        const text = allocText("This is a test");
-        module.text = text;
-        printText();
-        module.text = module.alt_text;
-        printText();
-        freeText(text);
-      });
-      expect(lines).to.eql([
-        'Hello world',
-        'This is a test',
-        'Goodbye cruel world',
-      ]);
     })
     it('should ignore variables of unsupported types', async function() {
       this.timeout(120000);

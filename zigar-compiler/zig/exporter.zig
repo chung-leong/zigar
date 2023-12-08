@@ -989,6 +989,7 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
                 const template = try host.createTemplate(dv);
                 try host.attachTemplate(slice_structure, template, false);
             }
+            try host.finalizeShape(slice_structure);
             try host.endStructure(slice_structure);
             break :slice slice_structure;
         },

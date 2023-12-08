@@ -1,3 +1,4 @@
+import * as ArrayTests from './array/tests.js';
 import * as BoolTests from './bool/tests.js';
 import * as ComptimeFloatTests from './comptime-float/tests.js';
 import * as ComptimeIntTests from './comptime-int/tests.js';
@@ -12,6 +13,7 @@ import * as NoReturnTests from './no-return/tests.js';
 import * as NullTests from './null/tests.js';
 import * as OpaqueTests from './opaque/tests.js';
 import * as OptionalTests from './optional/tests.js';
+import * as PointerTests from './pointer/tests.js';
 import * as TypeTests from './type/tests.js';
 import * as UndefinedTests from './undefined/tests.js';
 import * as VectorTests from './vector/tests.js';
@@ -19,6 +21,7 @@ import * as VoidTests from './void/tests.js';
 
 export function addTests(importModule, options) {
   describe('Type handling', function() {
+    ArrayTests.addTests(importModule, options);
     BoolTests.addTests(importModule, options);
     ComptimeFloatTests.addTests(importModule, options);
     ComptimeIntTests.addTests(importModule, options);
@@ -33,6 +36,7 @@ export function addTests(importModule, options) {
     NullTests.addTests(importModule, options);
     OpaqueTests.addTests(importModule, options);
     OptionalTests.addTests(importModule, options);
+    PointerTests.addTests(importModule, options);
     TypeTests.addTests(importModule, options);
     UndefinedTests.addTests(importModule, options);
     VectorTests.addTests(importModule, options);
