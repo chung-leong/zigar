@@ -1,3 +1,4 @@
+import * as BoolTests from './bool/tests.js';
 import * as ComptimeFloatTests from './comptime-float/tests.js';
 import * as ComptimeIntTests from './comptime-int/tests.js';
 import * as EnumTests from './enum/tests.js';
@@ -18,6 +19,7 @@ import * as VoidTests from './void/tests.js';
 
 export function addTests(importModule, options) {
   describe('Type handling', function() {
+    BoolTests.addTests(importModule, options);
     ComptimeFloatTests.addTests(importModule, options);
     ComptimeIntTests.addTests(importModule, options);
     EnumTests.addTests(importModule, options);
