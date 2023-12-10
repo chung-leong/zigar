@@ -6,7 +6,7 @@ export function addTests(importModule, options) {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
   };    
-  describe('Int', function() {
+  describe('Bool', function() {
     it('should import bool as static variables', async function() {
       this.timeout(120000);
       const { default: module, bool3, bool4, print } = await importTest('as-static-variables');
@@ -22,6 +22,15 @@ export function addTests(importModule, options) {
       expect(module.bool1).to.be.false;
       const [ after ] = await capture(() => print());
       expect(after).to.equal('no');
+    })
+    it('should print bool arguments', async function() {
+      this.timeout(120000);
+      const { default: module, print } = await importTest('as-function-parameters');
+      const lines = await capture(() => {
+        print(true);
+        print(false);
+      });
+      expect(lines).to.eql([ 'yes', 'no' ]);
     })
   })
 }

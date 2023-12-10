@@ -13,5 +13,10 @@ export function addTests(importModule, options) {
       expect(negative).to.equal(-167);
       expect(larger).to.equal(0x1234_5678);
     })
+    it('should ignore a function accepting comptime_int as arguments', async function() {
+      this.timeout(120000);
+      const { print } = await importTest('as-function-parameters');
+      expect(print).to.undefined;
+    })
   })
 }

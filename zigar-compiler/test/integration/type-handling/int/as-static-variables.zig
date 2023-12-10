@@ -1,3 +1,5 @@
+const std = @import("std");
+
 pub var int8: i8 = 127;
 pub var uint8: u8 = 0;
 pub const int16: i16 = -44;
@@ -14,3 +16,7 @@ pub var size1: usize = 1234;
 pub var size2: isize = -1234;
 
 var private: i32 = 8;
+
+pub fn print() void {
+    std.debug.print("{d}\n", .{uint16});
+}
