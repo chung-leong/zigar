@@ -411,7 +411,7 @@ describe('Environment', function() {
         expect(s.static.template).to.equal(templ);
       })
     })
-    describe('finalizeStructure', function() {
+    describe('finalizeShape', function() {
       it('should generate constructor for a struct', function() {
         const env = new Environment();
         const s = env.beginStructure({
@@ -431,7 +431,8 @@ describe('Environment', function() {
           bitOffset: 0,
           required: false,
         }, false);
-        const constructor = env.finalizeStructure(s);
+        env.finalizeShape(s);
+        const { constructor } = s;
         const object = new constructor(undefined);
         expect(object).to.have.property('number');
       })

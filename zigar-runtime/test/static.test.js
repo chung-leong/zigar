@@ -25,7 +25,9 @@ describe('Static variable functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -71,7 +73,9 @@ describe('Static variable functions', function() {
           1: int2,
         },
       }, true);
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(Hello.superdog).to.equal(1234);
       Hello.superdog = 43;
       expect(Hello.superdog).to.equal(43);
@@ -99,7 +103,9 @@ describe('Static variable functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'Hello'
@@ -151,7 +157,9 @@ describe('Static variable functions', function() {
           1: int2,
         },
       }, true);
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(Hello.superdog).to.equal(1234);
       Hello.superdog = 43;
       expect(Hello.superdog).to.equal(43);

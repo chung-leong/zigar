@@ -7,7 +7,7 @@ import { Environment } from '../src/environment.js'
 
 describe('Error set functions', function() {
   const env = new Environment();
-  describe('finalizeErrorSet', function() {
+  describe('defineErrorSet', function() {
     beforeEach(function() {
       useAllMemberTypes();
       useAllStructureTypes();
@@ -28,7 +28,9 @@ describe('Error set functions', function() {
         type: MemberType.Object,
         slot: 8,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(Hello).to.be.a('function');
       expect(Hello.UnableToRetrieveMemoryLocation).to.be.an.instanceOf(Error);
       expect(Hello.UnableToRetrieveMemoryLocation).to.be.an('error');
@@ -61,7 +63,9 @@ describe('Error set functions', function() {
         type: MemberType.Object,
         slot: 8,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(() => new Hello()).to.throw(TypeError);
     })
     it('should make previously defined error sets its subclasses if it has all its error numbers', function() {
@@ -79,7 +83,9 @@ describe('Error set functions', function() {
         type: MemberType.Object,
         slot: 6,
       });
-      const CatError = env.finalizeStructure(catStructure);
+      env.finalizeShape(catStructure);
+      env.finalizeStructure(catStructure);
+      const { constructor: CatError } = catStructure;
       const dogStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'DogError',
@@ -94,7 +100,9 @@ describe('Error set functions', function() {
         type: MemberType.Object,
         slot: 8,
       });
-      const DogError = env.finalizeStructure(dogStructure);
+      env.finalizeShape(dogStructure);
+      env.finalizeStructure(dogStructure);
+      const { constructor: DogError } = dogStructure;
       const petStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'PetError',
@@ -119,7 +127,9 @@ describe('Error set functions', function() {
         type: MemberType.Object,
         slot: 8,
       });
-      const PetError = env.finalizeStructure(petStructure);
+      env.finalizeShape(petStructure);
+      env.finalizeStructure(petStructure);
+      const { constructor: PetError } = petStructure;
       expect(PetError.BathRequired).to.equal(DogError.BathRequired);
       expect(DogError.BathRequired).to.be.instanceOf(PetError);
       expect(CatError.CucumberEncountered).to.be.instanceOf(PetError);
@@ -150,7 +160,9 @@ describe('Error set functions', function() {
         type: MemberType.Object,
         slot: 8,
       });
-      const PetError = env.finalizeStructure(petStructure);
+      env.finalizeShape(petStructure);
+      env.finalizeStructure(petStructure);
+      const { constructor: PetError } = petStructure;
       const catStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'CatError',
@@ -165,7 +177,9 @@ describe('Error set functions', function() {
         type: MemberType.Object,
         slot: 6,
       });
-      const CatError = env.finalizeStructure(catStructure);
+      env.finalizeShape(catStructure);
+      env.finalizeStructure(catStructure);
+      const { constructor: CatError } = catStructure;
       const dogStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'DogError',
@@ -180,7 +194,9 @@ describe('Error set functions', function() {
         type: MemberType.Object,
         slot: 8,
       });
-      const DogError = env.finalizeStructure(dogStructure);
+      env.finalizeShape(dogStructure);
+      env.finalizeStructure(dogStructure);
+      const { constructor: DogError } = dogStructure;
       expect(PetError.BathRequired).to.equal(DogError.BathRequired);
       expect(DogError.BathRequired).to.be.instanceOf(PetError);
       expect(CatError.CucumberEncountered).to.be.instanceOf(PetError);

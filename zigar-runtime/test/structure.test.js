@@ -18,7 +18,9 @@ describe('Structure functions', function() {
         name: 'Hello',
         byteSize: 0
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(Hello).to.be.an('function');
     })
   })

@@ -13,13 +13,6 @@ export function defineEnumerationShape(s, env) {
       members: [ member ],
     },
   } = s;
-  /* DEV-TEST */
-  for (const member of members) {
-    if (member.bitOffset !== undefined) {
-      throw new Error(`bitOffset must be undefined for enumeration member`);
-    }
-  }
-  /* DEV-TEST-END */
   const byIndex = {};
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;

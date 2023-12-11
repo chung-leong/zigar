@@ -24,7 +24,9 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
@@ -39,7 +41,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
       expect(Int32Ptr.child).to.equal(Int32);
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
@@ -58,7 +62,9 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
@@ -73,7 +79,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
       expect(() => new Int32Ptr).to.throw(TypeError);
     })
     it('should define a pointer for pointing to a structure', function() {
@@ -97,7 +105,9 @@ describe('Pointer functions', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      const Hello = env.finalizeStructure(structStructure);
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Hello',
@@ -112,7 +122,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: structStructure,
       });
-      const HelloPtr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtr } = structure;
       const target = new Hello({ cat: 123, dog: 456 });
       const pointer = new HelloPtr(target);
       expect(pointer['*']).to.equal(target);
@@ -143,7 +155,9 @@ describe('Pointer functions', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      const Hello = env.finalizeStructure(structStructure);
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Hello',
@@ -158,7 +172,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: structStructure,
       });
-      const HelloPtr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtr } = structure;
       const object1 = new Hello({ cat: 123, dog: 456 });
       const object2 = new Hello({ cat: 101, dog: 202 });
       const pointer = new HelloPtr(object1);
@@ -187,7 +203,9 @@ describe('Pointer functions', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      const Hello = env.finalizeStructure(structStructure);
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Hello',
@@ -202,7 +220,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: structStructure,
       });
-      const HelloPtr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtr } = structure;
       const object1 = new Hello({ cat: 123, dog: 456 });
       const object2 = new Hello({ cat: 101, dog: 202 });
       const pointer = new HelloPtr(object1);
@@ -231,7 +251,9 @@ describe('Pointer functions', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      const Hello = env.finalizeStructure(structStructure);
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Hello',
@@ -246,7 +268,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: structStructure,
       });
-      const HelloPtr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtr } = structure;
       const pointer = new HelloPtr(new Hello({ cat: 123, dog: 456 }));
       expect('cat' in pointer).to.be.true;
       expect('cow' in pointer).to.be.false;
@@ -279,7 +303,9 @@ describe('Pointer functions', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      const Hello = env.finalizeStructure(structStructure);
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Hello',
@@ -295,7 +321,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: structStructure,
       });
-      const HelloPtr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtr } = structure;
       const pointer = new HelloPtr(new Hello({ cat: 123, dog: 456 }));
       const descriptor = Object.getOwnPropertyDescriptor(pointer, 'cat');
       expect(descriptor.set).to.be.undefined;
@@ -326,7 +354,9 @@ describe('Pointer functions', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      const Hello = env.finalizeStructure(structStructure);
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const { constructor: Hello } = structStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Hello',
@@ -341,7 +371,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: structStructure,
       });
-      const HelloPtr = env.finalizeStructure(ptrStructure);
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const { constructor: HelloPtr } = ptrStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '**Hello',
@@ -356,7 +388,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: ptrStructure,
       });
-      const HelloPtrPtr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtrPtr } = structure;
       const target = new Hello({ cat: 123, dog: 456 });
       const pointer = new HelloPtr(target);
       const ptrPointer = new HelloPtrPtr(pointer);
@@ -376,7 +410,9 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
@@ -392,7 +428,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
       expect(intPointer['*']).to.equal(1234);
@@ -410,7 +448,9 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
@@ -425,7 +465,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
       // no autovivification
       expect(() => new Int32Ptr(1234)).to.throw();
       expect(() => new Int32Ptr(1234n)).to.throw();
@@ -446,7 +488,9 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
@@ -461,7 +505,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
       const buffer = new ArrayBuffer(8);
       expect(() => Int32Ptr(buffer)).to.throw();
     })
@@ -486,7 +532,9 @@ describe('Pointer functions', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      const Hello = env.finalizeStructure(structStructure);
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const { constructor: Hello } = structStructure;
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Hello',
@@ -499,7 +547,9 @@ describe('Pointer functions', function() {
         byteSize: 8,
         structure: structStructure,
       });
-      const HelloSlice = env.finalizeStructure(sliceStructure);
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const { constructor: HelloSlice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]Hello',
@@ -514,7 +564,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const HelloPtr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtr } = structure;
       const pointer = new HelloPtr([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
       expect(pointer['*']).to.be.instanceOf(HelloSlice);
       expect(pointer[0].valueOf()).to.eql({ cat: 123, dog: 456 });
@@ -533,7 +585,9 @@ describe('Pointer functions', function() {
         bitSize: 32,
         byteSize: 4,
       });
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Int32',
@@ -546,7 +600,9 @@ describe('Pointer functions', function() {
         byteSize: 4,
         structure: intStructure,
       });
-      const Int32Slice = env.finalizeStructure(sliceStructure);
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const { constructor: Int32Slice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]Hello',
@@ -561,7 +617,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const HelloPtr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtr } = structure;
       const ta = new Int32Array([ 1, 2, 3, 4 ]);
       const pointer = new HelloPtr(ta);
       expect(pointer['*']).to.be.instanceOf(Int32Slice);
@@ -580,7 +638,9 @@ describe('Pointer functions', function() {
         bitSize: 32,
         byteSize: 4,
       });
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Int32',
@@ -593,7 +653,9 @@ describe('Pointer functions', function() {
         byteSize: 4,
         structure: intStructure,
       });
-      const Int32Slice = env.finalizeStructure(sliceStructure);
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const { constructor: Int32Slice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]Int32',
@@ -608,7 +670,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const Int32SlicePtr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32SlicePtr } = structure;
       const origFn = console.warn;
       let message;
       try {
@@ -632,7 +696,9 @@ describe('Pointer functions', function() {
         bitSize: 32,
         byteSize: 4,
       });
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Int32',
@@ -645,7 +711,9 @@ describe('Pointer functions', function() {
         byteSize: 4,
         structure: intStructure,
       });
-      const Int32Slice = env.finalizeStructure(sliceStructure);
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const { constructor: Int32Slice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]Int32',
@@ -663,7 +731,9 @@ describe('Pointer functions', function() {
       const before = process.env.NODE_ENV;
       process.env.NODE_ENV = 'production';
       try {
-        const Int32SlicePtr = env.finalizeStructure(structure);
+        env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32SlicePtr } = structure;
         const origFn = console.warn;
         let message;
         try {
@@ -690,7 +760,9 @@ describe('Pointer functions', function() {
         bitSize: 1,
         byteSize: 8,
       });
-      const Bool = env.finalizeStructure(boolStructure);
+      env.finalizeShape(boolStructure);
+      env.finalizeStructure(boolStructure);
+      const { constructor: Bool } = boolStructure;
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Bool',
@@ -703,7 +775,9 @@ describe('Pointer functions', function() {
         byteSize: 1,
         structure: boolStructure,
       });
-      const BoolSlice = env.finalizeStructure(sliceStructure);
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const { constructor: BoolSlice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]Bool',
@@ -718,7 +792,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const BoolSlicePtr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: BoolSlicePtr } = structure;
       const origFn = console.warn;
       let message;
       try {
@@ -742,7 +818,9 @@ describe('Pointer functions', function() {
         bitSize: 32,
         byteSize: 4,
       });
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Int32',
@@ -755,7 +833,9 @@ describe('Pointer functions', function() {
         byteSize: 4,
         structure: intStructure,
       });
-      const Int32Slice = env.finalizeStructure(sliceStructure);
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const { constructor: Int32Slice } = sliceStructure;
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         name: '[8]Int32',
@@ -769,7 +849,9 @@ describe('Pointer functions', function() {
         byteSize: 4,
         structure: intStructure,
       });
-      const Int32Array = env.finalizeStructure(arrayStructure);
+      env.finalizeShape(arrayStructure);
+      env.finalizeStructure(arrayStructure);
+      const { constructor: Int32Array } = arrayStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]Hello',
@@ -784,7 +866,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const HelloPtr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtr } = structure;
       const array = new Int32Array([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
       const pointer = new HelloPtr(array);
       expect(pointer['*']).to.be.instanceOf(Int32Slice);
@@ -804,7 +888,9 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 1,
       });
-      const U8 = env.finalizeStructure(uintStructure);
+      env.finalizeShape(uintStructure);
+      env.finalizeStructure(uintStructure);
+      const { constructor: U8 } = uintStructure;
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
@@ -817,7 +903,9 @@ describe('Pointer functions', function() {
         byteSize: 1,
         structure: uintStructure,
       });
-      const U8Slice = env.finalizeStructure(sliceStructure);
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const { constructor: U8Slice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]u8',
@@ -832,7 +920,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const U8SlicePtr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: U8SlicePtr } = structure;
       const buffer = new ArrayBuffer(8);
       const dv = new DataView(buffer);
       for (let i = 0; i < dv.byteLength; i++) {
@@ -863,7 +953,9 @@ describe('Pointer functions', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      const Hello = env.finalizeStructure(structStructure);
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const { constructor: Hello } = structStructure;
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Hello',
@@ -876,7 +968,9 @@ describe('Pointer functions', function() {
         byteSize: 8,
         structure: structStructure,
       });
-      const HelloSlice = env.finalizeStructure(sliceStructure);
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const { constructor: HelloSlice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]Hello',
@@ -891,7 +985,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const HelloPtr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtr } = structure;
       const buffer = new ArrayBuffer(8 * 3);
       const dv = new DataView(buffer);
       for (let i = 0, multiplier = 1; i < 3; i++, multiplier *= 10) {
@@ -923,7 +1019,9 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 1,
       });
-      const U8 = env.finalizeStructure(uintStructure);
+      env.finalizeShape(uintStructure);
+      env.finalizeStructure(uintStructure);
+      const { constructor: U8 } = uintStructure;
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
@@ -936,7 +1034,9 @@ describe('Pointer functions', function() {
         byteSize: 1,
         structure: uintStructure,
       });
-      const U8Slice = env.finalizeStructure(sliceStructure);
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const { constructor: U8Slice } = sliceStructure;
       const constStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]const u8',
@@ -952,7 +1052,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const ConstU8SlicePtr = env.finalizeStructure(constStructure);
+      env.finalizeShape(constStructure);
+      env.finalizeStructure(constStructure);
+      const { constructor: ConstU8SlicePtr } = constStructure;
       const nonConstStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]u8',
@@ -968,7 +1070,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const U8SlicePtr = env.finalizeStructure(nonConstStructure);
+      env.finalizeShape(nonConstStructure);
+      env.finalizeStructure(nonConstStructure);
+      const { constructor: U8SlicePtr } = nonConstStructure;
       const buffer = new ArrayBuffer(8);
       const dv = new DataView(buffer);
       for (let i = 0; i < dv.byteLength; i++) {
@@ -996,7 +1100,9 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 1,
       });
-      const U8 = env.finalizeStructure(uintStructure);
+      env.finalizeShape(uintStructure);
+      env.finalizeStructure(uintStructure);
+      const { constructor: U8 } = uintStructure;
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
@@ -1009,7 +1115,9 @@ describe('Pointer functions', function() {
         byteSize: 1,
         structure: uintStructure,
       });
-      const U8Slice = env.finalizeStructure(sliceStructure);
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const { constructor: U8Slice } = sliceStructure;
       const constStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]const u8',
@@ -1025,7 +1133,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const ConstU8SlicePtr = env.finalizeStructure(constStructure);
+      env.finalizeShape(constStructure);
+      env.finalizeStructure(constStructure);
+      const { constructor: ConstU8SlicePtr } = constStructure;
       const nonConstStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]u8',
@@ -1041,7 +1151,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const U8SlicePtr = env.finalizeStructure(nonConstStructure);
+      env.finalizeShape(nonConstStructure);
+      env.finalizeStructure(nonConstStructure);
+      const { constructor: U8SlicePtr } = nonConstStructure;
       const buffer = new ArrayBuffer(8);
       const dv = new DataView(buffer);
       for (let i = 0; i < dv.byteLength; i++) {
@@ -1063,7 +1175,9 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
@@ -1078,7 +1192,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
       const int32 = new Int32(1234);
       const intPtr = new Int32Ptr(int32);
       intPtr.hello = "Hello";
@@ -1102,7 +1218,9 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
@@ -1118,7 +1236,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
       const int32 = new Int32(1234);
       const intPtr = new Int32Ptr(int32);
       expect(() => intPtr.$ = int32).to.not.throw();
@@ -1139,7 +1259,9 @@ describe('Pointer functions', function() {
       env.obtainFixedView = (address, len) => {
         return new DataView(new ArrayBuffer(4));
       };
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
@@ -1156,7 +1278,9 @@ describe('Pointer functions', function() {
         structure: intStructure,
       });
       const dv = new DataView(new SharedArrayBuffer(8));
-      const Int32Ptr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
       const int32 = new Int32(1234);
       const intPtr = Int32Ptr.call(ENVIRONMENT, dv);
       expect(() => intPtr.$ = int32).to.throw(TypeError)
@@ -1178,7 +1302,9 @@ describe('Pointer functions', function() {
       env.obtainFixedView = (address, len) => {
         return new DataView(new ArrayBuffer(4));
       };
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
@@ -1195,7 +1321,9 @@ describe('Pointer functions', function() {
         structure: intStructure,
       });
       const dv = new DataView(new SharedArrayBuffer(8));
-      const Int32Ptr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
       const int32 = new Int32(1234);
       const intPtr1 = Int32Ptr.call(ENVIRONMENT, dv);
       const intPtr2 = new Int32Ptr(int32);
@@ -1221,7 +1349,9 @@ describe('Pointer functions', function() {
       env.obtainFixedView = (address, len) => {
         return new DataView(new ArrayBuffer(4));
       };
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
@@ -1237,7 +1367,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
       const dv1 = new DataView(new SharedArrayBuffer(4));
       const dv2 = new DataView(new SharedArrayBuffer(8));
       dv1.buffer.address = 0xbbbbbbbbn;
@@ -1268,7 +1400,9 @@ describe('Pointer functions', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      const Hello = env.finalizeStructure(structStructure);
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const { constructor: Hello } = structStructure;
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Hello',
@@ -1281,7 +1415,9 @@ describe('Pointer functions', function() {
         byteSize: 8,
         structure: structStructure,
       });
-      const HelloSlice = env.finalizeStructure(sliceStructure);
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const { constructor: HelloSlice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]Hello',
@@ -1296,7 +1432,9 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const HelloPtr = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtr } = structure;
       env.obtainFixedView = (address, len) => {
         const buffer = new SharedArrayBuffer(len);
         buffer.address = address;

@@ -53,7 +53,8 @@ describe('Method functions', function() {
         bitOffset: 64,
         byteSize: 4,
       });
-      const c = env.finalizeStructure(argStruct);
+      env.finalizeShape(argStruct);
+      env.finalizeStructure(argStruct);
       let recv;
       const thunk = function(dv) {
         recv = this;
@@ -67,7 +68,9 @@ describe('Method functions', function() {
         isStaticOnly: false,
         thunk,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello({});
       expect(Hello.merge).to.be.a('function');
       expect(Hello.merge).to.have.property('name', 'merge');
@@ -149,7 +152,9 @@ describe('Method functions', function() {
         isStaticOnly: false,
         thunk,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(Hello.foo).to.be.a('function');
       expect(Hello.foo).to.have.property('name', 'foo');
       expect(Hello.prototype.foo).to.be.a('function');

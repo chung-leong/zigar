@@ -2,13 +2,13 @@ import { expect } from 'chai';
 
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { MEMORY, SLOTS } from '../src/symbol.js';
+import { ENVIRONMENT, MEMORY, SLOTS } from '../src/symbol.js';
 import { NodeEnvironment } from '../src/environment.js'
 import { encodeBase64 } from '../src/text.js';
 
 describe('Struct functions', function() {
   const env = new NodeEnvironment();
-  describe('finalizeStruct', function() {
+  describe('defineStructShape', function() {
     beforeEach(function() {
       useAllMemberTypes();
       useAllStructureTypes();
@@ -42,7 +42,9 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(Hello).to.be.a('function');
       const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
@@ -71,7 +73,9 @@ describe('Struct functions', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello({ dog: 5, cat: 6 });
       expect(object.dog).to.equal(5);
       expect(object.cat).to.equal(6);
@@ -96,7 +100,9 @@ describe('Struct functions', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const initObj = Object.create({ dog: 5 });
       Object.defineProperty(initObj, 'cat', { value: 6 });
       const object = new Hello(initObj);
@@ -125,7 +131,9 @@ describe('Struct functions', function() {
         bitOffset: 32,
         byteSize: 4,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(() => new Hello).to.throw(TypeError);
     })
     it('should work correctly with big-endian data', function() {
@@ -159,7 +167,9 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(Hello).to.be.a('function');
       const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
@@ -197,7 +207,9 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello({});
       object.dog = 72;
       expect(object.dog).to.equal(72);
@@ -235,7 +247,9 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello({});
       expect(object.dataView).to.be.instanceOf(DataView);
     })
@@ -268,7 +282,9 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello({});
       expect(() => object.dog = 0x1FFFFFFFF).to.throw(TypeError);
     })
@@ -303,7 +319,9 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello({});
       expect(() => object.dog = 0x1FFFFFFFF).to.not.throw();
     })
@@ -333,7 +351,9 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello({});
       expect(object.dog).to.be.false;
       expect(object.cat).to.be.true;
@@ -369,7 +389,9 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello({});
       expect(object.dog).to.equal(3);
       expect(object.cat).to.equal(1);
@@ -407,7 +429,9 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello({});
       expect(object.dog).to.equal(0);
       expect(object.cat).to.equal(2);
@@ -432,7 +456,9 @@ describe('Struct functions', function() {
         bitSize: 32,
         bitOffset: 32,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(() => new Hello({})).to.throw(TypeError)
         .with.property('message').that.contains('dog, cat');
       expect(() => new Hello({ dog: 1234 })).to.throw(TypeError)
@@ -461,7 +487,9 @@ describe('Struct functions', function() {
         bitSize: 32,
         bitOffset: 32,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(() => new Hello({ dog: 1234, cat: 4567, turkey: 1 })).to.throw(TypeError)
         .with.property('message').that.contains('turkey');
     })
@@ -485,7 +513,9 @@ describe('Struct functions', function() {
         bitSize: 32,
         bitOffset: 32,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(() => new Hello(5)).to.throw(TypeError)
         .with.property('message').that.does.not.contain('dog');
     })
@@ -513,7 +543,9 @@ describe('Struct functions', function() {
       env.attachTemplate(structure, {
         [MEMORY]: dv,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(() => new Hello({})).to.throw();
       const object = new Hello({ cat: 4567 });
       expect(object.dog).to.equal(1234);
@@ -539,7 +571,9 @@ describe('Struct functions', function() {
         bitSize: 32,
         bitOffset: 32,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const dv = new DataView(new ArrayBuffer(8));
       dv.setUint32(0, 1, true);
       dv.setUint32(4, 7, true);
@@ -568,7 +602,9 @@ describe('Struct functions', function() {
         bitSize: 32,
         bitOffset: 32,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello(undefined);
       const dv = new DataView(new ArrayBuffer(8));
       dv.setUint32(0, 15, true);
@@ -597,7 +633,9 @@ describe('Struct functions', function() {
         bitSize: 32,
         bitOffset: 32,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const typedArray = new Uint32Array([ 123, 456 ]);
       const dataView = new DataView(typedArray.buffer);
       const object = new Hello({ dataView });
@@ -624,7 +662,9 @@ describe('Struct functions', function() {
         bitSize: 32,
         bitOffset: 32,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello(undefined);
       const typedArray = new Uint32Array([ 123, 456 ]);
       object.dataView = new DataView(typedArray.buffer);
@@ -657,7 +697,9 @@ describe('Struct functions', function() {
       env.attachTemplate(structure, {
         [MEMORY]: dv,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello({});
       expect(object.valueOf()).to.eql({ dog: 1234, cat: 4567 });
       object.dog = 777;
@@ -680,7 +722,9 @@ describe('Struct functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      const StructA = env.finalizeStructure(structureA);
+      env.finalizeShape(structureA);
+      env.finalizeStructure(structureA);
+      const { constructor: StructA } = structureA;
       const structureB = env.beginStructure({
         type: StructureType.Struct,
         name: 'StructB',
@@ -695,7 +739,9 @@ describe('Struct functions', function() {
         slot: 0,
         structure: structureA,
       });
-      const StructB = env.finalizeStructure(structureB);
+      env.finalizeShape(structureB);
+      env.finalizeStructure(structureB);
+      const { constructor: StructB } = structureB;
       const buffer = new ArrayBuffer(8);
       const dv = new DataView(buffer, 4, 4);
       dv.setInt32(0, 1234, true);
@@ -714,7 +760,9 @@ describe('Struct functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
@@ -728,7 +776,9 @@ describe('Struct functions', function() {
         byteSize: 8,
         structure: intStructure,
       });
-      const Int32Ptr = env.finalizeStructure(ptrStructure);
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const { constructor: Int32Ptr } = ptrStructure;
       const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -769,7 +819,9 @@ describe('Struct functions', function() {
           1: intPtr2,
         }
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello({});
       expect(object.dog['*']).to.equal(1234);
       expect(object.cat['*']).to.equal(4567);
@@ -790,7 +842,9 @@ describe('Struct functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      const Int32 = env.finalizeStructure(intStructure);
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*Int32',
@@ -805,7 +859,9 @@ describe('Struct functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const Int32Ptr = env.finalizeStructure(ptrStructure);
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const { constructor: Int32Ptr } = ptrStructure;
       const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -840,7 +896,9 @@ describe('Struct functions', function() {
           1: intPtr2,
         }
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello({ dog: int1 });
       expect(object.dog['*']).to.equal(1234);
       expect(object.cat['*']).to.equal(4567);
@@ -874,13 +932,29 @@ describe('Struct functions', function() {
         })(),
         [SLOTS]: {},
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(Hello.name).to.equal('Hello');
       const object = new Hello({});
       const desc = Object.prototype.toString.call(object);
       expect(desc).to.equal('[object zig.super.Hello]');
     })
     it('should handle comptime fields', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'zig.super.Hello',
@@ -890,22 +964,30 @@ describe('Struct functions', function() {
         name: 'dog',
         type: MemberType.Comptime,
         slot: 0,
+        structure: { type: StructureType.Primitive }
       });
       env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Comptime,
         slot: 1,
+        structure: { type: StructureType.Primitive }
       });
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: { '*': 123  },
-          1: { '*': 456  },
+          0: Int32.call(ENVIRONMENT, viewOf(new Int32Array([ 123 ]))),
+          1: Int32.call(ENVIRONMENT, viewOf(new Int32Array([ 456 ]))),
         },
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello({});
       expect(object.dog).to.equal(123);
       expect(object.cat).to.equal(456);
     })
   })
 })
+
+function viewOf(ta) {
+  return new DataView(ta.buffer);
+}

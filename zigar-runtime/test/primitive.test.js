@@ -12,7 +12,7 @@ import { encodeBase64 } from '../src/text.js';
 
 describe('Primitive functions', function() {
   const env = new NodeEnvironment();
-  describe('finalizePrimitive', function() {
+  describe('definePrimitive', function() {
     beforeEach(function() {
       useAllMemberTypes();
       useAllStructureTypes();
@@ -29,7 +29,9 @@ describe('Primitive functions', function() {
         bitOffset: 0,
         byteSize: 8,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(Hello).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(8));
       dv.setBigUint64(0, 0x7FFFFFFFFFFFFFFFn, true);
@@ -49,7 +51,9 @@ describe('Primitive functions', function() {
         bitOffset: 0,
         byteSize: 8,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(() => new Hello).to.throw(TypeError);
     })
     it('should initialize a structure with a structure of the same type', function() {
@@ -64,7 +68,9 @@ describe('Primitive functions', function() {
         bitOffset: 0,
         byteSize: 8,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello(12345n);
       expect(object.$).to.equal(12345n);
       const object2 = new Hello(object);
@@ -82,7 +88,9 @@ describe('Primitive functions', function() {
         bitOffset: 0,
         byteSize: 8,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello(12345n);
       expect(object.dataView).to.be.an.instanceOf(DataView);
       expect(object.typedArray).to.be.an.instanceOf(BigInt64Array);
@@ -99,7 +107,9 @@ describe('Primitive functions', function() {
         bitOffset: 0,
         byteSize: 16,
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello(12345n);
       expect(object.dataView).to.be.an.instanceOf(DataView);
       expect(object.typedArray).to.be.undefined;
@@ -116,7 +126,9 @@ describe('Primitive functions', function() {
         bitSize: 64,
         byteSize: 8,
       });
-      const I64 = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: I64 } = structure;
       const str = '\u0001\u0000\u0000\u0000\u0000\u0000\u0000\u0000';
       const base64 = encodeBase64(Buffer.from(str));
       const int = new I64({ base64 });
@@ -134,7 +146,9 @@ describe('Primitive functions', function() {
         bitSize: 64,
         byteSize: 8,
       });
-      const I64 = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: I64 } = structure;
       const str = '\u0001\u0000\u0000\u0000\u0000\u0000\u0000\u0000';
       const int = new I64(0n);
       int.base64 = encodeBase64(Buffer.from(str));
@@ -152,7 +166,9 @@ describe('Primitive functions', function() {
         bitSize: 64,
         byteSize: 8,
       });
-      const I64 = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: I64 } = structure;
       const typedArray = new BigInt64Array([ 1234n ]);
       const int = new I64({ typedArray });
       expect(int.$).to.equal(typedArray[0]);
@@ -171,7 +187,9 @@ describe('Primitive functions', function() {
         bitSize: 64,
         byteSize: 8,
       });
-      const I64 = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: I64 } = structure;
       const int = new I64(77n);
       const typedArray = new BigInt64Array([ 1234n ]);
       int.typedArray = typedArray;
@@ -189,7 +207,9 @@ describe('Primitive functions', function() {
         bitSize: 64,
         byteSize: 8,
       });
-      const I64 = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: I64 } = structure;
       const typedArray = new BigInt64Array([ 1234n ]);
       const int = I64(typedArray);
       expect(int.$).to.equal(typedArray[0]);
@@ -208,7 +228,9 @@ describe('Primitive functions', function() {
         bitSize: 64,
         byteSize: 8,
       });
-      const I64 = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: I64 } = structure;
       expect(() => new I64({ dogmeat: 5 })).to.throw(TypeError);
     })
     it('should throw when given an empty object', function() {
@@ -223,7 +245,9 @@ describe('Primitive functions', function() {
         bitSize: 64,
         byteSize: 8,
       });
-      const I64 = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: I64 } = structure;
       expect(() => new I64({})).to.throw(TypeError);
     })
 

@@ -7,7 +7,7 @@ import { NodeEnvironment } from '../src/environment.js'
 
 describe('ArgStruct functions', function() {
   const env = new NodeEnvironment();
-  describe('finalizeArgStruct', function() {
+  describe('defineArgStruct', function() {
     beforeEach(function() {
       useAllMemberTypes();
       useAllStructureTypes();
@@ -39,7 +39,9 @@ describe('ArgStruct functions', function() {
         bitOffset: 64,
         byteSize: 4,
       });
-      const ArgStruct = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: ArgStruct } = structure;
       expect(ArgStruct).to.be.a('function');
       const object = new ArgStruct([ 123, 456 ]);
       object.retval = 777;
@@ -67,6 +69,7 @@ describe('ArgStruct functions', function() {
         bitOffset: 32,
         byteSize: 4,
       });
+      env.finalizeShape(childStructure);
       env.finalizeStructure(childStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
@@ -96,7 +99,9 @@ describe('ArgStruct functions', function() {
         bitOffset: 64,
         byteSize: 4,
       });
-      const ArgStruct = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: ArgStruct } = structure;
       const object = new ArgStruct([ { dog: 1234, cat: 4567 }, 789 ]);
       expect(object.pet.valueOf()).to.eql({ dog: 1234, cat: 4567 });
     })
@@ -127,7 +132,9 @@ describe('ArgStruct functions', function() {
         bitOffset: 64,
         byteSize: 4,
       });
-      const ArgStruct = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: ArgStruct } = structure;
       expect(() => new ArgStruct([ 123 ])).to.throw();
       expect(() => new ArgStruct([ 123, 456, 789 ])).to.throw();
     })
@@ -158,7 +165,9 @@ describe('ArgStruct functions', function() {
         bitOffset: 64,
         byteSize: 4,
       });
-      const ArgStruct = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: ArgStruct } = structure;
       expect(() => new ArgStruct([ 123, 456n ])).to.throw(TypeError)
         .with.property('message').that.contains('args[1]');
     })

@@ -25,7 +25,9 @@ describe('Vector functions', function() {
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array },
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(Hello).to.be.a('function');
       expect(Hello.child).to.equal(constructor);
       const object = new Hello(new Uint32Array([ 1, 2, 3, 4 ]));
@@ -51,7 +53,9 @@ describe('Vector functions', function() {
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array },
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(() => new Hello).to.throw(TypeError);
     })
     it('should define vector that is iterable', function() {
@@ -67,7 +71,9 @@ describe('Vector functions', function() {
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array },
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const dv = new DataView(new ArrayBuffer(4 * 8));
       dv.setUint32(0, 1234, true);
       dv.setUint32(16, 4567, true);
@@ -91,7 +97,9 @@ describe('Vector functions', function() {
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array },
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const dv = new DataView(new ArrayBuffer(4 * 8));
       dv.setUint32(0, 1234, true);
       dv.setUint32(16, 4567, true);
@@ -119,7 +127,9 @@ describe('Vector functions', function() {
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array },
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const buffer = new ArrayBuffer(32);
       const dv = new DataView(buffer, 16, 16);
       dv.setUint32(0, 1234, true);
@@ -140,7 +150,9 @@ describe('Vector functions', function() {
         byteSize: 4,
         structure: { constructor, typedArray: Float32Array },
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(Hello).to.be.a('function');
       const object = new Hello(new Float32Array([ 0.25, 1.5, 2.5, 3.5 ]));
       expect(object[0]).to.equal(0.25);
@@ -164,7 +176,9 @@ describe('Vector functions', function() {
         byteSize: 8,
         structure: { constructor, typedArray: BigInt64Array },
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello([ 12345n, 12345n, 12345n ]);
       expect(object.dataView).to.be.an.instanceOf(DataView);
       expect(object.typedArray).to.be.an.instanceOf(BigInt64Array);
@@ -182,7 +196,9 @@ describe('Vector functions', function() {
         byteSize: 16,
         structure: { constructor, typedArray: null },
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello([ 12345n, 12345n, 12345n ]);
       expect(object.dataView).to.be.an.instanceOf(DataView);
       expect(object.typedArray).to.be.undefined;
@@ -200,7 +216,9 @@ describe('Vector functions', function() {
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array },
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(Hello).to.be.a('function');
       const ta = new Uint32Array([ 1, 2, 3, 4 ]);
       const object = Hello(ta);
@@ -222,7 +240,9 @@ describe('Vector functions', function() {
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array },
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const object = new Hello([ 1, 2, 3, 4 ]);
       const object2 = new Hello(object);
       expect([ ...object2 ]).to.eql([ 1, 2, 3, 4 ]);
@@ -240,7 +260,9 @@ describe('Vector functions', function() {
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array },
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       const generate = function*() {
         for (let i = 0; i < 4; i++) {
           yield i + 1;
@@ -264,7 +286,9 @@ describe('Vector functions', function() {
         byteSize: 4,
         structure: { constructor: Uint32, typedArray: Uint32Array },
       });
-      const Vector = env.finalizeStructure(vectorStructure);
+      env.finalizeShape(vectorStructure)
+      env.finalizeStructure(vectorStructure)
+      const { constructor: Vector } = vectorStructure;
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         name: 'Array',
@@ -277,7 +301,9 @@ describe('Vector functions', function() {
         byteSize: 4,
         structure: { constructor: Uint32 },
       });
-      const Array = env.finalizeStructure(arrayStructure);
+      env.finalizeShape(arrayStructure);
+      env.finalizeStructure(arrayStructure);
+      const { constructor: Array } = arrayStructure;
       const array = new Array([ 1, 2, 3, 4 ]);
       const vector = Vector(array);
       expect([ ...vector ]).to.eql([ 1, 2, 3, 4 ]);
@@ -297,7 +323,9 @@ describe('Vector functions', function() {
           constructor: function() {},
         },
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(() => new Hello([ 1, 2, 3 ])).to.throw(TypeError)
         .with.property('message').that.contains('4 elements')
         .and.that.contains('3 initializers');
@@ -318,7 +346,9 @@ describe('Vector functions', function() {
           typedArray: Uint32Array,
         },
       });
-      const Hello = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
       expect(() => new Hello(1)).to.throw(TypeError)
         .with.property('message').that.contains('an array')
         .and.that.contains('Uint32Array');

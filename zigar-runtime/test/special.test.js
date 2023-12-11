@@ -295,7 +295,8 @@ describe('Special property functions', function() {
         bitOffset: 32,
         bitSize: 32,
       });
-      const Hello = env.finalizeStructure(structStructure);
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         name: 'HelloArray',
@@ -308,7 +309,8 @@ describe('Special property functions', function() {
         byteSize: 8,
         structure: structStructure,
       });
-      const HelloArray = env.finalizeStructure(arrayStructure);
+      env.finalizeShape(arrayStructure);
+      env.finalizeStructure(arrayStructure);
       const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Complex',
@@ -340,7 +342,9 @@ describe('Special property functions', function() {
         byteSize: 8,
         isRequired: true,
       });
-      const Complex = env.finalizeStructure(structure);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Complex } = structure;
       const data = {
         animals: [
           { dog: 1, cat: 2 },
@@ -368,6 +372,7 @@ describe('Special property functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array },
       });
+      env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const keys = getSpecialKeys(structure);
       expect(keys).to.eql([ 'dataView', 'base64', 'string', 'typedArray' ]);
@@ -384,6 +389,7 @@ describe('Special property functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Int8Array },
       });
+      env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const keys = getSpecialKeys(structure);
       expect(keys).to.eql([ 'dataView', 'base64', 'typedArray' ]);
@@ -400,6 +406,7 @@ describe('Special property functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array },
       });
+      env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const keys = getSpecialKeys(structure);
       expect(keys).to.eql([ 'dataView', 'base64', 'string', 'typedArray' ]);
@@ -416,6 +423,7 @@ describe('Special property functions', function() {
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array },
       });
+      env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const keys = getSpecialKeys(structure);
       expect(keys).to.eql([ 'dataView', 'base64', 'string', 'typedArray' ]);
@@ -432,6 +440,7 @@ describe('Special property functions', function() {
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array },
       });
+      env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const keys = getSpecialKeys(structure);
       expect(keys).to.eql([ 'dataView', 'base64', 'typedArray' ]);
