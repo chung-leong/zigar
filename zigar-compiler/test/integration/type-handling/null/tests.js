@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import { capture } from '../../capture.js';
 
 export function addTests(importModule, options) {
   const importTest = async (name) => {
@@ -10,6 +11,11 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { default: module } = await importTest('as-static-variables');
       expect(module.weird).to.be.null;
+    })
+    it('should ignore a function accepting @TypeOf(null) as arguments', async function() {
+      this.timeout(120000);
+      const { print } = await importTest('as-function-parameters');
+      expect(print).to.undefined;
     })
   })
 }

@@ -36,6 +36,14 @@ export function addTests(importModule, options) {
         '3.141592653589793 3.141592653589793e+00 3.141592653589793e+00',
       ]);
     })
-
+    it('should return float', async function() {
+      this.timeout(120000);
+      const { default: module } = await importTest('as-return-value');
+      expect(module.getFloat16()).to.equal(-44.40625);
+      expect(module.getFloat32()).to.equal(0.1234000027179718);
+      expect(module.getFloat64()).to.equal(Math.PI);
+      expect(module.getFloat80()).to.equal(Math.PI);
+      expect(module.getFloat128()).to.equal(Math.PI);
+    })
   })
 }

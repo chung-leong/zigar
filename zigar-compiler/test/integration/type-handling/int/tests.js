@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import { arch } from 'os';
 import { capture } from '../../capture.js';
 
 export function addTests(importModule, options) {
@@ -45,6 +46,24 @@ export function addTests(importModule, options) {
         '221 -1234',
         '1fffffffffffffff aaaaaaaaaaaaaaaaaaaaaaab' 
       ]);
+    })
+    it('should return int', async function() {
+      this.timeout(120000);
+      const { default: module } = await importTest('as-return-value');
+      expect(module.getInt8()).to.equal(127);
+      expect(module.getUint8()).to.equal(0);
+      expect(module.getInt16()).to.equal(-44);
+      expect(module.getUint16()).to.equal(44);
+      expect(module.getInt32()).to.equal(1234);
+      expect(module.getUint32()).to.equal(34567);
+      expect(module.getInt64()).to.equal(0x1FFF_FFFF_FFFF_FFFFn);
+      expect(module.getUint64()).to.equal(0xFFFF_FFFF_FFFF_FFFFn);
+      expect(module.getIsize()).to.equal(1000);
+      if (/32/.test(arch())) {
+        expect(module.getUsize()).to.equal(0x7FFF_FFFF);
+      } else {
+        expect(module.getUsize()).to.equal(0x7FFF_FFFF_FFFF_FFFFn);
+      }
     })
   })
 }

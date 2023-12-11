@@ -1683,27 +1683,23 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
     const ns = struct {
         fn tryFunction(host: HostT, arg_ptr: *ArgT) !void {
             // extract arguments from argument struct
-            if (@sizeOf(ArgT) != 0) {
-                var args: Args = undefined;
-                const fields = @typeInfo(Args).Struct.fields;
-                comptime var index = 0;
-                inline for (fields, 0..) |field, i| {
-                    if (field.type == std.mem.Allocator) {
-                        args[i] = createAllocator(&host);
-                    } else {
-                        const name = std.fmt.comptimePrint("{d}", .{index});
-                        // get the argument only if it isn't empty
-                        if (comptime @sizeOf(@TypeOf(@field(arg_ptr.*, name))) > 0) {
-                            args[i] = @field(arg_ptr.*, name);
-                        }
-                        index += 1;
+            var args: Args = undefined;
+            const fields = @typeInfo(Args).Struct.fields;
+            comptime var index = 0;
+            inline for (fields, 0..) |field, i| {
+                if (field.type == std.mem.Allocator) {
+                    args[i] = createAllocator(&host);
+                } else {
+                    const name = std.fmt.comptimePrint("{d}", .{index});
+                    // get the argument only if it isn't empty
+                    if (comptime @sizeOf(@TypeOf(@field(arg_ptr.*, name))) > 0) {
+                        args[i] = @field(arg_ptr.*, name);
                     }
+                    index += 1;
                 }
-                // never inline the function so its name would show up in the trace
-                arg_ptr.*.retval = @call(.never_inline, function, args);
-            } else {
-                @call(.never_inline, function, .{});
             }
+            // never inline the function so its name would show up in the trace
+            arg_ptr.*.retval = @call(.never_inline, function, args);
         }
 
         fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
