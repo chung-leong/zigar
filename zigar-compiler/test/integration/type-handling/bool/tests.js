@@ -32,5 +32,30 @@ export function addTests(importModule, options) {
       });
       expect(lines).to.eql([ 'yes', 'no' ]);
     })
+    it('should return bool', async function() {
+      this.timeout(120000);
+      const { default: module } = await importTest('as-return-value');
+      expect(module.getTrue()).to.equal(true);
+      expect(module.getFalse()).to.equal(false);
+    })
+    it('should handle bool in array', async function() {
+      this.timeout(120000);
+      const { default: module, array_const, print } = await importTest('array-of');      
+      expect(module.array.length).to.equal(4);
+      expect([ ...module.array ]).to.eql([ true, false, false, true ]);
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('{ true, false, false, true }');
+      module.array[2] = true;
+      const [ after1 ] = await capture(() => print());      
+      expect(after1).to.equal('{ true, false, true, true }');
+      module.array = [ true, true, true, true ];
+      const [ after2 ] = await capture(() => print());      
+      expect(after2).to.equal('{ true, true, true, true }');      
+      // TODO: #26
+      // expect(() => array_const[0] = true).to.throw();
+      expect(() => module.array_const = [ false, false, false, false ]).to.throw();
+      expect(() => module.array = [ false, false, false ]).to.throw();
+    })
+
   })
 }

@@ -18,5 +18,10 @@ export function addTests(importModule, options) {
       const { print } = await importTest('as-function-parameters');
       expect(print).to.undefined;
     })
+    it('should ignore a function returning comptime_int', async function() {
+      this.timeout(120000);
+      const { getComptimeInt } = await importTest('as-function-parameters');
+      expect(getComptimeInt).to.undefined;
+    })
   })
 }

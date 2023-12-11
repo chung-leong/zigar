@@ -17,5 +17,10 @@ export function addTests(importModule, options) {
       const { print } = await importTest('as-function-parameters');
       expect(print).to.undefined;
     })
+    it('should ignore a function returning @TypeOf(null)', async function() {
+      this.timeout(120000);
+      const { getNull } = await importTest('as-function-parameters');
+      expect(getNull).to.undefined;
+    })
   })
 }
