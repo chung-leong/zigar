@@ -45,5 +45,28 @@ export function addTests(importModule, options) {
       expect(module.getFloat80()).to.equal(Math.PI);
       expect(module.getFloat128()).to.equal(Math.PI);
     })
+    it('should handle float in array', async function() {
+      this.timeout(120000);
+      const { default: module, print1, print2, print3 } = await importTest('array-of');
+      expect([ ...module.array1 ]).to.eql([ 1.25, 2.25, 3.25, 4.25 ]);
+      expect([ ...module.array2 ]).to.eql([ 1.1, 2.1, 3.1, 4.1 ]);
+      // TODO: #236
+      // expect([ ...module.array3 ]).to.eql([ 1.1, 2.1, 3.1, 4.1 ]);
+      const [ before1 ] = await capture(() => print1());
+      expect(before1).to.equal('{ 1.25e+00, 2.25e+00, 3.25e+00, 4.25e+00 }');
+      module.array1 = [ 3.5, 3.5, 3.5, 3.5 ];
+      const [ after1 ] = await capture(() => print1());
+      expect(after1).to.equal('{ 3.5e+00, 3.5e+00, 3.5e+00, 3.5e+00 }');
+      const [ before2 ] = await capture(() => print2());
+      expect(before2).to.equal('{ 1.1e+00, 2.1e+00, 3.1e+00, 4.1e+00 }');
+      module.array2 = [ 3.5, 3.5, 3.5, 3.5 ];
+      const [ after2 ] = await capture(() => print2());
+      expect(after2).to.equal('{ 3.5e+00, 3.5e+00, 3.5e+00, 3.5e+00 }');
+      const [ before3 ] = await capture(() => print3());
+      expect(before3).to.equal('{ 1.1e+00, 2.1e+00, 3.1e+00, 4.1e+00 }');
+      module.array3 = [ 3.5, 3.5, 3.5, 3.5 ];
+      const [ after3 ] = await capture(() => print1());
+      expect(after3).to.equal('{ 3.5e+00, 3.5e+00, 3.5e+00, 3.5e+00 }');
+    })
   })
 }

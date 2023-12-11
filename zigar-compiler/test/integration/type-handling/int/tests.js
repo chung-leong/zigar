@@ -65,5 +65,27 @@ export function addTests(importModule, options) {
         expect(module.getUsize()).to.equal(0x7FFF_FFFF_FFFF_FFFFn);
       }
     })
+    it('should handle int in array', async function() {
+      this.timeout(120000);
+      const { default: module, print1, print2, print3 } = await importTest('array-of');
+      expect([ ...module.array1 ]).to.eql([ 1, 2, 3, 4 ]);
+      expect([ ...module.array2 ]).to.eql([ 1, 2, 3, 4 ]);
+      expect([ ...module.array3 ]).to.eql([ 1n, 2n, 3n, 4n ]);
+      const [ before1 ] = await capture(() => print1());
+      expect(before1).to.equal('{ 1, 2, 3, 4 }');
+      module.array1 = [ 3, 3, 3, 3 ];
+      const [ after1 ] = await capture(() => print1());
+      expect(after1).to.equal('{ 3, 3, 3, 3 }');
+      const [ before2 ] = await capture(() => print2());
+      expect(before2).to.equal('{ 1, 2, 3, 4 }');
+      module.array2 = [ 3, 3, 3, 3 ];
+      const [ after2 ] = await capture(() => print2());
+      expect(after2).to.equal('{ 3, 3, 3, 3 }');
+      const [ before3 ] = await capture(() => print3());
+      expect(before3).to.equal('{ 1, 2, 3, 4 }');
+      module.array3 = [ 3n, 3n, 3n, 3n ];
+      const [ after3 ] = await capture(() => print1());
+      expect(after3).to.equal('{ 3, 3, 3, 3 }');
+    })
   })
 }

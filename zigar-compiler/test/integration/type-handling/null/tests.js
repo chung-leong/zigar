@@ -22,5 +22,10 @@ export function addTests(importModule, options) {
       const { getNull } = await importTest('as-function-parameters');
       expect(getNull).to.undefined;
     })
+    it('should handle @TypeOf(null) in array', async function() {
+      this.timeout(120000);
+      const { array } = await importTest('array-of');
+      expect([ ...array ]).to.eql([ null, null, null, null ]);
+    })
   })
 }
