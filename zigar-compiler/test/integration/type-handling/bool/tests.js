@@ -176,6 +176,5 @@ export function addTests(importModule, options) {
       expect(() => module.vector_const = [ false, false, false, false ]).to.throw();
       expect(() => module.vector = [ false, false, false ]).to.throw();
     })
-
   })
 }

@@ -1486,7 +1486,7 @@
 "    function extract(object) {\n"
 "      if (typeof(object) === 'string') {\n"
 "        return object;\n"
-"      } else if (object[Symbol.iterator]) {\n"
+"      } else if (object?.[Symbol.iterator]) {\n"
 "        const array = [];\n"
 "        for (const element of object) {\n"
 "          array.push(extract(element));\n"

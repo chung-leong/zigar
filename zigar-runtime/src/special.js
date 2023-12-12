@@ -145,7 +145,7 @@ export function getValueOf() {
     let f;
     if (typeof(object) === 'string') {
       return object;
-    } else if (object[Symbol.iterator]) {
+    } else if (object?.[Symbol.iterator]) {
       const array = [];
       for (const element of object) {
         array.push(extract(element));
