@@ -1,1 +1,1 @@
-pub const weird: void = {};
+pub const empty: void = {};

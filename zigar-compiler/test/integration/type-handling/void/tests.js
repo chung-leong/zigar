@@ -10,7 +10,7 @@ export function addTests(importModule, options) {
     it('should handle void as static variables', async function() {
       this.timeout(120000);
       const { default: module } = await importTest('as-static-variables');
-      expect(module.weird).to.be.null;
+      expect(module.empty).to.be.null;
     })
     it('should print void arguments', async function() {
       this.timeout(120000);

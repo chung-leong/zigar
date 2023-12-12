@@ -6,7 +6,7 @@ export function addTests(importModule, options) {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
   };    
-  describe('Int', function() {
+  describe('Pointer', function() {
     it('should import pointer as static variables', async function() {
       this.timeout(120000);   
       const { 

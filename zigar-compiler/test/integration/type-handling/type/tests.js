@@ -22,6 +22,25 @@ export function addTests(importModule, options) {
       expect(object.number1).to.equal(123);
       expect(object.number2).to.equal(456);
     })
+    it('should ignore a function accepting type as arguments', async function() {
+      this.timeout(120000);
+      const { print } = await importTest('as-function-parameters');
+      expect(print).to.be.undefined;
+    })
+    it('should ignore a function returning type', async function() {
+      this.timeout(120000);
+      const { getType } = await importTest('as-return-value');
+      expect(getType).to.be.undefined;
+    })
+    it('should handle type in array', async function() {
+      this.timeout(120000);
+      const { array } = await importTest('array-of');      
+      expect(array.length).to.equal(4);
+      for (const item of array) {
+        expect(item).to.be.a('function');
+      }
+    })
+
   })
 }
 

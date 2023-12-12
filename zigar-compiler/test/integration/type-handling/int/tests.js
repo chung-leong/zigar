@@ -87,5 +87,129 @@ export function addTests(importModule, options) {
       const [ after3 ] = await capture(() => print1());
       expect(after3).to.equal('{ 3, 3, 3, 3 }');
     })
+    it('should handle int in struct', async function() {
+      this.timeout(120000);
+      const { default: module, StructA, print } = await importTest('in-a-struct');
+      expect(module.struct_a.valueOf()).to.eql({ number1: -5, number2: -444n });
+      const b = new StructA({});
+      expect(b.valueOf()).to.eql({ number1: 123, number2: 456n });
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('in-a-struct.StructA{ .number1 = -5, .number2 = -444 }');
+      module.struct_a = b;
+      const [ after ] = await capture(() => print());
+      expect(after).to.equal('in-a-struct.StructA{ .number1 = 123, .number2 = 456 }');
+    })
+    it('should handle int in packed struct', async function() {
+      this.timeout(120000);
+      const { default: module, StructA, print } = await importTest('in-a-packed-struct');
+      expect(module.struct_a.valueOf()).to.eql({ number1: 15, number2: 777n, state: true, number3: -420 });
+      const b = new StructA({});
+      expect(b.valueOf()).to.eql({ number1: 100, number2: 200n, state: false, number3: 300 });
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('in-a-packed-struct.StructA{ .number1 = 15, .number2 = 777, .state = true, .number3 = -420 }');
+      module.struct_a = b;
+      const [ after ] = await capture(() => print());
+      expect(after).to.equal('in-a-packed-struct.StructA{ .number1 = 100, .number2 = 200, .state = false, .number3 = 300 }');
+    })
+    it('should handle int as comptime field', async function() {
+      this.timeout(120000);
+      const { default: module, StructA, print } = await importTest('as-comptime-field');
+      expect(module.struct_a.number).to.equal(5000);
+      const b = new StructA({ state: true });
+      expect(b.number).to.equal(5000);
+      const [ line ] = await capture(() => print(b));
+      expect(line).to.equal('as-comptime-field.StructA{ .state = true, .number = 5000 }');
+    })
+    it('should handle int in bare union', async function() {
+      this.timeout(120000);
+      const { default: module, UnionA } = await importTest('in-bare-union');
+      expect(module.union_a.number).to.equal(1234);
+      if (options.runtimeSafety) {
+        expect(() => module.union_a.state).to.throw();
+      }
+      const b = new UnionA({ number: 4567 });
+      const c = new UnionA({ state: false });
+      expect(b.number).to.equal(4567);
+      expect(c.state).to.be.false;
+      if (options.runtimeSafety) {
+        expect(() => c.number).to.throw();
+      }
+      module.union_a = b;
+      expect(module.union_a.number).to.equal(4567);
+      module.union_a = c;
+      if (options.runtimeSafety) {
+        expect(() => module.union_a.number).to.throw();
+      }
+    })
+    it('should handle int in tagged union', async function() {
+      this.timeout(120000);
+      const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
+      expect(module.union_a.number).to.equal(3456);
+      expect(TagType(module.union_a)).to.equal(TagType.number);
+      if (options.runtimeSafety) {
+        expect(() => module.union_a.state).to.throw();
+      }
+      const b = new UnionA({ number: 123 });
+      const c = new UnionA({ state: false });
+      expect(b.number).to.equal(123);
+      expect(c.state).to.false;
+      if (options.runtimeSafety) {
+        expect(() => c.number).to.throw();
+      }
+      module.union_a = b;
+      expect(module.union_a.number).to.equal(123);
+      module.union_a = c;
+      if (options.runtimeSafety) {
+        expect(() => module.union_a.number).to.throw();
+      }
+    })
+    it('should handle int in optional', async function() {
+      this.timeout(120000);
+      const { default: module, print } = await importTest('in-optional');
+      expect(module.optional).to.equal(3000);
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('3000');
+      module.optional = null;
+      expect(module.optional).to.be.null;
+      const [ after ] = await capture(() => print());
+      expect(after).to.equal('null');
+      module.optional = -4000;
+      expect(module.optional).to.equal(-4000);
+    })
+    it('should handle int in error union', async function() {
+      this.timeout(120000);
+      const { default: module, Error, print } = await importTest('in-error-union');
+      expect(module.error_union).to.equal(3000);
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('3000');
+      module.error_union = Error.GoldfishDied;
+      expect(() => module.error_union).to.throw(Error.GoldfishDied);
+      const [ after ] = await capture(() => print());
+      expect(after).to.equal('error.GoldfishDied');
+      module.error_union = -4000;
+      expect(module.error_union).to.equal(-4000);
+    })
+    it('should handle int in vector', async function() {
+      this.timeout(120000);
+      const { default: module, print1, print2, print3 } = await importTest('vector-of');
+      expect([ ...module.vector1 ]).to.eql([ 1, 2, 3, 4 ]);
+      expect([ ...module.vector2 ]).to.eql([ 1, 2, 3, 4 ]);
+      expect([ ...module.vector3 ]).to.eql([ 1n, 2n, 3n, 4n ]);
+      const [ before1 ] = await capture(() => print1());
+      expect(before1).to.equal('{ 1, 2, 3, 4 }');
+      module.vector1 = [ 3, 3, 3, 3 ];
+      const [ after1 ] = await capture(() => print1());
+      expect(after1).to.equal('{ 3, 3, 3, 3 }');
+      const [ before2 ] = await capture(() => print2());
+      expect(before2).to.equal('{ 1, 2, 3, 4 }');
+      module.vector2 = [ 3, 3, 3, 3 ];
+      const [ after2 ] = await capture(() => print2());
+      expect(after2).to.equal('{ 3, 3, 3, 3 }');
+      const [ before3 ] = await capture(() => print3());
+      expect(before3).to.equal('{ 1, 2, 3, 4 }');
+      module.vector3 = [ 3n, 3n, 3n, 3n ];
+      const [ after3 ] = await capture(() => print1());
+      expect(after3).to.equal('{ 3, 3, 3, 3 }');
+    })
   })
 }

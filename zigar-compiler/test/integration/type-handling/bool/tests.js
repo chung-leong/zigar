@@ -56,6 +56,126 @@ export function addTests(importModule, options) {
       expect(() => module.array_const = [ false, false, false, false ]).to.throw();
       expect(() => module.array = [ false, false, false ]).to.throw();
     })
+    it('should handle bool in struct', async function() {
+      this.timeout(120000);
+      const { default: module, StructA, print } = await importTest('in-a-struct');
+      expect(module.struct_a.valueOf()).to.eql({ state1: false, state2: true });
+      const b = new StructA({});
+      expect(b.valueOf()).to.eql({ state1: true, state2: false });
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('in-a-struct.StructA{ .state1 = false, .state2 = true }');
+      module.struct_a = b;
+      const [ after ] = await capture(() => print());
+      expect(after).to.equal('in-a-struct.StructA{ .state1 = true, .state2 = false }');
+    })
+    it('should handle bool in packed struct', async function() {
+      this.timeout(120000);
+      const { default: module, StructA, print } = await importTest('in-a-packed-struct');
+      expect(module.struct_a.valueOf()).to.eql({ state1: false, state2: true, number: 200, state3: true });
+      const b = new StructA({});
+      expect(b.valueOf()).to.eql({ state1: true, state2: false, number: 100, state3: false });
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('in-a-packed-struct.StructA{ .state1 = false, .state2 = true, .number = 200, .state3 = true }');
+      module.struct_a = b;
+      const [ after ] = await capture(() => print());
+      expect(after).to.equal('in-a-packed-struct.StructA{ .state1 = true, .state2 = false, .number = 100, .state3 = false }');
+    })
+    it('should handle bool as comptime field', async function() {
+      this.timeout(120000);
+      const { default: module, StructA, print } = await importTest('as-comptime-field');
+      expect(module.struct_a.state).to.equal(false);
+      const b = new StructA({ number: 500 });
+      expect(b.state).to.equal(false);
+      const [ line ] = await capture(() => print(b));
+      expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .state = false }');
+    })
+    it('should handle bool in bare union', async function() {
+      this.timeout(120000);
+      const { default: module, UnionA } = await importTest('in-bare-union');
+      expect(module.union_a.state).to.be.true;
+      if (options.runtimeSafety) {
+        expect(() => module.union_a.number).to.throw();
+      }
+      const b = new UnionA({ state: false });
+      const c = new UnionA({ number: 123 });
+      expect(b.state).to.be.false;
+      expect(c.number).to.equal(123);
+      if (options.runtimeSafety) {
+        expect(() => c.state).to.throw();
+      }
+      module.union_a = b;
+      expect(module.union_a.state).to.be.false;
+      module.union_a = c;
+      if (options.runtimeSafety) {
+        expect(() => module.union_a.state).to.throw();
+      }
+    })
+    it('should handle bool in tagged union', async function() {
+      this.timeout(120000);
+      const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
+      expect(module.union_a.state).to.be.true;
+      expect(TagType(module.union_a)).to.equal(TagType.state);
+      if (options.runtimeSafety) {
+        expect(() => module.union_a.number).to.throw();
+      }
+      const b = new UnionA({ state: false });
+      const c = new UnionA({ number: 123 });
+      expect(b.state).to.be.false;
+      expect(c.number).to.equal(123);
+      if (options.runtimeSafety) {
+        expect(() => c.state).to.throw();
+      }
+      module.union_a = b;
+      expect(module.union_a.state).to.be.false;
+      module.union_a = c;
+      if (options.runtimeSafety) {
+        expect(() => module.union_a.state).to.throw();
+      }
+    })
+    it('should handle bool in optional', async function() {
+      this.timeout(120000);
+      const { default: module, print } = await importTest('in-optional');
+      expect(module.optional).to.be.true;
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('true');
+      module.optional = null;
+      expect(module.optional).to.be.null;
+      const [ after ] = await capture(() => print());
+      expect(after).to.equal('null');
+      module.optional = false;
+      expect(module.optional).to.be.false;
+    })
+    it('should handle bool in error union', async function() {
+      this.timeout(120000);
+      const { default: module, Error, print } = await importTest('in-error-union');
+      expect(module.error_union).to.be.true;
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('true');
+      module.error_union = Error.GoldfishDied;
+      expect(() => module.error_union).to.throw(Error.GoldfishDied);
+      const [ after ] = await capture(() => print());
+      expect(after).to.equal('error.GoldfishDied');
+      module.error_union = false;
+      expect(module.error_union).to.be.false;
+    })
+    it('should handle bool in vector', async function() {
+      this.timeout(120000);
+      const { default: module, vector_const, print } = await importTest('vector-of');      
+      expect(module.vector.length).to.equal(4);
+      expect([ ...module.vector ]).to.eql([ true, false, false, true ]);
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('{ true, false, false, true }');
+      module.vector[2] = true;
+      const [ after1 ] = await capture(() => print());      
+      expect(after1).to.equal('{ true, false, true, true }');
+      module.vector = [ true, true, true, true ];
+      const [ after2 ] = await capture(() => print());      
+      expect(after2).to.equal('{ true, true, true, true }');      
+      // TODO: #26
+      // expect(() => vector_const[0] = true).to.throw();
+      expect(() => module.vector_const = [ false, false, false, false ]).to.throw();
+      expect(() => module.vector = [ false, false, false ]).to.throw();
+    })
 
   })
 }
