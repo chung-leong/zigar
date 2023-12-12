@@ -7,7 +7,7 @@ pub const StructA = packed struct {
     state3: bool = false,
 };
 
-pub var struct_a: StructA = .{ .state1 = false, .state2 = true, .number = 200, .state3 = true };
+pub const struct_a: StructA = .{ .state1 = false, .state2 = true, .number = 200, .state3 = true };
 
 pub fn print() void {
     std.debug.print("{any}\n", .{struct_a});
