@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { capture } from '../../capture.js';
 
 export function addTests(importModule, options) {
+  const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(options.optimize);
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
@@ -105,20 +106,20 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { default: module, UnionA } = await importTest('in-bare-union');
       expect(module.union_a.number).to.equal(1.234);
-      if (options.runtimeSafety) {
+      if (runtimeSafety) {
         expect(() => module.union_a.state).to.throw();
       }
       const b = new UnionA({ number: 4.567 });
       const c = new UnionA({ state: false });
       expect(b.number).to.equal(4.567);
       expect(c.state).to.be.false;
-      if (options.runtimeSafety) {
+      if (runtimeSafety) {
         expect(() => c.number).to.throw();
       }
       module.union_a = b;
       expect(module.union_a.number).to.equal(4.567);
       module.union_a = c;
-      if (options.runtimeSafety) {
+      if (runtimeSafety) {
         expect(() => module.union_a.number).to.throw();
       }
     })
@@ -127,22 +128,16 @@ export function addTests(importModule, options) {
       const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
       expect(module.union_a.number).to.equal(3.456);
       expect(TagType(module.union_a)).to.equal(TagType.number);
-      if (options.runtimeSafety) {
-        expect(() => module.union_a.state).to.throw();
-      }
+      expect(module.union_a.state).to.be.null;
       const b = new UnionA({ number: 1.23 });
       const c = new UnionA({ state: false });
       expect(b.number).to.equal(1.23);
       expect(c.state).to.false;
-      if (options.runtimeSafety) {
-        expect(() => c.number).to.throw();
-      }
+      expect(c.number).to.be.null;
       module.union_a = b;
       expect(module.union_a.number).to.equal(1.23);
       module.union_a = c;
-      if (options.runtimeSafety) {
-        expect(() => module.union_a.number).to.throw();
-      }
+      expect(module.union_a.number).to.be.null;
     })
     it('should handle float in optional', async function() {
       this.timeout(120000);

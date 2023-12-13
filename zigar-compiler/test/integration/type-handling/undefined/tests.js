@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 
 export function addTests(importModule, options) {
+  const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(options.optimize);
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
@@ -47,20 +48,20 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { default: module, UnionA } = await importTest('in-bare-union');
       expect(module.union_a.empty).to.be.undefined;
-      if (options.runtimeSafety) {
+      if (runtimeSafety) {
         expect(() => module.union_a.number).to.throw();
       }
       const b = new UnionA({ empty: undefined });
       const c = new UnionA({ number: 123 });
       expect(b.empty).to.be.undefined;
       expect(c.number).to.equal(123);
-      if (options.runtimeSafety) {
+      if (runtimeSafety) {
         expect(() => c.empty).to.throw();
       }
       module.union_a = b;
       expect(module.union_a.empty).to.be.undefined;
       module.union_a = c;
-      if (options.runtimeSafety) {
+      if (runtimeSafety) {
         expect(() => module.union_a.empty).to.throw();
       }
     })
@@ -69,22 +70,16 @@ export function addTests(importModule, options) {
       const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
       expect(module.union_a.empty).to.be.undefined;
       expect(TagType(module.union_a)).to.equal(TagType.empty);
-      if (options.runtimeSafety) {
-        expect(() => module.union_a.number).to.throw();
-      }
+      expect(module.union_a.number).to.be.null;
       const b = new UnionA({ empty: undefined });
       const c = new UnionA({ number: 123 });
       expect(b.empty).to.be.undefined;
       expect(c.number).to.equal(123);
-      if (options.runtimeSafety) {
-        expect(() => c.empty).to.throw();
-      }
+      expect(c.empty).to.be.null;
       module.union_a = b;
       expect(module.union_a.empty).to.be.undefined;
       module.union_a = c;
-      if (options.runtimeSafety) {
-        expect(() => module.union_a.empty).to.throw();
-      }
+      expect(module.union_a.empty).to.be.null;
     })
     it('should not compile code with undefined optional', async function() {
       this.timeout(120000);

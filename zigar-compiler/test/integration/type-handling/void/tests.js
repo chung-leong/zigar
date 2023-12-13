@@ -5,6 +5,7 @@ import { capture } from '../../capture.js';
 use(ChaiAsPromised);
 
 export function addTests(importModule, options) {
+  const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(options.optimize);
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
@@ -71,20 +72,20 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { default: module, UnionA } = await importTest('in-bare-union');
       expect(module.union_a.empty).to.be.null;
-      if (options.runtimeSafety) {
+      if (runtimeSafety) {
         expect(() => module.union_a.number).to.throw();
       }
       const b = new UnionA({ empty: null });
       const c = new UnionA({ number: 123 });
       expect(b.empty).to.be.null;
       expect(c.number).to.equal(123);
-      if (options.runtimeSafety) {
+      if (runtimeSafety) {
         expect(() => c.empty).to.throw();
       }
       module.union_a = b;
       expect(module.union_a.empty).to.be.null;
       module.union_a = c;
-      if (options.runtimeSafety) {
+      if (runtimeSafety) {
         expect(() => module.union_a.empty).to.throw();
       }
     })
@@ -93,22 +94,16 @@ export function addTests(importModule, options) {
       const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
       expect(module.union_a.empty).to.be.null;
       expect(TagType(module.union_a)).to.equal(TagType.empty);
-      if (options.runtimeSafety) {
-        expect(() => module.union_a.number).to.throw();
-      }
+      expect(module.union_a.number).to.be.null;
       const b = new UnionA({ empty: null });
       const c = new UnionA({ number: 123 });
       expect(b.empty).to.be.null;
       expect(c.number).to.equal(123);
-      if (options.runtimeSafety) {
-        expect(() => c.empty).to.throw();
-      }
+      expect(c.empty).to.be.null;
       module.union_a = b;
       expect(module.union_a.empty).to.be.null;
       module.union_a = c;
-      if (options.runtimeSafety) {
-        expect(() => module.union_a.empty).to.throw();
-      }
+      expect(module.union_a.empty).to.be.null;
     })
     it('should handle void in optional', async function() {
       this.timeout(120000);

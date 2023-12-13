@@ -5,6 +5,7 @@ import { capture } from '../../capture.js';
 use(ChaiAsPromised);
 
 export function addTests(importModule, options) {
+  const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(options.optimize);
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
@@ -44,13 +45,50 @@ export function addTests(importModule, options) {
         expect(item).to.be.a('function');
       }
     })
-
+    it('should handle type in struct', async function() {
+      this.timeout(120000);
+      await expect(importTest('in-a-struct')).to.eventually.be.rejected;
+    })
+    it('should handle type in packed struct', async function() {
+      this.timeout(120000);
+      await expect(importTest('in-a-packed-struct')).to.eventually.be.rejected;
+    })
+    it('should handle type as comptime field', async function() {
+      this.timeout(120000);
+      const { default: module, StructA } = await importTest('as-comptime-field');
+      expect(module.struct_a.Type).to.be.a('function');
+      const b = new StructA({ number: 500 });
+      expect(b.Type).to.be.a('function');
+    })
+    it('should handle type in bare union', async function() {
+      this.timeout(120000);
+      const { default: module } = await importTest('in-tagged-union');
+      expect(module.union_a.Type).to.be.a('function');
+      if (runtimeSafety) {
+        expect(() => module.union_a.number).to.throw();
+      }
+    })
+    it('should handle type in tagged union', async function() {
+      this.timeout(120000);
+      const { default: module, TagType } = await importTest('in-tagged-union');
+      expect(module.union_a.Type).to.be.a('function');
+      expect(TagType(module.union_a)).to.equal(TagType.Type);
+      expect(module.union_a.number).to.be.null;
+    })
+    it('should handle type in optional', async function() {
+      this.timeout(120000);
+      const { default: module, print } = await importTest('in-optional');
+      expect(module.optional1).to.be.a('function');
+      const [ line ] = await capture(() => print());
+      expect(line).to.equal('bool');
+      expect(module.optional2).to.be.null;
+    })
     it('should handle type in error union', async function() {
       this.timeout(120000);
       const { default: module, Error, print } = await importTest('in-error-union');
       expect(module.error_union1).to.be.a('function');
       const [ line ] = await capture(() => print());
-      expect(line).to.equal('void');
+      expect(line).to.equal('bool');
       expect(() => module.error_union2).to.throw(Error.GoldfishDied);
     })
     it('should not compile code with type vector', async function() {

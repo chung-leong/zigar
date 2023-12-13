@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { capture } from '../../capture.js';
 
 export function addTests(importModule, options) {
+  const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(options.optimize);
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
@@ -33,7 +34,7 @@ export function addTests(importModule, options) {
       expect(module.bare_union.dog).to.equal(123);
       module.useCat();
       expect(module.bare_union.cat).to.equal(777);
-      if (options.runtimeSafety) {
+      if (runtimeSafety) {
         expect(() => module.bare_union.dog).to.throw(TypeError);
       } else {
         expect(module.bare_union.dog).to.equal(777);

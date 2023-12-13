@@ -5,6 +5,7 @@ import { capture } from '../../capture.js';
 use(ChaiAsPromised);
 
 export function addTests(importModule, options) {
+  const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(options.optimize);
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
@@ -54,7 +55,7 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { default: module, UnionA } = await importTest('in-bare-union');
       expect(module.union_a.number).to.equal(1.23);
-      if (options.runtimeSafety) {
+      if (runtimeSafety) {
         expect(() => module.union_a.state).to.throw();
       }
       expect(UnionA).to.be.undefined;
@@ -64,9 +65,7 @@ export function addTests(importModule, options) {
       const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
       expect(module.union_a.number).to.equal(1.23);
       expect(TagType(module.union_a)).to.equal(TagType.number);
-      if (options.runtimeSafety) {
-        expect(() => module.union_a.state).to.throw();
-      }
+      expect(() => module.union_a.state).to.be.null;
       expect(UnionA).to.be.undefined;
     })
     it('should handle comptime float in optional', async function() {
