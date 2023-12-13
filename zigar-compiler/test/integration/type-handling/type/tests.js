@@ -1,4 +1,8 @@
-import { expect } from 'chai';
+import { expect, use } from 'chai';
+import ChaiAsPromised from 'chai-as-promised';
+import { capture } from '../../capture.js';
+
+use(ChaiAsPromised);
 
 export function addTests(importModule, options) {
   const importTest = async (name) => {
@@ -41,6 +45,18 @@ export function addTests(importModule, options) {
       }
     })
 
+    it('should handle type in error union', async function() {
+      this.timeout(120000);
+      const { default: module, Error, print } = await importTest('in-error-union');
+      expect(module.error_union1).to.be.a('function');
+      const [ line ] = await capture(() => print());
+      expect(line).to.equal('void');
+      expect(() => module.error_union2).to.throw(Error.GoldfishDied);
+    })
+    it('should not compile code with type vector', async function() {
+      this.timeout(120000);
+      await expect(importTest('vector-of')).to.eventually.be.rejected;
+    })
   })
 }
 

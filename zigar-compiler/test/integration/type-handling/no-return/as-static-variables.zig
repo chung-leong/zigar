@@ -1,1 +1,1 @@
-pub const weird = noreturn;
+pub const weird: noreturn = unreachable;
