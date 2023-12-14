@@ -54,12 +54,14 @@ enum {
     Int,
     Uint,
     Float,
-    Enum,
+    EnumerationItem,
+    Error,
     Object,
     Type,
     Comptime,
     Static,
     Literal,
+    Null,
 };
 
 typedef struct {

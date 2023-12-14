@@ -122,11 +122,13 @@ pub const MemberType = enum(u32) {
     Uint,
     Float,
     EnumerationItem,
+    Error,
     Object,
     Type,
     Comptime,
     Static,
     Literal,
+    Null,
 };
 
 pub const Value = *opaque {};
@@ -383,6 +385,7 @@ fn getMemberType(comptime T: type) MemberType {
         .Int => |int| if (int.signedness == .signed) .Int else .Uint,
         .Float => .Float,
         .Enum => .EnumerationItem,
+        .ErrorSet => .Error,
         .Struct, .Union, .Array, .ErrorUnion, .Optional, .Pointer, .Vector => .Object,
         .Type => .Type,
         .EnumLiteral => .Literal,
@@ -1327,20 +1330,30 @@ fn addErrorUnionMember(host: anytype, structure: Value, comptime T: type) !void 
     }, false);
 }
 
+fn ErrorIntType() type {
+    return @Type(.{
+        .Int = .{
+            .signedness = .unsigned,
+            .bits = @bitSizeOf(anyerror),
+        },
+    });
+}
+
+test "ErrorIntType" {
+    const T = ErrorIntType();
+    assert(T == u16);
+}
+
 fn addErrorSetMember(host: anytype, structure: Value, comptime T: type) !void {
-    const es = @typeInfo(T).ErrorSet;
-    if (es) |errors| {
-        inline for (errors) |err_rec| {
-            // get error from global set
-            const err = @field(anyerror, err_rec.name);
-            try host.attachMember(structure, .{
-                .name = getCString(err_rec.name),
-                .member_type = .Object,
-                .slot = @intFromError(err),
-                .structure = null,
-            }, false);
-        }
-    }
+    _ = T;
+    const IT = ErrorIntType();
+    try host.attachMember(structure, .{
+        .member_type = getMemberType(IT),
+        .bit_size = getStructureBitSize(IT),
+        .bit_offset = 0,
+        .byte_size = getStructureSize(IT),
+        .structure = null,
+    }, false);
 }
 
 fn containsSupported(comptime T: type) bool {
@@ -1375,44 +1388,81 @@ fn getStaticMemberType(comptime T: type, comptime is_const: bool) MemberType {
     return if (member_type == .Comptime and !is_const) .Static else member_type;
 }
 
-fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
-    switch (@typeInfo(T)) {
-        .Enum => {
-            // enum always has a static template due to implicit members
-        },
-        else => {
-            // while other structure types might not
-            if (!containsSupported(T)) {
-                return;
-            }
-        },
-    }
-    const decls = switch (@typeInfo(T)) {
+test "getStaticMemberType" {
+    assert(getStaticMemberType(@TypeOf(.enum_literal), true) == .Literal);
+    assert(getStaticMemberType(u16, true) == .Comptime);
+    assert(getStaticMemberType(u16, false) == .Static);
+}
+
+fn hasStaticMembers(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        // enum and error set always have static templates due to implicit members
+        .Enum, .ErrorSet => true,
+        // while other structure types might not
+        else => containsSupported(T),
+    };
+}
+
+test "hasStaticMembers" {
+    const A = struct {
+        pub const hello: u32 = 0;
+    };
+    const B = struct {
+        const hello: u32 = 0;
+    };
+    const E = enum { Cat, Dog };
+    assert(hasStaticMembers(A) == true);
+    assert(hasStaticMembers(B) == false);
+    assert(hasStaticMembers(E) == true);
+    assert(hasStaticMembers(anyerror) == true);
+}
+
+fn getDecls(comptime T: type) ?[]const std.builtin.Type.Declaration {
+    return switch (@typeInfo(T)) {
         .Struct => |st| st.decls,
         .Union => |un| un.decls,
         .Enum => |en| en.decls,
         .Opaque => |op| op.decls,
-        else => return,
+        else => null,
     };
+}
+
+test "getDecls" {
+    const A = struct {
+        pub const hello: u32 = 0;
+    };
+    assert((getDecls(A) orelse unreachable).len == 1);
+    assert(getDecls(anyerror) == null);
+}
+
+fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
+    if (!hasStaticMembers(T)) {
+        return;
+    }
     // a stand-in type representing the "static side" of the structure
     const Static = opaque {};
     const template = try host.createTemplate(null);
-    inline for (decls, 0..) |decl, index| {
-        const decl_value_ptr = &@field(T, decl.name);
-        const DT = @TypeOf(decl_value_ptr.*);
-        if (comptime isSupported(DT)) {
-            const is_const = comptime isConst(@TypeOf(decl_value_ptr));
-            // can't pass decl_value_ptr.* to RuntimeType when it's var
-            const RT = if (is_const) RuntimeType(decl_value_ptr.*) else DT;
-            const slot = getObjectSlot(Static, index);
-            try host.attachMember(structure, .{
-                .name = getCString(decl.name),
-                .member_type = getStaticMemberType(RT, is_const),
-                .slot = slot,
-                .structure = try getComptimeStructure(host, RT),
-            }, true);
-            const value_obj = try exportPointerTarget(host, decl_value_ptr, is_const);
-            try host.writeSlot(template, slot, value_obj);
+    // add declared static members
+    comptime var offset = 0;
+    if (comptime getDecls(T)) |decls| {
+        inline for (decls, 0..) |decl, index| {
+            const decl_value_ptr = &@field(T, decl.name);
+            const DT = @TypeOf(decl_value_ptr.*);
+            if (comptime isSupported(DT)) {
+                const is_const = comptime isConst(@TypeOf(decl_value_ptr));
+                // can't pass decl_value_ptr.* to RuntimeType when it's var
+                const RT = if (is_const) RuntimeType(decl_value_ptr.*) else DT;
+                const slot = getObjectSlot(Static, index);
+                try host.attachMember(structure, .{
+                    .name = getCString(decl.name),
+                    .member_type = getStaticMemberType(RT, is_const),
+                    .slot = slot,
+                    .structure = try getComptimeStructure(host, RT),
+                }, true);
+                const value_obj = try exportPointerTarget(host, decl_value_ptr, is_const);
+                try host.writeSlot(template, slot, value_obj);
+            }
+            offset += 1;
         }
     }
     // add implicit static members
@@ -1421,13 +1471,30 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
             // add fields as static members
             inline for (en.fields, 0..) |field, index| {
                 const value = @field(T, field.name);
-                const slot = getObjectSlot(Static, decls.len + index);
+                const slot = getObjectSlot(Static, offset + index);
                 try host.attachMember(structure, .{
                     .name = getCString(field.name),
                     .member_type = getStaticMemberType(T, true),
                     .slot = slot,
                     .structure = structure,
                 }, true);
+                const value_obj = try exportPointerTarget(host, &value, true);
+                try host.writeSlot(template, slot, value_obj);
+            }
+        },
+        .ErrorSet => |es| if (es) |errors| {
+            inline for (errors, 0..) |err_rec, index| {
+                // get error from global set
+                const IT = ErrorIntType();
+                const err = @field(anyerror, err_rec.name);
+                const value: IT = @intFromError(err);
+                const slot = getObjectSlot(Static, offset + index);
+                try host.attachMember(structure, .{
+                    .name = getCString(err_rec.name),
+                    .member_type = getStaticMemberType(T, true),
+                    .slot = slot,
+                    .structure = structure,
+                }, false);
                 const value_obj = try exportPointerTarget(host, &value, true);
                 try host.writeSlot(template, slot, value_obj);
             }

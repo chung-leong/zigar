@@ -1,9 +1,9 @@
 import { defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
+import { requireDataView } from './data-view.js';
 import { throwInvalidInitializer, throwNoNewEnum } from './error.js';
 import { ALIGN, ENUM_ITEM, ENUM_ITEMS, ENVIRONMENT, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
-import { requireDataView } from './data-view.js';
 
 export function defineEnumerationShape(s, env) {
   const {

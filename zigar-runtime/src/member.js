@@ -15,7 +15,9 @@ import {
   throwNotNull,
   throwInvalidEnum,
   throwEnumExpected,
+  throwNotInErrorSet,
   rethrowRangeError,
+  throwErrorExpected,
 } from './error.js';
 import { restoreMemory } from './memory.js';
 import { MEMORY, CHILD_VIVIFICATOR, SLOTS } from './symbol.js';
@@ -27,11 +29,13 @@ export const MemberType = {
   Uint: 3,
   Float: 4,
   EnumerationItem: 5,
-  Object: 6,
-  Type: 7,
-  Comptime: 8,
-  Static: 9,
-  Literal: 10,
+  Error: 6,
+  Object: 7,
+  Type: 8,
+  Comptime: 9,
+  Static: 10,
+  Literal: 11,
+  Null: 12,
 };
 
 export function isReadOnly(type) {
@@ -91,6 +95,10 @@ export function useEnumerationItemEx() {
   factories[MemberType.EnumerationItem] = getEnumerationItemDescriptorEx;
 }
 
+export function useError() {
+  factories[MemberType.Error] = getErrorDescriptor;
+}
+
 export function useObject() {
   factories[MemberType.Object] = getObjectDescriptor;
 }
@@ -132,6 +140,8 @@ export function getMemberFeature(member) {
       } else {
         return 'useEnumerationItemEx';
       }
+    case MemberType.Error:
+      return 'useError';
     case MemberType.Float:
       if (isByteAligned(member) && (bitSize === 32 || bitSize === 64)) {
         return 'useFloat';
@@ -264,18 +274,14 @@ export function getEnumerationItemDescriptorEx(member, env) {
 function addEnumerationLookup(getDataViewIntAccessor) {
   return function(access, member) {
     // no point in using non-standard int accessor to read enum values unless they aren't byte-aligned
-    let { bitSize, byteSize } = member;
-    if (byteSize) {
-      bitSize = byteSize * 8;
-    }
-    const intMember = { type: MemberType.Int, bitSize, byteSize };
+    const { structure } = member;
+    const [ intMember ] = structure.instance.members;
     const accessor = getDataViewIntAccessor(access, intMember);
     /* DEV-TEST */
     if (!accessor) {
       return;
     }
     /* DEV-TEST-END */
-    const { structure } = member;
     if (access === 'get') {
       return function(offset, littleEndian) {
         const { constructor } = structure;
@@ -300,6 +306,51 @@ function addEnumerationLookup(getDataViewIntAccessor) {
           throwEnumExpected(structure, value);
         }
         accessor.call(this, offset, item.valueOf(), littleEndian);
+      };
+    }
+  };
+}
+
+export function getErrorDescriptor(member, env) {
+  const getDataViewAccessor = addErrorLookup(getDataViewIntAccessor);
+  return getDescriptorUsing(member, env, getDataViewAccessor) ;
+}
+
+function addErrorLookup(getDataViewIntAccessor) {
+  return function(access, member) {
+    // no point in using non-standard int accessor to read enum values unless they aren't byte-aligned
+    const { structure } = member;
+    const [ intMember ] = structure.instance.members;
+    const accessor = getDataViewIntAccessor(access, intMember);
+    /* DEV-TEST */
+    if (!accessor) {
+      return;
+    }
+    /* DEV-TEST-END */
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const { constructor } = structure;
+        const value = accessor.call(this, offset, littleEndian);
+        // the enumeration constructor returns the object for the int value
+        const object = constructor(value);
+        if (!object) {
+          throwNotInErrorSet(structure, value)
+        }
+        return object;
+      };
+    } else {
+      return function(offset, value, littleEndian) {
+        const { constructor } = structure;
+        let item;
+        if (value instanceof constructor) {
+          item = value;
+        } else {
+          item = constructor(value);
+        }
+        if (!item) {
+          throwErrorExpected(structure, value);
+        }
+        accessor.call(this, offset, item.index, littleEndian);
       };
     }
   };
@@ -512,6 +563,7 @@ export function useAllMemberTypes() {
   useUintEx();
   useFloatEx();
   useEnumerationItemEx();
+  useError();
   useObject();
   useType();
   useComptime();

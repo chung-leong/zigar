@@ -55,7 +55,12 @@ export function throwNoNewError(structure) {
   throw new TypeError(`Cannot create new error\nCall ${name} without the use of "new" to obtain an error object`);
 }
 
-export function throwNotInErrorSet(structure) {
+export function throwErrorExpected(structure, arg) {
+  const name = getStructureName(structure);
+  throw new TypeError(`Error of the type ${name} expected, received ${arg}`);
+}
+
+export function throwNotInErrorSet(structure, arg) {
   const name = getStructureName(structure);
   throw new TypeError(`Error given is not a part of error set ${name}`);
 }

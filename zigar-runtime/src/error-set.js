@@ -1,78 +1,72 @@
 import { defineProperties } from './structure.js';
-import { throwNoNewError, decamelizeErrorName } from './error.js';
-import { ERROR_INDEX } from './symbol.js';
+import { MemberType, getDescriptor } from './member.js';
+import { getMemoryCopier } from './memory.js';
+import { requireDataView } from './data-view.js';
+import { throwNoNewError } from './error.js';
+import { ALIGN, ENVIRONMENT, ERROR_ITEMS, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
 
 let currentErrorSets;
 
 export function defineErrorSet(s, env) {
   const {
-    name,
+    byteSize,
+    align,
     instance: {
-      members,
+      members: [ member ],
     },
   } = s;
-  const errors = currentErrorSets;
+  const byIndex = {};
   const constructor = s.constructor = function(arg) {
     const creating = this instanceof constructor;
     if (creating) {
       throwNoNewError(s);
     }
+    if (this === ENVIRONMENT) {
+      // called by Environment.castView() or recreateStructures()
+      // the only time when individual errors are created
+      const self = Object.create(constructor.prototype);
+      const dv = requireDataView(s, arg);
+      self[MEMORY] = dv;
+      const index = getIndex.call(self);
+      // return existing object if defined already
+      const existing = currentErrorSets[index];
+      if (existing) {
+        return existing; 
+      } else {
+        currentErrorSets[index] = self;
+        return self;
+      }
+    }
     const index = Number(arg);
-    return errors[index];
+    return byIndex[index];
   };
   Object.setPrototypeOf(constructor.prototype, Error.prototype);
-  let errorIndices;
-  const errorDescriptors = {};
-  for (const [ index, { name, slot } ] of members.entries()) {
-    let error = errors[slot];
-    if (error) {
-      // error already exists in a previously defined set
-      // see if we should make that set a subclass or superclass of this one
-      if (!(error instanceof constructor)) {
-        if (!errorIndices) {
-          errorIndices = members.map(m => m.slot);
-        }
-        const otherSet = error.constructor;
-        const otherErrors = Object.values(otherSet);
-        if (otherErrors.every(e => errorIndices.includes(e[ERROR_INDEX]))) {
-          // this set contains the all errors of the other one, so it's a superclass
-          Object.setPrototypeOf(otherSet.prototype, constructor.prototype);
-        } else {
-          // make this set a subclass of the other
-          Object.setPrototypeOf(constructor.prototype, otherSet.prototype);
-          for (const otherError of otherErrors) {
-            if (errorIndices.includes(otherError[ERROR_INDEX])) {
-              // this set should be this error object's class
-              Object.setPrototypeOf(otherError, constructor.prototype);
-            }
-          }
-        }
-      }
-    } else {
-      // need to create the error object--can't use the constructor since it would throw
-      error = Object.create(constructor.prototype);
-      const message = decamelizeErrorName(name);
-      defineProperties(error, {
-        message: { value: message, configurable: true, enumerable: true, writable: false },
-        [ERROR_INDEX]: { value: slot },
-      });
-      errors[slot] = error;
-    }
-    errorDescriptors[name] = { value: error, configurable: true, enumerable: true, writable: true };
-  }
-  const getIndex = function() { return this[ERROR_INDEX] };
+  const { get: getIndex } = getDescriptor(member, env);
+  // get the enum descriptor instead of the int/uint descriptor
+  const errorMember = { ...member, structure: s, type: MemberType.Error };
+  const { get } = getDescriptor(errorMember, env);
   const toStringTag = function() { return 'Error' };
   defineProperties(constructor.prototype, {
-    // provide a way to retrieve the error index
+    $: { get, configurable: true },
     index: { get: getIndex, configurable: true },
     // ensure that libraries that rely on the string tag for type detection will
     // correctly identify the object as an error
     [Symbol.toStringTag]: { get: toStringTag, configurable: true },
+    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
   });
-  defineProperties(constructor, errorDescriptors);
+  defineProperties(constructor, {
+    [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
+    [ERROR_ITEMS]: { value: byIndex },
+  });
   return constructor;
+
 };
 
 export function initializeErrorSets() {
   currentErrorSets = {};
+}
+
+export function getCurrentErrorSets() {
+  return currentErrorSets;
 }
