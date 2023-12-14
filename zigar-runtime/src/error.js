@@ -60,7 +60,7 @@ export function throwErrorExpected(structure, arg) {
   throw new TypeError(`Error of the type ${name} expected, received ${arg}`);
 }
 
-export function throwNotInErrorSet(structure, arg) {
+export function throwNotInErrorSet(structure) {
   const name = getStructureName(structure);
   throw new TypeError(`Error given is not a part of error set ${name}`);
 }

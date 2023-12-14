@@ -3,8 +3,8 @@ import { expect } from 'chai';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { initializeErrorSets } from '../src/error-set.js';
-import { MEMORY, SLOTS } from '../src/symbol.js';
 import { NodeEnvironment } from '../src/environment.js'
+import { ENVIRONMENT, MEMORY, SLOTS } from '../src/symbol.js';
 
 describe('Error union functions', function() {
   const env = new NodeEnvironment();
@@ -15,20 +15,38 @@ describe('Error union functions', function() {
       initializeErrorSets();
     })
     it('should define an error union', function() {
-      const setStructure = env.beginStructure({
+      const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'Error',
+        byteSize: 2,
+      });      
+      env.attachMember(errorStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
       });
-      env.attachMember(setStructure, {
+      env.finalizeShape(errorStructure);
+      const { constructor: Error } = errorStructure;
+      env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-      });
-      env.attachMember(setStructure, {
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: errorStructure,
+      }, true);
+      env.attachMember(errorStructure, {
         name: 'UnableToCreateObject',
-        type: MemberType.Object,
-      });
-      env.finalizeShape(setStructure);
-      env.finalizeStructure(setStructure);
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: errorStructure,
+      }, true);
+      env.attachTemplate(errorStructure, {
+        [SLOTS]: {
+          0: Error.call(ENVIRONMENT, errorData(5)),
+          1: Error.call(ENVIRONMENT, errorData(8)),
+        }
+      }, true);
+      env.finalizeStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         name: 'Hello',
@@ -44,11 +62,11 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Int,
+        type: MemberType.Error,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
-        structure: setStructure,
+        structure: errorStructure,
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
@@ -59,20 +77,38 @@ describe('Error union functions', function() {
       expect(object.$).to.equal(1234n);
     })
     it('should throw when no initializer is provided', function() {
-      const setStructure = env.beginStructure({
+      const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'Error',
+        byteSize: 2,
+      });      
+      env.attachMember(errorStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
       });
-      env.attachMember(setStructure, {
+      env.finalizeShape(errorStructure);
+      const { constructor: Error } = errorStructure;
+      env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-      });
-      env.attachMember(setStructure, {
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: errorStructure,
+      }, true);
+      env.attachMember(errorStructure, {
         name: 'UnableToCreateObject',
-        type: MemberType.Object,
-      });
-      env.finalizeShape(setStructure);
-      env.finalizeStructure(setStructure);
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: errorStructure,
+      }, true);
+      env.attachTemplate(errorStructure, {
+        [SLOTS]: {
+          0: Error.call(ENVIRONMENT, errorData(5)),
+          1: Error.call(ENVIRONMENT, errorData(8)),
+        }
+      }, true);
+      env.finalizeStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         name: 'Hello',
@@ -92,7 +128,7 @@ describe('Error union functions', function() {
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
-        structure: setStructure,
+        structure: errorStructure,
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
@@ -100,23 +136,38 @@ describe('Error union functions', function() {
       expect(() => new Hello).to.throw(TypeError);
     })
     it('should define an error union with internal struct', function() {
-      const setStructure = env.beginStructure({
+      const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'Error',
+        byteSize: 2,
+      });      
+      env.attachMember(errorStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
       });
-      env.attachMember(setStructure, {
+      env.finalizeShape(errorStructure);
+      const { constructor: Error } = errorStructure;
+      env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        slot: 1,
-      });
-      env.attachMember(setStructure, {
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: errorStructure,
+      }, true);
+      env.attachMember(errorStructure, {
         name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        slot: 2,
-      });
-      env.finalizeShape(setStructure);
-      env.finalizeStructure(setStructure);
-      const { constructor: SomeError } = setStructure;
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: errorStructure,
+      }, true);
+      env.attachTemplate(errorStructure, {
+        [SLOTS]: {
+          0: Error.call(ENVIRONMENT, errorData(5)),
+          1: Error.call(ENVIRONMENT, errorData(8)),
+        }
+      }, true);
+      env.finalizeStructure(errorStructure);
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Animal',
@@ -155,11 +206,11 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Int,
+        type: MemberType.Error,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
-        structure: setStructure,
+        structure: errorStructure,
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
@@ -167,27 +218,43 @@ describe('Error union functions', function() {
       const object = new Hello({ dog: 17, cat: 234 });
       expect(object).to.be.an('!Animal');
       expect(object.$).to.be.an('Animal');
-      object.$ = SomeError.UnableToCreateObject;
-      expect(() => object.$).to.throw(SomeError)
+      object.$ = Error.UnableToCreateObject;
+      expect(() => object.$).to.throw(Error)
         .with.property('message').that.equal('Unable to create object');
     })
     it('should define an error union with a pointer', function() {
-      const setStructure = env.beginStructure({
+      const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'Error',
+        byteSize: 2,
+      });      
+      env.attachMember(errorStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
       });
-      env.attachMember(setStructure, {
+      env.finalizeShape(errorStructure);
+      const { constructor: Error } = errorStructure;
+      env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        slot: 16,
-      });
-      env.attachMember(setStructure, {
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: errorStructure,
+      }, true);
+      env.attachMember(errorStructure, {
         name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        slot: 17,
-      });
-      env.finalizeShape(setStructure);
-      env.finalizeStructure(setStructure);
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: errorStructure,
+      }, true);
+      env.attachTemplate(errorStructure, {
+        [SLOTS]: {
+          0: Error.call(ENVIRONMENT, errorData(5)),
+          1: Error.call(ENVIRONMENT, errorData(8)),
+        }
+      }, true);
+      env.finalizeStructure(errorStructure);
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
@@ -236,11 +303,11 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Int,
+        type: MemberType.Error,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
-        structure: setStructure,
+        structure: errorStructure,
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
@@ -253,22 +320,38 @@ describe('Error union functions', function() {
       expect(object.$['*']).to.equal(5);
     })
     it('should define an error union with a slice', function() {
-      const setStructure = env.beginStructure({
+      const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'Error',
+        byteSize: 2,
+      });      
+      env.attachMember(errorStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
       });
-      env.attachMember(setStructure, {
+      env.finalizeShape(errorStructure);
+      const { constructor: Error } = errorStructure;
+      env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        slot: 16,
-      });
-      env.attachMember(setStructure, {
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: errorStructure,
+      }, true);
+      env.attachMember(errorStructure, {
         name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        slot: 17,
-      });
-      env.finalizeShape(setStructure);
-      env.finalizeStructure(setStructure);
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: errorStructure,
+      }, true);
+      env.attachTemplate(errorStructure, {
+        [SLOTS]: {
+          0: Error.call(ENVIRONMENT, errorData(5)),
+          1: Error.call(ENVIRONMENT, errorData(8)),
+        }
+      }, true);
+      env.finalizeStructure(errorStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Uint8',
@@ -317,11 +400,11 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Int,
+        type: MemberType.Error,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
-        structure: setStructure,
+        structure: errorStructure,
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
@@ -334,22 +417,38 @@ describe('Error union functions', function() {
       expect(JSON.stringify(object)).to.eql(JSON.stringify([ ...array ]));
     })
     it('should correctly copy an error union containing a pointer', function() {
-      const setStructure = env.beginStructure({
+      const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'Error',
+        byteSize: 2,
+      });      
+      env.attachMember(errorStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
       });
-      env.attachMember(setStructure, {
+      env.finalizeShape(errorStructure);
+      const { constructor: Error } = errorStructure;
+      env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        slot: 16,
-      });
-      env.attachMember(setStructure, {
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: errorStructure,
+      }, true);
+      env.attachMember(errorStructure, {
         name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        slot: 17,
-      });
-      env.finalizeShape(setStructure);
-      env.finalizeStructure(setStructure);
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: errorStructure,
+      }, true);
+      env.attachTemplate(errorStructure, {
+        [SLOTS]: {
+          0: Error.call(ENVIRONMENT, errorData(5)),
+          1: Error.call(ENVIRONMENT, errorData(8)),
+        }
+      }, true);
+      env.finalizeStructure(errorStructure);
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
@@ -398,11 +497,11 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Int,
+        type: MemberType.Error,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
-        structure: setStructure,
+        structure: errorStructure,
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
@@ -413,23 +512,38 @@ describe('Error union functions', function() {
       expect(object2.$['*']).to.equal(777);
     })
     it('should release pointer when error union is set to an error', function() {
-      const setStructure = env.beginStructure({
+      const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'SomeError',
+        name: 'Error',
+        byteSize: 2,
+      });      
+      env.attachMember(errorStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
       });
-      env.attachMember(setStructure, {
+      env.finalizeShape(errorStructure);
+      const { constructor: Error } = errorStructure;
+      env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        slot: 16,
-      });
-      env.attachMember(setStructure, {
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: errorStructure,
+      }, true);
+      env.attachMember(errorStructure, {
         name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        slot: 17,
-      });
-      env.finalizeShape(setStructure);
-      env.finalizeStructure(setStructure);
-      const { constructor: SomeError } = setStructure;
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: errorStructure,
+      }, true);
+      env.attachTemplate(errorStructure, {
+        [SLOTS]: {
+          0: Error.call(ENVIRONMENT, errorData(5)),
+          1: Error.call(ENVIRONMENT, errorData(8)),
+        }
+      }, true);
+      env.finalizeStructure(errorStructure);
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
@@ -478,37 +592,53 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Int,
+        type: MemberType.Error,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
-        structure: setStructure,
+        structure: errorStructure,
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: Hello } = structure;
       const object = new Hello(new Int32(777));
       const ptr = object.$;
-      object.$ = SomeError.UnableToCreateObject;
+      object.$ = Error.UnableToCreateObject;
       expect(ptr[SLOTS][0]).to.be.null;
     })
     it('should throw an error when error number is unknown', function() {
-      const setStructure = env.beginStructure({
+      const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'Error',
+        byteSize: 2,
+      });      
+      env.attachMember(errorStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
       });
-      env.attachMember(setStructure, {
+      env.finalizeShape(errorStructure);
+      const { constructor: Error } = errorStructure;
+      env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        slot: 1,
-     });
-      env.attachMember(setStructure, {
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: errorStructure,
+      }, true);
+      env.attachMember(errorStructure, {
         name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        slot: 2,
-      });
-      env.finalizeShape(setStructure);
-      env.finalizeStructure(setStructure);
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: errorStructure,
+      }, true);
+      env.attachTemplate(errorStructure, {
+        [SLOTS]: {
+          0: Error.call(ENVIRONMENT, errorData(5)),
+          1: Error.call(ENVIRONMENT, errorData(8)),
+        }
+      }, true);
+      env.finalizeStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         name: 'Hello',
@@ -524,11 +654,11 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Int,
+        type: MemberType.Error,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
-        structure: setStructure,
+        structure: errorStructure,
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
@@ -540,22 +670,38 @@ describe('Error union functions', function() {
         .with.property('message').that.contains('#32');
     })
     it('should throw when attempting to set an error that is not in the error set', function() {
-      const setStructure = env.beginStructure({
+      const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'SomeError',
+        name: 'Error',
+        byteSize: 2,
+      });      
+      env.attachMember(errorStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
       });
-      env.attachMember(setStructure, {
+      env.finalizeShape(errorStructure);
+      const { constructor: Error } = errorStructure;
+      env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        slot: 1,
-      });
-      env.attachMember(setStructure, {
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: errorStructure,
+      }, true);
+      env.attachMember(errorStructure, {
         name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        slot: 2,
-      });
-      env.finalizeShape(setStructure);
-      env.finalizeStructure(setStructure);
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: errorStructure,
+      }, true);
+      env.attachTemplate(errorStructure, {
+        [SLOTS]: {
+          0: Error.call(ENVIRONMENT, errorData(5)),
+          1: Error.call(ENVIRONMENT, errorData(8)),
+        }
+      }, true);
+      env.finalizeStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         name: 'Hello',
@@ -571,11 +717,11 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Int,
+        type: MemberType.Error,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
-        structure: setStructure,
+        structure: errorStructure,
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
@@ -583,7 +729,7 @@ describe('Error union functions', function() {
       const object = new Hello(123n);
       expect(object.$).to.equal(123n);
       expect(() => object.$ = new Error('Doh!')).to.throw(TypeError)
-        .with.property('message').that.contains('SomeError');
+        .with.property('message').that.contains('Error');
     })
   })
   // describe('getErrorUnionAccessors', function() {
@@ -725,3 +871,8 @@ describe('Error union functions', function() {
   //   })
   // })
 })
+
+function errorData(index) {
+  const ta = new Uint16Array([ index ]);
+  return new DataView(ta.buffer, 0, 2);
+}

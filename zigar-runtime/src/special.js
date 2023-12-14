@@ -9,24 +9,27 @@ import { isTypedArray } from './data-view.js';
 export function addSpecialAccessors(s) {
   const { constructor } = s;
   // use toPrimitive() as valueOf() when there's one
+  const valueDescriptor = getValueDescriptor(s);
   defineProperties(constructor.prototype, {
     dataView: { ...getDataViewAccessors(s), configurable: true },
     base64: { ...getBase64Accessors(), configurable: true },
-    toJSON: { value: valueOf, configurable: true, writable: true },
-    valueOf: overrideValueOf(s) ?? { value: getValueOf, configurable: true, writable: true },
+    toJSON:  valueDescriptor,
+    valueOf: valueDescriptor,
     string: canBeString(s) && { ...getStringAccessors(s), configurable: true },
     typedArray: canBeTypedArray(s) && { ...getTypedArrayAccessors(s), configurable: true },
   });
 }
 
-function overrideValueOf(s) {
+function getValueDescriptor(s) {
   switch (s.type) {
     case StructureType.Primitive:
     case StructureType.Enumeration:
+      const toPrimitive = s.constructor.prototype[Symbol.toPrimitive];
+      return { value: toPrimitive, configurable: true, writable: true };
     case StructureType.ErrorSet:
-      return false;
+      return;
     default:
-      return true;
+      return { value: getValueOf, configurable: true, writable: true };
   }
 }
 

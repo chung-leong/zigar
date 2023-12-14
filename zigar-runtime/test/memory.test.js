@@ -5,6 +5,7 @@ import {
   getResetFunction,
   getBitAlignFunction,
   restoreMemory,
+  getMemoryResetter,
 } from '../src/memory.js';
 import { MEMORY } from '../src/symbol.js';
 
@@ -57,12 +58,26 @@ describe('Memory functions', function() {
         if (!functions.includes(f)) {
           functions.push(f);
         }
-        f(dest);
+        f(dest, 0);
         for (let i = 0; i < size; i++) {
           expect(dest.getInt8(i)).to.equal(0);
         }
       }
       expect(functions).to.have.lengthOf(10);
+    })
+  })
+  describe('getMemoryResetter', function() {
+    it('should return function for clearing memory of objects', function() {
+      const dest = new DataView(new ArrayBuffer(32));
+      for (let i = 0; i < 32; i++) {
+        dest.setInt8(i, i);
+      }
+      const object = { [MEMORY]: dest };
+      const f = getMemoryResetter(16, 16);
+      f.call(object);
+      for (let i = 0; i < 32; i++) {
+        expect(dest.getInt8(i)).to.equal(i < 16 ? i : 0);
+      }
     })
   })
   describe('getBitAlignFunction', function() {

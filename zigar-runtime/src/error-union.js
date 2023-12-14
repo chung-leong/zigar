@@ -5,9 +5,8 @@ import { requireDataView } from './data-view.js';
 import { throwNoInitializer, throwNotInErrorSet, throwUnknownErrorNumber } from './error.js';
 import { copyPointer, resetPointer } from './pointer.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
-import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, MEMORY_RESETTER, POINTER_VISITOR,
-  SIZE,
-  SLOTS } from './symbol.js';
+import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SIZE, SLOTS, 
+  VALUE_RESETTER } from './symbol.js';
 
 export function defineErrorUnion(s, env) {
   const {
@@ -22,32 +21,26 @@ export function defineErrorUnion(s, env) {
   const { constructor: ErrorSet } = errorStructure;
   const set = function(value) {
     if (value instanceof Error) {
-      if (!(value instanceof ErrorSet)) {
-        throwNotInErrorSet(errorStructure);
-      }
-      this[MEMORY_RESETTER]();
+      setError.call(this, value);
+      this[VALUE_RESETTER]();
       this[POINTER_VISITOR]?.(resetPointer);
-      setError.call(this, value.index);
     } else {
+      // call setValue() first, in case it throws
       setValue.call(this, value);
-      setError.call(this, 0);
+      setError.call(this, null);
     }
   };
   const get = function() {
-    const errorNumber = getError.call(this);
-    if (errorNumber !== 0) {
-      const err = ErrorSet(errorNumber);
-      if (!err) {
-        throwUnknownErrorNumber(errorStructure, errorNumber);
-      }
-      throw err;
+    const error = getError.call(this);
+    if (error) {
+      throw error;
     } else {
       return getValue.call(this);
     }
   };
   const check = function() {
-    const errorNumber = getError.call(this);
-    return (errorNumber === 0);
+    const error = getError.call(this);
+    return !error;
   };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const constructor = s.constructor = function(arg) {
@@ -83,10 +76,11 @@ export function defineErrorUnion(s, env) {
       this.$ = arg;
     }
   };
+  const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
   defineProperties(constructor.prototype, {
     '$': { get, set, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [MEMORY_RESETTER]: { value: getMemoryResetter(byteSize) },
+    [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildActive: check }) },
   });

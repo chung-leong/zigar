@@ -164,7 +164,7 @@ export function copyPointer({ source, isActive = always }) {
 }
 
 export function resetPointer({ isActive = always }) {
-  if (!isActive(this)) {
+  if (isActive(this)) {
     this[SLOTS][0] = null;
   }
 }

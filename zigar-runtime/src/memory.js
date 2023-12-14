@@ -175,11 +175,11 @@ function copy32(dest, src) {
   dest.setInt32(28, src.getInt32(28, true), true);
 }
 
-export function getMemoryResetter(size) {
+export function getMemoryResetter(offset, size) {
   const reset = getResetFunction(size);
   return function() {
     const dest = this[MEMORY];
-    reset(dest);
+    reset(dest, offset);
   };
 }
 
@@ -203,64 +203,64 @@ const resetters = {
   32: reset32,
 };
 
-function reset1x(dest) {
-  for (let i = 0, len = dest.byteLength; i < len; i++) {
+function reset1x(dest, offset) {
+  for (let i = offset, len = dest.byteLength; i < len; i++) {
     dest.setInt8(i, 0);
   }
 }
 
-function reset2x(dest) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 2) {
+function reset2x(dest, offset) {
+  for (let i = offset, len = dest.byteLength; i < len; i += 2) {
     dest.setInt16(i, 0, true);
   }
 }
 
-function reset4x(dest) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 4) {
+function reset4x(dest, offset) {
+  for (let i = offset, len = dest.byteLength; i < len; i += 4) {
     dest.setInt32(i, 0, true);
   }
 }
 
-function reset8x(dest) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 8) {
+function reset8x(dest, offset) {
+  for (let i = offset, len = dest.byteLength; i < len; i += 8) {
     dest.setInt32(i, 0, true);
     dest.setInt32(i + 4, 0, true);
   }
 }
 
-function reset1(dest) {
-  dest.setInt8(0, 0);
+function reset1(dest, offset) {
+  dest.setInt8(offset, 0);
 }
 
-function reset2(dest) {
-  dest.setInt16(0, 0, true);
+function reset2(dest, offset) {
+  dest.setInt16(offset, 0, true);
 }
 
-function reset4(dest) {
-  dest.setInt32(0, 0, true);
+function reset4(dest, offset) {
+  dest.setInt32(offset, 0, true);
 }
 
-function reset8(dest) {
-  dest.setInt32(0, 0, true);
-  dest.setInt32(4, 0, true);
+function reset8(dest, offset) {
+  dest.setInt32(offset + 0, 0, true);
+  dest.setInt32(offset + 4, 0, true);
 }
 
-function reset16(dest) {
-  dest.setInt32(0, 0, true);
-  dest.setInt32(4, 0, true);
-  dest.setInt32(8, 0, true);
-  dest.setInt32(12, 0, true);
+function reset16(dest, offset) {
+  dest.setInt32(offset + 0, 0, true);
+  dest.setInt32(offset + 4, 0, true);
+  dest.setInt32(offset + 8, 0, true);
+  dest.setInt32(offset + 12, 0, true);
 }
 
-function reset32(dest) {
-  dest.setInt32(0, 0, true);
-  dest.setInt32(4, 0, true);
-  dest.setInt32(8, 0, true);
-  dest.setInt32(12, 0, true);
-  dest.setInt32(16, 0, true);
-  dest.setInt32(20, 0, true);
-  dest.setInt32(24, 0, true);
-  dest.setInt32(28, 0, true);
+function reset32(dest, offset) {
+  dest.setInt32(offset + 0, 0, true);
+  dest.setInt32(offset + 4, 0, true);
+  dest.setInt32(offset + 8, 0, true);
+  dest.setInt32(offset + 12, 0, true);
+  dest.setInt32(offset + 16, 0, true);
+  dest.setInt32(offset + 20, 0, true);
+  dest.setInt32(offset + 24, 0, true);
+  dest.setInt32(offset + 28, 0, true);
 }
 
 /* c8 ignore start */

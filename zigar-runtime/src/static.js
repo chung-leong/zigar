@@ -28,11 +28,13 @@ export function addStaticMembers(s, env) {
     const byIndex = constructor[ENUM_ITEMS];
     for (const { name } of members) {
       // place item in hash to facilitate lookup
-      const item = constructor[name];
-      const index = item.valueOf();
-      byIndex[index] = item;
-      // attach name to item so tagged union code can quickly find it
-      defineProperties(item, { [ENUM_NAME]: { value: name } });
+      const item = constructor[name];      
+      if (item instanceof constructor) {
+        const index = item[Symbol.toPrimitive]();
+        byIndex[index] = item;
+        // attach name to item so tagged union code can quickly find it
+        defineProperties(item, { [ENUM_NAME]: { value: name } });  
+      }
     }
   } else if (type === StructureType.ErrorSet) {
     const byIndex = constructor[ERROR_ITEMS];

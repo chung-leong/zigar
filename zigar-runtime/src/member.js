@@ -9,7 +9,7 @@ import {
   getDataViewFloatAccessor,
   getDataViewFloatAccessorEx,
 } from './data-view.js';
-import { getIntRange } from './primitive.js';
+import { getIntRange, getPrimitiveClass } from './primitive.js';
 import {
   throwOverflow,
   throwNotNull,
@@ -18,6 +18,7 @@ import {
   throwNotInErrorSet,
   rethrowRangeError,
   throwErrorExpected,
+  throwUnknownErrorNumber,
 } from './error.js';
 import { restoreMemory } from './memory.js';
 import { MEMORY, CHILD_VIVIFICATOR, SLOTS } from './symbol.js';
@@ -331,26 +332,33 @@ function addErrorLookup(getDataViewIntAccessor) {
       return function(offset, littleEndian) {
         const { constructor } = structure;
         const value = accessor.call(this, offset, littleEndian);
-        // the enumeration constructor returns the object for the int value
-        const object = constructor(value);
-        if (!object) {
-          throwNotInErrorSet(structure, value)
+        if (value) {
+          // the error constructor returns the object for the int value
+          const object = constructor(value);
+          if (!object) {
+            throwUnknownErrorNumber(structure, value);
+          }
+          return object;
         }
-        return object;
       };
     } else {
+      const Primitive = getPrimitiveClass(intMember);
+      const zero = Primitive(0);
       return function(offset, value, littleEndian) {
         const { constructor } = structure;
         let item;
-        if (value instanceof constructor) {
+        if (value instanceof Error) {
+          if (!(value instanceof constructor)) {
+            throwNotInErrorSet(structure);
+          }
           item = value;
-        } else {
+        } else if (value !== null) {
           item = constructor(value);
+          if (!item) {
+            throwErrorExpected(structure, value);
+          }
         }
-        if (!item) {
-          throwErrorExpected(structure, value);
-        }
-        accessor.call(this, offset, item.index, littleEndian);
+        accessor.call(this, offset, item?.index ?? zero, littleEndian);
       };
     }
   };

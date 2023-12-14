@@ -5,8 +5,8 @@ import { requireDataView }  from './data-view.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
 import { throwNoInitializer } from './error.js';
 import { copyPointer, resetPointer } from './pointer.js';
-import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, MEMORY_RESETTER, POINTER_VISITOR, SIZE,
-  SLOTS } from './symbol.js';
+import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SIZE, SLOTS, 
+  VALUE_RESETTER } from './symbol.js';
 
 export function defineOptional(s, env) {
   const {
@@ -27,10 +27,12 @@ export function defineOptional(s, env) {
   };
   const set = function(value) {
     if (value != null) {
-      setPresent.call(this, true);
+      // call setValue() first, in case it throws
       setValue.call(this, value);
-    } else {
-      this[MEMORY_RESETTER]();
+      setPresent.call(this, true);
+    } else {      
+      setPresent.call(this, false);
+      this[VALUE_RESETTER]();
       this[POINTER_VISITOR]?.(resetPointer);
     }
   };
@@ -70,10 +72,11 @@ export function defineOptional(s, env) {
       this.$ = arg;
     }
   };
+  const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
   defineProperties(constructor.prototype, {
     '$': { get, set, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [MEMORY_RESETTER]: { value: getMemoryResetter(byteSize) },
+    [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildActive: check }) },
   });

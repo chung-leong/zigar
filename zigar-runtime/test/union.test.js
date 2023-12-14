@@ -547,13 +547,13 @@ describe('Union functions', function() {
       const enumStructure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',
-        byteSize: 4,
+        byteSize: 2,
       });
       env.attachMember(enumStructure, {
         type: MemberType.Uint,
-        bitSize: 32,
+        bitSize: 16,
         bitOffset: 0,
-        byteSize: 4,
+        byteSize: 2,
       });
       env.finalizeShape(enumStructure);
       const { constructor: HelloTag } = enumStructure;
@@ -562,7 +562,7 @@ describe('Union functions', function() {
         type: MemberType.Comptime,
         slot: 0,
         structure: enumStructure,
-      });
+      }, true);
       env.attachMember(enumStructure, {
         name: 'cat',
         type: MemberType.Comptime,
@@ -571,15 +571,15 @@ describe('Union functions', function() {
       }, true);
       env.attachTemplate(enumStructure, {
         [SLOTS]: {
-          0: HelloTag.call(ENVIRONMENT, viewOf(new Uint32Array([ 100 ]))),
-          1: HelloTag.call(ENVIRONMENT, viewOf(new Uint32Array([ 200 ]))),
+          0: HelloTag.call(ENVIRONMENT, viewOf(new Uint16Array([ 100 ]))),
+          1: HelloTag.call(ENVIRONMENT, viewOf(new Uint16Array([ 200 ]))),
         },
       }, true);
       env.finalizeStructure(enumStructure);
       const structure = env.beginStructure({
         type: StructureType.TaggedUnion,
         name: 'Hello',
-        byteSize: 8,
+        byteSize: 6,
       });
       env.attachMember(structure, {
         name: 'dog',
@@ -600,16 +600,16 @@ describe('Union functions', function() {
       env.attachMember(structure, {
         name: 'selector',
         type: MemberType.EnumerationItem,
-        bitSize: 32,
+        bitSize: 16,
         bitOffset: 32,
-        byteSize: 4,
+        byteSize: 2,
         structure: enumStructure,
       });
       env.attachTemplate(structure, {
         [MEMORY]: (() => {
-          const dv = new DataView(new ArrayBuffer(8));
+          const dv = new DataView(new ArrayBuffer(6));
           dv.setInt32(0, 1234, true);
-          dv.setInt32(4, 100, true);
+          dv.setInt16(4, 100, true);
           return dv;
         })(),
         [SLOTS]: {},
@@ -625,11 +625,11 @@ describe('Union functions', function() {
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.be.null;
       expect(() => object.cat = 567).to.throw(TypeError);
-      object[MEMORY].setInt32(4, 200, true);
-      object[MEMORY].setInt32(0, 567, true);
+      object[MEMORY].setInt16(4, 200, true);
+      object[MEMORY].setInt16(0, 567, true);
       expect(object.dog).to.be.null;
       expect(object.cat).to.equal(567);
-      expect(HelloType(object)).to.equal(HelloType.cat);
+      expect(HelloTag(object)).to.equal(HelloTag.cat);
     })
     it('should only have a single enumerable property', function() {
       const enumStructure = env.beginStructure({
@@ -650,7 +650,7 @@ describe('Union functions', function() {
         type: MemberType.Comptime,
         slot: 0,
         structure: enumStructure,
-      });
+      }, true);
       env.attachMember(enumStructure, {
         name: 'cat',
         type: MemberType.Comptime,
@@ -736,13 +736,13 @@ describe('Union functions', function() {
       const enumStructure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',
-        byteSize: 4,
+        byteSize: 2,
       });
       env.attachMember(enumStructure, {
         type: MemberType.Uint,
-        bitSize: 32,
+        bitSize: 16,
         bitOffset: 0,
-        byteSize: 4,
+        byteSize: 2,
       });
       env.finalizeShape(enumStructure);
       const { constructor: HelloTag } = enumStructure;
@@ -751,7 +751,7 @@ describe('Union functions', function() {
         type: MemberType.Comptime,
         slot: 0,
         structure: enumStructure,
-      });
+      }, true);
       env.attachMember(enumStructure, {
         name: 'number',
         type: MemberType.Comptime,
@@ -760,8 +760,8 @@ describe('Union functions', function() {
       }, true);
       env.attachTemplate(enumStructure, {
         [SLOTS]: {
-          0: HelloTag.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
-          1: HelloTag.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
+          0: HelloTag.call(ENVIRONMENT, viewOf(new Uint16Array([ 0 ]))),
+          1: HelloTag.call(ENVIRONMENT, viewOf(new Uint16Array([ 1 ]))),
         },
       }, true);
       env.finalizeStructure(enumStructure);
@@ -841,13 +841,13 @@ describe('Union functions', function() {
       const enumStructure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',
-        byteSize: 4,
+        byteSize: 2,
       });
       env.attachMember(enumStructure, {
         type: MemberType.Uint,
-        bitSize: 32,
+        bitSize: 16,
         bitOffset: 0,
-        byteSize: 4,
+        byteSize: 2,
       });
       env.finalizeShape(enumStructure);
       const { constructor: HelloTag } = enumStructure;
@@ -856,7 +856,7 @@ describe('Union functions', function() {
         type: MemberType.Comptime,
         slot: 0,
         structure: enumStructure,
-      });
+      }, true);
       env.attachMember(enumStructure, {
         name: 'number',
         type: MemberType.Comptime,
@@ -865,8 +865,8 @@ describe('Union functions', function() {
       }, true);
       env.attachTemplate(enumStructure, {
         [SLOTS]: {
-          0: HelloTag.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
-          1: HelloTag.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
+          0: HelloTag.call(ENVIRONMENT, viewOf(new Uint16Array([ 0 ]))),
+          1: HelloTag.call(ENVIRONMENT, viewOf(new Uint16Array([ 1 ]))),
         },
       }, true);
       env.finalizeStructure(enumStructure);
@@ -945,13 +945,13 @@ describe('Union functions', function() {
       const enumStructure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',
-        byteSize: 4,
+        byteSize: 2,
       });
       env.attachMember(enumStructure, {
         type: MemberType.Uint,
-        bitSize: 32,
+        bitSize: 16,
         bitOffset: 0,
-        byteSize: 4,
+        byteSize: 2,
       });
       env.finalizeShape(enumStructure);
       const { constructor: HelloTag } = enumStructure;
@@ -960,7 +960,7 @@ describe('Union functions', function() {
         type: MemberType.Comptime,
         slot: 0,
         structure: enumStructure,
-      });
+      }, true);
       env.attachMember(enumStructure, {
         name: 'number',
         type: MemberType.Comptime,
@@ -969,8 +969,8 @@ describe('Union functions', function() {
       }, true);
       env.attachTemplate(enumStructure, {
         [SLOTS]: {
-          0: HelloTag.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
-          1: HelloTag.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
+          0: HelloTag.call(ENVIRONMENT, viewOf(new Uint16Array([ 0 ]))),
+          1: HelloTag.call(ENVIRONMENT, viewOf(new Uint16Array([ 1 ]))),
         },
       }, true);
       env.finalizeStructure(enumStructure);
@@ -1048,13 +1048,13 @@ describe('Union functions', function() {
       const enumStructure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',
-        byteSize: 4,
+        byteSize: 2,
       });
       env.attachMember(enumStructure, {
         type: MemberType.Uint,
-        bitSize: 32,
+        bitSize: 16,
         bitOffset: 0,
-        byteSize: 4,
+        byteSize: 2,
       });
       env.finalizeShape(enumStructure);
       const { constructor: HelloTag } = enumStructure;
@@ -1063,7 +1063,7 @@ describe('Union functions', function() {
         type: MemberType.Comptime,
         slot: 0,
         structure: enumStructure,
-      });
+      }, true);
       env.attachMember(enumStructure, {
         name: 'number',
         type: MemberType.Comptime,
@@ -1072,8 +1072,8 @@ describe('Union functions', function() {
       }, true);
       env.attachTemplate(enumStructure, {
         [SLOTS]: {
-          0: HelloTag.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
-          1: HelloTag.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
+          0: HelloTag.call(ENVIRONMENT, viewOf(new Uint16Array([ 0 ]))),
+          1: HelloTag.call(ENVIRONMENT, viewOf(new Uint16Array([ 1 ]))),
         },
       }, true);
       env.finalizeStructure(enumStructure);

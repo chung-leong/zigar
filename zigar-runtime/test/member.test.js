@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { CHILD_VIVIFICATOR, MEMORY } from '../src/symbol.js';
+import { CHILD_VIVIFICATOR, MEMORY, SLOTS } from '../src/symbol.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { clearMethodCache } from '../src/data-view.js';
 import {
@@ -323,7 +323,16 @@ describe('Member functions', function() {
         structure: {
           name: 'DummEnum',
           type: StructureType.Enumeration,
-          constructor: DummyEnum
+          constructor: DummyEnum,
+          instance: {
+            members: [ 
+              {
+                type: MemberType.Uint,
+                bitSize: 4,
+                bitOffset: 0,
+              } 
+            ]
+          }
         },
       };
       const { get, set } = getDescriptor(member, { ...env, runtimeSafety: false });
@@ -359,7 +368,19 @@ describe('Member functions', function() {
         type: MemberType.EnumerationItem,
         bitSize: 4,
         bitOffset: 32,
-        structure: { type: StructureType.Enumeration, constructor: DummyEnum },
+        structure: { 
+          type: StructureType.Enumeration, 
+          constructor: DummyEnum,
+          instance: {
+            members: [ 
+              {
+                type: MemberType.Uint,
+                bitSize: 4,
+                bitOffset: 0,
+              } 
+            ]
+          }
+        },
       };
       const { get, set } = getDescriptor(member, env);
       expect(get.call(object)).to.equal(DummyValue1);
@@ -374,7 +395,17 @@ describe('Member functions', function() {
         type: MemberType.EnumerationItem,
         bitSize: 4,
         bitOffset: 32,
-        structure: {},
+        structure: {
+          instance: {
+            members: [ 
+              {
+                type: MemberType.Uint,
+                bitSize: 4,
+                bitOffset: 0,
+              } 
+            ]
+          }
+        },
       };
       const { get, set } = getDescriptor(member, env);
       expect(get).to.be.undefined;
@@ -486,12 +517,13 @@ describe('Member functions', function() {
       const DummyClass = function(value) {};
       const member = {
         type: MemberType.Type,
-        structure: {
-          type: StructureType.Struct,
-          constructor: DummyClass
-        },
+        slot: 5,
       };
-      const object = {};
+      const object = {
+        [SLOTS]: {
+          5: { constructor: DummyClass },
+        }
+      };
       const { get, set } = getDescriptor(member, env);
       expect(get.call(object)).to.equal(DummyClass);
       expect(set).to.be.undefined;
