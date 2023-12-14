@@ -33,7 +33,7 @@ export function addTests(importModule, options) {
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ empty1: undefined, empty2: undefined });
     })
-    it('should no compile code with undefined in packed struct', async function() {
+    it('should not compile code with undefined in packed struct', async function() {
       this.timeout(120000);
       await expect(importTest('in-a-packed-struct')).to.eventually.be.rejected;
     })

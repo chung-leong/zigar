@@ -1,4 +1,8 @@
-import { expect } from 'chai';
+import { expect, use } from 'chai';
+import ChaiAsPromised from 'chai-as-promised';
+import { capture } from '../../capture.js';
+
+use(ChaiAsPromised);
 
 export function addTests(importModule, options) {
   const importTest = async (name) => {
@@ -21,6 +25,11 @@ export function addTests(importModule, options) {
         7: 'Alfheim',
         8: 'Nidavellir',
       });
+    })
+
+    it('should not compile code containing enum literal vector', async function() {
+      this.timeout(120000);
+      await expect(importTest('vector-of')).to.eventually.be.rejected;      
     })
   })
 }

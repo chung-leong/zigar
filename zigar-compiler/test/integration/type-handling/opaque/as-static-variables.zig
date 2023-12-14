@@ -1,1 +1,1 @@
-pub const something = opaque {};
+pub const something: anyopaque = {};

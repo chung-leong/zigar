@@ -9,7 +9,7 @@ export function addTests(importModule, options) {
       return importModule(url);
   };    
   describe('No return', function() {
-    it('should no compile code with no return as static variables', async function() {
+    it('should not compile code with no return as static variables', async function() {
       this.timeout(120000);
       await expect(importTest('as-static-variables')).to.eventually.be.rejected;
     })
