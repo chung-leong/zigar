@@ -179,7 +179,7 @@ export function getMemoryResetter(offset, size) {
   const reset = getResetFunction(size);
   return function() {
     const dest = this[MEMORY];
-    reset(dest, offset);
+    reset(dest, offset, size);
   };
 }
 
@@ -203,26 +203,26 @@ const resetters = {
   32: reset32,
 };
 
-function reset1x(dest, offset) {
-  for (let i = offset, len = dest.byteLength; i < len; i++) {
+function reset1x(dest, offset, size) {
+  for (let i = offset, limit = offset + size; i < limit; i++) {
     dest.setInt8(i, 0);
   }
 }
 
-function reset2x(dest, offset) {
-  for (let i = offset, len = dest.byteLength; i < len; i += 2) {
+function reset2x(dest, offset, size) {
+  for (let i = offset, limit = offset + size; i < limit; i += 2) {
     dest.setInt16(i, 0, true);
   }
 }
 
-function reset4x(dest, offset) {
-  for (let i = offset, len = dest.byteLength; i < len; i += 4) {
+function reset4x(dest, offset, size) {
+  for (let i = offset, limit = offset + size; i < limit; i += 4) {
     dest.setInt32(i, 0, true);
   }
 }
 
-function reset8x(dest, offset) {
-  for (let i = offset, len = dest.byteLength; i < len; i += 8) {
+function reset8x(dest, offset, size) {
+  for (let i = offset, limit = offset + size; i < limit; i += 8) {
     dest.setInt32(i, 0, true);
     dest.setInt32(i + 4, 0, true);
   }

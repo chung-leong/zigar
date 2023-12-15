@@ -170,10 +170,7 @@ export function getValueOf() {
         result = {};
         map.set(object, result);
         for (const [ name, child ] of Object.entries(object)) {
-          const childResult = extract(child);
-          if (childResult !== undefined) {
-            result[name] = childResult;
-          }
+          result[name] = extract(child);
         }
         return result;
       }

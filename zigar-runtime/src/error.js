@@ -270,6 +270,11 @@ export function throwNotNull(member) {
   throw new RangeError(`Property ${name} can only be null`);
 }
 
+export function throwNotUndefined(member) {
+  const { name } = member;
+  throw new RangeError(`Property ${name} can only be undefined`);
+}
+
 export function throwZigError(name) {
   throw new Error(decamelizeErrorName(name));
 }

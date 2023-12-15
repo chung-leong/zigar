@@ -26,7 +26,7 @@ export function defineOptional(s, env) {
     }
   };
   const set = function(value) {
-    if (value != null) {
+    if (value !== null) {
       // call setValue() first, in case it throws
       setValue.call(this, value);
       setPresent.call(this, true);

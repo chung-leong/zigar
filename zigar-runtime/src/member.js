@@ -19,6 +19,7 @@ import {
   rethrowRangeError,
   throwErrorExpected,
   throwUnknownErrorNumber,
+  throwNotUndefined,
 } from './error.js';
 import { restoreMemory } from './memory.js';
 import { MEMORY, CHILD_VIVIFICATOR, SLOTS } from './symbol.js';
@@ -120,6 +121,10 @@ export function useLiteral() {
   factories[MemberType.Literal] = getLiteralDescriptor;
 }
 
+export function useNull() {
+  factories[MemberType.Null] = getNullDescriptor;
+}
+
 export function getMemberFeature(member) {
   const { type, bitSize } = member;
   switch (type) {
@@ -190,11 +195,27 @@ export function getVoidDescriptor(member, env) {
   const { runtimeSafety } = env;
   return {
     get: function() {
+      return undefined;
+    },
+    set: (runtimeSafety)
+    ? function(value) {
+        if (value !== undefined) {
+          throwNotUndefined(member);
+        }
+      }
+    : function() {},
+  }
+}
+
+export function getNullDescriptor(member, env) {
+  const { runtimeSafety } = env;
+  return {
+    get: function() {
       return null;
     },
     set: (runtimeSafety)
     ? function(value) {
-        if (value != null) {
+        if (value !== null) {
           throwNotNull(member);
         }
       }
@@ -583,6 +604,7 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
 
 export function useAllMemberTypes() {
   useVoid();
+  useNull();
   useBoolEx();
   useIntEx();
   useUintEx();
