@@ -1,3 +1,5 @@
+const std = @import("std");
+
 pub const StrangeError = error{
     SystemIsOnFire,
     DogAteAllMemory,
@@ -12,3 +14,9 @@ pub const NormalError = error{
 };
 
 pub const PossibleError = NormalError || StrangeError;
+
+pub var error_var = NormalError.FileNotFound;
+
+pub fn print() void {
+    std.debug.print("{any}\n", .{error_var});
+}

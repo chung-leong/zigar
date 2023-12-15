@@ -9,6 +9,7 @@ let currentErrorSets;
 
 export function defineErrorSet(s, env) {
   const {
+    name,
     byteSize,
     align,
     instance: {
@@ -27,15 +28,7 @@ export function defineErrorSet(s, env) {
       const self = Object.create(constructor.prototype);
       const dv = requireDataView(s, arg);
       self[MEMORY] = dv;
-      const index = getIndex.call(self);
-      // return existing object if defined already
-      const existing = currentErrorSets[index];
-      if (existing) {
-        return existing; 
-      } else {
-        currentErrorSets[index] = self;
-        return self;
-      }
+      return self;
     }
     const index = Number(arg);
     return byIndex[index];
@@ -44,10 +37,10 @@ export function defineErrorSet(s, env) {
   const { get: getIndex } = getDescriptor(member, env);
   // get the enum descriptor instead of the int/uint descriptor
   const errorMember = { ...member, structure: s, type: MemberType.Error };
-  const { get } = getDescriptor(errorMember, env);
+  const { get, set } = getDescriptor(errorMember, env);
   const toStringTag = function() { return 'Error' };
   defineProperties(constructor.prototype, {
-    $: { get, configurable: true },
+    $: { get, set, configurable: true },
     index: { get: getIndex, configurable: true },
     // ensure that libraries that rely on the string tag for type detection will
     // correctly identify the object as an error

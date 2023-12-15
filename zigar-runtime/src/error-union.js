@@ -23,6 +23,7 @@ export function defineErrorUnion(s, env) {
     if (value instanceof Error) {
       setError.call(this, value);
       this[VALUE_RESETTER]();
+      debugger;
       this[POINTER_VISITOR]?.(resetPointer);
     } else {
       // call setValue() first, in case it throws

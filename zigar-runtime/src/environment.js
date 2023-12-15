@@ -2,13 +2,13 @@ import { defineProperties, getStructureFactory, getStructureName } from './struc
 import { decodeText } from './text.js';
 import { initializeErrorSets } from './error-set.js';
 import { throwAlignmentConflict, throwNullPointer, throwZigError } from './error.js';
-import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, ENVIRONMENT, LENGTH_GETTER, LENGTH_SETTER, MEMORY,
-  MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES, SIZE, SLOTS
-} from './symbol.js';
 import { getCopyFunction, getMemoryCopier, restoreMemory } from './memory.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors } from './special.js';
+import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, ENVIRONMENT, LENGTH_GETTER, LENGTH_SETTER, MEMORY,
+  MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES, SIZE, SLOTS
+} from './symbol.js';
 
 const defAlign = 16;
 
@@ -435,13 +435,13 @@ export class Environment {
     const dv = object[MEMORY];
     if (dv.byteLength !== 0) {
       const address = this.recreateAddress(reloc);
-      const wasmDV = this.obtainFixedView(address, dv.byteLength);
+      const fixedDV = this.obtainFixedView(address, dv.byteLength);
       if (writeBack) {
         const dest = Object.create(object.constructor.prototype);
-        dest[MEMORY] = wasmDV;
+        dest[MEMORY] = fixedDV;
         dest[MEMORY_COPIER](object);
       }
-      object[MEMORY] = wasmDV;
+      object[MEMORY] = fixedDV;
     }
   }
 
@@ -772,9 +772,6 @@ export class Environment {
         return;
       }
       const Target = pointer.constructor.child;
-      if (!Target) {
-        console.log({ pointer });
-      }
       let target = this[SLOTS][0];
       if (!target || isMutable(this)) {
         // obtain address (and possibly length) from memory

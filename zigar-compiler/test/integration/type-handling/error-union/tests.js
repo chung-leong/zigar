@@ -1,5 +1,8 @@
-import { expect } from 'chai';
+import { expect, use } from 'chai';
+import ChaiAsPromised from 'chai-as-promised';
 import { capture } from '../../capture.js';
+
+use(ChaiAsPromised);
 
 export function addTests(importModule, options) {
   const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(options.optimize);

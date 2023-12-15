@@ -1136,6 +1136,13 @@ fn exportPointerTarget(host: anytype, comptime ptr: anytype, is_comptime: bool) 
     return null;
 }
 
+fn exportError(host: anytype, err: anyerror, structure: Value) !Value {
+    const memory = toMemory(&err, true);
+    const dv = try host.createView(memory);
+    const obj = try host.castView(structure, dv);
+    return obj;
+}
+
 fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
     const st = @typeInfo(T).Struct;
     // pre-allocate relocatable slots for fields that always need them
@@ -1322,7 +1329,7 @@ fn addErrorUnionMember(host: anytype, structure: Value, comptime T: type) !void 
     }, false);
     try host.attachMember(structure, .{
         .name = "error",
-        .member_type = .Uint,
+        .member_type = getMemberType(eu.error_set),
         .bit_offset = error_offset,
         .bit_size = @bitSizeOf(anyerror),
         .byte_size = @sizeOf(anyerror),
@@ -1485,17 +1492,17 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
         .ErrorSet => |es| if (es) |errors| {
             inline for (errors, 0..) |err_rec, index| {
                 // get error from global set
-                const IT = ErrorIntType();
                 const err = @field(anyerror, err_rec.name);
-                const value: IT = @intFromError(err);
                 const slot = getObjectSlot(Static, offset + index);
                 try host.attachMember(structure, .{
                     .name = getCString(err_rec.name),
                     .member_type = getStaticMemberType(T, true),
                     .slot = slot,
                     .structure = structure,
-                }, false);
-                const value_obj = try exportPointerTarget(host, &value, true);
+                }, true);
+                // can't use exportPointerTarget(), since each error in the set would be
+                // considered a separate type--need special handling
+                const value_obj = try exportError(host, err, structure);
                 try host.writeSlot(template, slot, value_obj);
             }
         },

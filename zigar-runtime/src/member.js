@@ -331,12 +331,12 @@ function addErrorLookup(getDataViewIntAccessor) {
     if (access === 'get') {
       return function(offset, littleEndian) {
         const { constructor } = structure;
-        const value = accessor.call(this, offset, littleEndian);
-        if (value) {
+        const index = accessor.call(this, offset, littleEndian);
+        if (index) {
           // the error constructor returns the object for the int value
-          const object = constructor(value);
+          const object = constructor(index);
           if (!object) {
-            throwUnknownErrorNumber(structure, value);
+            throwUnknownErrorNumber(structure, index);
           }
           return object;
         }
@@ -457,6 +457,23 @@ export function getStaticDescriptor(member, env) {
       set: function setEnum(arg) {
         const object = this[SLOTS][slot];
         return set.call(object, arg);
+      },
+    };
+  } else if (structure.type === StructureType.ErrorSet) {
+    // ditto for error set
+    const { 
+      instance: { members: [ member ] },
+    } = structure;
+    const errorMember = { ...member, structure, type: MemberType.Error };
+    const { get, set } = getDescriptor(errorMember, env);
+    return {
+      get: function getError() {
+        const object = this[SLOTS][slot];
+        return get.call(object);
+      },
+      set: function setError(arg) {
+        const object = this[SLOTS][slot];
+        set.call(object, arg);
       },
     };
   } else {
