@@ -20,15 +20,15 @@ export async function compile(path, options = {}) {
   } = options;
   const fullPath = resolve(path);
   const rootFile = parse(fullPath);
-  const prefix = isWASM(arch) ? 'wasm' : 'cpp';
+  const suffix = isWASM(arch) ? 'wasm' : 'c';
   const config = {
     platform,
     arch,
     packageName: rootFile.name,
     packagePath: fullPath,
     packageRoot: rootFile.dir,
-    exporterPath: absolute(`../zig/${prefix}-exporter.zig`),
-    stubPath: absolute(`../zig/${prefix}-stub.zig`),
+    exporterPath: absolute(`../zig/exporter-${suffix}.zig`),
+    stubPath: absolute(`../zig/stub-${suffix}.zig`),
     buildFilePath: absolute(`../zig/build.zig`),
     useLibC: (platform === 'win32') ? true : false,
   };

@@ -1795,7 +1795,7 @@ test "createThunk" {
         }
     };
     const ArgA = ArgumentStruct(Test.A);
-    const Host = @import("./cpp-exporter.zig").Host;
+    const Host = @import("./exporter-c.zig").Host;
     const thunk = createThunk(Host, Test.A, ArgA);
     switch (@typeInfo(@TypeOf(thunk))) {
         .Pointer => |pt| {
