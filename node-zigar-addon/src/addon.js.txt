@@ -1806,7 +1806,7 @@
 "    }\n"
 "  }\n"
 "\n"
-"  function resetPointer({ isActive = always }) {\n"
+"  function resetPointer() {\n"
 "    this[SLOTS][0] = null;\n"
 "  }\n"
 "\n"

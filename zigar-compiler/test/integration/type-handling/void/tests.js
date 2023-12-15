@@ -24,8 +24,8 @@ export function addTests(importModule, options) {
     })
     it('should return void', async function() {
       this.timeout(120000);
-      const { default: module } = await importTest('as-return-value');
-      expect(module.getVoid()).to.equal(null);
+      const { getVoid } = await importTest('as-return-value');
+      expect(getVoid()).to.equal(null);
     })
     it('should handle void in array', async function() {
       this.timeout(120000);
