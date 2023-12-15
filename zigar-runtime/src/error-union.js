@@ -2,7 +2,7 @@ import { defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView } from './data-view.js';
-import { throwNoInitializer, throwNotInErrorSet, throwUnknownErrorNumber } from './error.js';
+import { throwNoInitializer } from './error.js';
 import { copyPointer, resetPointer } from './pointer.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
 import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SIZE, SLOTS, 

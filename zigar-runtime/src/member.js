@@ -22,6 +22,7 @@ import {
   throwNotUndefined,
 } from './error.js';
 import { restoreMemory } from './memory.js';
+import { getCurrentErrorSets } from './error-set.js';
 import { MEMORY, CHILD_VIVIFICATOR, SLOTS } from './symbol.js';
 
 export const MemberType = {
@@ -343,7 +344,9 @@ function addErrorLookup(getDataViewIntAccessor) {
     // no point in using non-standard int accessor to read enum values unless they aren't byte-aligned
     const { structure } = member;
     const [ intMember ] = structure.instance.members;
+    const acceptAny = structure.name === 'anyerror';
     const accessor = getDataViewIntAccessor(access, intMember);
+    const allErrors = getCurrentErrorSets();
     /* DEV-TEST */
     if (!accessor) {
       return;
@@ -354,12 +357,11 @@ function addErrorLookup(getDataViewIntAccessor) {
         const { constructor } = structure;
         const index = accessor.call(this, offset, littleEndian);
         if (index) {
-          // the error constructor returns the object for the int value
-          const object = constructor(index);
+          const object = acceptAny ? allErrors[index] : constructor(index);
           if (!object) {
             throwUnknownErrorNumber(structure, index);
           }
-          return object;
+        return object;
         }
       };
     } else {
@@ -367,19 +369,19 @@ function addErrorLookup(getDataViewIntAccessor) {
       const zero = Primitive(0);
       return function(offset, value, littleEndian) {
         const { constructor } = structure;
-        let item;
+        let object;
         if (value instanceof Error) {
-          if (!(value instanceof constructor)) {
+          if (!(acceptAny ? value.index : value instanceof constructor)) {
             throwNotInErrorSet(structure);
           }
-          item = value;
+          object = value;
         } else if (value !== null) {
-          item = constructor(value);
-          if (!item) {
+          object = acceptAny ? allErrors[value] : constructor(value);
+          if (!object) {
             throwErrorExpected(structure, value);
-          }
-        }
-        accessor.call(this, offset, item?.index ?? zero, littleEndian);
+          } 
+        }  
+        accessor.call(this, offset, object?.index ?? zero, littleEndian);
       };
     }
   };
