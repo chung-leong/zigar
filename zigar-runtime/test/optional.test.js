@@ -574,6 +574,35 @@ describe('Optional functions', function() {
         expect(array[SLOTS][i][SLOTS][0]).to.be.null;
       }
     })
+    it('should be able to create read-only object', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Optional,
+        name: 'Hello',
+        byteSize: 18,
+      });
+      env.attachMember(structure, {
+        name: 'value',
+        type: MemberType.Float,
+        bitOffset: 0,
+        bitSize: 128,
+        byteSize: 16,
+        structure: {
+          type: StructureType.Primitive,
+        }
+      });
+      env.attachMember(structure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: 128,
+        bitSize: 1,
+        byteSize: 1,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const object = Hello(new ArrayBuffer(18), { writable: false });
+      expect(() => object.$ = 3.14).to.throw(TypeError);
+    })
   })
   // describe('getOptionalAccessors', function() {
   //   beforeEach(function() {

@@ -165,9 +165,9 @@ export class Environment {
     return new constructor(arg);
   }
 
-  castView(structure, dv) {
+  castView(structure, dv, writable) {
     const { constructor, hasPointer } = structure;
-    const object = constructor.call(ENVIRONMENT, dv);
+    const object = constructor.call(ENVIRONMENT, dv, { writable });
     if (hasPointer) {
       // acquire targets of pointers
       this.acquirePointerTargets(object);
@@ -395,14 +395,16 @@ export class Environment {
         const { array, offset, length } = placeholder.memory;
         const dv = new DataView(array.buffer, offset, length);
         const { constructor } = placeholder.structure;
-        const object = constructor.call(ENVIRONMENT, dv);
+        const { reloc } = placeholder;
+        const writable = reloc !== undefined;
+        const object = constructor.call(ENVIRONMENT, dv, { writable });
         if (placeholder.slots) {
           insertObjects(object[SLOTS], placeholder.slots);
         }
-        if (placeholder.hasOwnProperty('reloc')) {
+        if (writable) {
           // need to replace dataview with one pointing to fixed memory later,
           // when the VM is up and running
-          this.variables.push({ reloc: placeholder.reloc, object });
+          this.variables.push({ reloc, object });
         }
         return object;  
       } else {
@@ -986,7 +988,7 @@ export class WebAssemblyEnvironment extends Environment {
     createString: { argType: 'ii', returnType: 'v' },
     createObject: { argType: 'vv', returnType: 's' },
     createView: { argType: 'iib', returnType: 'v' },
-    castView: { argType: 'vv', returnType: 'v' },
+    castView: { argType: 'vvb', returnType: 'v' },
     readSlot: { argType: 'vi', returnType: 'v' },
     writeSlot: { argType: 'viv' },
     getViewAddress: { argType: 'v', returnType: 'i' },

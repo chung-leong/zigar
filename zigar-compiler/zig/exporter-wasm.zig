@@ -27,7 +27,7 @@ extern fn _freeRelocatableMemory(bytes: [*]u8, len: usize, alignment: u16) void;
 extern fn _createString(bytes: ?[*]const u8, len: usize) ?Value;
 extern fn _createObject(structure: Value, dv: Value) ?Value;
 extern fn _createView(bytes: ?[*]u8, len: usize, copy: bool) ?Value;
-extern fn _castView(structure: Value, dv: Value) ?Value;
+extern fn _castView(structure: Value, dv: Value, writable: bool) ?Value;
 extern fn _getViewAddress(dv: Value) usize;
 extern fn _readSlot(container: ?Value, slot: usize) ?Value;
 extern fn _writeSlot(container: ?Value, slot: usize, object: ?Value) void;
@@ -165,8 +165,8 @@ pub const Host = struct {
         }
     }
 
-    pub fn castView(_: Host, structure: Value, dv: Value) !Value {
-        if (_castView(structure, dv)) |object| {
+    pub fn castView(_: Host, structure: Value, dv: Value, writable: bool) !Value {
+        if (_castView(structure, dv, writable)) |object| {
             return object;
         } else {
             return Error.UnableToCreateObject;

@@ -8,8 +8,6 @@ import {
   throwBufferExpected,
   throwInvalidEnum,
   throwEnumExpected,
-  throwNoNewEnum,
-  throwNoNewError,
   throwNotInErrorSet,
   throwUnknownErrorNumber,
   throwInvalidType,
@@ -141,28 +139,6 @@ describe('Error functions', function() {
         byteSize: 8,
       };
       expect(() => throwEnumExpected(structure, 16)).to.throw(TypeError)
-        .with.property('message').that.contains('Hello');
-    })
-  })
-  describe('throwNoNewEnum', function() {
-    it('should throw a type error', function() {
-      const structure = {
-        name: 'Hello',
-        type: StructureType.Enumeration,
-        byteSize: 8,
-      };
-      expect(() => throwNoNewEnum(structure, 16)).to.throw(TypeError)
-        .with.property('message').that.contains('Hello');
-    })
-  })
-  describe('throwNoNewError', function() {
-    it('should throw a type error', function() {
-      const structure = {
-        name: 'Hello',
-        type: StructureType.ErrorSet,
-        byteSize: 8,
-      };
-      expect(() => throwNoNewError(structure, 16)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
     })
   })

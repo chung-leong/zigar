@@ -250,7 +250,26 @@ describe('Primitive functions', function() {
       const { constructor: I64 } = structure;
       expect(() => new I64({})).to.throw(TypeError);
     })
-
+    it('should be able to create read-only object', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Hello',
+        byteSize: 8,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setBigUint64(0, 0x7FFFFFFFFFFFFFFFn, true);
+      const object = Hello(dv, { writable: false });
+      expect(() => object.$ = 100n);
+    })
   })
   describe('getIntRange', function() {
     it('should return expected range for a 8-bit signed integer', function() {

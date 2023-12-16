@@ -25,6 +25,7 @@ export function addTests(importModule, options) {
       expect(PossibleError.OutOfMemory).to.be.instanceOf(PossibleError);
       expect(StrangeError.SystemIsOnFire).to.equal(PossibleError.SystemIsOnFire);
       expect(StrangeError.SystemIsOnFire).to.be.instanceOf(PossibleError);
+      expect(() => StrangeError.SystemIsOnFire.$ = StrangeError.SystemIsOnFire).to.throw(TypeError);
       expect(module.error_var).to.equal(NormalError.FileNotFound);
       const [ before ] = await capture(() => print());
       expect(before).to.equal('error.FileNotFound');

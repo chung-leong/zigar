@@ -1,8 +1,8 @@
-import { defineProperties, getSelf } from './structure.js';
+import { defineProperties, getSelf, removeSetters } from './structure.js';
 import { getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
-import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
+import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer, throwReadOnly } from './error.js';
 import { ALIGN, COMPAT, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
 
 export function defineVector(s, env) {
@@ -24,7 +24,11 @@ export function defineVector(s, env) {
     throw new Error(`slot must be undefined for vector member`);
   }
   /* DEV-TEST-END */
-  const constructor = s.constructor = function(arg) {
+  const constructor = s.constructor = function(arg, options = {}) {
+    const {
+      writable = true,
+      fixed = false,
+    } = options;
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
@@ -32,7 +36,7 @@ export function defineVector(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align);
+      dv = env.createBuffer(byteSize, align, fixed);
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
@@ -40,9 +44,14 @@ export function defineVector(s, env) {
     self[MEMORY] = dv;
     if (creating) {
       initializer.call(self, arg);
-    } else {
-      return self;
     }
+    if (!writable) {
+      defineProperties(self, {
+        ...removeSetters(elementDescriptors),
+        $: { get: getSelf, set: throwReadOnly, configurable: true },
+      });
+    }
+    return self;
   };
   const { bitSize: elementBitSize, structure: elementStructure } = member;
   const initializer = function(arg) {

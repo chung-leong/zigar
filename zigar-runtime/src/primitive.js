@@ -4,7 +4,8 @@ import { getMemoryCopier } from './memory.js';
 import { getCompatibleTags, addTypedArray, requireDataView } from './data-view.js';
 import { getSpecialKeys } from './special.js';
 import { ALIGN, COMPAT, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
-import { throwInvalidInitializer, throwNoInitializer, throwNoProperty } from './error.js';
+import { throwInvalidInitializer, throwNoInitializer, throwNoProperty, 
+  throwReadOnly } from './error.js';
 
 export function definePrimitive(s, env) {
   const {
@@ -15,7 +16,11 @@ export function definePrimitive(s, env) {
     },
   } = s;
   addTypedArray(s);
-  const constructor = s.constructor = function(arg) {
+  const constructor = s.constructor = function(arg, options = {}) {
+    const {
+      writable = true,
+      fixed = false,
+    } = options;
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
@@ -23,7 +28,7 @@ export function definePrimitive(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align);
+      dv = env.createBuffer(byteSize, align, fixed);
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
@@ -31,9 +36,13 @@ export function definePrimitive(s, env) {
     self[MEMORY] = dv;
     if (creating) {
       initializer.call(self, arg);
-    } else {
-      return self;
+    } 
+    if (!writable) {
+      defineProperties(self, {
+        $: { get, set: throwReadOnly, configurable: true },
+      });
     }
+    return self;
   };
   const specialKeys = getSpecialKeys(s);
   const initializer = function(arg) {

@@ -731,6 +731,66 @@ describe('Error union functions', function() {
       expect(() => object.$ = new Error('Doh!')).to.throw(TypeError)
         .with.property('message').that.contains('Error');
     })
+    it('should be able to create read-only object', function() {
+      const errorStructure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Error',
+        byteSize: 2,
+      });      
+      env.attachMember(errorStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+      });
+      env.finalizeShape(errorStructure);
+      const { constructor: Error } = errorStructure;
+      env.attachMember(errorStructure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: errorStructure,
+      }, true);
+      env.attachMember(errorStructure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: errorStructure,
+      }, true);
+      env.attachTemplate(errorStructure, {
+        [SLOTS]: {
+          0: Error.call(ENVIRONMENT, errorData(5)),
+          1: Error.call(ENVIRONMENT, errorData(8)),
+        }
+      }, true);
+      env.finalizeStructure(errorStructure);
+      const structure = env.beginStructure({
+        type: StructureType.ErrorUnion,
+        name: 'Hello',
+        byteSize: 10,
+      });
+      env.attachMember(structure, {
+        name: 'value',
+        type: MemberType.Int,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        structure: {},
+      });
+      env.attachMember(structure, {
+        name: 'error',
+        type: MemberType.Error,
+        bitOffset: 64,
+        bitSize: 16,
+        byteSize: 2,
+        structure: errorStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const object = Hello(new ArrayBuffer(10), { writable: false });
+      expect(() => object.$ = 1234n).to.throw(TypeError);
+    })
   })
   // describe('getErrorUnionAccessors', function() {
   //   beforeEach(function() {

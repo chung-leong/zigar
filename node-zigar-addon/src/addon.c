@@ -121,7 +121,7 @@ result create_object(call ctx,
                      napi_value* dest) {
     napi_env env = ctx->env;
     napi_value args[2] = { structure, arg };
-    if (call_js_function(ctx, "castView", 2, args, dest)) {
+    if (call_js_function(ctx, "createObject", 2, args, dest)) {
         return OK;
     }
     return Failure;
@@ -145,10 +145,12 @@ result create_view(call ctx,
 result cast_view(call ctx,
                  napi_value structure,
                  napi_value dv,
+                 bool writable,
                  napi_value* dest) {
     napi_env env = ctx->env;
     napi_value args[2] = { structure, dv };
-    if (call_js_function(ctx, "castView", 2, args, dest)) {
+    if (napi_get_boolean(env, writable, &args[2]) == napi_ok
+     && call_js_function(ctx, "castView", 3, args, dest)) {
         return OK;
     }
     return Failure;

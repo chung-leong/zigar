@@ -958,6 +958,29 @@ describe('Array functions', function() {
       delete object[Symbol.asyncIterator];
       expect(object[Symbol.asyncIterator]).to.be.undefined;
     })
+    it('should be able to create read-only object', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        length: 8,
+        byteSize: 4 * 8,
+      });
+      const constructor = function() {};
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { constructor, typedArray: Uint32Array }
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      expect(Hello).to.be.a('function');
+      expect(Hello.child).to.equal(constructor);
+      const object = new Hello(new Uint32Array(8), { writable: false });
+      expect(() => object.set(0, 321)).to.throw();
+      expect(() => object[0] = 321).to.throw();
+    })
   })
   describe('getArrayIterator', function() {
     it('should return a iterator', function() {

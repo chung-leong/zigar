@@ -3,7 +3,7 @@ import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView }  from './data-view.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
-import { throwNoInitializer } from './error.js';
+import { throwNoInitializer, throwReadOnly } from './error.js';
 import { copyPointer, resetPointer } from './pointer.js';
 import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SIZE, SLOTS, 
   VALUE_RESETTER } from './symbol.js';
@@ -38,7 +38,11 @@ export function defineOptional(s, env) {
   };
   const check = getPresent;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const constructor = s.constructor = function(arg) {
+  const constructor = s.constructor = function(arg, options = {}) {
+    const {
+      writable = true,
+      fixed = false,
+    } = options;
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
@@ -46,7 +50,7 @@ export function defineOptional(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align);
+      dv = env.createBuffer(byteSize, align, fixed);
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
@@ -55,9 +59,14 @@ export function defineOptional(s, env) {
     self[SLOTS] = hasObject ? {} : undefined;
     if (creating) {
       initializer.call(self, arg);
-    } else {
-      return self;
     }
+    if (!writable) {
+      defineProperties(self, {
+        '$': { get, set: throwReadOnly, configurable: true },
+        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, false) },
+      });
+    }
+    return self;
   };
   const initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -77,7 +86,7 @@ export function defineOptional(s, env) {
     '$': { get, set, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildActive: check }) },
   });
   defineProperties(constructor, {

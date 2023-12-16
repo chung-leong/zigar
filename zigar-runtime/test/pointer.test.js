@@ -278,9 +278,6 @@ describe('Pointer functions', function() {
       expect(Object.keys(pointer)).to.eql([ 'cat', 'dog' ]);
       expect(Object.getOwnPropertyDescriptor(pointer, 'cow')).to.be.undefined;
       expect(Object.getOwnPropertyDescriptor(pointer, 'cat')).to.be.an('object');
-      // check descriptors of the pointer's own properties
-      // TODO: refactoring
-      // expect(Object.getOwnPropertyDescriptor(pointer, ZIG)).to.be.an('object');
     })
     it('should not return setters from target when it is const', function() {
       const structStructure = env.beginStructure({
@@ -327,10 +324,6 @@ describe('Pointer functions', function() {
       const pointer = new HelloPtr(new Hello({ cat: 123, dog: 456 }));
       const descriptor = Object.getOwnPropertyDescriptor(pointer, 'cat');
       expect(descriptor.set).to.be.undefined;
-      // check descriptors of the pointer's own properties
-      // TODO: refactoring
-      // expect(Object.getOwnPropertyDescriptor(pointer, ZIG)).to.be.an('object');
-      // check non-existing prop
       expect(Object.getOwnPropertyDescriptor(pointer, 'cow')).to.be.undefined;
     })
     it('should automatically dereference pointers a single-level only', function() {

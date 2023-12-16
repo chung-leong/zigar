@@ -30,6 +30,7 @@ export function addTests(importModule, options) {
       expect(float64_array4x4).to.be.an('[4][4]f64');
       const row1 = float64_array4x4[1];
       expect(row1).to.be.an('[4]f64');
+      expect(() => float64_array4x4[1][1] = 0).to.throw(TypeError);
     })
     it('should print array arguments', async function() {
       this.timeout(120000);

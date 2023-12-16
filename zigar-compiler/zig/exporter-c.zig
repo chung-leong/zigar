@@ -78,9 +78,9 @@ pub const Host = struct {
         return value;
     }
 
-    pub fn castView(self: Host, structure: Value, dv: Value) !Value {
+    pub fn castView(self: Host, structure: Value, dv: Value, writable: bool) !Value {
         var value: Value = undefined;
-        if (imports.cast_view(self.context, structure, dv, &value) != .OK) {
+        if (imports.cast_view(self.context, structure, dv, writable, &value) != .OK) {
             return Error.UnableToCreateObject;
         }
         return value;
@@ -223,7 +223,7 @@ const Imports = extern struct {
     create_string: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
     create_object: *const fn (Call, Value, Value, *Value) callconv(.C) Result,
     create_view: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
-    cast_view: *const fn (Call, Value, Value, *Value) callconv(.C) Result,
+    cast_view: *const fn (Call, Value, Value, bool, *Value) callconv(.C) Result,
     read_slot: *const fn (Call, ?Value, usize, *Value) callconv(.C) Result,
     write_slot: *const fn (Call, ?Value, usize, ?Value) callconv(.C) Result,
     begin_structure: *const fn (Call, *const Structure, *Value) callconv(.C) Result,

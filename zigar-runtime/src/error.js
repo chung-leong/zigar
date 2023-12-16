@@ -45,16 +45,6 @@ export function throwEnumExpected(structure, arg) {
   throw new TypeError(`Enum item of the type ${name} expected, received ${arg}`);
 }
 
-export function throwNoNewEnum(structure) {
-  const name = getStructureName(structure);
-  throw new TypeError(`Cannot create new enum item\nCall ${name} without the use of "new" to obtain an enum object`);
-}
-
-export function throwNoNewError(structure) {
-  const name = getStructureName(structure);
-  throw new TypeError(`Cannot create new error\nCall ${name} without the use of "new" to obtain an error object`);
-}
-
 export function throwErrorExpected(structure, arg) {
   const name = getStructureName(structure);
   throw new TypeError(`Error of the type ${name} expected, received ${arg}`);
@@ -273,6 +263,10 @@ export function throwNotNull(member) {
 export function throwNotUndefined(member) {
   const { name } = member;
   throw new RangeError(`Property ${name} can only be undefined`);
+}
+
+export function throwReadOnly() {
+  throw new TypeError(`Unable to modify read-only object`);
 }
 
 export function throwZigError(name) {

@@ -52,8 +52,7 @@ export function addTests(importModule, options) {
       module.array = [ true, true, true, true ];
       const [ after2 ] = await capture(() => print());      
       expect(after2).to.equal('{ true, true, true, true }');      
-      // TODO: #26
-      // expect(() => array_const[0] = true).to.throw();
+      expect(() => array_const[0] = true).to.throw();
       expect(() => module.array_const = [ false, false, false, false ]).to.throw();
       expect(() => module.array = [ false, false, false ]).to.throw();
     })
@@ -166,8 +165,7 @@ export function addTests(importModule, options) {
       module.vector = [ true, true, true, true ];
       const [ after2 ] = await capture(() => print());      
       expect(after2).to.equal('{ true, true, true, true }');      
-      // TODO: #26
-      // expect(() => vector_const[0] = true).to.throw();
+      expect(() => vector_const[0] = true).to.throw();
       expect(() => module.vector_const = [ false, false, false, false ]).to.throw();
       expect(() => module.vector = [ false, false, false ]).to.throw();
     })

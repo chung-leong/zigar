@@ -1,9 +1,9 @@
 import { defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { requireDataView } from './data-view.js';
-import { throwNoNewError } from './error.js';
-import { ALIGN, ENVIRONMENT, ERROR_ITEMS, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
+import { getDataView } from './data-view.js';
+import { throwReadOnly } from './error.js';
+import { ALIGN, ERROR_ITEMS, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
 
 let currentErrorSets;
 
@@ -17,21 +17,46 @@ export function defineErrorSet(s, env) {
     },
   } = s;
   const byIndex = {};
-  const constructor = s.constructor = function(arg) {
+  const constructor = s.constructor = function(arg, options = {}) {
+    const {
+      writable = true,
+      fixed = false,
+    } = options;
     const creating = this instanceof constructor;
+    let self, dv;
     if (creating) {
-      throwNoNewError(s);
+      if (arguments.length === 0) {
+        throwNoInitializer(s);
+      }
+      self = this;
+      dv = env.createBuffer(byteSize, align, fixed);
+    } else {
+      if (typeof(arg) === 'number') {
+        return byIndex[arg];  
+      } else if (typeof(arg) === 'string') {
+        for (const err of Object.values(constructor)) {
+          if (err.toString() === arg) {
+            return err;
+          }
+        }
+      } else {
+        self = Object.create(constructor.prototype);
+        dv = getDataView(s, arg);
+        if (!dv) {
+          throwInvalidInitializer(s, [ 'string', 'number' ], arg);
+        }
+      }
     }
-    if (this === ENVIRONMENT) {
-      // called by Environment.castView() or recreateStructures()
-      // the only time when individual errors are created
-      const self = Object.create(constructor.prototype);
-      const dv = requireDataView(s, arg);
-      self[MEMORY] = dv;
-      return self;
+    self[MEMORY] = dv;
+    if (creating) {
+      set.call(self, arg);
     }
-    const index = Number(arg);
-    return byIndex[index];
+    if (writable) {
+      defineProperties(constructor.prototype, {
+        $: { get, set, configurable: true },
+      });
+    }
+    return self;
   };
   Object.setPrototypeOf(constructor.prototype, Error.prototype);
   const { get: getIndex } = getDescriptor(member, env);
@@ -40,7 +65,7 @@ export function defineErrorSet(s, env) {
   const { get, set } = getDescriptor(errorMember, env);
   const toStringTag = function() { return 'Error' };
   defineProperties(constructor.prototype, {
-    $: { get, set, configurable: true },
+    $: { get, set: throwReadOnly, configurable: true },
     index: { get: getIndex, configurable: true },
     // ensure that libraries that rely on the string tag for type detection will
     // correctly identify the object as an error

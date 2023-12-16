@@ -6,7 +6,6 @@ const runtime_safety = (builtin.mode == .ReleaseSafe or builtin.mode == .Debug);
 
 // error type
 pub const Error = error{
-    TODO,
     Unknown,
     UnableToAllocateMemory,
     UnableToFreeMemory,
@@ -1130,7 +1129,7 @@ fn exportPointerTarget(host: anytype, comptime ptr: anytype, is_comptime: bool) 
         const memory = toMemory(value_ptr, is_comptime);
         const dv = try host.createView(memory);
         const structure = try getStructure(host, @TypeOf(value_ptr.*));
-        const obj = try host.castView(structure, dv);
+        const obj = try host.castView(structure, dv, !is_comptime);
         return obj;
     }
     return null;
@@ -1139,7 +1138,7 @@ fn exportPointerTarget(host: anytype, comptime ptr: anytype, is_comptime: bool) 
 fn exportError(host: anytype, err: anyerror, structure: Value) !Value {
     const memory = toMemory(&err, true);
     const dv = try host.createView(memory);
-    const obj = try host.castView(structure, dv);
+    const obj = try host.castView(structure, dv, false);
     return obj;
 }
 

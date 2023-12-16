@@ -10,6 +10,7 @@ import { definePointer } from './pointer.js';
 import { defineSlice } from './slice.js';
 import { defineVector } from './vector.js';
 import { defineArgStruct } from './arg-struct.js';
+import { throwReadOnly } from './error.js';
 
 export const StructureType = {
   Primitive: 0,
@@ -131,6 +132,20 @@ export function defineProperties(object, descriptors) {
       Object.defineProperty(object, symbol, descriptor);
     }
   }
+}
+
+export function removeSetters(descriptors) {
+  const newDescriptors = {};
+  for (const [ name, descriptor ] of Object.entries(descriptors)) {
+    if (descriptor) {
+      if (descriptor.set) {
+        newDescriptors[name] = { ...descriptor, set: throwReadOnly };
+      } else {
+        newDescriptors[name] = descriptor;
+      }
+    }
+  }
+  return newDescriptors;
 }
 
 export function getSelf() {

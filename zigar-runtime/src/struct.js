@@ -1,11 +1,11 @@
-import { defineProperties, getSelf } from './structure.js';
+import { defineProperties, getSelf, removeSetters } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { always, copyPointer } from './pointer.js';
 import { getSpecialKeys } from './special.js';
-import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer,
-  throwNoProperty } from './error.js';
+import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer, throwNoProperty,
+  throwReadOnly } from './error.js';
 import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR, SIZE, SLOTS
 } from './symbol.js';
 
@@ -26,7 +26,11 @@ export function defineStructShape(s, env) {
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const slots = template?.[SLOTS];
-  const constructor = s.constructor = function(arg) {
+  const constructor = s.constructor = function(arg, options = {}) {
+    const {
+      writable = true,
+      fixed = false,
+    } = options;
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
@@ -34,7 +38,7 @@ export function defineStructShape(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align);
+      dv = env.createBuffer(byteSize, align, fixed);
     } else {
       self = Object.create(constructor.prototype);
       dv = getDataView(s, arg);
@@ -46,9 +50,15 @@ export function defineStructShape(s, env) {
     Object.defineProperties(self, descriptors);
     if (creating) {
       initializer.call(self, arg);
-    } else {
-      return self;
     }
+    if (!writable) {
+      defineProperties(self, {
+        '$': { get: getSelf, set: throwReadOnly, configurable: true },
+        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, false) },
+        ...removeSetters(descriptors),
+      });
+    }
+    return self;
   };
   const specialKeys = getSpecialKeys(s);
   const requiredKeys = members.filter(m => m.isRequired).map(m => m.name);
@@ -121,7 +131,7 @@ export function defineStructShape(s, env) {
   defineProperties(constructor.prototype, {
     '$': { get: getSelf, set: initializer, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
   });
   defineProperties(constructor, {
@@ -131,7 +141,7 @@ export function defineStructShape(s, env) {
   return constructor;
 }
 
-export function getChildVivificators(s) {
+export function getChildVivificators(s, writable) {
   const { instance: { members } } = s;
   const objectMembers = members.filter(m => m.type === MemberType.Object);
   const vivificators = {};
@@ -144,7 +154,7 @@ export function getChildVivificators(s) {
         const parentOffset = dv.byteOffset;
         const offset = parentOffset + (bitOffset >> 3);
         const childDV = new DataView(dv.buffer, offset, byteSize);
-        object = this[SLOTS][slot] = constructor.call(PARENT, childDV);
+        object = this[SLOTS][slot] = constructor.call(PARENT, childDV, { writable });
       }
       return object;
     };

@@ -1,11 +1,11 @@
-import { StructureType, defineProperties, getSelf } from './structure.js';
+import { StructureType, defineProperties, getSelf, removeSetters } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { getSpecialKeys } from './special.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
 import { throwInvalidInitializer, throwMissingUnionInitializer, throwMultipleUnionInitializers,
-  throwNoProperty, throwInactiveUnionProperty, throwNoInitializer } from './error.js';
+  throwNoProperty, throwInactiveUnionProperty, throwNoInitializer, throwReadOnly } from './error.js';
 import { copyPointer, disablePointer, resetPointer } from './pointer.js';
 import { ALIGN, CHILD_VIVIFICATOR, ENUM_ITEM, ENUM_NAME, MEMORY, MEMORY_COPIER, POINTER_VISITOR,
   SIZE, SLOTS, TAG } from './symbol.js';
@@ -112,7 +112,11 @@ export function defineUnionShape(s, env) {
   // non-tagged union as marked as not having pointers--if there're actually
   // members with pointers, we need to disable them
   const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
-  const constructor = s.constructor = function(arg) {
+  const constructor = s.constructor = function(arg, options = {}) {
+    const {
+      writable = true,
+      fixed = false,
+    } = options;
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
@@ -120,7 +124,7 @@ export function defineUnionShape(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align);
+      dv = env.createBuffer(byteSize, align, fixed);
     } else {
       self = Object.create(constructor.prototype);
       dv = getDataView(s, arg);
@@ -135,10 +139,16 @@ export function defineUnionShape(s, env) {
     if (creating) {
       initializer.call(self, arg);
     }
+    if (!writable) {
+      defineProperties(self, {
+        '$': { get: getSelf, set: throwReadOnly, configurable: true },
+        ...removeSetters(descriptors),
+      });
+    }
     if (isTagged) {
       return new Proxy(self, taggedProxyHandlers);
     } else {
-      return (creating) ? undefined : self;
+      return self;
     }
   };
   const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);

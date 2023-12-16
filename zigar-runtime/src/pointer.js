@@ -4,7 +4,7 @@ import { requireDataView, getDataView, isCompatible, isBuffer } from './data-vie
 import { MemberType, getDescriptor } from './member.js';
 import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerTarget,
   throwAssigningToConstant, throwConstantConstraint, throwNoInitializer,
-  throwFixedMemoryTargetRequired, addArticle } from './error.js';
+  throwFixedMemoryTargetRequired, addArticle, throwReadOnly } from './error.js';
 import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, ENVIRONMENT, LENGTH_GETTER, LENGTH_SETTER, MEMORY,
   MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, PARENT, PROXY, SLOTS, SIZE } from './symbol.js';
 
@@ -39,7 +39,11 @@ export function definePointer(s, env) {
     byteSize: addressSize,
     structure: { name: 'usize', byteSize: addressSize },
   }, env) : {};
-  const constructor = s.constructor = function(arg) {
+  const constructor = s.constructor = function(arg, options = {}) {
+    const {
+      writable = true,
+      fixed = false,
+    } = options;
     const calledFromEnviroment = this === ENVIRONMENT;
     const calledFromParent = this === PARENT;
     let creating = this instanceof constructor;
@@ -49,7 +53,7 @@ export function definePointer(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align);
+      dv = env.createBuffer(byteSize, align, fixed);
     } else {
       self = Object.create(constructor.prototype);
       if (calledFromEnviroment || calledFromParent) {
@@ -66,13 +70,18 @@ export function definePointer(s, env) {
         } else {
           throwNoCastingToPointer(s);
         }
-        dv = env.createBuffer(byteSize, align);
+        dv = env.createBuffer(byteSize, align, fixed);
       }
     }
     self[MEMORY] = dv;
     self[SLOTS] = { 0: null };
     if (creating) {
       initializer.call(self, arg);
+    }
+    if (!writable) {
+      defineProperties(self, {
+        '$': { get: getProxy, set: throwReadOnly, configurable: true, },
+      });
     }
     return createProxy.call(self, isConst, isTargetPointer);
   };
@@ -134,7 +143,7 @@ export function definePointer(s, env) {
     }
   };
   defineProperties(constructor.prototype, {
-    '*': { get: getTarget, set: (isConst) ? undefined : setTarget, configurable: true },
+    '*': { get: getTarget, set: (isConst) ? throwReadOnly : setTarget, configurable: true },
     '$': { get: getProxy, set: initializer, configurable: true, },
     'valueOf': { value: getTargetValue, configurable: true, writable: true },
     [ADDRESS_GETTER]: { value: getAddress },

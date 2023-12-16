@@ -128,7 +128,7 @@ typedef struct {
     result (__cdecl *create_string)(call, const memory*, napi_value*);
     result (__cdecl *create_object)(call, napi_value, napi_value, napi_value*);
     result (__cdecl *create_view)(call, const memory*, napi_value*);
-    result (__cdecl *cast_view)(call, napi_value, napi_value, napi_value*);
+    result (__cdecl *cast_view)(call, napi_value, napi_value, bool, napi_value*);
     result (__cdecl *read_slot)(call, napi_value, size_t, napi_value*);
     result (__cdecl *write_slot)(call, napi_value, size_t, napi_value);
     result (__cdecl *begin_structure)(call, const structure*, napi_value*);

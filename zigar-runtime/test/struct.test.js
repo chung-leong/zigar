@@ -985,6 +985,44 @@ describe('Struct functions', function() {
       expect(object.dog).to.equal(123);
       expect(object.cat).to.equal(456);
     })
+    it('should be able to create read-only object', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 4 * 2,
+      });
+      env.attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      env.attachTemplate(structure, {
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setInt32(0, 1234, true);
+          dv.setInt32(4, 4567, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      expect(Hello).to.be.a('function');
+      const object = new Hello({}, { writable: false });
+      expect(() => object.dog = 123).to.throw(TypeError);
+      expect(() => object.cat = 123).to.throw(TypeError);
+      expect(() => object.$ = {}).to.throw(TypeError);
+    })
   })
 })
 

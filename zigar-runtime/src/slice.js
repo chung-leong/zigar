@@ -6,7 +6,7 @@ import { getArrayIterator, createProxy, createArrayEntries, getChildVivificator,
 import { copyPointer } from './pointer.js';
 import { checkDataView, getDataViewFromTypedArray, getDataViewFromUTF8, getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoProperty,
-  throwMisplacedSentinel, throwMissingSentinel, throwNoInitializer } from './error.js';
+  throwMisplacedSentinel, throwMissingSentinel, throwNoInitializer, throwReadOnly } from './error.js';
 import { ALIGN, CHILD_VIVIFICATOR, COMPAT, GETTER, LENGTH, MEMORY, MEMORY_COPIER, POINTER_VISITOR,
   SENTINEL, SETTER, SIZE, SLOTS } from './symbol.js';
 import { decodeBase64 } from './text.js';
@@ -39,7 +39,11 @@ export function defineSlice(s, env) {
   }
   // the slices are different from other structures due to variability of their sizes
   // we only know the "shape" of an object after we've processed the initializers
-  const constructor = s.constructor = function(arg) {
+  const constructor = s.constructor = function(arg, options = {}) {
+    const {
+      writable = true,
+      fixed = false,
+    } = options;
     const creating = this instanceof constructor;
     let self;
     if (creating) {
@@ -47,18 +51,25 @@ export function defineSlice(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      initializer.call(self, arg);
+      initializer.call(self, arg, fixed);
     } else {
       self = Object.create(constructor.prototype);
       const dv = requireDataView(s, arg);
-      shapeDefiner.call(self, dv, dv.byteLength / elementSize, this);
+      shapeDefiner.call(self, dv, dv.byteLength / elementSize);
+    }
+    if (!writable) {
+      defineProperties(self, {
+        set: { value: throwReadOnly, configurable: true, writable: true },
+        $: { get: getSelf, set: throwReadOnly, configurable: true },
+        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
+      });
     }
     return createProxy.call(self);
   };
   const specialKeys = getSpecialKeys(s);
-  const shapeDefiner = function(dv, length) {
+  const shapeDefiner = function(dv, length, fixed) {
     if (!dv) {
-      dv = env.createBuffer(length * elementSize, align);
+      dv = env.createBuffer(length * elementSize, align, fixed);
     }
     this[MEMORY] = dv;
     this[GETTER] = null;
@@ -73,13 +84,13 @@ export function defineSlice(s, env) {
       throwArrayLengthMismatch(s, this, arg);
     }
   };
-  // the initializer behave differently depending on whether it's called  by the
+  // the initializer behave differently depending on whether it's called by the
   // constructor or by a member setter (i.e. after object's shape has been established)
-  const initializer = function(arg) {
+  const initializer = function(arg, fixed) {
     let shapeless = !this.hasOwnProperty(MEMORY);
     if (arg instanceof constructor) {
       if (shapeless) {
-        shapeDefiner.call(this, null, arg.length);
+        shapeDefiner.call(this, null, arg.length, fixed);
       } else {
         shapeChecker.call(this, arg, arg.length);
       }
@@ -98,7 +109,7 @@ export function defineSlice(s, env) {
           argLen = arg.length;
         }
         if (!this[MEMORY]) {
-          shapeDefiner.call(this, null, argLen);
+          shapeDefiner.call(this, null, argLen, fixed);
         } else {
           shapeChecker.call(this, arg, argLen);
         }
@@ -181,7 +192,7 @@ export function defineSlice(s, env) {
     entries: { value: createArrayEntries, configurable: true, writable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(elementSize, true) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s) }
   });
   defineProperties(constructor, {

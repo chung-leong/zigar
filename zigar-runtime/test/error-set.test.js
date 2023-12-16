@@ -42,8 +42,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, errorData(5)),
-          1: Hello.call(ENVIRONMENT, errorData(8)),
+          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
+          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
         }
       }, true);
       env.finalizeStructure(structure);
@@ -63,41 +63,11 @@ describe('Error set functions', function() {
       } catch (err) {
         expect(err).to.equal(Hello.UnableToCreateObject);
       }
-    })
-    it('should not allow the creation of new error objects', function() {
-      const structure = env.beginStructure({
-        type: StructureType.ErrorSet,
-        name: 'Hello',
-        byteSize: 2,
-      });      
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-      });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
-      env.attachMember(structure, {
-        name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Comptime,
-        slot: 0,
-        structure,
-      }, true);
-      env.attachMember(structure, {
-        name: 'UnableToCreateObject',
-        type: MemberType.Comptime,
-        slot: 1,
-        structure,
-      }, true);
-      env.attachTemplate(structure, {
-        [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, errorData(5)),
-          1: Hello.call(ENVIRONMENT, errorData(8)),
-        }
-      }, true);
-      env.finalizeStructure(structure);
-      expect(() => new Hello()).to.throw(TypeError);
+      expect(() => Hello.UnableToCreateObject.$ = Hello.UnableToCreateObject).to.throw(TypeError);
+      const e = new Hello(Hello.UnableToCreateObject);
+      expect(e.$).to.equal(Hello.UnableToCreateObject);
+      e.$ = Hello.UnableToRetrieveMemoryLocation;
+      expect(e.$).to.equal(Hello.UnableToRetrieveMemoryLocation);
     })
     it('should make previously defined error sets its subclasses if it has all their errors', function() {
       const catStructure = env.beginStructure({
@@ -127,8 +97,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(catStructure, {
         [SLOTS]: {
-          0: CatError.call(ENVIRONMENT, errorData(5)),
-          1: CatError.call(ENVIRONMENT, errorData(6)),
+          0: CatError.call(ENVIRONMENT, errorData(5), { writable: false }),
+          1: CatError.call(ENVIRONMENT, errorData(6), { writable: false }),
         },
       }, true);
       env.finalizeStructure(catStructure);
@@ -159,8 +129,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(dogStructure, {
         [SLOTS]: {
-          0: CatError.call(ENVIRONMENT, errorData(7)),
-          1: CatError.call(ENVIRONMENT, errorData(8)),
+          0: CatError.call(ENVIRONMENT, errorData(7), { writable: false }),
+          1: CatError.call(ENVIRONMENT, errorData(8), { writable: false }),
         },
       }, true);
       env.finalizeStructure(dogStructure);
@@ -203,10 +173,10 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(petStructure, {
         [SLOTS]: {
-          0: PetError.call(ENVIRONMENT, errorData(5)),
-          1: PetError.call(ENVIRONMENT, errorData(6)),
-          2: PetError.call(ENVIRONMENT, errorData(7)),
-          3: PetError.call(ENVIRONMENT, errorData(8)),
+          0: PetError.call(ENVIRONMENT, errorData(5), { writable: false }),
+          1: PetError.call(ENVIRONMENT, errorData(6), { writable: false }),
+          2: PetError.call(ENVIRONMENT, errorData(7), { writable: false }),
+          3: PetError.call(ENVIRONMENT, errorData(8), { writable: false }),
         },
       }, true);
       env.finalizeStructure(petStructure);
@@ -255,10 +225,10 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(petStructure, {
         [SLOTS]: {
-          0: PetError.call(ENVIRONMENT, errorData(5)),
-          1: PetError.call(ENVIRONMENT, errorData(6)),
-          2: PetError.call(ENVIRONMENT, errorData(7)),
-          3: PetError.call(ENVIRONMENT, errorData(8)),
+          0: PetError.call(ENVIRONMENT, errorData(5), { writable: false }),
+          1: PetError.call(ENVIRONMENT, errorData(6), { writable: false }),
+          2: PetError.call(ENVIRONMENT, errorData(7), { writable: false }),
+          3: PetError.call(ENVIRONMENT, errorData(8), { writable: false }),
         },
       }, true);
       env.finalizeStructure(petStructure);
@@ -289,8 +259,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(catStructure, {
         [SLOTS]: {
-          0: CatError.call(ENVIRONMENT, errorData(5)),
-          1: CatError.call(ENVIRONMENT, errorData(6)),
+          0: CatError.call(ENVIRONMENT, errorData(5), { writable: false }),
+          1: CatError.call(ENVIRONMENT, errorData(6), { writable: false }),
         },
       }, true);
       env.finalizeStructure(catStructure);
@@ -321,8 +291,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(dogStructure, {
         [SLOTS]: {
-          0: CatError.call(ENVIRONMENT, errorData(7)),
-          1: CatError.call(ENVIRONMENT, errorData(8)),
+          0: CatError.call(ENVIRONMENT, errorData(7), { writable: false }),
+          1: CatError.call(ENVIRONMENT, errorData(8), { writable: false }),
         },
       }, true);
       env.finalizeStructure(dogStructure);

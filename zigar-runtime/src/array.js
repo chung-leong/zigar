@@ -3,7 +3,7 @@ import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { getSpecialKeys } from './special.js';
-import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer } from './error.js';
+import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer, throwReadOnly } from './error.js';
 import { always, copyPointer, getProxy } from './pointer.js';
 import { ALIGN, CHILD_VIVIFICATOR, COMPAT, GETTER, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR,
   PROXY, SELF, SETTER, SIZE, SLOTS } from './symbol.js';
@@ -29,7 +29,11 @@ export function defineArray(s, env) {
   /* DEV-TEST-END */
   addTypedArray(s);
   const hasObject = (member.type === MemberType.Object);
-  const constructor = s.constructor = function(arg) {
+  const constructor = s.constructor = function(arg, options = {}) {
+    const {
+      writable = true,
+      fixed = false,
+    } = options;
     const creating = this instanceof constructor;
     let self, dv;
     if (creating) {
@@ -37,7 +41,7 @@ export function defineArray(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align);
+      dv = env.createBuffer(byteSize, align, fixed);
     } else {
       self = Object.create(constructor.prototype);
       dv = requireDataView(s, arg);
@@ -48,6 +52,13 @@ export function defineArray(s, env) {
     self[SLOTS] = hasObject ? {} : undefined;
     if (creating) {
       initializer.call(self, arg);
+    }
+    if (!writable) {
+      defineProperties(self, {
+        set: { value: throwReadOnly, configurable: true, writable: true },
+        $: { get: getProxy, set: throwReadOnly, configurable: true },
+        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
+      });
     }
     return createProxy.call(self);
   };
@@ -110,7 +121,7 @@ export function defineArray(s, env) {
     entries: { value: createArrayEntries, configurable: true, writable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s) },
   });
   defineProperties(constructor, {
@@ -122,7 +133,7 @@ export function defineArray(s, env) {
   return constructor;
 }
 
-export function getChildVivificator(s) {
+export function getChildVivificator(s, writable) {
   const { instance: { members: [ member ]} } = s;
   const { byteSize, structure } = member;
   return function getChild(index) {
@@ -133,7 +144,7 @@ export function getChildVivificator(s) {
       const parentOffset = dv.byteOffset;
       const offset = parentOffset + byteSize * index;
       const childDV = new DataView(dv.buffer, offset, byteSize);
-      object = this[SLOTS][index] = constructor.call(PARENT, childDV);
+      object = this[SLOTS][index] = constructor.call(PARENT, childDV, { writable });
     }
     return object;
   };
