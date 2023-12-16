@@ -9,7 +9,7 @@ export function addTests(importModule, options) {
   describe('Console', function() {
     it('should output to development console', async function() {
       this.timeout(120000);
-      const { hello } = await importTest('console');
+      const { hello } = await importTest('print-with-newline');
       const lines = await capture(() => hello());
       expect(lines).to.eql([ 'Hello world!' ]);
     })

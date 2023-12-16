@@ -9,7 +9,7 @@ export function addTests(importModule, options) {
   describe('Memory allocation', function() {
     it('should return memory from internal allocator', async function() {
       this.timeout(120000);
-      const { createSlice, printSlice, freeSlice } = await importTest('create-slice');
+      const { createSlice, printSlice, freeSlice } = await importTest('create-internal-slice');
       for (let i = 0; i < 10; i++) {
         const slice = createSlice(16);
         for (let i = 0, { length, set } = slice; i < length; i++) {
