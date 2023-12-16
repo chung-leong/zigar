@@ -11,10 +11,18 @@ export function addTests(importModule, options) {
   };    
   describe('Function', function() {
     it('should handle function as static variables', async function() {
-      // no support currently
       this.timeout(120000);
-      const { default: module } = await importTest('as-static-variables');
+      const { default: module, hello, hello2, hello3 } = await importTest('as-static-variables');
+      // no support for function pointer currently
       expect(module.func).to.be.undefined;
+      expect(hello).to.be.a('function');
+      expect(hello2).to.be.a('function');
+      expect(hello3).to.be.a('function');
+      const name = ' \nthis is a totally weird function name!! :-)';
+      const f = module[name];
+      expect(f).to.be.a('function');
+      const lines = await capture(() => f())
+      expect(lines[0]).to.equal('Hello world');
     })
     it('should ignore function accepting function as arguments', async function() {
       this.timeout(120000);

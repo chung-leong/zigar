@@ -7,6 +7,12 @@ export function addTests(importModule, options) {
       return importModule(url);
   };    
   describe('Memory allocation', function() {
+    it('should provide allocator to function returning string', async function() {
+      this.timeout(120000);
+      const { getMessage } = await importTest('allocate-memory-for-string');;
+      const { string } = getMessage(123, 456n, 3.14);
+      expect(string).to.equal('Numbers: 123, 456, 3.14');
+    })
     it('should return memory from internal allocator', async function() {
       this.timeout(120000);
       const { createSlice, printSlice, freeSlice } = await importTest('create-internal-slice');
