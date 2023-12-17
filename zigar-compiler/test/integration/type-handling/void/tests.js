@@ -20,7 +20,7 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { print } = await importTest('as-function-parameters');
       const lines = await capture(() => print(undefined));
-      expect(lines).to.eql([ 'void' ]);undefined
+      expect(lines).to.eql([ 'void' ]);
     })
     it('should return void', async function() {
       this.timeout(120000);
