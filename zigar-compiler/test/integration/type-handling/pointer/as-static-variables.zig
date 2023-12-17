@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const int32_array: [3]i32 = .{ 123, 456, 789 };
+pub var int32_array: [3]i32 = .{ 123, 456, 789 };
 pub const int32_slice: []const i32 = &int32_array;
 pub const u8_slice: []const u8 = "Hello world";
 

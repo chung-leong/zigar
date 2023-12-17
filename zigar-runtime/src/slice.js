@@ -1,9 +1,9 @@
-import { defineProperties, getSelf } from './structure.js';
+import { defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, checkDataViewSize, getCompatibleTags } from './data-view.js';
 import { getArrayIterator, createProxy, createArrayEntries, getChildVivificator, getPointerVisitor } from './array.js';
-import { copyPointer } from './pointer.js';
+import { copyPointer, getProxy } from './pointer.js';
 import { checkDataView, getDataViewFromTypedArray, getDataViewFromUTF8, getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoProperty,
   throwMisplacedSentinel, throwMissingSentinel, throwNoInitializer, throwReadOnly } from './error.js';
@@ -60,7 +60,7 @@ export function defineSlice(s, env) {
     if (!writable) {
       defineProperties(self, {
         set: { value: throwReadOnly, configurable: true, writable: true },
-        $: { get: getSelf, set: throwReadOnly, configurable: true },
+        $: { get: getProxy, set: throwReadOnly, configurable: true },
         [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
       });
     }
@@ -188,7 +188,7 @@ export function defineSlice(s, env) {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { get: getLength, configurable: true },
-    $: { get: getSelf, set: initializer, configurable: true },
+    $: { get: getProxy, set: initializer, configurable: true },
     entries: { value: createArrayEntries, configurable: true, writable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(elementSize, true) },

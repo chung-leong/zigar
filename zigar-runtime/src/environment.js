@@ -395,13 +395,13 @@ export class Environment {
         const { array, offset, length } = placeholder.memory;
         const dv = new DataView(array.buffer, offset, length);
         const { constructor } = placeholder.structure;
-        const { reloc } = placeholder;
-        const writable = reloc !== undefined;
+        const { reloc, const: isConst } = placeholder;
+        const writable = reloc !== undefined && isConst !== true;
         const object = constructor.call(ENVIRONMENT, dv, { writable });
         if (placeholder.slots) {
           insertObjects(object[SLOTS], placeholder.slots);
         }
-        if (writable) {
+        if (reloc !== undefined) {
           // need to replace dataview with one pointing to fixed memory later,
           // when the VM is up and running
           this.variables.push({ reloc, object });
@@ -774,6 +774,7 @@ export class Environment {
         return;
       }
       const Target = pointer.constructor.child;
+      const writable = !pointer.constructor.const;
       let target = this[SLOTS][0];
       if (!target || isMutable(this)) {
         // obtain address (and possibly length) from memory
@@ -795,12 +796,12 @@ export class Environment {
         const dv = env.findMemory(address, byteLength);
         if (dv !== env.emptyView || byteLength == 0) {
           // create the target
-          target = this[SLOTS][0] = Target.call(this, dv);
+          target = this[SLOTS][0] = Target.call(this, dv, { writable });
         }
       }
       if (target?.[POINTER_VISITOR]) {
         // acquire objects pointed to by pointers in target
-        const isMutable = (pointer.constructor.const) ? () => false : () => true;
+        const isMutable = () => writable;
         target[POINTER_VISITOR](callback, { vivificate: true, isMutable });
       }
     }

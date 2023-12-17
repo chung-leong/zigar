@@ -91,7 +91,7 @@ function generateExportStatements(exports, omitExports) {
 }
 
 function generateStructureDefinitions(structures, params) {
-  function addStructure(varname, structure) {
+  const addStructure = (varname, structure) => {
     addBuffers(structure.instance.template);
     addBuffers(structure.static.template);
     // add static members; instance methods are also static methods, so
@@ -130,8 +130,8 @@ function generateStructureDefinitions(structures, params) {
       }
     }
     add(`});`);
-  }
-  function addStructureContent(name, { members, methods, template }) {
+  };
+  const addStructureContent = (name, { members, methods, template }) => {
     add(`${name}: {`);
     if (members.length > 0) {
       add(`members: [`);
@@ -163,8 +163,8 @@ function generateStructureDefinitions(structures, params) {
     }
     addObject('template', template);
     add(`},`);
-  }
-  function addBuffers(object) {
+  };
+  const addBuffers = (object) => {
     if (object) {
       const { memory: dv, slots: slots } = object;
       if (dv && !arrayBufferNames.get(dv.buffer)) {
@@ -183,8 +183,8 @@ function generateStructureDefinitions(structures, params) {
         }
       }
     }
-  }
-  function addObject(name, object) {
+  };
+  const addObject = (name, object) => {
     if (object) {
       const structure = structureMap.get(object.constructor);
       const { memory: dv, slots: slots } = object;
@@ -202,6 +202,9 @@ function generateStructureDefinitions(structures, params) {
         add(`memory: { ${pairs.join(', ')} },`);
         if (dv.hasOwnProperty('reloc')) {
           add(`reloc: ${dv.reloc},`);
+          if (isConst(object)) {
+            add(`const: true,`);
+          }
         }
       }
       if (slots && Object.keys(slots).length > 0) {
@@ -215,7 +218,13 @@ function generateStructureDefinitions(structures, params) {
     } else {
       add(`${name}: null,`);
     }
-  }
+  };
+  const isConst = (object) => {
+    const descriptor = Object.getOwnPropertyDescriptor(object, '$');
+    // the setter comes from the embedded source code and thus wouldn't match 
+    // if we compare it with the imported version--hence the check on the name 
+    return descriptor?.set?.name === 'throwReadOnly';
+  };
 
   const lines = [];
   const add = manageIndentation(lines);
