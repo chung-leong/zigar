@@ -62,5 +62,131 @@ export function addTests(importModule, options) {
       expect(string).to.equal('Hello world');
       expect([ ...i64_slice_w_sentinel ]).to.eql([ 0n, 1n, 2n, 3n, 4n, 5n, 6n, 7n ]);
     })
+    it('should print pointer arguments', async function() {
+      this.timeout(120000);
+      const { print } = await importTest('as-function-parameters');
+      const lines = await capture(() => {
+        print('hello');
+        print('world');
+      });
+      expect(lines).to.eql([ 'hello', 'world' ]);
+    })
+    it('should return pointer', async function() {
+      this.timeout(120000);
+      const { getText } = await importTest('as-return-value');
+      expect(getText().string).to.equal('Hello');
+    })
+    it('should handle pointer in array', async function() {
+      this.timeout(120000);
+      const { default: module, print } = await importTest('array-of');      
+      expect(module.array.length).to.equal(4);
+      expect(module.array[0].string).to.equal('dog');
+      expect(module.array[1].string).to.equal('cat');
+      expect(module.array[2].string).to.equal('monkey');
+      expect(module.array[3].string).to.equal('cow');
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('{ { 100, 111, 103 }, { 99, 97, 116 }, { 109, 111, 110, 107, 101, 121 }, { 99, 111, 119 } }');
+      module.array[2] = module.alt_text;
+      const [ after ] = await capture(() => print());
+      expect(after).to.equal('{ { 100, 111, 103 }, { 99, 97, 116 }, { 98, 101, 97, 114 }, { 99, 111, 119 } }');
+    })
+    it('should handle pointer in struct', async function() {
+      this.timeout(120000);
+      const { default: module, StructA, print } = await importTest('in-a-struct');
+      expect(module.struct_a.text1.string).to.equal('dog');
+      expect(module.struct_a.text2.string).to.equal('cat');
+      const b = new StructA({});
+      expect(b.text1.string).to.equal('apple');
+      expect(b.text2.string).to.equal('orange');
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('in-a-struct.StructA{ .text1 = { 100, 111, 103 }, .text2 = { 99, 97, 116 } }');
+      module.struct_a = b;
+      const [ after ] = await capture(() => print());
+      expect(after).to.equal('in-a-struct.StructA{ .text1 = { 97, 112, 112, 108, 101 }, .text2 = { 111, 114, 97, 110, 103, 101 } }');
+    })
+    it('should not compile code with pointer in packed struct', async function() {
+      this.timeout(120000);
+      await expect(importTest('in-packed-struct')).to.eventually.be.rejected;      
+    })
+    it('should handle pointer as comptime field', async function() {
+      this.timeout(120000);
+      const { default: module, StructA, print } = await importTest('as-comptime-field');
+      expect(module.struct_a.text.string).to.equal('Hello');
+      const b = new StructA({ number: 500 });
+      expect(b.text.string).to.equal('Hello');
+      const [ line ] = await capture(() => print(b));
+      expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .text = { 72, 101, 108, 108, 111 } }');
+    })
+    it('should handle pointer in bare union', async function() {
+      this.timeout(120000);
+      const { default: module, UnionA } = await importTest('in-bare-union');
+      expect(module.union_a.text.string).to.equal('Hello');
+      if (runtimeSafety) {
+        expect(() => module.union_a.number).to.throw();
+      }
+      const b = new UnionA({ text: module.alt_text });
+      const c = new UnionA({ number: 123 });
+      expect(b.text.string).to.equal('World');
+      expect(c.number).to.equal(123);
+      if (runtimeSafety) {
+        expect(() => c.text).to.throw();
+      }
+      module.union_a = b;
+      expect(module.union_a.text).to.equal('World');
+      module.union_a = c;
+      if (runtimeSafety) {
+        expect(() => module.union_a.text).to.throw();
+      }
+    })
+    it('should handle pointer in tagged union', async function() {
+      this.timeout(120000);
+      const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
+      expect(module.union_a.text.string).to.equal('Hello');
+      expect(TagType(module.union_a)).to.equal(TagType.text);
+      expect(module.union_a.number).to.be.null;
+      const b = new UnionA({ text: module.alt_text });
+      const c = new UnionA({ number: 123 });
+      expect(b.text.string).to.equal('World');
+      expect(c.number).to.equal(123);
+      expect(c.text).to.be.null;
+      module.union_a = b;
+      expect(module.union_a.text.string).to.equal('World');
+      module.union_a = c;
+      expect(module.union_a.text).to.be.null;
+    })
+    it('should handle pointer in optional', async function() {
+      this.timeout(120000);
+      const { default: module, print } = await importTest('in-optional');
+      expect(module.optional.string).to.equal('Hello');
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('{ 72, 101, 108, 108, 111 }');
+      module.optional = null;
+      expect(module.optional).to.be.null;
+      const [ after1 ] = await capture(() => print());
+      expect(after1).to.equal('null');
+      module.optional = module.alt_text;
+      expect(module.optional.string).to.equal('World');
+      const [ after2 ] = await capture(() => print());
+      expect(after2).to.equal('{ 87, 111, 114, 108, 100 }');
+    })
+    it('should handle pointer in error union', async function() {
+      this.timeout(120000);
+      const { default: module, Error, print } = await importTest('in-error-union');
+      expect(module.error_union.string).to.equal('Hello');
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('{ 72, 101, 108, 108, 111 }');
+      module.error_union = Error.GoldfishDied;
+      expect(() => module.error_union).to.throw(Error.GoldfishDied);
+      const [ after1 ] = await capture(() => print());
+      expect(after1).to.equal('error.GoldfishDied');
+      module.error_union = module.alt_text;
+      expect(module.error_union.string).to.equal('World');
+      const [ after2 ] = await capture(() => print());
+      expect(after2).to.equal('{ 87, 111, 114, 108, 100 }');
+    })
+    it('should not compile code containing pointer vector', async function() {
+      this.timeout(120000);
+      await expect(importTest('vector-of')).to.eventually.be.rejected;      
+    })
   })
 }
