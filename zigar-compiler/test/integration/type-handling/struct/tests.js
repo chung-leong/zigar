@@ -156,7 +156,7 @@ export function addTests(importModule, options) {
       const [ after ] = await capture(() => print());
       expect(after).to.equal('null');
       module.optional = { number1: 1, number2: 2 };
-      expect(module.optional.valueOf()).to.be.eql({ number1: 1, number2: 2 });
+      expect(module.optional.valueOf()).to.eql({ number1: 1, number2: 2 });
     })
     it('should handle struct in error union', async function() {
       this.timeout(120000);

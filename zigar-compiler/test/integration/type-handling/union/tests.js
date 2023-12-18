@@ -42,5 +42,69 @@ export function addTests(importModule, options) {
       module.useMonkey();
       expect(module.bare_union.monkey).to.equal(777n);
     })
+    it('should print union arguments', async function() {
+      this.timeout(120000);
+      const { print } = await importTest('as-function-parameters');
+      const lines = await capture(() => {
+        print({ Integer: 200 });
+        print({ Float: 3.14 });
+        print({ String: "Hello" })
+      });
+      expect(lines).to.eql([ 
+        'as-function-parameters.Variant{ .Integer = 200 }',
+        'as-function-parameters.Variant{ .Float = 3.14e+00 }', 
+        'as-function-parameters.Variant{ .String = { 72, 101, 108, 108, 111 } }', 
+      ]);
+    })
+    it('should return union', async function() {
+      this.timeout(120000);
+      const { getInteger, getFloat, getString } = await importTest('as-return-value');
+      expect(getInteger().Integer).to.equal(300);
+      expect(getFloat().Float).to.equal(3.14);
+      expect(getFloat().Integer).to.be.null;
+      expect(getString().String.string).to.equal('Hello');
+    })
+    it('should handle union in array', async function() {
+      this.timeout(120000);
+      const { default: module, print } = await importTest('array-of');      
+      expect(array.length).to.equal(4);
+      expect([ ...module.array ]).to.eql([ undefined, undefined, undefined, undefined ]);
+      const [ line ] = await capture(() => print());
+      expect(line).to.equal('{ void, void, void, void }');
+    })
+
+
+    it('should handle union in optional', async function() {
+      this.timeout(120000);
+      const { default: module, print } = await importTest('in-optional');
+      expect(module.optional.Integer).to.equal(100);
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('in-error-union.Variant');
+      module.optional = null;
+      expect(module.optional).to.be.null;
+      const [ after ] = await capture(() => print());
+      expect(after).to.equal('null');
+      module.optional = { Float: 3.14 };
+      expect(module.optional.Float).to.equal(3.14);
+      expect(module.error_union.Integer).to.be.null;
+    })
+    it('should handle union in error union', async function() {
+      this.timeout(120000);
+      const { default: module, Error, print } = await importTest('in-error-union');
+      expect(module.error_union.Integer).to.equal(100);
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('in-error-union.Variant');
+      module.error_union = Error.GoldfishDied;
+      expect(() => module.error_union).to.throw(Error.GoldfishDied);
+      const [ after ] = await capture(() => print());
+      expect(after).to.equal('error.GoldfishDied');
+      module.error_union = { Float: 3.14 };
+      expect(module.error_union.Float).to.equal(3.14);
+      expect(module.error_union.Integer).to.be.null;
+    })
+    it('should not compile code containing union vector', async function() {
+      await importTest('vector-of');
+      await expect(importTest('vector-of')).to.eventually.be.rejected;      
+    })   
   })
 }
