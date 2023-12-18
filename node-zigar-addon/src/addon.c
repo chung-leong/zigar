@@ -115,18 +115,6 @@ result create_string(call ctx,
     return Failure;
 }
 
-result create_object(call ctx,
-                     napi_value structure,
-                     napi_value arg,
-                     napi_value* dest) {
-    napi_env env = ctx->env;
-    napi_value args[2] = { structure, arg };
-    if (call_js_function(ctx, "createObject", 2, args, dest)) {
-        return OK;
-    }
-    return Failure;
-}
-
 result create_view(call ctx,
                    const memory* mem,
                    napi_value* dest) {
@@ -665,7 +653,6 @@ napi_value load_module(napi_env env,
     exports->allocate_relocatable_memory = allocate_relocatable_memory;
     exports->free_relocatable_memory = free_relocatable_memory;
     exports->create_string = create_string;
-    exports->create_object = create_object;
     exports->create_view = create_view;
     exports->cast_view = cast_view;
     exports->read_slot = read_slot;

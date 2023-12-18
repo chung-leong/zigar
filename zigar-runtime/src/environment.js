@@ -160,11 +160,6 @@ export class Environment {
     }
   }
 
-  createObject(structure, arg) {
-    const { constructor } = structure;
-    return new constructor(arg);
-  }
-
   castView(structure, dv, writable) {
     const { constructor, hasPointer } = structure;
     const object = constructor.call(ENVIRONMENT, dv, { writable });
@@ -987,7 +982,6 @@ export class WebAssemblyEnvironment extends Environment {
     allocateRelocatableMemory: { argType: 'ii', returnType: 'v' },
     freeRelocatableMemory: { argType: 'iii' },
     createString: { argType: 'ii', returnType: 'v' },
-    createObject: { argType: 'vv', returnType: 's' },
     createView: { argType: 'iib', returnType: 'v' },
     castView: { argType: 'vvb', returnType: 'v' },
     readSlot: { argType: 'vi', returnType: 'v' },

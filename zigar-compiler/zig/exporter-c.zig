@@ -62,14 +62,6 @@ pub const Host = struct {
         return value;
     }
 
-    pub fn createObject(self: Host, structure: Value, arg: Value) !Value {
-        var value: Value = undefined;
-        if (imports.create_object(self.context, structure, arg, &value) != .OK) {
-            return Error.UnableToCreateObject;
-        }
-        return value;
-    }
-
     pub fn createView(self: Host, memory: Memory) !Value {
         var value: Value = undefined;
         if (imports.create_view(self.context, &memory, &value) != .OK) {
@@ -221,7 +213,6 @@ const Imports = extern struct {
     allocate_relocatable_memory: *const fn (Call, usize, u16, *Memory) callconv(.C) Result,
     free_relocatable_memory: *const fn (Call, *const Memory) callconv(.C) Result,
     create_string: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
-    create_object: *const fn (Call, Value, Value, *Value) callconv(.C) Result,
     create_view: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
     cast_view: *const fn (Call, Value, Value, bool, *Value) callconv(.C) Result,
     read_slot: *const fn (Call, ?Value, usize, *Value) callconv(.C) Result,

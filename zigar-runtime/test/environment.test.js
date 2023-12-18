@@ -183,23 +183,6 @@ describe('Environment', function() {
         const object = env.castView(structure, dv);
       })
     })
-    describe('createObject', function() {
-      it('should call constructor using the new operator', function() {
-        const env = new Environment();
-        let recv, arg;
-        const structure = {
-          constructor: function(dv) {
-            recv = this;
-            arg = dv;
-          }
-        };
-        const initializer = {};
-        const object = env.createObject(structure, initializer);
-        expect(recv).to.be.instanceOf(structure.constructor);
-        expect(recv).to.equal(object);
-        expect(arg).to.equal(initializer);
-      })
-    })
     describe('readSlot', function() {
       it('should read from global slots where target is null', function() {
         const env = new Environment();

@@ -126,7 +126,6 @@ typedef struct {
     result (__cdecl *allocate_relocatable_memory)(call, size_t, uint16_t, memory*);
     result (__cdecl *free_relocatable_memory)(call, const memory*);
     result (__cdecl *create_string)(call, const memory*, napi_value*);
-    result (__cdecl *create_object)(call, napi_value, napi_value, napi_value*);
     result (__cdecl *create_view)(call, const memory*, napi_value*);
     result (__cdecl *cast_view)(call, napi_value, napi_value, bool, napi_value*);
     result (__cdecl *read_slot)(call, napi_value, size_t, napi_value*);
@@ -140,27 +139,6 @@ typedef struct {
     result (__cdecl *create_template)(call, napi_value, napi_value*);
     result (__cdecl *write_to_console)(call, napi_value);
 } export_table;
-
-typedef enum {
-    allocateRelocatableMemory,
-    freeRelocatableMemory,
-    createString,
-    createObject,
-    createView,
-    castView,
-    readSlot,
-    writeSlot,
-    beginStructure,
-    attachMember,
-    attachMethod,
-    attachTemplate,
-    endStructure,
-    createTemplate,
-    writeToConsole,
-    invokeFactory,
-
-    env_method_count,
-} js_function;
 
 typedef struct {
     result (__cdecl *  allocate_fixed_memory)(size_t, uint16_t, memory*);
