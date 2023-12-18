@@ -7,7 +7,7 @@ import {
   getPrimitiveClass,
   isExtendedType,
 } from '../src/primitive.js';
-import { NodeEnvironment } from '../src/environment.js'
+import { NodeEnvironment } from '../src/environment-node.js';
 import { encodeBase64 } from '../src/text.js';
 
 describe('Primitive functions', function() {

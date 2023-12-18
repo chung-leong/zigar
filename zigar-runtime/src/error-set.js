@@ -1,6 +1,6 @@
 import { defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
-import { getMemoryCopier } from './memory.js';
+import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { throwReadOnly } from './error.js';
 import { ALIGN, ERROR_ITEMS, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
@@ -65,8 +65,9 @@ export function defineErrorSet(s, env) {
   const { get, set } = getDescriptor(errorMember, env);
   const toStringTag = function() { return 'Error' };
   defineProperties(constructor.prototype, {
-    $: { get, set: throwReadOnly, configurable: true },
     index: { get: getIndex, configurable: true },
+    delete: { value: getDestructor(s), configurable: true },
+    $: { get, set: throwReadOnly, configurable: true },
     // ensure that libraries that rely on the string tag for type detection will
     // correctly identify the object as an error
     [Symbol.toStringTag]: { get: toStringTag, configurable: true },

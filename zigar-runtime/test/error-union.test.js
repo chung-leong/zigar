@@ -3,7 +3,7 @@ import { expect } from 'chai';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { initializeErrorSets } from '../src/error-set.js';
-import { NodeEnvironment } from '../src/environment.js'
+import { NodeEnvironment } from '../src/environment-node.js';
 import { ENVIRONMENT, MEMORY, SLOTS } from '../src/symbol.js';
 
 describe('Error union functions', function() {

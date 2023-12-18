@@ -1,7 +1,7 @@
 /* COMPTIME-ONLY */
 import { useAllMemberTypes } from './member.js';
 import { useAllStructureTypes } from './structure.js';
-import { WebAssemblyEnvironment } from './environment.js';
+import { WebAssemblyEnvironment } from './environment-wasm.js';
 
 useAllMemberTypes();
 useAllStructureTypes();

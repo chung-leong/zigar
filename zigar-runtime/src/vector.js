@@ -1,6 +1,6 @@
 import { defineProperties, getSelf, removeSetters } from './structure.js';
 import { getDescriptor } from './member.js';
-import { getMemoryCopier } from './memory.js';
+import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer, throwReadOnly } from './error.js';
 import { ALIGN, COMPAT, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
@@ -85,6 +85,7 @@ export function defineVector(s, env) {
     ...elementDescriptors,
     length: { value: length, configurable: true },
     entries: { value: createVectorEntries, configurable: true, writable: true },
+    delete: { value: getDestructor(s), configurable: true },
     $: { get: getSelf, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },

@@ -1,6 +1,6 @@
 import { defineProperties, getSelf, removeSetters } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
-import { getMemoryCopier } from './memory.js';
+import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { always, copyPointer } from './pointer.js';
 import { getSpecialKeys } from './special.js';
@@ -129,7 +129,8 @@ export function defineStructShape(s, env) {
     }
   };
   defineProperties(constructor.prototype, {
-    '$': { get: getSelf, set: initializer, configurable: true },
+    delete: { value: getDestructor(s), configurable: true },
+    $: { get: getSelf, set: initializer, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },

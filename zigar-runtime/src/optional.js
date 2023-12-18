@@ -1,6 +1,6 @@
 import { defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
-import { getMemoryCopier, getMemoryResetter } from './memory.js';
+import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView }  from './data-view.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
 import { throwNoInitializer, throwReadOnly } from './error.js';
@@ -83,7 +83,8 @@ export function defineOptional(s, env) {
   };
   const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
   defineProperties(constructor.prototype, {
-    '$': { get, set, configurable: true },
+    delete: { value: getDestructor(s), configurable: true },
+    $: { get, set, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, true) },

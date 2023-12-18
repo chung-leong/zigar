@@ -3,7 +3,7 @@ import { expect } from 'chai';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { MEMORY } from '../src/symbol.js';
-import { NodeEnvironment } from '../src/environment.js'
+import { NodeEnvironment } from '../src/environment-node.js';
 import { encodeBase64 } from '../src/text.js';
 
 describe('Slice functions', function() {

@@ -1,6 +1,6 @@
 import { defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
-import { getMemoryCopier } from './memory.js';
+import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, checkDataViewSize, getCompatibleTags } from './data-view.js';
 import { getArrayIterator, createProxy, createArrayEntries, getChildVivificator, getPointerVisitor } from './array.js';
 import { copyPointer, getProxy } from './pointer.js';
@@ -188,6 +188,7 @@ export function defineSlice(s, env) {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { get: getLength, configurable: true },
+    delete: { value: getDestructor(s), configurable: true },
     $: { get: getProxy, set: initializer, configurable: true },
     entries: { value: createArrayEntries, configurable: true, writable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },

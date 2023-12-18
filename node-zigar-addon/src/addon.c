@@ -590,9 +590,9 @@ bool export_functions(napi_env env,
                       napi_value js_env,
                       module_data* md) {
     return export_function(env, js_env, "extractBufferAddress", extract_buffer_address, md)
-        && export_function(env, js_env, "allocateExternalMemory", allocate_external_memory, md)
-        && export_function(env, js_env, "freeExternalMemory", free_external_memory, md)
-        && export_function(env, js_env, "obtainExternalBuffer", obtain_external_buffer, md)
+        && export_function(env, js_env, "allocateExternMemory", allocate_external_memory, md)
+        && export_function(env, js_env, "freeExternMemory", free_external_memory, md)
+        && export_function(env, js_env, "obtainExternBuffer", obtain_external_buffer, md)
         && export_function(env, js_env, "copyBytes", copy_bytes, md)
         && export_function(env, js_env, "findSentinel", find_sentinel, md)
         && export_function(env, js_env, "defineStructures", define_structures, md)

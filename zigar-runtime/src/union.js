@@ -1,6 +1,6 @@
 import { StructureType, defineProperties, getSelf, removeSetters } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
-import { getMemoryCopier } from './memory.js';
+import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { getSpecialKeys } from './special.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
@@ -227,7 +227,8 @@ export function defineUnionShape(s, env) {
   };
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
   defineProperties(constructor.prototype, {
-    '$': { get: getSelf, set: initializer, configurable: true },
+    delete: { value: getDestructor(s), configurable: true },
+    $: { get: getSelf, set: initializer, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [ENUM_ITEM]: isTagged && { get: getEnumItem, configurable: true },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },

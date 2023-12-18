@@ -1,5 +1,13 @@
 import { MEMORY } from './symbol.js';
 
+export function getDestructor(env) {
+  return function() {
+    const dv = this[MEMORY];
+    this[MEMORY] = null;
+    env.releaseView(dv);
+  };
+}
+
 export function getBitAlignFunction(bitPos, bitSize, toAligned) {
   if (bitPos + bitSize <= 8) {
     const mask = (2 ** bitSize) - 1;

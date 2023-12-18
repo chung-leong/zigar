@@ -1,6 +1,6 @@
 import { defineProperties } from './structure.js';
 import { MemberType, isByteAligned, getDescriptor } from './member.js';
-import { getMemoryCopier } from './memory.js';
+import { getDestructor, getMemoryCopier } from './memory.js';
 import { getCompatibleTags, addTypedArray, requireDataView } from './data-view.js';
 import { getSpecialKeys } from './special.js';
 import { ALIGN, COMPAT, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
@@ -77,6 +77,7 @@ export function definePrimitive(s, env) {
   };
   const { get, set } = getDescriptor(member, env);
   defineProperties(constructor.prototype, {
+    delete: { value: getDestructor(s), configurable: true },
     $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },

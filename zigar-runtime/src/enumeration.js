@@ -1,6 +1,6 @@
 import { defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
-import { getMemoryCopier } from './memory.js';
+import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { throwInvalidInitializer, throwReadOnly } from './error.js';
 import { ALIGN, ENUM_ITEM, ENUM_ITEMS, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
@@ -59,6 +59,7 @@ export function defineEnumerationShape(s, env) {
   const enumMember = { ...member, structure: s, type: MemberType.EnumerationItem };
   const { get, set } = getDescriptor(enumMember, env);
   defineProperties(constructor.prototype, {
+    delete: { value: getDestructor(s), configurable: true },
     $: { get, set: throwReadOnly, configurable: true },
     [Symbol.toPrimitive]: { value: getIndex, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },

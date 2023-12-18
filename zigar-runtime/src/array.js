@@ -1,6 +1,6 @@
 import { defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
-import { getMemoryCopier } from './memory.js';
+import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer, throwReadOnly } from './error.js';
@@ -117,8 +117,9 @@ export function defineArray(s, env) {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { value: length, configurable: true },
-    $: { get: getProxy, set: initializer, configurable: true },
     entries: { value: createArrayEntries, configurable: true, writable: true },
+    delete: { value: getDestructor(s), configurable: true },
+    $: { get: getProxy, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },

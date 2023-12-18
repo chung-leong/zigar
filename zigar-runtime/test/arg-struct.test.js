@@ -3,7 +3,7 @@ import 'mocha-skip-if';
 
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { NodeEnvironment } from '../src/environment.js'
+import { NodeEnvironment } from '../src/environment-node.js';
 
 describe('ArgStruct functions', function() {
   const env = new NodeEnvironment();

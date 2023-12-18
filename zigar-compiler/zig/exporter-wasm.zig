@@ -25,7 +25,6 @@ const CallContext = struct {
 extern fn _allocateRelocatableMemory(len: usize, alignment: u16) ?Value;
 extern fn _freeRelocatableMemory(bytes: [*]u8, len: usize, alignment: u16) void;
 extern fn _createString(bytes: ?[*]const u8, len: usize) ?Value;
-extern fn _createObject(structure: Value, dv: Value) ?Value;
 extern fn _createView(bytes: ?[*]u8, len: usize, copy: bool) ?Value;
 extern fn _castView(structure: Value, dv: Value, writable: bool) ?Value;
 extern fn _getViewAddress(dv: Value) usize;
@@ -64,22 +63,12 @@ pub fn getPtrAlign(alignment: u16) u8 {
     return if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
 }
 
-pub fn allocateFixedMemory(len: usize, alignment: u16) ?Value {
-    if (len == 0) {
-        return _createView(null, len, false);
-    }
+pub fn allocateExternMemory(len: usize, alignment: u16) ?[*]u8 {
     const ptr_align = getPtrAlign(alignment);
-    if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
-        return _createView(bytes, len, false);
-    } else {
-        return null;
-    }
+    return allocator.rawAlloc(len, ptr_align, 0);
 }
 
-pub fn freeFixedMemory(bytes: [*]u8, len: usize, alignment: u16) void {
-    if (len == 0) {
-        return;
-    }
+pub fn freeExternMemory(bytes: [*]u8, len: usize, alignment: u16) void {
     const ptr_align = getPtrAlign(alignment);
     allocator.rawFree(bytes[0..len], ptr_align, 0);
 }
@@ -146,14 +135,6 @@ pub const Host = struct {
             return str;
         } else {
             return Error.UnableToCreateString;
-        }
-    }
-
-    pub fn createObject(_: Host, structure: Value, arg: Value) !Value {
-        if (_createObject(structure, arg)) |object| {
-            return object;
-        } else {
-            return Error.UnableToCreateObject;
         }
     }
 
