@@ -92,17 +92,17 @@ export function addTests(importModule, options) {
     })
     it('should handle pointer in struct', async function() {
       this.timeout(120000);
-      const { default: module, StructA, print } = await importTest('in-a-struct');
+      const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.text1.string).to.equal('dog');
       expect(module.struct_a.text2.string).to.equal('cat');
       const b = new StructA({});
       expect(b.text1.string).to.equal('apple');
       expect(b.text2.string).to.equal('orange');
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-struct.StructA{ .text1 = { 100, 111, 103 }, .text2 = { 99, 97, 116 } }');
+      expect(before).to.equal('in-struct.StructA{ .text1 = { 100, 111, 103 }, .text2 = { 99, 97, 116 } }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-struct.StructA{ .text1 = { 97, 112, 112, 108, 101 }, .text2 = { 111, 114, 97, 110, 103, 101 } }');
+      expect(after).to.equal('in-struct.StructA{ .text1 = { 97, 112, 112, 108, 101 }, .text2 = { 111, 114, 97, 110, 103, 101 } }');
     })
     it('should not compile code with pointer in packed struct', async function() {
       this.timeout(120000);

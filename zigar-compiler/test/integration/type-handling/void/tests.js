@@ -37,27 +37,27 @@ export function addTests(importModule, options) {
     })
     it('should handle void in struct', async function() {
       this.timeout(120000);
-      const { default: module, StructA, print } = await importTest('in-a-struct');
+      const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ empty1: undefined, empty2: undefined });
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ empty1: undefined, empty2: undefined });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-struct.StructA{ .empty1 = void, .empty2 = void }');
+      expect(before).to.equal('in-struct.StructA{ .empty1 = void, .empty2 = void }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-struct.StructA{ .empty1 = void, .empty2 = void }');
+      expect(after).to.equal('in-struct.StructA{ .empty1 = void, .empty2 = void }');
     })
     it('should handle void in packed struct', async function() {
       this.timeout(120000);
-      const { default: module, StructA, print } = await importTest('in-a-packed-struct');
+      const { default: module, StructA, print } = await importTest('in-packed-struct');
       expect(module.struct_a.valueOf()).to.eql({ empty1: undefined, empty2: undefined, number: 200, empty3: undefined });
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ empty1: undefined, empty2: undefined, number: 100, empty3: undefined });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-packed-struct.StructA{ .empty1 = void, .empty2 = void, .number = 200, .empty3 = void }');
+      expect(before).to.equal('in-packed-struct.StructA{ .empty1 = void, .empty2 = void, .number = 200, .empty3 = void }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-packed-struct.StructA{ .empty1 = void, .empty2 = void, .number = 100, .empty3 = void }');
+      expect(after).to.equal('in-packed-struct.StructA{ .empty1 = void, .empty2 = void, .number = 100, .empty3 = void }');
     })
     it('should handle void as comptime field', async function() {
       this.timeout(120000);

@@ -55,21 +55,21 @@ export function addTests(importModule, options) {
     })
     it('should handle enum in struct', async function() {
       this.timeout(120000);
-      const { default: module, Pet, StructA, print } = await importTest('in-a-struct');
+      const { default: module, Pet, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.pet1).to.equal(Pet.Dog);
       expect(module.struct_a.pet2).to.equal(Pet.Cat);
       const b = new StructA({});
       expect(b.pet1).to.equal(Pet.Monkey);
       expect(b.pet2).to.equal(Pet.Dog);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-struct.StructA{ .pet1 = in-a-struct.Pet.Dog, .pet2 = in-a-struct.Pet.Cat }');
+      expect(before).to.equal('in-struct.StructA{ .pet1 = in-struct.Pet.Dog, .pet2 = in-struct.Pet.Cat }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-struct.StructA{ .pet1 = in-a-struct.Pet.Monkey, .pet2 = in-a-struct.Pet.Dog }');
+      expect(after).to.equal('in-struct.StructA{ .pet1 = in-struct.Pet.Monkey, .pet2 = in-struct.Pet.Dog }');
     })
     it('should handle enum in packed struct', async function() {
       this.timeout(120000);
-      const { default: module, Pet, StructA, print } = await importTest('in-a-packed-struct');
+      const { default: module, Pet, StructA, print } = await importTest('in-packed-struct');
       expect(module.struct_a.pet1).to.equal(Pet.Dog);
       expect(module.struct_a.pet2).to.equal(Pet.Cat);
       expect(module.struct_a.number).to.equal(200);
@@ -80,10 +80,10 @@ export function addTests(importModule, options) {
       expect(b.number).to.equal(100);
       expect(b.pet3).to.equal(Pet.Cat);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-packed-struct.StructA{ .pet1 = in-a-packed-struct.Pet.Dog, .pet2 = in-a-packed-struct.Pet.Cat, .number = 200, .pet3 = in-a-packed-struct.Pet.Monkey }');
+      expect(before).to.equal('in-packed-struct.StructA{ .pet1 = in-packed-struct.Pet.Dog, .pet2 = in-packed-struct.Pet.Cat, .number = 200, .pet3 = in-packed-struct.Pet.Monkey }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-packed-struct.StructA{ .pet1 = in-a-packed-struct.Pet.Monkey, .pet2 = in-a-packed-struct.Pet.Dog, .number = 100, .pet3 = in-a-packed-struct.Pet.Cat }');
+      expect(after).to.equal('in-packed-struct.StructA{ .pet1 = in-packed-struct.Pet.Monkey, .pet2 = in-packed-struct.Pet.Dog, .number = 100, .pet3 = in-packed-struct.Pet.Cat }');
     })
     it('should handle enum as comptime field', async function() {
       this.timeout(120000);

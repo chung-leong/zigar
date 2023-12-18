@@ -29,11 +29,11 @@ export function addTests(importModule, options) {
     })
     it('should not compile code with null in struct', async function() {
       this.timeout(120000);
-      await expect(importTest('in-a-struct')).to.eventually.be.rejected;
+      await expect(importTest('in-struct')).to.eventually.be.rejected;
     })
     it('should not compile code with null in packed struct', async function() {
       this.timeout(120000);
-      await expect(importTest('in-a-packed-struct')).to.eventually.be.rejected;
+      await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
     it('should handle null as comptime field', async function() {
       this.timeout(120000);

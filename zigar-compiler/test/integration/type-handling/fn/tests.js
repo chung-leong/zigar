@@ -42,12 +42,12 @@ export function addTests(importModule, options) {
     })
     it('should ignore function in struct', async function() {
       this.timeout(120000);
-      const { default: module } = await importTest('in-a-struct');
+      const { default: module } = await importTest('in-struct');
       expect(module).to.not.have.property('struct_a');
     })
     it('should ignore function in packed struct', async function() {
       this.timeout(120000);
-      const { default: module } = await importTest('in-a-packed-struct');
+      const { default: module } = await importTest('in-packed-struct');
       expect(module).to.not.have.property('struct_a');
     })
     it('should ignore function as comptime field', async function() {

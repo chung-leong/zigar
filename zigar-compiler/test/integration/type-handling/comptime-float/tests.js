@@ -33,16 +33,16 @@ export function addTests(importModule, options) {
     })
     it('should handle comptime float in struct', async function() {
       this.timeout(120000);
-      const { default: module, StructA, print } = await importTest('in-a-struct');
+      const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ number1: 0.1, number2: 0.2 });
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ number1: 1.1, number2: 2.2 });
       const [ line ] = await capture(() => print());
-      expect(line).to.equal('in-a-struct.StructA{ .number1 = 1.0e-01, .number2 = 2.0e-01 }');
+      expect(line).to.equal('in-struct.StructA{ .number1 = 1.0e-01, .number2 = 2.0e-01 }');
     })
     it('should handle comptime float in packed struct', async function() {
       this.timeout(120000);
-      await expect(importTest('in-a-packed-struct')).to.be.eventually.rejected;
+      await expect(importTest('in-packed-struct')).to.be.eventually.rejected;
     })
     it('should handle comptime float as comptime field', async function() {
       this.timeout(120000);

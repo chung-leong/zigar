@@ -77,21 +77,21 @@ export function addTests(importModule, options) {
     })
     it('should handle error union in struct', async function() {
       this.timeout(120000);
-      const { default: module, Error, StructA, print } = await importTest('in-a-struct');
+      const { default: module, Error, StructA, print } = await importTest('in-struct');
       expect(() => module.struct_a.number1).to.throw(Error.GoldfishDied);
       expect(module.struct_a.number2).to.equal(-444n);
       const b = new StructA({});
       expect(b.number1).to.equal(123);
       expect(() => b.number2).to.throw(Error.NoMoney);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-struct.StructA{ .number1 = error.GoldfishDied, .number2 = -444 }');
+      expect(before).to.equal('in-struct.StructA{ .number1 = error.GoldfishDied, .number2 = -444 }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-struct.StructA{ .number1 = 123, .number2 = error.NoMoney }');
+      expect(after).to.equal('in-struct.StructA{ .number1 = 123, .number2 = error.NoMoney }');
     })
     it('should handle error union in packed struct', async function() {
       this.timeout(120000);
-      await expect(importTest('in-a-packed-struct')).to.eventually.be.rejected;
+      await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
     it('should handle error union as comptime field', async function() {
       this.timeout(120000);

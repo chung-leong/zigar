@@ -28,14 +28,14 @@ export function addTests(importModule, options) {
     })
     it('should handle undefined in struct', async function() {
       this.timeout(120000);
-      const { default: module, StructA } = await importTest('in-a-struct');
+      const { default: module, StructA } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ empty1: undefined, empty2: undefined });
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ empty1: undefined, empty2: undefined });
     })
     it('should not compile code with undefined in packed struct', async function() {
       this.timeout(120000);
-      await expect(importTest('in-a-packed-struct')).to.eventually.be.rejected;
+      await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
     it('should handle undefined as comptime field', async function() {
       this.timeout(120000);

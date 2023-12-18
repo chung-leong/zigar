@@ -59,7 +59,7 @@ export function addTests(importModule, options) {
     })
     it('should handle array in struct', async function() {
       this.timeout(120000);
-      const { default: module, StructA, print } = await importTest('in-a-struct');
+      const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ 
         array1: [ 10, 20, 30, 40 ], 
         array2: [ 11, 21, 31, 41 ], 
@@ -70,14 +70,14 @@ export function addTests(importModule, options) {
         array2: [ 5, 6, 7, 8 ],
       });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-struct.StructA{ .array1 = { 10, 20, 30, 40 }, .array2 = { 11, 21, 31, 41 } }');
+      expect(before).to.equal('in-struct.StructA{ .array1 = { 10, 20, 30, 40 }, .array2 = { 11, 21, 31, 41 } }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-struct.StructA{ .array1 = { 1, 2, 3, 4 }, .array2 = { 5, 6, 7, 8 } }');
+      expect(after).to.equal('in-struct.StructA{ .array1 = { 1, 2, 3, 4 }, .array2 = { 5, 6, 7, 8 } }');
     })
     it('should should not compile code with array in packed struct', async function() {
       this.timeout(120000);
-      await expect(importTest('in-a-packed-struct')).to.eventually.be.rejected;
+      await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
     it('should handle array as comptime field', async function() {
       this.timeout(120000);

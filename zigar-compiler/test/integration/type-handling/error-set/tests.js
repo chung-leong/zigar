@@ -66,21 +66,21 @@ export function addTests(importModule, options) {
     })
     it('should handle error in struct', async function() {
       this.timeout(120000);
-      const { default: module, StrangeError, StructA, print } = await importTest('in-a-struct');
+      const { default: module, StrangeError, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.err1).to.equal(StrangeError.AlienInvasion);
       expect(module.struct_a.err2).to.equal(StrangeError.SystemIsOnFire);
       const b = new StructA({});
       expect(b.err1).to.equal(StrangeError.SystemIsOnFire);
       expect(b.err2).to.equal(StrangeError.DogAteAllMemory);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-struct.StructA{ .err1 = error.AlienInvasion, .err2 = error.SystemIsOnFire }');
+      expect(before).to.equal('in-struct.StructA{ .err1 = error.AlienInvasion, .err2 = error.SystemIsOnFire }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-struct.StructA{ .err1 = error.SystemIsOnFire, .err2 = error.DogAteAllMemory }');
+      expect(after).to.equal('in-struct.StructA{ .err1 = error.SystemIsOnFire, .err2 = error.DogAteAllMemory }');
     })
     it('should not compile code with error in packed struct', async function() {
       this.timeout(120000);
-      await expect(importTest('in-a-packed-struct')).to.eventually.be.rejected;
+      await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
     it('should handle error as comptime field', async function() {
       this.timeout(120000);

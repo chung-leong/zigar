@@ -58,27 +58,27 @@ export function addTests(importModule, options) {
     })
     it('should handle bool in struct', async function() {
       this.timeout(120000);
-      const { default: module, StructA, print } = await importTest('in-a-struct');
+      const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ state1: false, state2: true });
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ state1: true, state2: false });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-struct.StructA{ .state1 = false, .state2 = true }');
+      expect(before).to.equal('in-struct.StructA{ .state1 = false, .state2 = true }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-struct.StructA{ .state1 = true, .state2 = false }');
+      expect(after).to.equal('in-struct.StructA{ .state1 = true, .state2 = false }');
     })
     it('should handle bool in packed struct', async function() {
       this.timeout(120000);
-      const { default: module, StructA, print } = await importTest('in-a-packed-struct');
+      const { default: module, StructA, print } = await importTest('in-packed-struct');
       expect(module.struct_a.valueOf()).to.eql({ state1: false, state2: true, number: 200, state3: true });
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ state1: true, state2: false, number: 100, state3: false });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-packed-struct.StructA{ .state1 = false, .state2 = true, .number = 200, .state3 = true }');
+      expect(before).to.equal('in-packed-struct.StructA{ .state1 = false, .state2 = true, .number = 200, .state3 = true }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-packed-struct.StructA{ .state1 = true, .state2 = false, .number = 100, .state3 = false }');
+      expect(after).to.equal('in-packed-struct.StructA{ .state1 = true, .state2 = false, .number = 100, .state3 = false }');
     })
     it('should handle bool as comptime field', async function() {
       this.timeout(120000);

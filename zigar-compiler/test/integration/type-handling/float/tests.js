@@ -71,27 +71,27 @@ export function addTests(importModule, options) {
     })
     it('should handle float in struct', async function() {
       this.timeout(120000);
-      const { default: module, StructA, print } = await importTest('in-a-struct');
+      const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ number1: -0.5, number2: -4.44 });
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ number1: 123, number2: 0.456 });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-struct.StructA{ .number1 = -5.0e-01, .number2 = -4.44e+00 }');
+      expect(before).to.equal('in-struct.StructA{ .number1 = -5.0e-01, .number2 = -4.44e+00 }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-struct.StructA{ .number1 = 1.23e+02, .number2 = 4.56e-01 }');
+      expect(after).to.equal('in-struct.StructA{ .number1 = 1.23e+02, .number2 = 4.56e-01 }');
     })
     it('should handle float in packed struct', async function() {
       this.timeout(120000);
-      const { default: module, StructA, print } = await importTest('in-a-packed-struct');
+      const { default: module, StructA, print } = await importTest('in-packed-struct');
       expect(module.struct_a.valueOf()).to.eql({ state: true, number1: 1.5, number2: 7.77, number3: -4.25 });
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ state: false, number1: 1, number2: 2, number3: 3 });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-packed-struct.StructA{ .state = true, .number1 = 1.5e+00, .number2 = 7.77e+00, .number3 = -4.25e+00 }');
+      expect(before).to.equal('in-packed-struct.StructA{ .state = true, .number1 = 1.5e+00, .number2 = 7.77e+00, .number3 = -4.25e+00 }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-packed-struct.StructA{ .state = false, .number1 = 1.0e+00, .number2 = 2.0e+00, .number3 = 3.0e+00 }');
+      expect(after).to.equal('in-packed-struct.StructA{ .state = false, .number1 = 1.0e+00, .number2 = 2.0e+00, .number3 = 3.0e+00 }');
     })
     it('should handle float as comptime field', async function() {
       this.timeout(120000);

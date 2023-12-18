@@ -90,27 +90,27 @@ export function addTests(importModule, options) {
     })
     it('should handle int in struct', async function() {
       this.timeout(120000);
-      const { default: module, StructA, print } = await importTest('in-a-struct');
+      const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ number1: -5, number2: -444n });
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ number1: 123, number2: 456n });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-struct.StructA{ .number1 = -5, .number2 = -444 }');
+      expect(before).to.equal('in-struct.StructA{ .number1 = -5, .number2 = -444 }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-struct.StructA{ .number1 = 123, .number2 = 456 }');
+      expect(after).to.equal('in-struct.StructA{ .number1 = 123, .number2 = 456 }');
     })
     it('should handle int in packed struct', async function() {
       this.timeout(120000);
-      const { default: module, StructA, print } = await importTest('in-a-packed-struct');
+      const { default: module, StructA, print } = await importTest('in-packed-struct');
       expect(module.struct_a.valueOf()).to.eql({ number1: 15, number2: 777n, state: true, number3: -420 });
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ number1: 100, number2: 200n, state: false, number3: 300 });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-packed-struct.StructA{ .number1 = 15, .number2 = 777, .state = true, .number3 = -420 }');
+      expect(before).to.equal('in-packed-struct.StructA{ .number1 = 15, .number2 = 777, .state = true, .number3 = -420 }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-packed-struct.StructA{ .number1 = 100, .number2 = 200, .state = false, .number3 = 300 }');
+      expect(after).to.equal('in-packed-struct.StructA{ .number1 = 100, .number2 = 200, .state = false, .number3 = 300 }');
     })
     it('should handle int as comptime field', async function() {
       this.timeout(120000);

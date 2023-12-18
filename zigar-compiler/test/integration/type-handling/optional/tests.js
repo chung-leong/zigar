@@ -61,19 +61,19 @@ export function addTests(importModule, options) {
     })
     it('should handle optional in struct', async function() {
       this.timeout(120000);
-      const { default: module, StructA, print } = await importTest('in-a-struct');
+      const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ number1: null, number2: -444n });
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ number1: 123, number2: null });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-struct.StructA{ .number1 = null, .number2 = -444 }');
+      expect(before).to.equal('in-struct.StructA{ .number1 = null, .number2 = -444 }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-struct.StructA{ .number1 = 123, .number2 = null }');
+      expect(after).to.equal('in-struct.StructA{ .number1 = 123, .number2 = null }');
     })
     it('should handle optional in packed struct', async function() {
       this.timeout(120000);
-      await expect(importTest('in-a-packed-struct')).to.eventually.be.rejected;
+      await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
     it('should handle optional as comptime field', async function() {
       this.timeout(120000);

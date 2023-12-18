@@ -67,19 +67,19 @@ export function addTests(importModule, options) {
     })
     it('should handle struct in struct', async function() {
       this.timeout(120000);
-      const { default: module, StructA, print } = await importTest('in-a-struct');
+      const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ struct1: { number1: 1, number2: 2 }, struct2: { number1: 3, number2: 4 } });
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ struct1: { number1: 10, number2: 20 }, struct2: { number1: 11, number2: 21 } });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-struct.StructA{ .struct1 = in-a-struct.Struct{ .number1 = 1, .number2 = 2 }, .struct2 = in-a-struct.Struct{ .number1 = 3, .number2 = 4 } }');
+      expect(before).to.equal('in-struct.StructA{ .struct1 = in-struct.Struct{ .number1 = 1, .number2 = 2 }, .struct2 = in-struct.Struct{ .number1 = 3, .number2 = 4 } }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-struct.StructA{ .struct1 = in-a-struct.Struct{ .number1 = 10, .number2 = 20 }, .struct2 = in-a-struct.Struct{ .number1 = 11, .number2 = 21 } }');
+      expect(after).to.equal('in-struct.StructA{ .struct1 = in-struct.Struct{ .number1 = 10, .number2 = 20 }, .struct2 = in-struct.Struct{ .number1 = 11, .number2 = 21 } }');
     })
     it('should handle struct in packed struct', async function() {
       this.timeout(120000);
-      const { default: module, StructA, print } = await importTest('in-a-packed-struct');
+      const { default: module, StructA, print } = await importTest('in-packed-struct');
       expect(module.struct_a.valueOf()).to.eql({ 
         struct1: { number1: 1, number2: 2 }, 
         struct2: { number1: 3, number2: 4 }, 
@@ -94,10 +94,10 @@ export function addTests(importModule, options) {
         struct3: { number1: 12, number2: 22 }, 
       });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-a-packed-struct.StructA{ .struct1 = in-a-packed-struct.Struct{ .number1 = 1, .number2 = 2 }, .struct2 = in-a-packed-struct.Struct{ .number1 = 3, .number2 = 4 }, .number = 200, .struct3 = in-a-packed-struct.Struct{ .number1 = 5, .number2 = 6 } }');
+      expect(before).to.equal('in-packed-struct.StructA{ .struct1 = in-packed-struct.Struct{ .number1 = 1, .number2 = 2 }, .struct2 = in-packed-struct.Struct{ .number1 = 3, .number2 = 4 }, .number = 200, .struct3 = in-packed-struct.Struct{ .number1 = 5, .number2 = 6 } }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-a-packed-struct.StructA{ .struct1 = in-a-packed-struct.Struct{ .number1 = 10, .number2 = 20 }, .struct2 = in-a-packed-struct.Struct{ .number1 = 11, .number2 = 21 }, .number = 100, .struct3 = in-a-packed-struct.Struct{ .number1 = 12, .number2 = 22 } }');
+      expect(after).to.equal('in-packed-struct.StructA{ .struct1 = in-packed-struct.Struct{ .number1 = 10, .number2 = 20 }, .struct2 = in-packed-struct.Struct{ .number1 = 11, .number2 = 21 }, .number = 100, .struct3 = in-packed-struct.Struct{ .number1 = 12, .number2 = 22 } }');
     })
     it('should handle struct as comptime field', async function() {
       this.timeout(120000);
