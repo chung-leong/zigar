@@ -54,6 +54,19 @@ describe('Environment', function() {
       expect(env.context).to.equal(ctx1);
     })
   })
+  describe('createBuffer', function() {
+    it('should return a data view of a newly created array buffer', function() {
+      const env = new Environment();
+      env.getBufferAddress = () => 0x10000;
+      const dv = env.createBuffer(32, 3);
+      expect(dv).to.be.instanceOf(DataView);
+      expect(dv.byteLength).to.equal(32);
+      expect(dv.byteOffset).to.equal(0);
+    })
+  })
+  describe('createRelocatableBuffer', function() {   
+  })
+
   describe('registerMemory', function() {
     it('should return address of data view', function() {
       const env = new Environment();
@@ -71,6 +84,9 @@ describe('Environment', function() {
       const address = env.registerMemory(dv);
       expect(address).to.equal(0x1000 + 8);
     })
+  })
+  describe('unregisterMemory', function() {
+
   })
   describe('findMemory', function() {
     it('should find previously imported buffer', function() {
@@ -116,16 +132,6 @@ describe('Environment', function() {
       const dv = new DataView(new ArrayBuffer(32), 8, 8);
       const address = env.getViewAddress(dv);
       expect(address).to.equal(0x1008n);
-    })
-  })
-  describe('createBuffer', function() {
-    it('should return a data view of a newly created array buffer', function() {
-      const env = new Environment();
-      env.getBufferAddress = () => 0x10000;
-      const dv = env.createBuffer(32, 3);
-      expect(dv).to.be.instanceOf(DataView);
-      expect(dv.byteLength).to.equal(32);
-      expect(dv.byteOffset).to.equal(0);
     })
   })
   describe('createView', function() {
@@ -351,14 +357,6 @@ describe('Environment', function() {
       expect(s.instance.methods[0]).to.eql(method);
     })
   })
-  describe('createTemplate', function() {
-    it('should return a template object', function() {
-      const env = new Environment();
-      const dv = new DataView(new ArrayBuffer(8));
-      const templ = env.createTemplate(dv);
-      expect(templ[MEMORY]).to.equal(dv);
-    })
-  })
   describe('attachTemplate', function() {
     it('should attach instance template', function() {
       const env = new Environment();
@@ -393,6 +391,49 @@ describe('Environment', function() {
       expect(s.static.template).to.equal(templ);
     })
   })
+  describe('endStructure', function() {   
+  })
+  describe('acquireStructures', function() {    
+  })
+  describe('getRootModule', function() {    
+  })
+  describe('exportStructures', function() {    
+  })
+  describe('prepareObjectsForExport', function() {
+    it('should combine data views that overlaps the same memory region', function() {
+      const env = new Environment();
+      const templ1 = {
+        [MEMORY]: new DataView(new ArrayBuffer(8))
+      };
+      const object = {
+        [MEMORY]: new DataView(new ArrayBuffer(8))
+      };
+      const templ2 = {
+        [MEMORY]: new DataView(new ArrayBuffer(32)),
+        [SLOTS]: {
+          0: object,
+        },
+      };
+      const structures = env.structures = [
+        {
+          instance: { template: templ1 },
+          static: {}
+        },
+        {
+          instance: { template: templ2 },
+          static: {}
+        },
+      ];
+      templ1[MEMORY].address = 1002;
+      templ2[MEMORY].address = 1000;
+      object[MEMORY].address = 1016;
+      env.prepareObjectsForExport();
+      expect(templ1[MEMORY].buffer).to.equal(templ2[MEMORY].buffer);
+      expect(templ1[MEMORY].byteOffset).to.equal(2);
+      expect(object[MEMORY].buffer).to.equal(templ2[MEMORY].buffer);
+      expect(object[MEMORY].byteOffset).to.equal(16);
+    })
+  })
   describe('finalizeShape', function() {
     it('should generate constructor for a struct', function() {
       const env = new Environment();
@@ -418,6 +459,32 @@ describe('Environment', function() {
       const object = new constructor(undefined);
       expect(object).to.have.property('number');
     })
+  })
+  describe('finalizeStructure', function() {
+    it('should add structure to list', function() {
+      const env = new Environment();
+      const s = {};
+      env.finalizeStructure(s);
+      expect(env.structures[0]).to.equal(s);
+    })
+  })
+  describe('createCaller', function() {    
+  })
+  describe('recreateStructures', function() {    
+  })
+  describe('linkVariables', function() {    
+  })
+  describe('linkObject', function() {    
+  })
+  describe('unlinkVariables', function() {    
+  })
+  describe('unlinkObject', function() {    
+  })
+  describe('releaseFunctions', function() {    
+  })
+  describe('getControlObject', function() {    
+  })
+  describe('abandon', function() {
   })
   describe('writeToConsole', function() {
     const encoder = new TextEncoder();
@@ -468,53 +535,27 @@ describe('Environment', function() {
       expect(lines).to.eql([ 'Hello world!' ]);
     })
   })
-  describe('prepareObjectsForExport', function() {
-    it('should combine data views that overlaps the same memory region', function() {
-      const env = new Environment();
-      const templ1 = {
-        [MEMORY]: new DataView(new ArrayBuffer(8))
-      };
-      const object = {
-        [MEMORY]: new DataView(new ArrayBuffer(8))
-      };
-      const templ2 = {
-        [MEMORY]: new DataView(new ArrayBuffer(32)),
-        [SLOTS]: {
-          0: object,
-        },
-      };
-      const structures = env.structures = [
-        {
-          instance: { template: templ1 },
-          static: {}
-        },
-        {
-          instance: { template: templ2 },
-          static: {}
-        },
-      ];
-      templ1[MEMORY].address = 1002;
-      templ2[MEMORY].address = 1000;
-      object[MEMORY].address = 1016;
-      env.prepareObjectsForExport();
-      expect(templ1[MEMORY].buffer).to.equal(templ2[MEMORY].buffer);
-      expect(templ1[MEMORY].byteOffset).to.equal(2);
-      expect(object[MEMORY].buffer).to.equal(templ2[MEMORY].buffer);
-      expect(object[MEMORY].byteOffset).to.equal(16);
-    })
+  describe('updatePointerAddresses', function() {    
   })
-  describe('finalizeStructure', function() {
-    it('should add structure to list', function() {
-      const env = new Environment();
-      const s = {};
-      env.finalizeStructure(s);
-      expect(env.structures[0]).to.equal(s);
-    })
+  describe('findTargetClusters', function() {    
   })
-  describe('finalizeStructures', function() {
-    it('should define the structures with the info provided', function() {
-
-    })
+  describe('getShadowAddress', function() {    
+  })
+  describe('createShadow', function() {    
+  })
+  describe('createClusterShadow', function() {    
+  })
+  describe('addShadow', function() {    
+  })
+  describe('removeShadow', function() {    
+  })
+  describe('updateShadow', function() {    
+  })
+  describe('releaseShadow', function() {    
+  })
+  describe('acquirePointerTargets', function() {    
+  })
+  describe('acquireDefaultPointers', function() {    
   })
   describe('findSortedIndex', function() {
     it('should return correct indices for the addresses given', function() {

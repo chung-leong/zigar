@@ -852,14 +852,6 @@ function findMemoryIndex(array, address) {
   return findSortedIndex(array, address, m => m.address);
 }
 
-export function add(address, len) {
-  return address + ((typeof(address) === 'bigint') ? BigInt(len) : len);
-}
-
-export function subtract(address, len) {
-  return address - ((typeof(address) === 'bigint') ? BigInt(len) : len);
-}
-
 export function isMisaligned(address, align) {
   if (typeof(address) === 'bigint') {
     address = Number(address & 0xFFFFFFFFn);
@@ -877,4 +869,12 @@ export function getAlignedAddress(address, align) {
     mask = ~(align - 1);
   }
   return (address & mask) + align;
+}
+
+export function add(address, len) {
+  return address + ((typeof(address) === 'bigint') ? BigInt(len) : len);
+}
+
+export function subtract(address, len) {
+  return address - ((typeof(address) === 'bigint') ? BigInt(len) : len);
 }

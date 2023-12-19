@@ -13,6 +13,42 @@ describe('WebAssemblyEnvironment', function() {
     useAllMemberTypes();
     useAllStructureTypes();
   })
+  describe('allocateRelocatableMemory', function() {
+  })
+  describe('freeRelocatableMemory', function() {
+  })
+  describe('getBufferAddress', function() {
+  })
+  describe('allocateFixedMemory', function() {
+  })
+  describe('freeFixedMemory', function() {
+  })
+  describe('obtainFixedView', function() {
+  })
+  describe('releaseFixedView', function() {
+  })
+  describe('inFixedMemory', function() {
+    it('should return true when view points to a WebAssembly memory', function() {
+      const env = new WebAssemblyEnvironment();
+      const memory = env.memory = new WebAssembly.Memory({
+        initial: 128,
+        maximum: 1024,
+      });
+      const object = {
+        [MEMORY]: new DataView(memory.buffer, 0, 8),
+      };
+      const result = env.inFixedMemory(object);
+      expect(result).to.be.true;
+    })
+  })
+  describe('copyBytes', function() {
+  })
+  describe('findSentinel', function() {
+  })
+  describe('createString', function() {
+  })
+  describe('getTargetAddress', function() {
+  })
   describe('clearExchangeTable', function() {
     it('should release objects stored in value table', function() {
       const env = new WebAssemblyEnvironment();
@@ -185,23 +221,6 @@ describe('WebAssemblyEnvironment', function() {
       expect(env.isRuntimeSafetyActive).to.be.a('function');
     })
   })
-  describe('releaseFunctions', function() {
-    it('should replace imported functions with placeholders that throw', function() {
-      const env = new WebAssemblyEnvironment();
-      const exports = {
-        defineStructures: () => {},
-        allocateShadowMemory: () => {},
-        freeShadowMemory: () => {},
-        runThunk: () => {},
-        isRuntimeSafetyActive: () => {},
-        garbage: () => {},
-      };
-      env.importFunctions(exports);
-      expect(() => env.runThunk()).to.not.throw();
-      env.releaseFunctions();
-      expect(() => env.runThunk()).to.throw();
-    })
-  })
   describe('instantiateWebAssembly', function() {
     it('should attempt to stream in a WASM instance', async function() {
       const env = new WebAssemblyEnvironment();
@@ -220,33 +239,11 @@ describe('WebAssemblyEnvironment', function() {
       const wasm = await env.instantiateWebAssembly(buffer);
     })
   })
-  describe('loadWebAssembly', function() {
-    it('should load a WASM file', function() {
-
-
-    })
-    it('should allow the releasing of a WebAssembly instance', function() {
-
-    })
+  describe('loadModule', function() {
   })
-  describe('runFactory', function() {
-    it('should return list of structures defined in WASM file', function() {
-
-    })
+  describe('trackInstance', function() {
   })
-  describe('inFixedMemory', function() {
-    it('should return true when view points to a WebAssembly memory', function() {
-      const env = new WebAssemblyEnvironment();
-      const memory = env.memory = new WebAssembly.Memory({
-        initial: 128,
-        maximum: 1024,
-      });
-      const object = {
-        [MEMORY]: new DataView(memory.buffer, 0, 8),
-      };
-      const result = env.inFixedMemory(object);
-      expect(result).to.be.true;
-    })
+  describe('linkVariables', function() {
   })
   describe('beginDefinition', function() {
     it('should return an empty object', function() {
@@ -284,7 +281,14 @@ describe('WebAssemblyEnvironment', function() {
       expect(def2).to.have.property('object', object);
     })
   })
-  describe('linkWebAssembly', function() {
-    it('should link methods and variables')
+  describe('getMemoryOffset', function() {
+  })
+  describe('recreateAddress', function() {
+  })
+  describe('startCall', function() {
+  })
+  describe('endCall', function() {
+  })
+  describe('invokeThunk', function() {
   })
 })

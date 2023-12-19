@@ -46,10 +46,6 @@ export class WebAssemblyEnvironment extends Environment {
   // WASM is always little endian
   littleEndian = true;
 
-  constructor() {
-    super();
-  }
-
   allocateRelocatableMemory(len, align) {
     // allocate memory in both JS and WASM space
     const constructor = { [ALIGN]: align };
