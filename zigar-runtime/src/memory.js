@@ -1,10 +1,13 @@
-import { MEMORY } from './symbol.js';
+import { MEMORY, SLOTS } from './symbol.js';
 
 export function getDestructor(env) {
   return function() {
     const dv = this[MEMORY];
     this[MEMORY] = null;
-    env.releaseView(dv);
+    if (this[SLOTS]) {
+      this[SLOTS] = {};
+    }
+    env.releaseFixedView(dv);
   };
 }
 

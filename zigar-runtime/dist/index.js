@@ -3964,13 +3964,13 @@ class Environment {
   getBufferAddress(buffer: ArrayBuffer): bigint|number {
     // return a buffer's address
   }
-  allocateRelocatableMemory(len: number, align: number): DataView {
+  allocateRelocMemory(len: number, align: number): DataView {
     // allocate memory and remember its address
   }
   allocateShadowMemory(len: number, align: number): DataView {
     // allocate memory for shadowing objects
   }
-  freeRelocatableMemory(address: bigint|number, len: number, align: number): void {
+  freeRelocMemory(address: bigint|number, len: number, align: number): void {
     // free previously allocated memory
   }
   freeShadowMemory(address: bigint|number, len: number, align: number): void {
@@ -4014,11 +4014,11 @@ class Environment {
     if (fixed) {
       return this.createFixedBuffer(len);
     } else {
-      return this.createRelocatableBuffer(len, align);
+      return this.createRelocBuffer(len, align);
     }
   }
 
-  createRelocatableBuffer(len) {
+  createRelocBuffer(len) {
     const buffer = new ArrayBuffer(len);
     return new DataView(buffer);
   }
@@ -4071,7 +4071,7 @@ class Environment {
 
   createView(address, len, copy) {
     if (copy) {
-      const dv = this.createRelocatableBuffer(len);
+      const dv = this.createRelocBuffer(len);
       this.copyBytes(dv, address, len);
       return dv;
     } else {
@@ -4478,8 +4478,8 @@ class WebAssemblyEnvironment extends Environment {
     isRuntimeSafetyActive: { argType: '', returnType: 'b' },
   };
   exports = {
-    allocateRelocatableMemory: { argType: 'ii', returnType: 'v' },
-    freeRelocatableMemory: { argType: 'iii' },
+    allocateRelocMemory: { argType: 'ii', returnType: 'v' },
+    freeRelocMemory: { argType: 'iii' },
     createString: { argType: 'ii', returnType: 'v' },
     createObject: { argType: 'vv', returnType: 's' },
     createView: { argType: 'iib', returnType: 'v' },
@@ -4514,7 +4514,7 @@ class WebAssemblyEnvironment extends Environment {
     super();
   }
 
-  allocateRelocatableMemory(len, align) {
+  allocateRelocMemory(len, align) {
     // allocate memory in both JS and WASM space
     const constructor = { [ALIGN]: align };
     const copier = getMemoryCopier(len);
@@ -4528,7 +4528,7 @@ class WebAssemblyEnvironment extends Environment {
     return shadowDV;
   }
 
-  freeRelocatableMemory(address, len, align) {
+  freeRelocMemory(address, len, align) {
     const dv = this.findMemory(address, len);
     this.removeShadow(dv);
     this.unregisterMemory(address);
@@ -4867,7 +4867,7 @@ class WebAssemblyEnvironment extends Environment {
       return;
     }
     const dv = object[MEMORY];
-    const relocDV = this.createRelocatableBuffer(dv.byteLength);
+    const relocDV = this.createRelocBuffer(dv.byteLength);
     const dest = Object.create(object.constructor.prototype);
     dest[MEMORY] = relocDV;
     dest[MEMORY_COPIER](object);

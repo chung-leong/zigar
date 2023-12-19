@@ -38,13 +38,13 @@ export class Environment {
   getBufferAddress(buffer: ArrayBuffer): bigint|number {
     // return a buffer's address
   }
-  allocateRelocatableMemory(len: number, align: number): DataView {
+  allocateRelocMemory(len: number, align: number): DataView {
     // allocate memory and remember its address
   }
   allocateShadowMemory(len: number, align: number): DataView {
     // allocate memory for shadowing objects
   }
-  freeRelocatableMemory(address: bigint|number, len: number, align: number): void {
+  freeRelocMemory(address: bigint|number, len: number, align: number): void {
     // free previously allocated memory
   }
   freeShadowMemory(address: bigint|number, len: number, align: number): void {
@@ -95,17 +95,13 @@ export class Environment {
     this.context = this.contextStack.pop();
   }
 
-  createBuffer(len, align, fixed = false) {
+  createBuffer(len, align = 0, fixed = false) {
     if (fixed) {
-      return this.createFixedBuffer(len);
+      return this.allocateFixedMemory(len, align);
     } else {
-      return this.createRelocatableBuffer(len, align);
+      const buffer = new ArrayBuffer(len);
+      return new DataView(buffer);
     }
-  }
-
-  createRelocatableBuffer(len) {
-    const buffer = new ArrayBuffer(len);
-    return new DataView(buffer);
   }
 
   registerMemory(dv, targetDV = null) {
@@ -156,7 +152,7 @@ export class Environment {
 
   createView(address, len, copy) {
     if (copy) {
-      const dv = this.createRelocatableBuffer(len);
+      const dv = this.createBuffer(len);
       this.copyBytes(dv, address, len);
       return dv;
     } else {
@@ -457,7 +453,7 @@ export class Environment {
       return;
     }
     const dv = object[MEMORY];
-    const relocDV = this.createRelocatableBuffer(dv.byteLength);
+    const relocDV = this.createBuffer(dv.byteLength);
     const dest = Object.create(object.constructor.prototype);
     dest[MEMORY] = relocDV;
     dest[MEMORY_COPIER](object);

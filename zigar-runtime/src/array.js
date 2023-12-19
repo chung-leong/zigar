@@ -118,7 +118,7 @@ export function defineArray(s, env) {
     set: { value: set, configurable: true, writable: true },
     length: { value: length, configurable: true },
     entries: { value: createArrayEntries, configurable: true, writable: true },
-    delete: { value: getDestructor(s), configurable: true },
+    delete: { value: getDestructor(env), configurable: true },
     $: { get: getProxy, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },

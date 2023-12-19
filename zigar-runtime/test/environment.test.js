@@ -58,15 +58,24 @@ describe('Environment', function() {
     it('should return a data view of a newly created array buffer', function() {
       const env = new Environment();
       env.getBufferAddress = () => 0x10000;
-      const dv = env.createBuffer(32, 3);
+      const dv = env.createBuffer(32, 4);
       expect(dv).to.be.instanceOf(DataView);
       expect(dv.byteLength).to.equal(32);
       expect(dv.byteOffset).to.equal(0);
     })
+    it('should try to create a buffer in fixed memory', function() {
+      const env = new Environment();
+      env.allocateFixedMemory = (len, align) => {
+        const buffer = new ArrayBuffer(len);
+        buffer.align = align;
+        return new DataView(buffer);
+      }
+      const dv = env.createBuffer(32, 4, true);
+      expect(dv).to.be.instanceOf(DataView);
+      expect(dv.byteLength).to.equal(32);
+      expect(dv.buffer.align).to.equal(4);
+    })
   })
-  describe('createRelocatableBuffer', function() {   
-  })
-
   describe('registerMemory', function() {
     it('should return address of data view', function() {
       const env = new Environment();

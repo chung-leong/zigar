@@ -13,9 +13,9 @@ describe('WebAssemblyEnvironment', function() {
     useAllMemberTypes();
     useAllStructureTypes();
   })
-  describe('allocateRelocatableMemory', function() {
+  describe('allocateRelocMemory', function() {
   })
-  describe('freeRelocatableMemory', function() {
+  describe('freeRelocMemory', function() {
   })
   describe('getBufferAddress', function() {
   })
@@ -198,7 +198,7 @@ describe('WebAssemblyEnvironment', function() {
     it('should export functions of the class needed by Zig code', function() {
       const env = new WebAssemblyEnvironment();
       const exports = env.exportFunctions();
-      expect(exports._allocateRelocatableMemory).to.be.a('function');
+      expect(exports._allocateRelocMemory).to.be.a('function');
       expect(exports._beginStructure).to.be.a('function');
     })
   })

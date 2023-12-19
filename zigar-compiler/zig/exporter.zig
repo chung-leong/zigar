@@ -1306,7 +1306,7 @@ fn addOptionalMember(host: anytype, structure: Value, comptime T: type) !void {
         .name = "present",
         .member_type = .Bool,
         .bit_offset = present_offset,
-        .bit_size = @bitSizeOf(bool),
+        .bit_size = present_byte_size * 8,
         .byte_size = present_byte_size,
         .structure = try getStructure(host, bool),
     }, false);

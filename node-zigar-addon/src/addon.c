@@ -79,7 +79,7 @@ result allocate_relocatable_memory(call ctx,
     void* data;
     if (napi_create_uint32(env, len, &args[0]) == napi_ok
      && napi_create_uint32(env, align, &args[1]) == napi_ok
-     && call_js_function(ctx, "allocateRelocatableMemory", 2, args, &result)
+     && call_js_function(ctx, "allocateRelocMemory", 2, args, &result)
      && napi_get_dataview_info(env, result, NULL, &data, NULL, NULL) == napi_ok) {
         dest->bytes = (uint8_t*) data;
         dest->len = len;
@@ -99,7 +99,7 @@ result free_relocatable_memory(call ctx,
     if (napi_create_bigint_uint64(env, (uintptr_t) mem->bytes, &args[0]) == napi_ok
      && napi_create_uint32(env, mem->len, &args[1]) == napi_ok
      && napi_create_uint32(env, mem->attributes.align, &args[2]) == napi_ok
-     && call_js_function(ctx, "freeRelocatableMemory", 3, args, &result)) {
+     && call_js_function(ctx, "freeRelocMemory", 3, args, &result)) {
         return OK;
     }
     return Failure;

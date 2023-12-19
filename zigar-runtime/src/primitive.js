@@ -77,7 +77,7 @@ export function definePrimitive(s, env) {
   };
   const { get, set } = getDescriptor(member, env);
   defineProperties(constructor.prototype, {
-    delete: { value: getDestructor(s), configurable: true },
+    delete: { value: getDestructor(env), configurable: true },
     $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },

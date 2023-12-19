@@ -15,8 +15,8 @@ export class WebAssemblyEnvironment extends Environment {
     isRuntimeSafetyActive: { argType: '', returnType: 'b' },
   };
   exports = {
-    allocateRelocatableMemory: { argType: 'ii', returnType: 'v' },
-    freeRelocatableMemory: { argType: 'iii' },
+    allocateRelocMemory: { argType: 'ii', returnType: 'v' },
+    freeRelocMemory: { argType: 'iii' },
     createString: { argType: 'ii', returnType: 'v' },
     createView: { argType: 'iib', returnType: 'v' },
     castView: { argType: 'vvb', returnType: 'v' },
@@ -46,7 +46,7 @@ export class WebAssemblyEnvironment extends Environment {
   // WASM is always little endian
   littleEndian = true;
 
-  allocateRelocatableMemory(len, align) {
+  allocateRelocMemory(len, align) {
     // allocate memory in both JS and WASM space
     const constructor = { [ALIGN]: align };
     const copier = getMemoryCopier(len);
@@ -60,7 +60,7 @@ export class WebAssemblyEnvironment extends Environment {
     return shadowDV;
   }
 
-  freeRelocatableMemory(address, len, align) {
+  freeRelocMemory(address, len, align) {
     const dv = this.findMemory(address, len);
     this.removeShadow(dv);
     this.unregisterMemory(address);

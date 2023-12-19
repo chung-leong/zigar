@@ -188,7 +188,7 @@ export function defineSlice(s, env) {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { get: getLength, configurable: true },
-    delete: { value: getDestructor(s), configurable: true },
+    delete: { value: getDestructor(env), configurable: true },
     $: { get: getProxy, set: initializer, configurable: true },
     entries: { value: createArrayEntries, configurable: true, writable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },

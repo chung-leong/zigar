@@ -85,7 +85,7 @@ export function defineVector(s, env) {
     ...elementDescriptors,
     length: { value: length, configurable: true },
     entries: { value: createVectorEntries, configurable: true, writable: true },
-    delete: { value: getDestructor(s), configurable: true },
+    delete: { value: getDestructor(env), configurable: true },
     $: { get: getSelf, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },

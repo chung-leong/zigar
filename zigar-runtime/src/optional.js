@@ -17,22 +17,38 @@ export function defineOptional(s, env) {
   } = s;
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getPresent, set: setPresent } = getDescriptor(members[1], env);
-  const get = function() {
-    const present = getPresent.call(this);
-    if (present) {
-      return getValue.call(this);
-    } else {
-      return null;
+  // optionals containing pointers use the pointer itself as indication of presence
+  const hasPresentFlag = members[1].bitOffset != members[0].bitOffset;
+  const get = (hasPresentFlag)
+  ? function() {
+      const present = getPresent.call(this);
+      if (present) {
+        return getValue.call(this);
+      } else {
+        return null;
+      }
     }
+  : function() {
+    const value = getValue.call(this);
+    return (value) ? value : null;
   };
-  const set = function(value) {
+  const set = (hasPresentFlag)
+  ? function(value) {
+      if (value !== null) {
+        // call setValue() first, in case it throws
+        setValue.call(this, value);
+        setPresent.call(this, true);
+      } else {      
+        setPresent.call(this, false);
+        this[VALUE_RESETTER]();
+        this[POINTER_VISITOR]?.(resetPointer);
+      }
+    }
+  : function(value) {
     if (value !== null) {
-      // call setValue() first, in case it throws
       setValue.call(this, value);
-      setPresent.call(this, true);
-    } else {      
+    } else {
       setPresent.call(this, false);
-      this[VALUE_RESETTER]();
       this[POINTER_VISITOR]?.(resetPointer);
     }
   };
@@ -83,7 +99,7 @@ export function defineOptional(s, env) {
   };
   const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
   defineProperties(constructor.prototype, {
-    delete: { value: getDestructor(s), configurable: true },
+    delete: { value: getDestructor(env), configurable: true },
     $: { get, set, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },

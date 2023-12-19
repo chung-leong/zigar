@@ -59,7 +59,7 @@ export function defineEnumerationShape(s, env) {
   const enumMember = { ...member, structure: s, type: MemberType.EnumerationItem };
   const { get, set } = getDescriptor(enumMember, env);
   defineProperties(constructor.prototype, {
-    delete: { value: getDestructor(s), configurable: true },
+    delete: { value: getDestructor(env), configurable: true },
     $: { get, set: throwReadOnly, configurable: true },
     [Symbol.toPrimitive]: { value: getIndex, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },

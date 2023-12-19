@@ -33,5 +33,21 @@ export function addTests(importModule, options) {
         expect(() => freeSlice(slice)).to.not.throw();
       }
     })
+    it('should create object in fixed memory', async function() {
+      this.timeout(120000);
+      const { default: module, Struct, print } = await importTest('create-fixed-object');
+      const [ before ] = await capture(() => print());
+      expect(before).to.equal('empty');
+      const notFixed = new Struct({ number1: 23, number2: 55 });
+      expect(() => module.ptr_maybe = notFixed).to.throw(TypeError);
+      const fixed = new Struct({ number1: 23, number2: 55 }, { fixed: true });
+      expect(fixed.number1).to.equal(23);
+      expect(fixed.number2).to.equal(55);
+      expect(() => module.ptr_maybe = fixed).to.not.throw();
+      const [ after ] = await capture(() => print());
+      expect(after).to.equal('create-fixed-object.Struct{ .number1 = 23, .number2 = 55 }');
+      fixed.delete();
+      expect(() => fixed.number1).to.throw();
+    })
   })
 }

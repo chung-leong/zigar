@@ -227,7 +227,7 @@ export function defineUnionShape(s, env) {
   };
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
   defineProperties(constructor.prototype, {
-    delete: { value: getDestructor(s), configurable: true },
+    delete: { value: getDestructor(env), configurable: true },
     $: { get: getSelf, set: initializer, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [ENUM_ITEM]: isTagged && { get: getEnumItem, configurable: true },

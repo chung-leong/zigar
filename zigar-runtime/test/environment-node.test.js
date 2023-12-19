@@ -12,14 +12,29 @@ describe('NodeEnvironment', function() {
     useAllMemberTypes();
     useAllStructureTypes();
   })
-  describe('getBufferAddress', function() {    
+  describe('getBufferAddress', function() {
+    it('should obtain address of memory in an ArrayBuffer with the help of Node API', function() {
+      const env = new NodeEnvironment();
+      env.extractBufferAddress = function() { return 0x1000n };
+      const buffer = new ArrayBuffer(1024);
+      const address = env.getBufferAddress(buffer);
+      expect(address).to.equal(0x1000n);
+    })
+    it('should return cached address when available', function() {
+      const env = new NodeEnvironment();
+      let calls = 0;
+      const buffer = new ArrayBuffer(1024);
+      env.addressMap.set(buffer, 0x1000n);
+      const address = env.getBufferAddress(buffer);
+      expect(address).to.equal(0x1000n);
+    })
   })
-  describe('allocateRelocatableMemory', function() {
+  describe('allocateRelocMemory', function() {
     it('should create a buffer that can be discovered later', function() {
     const env = new NodeEnvironment();
     env.getBufferAddress = () => 0x10000n;
     env.startContext();
-    const dv1 = env.allocateRelocatableMemory(32, 8);
+    const dv1 = env.allocateRelocMemory(32, 8);
     expect(dv1).to.be.instanceOf(DataView);
     expect(dv1.byteLength).to.equal(32);
     const dv2 = env.findMemory(0x10000n, 32);
@@ -27,33 +42,104 @@ describe('NodeEnvironment', function() {
     expect(dv2.byteLength).to.equal(32);
     })
   })
-  describe('freeRelocatableMemory', function() {
+  describe('freeRelocMemory', function() {
     it('should remove buffer at indicated address', function() {
       const env = new NodeEnvironment();
       env.obtainFixedView = () => null;
       env.getBufferAddress = () => 0x10010;
       env.startContext();
-      const dv = env.allocateRelocatableMemory(32, 32);
+      const dv = env.allocateRelocMemory(32, 32);
       expect(dv).to.be.instanceOf(DataView);
       expect(dv.byteLength).to.equal(32);
       expect(dv.byteOffset).to.equal(16);
       const address = env.getViewAddress(dv);
-      env.freeRelocatableMemory(address, 32, 32);
+      env.freeRelocMemory(address, 32, 32);
       const bad = env.findMemory(address, 32);
       expect(bad).to.be.null;
     })
   })
   describe('allocateShadowMemory', function() {    
+    it('should allocate memory for dealing with misalignment', function() {
+      const env = new NodeEnvironment();
+      const dv = env.allocateShadowMemory(16, 4);
+      expect(dv).to.be.instanceOf(DataView);
+      expect(dv.byteLength).to.equal(16);
+    })
   })
   describe('freeShadowMemory', function() {    
+    it('should do nothing', function() {
+      const env = new NodeEnvironment();
+      env.freeShadowMemory(0x1000n, 16, 4);
+    })
   })
   describe('allocateFixedMemory', function() {    
+    it('should try to allocate fixed memory from zig', function() {
+      const env = new NodeEnvironment();
+      env.allocateExternMemory = function(len, align) {
+        return new ArrayBuffer(len);
+      };
+      env.extractBufferAddress = function() { return 0x1000n };
+      const dv = env.allocateFixedMemory(400, 4);
+      expect(dv).to.be.instanceOf(DataView);
+      expect(dv.byteLength).to.equal(400);
+    })
+    it('should return empty data view when len is 0', function() {
+      const env = new NodeEnvironment();
+      const dv1 = env.allocateFixedMemory(0, 4);
+      const dv2 = env.allocateFixedMemory(0, 1);
+      expect(dv1.byteLength).to.equal(0);
+      expect(dv2.byteLength).to.equal(0);
+      expect(dv1).to.equal(dv2);
+    })
   })
-  describe('freeFixedMemory', function() {    
+  describe('freeFixedMemory', function() {
+    it('should try to free fixed memory through Zig', function() {
+      const env = new NodeEnvironment();
+      let args;
+      env.freeExternMemory = function(address, len, align) {
+        args = { address, len, align };
+      };
+      env.freeFixedMemory(0x1000n, 10, 2);
+      expect(args).to.eql({ address: 0x1000n, len: 10, align: 2 });
+    })
+    it('should do nothing when len is 0', function() {
+      const env = new NodeEnvironment();
+      env.freeFixedMemory(0x1000n, 0, 0);
+    })
   })
   describe('obtainFixedView', function() {    
+    it('should return a data view covering fixed memory at given address', function() {
+      const env = new NodeEnvironment();
+      env.obtainExternBuffer = function(address, len) {
+        return new ArrayBuffer(len);
+      };
+      const dv = env.obtainFixedView(0x1000n, 16);
+      expect(dv.byteLength).to.equal(16);
+    })
+    it('should return empty data view when len is 0', function() {
+      const env = new NodeEnvironment();
+      const dv1 = env.obtainFixedView(0x1000n, 0);
+      const dv2 = env.obtainFixedView(0x2000n, 0);
+      expect(dv1.byteLength).to.equal(0);
+      expect(dv2.byteLength).to.equal(0);
+      expect(dv1).to.equal(dv2);
+    })
   })
   describe('releaseFixedView', function() {    
+    it('should free a data view that was allocated using allocateFixedMemory', function() {
+      const env = new NodeEnvironment();
+      env.allocateExternMemory = function(len, align) {
+        return new ArrayBuffer(len);
+      };
+      env.extractBufferAddress = function() { return 0x1000n };
+      let args;
+      env.freeExternMemory = function(address, len, align) {
+        args = { address, len, align };
+      };
+      const dv = env.allocateFixedMemory(400, 4);
+      env.releaseFixedView(dv);
+      expect(args).to.eql({ address: 0x1000n, len: 400, align: 4 });
+    })
   })
   describe('inFixedMemory', function() {
     it('should return true when view points to a SharedArrayBuffer', function() {
@@ -92,94 +178,3 @@ describe('NodeEnvironment', function() {
     })
   })
 })
-
-// describe('invokeFactory', function() {
-//   it('should run the given thunk function with the expected arguments and return a constructor', function() {
-//     const env = new NodeEnvironment();
-//     let recv;
-//     const constructor = function() {};
-//     function thunk(...args) {
-//       recv = this;
-//       return constructor
-//     };
-//     const result = env.invokeFactory(thunk);
-//     expect(recv).to.be.equal(env);
-//     expect(result).to.equal(constructor);
-//     expect(result).to.have.property('__zigar');
-//   })
-//   it('should throw if the thunk function returns a string', function() {
-//     const env = new NodeEnvironment();
-//     function thunk(...args) {
-//       return 'TotalBrainFart';
-//     }
-//     expect(() => env.invokeFactory(thunk)).to.throw(Error)
-//       .with.property('message').that.equal('Total brain fart');
-//   })
-//   it('should allow abandonment of library', async function() {
-//     const env = new NodeEnvironment();
-//     const constructor = function() {};
-//     function thunk(...args) {
-//       return constructor
-//     }
-//     const result = env.invokeFactory(thunk);
-//     await result.__zigar.init();
-//     const promise = result.__zigar.abandon();
-//     expect(promise).to.be.a('promise');
-//     const released = await result.__zigar.released();
-//     expect(released).to.be.true;
-//   })
-//   it('should replace abandoned functions with placeholders that throw', async function() {
-//     const env = new NodeEnvironment();
-//     const constructor = function() {};
-//     function thunk(...args) {
-//       return constructor
-//     }
-//     let t = () => console.log('hello');
-//     constructor.hello = function() { t() };
-//     const constructor2 = function() {};
-//     Object.defineProperty(constructor, 'submodule', { get: () => constructor2 });
-//     Object.defineProperty(constructor, 'self', { get: () => constructor });
-//     const result = env.invokeFactory(thunk);
-//     await capture(() => {
-//       expect(constructor.hello).to.not.throw();
-//     });
-//     await result.__zigar.abandon();
-//     expect(constructor.hello).to.throw(Error)
-//       .with.property('message').that.contains('was abandoned');
-//   })
-//   it('should release variable of abandoned module', async function() {
-//     const env = new NodeEnvironment();
-//     const constructor = function() {};
-//     function thunk(...args) {
-//       return constructor
-//     }
-//     const obj1 = {
-//       [MEMORY]: new DataView(new SharedArrayBuffer(8)),
-//       [POINTER_VISITOR]: () => {},
-//       [SLOTS]: {
-//         0: {
-//           [MEMORY]: new DataView(new SharedArrayBuffer(4))
-//         }
-//       },
-//     };
-//     obj1[SLOTS][0][MEMORY].setInt32(0, 1234, true);
-//     const obj2 = {
-//       [MEMORY]: new DataView(new SharedArrayBuffer(8)),
-//       [POINTER_VISITOR]: () => {},
-//       [SLOTS]: {
-//         0: {
-//           [MEMORY]: new DataView(new SharedArrayBuffer(32)),
-//           [SLOTS]: {}
-//         }
-//       },
-//     };
-//     constructor[CHILD_VIVIFICATOR] = {
-//       hello: () => { return obj1 },
-//       world: () => { return obj2 },
-//     };
-//     const result = env.invokeFactory(thunk);
-//     await result.__zigar.abandon();
-//     expect(obj1[SLOTS][0][MEMORY].buffer).to.be.an.instanceOf(ArrayBuffer);
-//     expect(obj1[SLOTS][0][MEMORY].getInt32(0, true)).to.equal(1234);
-//   })
-// })

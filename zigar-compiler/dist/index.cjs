@@ -394,6 +394,17 @@ const SENTINEL = Symbol('sentinel');
 const ENVIRONMENT = Symbol('environment');
 const SHADOW_ATTRIBUTES = Symbol('shadowAttributes');
 
+function getDestructor(env) {
+  return function() {
+    const dv = this[MEMORY];
+    this[MEMORY] = null;
+    if (this[SLOTS]) {
+      this[SLOTS] = {};
+    }
+    env.releaseFixedView(dv);
+  };
+}
+
 function getBitAlignFunction(bitPos, bitSize, toAligned) {
   if (bitPos + bitSize <= 8) {
     const mask = (2 ** bitSize) - 1;
@@ -1977,6 +1988,7 @@ function definePrimitive(s, env) {
   };
   const { get, set } = getDescriptor(member, env);
   defineProperties(constructor.prototype, {
+    delete: { value: getDestructor(env), configurable: true },
     $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
@@ -2426,8 +2438,9 @@ function defineArray(s, env) {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { value: length, configurable: true },
-    $: { get: getProxy, set: initializer, configurable: true },
     entries: { value: createArrayEntries, configurable: true, writable: true },
+    delete: { value: getDestructor(env), configurable: true },
+    $: { get: getProxy, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
@@ -2745,7 +2758,8 @@ function defineStructShape(s, env) {
     }
   };
   defineProperties(constructor.prototype, {
-    '$': { get: getSelf, set: initializer, configurable: true },
+    delete: { value: getDestructor(env), configurable: true },
+    $: { get: getSelf, set: initializer, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
@@ -3037,7 +3051,8 @@ function defineUnionShape(s, env) {
   };
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
   defineProperties(constructor.prototype, {
-    '$': { get: getSelf, set: initializer, configurable: true },
+    delete: { value: getDestructor(env), configurable: true },
+    $: { get: getSelf, set: initializer, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [ENUM_ITEM]: isTagged && { get: getEnumItem, configurable: true },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
@@ -3209,8 +3224,9 @@ function defineErrorSet(s, env) {
   const { get, set } = getDescriptor(errorMember, env);
   const toStringTag = function() { return 'Error' };
   defineProperties(constructor.prototype, {
-    $: { get, set: throwReadOnly, configurable: true },
     index: { get: getIndex, configurable: true },
+    delete: { value: getDestructor(env), configurable: true },
+    $: { get, set: throwReadOnly, configurable: true },
     // ensure that libraries that rely on the string tag for type detection will
     // correctly identify the object as an error
     [Symbol.toStringTag]: { get: toStringTag, configurable: true },
@@ -3286,6 +3302,7 @@ function defineEnumerationShape(s, env) {
   const enumMember = { ...member, structure: s, type: MemberType.EnumerationItem };
   const { get, set } = getDescriptor(enumMember, env);
   defineProperties(constructor.prototype, {
+    delete: { value: getDestructor(env), configurable: true },
     $: { get, set: throwReadOnly, configurable: true },
     [Symbol.toPrimitive]: { value: getIndex, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
@@ -3307,22 +3324,38 @@ function defineOptional(s, env) {
   } = s;
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getPresent, set: setPresent } = getDescriptor(members[1], env);
-  const get = function() {
-    const present = getPresent.call(this);
-    if (present) {
-      return getValue.call(this);
-    } else {
-      return null;
+  // optionals containing pointers use the pointer itself as indication of presence
+  const hasPresentFlag = members[1].bitOffset != members[0].bitOffset;
+  const get = (hasPresentFlag)
+  ? function() {
+      const present = getPresent.call(this);
+      if (present) {
+        return getValue.call(this);
+      } else {
+        return null;
+      }
     }
+  : function() {
+    const value = getValue.call(this);
+    return (value) ? value : null;
   };
-  const set = function(value) {
+  const set = (hasPresentFlag)
+  ? function(value) {
+      if (value !== null) {
+        // call setValue() first, in case it throws
+        setValue.call(this, value);
+        setPresent.call(this, true);
+      } else {      
+        setPresent.call(this, false);
+        this[VALUE_RESETTER]();
+        this[POINTER_VISITOR]?.(resetPointer);
+      }
+    }
+  : function(value) {
     if (value !== null) {
-      // call setValue() first, in case it throws
       setValue.call(this, value);
-      setPresent.call(this, true);
-    } else {      
+    } else {
       setPresent.call(this, false);
-      this[VALUE_RESETTER]();
       this[POINTER_VISITOR]?.(resetPointer);
     }
   };
@@ -3373,7 +3406,8 @@ function defineOptional(s, env) {
   };
   const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
   defineProperties(constructor.prototype, {
-    '$': { get, set, configurable: true },
+    delete: { value: getDestructor(env), configurable: true },
+    $: { get, set, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, true) },
@@ -3554,6 +3588,7 @@ function defineSlice(s, env) {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { get: getLength, configurable: true },
+    delete: { value: getDestructor(env), configurable: true },
     $: { get: getProxy, set: initializer, configurable: true },
     entries: { value: createArrayEntries, configurable: true, writable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
@@ -3693,6 +3728,7 @@ function defineVector(s, env) {
     ...elementDescriptors,
     length: { value: length, configurable: true },
     entries: { value: createVectorEntries, configurable: true, writable: true },
+    delete: { value: getDestructor(env), configurable: true },
     $: { get: getSelf, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
@@ -4611,13 +4647,13 @@ class Environment {
   getBufferAddress(buffer: ArrayBuffer): bigint|number {
     // return a buffer's address
   }
-  allocateRelocatableMemory(len: number, align: number): DataView {
+  allocateRelocMemory(len: number, align: number): DataView {
     // allocate memory and remember its address
   }
   allocateShadowMemory(len: number, align: number): DataView {
     // allocate memory for shadowing objects
   }
-  freeRelocatableMemory(address: bigint|number, len: number, align: number): void {
+  freeRelocMemory(address: bigint|number, len: number, align: number): void {
     // free previously allocated memory
   }
   freeShadowMemory(address: bigint|number, len: number, align: number): void {
@@ -4631,6 +4667,10 @@ class Environment {
   }
   obtainFixedView(address: bigint|number, len: number): DataView {
     // obtain a data view of memory at given address
+  }
+  releaseFixedView(dv: DataView): void {
+    // release allocated memory stored in data view, doing nothing if data view 
+    // does not contain fixed memory or if memory is static
   }
   inFixedMemory(object: object): boolean {
     // return true/false depending on whether object is in fixed memory
@@ -4664,17 +4704,13 @@ class Environment {
     this.context = this.contextStack.pop();
   }
 
-  createBuffer(len, align, fixed = false) {
+  createBuffer(len, align = 0, fixed = false) {
     if (fixed) {
-      return this.createFixedBuffer(len);
+      return this.allocateFixedMemory(len, align);
     } else {
-      return this.createRelocatableBuffer(len, align);
+      const buffer = new ArrayBuffer(len);
+      return new DataView(buffer);
     }
-  }
-
-  createRelocatableBuffer(len) {
-    const buffer = new ArrayBuffer(len);
-    return new DataView(buffer);
   }
 
   registerMemory(dv, targetDV = null) {
@@ -4725,17 +4761,12 @@ class Environment {
 
   createView(address, len, copy) {
     if (copy) {
-      const dv = this.createRelocatableBuffer(len);
+      const dv = this.createBuffer(len);
       this.copyBytes(dv, address, len);
       return dv;
     } else {
       return this.obtainFixedView(address, len);
     }
-  }
-
-  createObject(structure, arg) {
-    const { constructor } = structure;
-    return new constructor(arg);
   }
 
   castView(structure, dv, writable) {
@@ -5001,23 +5032,55 @@ class Environment {
   /* COMPTIME-ONLY-END */
 }
 
+class CallContext {
+  pointerProcessed = new Map();
+  memoryList = [];
+  shadowMap = null;
+  /* WASM-ONLY */
+  call = 0;
+  /* WASM-ONLY-END */
+}
 
-/* WASM-ONLY */
+function findSortedIndex(array, value, cb) {
+  let low = 0;
+  let high = array.length;
+  if (high === 0) {
+    return 0;
+  }
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    const value2 = cb(array[mid]);
+    if (value2 <= value) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return high;
+}
+
+function findMemoryIndex(array, address) {
+  return findSortedIndex(array, address, m => m.address);
+}
+
+function add(address, len) {
+  return address + ((typeof(address) === 'bigint') ? BigInt(len) : len);
+}
+
 class WebAssemblyEnvironment extends Environment {
   imports = {
     defineStructures: { argType: '', returnType: 'v' },
-    allocateFixedMemory: { argType: 'ii', returnType: 'v' },
-    freeFixedMemory: { argType: 'iii' },
+    allocateExternMemory: { argType: 'ii', returnType: 'v' },
+    freeExternMemory: { argType: 'iii' },
     allocateShadowMemory: { argType: 'cii', returnType: 'v' },
     freeShadowMemory: { argType: 'ciii' },
     runThunk: { argType: 'iv', returnType: 'v' },
     isRuntimeSafetyActive: { argType: '', returnType: 'b' },
   };
   exports = {
-    allocateRelocatableMemory: { argType: 'ii', returnType: 'v' },
-    freeRelocatableMemory: { argType: 'iii' },
+    allocateRelocMemory: { argType: 'ii', returnType: 'v' },
+    freeRelocMemory: { argType: 'iii' },
     createString: { argType: 'ii', returnType: 'v' },
-    createObject: { argType: 'vv', returnType: 's' },
     createView: { argType: 'iib', returnType: 'v' },
     castView: { argType: 'vvb', returnType: 'v' },
     readSlot: { argType: 'vi', returnType: 'v' },
@@ -5046,11 +5109,7 @@ class WebAssemblyEnvironment extends Environment {
   // WASM is always little endian
   littleEndian = true;
 
-  constructor() {
-    super();
-  }
-
-  allocateRelocatableMemory(len, align) {
+  allocateRelocMemory(len, align) {
     // allocate memory in both JS and WASM space
     const constructor = { [ALIGN]: align };
     const copier = getMemoryCopier(len);
@@ -5064,7 +5123,7 @@ class WebAssemblyEnvironment extends Environment {
     return shadowDV;
   }
 
-  freeRelocatableMemory(address, len, align) {
+  freeRelocMemory(address, len, align) {
     const dv = this.findMemory(address, len);
     this.removeShadow(dv);
     this.unregisterMemory(address);
@@ -5075,6 +5134,23 @@ class WebAssemblyEnvironment extends Environment {
     return 0;
   }
 
+  allocateFixedMemory(len, align) {
+    if (len === 0) {
+      return this.emptyView;
+    }
+    const address = this.allocateExternMemory(len, align);
+    const dv = new DataView(buffer, address, len);
+    dv[ALIGN] = align;
+    return dv;
+  }
+
+  freeFixedMemory(address, len, align) {
+    if (!len === 0) {
+      return;
+    }
+    this.freeExternMemory(address, len, align);
+  }
+
   obtainFixedView(address, len) {
     if (len === 0) {
       return this.emptyView;
@@ -5083,6 +5159,16 @@ class WebAssemblyEnvironment extends Environment {
     const dv = new DataView(memory.buffer, address, len);
     dv[MEMORY] = { memory, address, len };
     return dv;
+  }
+
+  releaseFixedView(dv) {
+    const buffer = dv.buffer;
+    const address = buffer.byteOffset;
+    const len = dv.byteLength;
+    const align = dv[ALIGN];
+    if (align !== undefined) {
+      this.freeFixedMemory(address, len, align);
+    }
   }
 
   inFixedMemory(object) {
@@ -5254,6 +5340,26 @@ class WebAssemblyEnvironment extends Environment {
     this.initPromise = this.initPromise.then(() => super.linkVariables(writeBack));
   }
 
+  /* COMPTIME-ONLY */
+  beginDefinition() {
+    return {};
+  }
+
+  insertProperty(def, name, value) {
+    def[name] = value;
+  }
+  /* COMPTIME-ONLY-END */
+
+  /* RUNTIME-ONLY */
+  getMemoryOffset(address) {
+    // WASM address space starts at 0
+    return address;
+  }
+
+  recreateAddress(reloc) {
+    return reloc;
+  }
+
   startCall(call, args) {
     this.startContext();
     // call context, used by allocateShadowMemory and freeShadowMemory
@@ -5281,26 +5387,9 @@ class WebAssemblyEnvironment extends Environment {
     }
     // restore the previous context if there's one
     this.endContext();
-  }
-
-  /* COMPTIME-ONLY */
-  beginDefinition() {
-    return {};
-  }
-
-  insertProperty(def, name, value) {
-    def[name] = value;
-  }
-  /* COMPTIME-ONLY-END */
-
-  /* RUNTIME-ONLY */
-  getMemoryOffset(address) {
-    // WASM address space starts at 0
-    return address;
-  }
-
-  recreateAddress(reloc) {
-    return reloc;
+    if (!this.context) {
+      this.flushConsole();
+    }
   }
 
   invokeThunk(thunkId, args) {
@@ -5309,9 +5398,6 @@ class WebAssemblyEnvironment extends Environment {
     // memory from the WebAssembly allocator; pointer target acquisition will happen in
     // endCall()
     const err = this.runThunk(thunkId, args);
-    if (!this.context) {
-      this.flushConsole();
-    }
     // errors returned by exported Zig functions are normally written into the
     // argument object and get thrown when we access its retval property (a zig error union)
     // error strings returned by the thunk are due to problems in the thunking process
@@ -5322,42 +5408,6 @@ class WebAssemblyEnvironment extends Environment {
     return args.retval;
   }
   /* RUNTIME-ONLY */
-}
-/* WASM-ONLY-END */
-
-class CallContext {
-  pointerProcessed = new Map();
-  memoryList = [];
-  shadowMap = null;
-  /* WASM-ONLY */
-  call = 0;
-  /* WASM-ONLY-END */
-}
-
-function findSortedIndex(array, value, cb) {
-  let low = 0;
-  let high = array.length;
-  if (high === 0) {
-    return 0;
-  }
-  while (low < high) {
-    const mid = Math.floor((low + high) / 2);
-    const value2 = cb(array[mid]);
-    if (value2 <= value) {
-      low = mid + 1;
-    } else {
-      high = mid;
-    }
-  }
-  return high;
-}
-
-function findMemoryIndex(array, address) {
-  return findSortedIndex(array, address, m => m.address);
-}
-
-function add(address, len) {
-  return address + ((typeof(address) === 'bigint') ? BigInt(len) : len);
 }
 
 /* COMPTIME-ONLY */

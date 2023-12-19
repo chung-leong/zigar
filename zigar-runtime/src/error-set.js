@@ -66,7 +66,7 @@ export function defineErrorSet(s, env) {
   const toStringTag = function() { return 'Error' };
   defineProperties(constructor.prototype, {
     index: { get: getIndex, configurable: true },
-    delete: { value: getDestructor(s), configurable: true },
+    delete: { value: getDestructor(env), configurable: true },
     $: { get, set: throwReadOnly, configurable: true },
     // ensure that libraries that rely on the string tag for type detection will
     // correctly identify the object as an error

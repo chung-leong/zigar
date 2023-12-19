@@ -129,7 +129,7 @@ export function defineStructShape(s, env) {
     }
   };
   defineProperties(constructor.prototype, {
-    delete: { value: getDestructor(s), configurable: true },
+    delete: { value: getDestructor(env), configurable: true },
     $: { get: getSelf, set: initializer, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, true) },
