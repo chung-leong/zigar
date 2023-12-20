@@ -13,9 +13,7 @@ export function defineArray(s, env) {
     length,
     byteSize,
     align,
-    instance: {
-      members: [ member ],
-    },
+    instance: { members: [ member ] },
     hasPointer,
   } = s;
   /* DEV-TEST */

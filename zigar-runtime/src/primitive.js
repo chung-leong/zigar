@@ -11,9 +11,7 @@ export function definePrimitive(s, env) {
   const {
     byteSize,
     align,
-    instance: {
-      members: [ member ],
-    },
+    instance: { members: [ member ] },
   } = s;
   addTypedArray(s);
   const cache = new ObjectCache();

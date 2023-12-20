@@ -9,9 +9,7 @@ export function defineArgStruct(s, env) {
   const {
     byteSize,
     align,
-    instance: {
-      members,
-    },
+    instance: { members },
     hasPointer,
   } = s;
   const hasObject = !!members.find(m => m.type === MemberType.Object);

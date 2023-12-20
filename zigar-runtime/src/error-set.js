@@ -12,9 +12,7 @@ export function defineErrorSet(s, env) {
     name,
     byteSize,
     align,
-    instance: {
-      members: [ member ],
-    },
+    instance: { members: [ member ] },
   } = s;
   const byIndex = {};
   const cache = new ObjectCache();

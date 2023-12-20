@@ -13,10 +13,7 @@ export function defineStructShape(s, env) {
   const {
     byteSize,
     align,
-    instance: {
-      members,
-      template,
-    },
+    instance: { members },
     hasPointer,
   } = s;
   const descriptors = {};
@@ -105,12 +102,17 @@ export function defineStructShape(s, env) {
           throwMissingInitializers(s, arg);
         }
         // apply default values unless all properties are initialized
-        if (template && specialFound === 0 && found < keys.length) {
-          if (template[MEMORY]) {
-            this[MEMORY_COPIER](template);
-          }
-          if (hasPointer) {
-            this[POINTER_VISITOR](copyPointer, { vivificate: true, source: template });
+        if (specialFound === 0 && found < keys.length) {
+          // the template wouldn't be ready when shape is being defined, that's why 
+          // we need to retrieve it from the structure here
+          const { instance: { template } } = s;
+          if (template) {
+            if (template[MEMORY]) {
+              this[MEMORY_COPIER](template);
+            }
+            if (hasPointer) {
+              this[POINTER_VISITOR](copyPointer, { vivificate: true, source: template });
+            } 
           }
         }
         if (specialFound > 0) {
@@ -138,7 +140,7 @@ export function defineStructShape(s, env) {
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
     // comptime fields are stored in the instance template's slots
-    [PROTO_SLOTS]: template?.[SLOTS] && { value: template?.[SLOTS] },
+    [PROTO_SLOTS]: { get: () => s.instance.template?.[SLOTS] },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },

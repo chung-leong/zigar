@@ -10,9 +10,7 @@ export function defineVector(s, env) {
     length,
     byteSize,
     align,
-    instance: {
-      members: [ member ],
-    },
+    instance: { members: [ member ] },
   } = s;
   addTypedArray(s);
   /* DEV-TEST */

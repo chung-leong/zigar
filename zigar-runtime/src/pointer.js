@@ -12,9 +12,7 @@ export function definePointer(s, env) {
   const {
     byteSize,
     align,
-    instance: {
-      members: [ member ],
-    },
+    instance: { members: [ member ] },
     isConst,
   } = s;
   const {
