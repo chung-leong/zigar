@@ -50,6 +50,43 @@ describe('Pointer functions', function() {
       expect(intPointer['*']).to.equal(1234);
       expect(intPointer.valueOf()).to.equal(1234);
     })
+    it('should cast the same buffer to the same object', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
+      const buffer = new ArrayBuffer(8);
+      const object1 = Int32Ptr.call(ENVIRONMENT, buffer);
+      const object2 = Int32Ptr.call(ENVIRONMENT, buffer);
+      expect(object2).to.equal(object1);
+    })
     it('should throw when no initializer is provided', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,

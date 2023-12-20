@@ -45,6 +45,32 @@ describe('Array functions', function() {
       expect(object.length).to.equal(8);
       expect(object.typedArray).to.be.instanceOf(Uint32Array);
     })
+    it('should cast the same buffer to the same object', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        length: 8,
+        byteSize: 4 * 8,
+      });
+      const constructor = function() {};
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { constructor, typedArray: Uint32Array }
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const buffer = new ArrayBuffer(4 * 8);
+      const object1 = Hello(buffer);
+      const object2 = Hello(buffer);
+      expect(object2).to.equal(object1);
+      const object3 = Hello(buffer, { writable: false });
+      const object4 = Hello(buffer, { writable: false });
+      expect(object3).to.not.equal(object1);
+      expect(object4).to.equal(object3);
+    })
     it('should allow array access using bracket operator', function() {
       const structure = env.beginStructure({
         type: StructureType.Array,

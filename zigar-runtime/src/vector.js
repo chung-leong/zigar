@@ -1,4 +1,4 @@
-import { defineProperties, getSelf, removeSetters } from './structure.js';
+import { ObjectCache, defineProperties, getSelf, removeSetters } from './structure.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
@@ -24,6 +24,7 @@ export function defineVector(s, env) {
     throw new Error(`slot must be undefined for vector member`);
   }
   /* DEV-TEST-END */
+  const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
       writable = true,
@@ -36,10 +37,13 @@ export function defineVector(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
+      dv = requireDataView(s, arg, env);
+      if (self = cache.find(dv, writable)) {
+        return self;
+      }
       self = Object.create(constructor.prototype);
-      dv = requireDataView(s, arg);
     }
     self[MEMORY] = dv;
     if (creating) {
@@ -51,7 +55,7 @@ export function defineVector(s, env) {
         $: { get: getSelf, set: throwReadOnly, configurable: true },
       });
     }
-    return self;
+    return cache.save(dv, writable, self);
   };
   const { bitSize: elementBitSize, structure: elementStructure } = member;
   const initializer = function(arg) {
@@ -85,7 +89,7 @@ export function defineVector(s, env) {
     ...elementDescriptors,
     length: { value: length, configurable: true },
     entries: { value: createVectorEntries, configurable: true, writable: true },
-    delete: { value: getDestructor(env), configurable: true },
+    delete: { value: getDestructor(s), configurable: true },
     $: { get: getSelf, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },

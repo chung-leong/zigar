@@ -21,12 +21,14 @@ import {
   getDataViewFloatAccessorEx,
   clearMethodCache,
 } from '../src/data-view.js';
+import { Environment } from '../src/environment.js';
 import { MEMORY } from '../src/symbol.js';
 
 describe('Data view functions', function() {
   beforeEach(function() {
     clearMethodCache();
   })
+  const env = new Environment();
   describe('isBuffer', function() {
     it('should return true when argument is an ArrayBuffer', function() {
       expect(isBuffer(new ArrayBuffer(8))).to.be.true;
@@ -202,7 +204,7 @@ describe('Data view functions', function() {
         byteSize: 8
       };
       const arg = new ArrayBuffer(8);
-      const dv = getDataView(structure, arg);
+      const dv = getDataView(structure, arg, env);
       expect(dv).to.be.instanceOf(DataView);
     })
     it('should return a DataView when given an SharedArrayBuffer', function() {
@@ -212,7 +214,7 @@ describe('Data view functions', function() {
         byteSize: 8
       };
       const arg = new SharedArrayBuffer(8);
-      const dv = getDataView(structure, arg);
+      const dv = getDataView(structure, arg, env);
       expect(dv).to.be.instanceOf(DataView);
     })
     it('should return a DataView when given an DataView', function() {
@@ -222,7 +224,7 @@ describe('Data view functions', function() {
         byteSize: 8
       };
       const arg = new DataView(new ArrayBuffer(8));
-      const dv = getDataView(structure, arg);
+      const dv = getDataView(structure, arg, env);
       expect(dv).to.be.instanceOf(DataView);
     })
     it('should return a DataView when given an DataView with length that is multiple of given size', function() {
@@ -232,7 +234,7 @@ describe('Data view functions', function() {
         byteSize: 8
       };
       const arg = new DataView(new ArrayBuffer(64));
-      const dv = getDataView(structure, arg);
+      const dv = getDataView(structure, arg, env);
       expect(dv).to.be.instanceOf(DataView);
     })
     it('should return a DataView when given an empty DataView', function() {
@@ -242,7 +244,7 @@ describe('Data view functions', function() {
         byteSize: 8
       };
       const arg = new DataView(new ArrayBuffer(0));
-      const dv = getDataView(structure, arg);
+      const dv = getDataView(structure, arg, env);
       expect(dv).to.be.instanceOf(DataView);
     })
     it('should return undefined when argument is not a data view or buffer', function() {
@@ -252,7 +254,7 @@ describe('Data view functions', function() {
         byteSize: 8
       };
       const arg = {};
-      const dv = getDataView(structure, arg);
+      const dv = getDataView(structure, arg, env);
       expect(dv).to.be.undefined;
     })
     it('should throw when there is a size mismatch', function() {
@@ -267,9 +269,9 @@ describe('Data view functions', function() {
         byteSize: 3
       };
       const arg = new DataView(new ArrayBuffer(8));
-      expect(() => getDataView(structure1, arg)).to.throw(TypeError)
+      expect(() => getDataView(structure1, arg, env)).to.throw(TypeError)
         .with.property('message').that.contains('17');
-      expect(() => getDataView(structure2, arg)).to.throw(TypeError)
+      expect(() => getDataView(structure2, arg, env)).to.throw(TypeError)
         .with.property('message').that.contains('3');
     })
     it('should accept compatible TypedArray', function() {
@@ -281,8 +283,8 @@ describe('Data view functions', function() {
       };
       const ta1 = new Uint32Array([ 1, 2, 3 ]);
       const ta2 = new Int32Array([ 1, 2, 3 ]);
-      const dv1 = getDataView(structure, ta1);
-      const dv2 = getDataView(structure, ta2);
+      const dv1 = getDataView(structure, ta1, env);
+      const dv2 = getDataView(structure, ta2, env);
       expect(dv1).to.be.an.instanceOf(DataView);
       expect(dv2).to.be.undefined;
     })
@@ -308,7 +310,7 @@ describe('Data view functions', function() {
       const array = new arrayConstructor();
       array[MEMORY] = new DataView(new ArrayBuffer(6));
       array.length = 3;
-      const dv = getDataView(structure, array);
+      const dv = getDataView(structure, array, env);
       expect(dv).to.be.an.instanceOf(DataView);
     })
     it('should return memory of compatible slice', function() {
@@ -333,7 +335,7 @@ describe('Data view functions', function() {
       const array = new arrayConstructor();
       array[MEMORY] = new DataView(new ArrayBuffer(6));
       array.length = 3;
-      const dv = getDataView(structure, array);
+      const dv = getDataView(structure, array, env);
       expect(dv).to.equal(array[MEMORY]);
     })
     it('should return memory of compatible object', function() {
@@ -355,7 +357,7 @@ describe('Data view functions', function() {
       };
       const object = new elementConstructor();
       object[MEMORY] = new DataView(new ArrayBuffer(2));
-      const dv = getDataView(structure, object);
+      const dv = getDataView(structure, object, env);
       expect(dv).to.equal(object[MEMORY]);
     })
     it('should return memory of compatible slice', function() {
@@ -380,7 +382,7 @@ describe('Data view functions', function() {
       const array = new arrayConstructor();
       array[MEMORY] = new DataView(new ArrayBuffer(8));
       array.length = 4;
-      expect(() => getDataView(structure, array)).to.throw(TypeError);
+      expect(() => getDataView(structure, array, env)).to.throw(TypeError);
     })
   })
   describe('requireDataView', function() {

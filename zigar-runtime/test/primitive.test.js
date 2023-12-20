@@ -39,6 +39,26 @@ describe('Primitive functions', function() {
       expect(object.$).to.equal(0x7FFFFFFFFFFFFFFFn);
       expect(BigInt(object)).to.equal(0x7FFFFFFFFFFFFFFFn);
     })
+    it('should cast the same buffer to the same object', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Hello',
+        byteSize: 8,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const buffer = new ArrayBuffer(8);
+      const object1 = Hello(buffer);
+      const object2 = Hello(buffer);
+      expect(object2).to.equal(object1);
+    })
     it('should throw when no initializer is provided', function() {
       const structure = env.beginStructure({
         type: StructureType.Primitive,

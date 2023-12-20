@@ -54,11 +54,11 @@ describe('Environment', function() {
       expect(env.context).to.equal(ctx1);
     })
   })
-  describe('createBuffer', function() {
+  describe('allocateMemory', function() {
     it('should return a data view of a newly created array buffer', function() {
       const env = new Environment();
       env.getBufferAddress = () => 0x10000;
-      const dv = env.createBuffer(32, 4);
+      const dv = env.allocateMemory(32, 4);
       expect(dv).to.be.instanceOf(DataView);
       expect(dv.byteLength).to.equal(32);
       expect(dv.byteOffset).to.equal(0);
@@ -70,7 +70,7 @@ describe('Environment', function() {
         buffer.align = align;
         return new DataView(buffer);
       }
-      const dv = env.createBuffer(32, 4, true);
+      const dv = env.allocateMemory(32, 4, true);
       expect(dv).to.be.instanceOf(DataView);
       expect(dv.byteLength).to.equal(32);
       expect(dv.buffer.align).to.equal(4);
@@ -143,7 +143,30 @@ describe('Environment', function() {
       expect(address).to.equal(0x1008n);
     })
   })
-  describe('createView', function() {
+  describe('obtainView', function() {
+    it('should obtain the same view object for the same offset and length', function() {
+      const env = new Environment();
+      const buffer = new ArrayBuffer(48);
+      const dv1 = env.obtainView(buffer, 4, 8);
+      expect(dv1.byteOffset).to.equal(4);
+      expect(dv1.byteLength).to.equal(8);
+      const dv2 = env.obtainView(buffer, 4, 8);
+      expect(dv2).to.equal(dv1);
+    })
+    it('should be able to keep track of multiple views', function() {
+      const env = new Environment();
+      const buffer = new ArrayBuffer(48);
+      const dv1 = env.obtainView(buffer, 4, 8);
+      expect(dv1.byteOffset).to.equal(4);
+      const dv2 = env.obtainView(buffer, 8, 16);
+      expect(dv2.byteOffset).to.equal(8);
+      const dv3 = env.obtainView(buffer, 8, 16);
+      expect(dv3).to.equal(dv2);
+      const dv4 = env.obtainView(buffer, 4, 8);
+      expect(dv4).to.equal(dv1);      
+    })
+  })
+  describe('captureView', function() {
     it('should allocate new buffer and copy data using copyBytes', function() {
       const env = new Environment();
       env.getBufferAddress = () => 0x10000;
@@ -151,7 +174,7 @@ describe('Environment', function() {
         dv.setInt32(0, address, true);
         dv.setInt32(4, len, true);
       };
-      const dv = env.createView(1234, 32, 3, true);
+      const dv = env.captureView(1234, 32, 3, true);
       expect(dv).to.be.instanceOf(DataView);
       expect(dv.getInt32(0, true)).to.equal(1234);
       expect(dv.getInt32(4, true)).to.equal(32);
@@ -162,7 +185,7 @@ describe('Environment', function() {
       env.obtainFixedView = (address, len) => {
         return { address, len };
       };
-      const result = env.createView(1234, 32, 3, false);
+      const result = env.captureView(1234, 32, 3, false);
       expect(result).to.eql({ address: 1234, len: 32 });
     })
   })

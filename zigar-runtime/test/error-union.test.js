@@ -76,6 +76,68 @@ describe('Error union functions', function() {
       object.$ = 1234n;
       expect(object.$).to.equal(1234n);
     })
+    it('should cast the same buffer to the same object', function() {
+      const errorStructure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Error',
+        byteSize: 2,
+      });      
+      env.attachMember(errorStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+      });
+      env.finalizeShape(errorStructure);
+      const { constructor: Error } = errorStructure;
+      env.attachMember(errorStructure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: errorStructure,
+      }, true);
+      env.attachMember(errorStructure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: errorStructure,
+      }, true);
+      env.attachTemplate(errorStructure, {
+        [SLOTS]: {
+          0: Error.call(ENVIRONMENT, errorData(5)),
+          1: Error.call(ENVIRONMENT, errorData(8)),
+        }
+      }, true);
+      env.finalizeStructure(errorStructure);
+      const structure = env.beginStructure({
+        type: StructureType.ErrorUnion,
+        name: 'Hello',
+        byteSize: 10,
+      });
+      env.attachMember(structure, {
+        name: 'value',
+        type: MemberType.Int,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        structure: {},
+      });
+      env.attachMember(structure, {
+        name: 'error',
+        type: MemberType.Error,
+        bitOffset: 64,
+        bitSize: 16,
+        byteSize: 2,
+        structure: errorStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const buffer = new ArrayBuffer(10);
+      const object1 = Hello(buffer);
+      const object2 = Hello(buffer);
+      expect(object2).to.equal(object1);
+    })
     it('should throw when no initializer is provided', function() {
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,

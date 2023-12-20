@@ -1,4 +1,4 @@
-import { defineProperties } from './structure.js';
+import { ObjectCache, defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
@@ -14,6 +14,7 @@ export function defineEnumerationShape(s, env) {
     },
   } = s;
   const byIndex = {};
+  const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
       writable = true,
@@ -26,7 +27,7 @@ export function defineEnumerationShape(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       if (typeof(arg)  === 'string') {
         return constructor[arg];
@@ -36,11 +37,14 @@ export function defineEnumerationShape(s, env) {
         // a tagged union, return the active tag
         return arg[ENUM_ITEM];
       } else {
-        self = Object.create(constructor.prototype);
-        dv = getDataView(s, arg);
+        dv = getDataView(s, arg, env);
         if (!dv) {
           throwInvalidInitializer(s, [ 'string', 'number', 'tagged union' ], arg);
         } 
+        if (self = cache.find(dv, writable)) {
+          return self;
+        }
+        self = Object.create(constructor.prototype); 
       }
     }
     self[MEMORY] = dv;
@@ -52,7 +56,7 @@ export function defineEnumerationShape(s, env) {
         $: { get, set, configurable: true },
       });
     }
-    return self; 
+    return cache.save(dv, writable, self); 
   };
   const { get: getIndex } = getDescriptor(member, env);
   // get the enum descriptor instead of the int/uint descriptor

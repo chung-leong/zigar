@@ -24,8 +24,8 @@ const CallContext = struct {
 
 extern fn _allocateRelocMemory(len: usize, alignment: u16) ?Value;
 extern fn _freeRelocMemory(bytes: [*]u8, len: usize, alignment: u16) void;
-extern fn _createString(bytes: ?[*]const u8, len: usize) ?Value;
-extern fn _createView(bytes: ?[*]u8, len: usize, copy: bool) ?Value;
+extern fn _captureString(bytes: ?[*]const u8, len: usize) ?Value;
+extern fn _captureView(bytes: ?[*]u8, len: usize, copy: bool) ?Value;
 extern fn _castView(structure: Value, dv: Value, writable: bool) ?Value;
 extern fn _getViewAddress(dv: Value) usize;
 extern fn _readSlot(container: ?Value, slot: usize) ?Value;
@@ -130,16 +130,16 @@ pub const Host = struct {
         }
     }
 
-    pub fn createString(_: Host, memory: Memory) !Value {
-        if (_createString(memory.bytes, memory.len)) |str| {
+    pub fn captureString(_: Host, memory: Memory) !Value {
+        if (_captureString(memory.bytes, memory.len)) |str| {
             return str;
         } else {
             return Error.UnableToCreateString;
         }
     }
 
-    pub fn createView(_: Host, memory: Memory) !Value {
-        if (_createView(memory.bytes, memory.len, memory.attributes.is_comptime)) |dv| {
+    pub fn captureView(_: Host, memory: Memory) !Value {
+        if (_captureView(memory.bytes, memory.len, memory.attributes.is_comptime)) |dv| {
             return dv;
         } else {
             return Error.UnableToCreateDataView;
@@ -180,11 +180,11 @@ pub const Host = struct {
             },
             else => {},
         }
-        const key_str = _createString(key.ptr, key.len) orelse return Error.UnableToCreateString;
+        const key_str = _captureString(key.ptr, key.len) orelse return Error.UnableToCreateString;
         switch (@typeInfo(T)) {
             .Pointer => {
                 if (T == [*:0]const u8) {
-                    const str = _createString(value, strlen(value)) orelse return Error.UnableToCreateString;
+                    const str = _captureString(value, strlen(value)) orelse return Error.UnableToCreateString;
                     _insertString(container, key_str, str);
                 } else if (T == Value) {
                     _insertObject(container, key_str, value);
@@ -290,7 +290,7 @@ pub const Host = struct {
                 .bytes = @constCast(ptr),
                 .len = len,
             };
-            const dv = try host.createView(memory);
+            const dv = try host.captureView(memory);
             try host.writeToConsole(dv);
         } else {
             return Error.UnableToWriteToConsole;

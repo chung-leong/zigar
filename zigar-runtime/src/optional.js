@@ -1,4 +1,4 @@
-import { defineProperties } from './structure.js';
+import { ObjectCache, defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView }  from './data-view.js';
@@ -54,6 +54,7 @@ export function defineOptional(s, env) {
   };
   const check = getPresent;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
       writable = true,
@@ -66,10 +67,13 @@ export function defineOptional(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
-      self = Object.create(constructor.prototype);
-      dv = requireDataView(s, arg);
+      dv = requireDataView(s, arg, env);
+      if (self = cache.find(dv, writable)) {
+        return self;
+      }
+      self = Object.create(constructor.prototype); 
     }
     self[MEMORY] = dv;
     self[SLOTS] = hasObject ? {} : undefined;
@@ -82,7 +86,7 @@ export function defineOptional(s, env) {
         [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, false) },
       });
     }
-    return self;
+    return cache.save(dv, writable, self);
   };
   const initializer = function(arg) {
     if (arg instanceof constructor) {

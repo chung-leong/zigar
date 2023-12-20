@@ -1,4 +1,4 @@
-import { defineProperties } from './structure.js';
+import { ObjectCache, defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
@@ -17,6 +17,7 @@ export function defineErrorSet(s, env) {
     },
   } = s;
   const byIndex = {};
+  const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
       writable = true,
@@ -29,7 +30,7 @@ export function defineErrorSet(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       if (typeof(arg) === 'number') {
         return byIndex[arg];  
@@ -40,11 +41,14 @@ export function defineErrorSet(s, env) {
           }
         }
       } else {
-        self = Object.create(constructor.prototype);
-        dv = getDataView(s, arg);
+        dv = getDataView(s, arg, env);
         if (!dv) {
           throwInvalidInitializer(s, [ 'string', 'number' ], arg);
         }
+        if (self = cache.find(dv, writable)) {
+          return self;
+        }
+        self = Object.create(constructor.prototype); 
       }
     }
     self[MEMORY] = dv;
@@ -56,7 +60,7 @@ export function defineErrorSet(s, env) {
         $: { get, set, configurable: true },
       });
     }
-    return self;
+    return cache.save(dv, writable, self);
   };
   Object.setPrototypeOf(constructor.prototype, Error.prototype);
   const { get: getIndex } = getDescriptor(member, env);

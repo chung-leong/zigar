@@ -1,7 +1,7 @@
-import { defineProperties, getSelf, removeSetters } from './structure.js';
+import { ObjectCache, defineProperties, getSelf, removeSetters } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { getDataView } from './data-view.js';
+import { requireDataView } from './data-view.js';
 import { always, copyPointer } from './pointer.js';
 import { getSpecialKeys } from './special.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer, throwNoProperty,
@@ -26,6 +26,7 @@ export function defineStructShape(s, env) {
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const slots = template?.[SLOTS];
+  const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
       writable = true,
@@ -38,10 +39,13 @@ export function defineStructShape(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
+      dv = requireDataView(s, arg, env);
+      if (self = cache.find(dv, writable)) {
+        return self;
+      }
       self = Object.create(constructor.prototype);
-      dv = getDataView(s, arg);
     }
     self[MEMORY] = dv;
     // comptime fields are stored in the template slots, so slots might be used present even
@@ -58,7 +62,7 @@ export function defineStructShape(s, env) {
         ...removeSetters(descriptors),
       });
     }
-    return self;
+    return cache.save(dv, writable, self);
   };
   const specialKeys = getSpecialKeys(s);
   const requiredKeys = members.filter(m => m.isRequired).map(m => m.name);

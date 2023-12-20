@@ -105,9 +105,9 @@ result free_relocatable_memory(call ctx,
     return Failure;
 }
 
-result create_string(call ctx,
-                     const memory* mem,
-                     napi_value* dest) {
+result capture_string(call ctx,
+                      const memory* mem,
+                      napi_value* dest) {
     napi_env env = ctx->env;
     if (napi_create_string_utf8(env, (const char*) mem->bytes, mem->len, dest) == napi_ok) {
         return OK;
@@ -115,16 +115,16 @@ result create_string(call ctx,
     return Failure;
 }
 
-result create_view(call ctx,
-                   const memory* mem,
-                   napi_value* dest) {
+result capture_view(call ctx,
+                    const memory* mem,
+                    napi_value* dest) {
     napi_env env = ctx->env;
     napi_value args[3];
     napi_value result;
     if (napi_create_bigint_uint64(env, (uintptr_t) mem->bytes, &args[0]) == napi_ok
      && napi_create_uint32(env, mem->len, &args[1]) == napi_ok
      && napi_get_boolean(env, mem->attributes.is_comptime, &args[2]) == napi_ok
-     && call_js_function(ctx, "createView", 3, args, dest)) {
+     && call_js_function(ctx, "captureView", 3, args, dest)) {
         return OK;
     }
     return Failure;
@@ -652,8 +652,8 @@ napi_value load_module(napi_env env,
     export_table* exports = mod->exports;
     exports->allocate_relocatable_memory = allocate_relocatable_memory;
     exports->free_relocatable_memory = free_relocatable_memory;
-    exports->create_string = create_string;
-    exports->create_view = create_view;
+    exports->capture_string = capture_string;
+    exports->capture_view = capture_view;
     exports->cast_view = cast_view;
     exports->read_slot = read_slot;
     exports->write_slot = write_slot;

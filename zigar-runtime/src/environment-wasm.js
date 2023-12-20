@@ -17,8 +17,8 @@ export class WebAssemblyEnvironment extends Environment {
   exports = {
     allocateRelocMemory: { argType: 'ii', returnType: 'v' },
     freeRelocMemory: { argType: 'iii' },
-    createString: { argType: 'ii', returnType: 'v' },
-    createView: { argType: 'iib', returnType: 'v' },
+    captureString: { argType: 'ii', returnType: 'v' },
+    captureView: { argType: 'iib', returnType: 'v' },
     castView: { argType: 'vvb', returnType: 'v' },
     readSlot: { argType: 'vi', returnType: 'v' },
     writeSlot: { argType: 'viv' },
@@ -50,7 +50,7 @@ export class WebAssemblyEnvironment extends Environment {
     // allocate memory in both JS and WASM space
     const constructor = { [ALIGN]: align };
     const copier = getMemoryCopier(len);
-    const dv = this.createBuffer(len);
+    const dv = this.allocateMemory(len);
     const shadowDV = this.allocateShadowMemory(len, align);
     // create a shadow for the relocatable memory
     const object = { constructor, [MEMORY]: dv, [MEMORY_COPIER]: copier };
@@ -81,7 +81,7 @@ export class WebAssemblyEnvironment extends Environment {
       return this.emptyView;
     }
     const address = this.allocateExternMemory(len, align);
-    const dv = new DataView(buffer, address, len);
+    const dv = this.obtainView(buffer, address, len);
     dv[ALIGN] = align;
     return dv;
   }
@@ -98,7 +98,7 @@ export class WebAssemblyEnvironment extends Environment {
       return this.emptyView;
     }
     const { memory } = this;
-    const dv = new DataView(memory.buffer, address, len);
+    const dv = this.obtainView(memory.buffer, address, len);
     dv[MEMORY] = { memory, address, len };
     return dv;
   }
@@ -147,7 +147,7 @@ export class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  createString(address, len) {
+  captureString(address, len) {
     const { buffer } = this.memory;
     const ta = new Uint8Array(buffer, address, len);
     return decodeText(ta);

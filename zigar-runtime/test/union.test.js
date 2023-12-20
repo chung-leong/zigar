@@ -58,6 +58,44 @@ describe('Union functions', function() {
       expect(object.cat).to.equal(777);
       expect(Object.keys(object)).to.eql([ 'dog', 'cat' ]);
     })
+    it('should cast the same buffer to the same object', function() {
+      const structure = env.beginStructure({
+        type: StructureType.ExternUnion,
+        name: 'Hello',
+        byteSize: 4,
+      });
+      env.attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.attachTemplate(structure, {
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4));
+          dv.setInt32(0, 1234, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
+      })
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const buffer = new ArrayBuffer(4);
+      const object1 = Hello(buffer);
+      const object2 = Hello(buffer);
+      expect(object2).to.equal(object1);
+    })
     it('should throw when no initializer is provided', function() {
       const structure = env.beginStructure({
         type: StructureType.ExternUnion,

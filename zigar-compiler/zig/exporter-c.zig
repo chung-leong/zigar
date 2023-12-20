@@ -54,17 +54,17 @@ pub const Host = struct {
         }
     }
 
-    pub fn createString(self: Host, memory: Memory) !Value {
+    pub fn captureString(self: Host, memory: Memory) !Value {
         var value: Value = undefined;
-        if (imports.create_string(self.context, &memory, &value) != .OK) {
+        if (imports.capture_string(self.context, &memory, &value) != .OK) {
             return Error.UnableToCreateObject;
         }
         return value;
     }
 
-    pub fn createView(self: Host, memory: Memory) !Value {
+    pub fn captureView(self: Host, memory: Memory) !Value {
         var value: Value = undefined;
-        if (imports.create_view(self.context, &memory, &value) != .OK) {
+        if (imports.capture_view(self.context, &memory, &value) != .OK) {
             return Error.UnableToCreateDataView;
         }
         return value;
@@ -153,7 +153,7 @@ pub const Host = struct {
             .bytes = @constCast(bytes),
             .len = len,
         };
-        const dv = try self.createView(memory);
+        const dv = try self.captureView(memory);
         try self.writeToConsole(dv);
     }
 };
@@ -212,8 +212,8 @@ pub fn runThunk(call: Call, thunk_address: usize, args: *anyopaque, dest: *?Valu
 const Imports = extern struct {
     allocate_relocatable_memory: *const fn (Call, usize, u16, *Memory) callconv(.C) Result,
     free_relocatable_memory: *const fn (Call, *const Memory) callconv(.C) Result,
-    create_string: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
-    create_view: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
+    capture_string: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
+    capture_view: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
     cast_view: *const fn (Call, Value, Value, bool, *Value) callconv(.C) Result,
     read_slot: *const fn (Call, ?Value, usize, *Value) callconv(.C) Result,
     write_slot: *const fn (Call, ?Value, usize, ?Value) callconv(.C) Result,

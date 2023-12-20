@@ -18,6 +18,7 @@ export class Environment {
   consolePending = [];
   consoleTimeout = 0;
   emptyView = new DataView(new ArrayBuffer(0));
+  viewMap = new WeakMap();
   initPromise;
   abandoned = false;
   released = false;
@@ -95,12 +96,11 @@ export class Environment {
     this.context = this.contextStack.pop();
   }
 
-  createBuffer(len, align = 0, fixed = false) {
+  allocateMemory(len, align = 0, fixed = false) {
     if (fixed) {
       return this.allocateFixedMemory(len, align);
     } else {
-      const buffer = new ArrayBuffer(len);
-      return new DataView(buffer);
+      return this.obtainView(new ArrayBuffer(len), 0, len);
     }
   }
 
@@ -134,11 +134,8 @@ export class Environment {
         return prev.targetDV ?? prev.dv;
       } else if (prev?.address <= address && address < add(prev.address, prev.len)) {
         const offset = Number(address - prev.address) + prev.dv.byteOffset;
-        if (prev.targetDV) {
-          return new DataView(prev.targetDV.buffer, prev.targetDV.byteOffset + offset, len);
-        } else {
-          return new DataView(prev.dv.buffer, prev.dv.byteOffset + offset, len);
-        }
+        const dv = prev.targetDV ?? prev.dv;
+        return this.obtainView(dv.buffer, dv.byteOffset + offset, len);
       }
     }
     // not found in any of the buffers we've seen--assume it's fixed memory
@@ -150,9 +147,36 @@ export class Environment {
     return add(address, dv.byteOffset);
   }
 
-  createView(address, len, copy) {
+  obtainView(buffer, offset, len) {
+    let entry = this.viewMap.get(buffer);
+    if (!entry) {
+      const dv = new DataView(buffer, offset, len);
+      this.viewMap.set(buffer, dv);
+      return dv;
+    } 
+    if (entry instanceof DataView) {
+      // only one view created thus far--see if that's the matching one 
+      if (entry.byteOffset === offset && entry.byteLength === len) {
+        return entry;
+      } else {
+        // no, need to replace the entry with a hash keyed by `offset:len`
+        const dv = entry;
+        const key = `${dv.byteOffset}:${dv.byteLength}`;
+        entry = { [key]: dv };
+        this.viewMap.set(buffer, entry);
+      }
+    }
+    const key = `${offset}:${len}`;
+    let dv = entry[key];
+    if (!dv) {
+      dv = entry[key] = new DataView(buffer, offset, len);
+    }
+    return dv;
+  }
+
+  captureView(address, len, copy) {
     if (copy) {
-      const dv = this.createBuffer(len);
+      const dv = this.allocateMemory(len);
       this.copyBytes(dv, address, len);
       return dv;
     } else {
@@ -282,7 +306,7 @@ export class Environment {
           const address = this.getViewAddress(dv);
           const offset = this.getMemoryOffset(address);
           const len = dv.byteLength;
-          const relocDV = this.createView(address, len, true);
+          const relocDV = this.captureView(address, len, true);
           relocDV.reloc = offset;
           dv = relocDV;
           list.push({ offset, len, owner: object, replaced: false });
@@ -311,7 +335,7 @@ export class Environment {
             // B is inside A--replace it with a view of A's buffer
             const dv = a.owner.memory;
             const pos = b.offset - a.offset + dv.byteOffset;
-            const newDV = new DataView(dv.buffer, pos, b.len);
+            const newDV = this.obtainView(dv.buffer, pos, b.len);
             newDV.reloc = b.offset;
             b.owner.memory = newDV;
             b.replaced = true;
@@ -367,7 +391,7 @@ export class Environment {
       const template = {};
       if (placeholder.memory) {
         const { array, offset, length } = placeholder.memory;
-        template[MEMORY] = new DataView(array.buffer, offset, length);
+        template[MEMORY] = this.obtainView(array.buffer, offset, length);
       }
       if (placeholder.slots) {
         template[SLOTS] = insertObjects({}, placeholder.slots);
@@ -388,7 +412,7 @@ export class Environment {
     const createObject = (placeholder) => {
       if (placeholder.memory) {
         const { array, offset, length } = placeholder.memory;
-        const dv = new DataView(array.buffer, offset, length);
+        const dv = this.obtainView(array.buffer, offset, length);
         const { constructor } = placeholder.structure;
         const { reloc, const: isConst } = placeholder;
         const writable = reloc !== undefined && isConst !== true;
@@ -453,7 +477,7 @@ export class Environment {
       return;
     }
     const dv = object[MEMORY];
-    const relocDV = this.createBuffer(dv.byteLength);
+    const relocDV = this.allocateMemory(dv.byteLength);
     const dest = Object.create(object.constructor.prototype);
     dest[MEMORY] = relocDV;
     dest[MEMORY_COPIER](object);

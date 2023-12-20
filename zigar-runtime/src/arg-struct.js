@@ -16,7 +16,7 @@ export function defineArgStruct(s, env) {
   } = s;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const constructor = s.constructor = function(args) {
-    const dv = env.createBuffer(byteSize, align);
+    const dv = env.allocateMemory(byteSize, align);
     this[MEMORY] = dv;
     if (hasObject) {
       this[SLOTS] = {};

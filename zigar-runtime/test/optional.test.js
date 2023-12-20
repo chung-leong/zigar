@@ -45,6 +45,37 @@ describe('Optional functions', function() {
       object.$ = null;
       expect(object.$).to.equal(null);
     })
+    it('should cast the same buffer to the same object', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Optional,
+        name: 'Hello',
+        byteSize: 18,
+      });
+      env.attachMember(structure, {
+        name: 'value',
+        type: MemberType.Float,
+        bitOffset: 0,
+        bitSize: 128,
+        byteSize: 16,
+        structure: {
+          type: StructureType.Primitive,
+        }
+      });
+      env.attachMember(structure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: 128,
+        bitSize: 1,
+        byteSize: 1,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const buffer = new ArrayBuffer(18);
+      const object1 = Hello(buffer);
+      const object2 = Hello(buffer);
+      expect(object2).to.equal(object1);
+    })
     it('should throw when no initializer is provided', function() {
       const structure = env.beginStructure({
         type: StructureType.Optional,

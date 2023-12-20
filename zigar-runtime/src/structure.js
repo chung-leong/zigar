@@ -169,3 +169,24 @@ export function useAllStructureTypes() {
   useVector();
   useOpaque();
 }
+
+export class ObjectCache {
+  [0] = null;
+  [1] = null;
+
+  find(dv, writable) {
+    const key = (writable) ? 0 : 1;
+    const map = this[key];
+    return map?.get(dv);
+  }
+
+  save(dv, writable, object) {
+    const key = (writable) ? 0 : 1;
+    let map = this[key];    
+    if (!map) {
+      map = this[key] = new WeakMap();
+    }
+    map.set(dv, object);
+    return object;
+  }
+}

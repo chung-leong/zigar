@@ -1,4 +1,4 @@
-import { StructureType, defineProperties } from './structure.js';
+import { ObjectCache, StructureType, defineProperties } from './structure.js';
 import { getMemoryCopier } from './memory.js';
 import { requireDataView, getDataView, isCompatible, isBuffer } from './data-view.js';
 import { MemberType, getDescriptor } from './member.js';
@@ -39,6 +39,7 @@ export function definePointer(s, env) {
     byteSize: addressSize,
     structure: { name: 'usize', byteSize: addressSize },
   }, env) : {};
+  const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
       writable = true,
@@ -53,11 +54,14 @@ export function definePointer(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
-      self = Object.create(constructor.prototype);
       if (calledFromEnviroment || calledFromParent) {
-        dv = requireDataView(s, arg);
+        dv = requireDataView(s, arg, env);
+        if (self = cache.find(dv, writable)) {
+          return self;
+        }
+        self = Object.create(constructor.prototype); 
       } else {
         const Target = targetStructure.constructor;
         if (isPointerOf(arg, Target)) {
@@ -70,7 +74,8 @@ export function definePointer(s, env) {
         } else {
           throwNoCastingToPointer(s);
         }
-        dv = env.createBuffer(byteSize, align, fixed);
+        dv = env.allocateMemory(byteSize, align, fixed);
+        self = Object.create(constructor.prototype); 
       }
     }
     self[MEMORY] = dv;
@@ -83,7 +88,8 @@ export function definePointer(s, env) {
         '$': { get: getProxy, set: throwReadOnly, configurable: true, },
       });
     }
-    return createProxy.call(self, isConst, isTargetPointer);
+    const proxy = createProxy.call(self, isConst, isTargetPointer);
+    return cache.save(dv, writable, proxy);
   };
   const initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -106,7 +112,7 @@ export function definePointer(s, env) {
         if (!(arg instanceof Target)) {
           if (isCompatible(arg, Target)) {
             // autocast to target type
-            const dv = getDataView(targetStructure, arg);
+            const dv = getDataView(targetStructure, arg, env);
             arg = Target(dv);
           } else if (isTargetSlice) {
             // autovivificate target object
@@ -266,7 +272,14 @@ const proxyHandlers = {
     return true;
   },
   has(pointer, name) {
-    return isPointerKeys[name] || name in pointer[SLOTS][0];
+    if (isPointerKeys[name]) {
+      return true;
+    }
+    const target = pointer[SLOTS][0];
+    if (!target) {
+      return false;
+    }
+    return name in target;
   },
   ownKeys(pointer) {
     const targetKeys = Object.getOwnPropertyNames(pointer[SLOTS][0]);

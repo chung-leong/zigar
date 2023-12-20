@@ -52,7 +52,7 @@ export class NodeEnvironment extends Environment {
     const buffer = this.allocateExternMemory(len, align);
     const address = this.extractBufferAddress(buffer);
     this.addressMap.set(buffer, address);
-    const dv = new DataView(buffer);
+    const dv = this.obtainView(buffer, 0, len);
     dv[ALIGN] = align;
     return dv;
   }
@@ -70,7 +70,7 @@ export class NodeEnvironment extends Environment {
     }
     const buffer = this.obtainExternBuffer(address, len);
     this.addressMap.set(buffer, address);
-    return new DataView(buffer);
+    return this.obtainView(buffer, 0, len);
   }
 
   releaseFixedView(dv) {
@@ -130,7 +130,7 @@ export class NodeEnvironment extends Environment {
       const aligned = getAlignedAddress(address, align);
       offset = aligned - address;
     }
-    return new DataView(buffer, Number(offset), len);
+    return this.obtainView(buffer, Number(offset), len);
   }
 
   invokeThunk(thunkId, args) {

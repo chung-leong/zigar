@@ -1,4 +1,4 @@
-import { defineProperties } from './structure.js';
+import { ObjectCache, defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
@@ -29,6 +29,7 @@ export function defineArray(s, env) {
   /* DEV-TEST-END */
   addTypedArray(s);
   const hasObject = (member.type === MemberType.Object);
+  const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
       writable = true,
@@ -41,10 +42,13 @@ export function defineArray(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
-      self = Object.create(constructor.prototype);
-      dv = requireDataView(s, arg);
+      dv = requireDataView(s, arg, env);
+      if (self = cache.find(dv, writable)) {
+        return self;
+      }
+      self = Object.create(constructor.prototype); 
     }
     self[MEMORY] = dv;
     self[GETTER] = null;
@@ -60,7 +64,8 @@ export function defineArray(s, env) {
         [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
       });
     }
-    return createProxy.call(self);
+    const proxy = createProxy.call(self);
+    return cache.save(dv, writable, proxy);
   };
   const { structure: elementStructure } = member;
   const specialKeys = getSpecialKeys(s);

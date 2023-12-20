@@ -1,4 +1,4 @@
-import { defineProperties } from './structure.js';
+import { ObjectCache, defineProperties } from './structure.js';
 import { MemberType, isByteAligned, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getCompatibleTags, addTypedArray, requireDataView } from './data-view.js';
@@ -16,6 +16,7 @@ export function definePrimitive(s, env) {
     },
   } = s;
   addTypedArray(s);
+  const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
       writable = true,
@@ -28,10 +29,13 @@ export function definePrimitive(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
+      dv = requireDataView(s, arg, env);
+      if (self = cache.find(dv, writable)) {
+        return self;
+      }
       self = Object.create(constructor.prototype);
-      dv = requireDataView(s, arg);
     }
     self[MEMORY] = dv;
     if (creating) {
@@ -42,7 +46,7 @@ export function definePrimitive(s, env) {
         $: { get, set: throwReadOnly, configurable: true },
       });
     }
-    return self;
+    return cache.save(dv, writable, self);
   };
   const specialKeys = getSpecialKeys(s);
   const initializer = function(arg) {

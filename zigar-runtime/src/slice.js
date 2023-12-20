@@ -1,4 +1,4 @@
-import { defineProperties } from './structure.js';
+import { ObjectCache, defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, checkDataViewSize, getCompatibleTags } from './data-view.js';
@@ -37,6 +37,7 @@ export function defineSlice(s, env) {
     // so we're not putting this prop into the standard structure
     s.sentinel = sentinel;
   }
+  const cache = new ObjectCache();
   // the slices are different from other structures due to variability of their sizes
   // we only know the "shape" of an object after we've processed the initializers
   const constructor = s.constructor = function(arg, options = {}) {
@@ -45,16 +46,20 @@ export function defineSlice(s, env) {
       fixed = false,
     } = options;
     const creating = this instanceof constructor;
-    let self;
+    let self, dv;
     if (creating) {
       if (arguments.length === 0) {
         throwNoInitializer(s);
       }
       self = this;
       initializer.call(self, arg, fixed);
+      dv = self[MEMORY];
     } else {
+      dv = requireDataView(s, arg, env);
+      if (self = cache.find(dv, writable)) {
+        return self;
+      }
       self = Object.create(constructor.prototype);
-      const dv = requireDataView(s, arg);
       shapeDefiner.call(self, dv, dv.byteLength / elementSize);
     }
     if (!writable) {
@@ -64,12 +69,13 @@ export function defineSlice(s, env) {
         [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
       });
     }
-    return createProxy.call(self);
+    const proxy = createProxy.call(self);
+    return cache.save(dv, writable, proxy);
   };
   const specialKeys = getSpecialKeys(s);
   const shapeDefiner = function(dv, length, fixed) {
     if (!dv) {
-      dv = env.createBuffer(length * elementSize, align, fixed);
+      dv = env.allocateMemory(length * elementSize, align, fixed);
     }
     this[MEMORY] = dv;
     this[GETTER] = null;

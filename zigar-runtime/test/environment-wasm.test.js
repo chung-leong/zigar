@@ -45,7 +45,7 @@ describe('WebAssemblyEnvironment', function() {
   })
   describe('findSentinel', function() {
   })
-  describe('createString', function() {
+  describe('captureString', function() {
   })
   describe('getTargetAddress', function() {
   })

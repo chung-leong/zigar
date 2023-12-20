@@ -56,6 +56,44 @@ describe('Enumeration functions', function() {
       e.$ = Hello.Dog;
       expect(e.$).to.equal(Hello.Dog);
     })
+    it('should cast the same buffer to the same object', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Enumeration,
+        name: 'Hello',
+        byteSize: 4,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(structure);
+      const { constructor: Hello } = structure;
+      env.attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure,
+      }, true);
+      env.attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure,
+      }, true);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ])), { writable: false }),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ])), { writable: false }),
+        },
+      }, true);
+      env.finalizeStructure(structure);
+      const buffer = new ArrayBuffer(4);
+      const object1 = Hello(buffer);
+      const object2 = Hello(buffer);
+      expect(object2).to.equal(object1);
+    })
     it('should look up the correct enum object', function() {
       const structure = env.beginStructure({
         type: StructureType.Enumeration,

@@ -987,7 +987,7 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
                     .structure = child_structure,
                 }, false);
                 const memory = toMemory(&sentinel, true);
-                const dv = try host.createView(memory);
+                const dv = try host.captureView(memory);
                 const template = try host.createTemplate(dv);
                 try host.attachTemplate(slice_structure, template, false);
             }
@@ -1127,7 +1127,7 @@ fn exportPointerTarget(host: anytype, comptime ptr: anytype, is_comptime: bool) 
             else => ptr,
         };
         const memory = toMemory(value_ptr, is_comptime);
-        const dv = try host.createView(memory);
+        const dv = try host.captureView(memory);
         const structure = try getStructure(host, @TypeOf(value_ptr.*));
         const obj = try host.castView(structure, dv, !is_comptime);
         return obj;
@@ -1137,7 +1137,7 @@ fn exportPointerTarget(host: anytype, comptime ptr: anytype, is_comptime: bool) 
 
 fn exportError(host: anytype, err: anyerror, structure: Value) !Value {
     const memory = toMemory(&err, true);
-    const dv = try host.createView(memory);
+    const dv = try host.captureView(memory);
     const obj = try host.castView(structure, dv, false);
     return obj;
 }
@@ -1194,7 +1194,7 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
             }
         }
         const memory = toMemory(&values, true);
-        const dv = try host.createView(memory);
+        const dv = try host.captureView(memory);
         const template = try host.createTemplate(dv);
         inline for (st.fields, 0..) |field, index| {
             if (field.default_value) |opaque_ptr| {
@@ -1748,7 +1748,7 @@ fn createAllocator(host_ptr: anytype) std.mem.Allocator {
 fn createErrorMessage(host: anytype, err: anyerror) !Value {
     const err_name = @errorName(err);
     const memory = toMemory(err_name, true);
-    return host.createString(memory);
+    return host.captureString(memory);
 }
 
 fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: type) Thunk {

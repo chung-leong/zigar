@@ -1,13 +1,14 @@
-import { StructureType, defineProperties, getSelf, removeSetters } from './structure.js';
+import { ObjectCache, StructureType, defineProperties, getSelf, removeSetters } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { getDataView } from './data-view.js';
+import { requireDataView } from './data-view.js';
 import { getSpecialKeys } from './special.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
 import { throwInvalidInitializer, throwMissingUnionInitializer, throwMultipleUnionInitializers,
   throwNoProperty, throwInactiveUnionProperty, throwNoInitializer, throwReadOnly } from './error.js';
 import { copyPointer, disablePointer, resetPointer } from './pointer.js';
 import { ALIGN, CHILD_VIVIFICATOR, ENUM_ITEM, ENUM_NAME, MEMORY, MEMORY_COPIER, POINTER_VISITOR,
+  PROXY,
   SIZE, SLOTS, TAG } from './symbol.js';
 
 export function defineUnionShape(s, env) {
@@ -112,6 +113,7 @@ export function defineUnionShape(s, env) {
   // non-tagged union as marked as not having pointers--if there're actually
   // members with pointers, we need to disable them
   const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
+  const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
       writable = true,
@@ -124,10 +126,13 @@ export function defineUnionShape(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
+      dv = requireDataView(s, arg, env);
+      if (self = cache.find(dv, writable)) {
+        return self;
+      }
       self = Object.create(constructor.prototype);
-      dv = getDataView(s, arg);
     }
     self[MEMORY] = dv;
     self[SLOTS] = hasObject ? {} : undefined;
@@ -146,9 +151,11 @@ export function defineUnionShape(s, env) {
       });
     }
     if (isTagged) {
-      return new Proxy(self, taggedProxyHandlers);
+      const proxy = new Proxy(self, taggedProxyHandlers);
+      Object.defineProperty(self, PROXY, { value: proxy });
+      return cache.save(dv, writable, proxy);
     } else {
-      return self;
+      return cache.save(dv, writable, self);
     }
   };
   const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
@@ -245,6 +252,6 @@ const taggedProxyHandlers = {
   ownKeys(union) {
     const item = union[ENUM_ITEM];
     const name = item[ENUM_NAME];
-    return [ name, MEMORY, TAG ];
+    return [ name, MEMORY, TAG, PROXY ];
   },
 };

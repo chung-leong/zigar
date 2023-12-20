@@ -111,7 +111,7 @@ export function getDataViewFloatAccessorEx(access, member) {
   });
 }
 
-export function getDataView(structure, arg) {
+export function getDataView(structure, arg, env) {
   const { type, byteSize, typedArray } = structure;
   let dv;
   // not using instanceof just in case we're getting objects created in other contexts
@@ -119,11 +119,11 @@ export function getDataView(structure, arg) {
   if (tag === 'DataView') {
     dv = arg;
   } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
-    dv = new DataView(arg);
+    dv = env.obtainView(arg, 0, arg.byteLength);
   } else if (typedArray && tag === typedArray.name || (tag === 'Uint8ClampedArray' && typedArray === Uint8Array)) {
-    dv = new DataView(arg.buffer, arg.byteOffset, arg.byteLength);
+    dv = env.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);
   } else if (tag === 'Uint8Array' && typeof(Buffer) === 'function' && arg instanceof Buffer) {
-    dv = new DataView(arg.buffer, arg.byteOffset, arg.byteLength);
+    dv = env.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);
   } else {
     const memory = arg?.[MEMORY];
     if (memory && (type === StructureType.Array || type === StructureType.Slice || type === StructureType.Vector)) {
@@ -164,8 +164,8 @@ function findElements(arg, Child) {
   }
 }
 
-export function requireDataView(structure, arg) {
-  const dv = getDataView(structure, arg);
+export function requireDataView(structure, arg, env) {
+  const dv = getDataView(structure, arg, env);
   if (!dv) {
     throwBufferExpected(structure);
   }

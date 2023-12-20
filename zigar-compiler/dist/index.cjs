@@ -1939,10 +1939,10 @@ function definePrimitive(s, env) {
         throwNoInitializer$1(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       self = Object.create(constructor.prototype);
-      dv = requireDataView(s, arg);
+      dv = requireDataView(s, arg, env);
     }
     self[MEMORY] = dv;
     if (creating) {
@@ -2082,11 +2082,11 @@ function definePointer(s, env) {
         throwNoInitializer$1(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       self = Object.create(constructor.prototype);
       if (calledFromEnviroment || calledFromParent) {
-        dv = requireDataView(s, arg);
+        dv = requireDataView(s, arg, env);
       } else {
         const Target = targetStructure.constructor;
         if (isPointerOf(arg, Target)) {
@@ -2099,7 +2099,7 @@ function definePointer(s, env) {
         } else {
           throwNoCastingToPointer();
         }
-        dv = env.createBuffer(byteSize, align, fixed);
+        dv = env.allocateMemory(byteSize, align, fixed);
       }
     }
     self[MEMORY] = dv;
@@ -2362,10 +2362,10 @@ function defineArray(s, env) {
         throwNoInitializer$1(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       self = Object.create(constructor.prototype);
-      dv = requireDataView(s, arg);
+      dv = requireDataView(s, arg, env);
     }
     self[MEMORY] = dv;
     self[GETTER] = null;
@@ -2667,10 +2667,10 @@ function defineStructShape(s, env) {
         throwNoInitializer$1(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView(s, arg);
+      dv = getDataView(s, arg, env);
     }
     self[MEMORY] = dv;
     // comptime fields are stored in the template slots, so slots might be used present even
@@ -2948,10 +2948,10 @@ function defineUnionShape(s, env) {
         throwNoInitializer$1(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       self = Object.create(constructor.prototype);
-      dv = getDataView(s, arg);
+      dv = getDataView(s, arg, env);
     }
     self[MEMORY] = dv;
     self[SLOTS] = hasObject ? {} : undefined;
@@ -3119,10 +3119,10 @@ function defineErrorUnion(s, env) {
         throwNoInitializer$1(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       self = Object.create(constructor.prototype);
-      dv = requireDataView(s, arg);
+      dv = requireDataView(s, arg, env);
     }
     self[MEMORY] = dv;
     self[SLOTS] = hasObject ? {} : undefined;
@@ -3188,7 +3188,7 @@ function defineErrorSet(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       if (typeof(arg) === 'number') {
         return byIndex[arg];  
@@ -3200,7 +3200,7 @@ function defineErrorSet(s, env) {
         }
       } else {
         self = Object.create(constructor.prototype);
-        dv = getDataView(s, arg);
+        dv = getDataView(s, arg, env);
         if (!dv) {
           throwInvalidInitializer(s, [ 'string', 'number' ], arg);
         }
@@ -3269,7 +3269,7 @@ function defineEnumerationShape(s, env) {
         throwNoInitializer(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       if (typeof(arg)  === 'string') {
         return constructor[arg];
@@ -3280,7 +3280,7 @@ function defineEnumerationShape(s, env) {
         return arg[ENUM_ITEM];
       } else {
         self = Object.create(constructor.prototype);
-        dv = getDataView(s, arg);
+        dv = getDataView(s, arg, env);
         if (!dv) {
           throwInvalidInitializer$1(s, [ 'string', 'number', 'tagged union' ], arg);
         } 
@@ -3373,10 +3373,10 @@ function defineOptional(s, env) {
         throwNoInitializer$1(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       self = Object.create(constructor.prototype);
-      dv = requireDataView(s, arg);
+      dv = requireDataView(s, arg, env);
     }
     self[MEMORY] = dv;
     self[SLOTS] = hasObject ? {} : undefined;
@@ -3454,7 +3454,7 @@ function defineSlice(s, env) {
       initializer.call(self, arg, fixed);
     } else {
       self = Object.create(constructor.prototype);
-      const dv = requireDataView(s, arg);
+      const dv = requireDataView(s, arg, env);
       shapeDefiner.call(self, dv, dv.byteLength / elementSize);
     }
     if (!writable) {
@@ -3469,7 +3469,7 @@ function defineSlice(s, env) {
   const specialKeys = getSpecialKeys(s);
   const shapeDefiner = function(dv, length, fixed) {
     if (!dv) {
-      dv = env.createBuffer(length * elementSize, align, fixed);
+      dv = env.allocateMemory(length * elementSize, align, fixed);
     }
     this[MEMORY] = dv;
     this[GETTER] = null;
@@ -3679,10 +3679,10 @@ function defineVector(s, env) {
         throwNoInitializer$1(s);
       }
       self = this;
-      dv = env.createBuffer(byteSize, align, fixed);
+      dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       self = Object.create(constructor.prototype);
-      dv = requireDataView(s, arg);
+      dv = requireDataView(s, arg, env);
     }
     self[MEMORY] = dv;
     if (creating) {
@@ -3798,7 +3798,7 @@ function defineArgStruct(s, env) {
   } = s;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const constructor = s.constructor = function(args) {
-    const dv = env.createBuffer(byteSize, align);
+    const dv = env.allocateMemory(byteSize, align);
     this[MEMORY] = dv;
     if (hasObject) {
       this[SLOTS] = {};
@@ -4704,7 +4704,7 @@ class Environment {
     this.context = this.contextStack.pop();
   }
 
-  createBuffer(len, align = 0, fixed = false) {
+  allocateMemory(len, align = 0, fixed = false) {
     if (fixed) {
       return this.allocateFixedMemory(len, align);
     } else {
@@ -4761,7 +4761,7 @@ class Environment {
 
   createView(address, len, copy) {
     if (copy) {
-      const dv = this.createBuffer(len);
+      const dv = this.allocateMemory(len);
       this.copyBytes(dv, address, len);
       return dv;
     } else {
@@ -5113,7 +5113,7 @@ class WebAssemblyEnvironment extends Environment {
     // allocate memory in both JS and WASM space
     const constructor = { [ALIGN]: align };
     const copier = getMemoryCopier(len);
-    const dv = this.createBuffer(len);
+    const dv = this.allocateMemory(len);
     const shadowDV = this.allocateShadowMemory(len, align);
     // create a shadow for the relocatable memory
     const object = { constructor, [MEMORY]: dv, [MEMORY_COPIER]: copier };

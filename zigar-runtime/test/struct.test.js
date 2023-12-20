@@ -53,6 +53,50 @@ describe('Struct functions', function() {
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(4567);
     })
+    it('should cast the same buffer to the same object', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 4 * 2,
+      });
+      env.attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      env.attachTemplate(structure, {
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setInt32(0, 1234, true);
+          dv.setInt32(4, 4567, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const buffer = new ArrayBuffer(8)
+      const object1 = Hello(buffer);
+      const object2 = Hello(buffer);
+      expect(object2).to.equal(object1);
+      const dv = env.obtainView(buffer, 0, 8);
+      const object3 = Hello(dv);
+      expect(object3).to.equal(object1);
+      const object4 = Hello(dv, { writable: false });
+      expect(object4).to.not.equal(object1);
+      const object5 = Hello(dv, { writable: false });
+      expect(object5).to.equal(object4);
+    })
     it('should initialize fields from object', function() {
       const structure = env.beginStructure({
         type: StructureType.Struct,
