@@ -6,7 +6,7 @@ import { always, copyPointer } from './pointer.js';
 import { getSpecialKeys } from './special.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer, throwNoProperty,
   throwReadOnly } from './error.js';
-import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR, SIZE, SLOTS
+import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR, PROTO_SLOTS, SIZE, SLOTS
 } from './symbol.js';
 
 export function defineStructShape(s, env) {
@@ -25,7 +25,6 @@ export function defineStructShape(s, env) {
   }
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const slots = template?.[SLOTS];
   const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
@@ -48,9 +47,9 @@ export function defineStructShape(s, env) {
       self = Object.create(constructor.prototype);
     }
     self[MEMORY] = dv;
-    // comptime fields are stored in the template slots, so slots might be used present even
-    // when the struct has no objects
-    self[SLOTS] = hasObject ? { ...slots } : slots;
+    if (hasObject) {
+      self[SLOTS] = {};
+    }
     Object.defineProperties(self, descriptors);
     if (creating) {
       initializer.call(self, arg);
@@ -138,6 +137,8 @@ export function defineStructShape(s, env) {
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
+    // comptime fields are stored in the instance template's slots
+    [PROTO_SLOTS]: template?.[SLOTS] && { value: template?.[SLOTS] },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },

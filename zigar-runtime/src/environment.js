@@ -266,7 +266,6 @@ export class Environment {
 
   endStructure(s) {
     this.structures.push(s);
-    this.acquireDefaultPointers(s);
   }
 
   acquireStructures(options) {
@@ -278,6 +277,9 @@ export class Environment {
     }
     initializeErrorSets();
     const result = this.defineStructures();
+    for (const s of this.structures) {
+      this.acquireDefaultPointers(s);
+    }
     if (typeof(result) === 'string') {
       throwZigError(result);
     }
@@ -404,11 +406,6 @@ export class Environment {
       }
       return dest;
     };
-    const recreateScope = (scope) => {
-      if (scope.template) {
-        scope.template = createTemplate(scope.template);
-      }
-    };
     const createObject = (placeholder) => {
       if (placeholder.memory) {
         const { array, offset, length } = placeholder.memory;
@@ -431,13 +428,17 @@ export class Environment {
       }
     };
     initializeErrorSets();
+    // finalize the shapes of all structures so we can use their constructors
     for (const structure of structures) {
-      // first create the actual template using the provided placeholder
-      recreateScope(structure.instance);
-      // finalize the shape before we recreate the static template as 
-      // the template can have objects of this structure 
       this.finalizeShape(structure);
-      recreateScope(structure.static);
+    }
+    for (const structure of structures) {
+      // recreate the actual template using the provided placeholder
+      for (const scope of [ structure.instance, structure.static ]) {
+        if (scope.template) {
+          scope.template = createTemplate(scope.template);
+        }
+      }
       // add static members, methods, etc.
       this.finalizeStructure(structure);
     }
@@ -791,6 +792,8 @@ export class Environment {
       }
       if (pointerMap.get(pointer)) {
         return;
+      } else {
+        pointerMap.set(pointer, true);
       }
       const Target = pointer.constructor.child;
       const writable = !pointer.constructor.const;
@@ -824,6 +827,7 @@ export class Environment {
         target[POINTER_VISITOR](callback, { vivificate: true, isMutable });
       }
     }
+    debugger;
     args[POINTER_VISITOR](callback, { vivificate: true });
   }
 

@@ -23,7 +23,7 @@ import {
 } from './error.js';
 import { restoreMemory } from './memory.js';
 import { getCurrentErrorSets } from './error-set.js';
-import { MEMORY, CHILD_VIVIFICATOR, SLOTS } from './symbol.js';
+import { MEMORY, CHILD_VIVIFICATOR, SLOTS, PROTO_SLOTS } from './symbol.js';
 
 export const MemberType = {
   Void: 0,
@@ -441,7 +441,7 @@ export function getTypeDescriptor(member, env) {
   return {
     get: function getType() {
       // unsupported types will have undefined structure
-      const structure = this[SLOTS][slot];
+      const structure = this[PROTO_SLOTS][slot];
       return structure?.constructor;
     },
     // no setter
@@ -453,11 +453,11 @@ export function getComptimeDescriptor(member, env) {
   return {
     get: (isValueExpected(structure))
     ? function getValue() {
-      const object = this[SLOTS][slot];
+      const object = this[PROTO_SLOTS][slot];
       return object.$;
     }
     : function getObject() {
-      const object = this[SLOTS][slot];
+      const object = this[PROTO_SLOTS][slot];
       return object;
     },
   };
@@ -474,11 +474,11 @@ export function getStaticDescriptor(member, env) {
     const { get, set } = getDescriptor(enumMember, env);
     return {
       get: function getEnum() {
-        const object = this[SLOTS][slot];
+        const object = this[PROTO_SLOTS][slot];
         return get.call(object);
       },
       set: function setEnum(arg) {
-        const object = this[SLOTS][slot];
+        const object = this[PROTO_SLOTS][slot];
         return set.call(object, arg);
       },
     };
@@ -491,11 +491,11 @@ export function getStaticDescriptor(member, env) {
     const { get, set } = getDescriptor(errorMember, env);
     return {
       get: function getError() {
-        const object = this[SLOTS][slot];
+        const object = this[PROTO_SLOTS][slot];
         return get.call(object);
       },
       set: function setError(arg) {
-        const object = this[SLOTS][slot];
+        const object = this[PROTO_SLOTS][slot];
         set.call(object, arg);
       },
     };
@@ -503,7 +503,7 @@ export function getStaticDescriptor(member, env) {
     return {
       ...getComptimeDescriptor(member, env),
       set: function setValue(value) {
-        const object = this[SLOTS][slot];
+        const object = this[PROTO_SLOTS][slot];
         object.$ = value;
       },
     };  
@@ -514,7 +514,7 @@ export function getLiteralDescriptor(member, env) {
   const { slot } = member;
   return {
     get: function getType() {
-      const object = this[SLOTS][slot];
+      const object = this[PROTO_SLOTS][slot];
       return object.string;
     },
     // no setter

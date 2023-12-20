@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { capture, captureWarning } from '../capture.js';
+import { MEMORY } from '../../../../zigar-runtime/src/symbol.js';
 
 export function addTests(importModule, options) {
   const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(options.optimize);
@@ -341,5 +342,13 @@ export function addTests(importModule, options) {
       const object = new Hello({ dog: 3, cat: 7 });
       expect(object.both).to.equal(10);
     })
+    it('should return the same struct', async function() {
+      this.timeout(120000);
+      const { default: module, Struct, echo } = await importTest('return-same-struct');
+      const object1 = new Struct({ number1: 5, number2: 55 });
+      const ptr = echo(object1);
+      const object2 = ptr['*'];
+      expect(object2).to.equal(object1);
+    });
   })
 }

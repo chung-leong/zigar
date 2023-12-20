@@ -1,5 +1,6 @@
 export const MEMORY = Symbol('memory');
 export const SLOTS = Symbol('slots');
+export const PROTO_SLOTS = Symbol('protoSlots');
 export const PARENT = Symbol('parent');
 export const ENUM_NAME = Symbol('enumName');
 export const ENUM_ITEM = Symbol('enumItem');
