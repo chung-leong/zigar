@@ -16,7 +16,7 @@ export function defineUnionShape(s, env) {
     type,
     byteSize,
     align,
-    instance: { members },
+    instance: { members, template },
     hasPointer,
   } = s;
   const { runtimeSafety } = env;
@@ -203,7 +203,6 @@ export function defineUnionShape(s, env) {
             }
           }
         } else if (found === 0) {
-          const { instance: { template } } = s;
           if (template) {
             if (template[MEMORY]) {
               this[MEMORY_COPIER](template);

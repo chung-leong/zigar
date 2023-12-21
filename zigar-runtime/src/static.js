@@ -2,16 +2,13 @@ import { StructureType, defineProperties } from './structure.js';
 import { getDescriptor } from './member.js';
 import { decamelizeErrorName } from './error.js';
 import { getCurrentErrorSets } from './error-set.js';
-import { ENUM_ITEMS, ENUM_NAME, ERROR_ITEMS, PROTO_SLOTS, SLOTS } from './symbol.js';
+import { ENUM_ITEMS, ENUM_NAME, ERROR_ITEMS, SLOTS } from './symbol.js';
 
 export function addStaticMembers(s, env) {
   const {
     type,
     constructor,
-    static: {
-      members,
-      template,
-    },
+    static: { members, template },
   } = s;
   if (members.length === 0) {
     return;
@@ -23,9 +20,7 @@ export function addStaticMembers(s, env) {
   defineProperties(constructor, {
     ...descriptors,
     // static variables are objects stored in the static template's slots
-    // using PROTO_SLOTS instead of SLOTS so we can reuse accessors used 
-    // for comptime fields
-    [PROTO_SLOTS]: { value: template[SLOTS] },
+    [SLOTS]: { value: template[SLOTS] },
   });
   if (type === StructureType.Enumeration) {
     const byIndex = constructor[ENUM_ITEMS];

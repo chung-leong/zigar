@@ -6,14 +6,14 @@ import { always, copyPointer } from './pointer.js';
 import { getSpecialKeys } from './special.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer, throwNoProperty,
   throwReadOnly } from './error.js';
-import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR, PROTO_SLOTS, SIZE, SLOTS
-} from './symbol.js';
+import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR, SIZE, 
+  SLOTS } from './symbol.js';
 
 export function defineStructShape(s, env) {
   const {
     byteSize,
     align,
-    instance: { members },
+    instance: { members, template },
     hasPointer,
   } = s;
   const descriptors = {};
@@ -23,6 +23,8 @@ export function defineStructShape(s, env) {
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const cache = new ObjectCache();
+  // comptime fields are stored in the instance template's slots
+  const slots = getComptimeFields(members, template);
   const constructor = s.constructor = function(arg, options = {}) {
     const {
       writable = true,
@@ -45,7 +47,9 @@ export function defineStructShape(s, env) {
     }
     self[MEMORY] = dv;
     if (hasObject) {
-      self[SLOTS] = {};
+      self[SLOTS] = { ...slots };
+    } else if (slots) {
+      self[SLOTS] = slots;
     }
     Object.defineProperties(self, descriptors);
     if (creating) {
@@ -103,9 +107,6 @@ export function defineStructShape(s, env) {
         }
         // apply default values unless all properties are initialized
         if (specialFound === 0 && found < keys.length) {
-          // the template wouldn't be ready when shape is being defined, that's why 
-          // we need to retrieve it from the structure here
-          const { instance: { template } } = s;
           if (template) {
             if (template[MEMORY]) {
               this[MEMORY_COPIER](template);
@@ -139,14 +140,23 @@ export function defineStructShape(s, env) {
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
-    // comptime fields are stored in the instance template's slots
-    [PROTO_SLOTS]: { get: () => s.instance.template?.[SLOTS] },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
   return constructor;
+}
+
+export function getComptimeFields(members, template) {
+  const comptimeMembers = members.filter(m => m.type === MemberType.Comptime);
+  if (comptimeMembers.length > 0) {
+    const slots = {};
+    for (const { slot } of comptimeMembers) {
+      slots[slot] = template[SLOTS][slot];
+    }
+    return slots;
+  }
 }
 
 export function getChildVivificators(s, writable) {

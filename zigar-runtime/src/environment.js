@@ -389,17 +389,6 @@ export class Environment {
 
   /* RUNTIME-ONLY */
   recreateStructures(structures) {
-    const createTemplate = (placeholder) => {
-      const template = {};
-      if (placeholder.memory) {
-        const { array, offset, length } = placeholder.memory;
-        template[MEMORY] = this.obtainView(array.buffer, offset, length);
-      }
-      if (placeholder.slots) {
-        template[SLOTS] = insertObjects({}, placeholder.slots);
-      }
-      return template;
-    };
     const insertObjects = (dest, placeholders) => {
       for (const [ slot, placeholder ] of Object.entries(placeholders)) {
         dest[slot] = placeholder ? createObject(placeholder) : null;
@@ -428,18 +417,32 @@ export class Environment {
       }
     };
     initializeErrorSets();
-    // finalize the shapes of all structures so we can use their constructors
-    for (const structure of structures) {
-      this.finalizeShape(structure);
-    }
+    const objectPlaceholders = new Map();
     for (const structure of structures) {
       // recreate the actual template using the provided placeholder
       for (const scope of [ structure.instance, structure.static ]) {
         if (scope.template) {
-          scope.template = createTemplate(scope.template);
+          const placeholder = scope.template;
+          const template = scope.template = {};
+          if (placeholder.memory) {
+            const { array, offset, length } = placeholder.memory;
+            template[MEMORY] = this.obtainView(array.buffer, offset, length);
+          }
+          if (placeholder.slots) {
+            // defer creation of objects until shapes of structures are finalized
+            const slots = template[SLOTS] = {};
+            objectPlaceholders.set(slots, placeholder.slots); 
+          }   
         }
       }
-      // add static members, methods, etc.
+      this.finalizeShape(structure);
+    }
+    // insert objects into template slots
+    for (const [ slots, placeholders ] of objectPlaceholders) {
+      insertObjects(slots, placeholders);
+    }
+    // add static members, methods, etc.
+    for (const structure of structures) {
       this.finalizeStructure(structure);
     }
   }
