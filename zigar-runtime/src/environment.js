@@ -266,6 +266,10 @@ export class Environment {
 
   endStructure(s) {
     this.structures.push(s);
+    this.finalizeStructure(s);
+    for (const s of this.structures) {
+      this.acquireDefaultPointers(s);
+    }
   }
 
   acquireStructures(options) {
@@ -277,9 +281,6 @@ export class Environment {
     }
     initializeErrorSets();
     const result = this.defineStructures();
-    for (const s of this.structures) {
-      this.acquireDefaultPointers(s);
-    }
     if (typeof(result) === 'string') {
       throwZigError(result);
     }
@@ -319,7 +320,11 @@ export class Environment {
       if (object[SLOTS]) {
         const slots = object[SLOTS];
         for (const child of Object.values(object[SLOTS])) {
-          find(child);
+          // find() can throw when a bare union contains pointers
+          try {
+            find(child);         
+          } catch (err) {
+          }
         }
         object.slots = slots;
       }
@@ -830,7 +835,6 @@ export class Environment {
         target[POINTER_VISITOR](callback, { vivificate: true, isMutable });
       }
     }
-    debugger;
     args[POINTER_VISITOR](callback, { vivificate: true });
   }
 

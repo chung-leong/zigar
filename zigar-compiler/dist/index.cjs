@@ -367,7 +367,6 @@ function absolute(relpath) {
 
 const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
-const PROTO_SLOTS = Symbol('protoSlots');
 const PARENT = Symbol('parent');
 const ENUM_NAME = Symbol('enumName');
 const ENUM_ITEM = Symbol('enumItem');
@@ -2659,7 +2658,7 @@ function defineStructShape(s, env) {
   const {
     byteSize,
     align,
-    instance: { members },
+    instance: { members, template },
     hasPointer,
   } = s;
   const descriptors = {};
@@ -2669,6 +2668,8 @@ function defineStructShape(s, env) {
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const cache = new ObjectCache();
+  // comptime fields are stored in the instance template's slots
+  const slots = getComptimeFields(members, template);
   const constructor = s.constructor = function(arg, options = {}) {
     const {
       writable = true,
@@ -2691,7 +2692,9 @@ function defineStructShape(s, env) {
     }
     self[MEMORY] = dv;
     if (hasObject) {
-      self[SLOTS] = {};
+      self[SLOTS] = { ...slots };
+    } else if (slots) {
+      self[SLOTS] = slots;
     }
     Object.defineProperties(self, descriptors);
     if (creating) {
@@ -2749,9 +2752,6 @@ function defineStructShape(s, env) {
         }
         // apply default values unless all properties are initialized
         if (specialFound === 0 && found < keys.length) {
-          // the template wouldn't be ready when shape is being defined, that's why 
-          // we need to retrieve it from the structure here
-          const { instance: { template } } = s;
           if (template) {
             if (template[MEMORY]) {
               this[MEMORY_COPIER](template);
@@ -2785,14 +2785,23 @@ function defineStructShape(s, env) {
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
-    // comptime fields are stored in the instance template's slots
-    [PROTO_SLOTS]: { get: () => s.instance.template?.[SLOTS] },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
   return constructor;
+}
+
+function getComptimeFields(members, template) {
+  const comptimeMembers = members.filter(m => m.type === MemberType.Comptime);
+  if (comptimeMembers.length > 0) {
+    const slots = {};
+    for (const { slot } of comptimeMembers) {
+      slots[slot] = template[SLOTS][slot];
+    }
+    return slots;
+  }
 }
 
 function getChildVivificators(s, writable) {
@@ -2863,7 +2872,7 @@ function defineUnionShape(s, env) {
     type,
     byteSize,
     align,
-    instance: { members },
+    instance: { members, template },
     hasPointer,
   } = s;
   const { runtimeSafety } = env;
@@ -3050,7 +3059,6 @@ function defineUnionShape(s, env) {
             }
           }
         } else if (found === 0) {
-          const { instance: { template } } = s;
           if (template) {
             if (template[MEMORY]) {
               this[MEMORY_COPIER](template);
@@ -4412,7 +4420,7 @@ function getTypeDescriptor(member, env) {
   return {
     get: function getType() {
       // unsupported types will have undefined structure
-      const structure = this[PROTO_SLOTS][slot];
+      const structure = this[SLOTS][slot];
       return structure?.constructor;
     },
     // no setter
@@ -4424,11 +4432,11 @@ function getComptimeDescriptor(member, env) {
   return {
     get: (isValueExpected(structure))
     ? function getValue() {
-      const object = this[PROTO_SLOTS][slot];
+      const object = this[SLOTS][slot];
       return object.$;
     }
     : function getObject() {
-      const object = this[PROTO_SLOTS][slot];
+      const object = this[SLOTS][slot];
       return object;
     },
   };
@@ -4445,11 +4453,11 @@ function getStaticDescriptor(member, env) {
     const { get, set } = getDescriptor(enumMember, env);
     return {
       get: function getEnum() {
-        const object = this[PROTO_SLOTS][slot];
+        const object = this[SLOTS][slot];
         return get.call(object);
       },
       set: function setEnum(arg) {
-        const object = this[PROTO_SLOTS][slot];
+        const object = this[SLOTS][slot];
         return set.call(object, arg);
       },
     };
@@ -4462,11 +4470,11 @@ function getStaticDescriptor(member, env) {
     const { get, set } = getDescriptor(errorMember, env);
     return {
       get: function getError() {
-        const object = this[PROTO_SLOTS][slot];
+        const object = this[SLOTS][slot];
         return get.call(object);
       },
       set: function setError(arg) {
-        const object = this[PROTO_SLOTS][slot];
+        const object = this[SLOTS][slot];
         set.call(object, arg);
       },
     };
@@ -4474,7 +4482,7 @@ function getStaticDescriptor(member, env) {
     return {
       ...getComptimeDescriptor(member),
       set: function setValue(value) {
-        const object = this[PROTO_SLOTS][slot];
+        const object = this[SLOTS][slot];
         object.$ = value;
       },
     };  
@@ -4485,7 +4493,7 @@ function getLiteralDescriptor(member, env) {
   const { slot } = member;
   return {
     get: function getType() {
-      const object = this[PROTO_SLOTS][slot];
+      const object = this[SLOTS][slot];
       return object.string;
     },
     // no setter
@@ -4589,10 +4597,7 @@ function addStaticMembers(s, env) {
   const {
     type,
     constructor,
-    static: {
-      members,
-      template,
-    },
+    static: { members, template },
   } = s;
   if (members.length === 0) {
     return;
@@ -4604,9 +4609,7 @@ function addStaticMembers(s, env) {
   defineProperties(constructor, {
     ...descriptors,
     // static variables are objects stored in the static template's slots
-    // using PROTO_SLOTS instead of SLOTS so we can reuse accessors used 
-    // for comptime fields
-    [PROTO_SLOTS]: { value: template[SLOTS] },
+    [SLOTS]: { value: template[SLOTS] },
   });
   if (type === StructureType.Enumeration) {
     const byIndex = constructor[ENUM_ITEMS];
@@ -4948,6 +4951,10 @@ class Environment {
 
   endStructure(s) {
     this.structures.push(s);
+    this.finalizeShape(s);
+    for (const s of this.structures) {
+      this.acquireDefaultPointers(s);
+    }
   }
 
   acquireStructures(options) {
@@ -4958,10 +4965,9 @@ class Environment {
       this.attachMethod = () => {};
     }
     initializeErrorSets();
+    console.log(`defineStructures [start]`);
     const result = this.defineStructures();
-    for (const s of this.structures) {
-      this.acquireDefaultPointers(s);
-    }
+    console.log(`defineStructures [end]`);
     if (typeof(result) === 'string') {
       throwZigError(result);
     }
@@ -5031,6 +5037,7 @@ class Environment {
   /* COMPTIME-ONLY-END */
 
   finalizeShape(s) {
+    console.log(`finalizeShape: ${s.name}`);
     const f = getStructureFactory(s.type);
     const constructor = f(s, this);
     if (typeof(constructor) === 'function') {
@@ -5116,7 +5123,6 @@ class Environment {
         target[POINTER_VISITOR](callback, { vivificate: true, isMutable });
       }
     };
-    debugger;
     args[POINTER_VISITOR](callback, { vivificate: true });
   }
 
