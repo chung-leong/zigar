@@ -107,19 +107,9 @@ typedef struct {
 typedef struct call_context* call;
 
 typedef struct {
-    union {
-        struct {
-            bool has_pointer: 1;
-        };
-        uint32_t _;
-    };
-} method_attributes;
-
-typedef struct {
     const char* name;
     size_t thunk_id;
     napi_value structure;
-    method_attributes attributes;
 } method;
 
 typedef struct {

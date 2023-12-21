@@ -350,5 +350,31 @@ export function addTests(importModule, options) {
       const object2 = ptr['*'];
       expect(object2).to.equal(object1);
     });
+    it('should allow method calls', async function() {
+      this.timeout(120000);
+      const { Struct } = await importTest('allow-method-calls');
+      const a = new Struct({ number: 123 });
+      const b = new Struct({ number: 456 });
+      const lines1 = await capture(() => {
+        a.print1();
+        b.print1();
+      });
+      expect(lines1).to.eql([
+        'allow-method-calls.Struct{ .number = 123 }',
+        'allow-method-calls.Struct{ .number = 456 }'
+      ]);
+      const lines2 = await capture(() => {
+        a.print2();
+        b.print2();
+      });
+      expect(lines2).to.eql([
+        'allow-method-calls.Struct{ .number = 123 }',
+        'allow-method-calls.Struct{ .number = 456 }'
+      ]);
+      a.add(7);
+      expect(a.number).to.equal(130);
+      b.add(4);
+      expect(b.number).to.equal(460);     
+    });
   })
 }

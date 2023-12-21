@@ -169,16 +169,10 @@ pub const Memory = extern struct {
     attributes: MemoryAttributes = .{},
 };
 
-pub const MethodAttributes = packed struct {
-    has_pointer: bool,
-    _: u31 = 0,
-};
-
 pub const Method = extern struct {
     name: ?[*:0]const u8 = null,
     thunk_id: usize,
     structure: Value,
-    attributes: MethodAttributes,
 };
 
 fn NextIntType(comptime T: type) type {
@@ -1571,7 +1565,7 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
                 const is_static_only = static: {
                     if (f.params.len > 0) {
                         if (f.params[0].type) |ParamT| {
-                            if (ParamT == T) {
+                            if (ParamT == T or ParamT == *const T or ParamT == *T) {
                                 break :static false;
                             }
                         }
@@ -1582,7 +1576,6 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
                     .name = getCString(decl.name),
                     .thunk_id = @intFromPtr(createThunk(@TypeOf(host), function, ArgT)),
                     .structure = arg_structure,
-                    .attributes = .{ .has_pointer = hasPointerArguments(ArgT) },
                 }, is_static_only);
             },
             else => {},
