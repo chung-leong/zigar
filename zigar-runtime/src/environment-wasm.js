@@ -329,7 +329,7 @@ export class WebAssemblyEnvironment extends Environment {
     }
     // restore the previous context if there's one
     this.endContext();
-    if (!this.context) {
+    if (!this.context && this.flushConsole) {
       this.flushConsole();
     }
   }

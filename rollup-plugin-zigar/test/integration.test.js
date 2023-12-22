@@ -1,16 +1,17 @@
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
 import { rollup } from 'rollup'
 import NodeResolve from '@rollup/plugin-node-resolve';
 import Zigar from '../dist/index.js';
-import { addTests } from '../../zigar-compiler/test/integration.js';
+import { addTests } from '../../zigar-compiler/test/integration/index.js';
 import 'mocha-skip-if';
 
 for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]) {
   skip.permanently.if(process.env.npm_lifecycle_event === 'coverage').
   describe(`Integration tests (rollup-plugin-zigar, ${optimize})`, function() {
-    addTests(path => importModule(path, optimize), {
+    addTests(url => importModule(url, optimize), {
       littleEndian: true,
       target: 'WASM-COMPTIME',
       optimize,
@@ -20,7 +21,7 @@ for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]
 
 let currentModule;
 
-async function importModule(path, optimize) {
+async function importModule(url, optimize) {
   if (currentModule) {
     await currentModule.__zigar?.abandon();
     if (global.gc) {
@@ -32,6 +33,7 @@ async function importModule(path, optimize) {
     }
     currentModule = null;
   }
+  const path = fileURLToPath(url);
   const hash = md5(path);
   const jsPath = join(tmpdir(), 'rollup-integration-test', optimize, `${hash}.mjs`);
   const inputOptions = {

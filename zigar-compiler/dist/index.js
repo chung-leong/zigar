@@ -1678,6 +1678,616 @@ function cacheMethod(access, member, cb) {
 
 const methodCache = {};
 
+let currentErrorSets;
+
+function defineErrorSet(s, env) {
+  const {
+    name,
+    byteSize,
+    align,
+    instance: { members: [ member ] },
+  } = s;
+  const byIndex = {};
+  const cache = new ObjectCache();
+  const constructor = s.constructor = function(arg, options = {}) {
+    const {
+      writable = true,
+      fixed = false,
+    } = options;
+    const creating = this instanceof constructor;
+    let self, dv;
+    if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer(s);
+      }
+      self = this;
+      dv = env.allocateMemory(byteSize, align, fixed);
+    } else {
+      if (typeof(arg) === 'number') {
+        return byIndex[arg];  
+      } else if (typeof(arg) === 'string') {
+        for (const err of Object.values(constructor)) {
+          if (err.toString() === arg) {
+            return err;
+          }
+        }
+      } else {
+        dv = getDataView(s, arg, env);
+        if (!dv) {
+          throwInvalidInitializer(s, [ 'string', 'number' ], arg);
+        }
+        if (self = cache.find(dv, writable)) {
+          return self;
+        }
+        self = Object.create(constructor.prototype); 
+      }
+    }
+    self[MEMORY] = dv;
+    if (creating) {
+      set.call(self, arg);
+    }
+    if (writable) {
+      defineProperties(constructor.prototype, {
+        $: { get, set, configurable: true },
+      });
+    }
+    return cache.save(dv, writable, self);
+  };
+  Object.setPrototypeOf(constructor.prototype, Error.prototype);
+  const { get: getIndex } = getDescriptor(member, env);
+  // get the enum descriptor instead of the int/uint descriptor
+  const errorMember = { ...member, structure: s, type: MemberType.Error };
+  const { get, set } = getDescriptor(errorMember, env);
+  const toStringTag = function() { return 'Error' };
+  defineProperties(constructor.prototype, {
+    index: { get: getIndex, configurable: true },
+    delete: { value: getDestructor(env), configurable: true },
+    $: { get, set: throwReadOnly, configurable: true },
+    // ensure that libraries that rely on the string tag for type detection will
+    // correctly identify the object as an error
+    [Symbol.toStringTag]: { get: toStringTag, configurable: true },
+    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
+  });
+  defineProperties(constructor, {
+    [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
+    [ERROR_ITEMS]: { value: byIndex },
+  });
+  return constructor;
+
+}
+function initializeErrorSets() {
+  currentErrorSets = {};
+}
+
+function getCurrentErrorSets() {
+  return currentErrorSets;
+}
+
+const MemberType = {
+  Void: 0,
+  Bool: 1,
+  Int: 2,
+  Uint: 3,
+  Float: 4,
+  EnumerationItem: 5,
+  Error: 6,
+  Object: 7,
+  Type: 8,
+  Comptime: 9,
+  Static: 10,
+  Literal: 11,
+  Null: 12,
+};
+
+function isReadOnly(type) {
+  switch (type) {
+    case MemberType.Type:
+    case MemberType.Comptime:
+    case MemberType.Literal:
+      return true;
+    default:
+      return false;
+  }
+}
+
+const factories$1 = Array(Object.values(MemberType).length);
+
+function useVoid() {
+  factories$1[MemberType.Void] = getVoidDescriptor;
+}
+
+function useBoolEx() {
+  factories$1[MemberType.Bool] = getBoolDescriptorEx;
+}
+
+function useIntEx() {
+  factories$1[MemberType.Int] = getIntDescriptorEx;
+}
+
+function useUintEx() {
+  factories$1[MemberType.Uint] = getUintDescriptorEx;
+}
+
+function useFloatEx() {
+  factories$1[MemberType.Float] = getFloatDescriptorEx;
+}
+
+function useEnumerationItemEx() {
+  factories$1[MemberType.EnumerationItem] = getEnumerationItemDescriptorEx;
+}
+
+function useError() {
+  factories$1[MemberType.Error] = getErrorDescriptor;
+}
+
+function useObject() {
+  factories$1[MemberType.Object] = getObjectDescriptor;
+}
+
+function useType() {
+  factories$1[MemberType.Type] = getTypeDescriptor;
+}
+
+function useComptime() {
+  factories$1[MemberType.Comptime] = getComptimeDescriptor;
+}
+
+function useStatic() {
+  factories$1[MemberType.Static] = getStaticDescriptor;
+}
+
+function useLiteral() {
+  factories$1[MemberType.Literal] = getLiteralDescriptor;
+}
+
+function useNull() {
+  factories$1[MemberType.Null] = getNullDescriptor;
+}
+
+function getMemberFeature(member) {
+  const { type, bitSize } = member;
+  switch (type) {
+    case MemberType.Int:
+      if(isByteAligned(member) && (bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64)) {
+        return 'useInt';
+      } else {
+        return 'useIntEx';
+      }
+    case MemberType.Uint:
+      if(isByteAligned(member) && (bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64)) {
+        return 'useUint';
+      } else {
+        return 'useUintEx';
+      }
+    case MemberType.EnumerationItem:
+      if(isByteAligned(member) && bitSize <= 64) {
+        return 'useEnumerationItem';
+      } else {
+        return 'useEnumerationItemEx';
+      }
+    case MemberType.Error:
+      return 'useError';
+    case MemberType.Float:
+      if (isByteAligned(member) && (bitSize === 32 || bitSize === 64)) {
+        return 'useFloat';
+      } else {
+        return 'useFloatEx';
+      }
+    case MemberType.Bool:
+      if (isByteAligned(member)) {
+        return 'useBool';
+      } else {
+        return 'useBoolEx';
+      }
+    case MemberType.Object:
+      return 'useObject';
+    case MemberType.Void:
+      return 'useVoid';
+    case MemberType.Type:
+      return 'useType';
+    case MemberType.Comptime:
+      return 'useComptime';
+    case MemberType.Static:
+      return 'useStatic';
+    case MemberType.Literal:
+      return 'useLiteral';
+  }
+}
+
+function isByteAligned({ bitOffset, bitSize, byteSize }) {
+  return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
+}
+
+function getDescriptor(member, env) {
+  const f = factories$1[member.type];
+  return { ...f(member, env), configurable: true, enumerable: true };
+}
+
+function getVoidDescriptor(member, env) {
+  const { runtimeSafety } = env;
+  return {
+    get: function() {
+      return undefined;
+    },
+    set: (runtimeSafety)
+    ? function(value) {
+        if (value !== undefined) {
+          throwNotUndefined(member);
+        }
+      }
+    : function() {},
+  }
+}
+
+function getNullDescriptor(member, env) {
+  const { runtimeSafety } = env;
+  return {
+    get: function() {
+      return null;
+    },
+    set: (runtimeSafety)
+    ? function(value) {
+        if (value !== null) {
+          throwNotNull(member);
+        }
+      }
+    : function() {},
+  }
+}
+
+function getBoolDescriptorEx(member, env) {
+  return getDescriptorUsing(member, env, getDataViewBoolAccessorEx)
+}
+
+function getIntDescriptorEx(member, env) {
+  const getDataViewAccessor = addRuntimeCheck(env, getDataViewIntAccessorEx);
+  return getDescriptorUsing(member, env, getDataViewAccessor)
+}
+
+function getUintDescriptorEx(member, env) {
+  const getDataViewAccessor = addRuntimeCheck(env, getDataViewUintAccessorEx);
+  return getDescriptorUsing(member, env, getDataViewAccessor)
+}
+
+function addRuntimeCheck(env, getDataViewAccessor) {
+  return function (access, member) {
+    const {
+      runtimeSafety = true,
+    } = env;
+    const accessor = getDataViewAccessor(access, member);
+    if (runtimeSafety && access === 'set') {
+      const { min, max } = getIntRange(member);
+      return function(offset, value, littleEndian) {
+        if (value < min || value > max) {
+          throwOverflow(member, value);
+        }
+        accessor.call(this, offset, value, littleEndian);
+      };
+    }
+    return accessor;
+  };
+}
+
+function getFloatDescriptorEx(member, env) {
+  return getDescriptorUsing(member, env, getDataViewFloatAccessorEx)
+}
+
+function getEnumerationItemDescriptorEx(member, env) {
+  const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessorEx);
+  return getDescriptorUsing(member, env, getDataViewAccessor) ;
+}
+
+function addEnumerationLookup(getDataViewIntAccessor) {
+  return function(access, member) {
+    // no point in using non-standard int accessor to read enum values unless they aren't byte-aligned
+    const { structure } = member;
+    const [ intMember ] = structure.instance.members;
+    const accessor = getDataViewIntAccessor(access, intMember);
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const { constructor } = structure;
+        const value = accessor.call(this, offset, littleEndian);
+        // the enumeration constructor returns the object for the int value
+        const object = constructor(value);
+        if (!object) {
+          throwInvalidEnum(structure, value);
+        }
+        return object;
+      };
+    } else {
+      return function(offset, value, littleEndian) {
+        const { constructor } = structure;
+        let item;
+        if (value instanceof constructor) {
+          item = value;
+        } else {
+          item = constructor(value);
+        }
+        if (!item) {
+          throwEnumExpected(structure, value);
+        }
+        accessor.call(this, offset, item.valueOf(), littleEndian);
+      };
+    }
+  };
+}
+
+function getErrorDescriptor(member, env) {
+  const getDataViewAccessor = addErrorLookup(getDataViewIntAccessor);
+  return getDescriptorUsing(member, env, getDataViewAccessor) ;
+}
+
+function addErrorLookup(getDataViewIntAccessor) {
+  return function(access, member) {
+    // no point in using non-standard int accessor to read enum values unless they aren't byte-aligned
+    const { structure } = member;
+    const [ intMember ] = structure.instance.members;
+    const acceptAny = structure.name === 'anyerror';
+    const accessor = getDataViewIntAccessor(access, intMember);
+    const allErrors = getCurrentErrorSets();
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const { constructor } = structure;
+        const index = accessor.call(this, offset, littleEndian);
+        if (index) {
+          const object = acceptAny ? allErrors[index] : constructor(index);
+          if (!object) {
+            throwUnknownErrorNumber(structure, index);
+          }
+        return object;
+        }
+      };
+    } else {
+      const Primitive = getPrimitiveClass(intMember);
+      const zero = Primitive(0);
+      return function(offset, value, littleEndian) {
+        const { constructor } = structure;
+        let object;
+        if (value instanceof Error) {
+          if (!(acceptAny ? value.index : value instanceof constructor)) {
+            throwNotInErrorSet(structure);
+          }
+          object = value;
+        } else if (value !== null) {
+          object = acceptAny ? allErrors[value] : constructor(value);
+          if (!object) {
+            throwErrorExpected(structure, value);
+          } 
+        }  
+        accessor.call(this, offset, object?.index ?? zero, littleEndian);
+      };
+    }
+  };
+}
+
+function isValueExpected(structure) {
+  switch (structure.type) {
+    case StructureType.Primitive:
+    case StructureType.ErrorUnion:
+    case StructureType.Optional:
+      return true;
+    default:
+      return false;
+  }
+}
+
+function getObjectDescriptor(member, env) {
+  const { structure, slot } = member;
+  if (slot !== undefined) {
+    return {
+      get: (isValueExpected(structure))
+      ? function getValue() {
+        const object = this[CHILD_VIVIFICATOR][slot].call(this);
+        return object.$;
+      }
+      : function getObject() {
+        const object = this[CHILD_VIVIFICATOR][slot].call(this);
+        return object;
+      },
+      set: function setValue(value) {
+        const object = this[CHILD_VIVIFICATOR][slot].call(this);
+        object.$ = value;
+      },
+    };
+  } else {
+    // array accessors
+    return {
+      get: (isValueExpected(structure))
+      ? function getValue(index) {
+        const object = this[CHILD_VIVIFICATOR](index);
+        return object.$;
+      }
+      : function getObject(index) {
+        const object = this[CHILD_VIVIFICATOR](index);
+        return object;
+      },
+      set: function setValue(index, value) {
+        const object = this[CHILD_VIVIFICATOR](index);
+        object.$ = value;
+      },
+    };
+  }
+}
+
+function getTypeDescriptor(member, env) {
+  const { slot } = member;
+  return {
+    get: function getType() {
+      // unsupported types will have undefined structure
+      const structure = this[SLOTS][slot];
+      return structure?.constructor;
+    },
+    // no setter
+  };
+}
+
+function getComptimeDescriptor(member, env) {
+  const { slot, structure } = member;
+  return {
+    get: (isValueExpected(structure))
+    ? function getValue() {
+      const object = this[SLOTS][slot];
+      return object.$;
+    }
+    : function getObject() {
+      const object = this[SLOTS][slot];
+      return object;
+    },
+  };
+}
+
+function getStaticDescriptor(member, env) {
+  const { slot, structure } = member;
+  if (structure.type === StructureType.Enumeration) {
+    // enum needs to be dealt with separately, since the object reference changes
+    const { 
+      instance: { members: [ member ] },
+    } = structure;
+    const enumMember = { ...member, structure, type: MemberType.EnumerationItem };
+    const { get, set } = getDescriptor(enumMember, env);
+    return {
+      get: function getEnum() {
+        const object = this[SLOTS][slot];
+        return get.call(object);
+      },
+      set: function setEnum(arg) {
+        const object = this[SLOTS][slot];
+        return set.call(object, arg);
+      },
+    };
+  } else if (structure.type === StructureType.ErrorSet) {
+    // ditto for error set
+    const { 
+      instance: { members: [ member ] },
+    } = structure;
+    const errorMember = { ...member, structure, type: MemberType.Error };
+    const { get, set } = getDescriptor(errorMember, env);
+    return {
+      get: function getError() {
+        const object = this[SLOTS][slot];
+        return get.call(object);
+      },
+      set: function setError(arg) {
+        const object = this[SLOTS][slot];
+        set.call(object, arg);
+      },
+    };
+  } else {
+    return {
+      ...getComptimeDescriptor(member),
+      set: function setValue(value) {
+        const object = this[SLOTS][slot];
+        object.$ = value;
+      },
+    };  
+  }
+}
+
+function getLiteralDescriptor(member, env) {
+  const { slot } = member;
+  return {
+    get: function getType() {
+      const object = this[SLOTS][slot];
+      return object.string;
+    },
+    // no setter
+  };
+}
+
+function getDescriptorUsing(member, env, getDataViewAccessor) {
+  const {
+    littleEndian = true,
+  } = env;
+  const { bitOffset, byteSize } = member;
+  const getter = getDataViewAccessor('get', member);
+  const setter = getDataViewAccessor('set', member);
+  if (bitOffset !== undefined) {
+    const offset = bitOffset >> 3;
+    return {
+      get: function getValue() {
+        /* WASM-ONLY */
+        try {
+        /* WASM-ONLY-END*/
+          return getter.call(this[MEMORY], offset, littleEndian);
+        /* WASM-ONLY */
+        } catch (err) {
+          if (err instanceof TypeError && restoreMemory.call(this)) {
+            return getter.call(this[MEMORY], offset, littleEndian);
+          } else {
+            throw err;
+          }
+        }
+        /* WASM-ONLY-END*/
+      },
+      set: function setValue(value) {
+        /* WASM-ONLY */
+        try {
+        /* WASM-ONLY-END*/
+        return setter.call(this[MEMORY], offset, value, littleEndian);
+        /* WASM-ONLY */
+        } catch (err) {
+          if (err instanceof TypeError && restoreMemory.call(this)) {
+            return setter.call(this[MEMORY], offset, value, littleEndian);
+          } else {
+            throw err;
+          }
+        }
+        /* WASM-ONLY-END*/
+      }
+    }
+  } else {
+    return {
+      get: function getElement(index) {
+        try {
+          return getter.call(this[MEMORY], index * byteSize, littleEndian);
+        } catch (err) {
+          /* WASM-ONLY */
+          if (err instanceof TypeError && restoreMemory.call(this)) {
+            return getter.call(this[MEMORY], index * byteSize, littleEndian);
+          } else {
+          /* WASM-ONLY-END */
+            rethrowRangeError(member, index, err);
+          /* WASM-ONLY */
+          }
+          /* WASM-ONLY-END */
+        }
+      },
+      set: function setElement(index, value) {
+        /* WASM-ONLY */
+        try {
+        /* WASM-ONLY-END */
+          return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
+        /* WASM-ONLY */
+        } catch (err) {
+          if (err instanceof TypeError && restoreMemory.call(this)) {
+            return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
+          } else {
+            rethrowRangeError(member, index, err);
+          }
+        }
+        /* WASM-ONLY-END */
+      },
+    }
+  }
+}
+
+function useAllMemberTypes() {
+  useVoid();
+  useNull();
+  useBoolEx();
+  useIntEx();
+  useUintEx();
+  useFloatEx();
+  useEnumerationItemEx();
+  useError();
+  useObject();
+  useType();
+  useComptime();
+  useStatic();
+  useLiteral();
+}
+
 const decoders = {};
 const encoders = {};
 
@@ -3204,92 +3814,6 @@ function defineErrorUnion(s, env) {
   return constructor;
 }
 
-let currentErrorSets;
-
-function defineErrorSet(s, env) {
-  const {
-    name,
-    byteSize,
-    align,
-    instance: { members: [ member ] },
-  } = s;
-  const byIndex = {};
-  const cache = new ObjectCache();
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = this;
-      dv = env.allocateMemory(byteSize, align, fixed);
-    } else {
-      if (typeof(arg) === 'number') {
-        return byIndex[arg];  
-      } else if (typeof(arg) === 'string') {
-        for (const err of Object.values(constructor)) {
-          if (err.toString() === arg) {
-            return err;
-          }
-        }
-      } else {
-        dv = getDataView(s, arg, env);
-        if (!dv) {
-          throwInvalidInitializer(s, [ 'string', 'number' ], arg);
-        }
-        if (self = cache.find(dv, writable)) {
-          return self;
-        }
-        self = Object.create(constructor.prototype); 
-      }
-    }
-    self[MEMORY] = dv;
-    if (creating) {
-      set.call(self, arg);
-    }
-    if (writable) {
-      defineProperties(constructor.prototype, {
-        $: { get, set, configurable: true },
-      });
-    }
-    return cache.save(dv, writable, self);
-  };
-  Object.setPrototypeOf(constructor.prototype, Error.prototype);
-  const { get: getIndex } = getDescriptor(member, env);
-  // get the enum descriptor instead of the int/uint descriptor
-  const errorMember = { ...member, structure: s, type: MemberType.Error };
-  const { get, set } = getDescriptor(errorMember, env);
-  const toStringTag = function() { return 'Error' };
-  defineProperties(constructor.prototype, {
-    index: { get: getIndex, configurable: true },
-    delete: { value: getDestructor(env), configurable: true },
-    $: { get, set: throwReadOnly, configurable: true },
-    // ensure that libraries that rely on the string tag for type detection will
-    // correctly identify the object as an error
-    [Symbol.toStringTag]: { get: toStringTag, configurable: true },
-    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-  });
-  defineProperties(constructor, {
-    [ALIGN]: { value: align },
-    [SIZE]: { value: byteSize },
-    [ERROR_ITEMS]: { value: byIndex },
-  });
-  return constructor;
-
-}
-function initializeErrorSets() {
-  currentErrorSets = {};
-}
-
-function getCurrentErrorSets() {
-  return currentErrorSets;
-}
-
 function defineEnumerationShape(s, env) {
   const {
     byteSize,
@@ -3914,66 +4438,66 @@ const StructureType = {
   Function: 15,
 };
 
-const factories$1 = Array(Object.values(StructureType).length);
+const factories = Array(Object.values(StructureType).length);
 
 function usePrimitive() {
-  factories$1[StructureType.Primitive] = definePrimitive;
+  factories[StructureType.Primitive] = definePrimitive;
 }
 
 function useArray() {
-  factories$1[StructureType.Array] = defineArray;
+  factories[StructureType.Array] = defineArray;
 }
 
 function useStruct() {
-  factories$1[StructureType.Struct] = defineStructShape;
+  factories[StructureType.Struct] = defineStructShape;
 }
 
 function useExternUnion() {
-  factories$1[StructureType.ExternUnion] = defineUnionShape;
+  factories[StructureType.ExternUnion] = defineUnionShape;
 }
 
 function useBareUnion() {
-  factories$1[StructureType.BareUnion] = defineUnionShape;
+  factories[StructureType.BareUnion] = defineUnionShape;
 }
 
 function useTaggedUnion() {
-  factories$1[StructureType.TaggedUnion] = defineUnionShape;
+  factories[StructureType.TaggedUnion] = defineUnionShape;
 }
 
 function useErrorUnion() {
-  factories$1[StructureType.ErrorUnion] = defineErrorUnion;
+  factories[StructureType.ErrorUnion] = defineErrorUnion;
 }
 
 function useErrorSet() {
-  factories$1[StructureType.ErrorSet] = defineErrorSet;
+  factories[StructureType.ErrorSet] = defineErrorSet;
 }
 
 function useEnumeration() {
-  factories$1[StructureType.Enumeration] = defineEnumerationShape;
+  factories[StructureType.Enumeration] = defineEnumerationShape;
 }
 
 function useOptional() {
-  factories$1[StructureType.Optional] = defineOptional;
+  factories[StructureType.Optional] = defineOptional;
 }
 
 function usePointer() {
-  factories$1[StructureType.Pointer] = definePointer;
+  factories[StructureType.Pointer] = definePointer;
 }
 
 function useSlice() {
-  factories$1[StructureType.Slice] = defineSlice;
+  factories[StructureType.Slice] = defineSlice;
 }
 
 function useVector() {
-  factories$1[StructureType.Vector] = defineVector;
+  factories[StructureType.Vector] = defineVector;
 }
 
 function useOpaque() {
-  factories$1[StructureType.Opaque] = defineStructShape;
+  factories[StructureType.Opaque] = defineStructShape;
 }
 
 function useArgStruct() {
-  factories$1[StructureType.ArgStruct] = defineArgStruct;
+  factories[StructureType.ArgStruct] = defineArgStruct;
 }
 
 function getStructureName(s, full = false) {
@@ -3986,7 +4510,7 @@ function getStructureName(s, full = false) {
 }
 
 function getStructureFactory(type) {
-  const f = factories$1[type];
+  const f = factories[type];
   return f;
 }
 
@@ -4065,530 +4589,6 @@ class ObjectCache {
     map.set(dv, object);
     return object;
   }
-}
-
-const MemberType = {
-  Void: 0,
-  Bool: 1,
-  Int: 2,
-  Uint: 3,
-  Float: 4,
-  EnumerationItem: 5,
-  Error: 6,
-  Object: 7,
-  Type: 8,
-  Comptime: 9,
-  Static: 10,
-  Literal: 11,
-  Null: 12,
-};
-
-function isReadOnly(type) {
-  switch (type) {
-    case MemberType.Type:
-    case MemberType.Comptime:
-    case MemberType.Literal:
-      return true;
-    default:
-      return false;
-  }
-}
-
-const factories = Array(Object.values(MemberType).length);
-
-function useVoid() {
-  factories[MemberType.Void] = getVoidDescriptor;
-}
-
-function useBoolEx() {
-  factories[MemberType.Bool] = getBoolDescriptorEx;
-}
-
-function useIntEx() {
-  factories[MemberType.Int] = getIntDescriptorEx;
-}
-
-function useUintEx() {
-  factories[MemberType.Uint] = getUintDescriptorEx;
-}
-
-function useFloatEx() {
-  factories[MemberType.Float] = getFloatDescriptorEx;
-}
-
-function useEnumerationItemEx() {
-  factories[MemberType.EnumerationItem] = getEnumerationItemDescriptorEx;
-}
-
-function useError() {
-  factories[MemberType.Error] = getErrorDescriptor;
-}
-
-function useObject() {
-  factories[MemberType.Object] = getObjectDescriptor;
-}
-
-function useType() {
-  factories[MemberType.Type] = getTypeDescriptor;
-}
-
-function useComptime() {
-  factories[MemberType.Comptime] = getComptimeDescriptor;
-}
-
-function useStatic() {
-  factories[MemberType.Static] = getStaticDescriptor;
-}
-
-function useLiteral() {
-  factories[MemberType.Literal] = getLiteralDescriptor;
-}
-
-function useNull() {
-  factories[MemberType.Null] = getNullDescriptor;
-}
-
-function getMemberFeature(member) {
-  const { type, bitSize } = member;
-  switch (type) {
-    case MemberType.Int:
-      if(isByteAligned(member) && (bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64)) {
-        return 'useInt';
-      } else {
-        return 'useIntEx';
-      }
-    case MemberType.Uint:
-      if(isByteAligned(member) && (bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64)) {
-        return 'useUint';
-      } else {
-        return 'useUintEx';
-      }
-    case MemberType.EnumerationItem:
-      if(isByteAligned(member) && bitSize <= 64) {
-        return 'useEnumerationItem';
-      } else {
-        return 'useEnumerationItemEx';
-      }
-    case MemberType.Error:
-      return 'useError';
-    case MemberType.Float:
-      if (isByteAligned(member) && (bitSize === 32 || bitSize === 64)) {
-        return 'useFloat';
-      } else {
-        return 'useFloatEx';
-      }
-    case MemberType.Bool:
-      if (isByteAligned(member)) {
-        return 'useBool';
-      } else {
-        return 'useBoolEx';
-      }
-    case MemberType.Object:
-      return 'useObject';
-    case MemberType.Void:
-      return 'useVoid';
-    case MemberType.Type:
-      return 'useType';
-    case MemberType.Comptime:
-      return 'useComptime';
-    case MemberType.Comptime:
-      return 'useStatic';
-    case MemberType.Literal:
-      return 'useLiteral';
-  }
-}
-
-function isByteAligned({ bitOffset, bitSize, byteSize }) {
-  return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
-}
-
-function getDescriptor(member, env) {
-  const f = factories[member.type];
-  return { ...f(member, env), configurable: true, enumerable: true };
-}
-
-function getVoidDescriptor(member, env) {
-  const { runtimeSafety } = env;
-  return {
-    get: function() {
-      return undefined;
-    },
-    set: (runtimeSafety)
-    ? function(value) {
-        if (value !== undefined) {
-          throwNotUndefined(member);
-        }
-      }
-    : function() {},
-  }
-}
-
-function getNullDescriptor(member, env) {
-  const { runtimeSafety } = env;
-  return {
-    get: function() {
-      return null;
-    },
-    set: (runtimeSafety)
-    ? function(value) {
-        if (value !== null) {
-          throwNotNull(member);
-        }
-      }
-    : function() {},
-  }
-}
-
-function getBoolDescriptorEx(member, env) {
-  return getDescriptorUsing(member, env, getDataViewBoolAccessorEx)
-}
-
-function getIntDescriptorEx(member, env) {
-  const getDataViewAccessor = addRuntimeCheck(env, getDataViewIntAccessorEx);
-  return getDescriptorUsing(member, env, getDataViewAccessor)
-}
-
-function getUintDescriptorEx(member, env) {
-  const getDataViewAccessor = addRuntimeCheck(env, getDataViewUintAccessorEx);
-  return getDescriptorUsing(member, env, getDataViewAccessor)
-}
-
-function addRuntimeCheck(env, getDataViewAccessor) {
-  return function (access, member) {
-    const {
-      runtimeSafety = true,
-    } = env;
-    const accessor = getDataViewAccessor(access, member);
-    if (runtimeSafety && access === 'set') {
-      const { min, max } = getIntRange(member);
-      return function(offset, value, littleEndian) {
-        if (value < min || value > max) {
-          throwOverflow(member, value);
-        }
-        accessor.call(this, offset, value, littleEndian);
-      };
-    }
-    return accessor;
-  };
-}
-
-function getFloatDescriptorEx(member, env) {
-  return getDescriptorUsing(member, env, getDataViewFloatAccessorEx)
-}
-
-function getEnumerationItemDescriptorEx(member, env) {
-  const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessorEx);
-  return getDescriptorUsing(member, env, getDataViewAccessor) ;
-}
-
-function addEnumerationLookup(getDataViewIntAccessor) {
-  return function(access, member) {
-    // no point in using non-standard int accessor to read enum values unless they aren't byte-aligned
-    const { structure } = member;
-    const [ intMember ] = structure.instance.members;
-    const accessor = getDataViewIntAccessor(access, intMember);
-    if (access === 'get') {
-      return function(offset, littleEndian) {
-        const { constructor } = structure;
-        const value = accessor.call(this, offset, littleEndian);
-        // the enumeration constructor returns the object for the int value
-        const object = constructor(value);
-        if (!object) {
-          throwInvalidEnum(structure, value);
-        }
-        return object;
-      };
-    } else {
-      return function(offset, value, littleEndian) {
-        const { constructor } = structure;
-        let item;
-        if (value instanceof constructor) {
-          item = value;
-        } else {
-          item = constructor(value);
-        }
-        if (!item) {
-          throwEnumExpected(structure, value);
-        }
-        accessor.call(this, offset, item.valueOf(), littleEndian);
-      };
-    }
-  };
-}
-
-function getErrorDescriptor(member, env) {
-  const getDataViewAccessor = addErrorLookup(getDataViewIntAccessor);
-  return getDescriptorUsing(member, env, getDataViewAccessor) ;
-}
-
-function addErrorLookup(getDataViewIntAccessor) {
-  return function(access, member) {
-    // no point in using non-standard int accessor to read enum values unless they aren't byte-aligned
-    const { structure } = member;
-    const [ intMember ] = structure.instance.members;
-    const acceptAny = structure.name === 'anyerror';
-    const accessor = getDataViewIntAccessor(access, intMember);
-    const allErrors = getCurrentErrorSets();
-    if (access === 'get') {
-      return function(offset, littleEndian) {
-        const { constructor } = structure;
-        const index = accessor.call(this, offset, littleEndian);
-        if (index) {
-          const object = acceptAny ? allErrors[index] : constructor(index);
-          if (!object) {
-            throwUnknownErrorNumber(structure, index);
-          }
-        return object;
-        }
-      };
-    } else {
-      const Primitive = getPrimitiveClass(intMember);
-      const zero = Primitive(0);
-      return function(offset, value, littleEndian) {
-        const { constructor } = structure;
-        let object;
-        if (value instanceof Error) {
-          if (!(acceptAny ? value.index : value instanceof constructor)) {
-            throwNotInErrorSet(structure);
-          }
-          object = value;
-        } else if (value !== null) {
-          object = acceptAny ? allErrors[value] : constructor(value);
-          if (!object) {
-            throwErrorExpected(structure, value);
-          } 
-        }  
-        accessor.call(this, offset, object?.index ?? zero, littleEndian);
-      };
-    }
-  };
-}
-
-function isValueExpected(structure) {
-  switch (structure.type) {
-    case StructureType.Primitive:
-    case StructureType.ErrorUnion:
-    case StructureType.Optional:
-      return true;
-    default:
-      return false;
-  }
-}
-
-function getObjectDescriptor(member, env) {
-  const { structure, slot } = member;
-  if (slot !== undefined) {
-    return {
-      get: (isValueExpected(structure))
-      ? function getValue() {
-        const object = this[CHILD_VIVIFICATOR][slot].call(this);
-        return object.$;
-      }
-      : function getObject() {
-        const object = this[CHILD_VIVIFICATOR][slot].call(this);
-        return object;
-      },
-      set: function setValue(value) {
-        const object = this[CHILD_VIVIFICATOR][slot].call(this);
-        object.$ = value;
-      },
-    };
-  } else {
-    // array accessors
-    return {
-      get: (isValueExpected(structure))
-      ? function getValue(index) {
-        const object = this[CHILD_VIVIFICATOR](index);
-        return object.$;
-      }
-      : function getObject(index) {
-        const object = this[CHILD_VIVIFICATOR](index);
-        return object;
-      },
-      set: function setValue(index, value) {
-        const object = this[CHILD_VIVIFICATOR](index);
-        object.$ = value;
-      },
-    };
-  }
-}
-
-function getTypeDescriptor(member, env) {
-  const { slot } = member;
-  return {
-    get: function getType() {
-      // unsupported types will have undefined structure
-      const structure = this[SLOTS][slot];
-      return structure?.constructor;
-    },
-    // no setter
-  };
-}
-
-function getComptimeDescriptor(member, env) {
-  const { slot, structure } = member;
-  return {
-    get: (isValueExpected(structure))
-    ? function getValue() {
-      const object = this[SLOTS][slot];
-      return object.$;
-    }
-    : function getObject() {
-      const object = this[SLOTS][slot];
-      return object;
-    },
-  };
-}
-
-function getStaticDescriptor(member, env) {
-  const { slot, structure } = member;
-  if (structure.type === StructureType.Enumeration) {
-    // enum needs to be dealt with separately, since the object reference changes
-    const { 
-      instance: { members: [ member ] },
-    } = structure;
-    const enumMember = { ...member, structure, type: MemberType.EnumerationItem };
-    const { get, set } = getDescriptor(enumMember, env);
-    return {
-      get: function getEnum() {
-        const object = this[SLOTS][slot];
-        return get.call(object);
-      },
-      set: function setEnum(arg) {
-        const object = this[SLOTS][slot];
-        return set.call(object, arg);
-      },
-    };
-  } else if (structure.type === StructureType.ErrorSet) {
-    // ditto for error set
-    const { 
-      instance: { members: [ member ] },
-    } = structure;
-    const errorMember = { ...member, structure, type: MemberType.Error };
-    const { get, set } = getDescriptor(errorMember, env);
-    return {
-      get: function getError() {
-        const object = this[SLOTS][slot];
-        return get.call(object);
-      },
-      set: function setError(arg) {
-        const object = this[SLOTS][slot];
-        set.call(object, arg);
-      },
-    };
-  } else {
-    return {
-      ...getComptimeDescriptor(member),
-      set: function setValue(value) {
-        const object = this[SLOTS][slot];
-        object.$ = value;
-      },
-    };  
-  }
-}
-
-function getLiteralDescriptor(member, env) {
-  const { slot } = member;
-  return {
-    get: function getType() {
-      const object = this[SLOTS][slot];
-      return object.string;
-    },
-    // no setter
-  };
-}
-
-function getDescriptorUsing(member, env, getDataViewAccessor) {
-  const {
-    littleEndian = true,
-  } = env;
-  const { bitOffset, byteSize } = member;
-  const getter = getDataViewAccessor('get', member);
-  const setter = getDataViewAccessor('set', member);
-  if (bitOffset !== undefined) {
-    const offset = bitOffset >> 3;
-    return {
-      get: function getValue() {
-        /* WASM-ONLY */
-        try {
-        /* WASM-ONLY-END*/
-          return getter.call(this[MEMORY], offset, littleEndian);
-        /* WASM-ONLY */
-        } catch (err) {
-          if (err instanceof TypeError && restoreMemory.call(this)) {
-            return getter.call(this[MEMORY], offset, littleEndian);
-          } else {
-            throw err;
-          }
-        }
-        /* WASM-ONLY-END*/
-      },
-      set: function setValue(value) {
-        /* WASM-ONLY */
-        try {
-        /* WASM-ONLY-END*/
-        return setter.call(this[MEMORY], offset, value, littleEndian);
-        /* WASM-ONLY */
-        } catch (err) {
-          if (err instanceof TypeError && restoreMemory.call(this)) {
-            return setter.call(this[MEMORY], offset, value, littleEndian);
-          } else {
-            throw err;
-          }
-        }
-        /* WASM-ONLY-END*/
-      }
-    }
-  } else {
-    return {
-      get: function getElement(index) {
-        try {
-          return getter.call(this[MEMORY], index * byteSize, littleEndian);
-        } catch (err) {
-          /* WASM-ONLY */
-          if (err instanceof TypeError && restoreMemory.call(this)) {
-            return getter.call(this[MEMORY], index * byteSize, littleEndian);
-          } else {
-          /* WASM-ONLY-END */
-            rethrowRangeError(member, index, err);
-          /* WASM-ONLY */
-          }
-          /* WASM-ONLY-END */
-        }
-      },
-      set: function setElement(index, value) {
-        /* WASM-ONLY */
-        try {
-        /* WASM-ONLY-END */
-          return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
-        /* WASM-ONLY */
-        } catch (err) {
-          if (err instanceof TypeError && restoreMemory.call(this)) {
-            return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
-          } else {
-            rethrowRangeError(member, index, err);
-          }
-        }
-        /* WASM-ONLY-END */
-      },
-    }
-  }
-}
-
-function useAllMemberTypes() {
-  useVoid();
-  useNull();
-  useBoolEx();
-  useIntEx();
-  useUintEx();
-  useFloatEx();
-  useEnumerationItemEx();
-  useError();
-  useObject();
-  useType();
-  useComptime();
-  useStatic();
-  useLiteral();
 }
 
 function addStaticMembers(s, env) {
@@ -4949,7 +4949,7 @@ class Environment {
 
   endStructure(s) {
     this.structures.push(s);
-    this.finalizeShape(s);
+    this.finalizeStructure(s);
     for (const s of this.structures) {
       this.acquireDefaultPointers(s);
     }
@@ -4963,9 +4963,7 @@ class Environment {
       this.attachMethod = () => {};
     }
     initializeErrorSets();
-    console.log(`defineStructures [start]`);
     const result = this.defineStructures();
-    console.log(`defineStructures [end]`);
     if (typeof(result) === 'string') {
       throwZigError(result);
     }
@@ -5005,7 +5003,11 @@ class Environment {
       if (object[SLOTS]) {
         const slots = object[SLOTS];
         for (const child of Object.values(object[SLOTS])) {
-          find(child);
+          // find() can throw when a bare union contains pointers
+          try {
+            find(child);         
+          } catch (err) {
+          }
         }
         object.slots = slots;
       }
@@ -5035,7 +5037,6 @@ class Environment {
   /* COMPTIME-ONLY-END */
 
   finalizeShape(s) {
-    console.log(`finalizeShape: ${s.name}`);
     const f = getStructureFactory(s.type);
     const constructor = f(s, this);
     if (typeof(constructor) === 'function') {
@@ -5493,7 +5494,7 @@ class WebAssemblyEnvironment extends Environment {
     }
     // restore the previous context if there's one
     this.endContext();
-    if (!this.context) {
+    if (!this.context && this.flushConsole) {
       this.flushConsole();
     }
   }
@@ -5515,8 +5516,6 @@ class WebAssemblyEnvironment extends Environment {
   }
   /* RUNTIME-ONLY */
 }
-
-/* COMPTIME-ONLY */
 
 useAllMemberTypes();
 useAllStructureTypes();

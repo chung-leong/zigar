@@ -75,11 +75,11 @@ pub fn freeExternMemory(bytes: [*]u8, len: usize, alignment: u16) void {
 
 pub fn allocateShadowMemory(call: Call, len: usize, alignment: u16) ?Value {
     if (len == 0) {
-        return _createView(null, len, false);
+        return _captureView(null, len, false);
     }
     const ptr_align = getPtrAlign(alignment);
     if (call.allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
-        return _createView(bytes, len, false);
+        return _captureView(bytes, len, false);
     } else {
         return null;
     }
@@ -249,6 +249,10 @@ pub const Host = struct {
             try insertProperty(def, "structure", s);
         }
         _attachMember(structure, def, is_static);
+    }
+
+    pub fn finalizeShape(_: Host, structure: Value) !void {
+        _finalizeShape(structure);
     }
 
     pub fn attachMethod(_: Host, structure: Value, method: Method, is_static_only: bool) !void {

@@ -1,7 +1,7 @@
+import { WebAssemblyEnvironment } from './environment-wasm.js';
 /* COMPTIME-ONLY */
 import { useAllMemberTypes } from './member.js';
 import { useAllStructureTypes } from './structure.js';
-import { WebAssemblyEnvironment } from './environment-wasm.js';
 
 useAllMemberTypes();
 useAllStructureTypes();
@@ -45,6 +45,7 @@ export {
   useFloatEx,
   useEnumerationItem,
   useEnumerationItemEx,
+  useError,
   useObject,
   useType,
   useComptime,

@@ -9,7 +9,7 @@ const loader = resolve('../dist/index.js');
 
 describe('Loader', function() {
   describe('Options', function() {
-    const path = resolve('../../zigar-compiler/test/zig-samples/console.zig');
+    const path = resolve('../../zigar-compiler/test/zig-samples/basic/console.zig');
     it('should generate code with embedded WASM by default', async function() {
       this.timeout(60000);
       const code = await transpile(path, { embedWASM: true });

@@ -71,7 +71,7 @@ describe('Compilation', function() {
   })
   describe('loadFile', function() {
     it('should load a file', async function() {
-      const { pathname } = new URL('./zig-samples/console.zig', import.meta.url);
+      const { pathname } = new URL('./zig-samples/basic/console.zig', import.meta.url);
       const text = await loadFile(pathname, '');
       expect(text.length).to.be.above(0);
     })
@@ -154,14 +154,14 @@ describe('Compilation', function() {
   describe('compile', function() {
     it('should compile zig source code for C addon', async function() {
       this.timeout(60000);
-      const { pathname } = new URL('./zig-samples/integers.zig', import.meta.url);
+      const { pathname } = new URL('./zig-samples/basic/integers.zig', import.meta.url);
       const libpath = await compile(pathname);
       expect(libpath).to.be.a('string');
       expect(libpath).to.contain('libintegers');
     })
     it('should compile code for WASM32', async function() {
       this.timeout(60000);
-      const { pathname } = new URL('./zig-samples/integers.zig', import.meta.url);
+      const { pathname } = new URL('./zig-samples/basic/integers.zig', import.meta.url);
       await forceChange(pathname, async () => {
         const libpath = await compile(pathname, { arch: 'wasm32', platform: 'freestanding' });
         expect(libpath).to.be.a('string');
@@ -170,7 +170,7 @@ describe('Compilation', function() {
     })
     it('should compile optimized code', async function() {
       this.timeout(60000);
-      const { pathname } = new URL('./zig-samples/integers.zig', import.meta.url);
+      const { pathname } = new URL('./zig-samples/basic/integers.zig', import.meta.url);
       const libpath1 = await compile(pathname, { arch: 'wasm32', platform: 'freestanding' });
       const { size: before } = await stat(libpath1);
       const libpath2 = await compile(pathname, { arch: 'wasm32', platform: 'freestanding', optimize: 'ReleaseSmall' });
@@ -188,7 +188,7 @@ describe('Compilation', function() {
     })
     it('should work correctly when the same file is compiled at the same time', async function() {
       this.timeout(60000);
-      const { pathname } = new URL('./zig-samples/integers.zig', import.meta.url);
+      const { pathname } = new URL('./zig-samples/basic/integers.zig', import.meta.url);
       await forceChange(pathname, async () => {
         const promise1 = compile(pathname);
         const promise2 = compile(pathname);
@@ -210,7 +210,7 @@ describe('Compilation', function() {
     })
     it('should return library path when the file exists and buildDir is empty', async function() {
       this.timeout(60000);
-      const { pathname } = new URL('./zig-samples/integers.zig', import.meta.url);
+      const { pathname } = new URL('./zig-samples/basic/integers.zig', import.meta.url);
       const libpath = await compile(pathname);
       const libpath2 = await compile(pathname, { buildDir: '' });
       expect(libpath2).to.equal(libpath);
@@ -254,13 +254,13 @@ describe('Compilation', function() {
     })
     it('should throw when code cannot be compiled', async function() {
       this.timeout(60000);
-      const { pathname } = new URL('./zig-samples/invalid-syntax.zig', import.meta.url);
+      const { pathname } = new URL('./zig-samples/basic/invalid-syntax.zig', import.meta.url);
       await expect(compile(pathname)).to.eventually.be.rejectedWith(Error)
         .with.property('message').that.contains(`expected ';' after declaration`);
     })
     it('should remove build folder when the clean option is given', async function() {
       this.timeout(60000);
-      const { pathname } = new URL('./zig-samples/invalid-syntax.zig', import.meta.url);
+      const { pathname } = new URL('./zig-samples/basic/invalid-syntax.zig', import.meta.url);
       await expect(compile(pathname, { clean: true })).to.eventually.be.rejectedWith(Error);
       const buildFolder = await getBuildFolder(pathname, os.platform(), os.arch());
       const info = await findDirectory(buildFolder);

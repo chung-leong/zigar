@@ -449,11 +449,9 @@ describe('Code generation', function() {
         static: {
           members: [
             {
-              type: MemberType.Object,
+              type: MemberType.Comptime,
               name: "panda",
-              bitOffset: 0,
-              bitSize: 32,
-              byteSize: 4,
+              slot: 0,
               structure: ptrStructure,
             }
           ],
@@ -466,9 +464,9 @@ describe('Code generation', function() {
       expect(code).to.contain('useStruct()');
       expect(code).to.contain('usePointer()');
       // find export section
-      const m = /export \{([\s\S]*)\}/.exec(code);
+      const m = /export const \{([\s\S]*)\} = constructor/.exec(code);
       expect(m).to.not.be.null;
-      expect(m[1]).to.contain('panda,');
+      expect(m[1]).to.contain('panda');
     })
     it('should generate code for exporting a function', function() {
       const argStructure = {
@@ -521,7 +519,9 @@ describe('Code generation', function() {
       const { code } = generateCodeForWASM([ argStructure, structure ], { loadWASM: `loadWASM()`, topLevelAwait: true });
       expect(code).to.contain('package');
       expect(code).to.contain('useStruct()');
-      expect(code).to.contain('c.hello as hello');
+      const m = /export const \{([\s\S]*)\} = constructor/.exec(code);
+      expect(m).to.not.be.null;
+      expect(m[1]).to.contain('hello');
       expect(code).to.contain('await __zigar.init()');
       expect(code).to.contain('env.linkVariables(false)');
       const { code: codeAlt } = generateCodeForWASM([ argStructure, structure ], { loadWASM: `loadWASM()`, topLevelAwait: false });

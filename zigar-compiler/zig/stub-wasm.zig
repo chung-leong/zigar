@@ -7,12 +7,12 @@ const Call = exporter.Call;
 
 pub const os = exporter.getOS();
 
-export fn allocateFixedMemory(len: usize, alignment: u16) ?Value {
-    return exporter.allocateFixedMemory(len, alignment);
+export fn allocateExternMemory(len: usize, alignment: u16) ?[*]u8 {
+    return exporter.allocateExternMemory(len, alignment);
 }
 
-export fn freeFixedMemory(bytes: [*]u8, len: usize, alignment: u16) void {
-    exporter.freeFixedMemory(bytes, len, alignment);
+export fn freeExternMemory(bytes: [*]u8, len: usize, alignment: u16) void {
+    exporter.freeExternMemory(bytes, len, alignment);
 }
 
 export fn allocateShadowMemory(call: Call, len: usize, alignment: u16) ?Value {

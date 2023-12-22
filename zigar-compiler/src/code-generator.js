@@ -360,7 +360,7 @@ function getExports(structures) {
     // only read-only properties are exportable
     if (isReadOnly(member.type) && legal.test(member.name)) {
       exportables.push(member.name);
-    }
+    }    
   }
   return [ 'default', '__zigar', ...exportables ];
 }

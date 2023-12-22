@@ -8,7 +8,7 @@ import { transpile } from '../src/transpiler.js';
 
 describe('Transpilation', function() {
   const getSamplePath = (name) => {
-    const url = new URL(`./zig-samples/${name}.zig`, import.meta.url);
+    const url = new URL(`./zig-samples/basic/${name}.zig`, import.meta.url);
     return fileURLToPath(url);
   };
   describe('transpile', function() {

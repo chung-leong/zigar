@@ -169,7 +169,7 @@ export function getMemberFeature(member) {
       return 'useType';
     case MemberType.Comptime:
       return 'useComptime';
-    case MemberType.Comptime:
+    case MemberType.Static:
       return 'useStatic';
     case MemberType.Literal:
       return 'useLiteral';
