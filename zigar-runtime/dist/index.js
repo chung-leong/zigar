@@ -5092,6 +5092,9 @@ class WebAssemblyEnvironment extends Environment {
 
   inFixedMemory(object) {
     // reconnect any detached buffer before checking
+    if (!this.memory) {
+      return false;
+    }
     restoreMemory.call(object);
     return object[MEMORY].buffer === this.memory.buffer;
   }
@@ -5238,7 +5241,7 @@ class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  async loadModule(source) {
+  loadModule(source) {
     return this.initPromise = (async () => {
       const { instance } = await this.instantiateWebAssembly(source);
       this.memory = instance.exports.memory;
@@ -5256,7 +5259,10 @@ class WebAssemblyEnvironment extends Environment {
 
   linkVariables(writeBack) {
     // linkage occurs when WASM compilation is complete and functions have been imported
-    this.initPromise = this.initPromise.then(() => super.linkVariables(writeBack));
+    // nothing needs to happen when WASM is not used
+    if (this.initPromise) {
+      this.initPromise = this.initPromise.then(() => super.linkVariables(writeBack));
+    }
   }
 
 
@@ -5320,10 +5326,10 @@ class WebAssemblyEnvironment extends Environment {
   /* RUNTIME-ONLY */
 }
 
-async function loadModule(source) {
+function loadModule(source) {
   const env = new WebAssemblyEnvironment();
   if (source) {
-    await env.loadModule(source);
+    env.loadModule(source);
   }
   return env;
 }

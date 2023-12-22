@@ -28,7 +28,8 @@ export async function transpile(path, options = {}) {
     platform: 'freestanding'
   });
   const content = await readFile(wasmPath);
-  const env = await loadModule(content);
+  const env = loadModule(content);
+  await env.initPromise;
   env.acquireStructures({ omitFunctions });
   const structures = env.exportStructures();
   // all methods are static, so there's no need to check the instance methods

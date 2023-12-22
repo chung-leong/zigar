@@ -1,6 +1,7 @@
-export async function loadModule(libPath) {
-  const { createRequire } = await import('module');
-  const { fileURLToPath } = await import('url');
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+
+export function loadModule(libPath) {
   const require = createRequire(import.meta.url);
   const extPath = fileURLToPath(new URL('../build/Release/node-zigar-addon', import.meta.url));
   const { loadModule } = require(extPath);

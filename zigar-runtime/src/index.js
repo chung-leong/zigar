@@ -7,10 +7,10 @@ useAllMemberTypes();
 useAllStructureTypes();
 /* COMPTIME-ONLY-END */
 
-export async function loadModule(source) {
+export function loadModule(source) {
   const env = new WebAssemblyEnvironment();
   if (source) {
-    await env.loadModule(source);
+    env.loadModule(source);
   }
   return env;
 }

@@ -5280,6 +5280,9 @@ class WebAssemblyEnvironment extends Environment {
 
   inFixedMemory(object) {
     // reconnect any detached buffer before checking
+    if (!this.memory) {
+      return false;
+    }
     restoreMemory.call(object);
     return object[MEMORY].buffer === this.memory.buffer;
   }
@@ -5426,7 +5429,7 @@ class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  async loadModule(source) {
+  loadModule(source) {
     return this.initPromise = (async () => {
       const { instance } = await this.instantiateWebAssembly(source);
       this.memory = instance.exports.memory;
@@ -5444,7 +5447,10 @@ class WebAssemblyEnvironment extends Environment {
 
   linkVariables(writeBack) {
     // linkage occurs when WASM compilation is complete and functions have been imported
-    this.initPromise = this.initPromise.then(() => super.linkVariables(writeBack));
+    // nothing needs to happen when WASM is not used
+    if (this.initPromise) {
+      this.initPromise = this.initPromise.then(() => super.linkVariables(writeBack));
+    }
   }
 
   /* COMPTIME-ONLY */
@@ -5521,10 +5527,10 @@ useAllMemberTypes();
 useAllStructureTypes();
 /* COMPTIME-ONLY-END */
 
-async function loadModule(source) {
+function loadModule(source) {
   const env = new WebAssemblyEnvironment();
   if (source) {
-    await env.loadModule(source);
+    env.loadModule(source);
   }
   return env;
 }
@@ -5568,6 +5574,7 @@ function generateCodeForNode(structures, params) {
   const {
     runtimeURL,
     libPath,
+    topLevelAwait = true,
     omitExports = false,
   } = params;
   const exports = getExports(structures);
@@ -5578,6 +5585,9 @@ function generateCodeForNode(structures, params) {
   lines.push(...generateStructureDefinitions(structures));
   lines.push(...generateLoadStatements(JSON.stringify(libPath), 'false'));
   lines.push(...generateExportStatements(exports, omitExports));
+  if (topLevelAwait) {
+    add(`await __zigar.init();`);
+  }
   const code = lines.join('\n');
   return { code, exports, structures };
 }
@@ -5586,7 +5596,7 @@ function generateLoadStatements(source, writeBack) {
   const lines = [];
   const add = manageIndentation(lines);
   add(`// create runtime environment`);
-  add(`const env = await loadModule(${source});`);
+  add(`const env = loadModule(${source});`);
   add(`const __zigar = env.getControlObject();`);
   add(`env.recreateStructures(structures);`);
   add(`env.linkVariables(${writeBack});`);
@@ -5888,7 +5898,7 @@ function getExports(structures) {
     // only read-only properties are exportable
     if (isReadOnly(member.type) && legal.test(member.name)) {
       exportables.push(member.name);
-    }
+    }    
   }
   return [ 'default', '__zigar', ...exportables ];
 }
@@ -7220,7 +7230,8 @@ async function transpile(path, options = {}) {
     platform: 'freestanding'
   });
   const content = await readFile(wasmPath);
-  const env = await loadModule(content);
+  const env = loadModule(content);
+  await env.initPromise;
   env.acquireStructures({ omitFunctions });
   const structures = env.exportStructures();
   // all methods are static, so there's no need to check the instance methods

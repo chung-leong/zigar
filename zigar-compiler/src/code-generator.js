@@ -40,6 +40,7 @@ export function generateCodeForNode(structures, params) {
   const {
     runtimeURL,
     libPath,
+    topLevelAwait = true,
     omitExports = false,
   } = params;
   const exports = getExports(structures);
@@ -50,6 +51,9 @@ export function generateCodeForNode(structures, params) {
   lines.push(...generateStructureDefinitions(structures));
   lines.push(...generateLoadStatements(JSON.stringify(libPath), 'false'));
   lines.push(...generateExportStatements(exports, omitExports));
+  if (topLevelAwait) {
+    add(`await __zigar.init();`);
+  }
   const code = lines.join('\n');
   return { code, exports, structures };
 }
@@ -58,7 +62,7 @@ function generateLoadStatements(source, writeBack) {
   const lines = [];
   const add = manageIndentation(lines);
   add(`// create runtime environment`);
-  add(`const env = await loadModule(${source});`);
+  add(`const env = loadModule(${source});`);
   add(`const __zigar = env.getControlObject();`);
   add(`env.recreateStructures(structures);`);
   add(`env.linkVariables(${writeBack});`);
