@@ -525,7 +525,7 @@ function defineAlignedFloatAccessor(access, member) {
         if (exp64 >= 2047n) {
           return (sign) ? -Infinity : Infinity;
         }
-        const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 11n);
+        const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 11n) + BigInt((frac & (2n**11n - 1n)) >= 2n**10n);
         buf.setBigUint64(0, n64, littleEndian);
         return buf.getFloat64(0, littleEndian);
       }
@@ -582,7 +582,7 @@ function defineAlignedFloatAccessor(access, member) {
         if (exp64 >= 2047n) {
           return (sign) ? -Infinity : Infinity;
         }
-        const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 60n);
+        const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 60n) + BigInt((frac & (2n**60n - 1n)) >= 2n**59n);
         buf.setBigUint64(0, n64, littleEndian);
         return buf.getFloat64(0, littleEndian);
       }
