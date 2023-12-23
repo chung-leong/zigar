@@ -372,6 +372,50 @@ test "hasPointerArguments" {
     assert(hasPointerArguments(ArgC) == false);
 }
 
+fn hasTaggedUnion(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Pointer => |pt| hasTaggedUnion(pt.child),
+        .Array => |ar| hasTaggedUnion(ar.child),
+        .Struct => |st| any: {
+            inline for (st.fields) |field| {
+                if (!field.is_comptime and hasTaggedUnion(field.type)) {
+                    break :any true;
+                }
+            }
+            break :any false;
+        },
+        .Union => |un| if (un.tag_type) |_| true else false,
+        .Optional => |op| hasTaggedUnion(op.child),
+        .ErrorUnion => |eu| hasTaggedUnion(eu.payload),
+        else => false,
+    };
+}
+
+test "hasTaggedUnion" {
+    const Tag = enum { A, B };
+    const UnionA = union(Tag) {
+        A: i32,
+        B: i32,
+    };
+    const UnionB = union {
+        A: i32,
+        B: i32,
+    };
+    const Struct = struct {
+        something: UnionA,
+        number: i32,
+    };
+    assert(hasTaggedUnion(UnionA) == true);
+    assert(hasTaggedUnion(UnionB) == false);
+    assert(hasTaggedUnion(Struct) == true);
+    assert(hasTaggedUnion(*UnionA) == true);
+    assert(hasTaggedUnion(*UnionB) == false);
+    assert(hasTaggedUnion([5]UnionA) == true);
+    assert(hasTaggedUnion(?UnionA) == true);
+    assert(hasTaggedUnion(anyerror!UnionA) == true);
+    assert(hasTaggedUnion(anyerror!UnionB) == false);
+}
+
 fn getMemberType(comptime T: type) MemberType {
     return switch (@typeInfo(T)) {
         .Bool => .Bool,
@@ -409,7 +453,8 @@ fn isSupported(comptime T: type) bool {
         .Vector,
         .EnumLiteral,
         => true,
-        .Struct => |st| check_fields: {
+        .ErrorUnion => |eu| isSupported(eu.payload),
+        inline .Struct, .Union => |st| check_fields: {
             inline for (st.fields) |field| {
                 if (!isSupported(field.type)) {
                     break :check_fields false;
@@ -417,18 +462,7 @@ fn isSupported(comptime T: type) bool {
             }
             break :check_fields true;
         },
-        .Union => |un| check_fields: {
-            inline for (un.fields) |field| {
-                if (!isSupported(field.type)) {
-                    break :check_fields false;
-                }
-            }
-            break :check_fields true;
-        },
-        .ErrorUnion => |eu| isSupported(eu.payload),
-        .Optional => |op| isSupported(op.child),
-        .Array => |ar| isSupported(ar.child),
-        .Pointer => |pt| isSupported(pt.child),
+        inline .Array, .Optional, .Pointer => |ar| isSupported(ar.child),
         else => false,
     };
 }
@@ -1357,18 +1391,16 @@ fn addErrorSetMember(host: anytype, structure: Value, comptime T: type) !void {
 }
 
 fn containsSupported(comptime T: type) bool {
-    const decls = switch (@typeInfo(T)) {
-        .Struct => |st| st.decls,
-        .Union => |un| un.decls,
-        .Enum => |en| en.decls,
-        .Opaque => |op| op.decls,
-        else => return false,
-    };
-    inline for (decls) |decl| {
-        const DT = @TypeOf(@field(T, decl.name));
-        if (isSupported(DT)) {
-            return true;
-        }
+    switch (@typeInfo(T)) {
+        inline .Struct, .Union, .Enum, .Opaque => |st| {
+            inline for (st.decls) |decl| {
+                const DT = @TypeOf(@field(T, decl.name));
+                if (isSupported(DT)) {
+                    return true;
+                }
+            }
+        },
+        else => {},
     }
     return false;
 }
@@ -1417,24 +1449,6 @@ test "hasStaticMembers" {
     assert(hasStaticMembers(anyerror) == true);
 }
 
-fn getDecls(comptime T: type) ?[]const std.builtin.Type.Declaration {
-    return switch (@typeInfo(T)) {
-        .Struct => |st| st.decls,
-        .Union => |un| un.decls,
-        .Enum => |en| en.decls,
-        .Opaque => |op| op.decls,
-        else => null,
-    };
-}
-
-test "getDecls" {
-    const A = struct {
-        pub const hello: u32 = 0;
-    };
-    assert((getDecls(A) orelse unreachable).len == 1);
-    assert(getDecls(anyerror) == null);
-}
-
 fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
     if (!hasStaticMembers(T)) {
         return;
@@ -1444,26 +1458,29 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
     const template = try host.createTemplate(null);
     // add declared static members
     comptime var offset = 0;
-    if (comptime getDecls(T)) |decls| {
-        inline for (decls, 0..) |decl, index| {
-            const decl_value_ptr = &@field(T, decl.name);
-            const DT = @TypeOf(decl_value_ptr.*);
-            if (comptime isSupported(DT)) {
-                const is_const = comptime isConst(@TypeOf(decl_value_ptr));
-                // can't pass decl_value_ptr.* to RuntimeType when it's var
-                const RT = if (is_const) RuntimeType(decl_value_ptr.*) else DT;
-                const slot = getObjectSlot(Static, index);
-                try host.attachMember(structure, .{
-                    .name = getCString(decl.name),
-                    .member_type = getStaticMemberType(RT, is_const),
-                    .slot = slot,
-                    .structure = try getComptimeStructure(host, RT),
-                }, true);
-                const value_obj = try exportPointerTarget(host, decl_value_ptr, is_const);
-                try host.writeSlot(template, slot, value_obj);
+    switch (@typeInfo(T)) {
+        inline .Struct, .Union, .Enum, .Opaque => |st| {
+            inline for (st.decls, 0..) |decl, index| {
+                const decl_value_ptr = &@field(T, decl.name);
+                const DT = @TypeOf(decl_value_ptr.*);
+                if (comptime isSupported(DT)) {
+                    const is_const = comptime isConst(@TypeOf(decl_value_ptr));
+                    // can't pass decl_value_ptr.* to RuntimeType when it's var
+                    const RT = if (is_const) RuntimeType(decl_value_ptr.*) else DT;
+                    const slot = getObjectSlot(Static, index);
+                    try host.attachMember(structure, .{
+                        .name = getCString(decl.name),
+                        .member_type = getStaticMemberType(RT, is_const),
+                        .slot = slot,
+                        .structure = try getComptimeStructure(host, RT),
+                    }, true);
+                    const value_obj = try exportPointerTarget(host, decl_value_ptr, is_const);
+                    try host.writeSlot(template, slot, value_obj);
+                }
+                offset += 1;
             }
-            offset += 1;
-        }
+        },
+        else => {},
     }
     // add implicit static members
     switch (@typeInfo(T)) {
@@ -1543,44 +1560,42 @@ test "hasUnsupported" {
 }
 
 fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
-    const decls = switch (@typeInfo(T)) {
-        .Struct => |st| st.decls,
-        .Union => |un| un.decls,
-        .Enum => |en| en.decls,
-        .Opaque => |op| op.decls,
-        else => return,
-    };
-    inline for (decls) |decl| {
-        switch (@typeInfo(@TypeOf(@field(T, decl.name)))) {
-            .Fn => |f| {
-                if (comptime f.is_generic or f.is_var_args) {
-                    continue;
-                }
-                if (comptime hasUnsupported(f.params)) {
-                    continue;
-                }
-                const function = @field(T, decl.name);
-                const ArgT = ArgumentStruct(function);
-                const arg_structure = try getStructure(host, ArgT);
-                const is_static_only = static: {
-                    if (f.params.len > 0) {
-                        if (f.params[0].type) |ParamT| {
-                            if (ParamT == T or ParamT == *const T or ParamT == *T) {
-                                break :static false;
-                            }
+    return switch (@typeInfo(T)) {
+        inline .Struct, .Union, .Enum, .Opaque => |st| {
+            inline for (st.decls) |decl| {
+                switch (@typeInfo(@TypeOf(@field(T, decl.name)))) {
+                    .Fn => |f| {
+                        if (comptime f.is_generic or f.is_var_args) {
+                            continue;
                         }
-                    }
-                    break :static true;
-                };
-                try host.attachMethod(structure, .{
-                    .name = getCString(decl.name),
-                    .thunk_id = @intFromPtr(createThunk(@TypeOf(host), function, ArgT)),
-                    .structure = arg_structure,
-                }, is_static_only);
-            },
-            else => {},
-        }
-    }
+                        if (comptime hasUnsupported(f.params)) {
+                            continue;
+                        }
+                        const function = @field(T, decl.name);
+                        const ArgT = ArgumentStruct(function);
+                        const arg_structure = try getStructure(host, ArgT);
+                        const is_static_only = static: {
+                            if (f.params.len > 0) {
+                                if (f.params[0].type) |ParamT| {
+                                    if (ParamT == T or ParamT == *const T or ParamT == *T) {
+                                        break :static false;
+                                    }
+                                }
+                            }
+                            break :static true;
+                        };
+                        try host.attachMethod(structure, .{
+                            .name = getCString(decl.name),
+                            .thunk_id = @intFromPtr(createThunk(@TypeOf(host), function, ArgT)),
+                            .structure = arg_structure,
+                        }, is_static_only);
+                    },
+                    else => {},
+                }
+            }
+        },
+        else => {},
+    };
 }
 
 fn getFieldCount(comptime T: type) comptime_int {

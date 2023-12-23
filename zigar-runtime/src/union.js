@@ -6,10 +6,9 @@ import { getSpecialKeys } from './special.js';
 import { getChildVivificators, getPointerVisitor } from './struct.js';
 import { throwInvalidInitializer, throwMissingUnionInitializer, throwMultipleUnionInitializers,
   throwNoProperty, throwInactiveUnionProperty, throwNoInitializer, throwReadOnly } from './error.js';
-import { copyPointer, disablePointer, resetPointer } from './pointer.js';
-import { ALIGN, CHILD_VIVIFICATOR, ENUM_ITEM, ENUM_NAME, MEMORY, MEMORY_COPIER, POINTER_VISITOR,
-  PROXY,
-  SIZE, SLOTS, TAG } from './symbol.js';
+import { always, copyPointer, disablePointer, resetPointer } from './pointer.js';
+import { ACTIVE_FIELD, ALIGN, CHILD_VIVIFICATOR, ENUM_ITEM, ENUM_NAME, MEMORY, MEMORY_COPIER, 
+  POINTER_VISITOR, PROXY, SIZE, SLOTS } from './symbol.js';
 
 export function defineUnionShape(s, env) {
   const {
@@ -51,28 +50,34 @@ export function defineUnionShape(s, env) {
         setSelector.call(this, index);
       };
     }
+    const pointerSlots = {};
     for (const member of valueMembers) {
       const { name, slot, structure: { hasPointer } } = member;
       const { get: getValue, set: setValue } = getDescriptor(member, env);
-      const update = (isTagged) ? function(name) {
-        if (this[TAG]?.name !== name) {
-          this[TAG]?.clear?.();
-          this[TAG] = { name };
-          if (hasPointer) {
-            this[TAG].clear = () => {
+      const update = function(name) {
+        const prevActiveField = this[ACTIVE_FIELD];
+        if (prevActiveField !== name) {
+          this[ACTIVE_FIELD] = name;
+          if (prevActiveField) {
+            // release pointers in deactivated field
+            const slot = pointerSlots[prevActiveField];
+            if (slot !== undefined) {
               const object = this[SLOTS][slot];
-              object[POINTER_VISITOR](resetPointer);
-            };
+              object?.[POINTER_VISITOR](resetPointer);  
+            }
           }
         }
-      } : null;
+      };
       const get = function() {
         const currentName = getName.call(this);
-        update?.call(this, currentName);
+        update.call(this, currentName);
         if (name !== currentName) {
           if (isTagged) {
+            // tagged union allows inactive member to be queried
             return null;
           } else {
+            // whereas bare union does not, since the condition is not detectable 
+            // when runtime safety is off
             throwInactiveUnionProperty(s, name, currentName);
           }
         }
@@ -80,7 +85,7 @@ export function defineUnionShape(s, env) {
       };
       const set = function(value) {
         const currentName = getName.call(this);
-        update?.call(this, currentName);
+        update.call(this, currentName);
         if (name !== currentName) {
           throwInactiveUnionProperty(s, name, currentName);
         }
@@ -89,12 +94,15 @@ export function defineUnionShape(s, env) {
       const init = function(value) {
         setName.call(this, name);
         setValue.call(this, value);
-        update?.call(this, name);
+        update.call(this, name);
       };
+      if (hasPointer) {
+        pointerSlots[name] = slot;
+      }
       descriptors[member.name] = { get, set, init, update, configurable: true, enumerable: true };
     }
   } else {
-    // extern union
+    // extern union or bare union with runtime safety disabled
     valueMembers = members;
     for (const member of members) {
       const { get, set } = getDescriptor(member, env);
@@ -102,7 +110,7 @@ export function defineUnionShape(s, env) {
     }
   }
   if (isTagged) {
-    descriptors[TAG] = { value: null, writable: true };
+    descriptors[ACTIVE_FIELD] = { value: undefined, writable: true };
   }
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
@@ -226,11 +234,13 @@ export function defineUnionShape(s, env) {
       }
     }
   };
-  const isChildActive = function(child) {
-    const name = getName.call(this);
-    const active = this[name];
-    return child === active;
-  };
+  const isChildActive = (isTagged)
+  ? function(child) {
+      const name = getName.call(this);
+      const active = this[name];
+      return child === active;
+    }
+  : always;
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
   defineProperties(constructor.prototype, {
     delete: { value: getDestructor(env), configurable: true },
@@ -251,6 +261,6 @@ const taggedProxyHandlers = {
   ownKeys(union) {
     const item = union[ENUM_ITEM];
     const name = item[ENUM_NAME];
-    return [ name, MEMORY, TAG, PROXY ];
+    return [ name, MEMORY, ACTIVE_FIELD, PROXY ];
   },
 };
