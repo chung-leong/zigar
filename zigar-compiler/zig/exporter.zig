@@ -372,50 +372,6 @@ test "hasPointerArguments" {
     assert(hasPointerArguments(ArgC) == false);
 }
 
-fn hasTaggedUnion(comptime T: type) bool {
-    return switch (@typeInfo(T)) {
-        .Pointer => |pt| hasTaggedUnion(pt.child),
-        .Array => |ar| hasTaggedUnion(ar.child),
-        .Struct => |st| any: {
-            inline for (st.fields) |field| {
-                if (!field.is_comptime and hasTaggedUnion(field.type)) {
-                    break :any true;
-                }
-            }
-            break :any false;
-        },
-        .Union => |un| if (un.tag_type) |_| true else false,
-        .Optional => |op| hasTaggedUnion(op.child),
-        .ErrorUnion => |eu| hasTaggedUnion(eu.payload),
-        else => false,
-    };
-}
-
-test "hasTaggedUnion" {
-    const Tag = enum { A, B };
-    const UnionA = union(Tag) {
-        A: i32,
-        B: i32,
-    };
-    const UnionB = union {
-        A: i32,
-        B: i32,
-    };
-    const Struct = struct {
-        something: UnionA,
-        number: i32,
-    };
-    assert(hasTaggedUnion(UnionA) == true);
-    assert(hasTaggedUnion(UnionB) == false);
-    assert(hasTaggedUnion(Struct) == true);
-    assert(hasTaggedUnion(*UnionA) == true);
-    assert(hasTaggedUnion(*UnionB) == false);
-    assert(hasTaggedUnion([5]UnionA) == true);
-    assert(hasTaggedUnion(?UnionA) == true);
-    assert(hasTaggedUnion(anyerror!UnionA) == true);
-    assert(hasTaggedUnion(anyerror!UnionB) == false);
-}
-
 fn getMemberType(comptime T: type) MemberType {
     return switch (@typeInfo(T)) {
         .Bool => .Bool,
