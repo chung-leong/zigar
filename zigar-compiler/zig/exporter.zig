@@ -1056,8 +1056,10 @@ test "WithoutComptimeFields" {
 fn RuntimeType(comptime value: anytype) type {
     const T = @TypeOf(value);
     return switch (@typeInfo(T)) {
-        .ComptimeInt => IntType(i32, value),
+        .ComptimeInt => IntType(i8, value),
         .ComptimeFloat => f64,
+        .Optional => |op| ?RuntimeType(value orelse @as(op.child, 0)),
+        .ErrorUnion => |eu| eu.error_set!RuntimeType(value catch @as(eu.payload, 0)),
         else => T,
     };
 }
@@ -1067,10 +1069,24 @@ test "RuntimeType" {
     const b = 0x10_0000_0000;
     const c = 3.14;
     const d: f32 = 3.14;
-    assert(RuntimeType(a) == i32);
+    assert(RuntimeType(a) == i16);
     assert(RuntimeType(b) == i64);
     assert(RuntimeType(c) == f64);
     assert(RuntimeType(d) == f32);
+    const e: anyerror!comptime_float = 3.14;
+    const f: anyerror!comptime_int = Error.PointerIsInvalid;
+    assert(RuntimeType(e) == anyerror!f64);
+    assert(RuntimeType(f) == anyerror!i8);
+}
+
+fn RuntimeValue(comptime value: anytype) RuntimeType(value) {
+    const T = @TypeOf(value);
+    return switch (@typeInfo(T)) {
+        inline .ComptimeInt, .ComptimeFloat => value,
+        .Optional => value orelse null,
+        .ErrorUnion => value catch |err| err,
+        else => value,
+    };
 }
 
 fn getComptimeMemberType(comptime T: type) MemberType {
@@ -1094,7 +1110,7 @@ fn getComptimeStructure(host: anytype, comptime T: type) !?Value {
     };
 }
 
-fn exportPointerTarget(host: anytype, comptime ptr: anytype, is_comptime: bool) !?Value {
+fn exportPointerTarget(host: anytype, comptime ptr: anytype, comptime is_comptime: bool) !?Value {
     const T = @TypeOf(ptr.*);
     if (T == type) {
         const FT = ptr.*;
@@ -1102,13 +1118,15 @@ fn exportPointerTarget(host: anytype, comptime ptr: anytype, is_comptime: bool) 
             return getStructure(host, FT);
         }
     } else if (isSupported(T)) {
-        const value_ptr = switch (@typeInfo(T)) {
-            .EnumLiteral => @tagName(ptr.*),
-            .ComptimeInt, .ComptimeFloat => rt_ptr: {
-                const rt_value: RuntimeType(ptr.*) = ptr.*;
-                break :rt_ptr &rt_value;
+        const value_ptr = switch (is_comptime) {
+            true => switch (@typeInfo(T)) {
+                .EnumLiteral => @tagName(ptr.*),
+                else => rt_ptr: {
+                    const rt_value: RuntimeType(ptr.*) = RuntimeValue(ptr.*);
+                    break :rt_ptr &rt_value;
+                },
             },
-            else => ptr,
+            false => ptr,
         };
         const memory = toMemory(value_ptr, is_comptime);
         const dv = try host.captureView(memory);
