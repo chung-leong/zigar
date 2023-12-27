@@ -363,7 +363,13 @@ function getExports(structures) {
   for (const member of root.static.members) {
     // only read-only properties are exportable
     if (isReadOnly(member.type) && legal.test(member.name)) {
-      exportables.push(member.name);
+      // make sure that getter wouldn't throw (possible with error union)
+      const { constructor } = root;
+      try {
+        const value = constructor[member.name];
+        exportables.push(member.name);
+      } catch (err) {
+      }
     }    
   }
   return [ 'default', '__zigar', ...exportables ];

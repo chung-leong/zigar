@@ -75,8 +75,10 @@ export function addTests(importModule, options) {
     })
     it('should handle comptime float in error union', async function() {
       this.timeout(120000);
-      const { default: module, Error, print } = await importTest('in-error-union');
+      const { default: module, Error, error_union1, error_union2 } = await importTest('in-error-union');
       expect(module.error_union1).to.equal(1234);
+      expect(error_union1).to.equal(1234);
+      expect(error_union2).to.be.undefined;
       expect(() => module.error_union2).to.throw(Error.GoldfishDied);
     })
     it('should not compile code with comptime float vector', async function() {

@@ -7,6 +7,7 @@ var path = require('path');
 var os = require('os');
 var promises = require('fs/promises');
 
+var _documentCurrentScript = typeof document !== 'undefined' ? document.currentScript : null;
 const cwd = process.cwd();
 
 async function compile(path$1, options = {}) {
@@ -362,7 +363,7 @@ async function delay(ms) {
 }
 
 function absolute(relpath) {
-  return url.fileURLToPath(new URL(relpath, (typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (document.currentScript && document.currentScript.src || new URL('index.cjs', document.baseURI).href))));
+  return url.fileURLToPath(new URL(relpath, (typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (_documentCurrentScript && _documentCurrentScript.src || new URL('index.cjs', document.baseURI).href))));
 }
 
 const MEMORY = Symbol('memory');
@@ -372,7 +373,7 @@ const ENUM_NAME = Symbol('enumName');
 const ENUM_ITEM = Symbol('enumItem');
 const ENUM_ITEMS = Symbol('enumItems');
 const ERROR_ITEMS = Symbol('errorItems');
-const TAG = Symbol('TAG');
+const ACTIVE_FIELD = Symbol('activeField');
 const GETTER = Symbol('getter');
 const SETTER = Symbol('setter');
 const LENGTH = Symbol('length');
@@ -1506,7 +1507,7 @@ function defineAlignedFloatAccessor(access, member) {
         if (exp64 >= 2047n) {
           return (sign) ? -Infinity : Infinity;
         }
-        const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 11n);
+        const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 11n) + BigInt((frac & (2n**11n - 1n)) >= 2n**10n);
         buf.setBigUint64(0, n64, littleEndian);
         return buf.getFloat64(0, littleEndian);
       }
@@ -1563,7 +1564,7 @@ function defineAlignedFloatAccessor(access, member) {
         if (exp64 >= 2047n) {
           return (sign) ? -Infinity : Infinity;
         }
-        const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 60n);
+        const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 60n) + BigInt((frac & (2n**60n - 1n)) >= 2n**59n);
         buf.setBigUint64(0, n64, littleEndian);
         return buf.getFloat64(0, littleEndian);
       }
@@ -3517,28 +3518,34 @@ function defineUnionShape(s, env) {
         setSelector.call(this, index);
       };
     }
+    const pointerSlots = {};
     for (const member of valueMembers) {
       const { name, slot, structure: { hasPointer } } = member;
       const { get: getValue, set: setValue } = getDescriptor(member, env);
-      const update = (isTagged) ? function(name) {
-        if (this[TAG]?.name !== name) {
-          this[TAG]?.clear?.();
-          this[TAG] = { name };
-          if (hasPointer) {
-            this[TAG].clear = () => {
+      const update = function(name) {
+        const prevActiveField = this[ACTIVE_FIELD];
+        if (prevActiveField !== name) {
+          this[ACTIVE_FIELD] = name;
+          if (prevActiveField) {
+            // release pointers in deactivated field
+            const slot = pointerSlots[prevActiveField];
+            if (slot !== undefined) {
               const object = this[SLOTS][slot];
-              object[POINTER_VISITOR](resetPointer);
-            };
+              object?.[POINTER_VISITOR](resetPointer);  
+            }
           }
         }
-      } : null;
+      };
       const get = function() {
         const currentName = getName.call(this);
-        update?.call(this, currentName);
+        update.call(this, currentName);
         if (name !== currentName) {
           if (isTagged) {
+            // tagged union allows inactive member to be queried
             return null;
           } else {
+            // whereas bare union does not, since the condition is not detectable 
+            // when runtime safety is off
             throwInactiveUnionProperty(s, name, currentName);
           }
         }
@@ -3546,7 +3553,7 @@ function defineUnionShape(s, env) {
       };
       const set = function(value) {
         const currentName = getName.call(this);
-        update?.call(this, currentName);
+        update.call(this, currentName);
         if (name !== currentName) {
           throwInactiveUnionProperty(s, name, currentName);
         }
@@ -3555,12 +3562,15 @@ function defineUnionShape(s, env) {
       const init = function(value) {
         setName.call(this, name);
         setValue.call(this, value);
-        update?.call(this, name);
+        update.call(this, name);
       };
+      if (hasPointer) {
+        pointerSlots[name] = slot;
+      }
       descriptors[member.name] = { get, set, init, update, configurable: true, enumerable: true };
     }
   } else {
-    // extern union
+    // extern union or bare union with runtime safety disabled
     valueMembers = members;
     for (const member of members) {
       const { get, set } = getDescriptor(member, env);
@@ -3568,7 +3578,7 @@ function defineUnionShape(s, env) {
     }
   }
   if (isTagged) {
-    descriptors[TAG] = { value: null, writable: true };
+    descriptors[ACTIVE_FIELD] = { value: undefined, writable: true };
   }
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
@@ -3692,11 +3702,13 @@ function defineUnionShape(s, env) {
       }
     }
   };
-  const isChildActive = function(child) {
-    const name = getName.call(this);
-    const active = this[name];
-    return child === active;
-  };
+  const isChildActive = (isTagged)
+  ? function(child) {
+      const name = getName.call(this);
+      const active = this[name];
+      return child === active;
+    }
+  : always;
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
   defineProperties(constructor.prototype, {
     delete: { value: getDestructor(env), configurable: true },
@@ -3716,7 +3728,7 @@ const taggedProxyHandlers = {
   ownKeys(union) {
     const item = union[ENUM_ITEM];
     const name = item[ENUM_NAME];
-    return [ name, MEMORY, TAG, PROXY ];
+    return [ name, MEMORY, ACTIVE_FIELD, PROXY ];
   },
 };
 
@@ -5899,7 +5911,13 @@ function getExports(structures) {
   for (const member of root.static.members) {
     // only read-only properties are exportable
     if (isReadOnly(member.type) && legal.test(member.name)) {
-      exportables.push(member.name);
+      // make sure that getter wouldn't throw (possible with error union)
+      const { constructor } = root;
+      try {
+        const value = constructor[member.name];
+        exportables.push(member.name);
+      } catch (err) {
+      }
     }    
   }
   return [ 'default', '__zigar', ...exportables ];
