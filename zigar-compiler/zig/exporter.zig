@@ -1034,8 +1034,10 @@ fn hasComptimeNumbers(comptime T: type) bool {
         .ErrorUnion => |eu| hasComptimeNumbers(eu.payload),
         inline .Struct, .Union => |st| find: {
             inline for (st.fields) |field| {
-                if (hasComptimeNumbers(field.type)) {
-                    break :find true;
+                if (comptime !@hasField(@TypeOf(field), "is_comptime") or !field.is_comptime) {
+                    if (hasComptimeNumbers(field.type)) {
+                        break :find true;
+                    }
                 }
             }
             break :find false;
@@ -1219,7 +1221,7 @@ fn RuntimeType(comptime value: anytype) type {
                 fields[index] = .{
                     .name = field.name,
                     .type = FT,
-                    .default_value = null,
+                    .default_value = if (field.is_comptime) field.default_value else null,
                     .is_comptime = field.is_comptime,
                     .alignment = @alignOf(FT),
                 };
