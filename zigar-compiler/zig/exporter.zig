@@ -866,6 +866,21 @@ test "getSentinel" {
     assert(sentinel2 == 7);
 }
 
+fn getUnionSelectorType(comptime T: type) type {
+    return switch (@typeInfo(T)) {
+        .Union => |un| un.tag_type orelse IntType(u8, un.fields.len),
+        else => @compileError("Not a union"),
+    };
+}
+
+test "getUnionSelectorType" {
+    const U = union {
+        a: u32,
+        b: u32,
+    };
+    assert(getUnionSelectorType(U) == u8);
+}
+
 fn getUnionSelectorOffset(comptime TT: type, comptime fields: []const std.builtin.Type.UnionField) comptime_int {
     // selector comes first unless content needs larger align
     comptime var offset = 0;
@@ -887,6 +902,30 @@ test "getUnionSelectorOffset" {
     };
     assert(getUnionSelectorOffset(i16, @typeInfo(Union).Union.fields) == 32);
     assert(getUnionSelectorOffset(i64, @typeInfo(Union).Union.fields) == 0);
+}
+
+fn getUnionSelector(comptime TT: type, comptime value: anytype) TT {
+    return switch (@typeInfo(@TypeOf(value))) {
+        .Union => |un| {
+            const bytes = std.mem.asBytes(&value);
+            const array = bytes.*;
+            const offset = getUnionSelectorOffset(TT, un.fields);
+            const offset_ptr: *const TT = @ptrCast(&array[offset / 8]);
+            return offset_ptr.*;
+        },
+        else => @compileError("Not a union"),
+    };
+}
+
+test "getUnionSelector" {
+    const Union = union {
+        cat: comptime_int,
+        dog: i32,
+    };
+    const u: Union = .{ .dog = 1234 };
+    const TT = getUnionSelectorType(Union);
+    const selector = getUnionSelector(TT, u);
+    assert(selector == 1);
 }
 
 fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
@@ -989,22 +1028,61 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
     }, false);
 }
 
-fn hasComptimeFields(comptime T: type) bool {
+fn hasComptimeNumbers(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        .Struct => |st| find_comptime: {
+        .ComptimeFloat, .ComptimeInt => true,
+        .ErrorUnion => |eu| hasComptimeNumbers(eu.payload),
+        inline .Struct, .Union => |st| find: {
             inline for (st.fields) |field| {
-                const is_comptime = switch (@typeInfo(field.type)) {
-                    .ComptimeFloat, .ComptimeInt, .EnumLiteral => true,
-                    else => field.is_comptime,
-                };
-                if (is_comptime) {
-                    break :find_comptime true;
+                if (hasComptimeNumbers(field.type)) {
+                    break :find true;
                 }
             }
-            break :find_comptime false;
+            break :find false;
+        },
+        inline .Array, .Optional, .Pointer => |ar| hasComptimeNumbers(ar.child),
+        else => false,
+    };
+}
+
+test "hasComptimeNumbers" {
+    const S1 = struct {
+        size: comptime_int,
+    };
+    const S2 = struct {
+        size: comptime_float,
+    };
+    const S3 = struct {
+        comptime size: u32 = 100,
+    };
+    assert(hasComptimeNumbers(S1) == true);
+    assert(hasComptimeNumbers(S2) == true);
+    assert(hasComptimeNumbers(S3) == false);
+}
+
+fn hasComptimeFields(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Struct => |st| find: {
+            inline for (st.fields) |field| {
+                if (field.is_comptime) {
+                    break :find true;
+                }
+            }
+            break :find false;
         },
         else => false,
     };
+}
+
+test "hasComptimeFields" {
+    const S1 = struct {
+        size: u32,
+    };
+    const S2 = struct {
+        comptime size: u32 = 100,
+    };
+    assert(hasComptimeFields(S1) == false);
+    assert(hasComptimeFields(S2) == true);
 }
 
 fn WithoutComptimeFields(comptime T: type) type {
@@ -1094,14 +1172,48 @@ test "mergeValues" {
     assert(v3.a == 1234);
 }
 
+fn initComptime(comptime T: type) T {
+    var c: T = undefined;
+    return switch (@typeInfo(T)) {
+        .ComptimeInt, .ComptimeFloat => 0,
+        .Array => |ar| init: {
+            comptime var i = 0;
+            while (i < c.len) : (i += 1) {
+                c[i] = initComptime(ar.child);
+            }
+            break :init c;
+        },
+        .Struct => |st| init: {
+            inline for (st.fields) |field| {
+                @field(c, field.name) = initComptime(field.type);
+            }
+            break :init c;
+        },
+        .Optional => |op| initComptime(op.child),
+        .ErrorUnion => |eu| initComptime(eu.payload),
+        else => c,
+    };
+}
+
 fn RuntimeType(comptime value: anytype) type {
     const T = @TypeOf(value);
+    if (comptime !hasComptimeNumbers(T)) {
+        return T;
+    }
     return switch (@typeInfo(T)) {
         .ComptimeInt => IntType(i8, value),
         .ComptimeFloat => f64,
+        .Array => |ar| derive: {
+            var combined_value = initComptime(ar.child);
+            inline for (value) |element| {
+                combined_value = mergeValues(combined_value, element);
+            }
+            const ET = RuntimeType(combined_value);
+            break :derive [ar.len]ET;
+        },
         .Struct => |st| derive: {
             var fields: [st.fields.len]std.builtin.Type.StructField = undefined;
-            for (st.fields, 0..) |field, index| {
+            inline for (st.fields, 0..) |field, index| {
                 const field_value = @field(value, field.name);
                 const FT = RuntimeType(field_value);
                 fields[index] = .{
@@ -1119,6 +1231,42 @@ fn RuntimeType(comptime value: anytype) type {
                     .fields = &fields,
                     .decls = &.{},
                     .is_tuple = st.is_tuple,
+                },
+            });
+        },
+        .Union => |un| derive: {
+            var fields: [un.fields.len]std.builtin.Type.UnionField = undefined;
+            if (un.tag_type) |Tag| {
+                const tag: Tag = value;
+                inline for (un.fields, 0..) |field, index| {
+                    const field_tag = @field(Tag, field.name);
+                    const field_value = if (tag == field_tag) @field(value, field.name) else initComptime(field.type);
+                    const FT = RuntimeType(field_value);
+                    fields[index] = .{
+                        .name = field.name,
+                        .type = FT,
+                        .alignment = @alignOf(FT),
+                    };
+                }
+            } else {
+                const TT = getUnionSelectorType(T);
+                const selector = comptime getUnionSelector(TT, value);
+                inline for (un.fields, 0..) |field, index| {
+                    const field_value = if (index == selector) @field(value, field.name) else initComptime(field.type);
+                    const FT = RuntimeType(field_value);
+                    fields[index] = .{
+                        .name = field.name,
+                        .type = FT,
+                        .alignment = @alignOf(FT),
+                    };
+                }
+            }
+            break :derive @Type(.{
+                .Union = .{
+                    .layout = .Auto,
+                    .tag_type = un.tag_type,
+                    .fields = &fields,
+                    .decls = &.{},
                 },
             });
         },
@@ -1154,14 +1302,40 @@ test "RuntimeType" {
 
 fn RuntimeValue(comptime value: anytype) RuntimeType(value) {
     const T = @TypeOf(value);
+    if (comptime !hasComptimeNumbers(T)) {
+        return value;
+    }
     const RT = RuntimeType(value);
     return switch (@typeInfo(T)) {
         inline .ComptimeInt, .ComptimeFloat => value,
+        .Array => |ar| derive: {
+            var v: RT = undefined;
+            comptime var i = 0;
+            inline while (i < ar.len) : (i += 1) {
+                v[i] = RuntimeValue(value[i]);
+            }
+            break :derive v;
+        },
         .Struct => |st| derive: {
             var v: RT = undefined;
             inline for (st.fields) |field| {
-                @field(v, field.name) = @field(value, field.name);
+                @field(v, field.name) = RuntimeValue(@field(value, field.name));
             }
+            break :derive v;
+        },
+        .Union => |un| derive: {
+            var v: RT = undefined;
+            const tag_name = find: {
+                if (un.tag_type) |Tag| {
+                    const tag: Tag = value;
+                    break :find @tagName(tag);
+                } else {
+                    const TT = getUnionSelectorType(T);
+                    const selector = getUnionSelector(TT, value);
+                    break :find un.fields[selector].name;
+                }
+            };
+            v = @unionInit(RT, tag_name, @field(value, tag_name));
             break :derive v;
         },
         .Optional => value orelse null,
@@ -1216,7 +1390,7 @@ fn exportPointerTarget(host: anytype, comptime ptr: anytype, comptime is_comptim
     const T = @TypeOf(ptr.*);
     if (T == type) {
         const FT = ptr.*;
-        if (comptime isSupported(FT) and !hasComptimeFields(FT)) {
+        if (comptime isSupported(FT) and !hasComptimeNumbers(FT)) {
             return getStructure(host, FT);
         }
     } else if (isSupported(T)) {
@@ -1324,7 +1498,7 @@ fn addUnionMember(host: anytype, structure: Value, comptime T: type) !void {
             else => {},
         }
     }
-    const TT = un.tag_type orelse IntType(u8, un.fields.len);
+    const TT = getUnionSelectorType(T);
     const has_selector = if (un.tag_type) |_|
         true
     else if (runtime_safety and un.layout != .Extern)
