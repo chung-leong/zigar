@@ -993,8 +993,12 @@ fn hasComptimeFields(comptime T: type) bool {
     return switch (@typeInfo(T)) {
         .Struct => |st| find_comptime: {
             inline for (st.fields) |field| {
-                if (field.is_comptime) {
-                    return true;
+                const is_comptime = switch (@typeInfo(field.type)) {
+                    .ComptimeFloat, .ComptimeInt, .EnumLiteral => true,
+                    else => field.is_comptime,
+                };
+                if (is_comptime) {
+                    break :find_comptime true;
                 }
             }
             break :find_comptime false;
@@ -1053,11 +1057,71 @@ test "WithoutComptimeFields" {
     assert(WC4 == S4);
 }
 
+fn abs(comptime v: comptime_int) comptime_int {
+    return if (v < 0) -v else v;
+}
+
+fn mergeValues(comptime a: anytype, comptime b: anytype) @TypeOf(a) {
+    const T = @TypeOf(a);
+    return switch (@typeInfo(T)) {
+        .ComptimeInt => merge: {
+            const negative = a < 0 or b < 0;
+            const value = @max(abs(a), abs(b));
+            break :merge if (negative) -value else value;
+        },
+        .Struct => |st| merge: {
+            var c: T = undefined;
+            inline for (st.fields) |field| {
+                @field(c, field.name) = mergeValues(@field(a, field.name), @field(b, field.name));
+            }
+            break :merge c;
+        },
+        .Optional => mergeValues(a orelse 0, b orelse 0),
+        .ErrorUnion => mergeValues(a catch 0, b catch 0),
+        else => a,
+    };
+}
+
+test "mergeValues" {
+    const v1 = mergeValues(-1, 1234);
+    assert(v1 == -1234);
+    const S = struct {
+        a: comptime_int,
+    };
+    const v2 = mergeValues(S{ .a = -2 }, S{ .a = -8 });
+    assert(v2.a == -8);
+    const v3 = mergeValues(S{ .a = 2 }, S{ .a = 1234 });
+    assert(v3.a == 1234);
+}
+
 fn RuntimeType(comptime value: anytype) type {
     const T = @TypeOf(value);
     return switch (@typeInfo(T)) {
         .ComptimeInt => IntType(i8, value),
         .ComptimeFloat => f64,
+        .Struct => |st| derive: {
+            var fields: [st.fields.len]std.builtin.Type.StructField = undefined;
+            for (st.fields, 0..) |field, index| {
+                const field_value = @field(value, field.name);
+                const FT = RuntimeType(field_value);
+                fields[index] = .{
+                    .name = field.name,
+                    .type = FT,
+                    .default_value = null,
+                    .is_comptime = field.is_comptime,
+                    .alignment = @alignOf(FT),
+                };
+            }
+            break :derive @Type(.{
+                .Struct = .{
+                    .layout = .Auto,
+                    .backing_integer = null,
+                    .fields = &fields,
+                    .decls = &.{},
+                    .is_tuple = st.is_tuple,
+                },
+            });
+        },
         .Optional => |op| ?RuntimeType(value orelse @as(op.child, 0)),
         .ErrorUnion => |eu| eu.error_set!RuntimeType(value catch @as(eu.payload, 0)),
         else => T,
@@ -1077,16 +1141,54 @@ test "RuntimeType" {
     const f: anyerror!comptime_int = Error.PointerIsInvalid;
     assert(RuntimeType(e) == anyerror!f64);
     assert(RuntimeType(f) == anyerror!i8);
+    const S1 = struct {
+        a: comptime_int,
+        b: comptime_float,
+    };
+    const s1: S1 = .{ .a = 1234, .b = 3.14 };
+    const S2 = RuntimeType(s1);
+    const s2: S2 = .{ .a = s1.a, .b = s1.b };
+    assert(@TypeOf(s2.a) == i16);
+    assert(@TypeOf(s2.b) == f64);
 }
 
 fn RuntimeValue(comptime value: anytype) RuntimeType(value) {
     const T = @TypeOf(value);
+    const RT = RuntimeType(value);
     return switch (@typeInfo(T)) {
         inline .ComptimeInt, .ComptimeFloat => value,
+        .Struct => |st| derive: {
+            var v: RT = undefined;
+            inline for (st.fields) |field| {
+                @field(v, field.name) = @field(value, field.name);
+            }
+            break :derive v;
+        },
         .Optional => value orelse null,
         .ErrorUnion => value catch |err| err,
         else => value,
     };
+}
+
+test "RuntimeValue" {
+    const v1: comptime_int = 1234;
+    const r1 = RuntimeValue(v1);
+    assert(@TypeOf(r1) == i16);
+    assert(r1 == 1234);
+    const v2: comptime_float = 1234;
+    const r2 = RuntimeValue(v2);
+    assert(@TypeOf(r2) == f64);
+    assert(r2 == 1234);
+    const S1 = struct {
+        a: comptime_int,
+        b: comptime_float,
+    };
+    const v3: S1 = .{ .a = 1234, .b = 3.14 };
+    const r3 = RuntimeValue(v3);
+    assert(@TypeOf(r3.a) == i16);
+    assert(r3.a == 1234);
+    assert(@TypeOf(r3.b) == f64);
+    assert(r3.b == 3.14);
 }
 
 fn getComptimeMemberType(comptime T: type) MemberType {
@@ -1114,7 +1216,7 @@ fn exportPointerTarget(host: anytype, comptime ptr: anytype, comptime is_comptim
     const T = @TypeOf(ptr.*);
     if (T == type) {
         const FT = ptr.*;
-        if (comptime isSupported(FT)) {
+        if (comptime isSupported(FT) and !hasComptimeFields(FT)) {
             return getStructure(host, FT);
         }
     } else if (isSupported(T)) {

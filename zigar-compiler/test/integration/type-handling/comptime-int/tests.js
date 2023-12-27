@@ -38,8 +38,7 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ number1: 1, number2: 2 });
-      const b = new StructA({});
-      expect(b.valueOf()).to.eql({ number1: 100, number2: 200 });
+      expect(StructA).to.be.undefined;
       const [ line ] = await capture(() => print());
       expect(line).to.equal('in-struct.StructA{ .number1 = 1, .number2 = 2 }');
     })
