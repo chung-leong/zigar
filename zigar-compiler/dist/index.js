@@ -2115,6 +2115,7 @@ function getTypeDescriptor(member, env) {
   return {
     get: function getType() {
       // unsupported types will have undefined structure
+      console.log({ member });
       const structure = this[SLOTS][slot];
       return structure?.constructor;
     },

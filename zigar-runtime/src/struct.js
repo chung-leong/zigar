@@ -148,8 +148,9 @@ export function defineStructShape(s, env) {
   return constructor;
 }
 
+
 export function getComptimeFields(members, template) {
-  const comptimeMembers = members.filter(m => m.type === MemberType.Comptime);
+  const comptimeMembers = members.filter(m => [ MemberType.Comptime, MemberType.Static, MemberType.Literal, MemberType.Type ].includes(m.type));
   if (comptimeMembers.length > 0) {
     const slots = {};
     for (const { slot } of comptimeMembers) {

@@ -26,7 +26,6 @@ export function addTests(importModule, options) {
         8: 'Nidavellir',
       });
     })
-
     it('should ignore function accepting enum literal as arguments', async function() {
       this.timeout(120000);
       const { print } = await importTest('as-function-parameters');

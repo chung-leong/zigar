@@ -513,7 +513,7 @@ export function getStaticDescriptor(member, env) {
 export function getLiteralDescriptor(member, env) {
   const { slot } = member;
   return {
-    get: function getType() {
+    get: function getLiteral() {
       const object = this[SLOTS][slot];
       return object.string;
     },
