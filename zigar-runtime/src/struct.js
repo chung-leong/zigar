@@ -24,7 +24,7 @@ export function defineStructShape(s, env) {
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const cache = new ObjectCache();
   // comptime fields are stored in the instance template's slots
-  const slots = getComptimeFields(members, template);
+  const comptimeFields = getComptimeFields(members, template);
   const constructor = s.constructor = function(arg, options = {}) {
     const {
       writable = true,
@@ -47,9 +47,9 @@ export function defineStructShape(s, env) {
     }
     self[MEMORY] = dv;
     if (needSlots(s)) {
-      self[SLOTS] = { ...slots };
-    } else if (slots) {
-      self[SLOTS] = slots;
+      self[SLOTS] = { ...comptimeFields };
+    } else if (comptimeFields) {
+      self[SLOTS] = comptimeFields;
     }
     Object.defineProperties(self, descriptors);
     if (creating) {

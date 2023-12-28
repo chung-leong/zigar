@@ -45,9 +45,10 @@ export function addTests(importModule, options) {
         expect(item).to.be.a('function');
       }
     })
-    it('should handle type in struct', async function() {
+    it('should ignore struct with type as member', async function() {
       this.timeout(120000);
-      await expect(importTest('in-struct')).to.eventually.be.rejected;
+      const { StructA } = await importTest('in-struct');
+      expect(StructA).to.be.undefined;
     })
     it('should handle type in packed struct', async function() {
       this.timeout(120000);

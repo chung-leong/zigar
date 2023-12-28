@@ -1076,7 +1076,8 @@ fn isComptimeOnly(comptime T: type) bool {
         .Array => |ar| isComptimeOnly(ar.child),
         .Struct => |st| check: {
             inline for (st.fields) |field| {
-                if (field.is_comptime or isComptimeOnly(field.type)) {
+                // structs with comptime fields of comptime type can be created at runtime
+                if (!field.is_comptime and isComptimeOnly(field.type)) {
                     break :check true;
                 }
             }
@@ -1109,7 +1110,7 @@ fn ComptimeFree(comptime T: type) type {
                     .type = FT,
                     .default_value = null,
                     .is_comptime = false,
-                    .alignment = @alignOf(FT),
+                    .alignment = if (st.layout != .Packed) @alignOf(FT) else 0,
                 };
             }
             break :derive @Type(.{
@@ -1172,8 +1173,8 @@ fn removeComptimeValues(comptime value: anytype) ComptimeFree(@TypeOf(value)) {
             const field_value = @field(value, field_name);
             result = @unionInit(RT, field_name, removeComptimeValues(field_value));
         },
-        .Optional => if (value) |v| removeComptimeValues(v) else null,
-        .ErrorUnion => if (value) |v| removeComptimeValues(v) else |e| e,
+        .Optional => result = if (value) |v| removeComptimeValues(v) else null,
+        .ErrorUnion => result = if (value) |v| removeComptimeValues(v) else |e| e,
         else => result = value,
     }
     return result;
@@ -1268,7 +1269,7 @@ fn exportPointerTarget(host: anytype, comptime ptr: anytype, comptime is_comptim
         const dv = try host.captureView(memory);
         const structure = try getStructure(host, T);
         const obj = try host.castView(structure, dv, !is_comptime);
-        if (isComptimeOnly(T)) {
+        if (comptime isComptimeOnly(T)) {
             try attachComptimeValues(host, obj, ptr.*);
         }
         return obj;
@@ -1707,13 +1708,6 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
             }
         },
         else => {},
-    };
-}
-
-fn getFieldCount(comptime T: type) comptime_int {
-    return switch (@typeInfo(T)) {
-        .Struct, .Union => std.meta.fields(T).len,
-        else => 0,
     };
 }
 

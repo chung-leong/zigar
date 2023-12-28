@@ -38,9 +38,9 @@ export function addTests(importModule, options) {
     })
     it('should handle enum literal in array', async function() {
       this.timeout(120000);
-      const { array } = await importTest('array-of');      
+      const { default: module, array } = await importTest('array-of');      
       expect(array.length).to.equal(4);
-      expect([ ...array ]).to.eql([ null, null, null, null ]);
+      expect([ ...array ]).to.eql([ 'hello', 'world', 'dog', 'cat' ]);
     })
     it('should handle enum literal in struct', async function() {
       this.timeout(120000);
