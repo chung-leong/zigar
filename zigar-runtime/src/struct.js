@@ -1,4 +1,4 @@
-import { ObjectCache, defineProperties, getSelf, removeSetters } from './structure.js';
+import { ObjectCache, defineProperties, getSelf, needSlots, removeSetters } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView } from './data-view.js';
@@ -46,7 +46,7 @@ export function defineStructShape(s, env) {
       self = Object.create(constructor.prototype);
     }
     self[MEMORY] = dv;
-    if (hasObject) {
+    if (needSlots(s)) {
       self[SLOTS] = { ...slots };
     } else if (slots) {
       self[SLOTS] = slots;
@@ -150,13 +150,15 @@ export function defineStructShape(s, env) {
 
 
 export function getComptimeFields(members, template) {
-  const comptimeMembers = members.filter(m => [ MemberType.Comptime, MemberType.Static, MemberType.Literal, MemberType.Type ].includes(m.type));
-  if (comptimeMembers.length > 0) {
-    const slots = {};
-    for (const { slot } of comptimeMembers) {
-      slots[slot] = template[SLOTS][slot];
+  if (template) {
+    const comptimeMembers = members.filter(m => [ MemberType.Comptime, MemberType.Static, MemberType.Literal, MemberType.Type ].includes(m.type));
+    if (comptimeMembers.length > 0) {
+      const slots = {};
+      for (const { slot } of comptimeMembers) {
+        slots[slot] = template[SLOTS][slot];
+      }
+      return slots;
     }
-    return slots;
   }
 }
 

@@ -379,9 +379,17 @@ fn getMemberType(comptime T: type) MemberType {
         .Float => .Float,
         .Enum => .EnumerationItem,
         .ErrorSet => .Error,
-        .Struct, .Union, .Array, .ErrorUnion, .Optional, .Pointer, .Vector => .Object,
+        .Struct,
+        .Union,
+        .Array,
+        .ErrorUnion,
+        .Optional,
+        .Pointer,
+        .Vector,
+        => .Object,
         .Type => .Type,
         .EnumLiteral => .Literal,
+        .ComptimeInt, .ComptimeFloat => .Comptime,
         else => .Void,
     };
 }
@@ -930,7 +938,16 @@ test "getUnionSelector" {
 
 fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
     return switch (@typeInfo(T)) {
-        .Bool, .Int, .Float, .Void, .Null, .Type => addPrimitiveMember(host, structure, T),
+        .Bool,
+        .Int,
+        .Float,
+        .Void,
+        .Null,
+        .Type,
+        .ComptimeInt,
+        .ComptimeFloat,
+        .EnumLiteral,
+        => addPrimitiveMember(host, structure, T),
         .Array => addArrayMember(host, structure, T),
         .Pointer => addPointerMember(host, structure, T),
         .Struct => addStructMember(host, structure, T),
@@ -950,6 +967,10 @@ fn addPrimitiveMember(host: anytype, structure: Value, comptime T: type) !void {
         .bit_size = getStructureBitSize(T),
         .bit_offset = 0,
         .byte_size = getStructureSize(T),
+        .slot = switch (getMemberType(T)) {
+            .Comptime, .Literal, .Type => 0,
+            else => missing,
+        },
         .structure = try getStructure(host, T),
     }, false);
 }
@@ -1028,345 +1049,6 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
     }, false);
 }
 
-fn hasComptimeNumbers(comptime T: type) bool {
-    return switch (@typeInfo(T)) {
-        .ComptimeFloat, .ComptimeInt => true,
-        .ErrorUnion => |eu| hasComptimeNumbers(eu.payload),
-        inline .Struct, .Union => |st| find: {
-            inline for (st.fields) |field| {
-                if (comptime !@hasField(@TypeOf(field), "is_comptime") or !field.is_comptime) {
-                    if (hasComptimeNumbers(field.type)) {
-                        break :find true;
-                    }
-                }
-            }
-            break :find false;
-        },
-        inline .Array, .Optional, .Pointer => |ar| hasComptimeNumbers(ar.child),
-        else => false,
-    };
-}
-
-test "hasComptimeNumbers" {
-    const S1 = struct {
-        size: comptime_int,
-    };
-    const S2 = struct {
-        size: comptime_float,
-    };
-    const S3 = struct {
-        comptime size: u32 = 100,
-    };
-    assert(hasComptimeNumbers(S1) == true);
-    assert(hasComptimeNumbers(S2) == true);
-    assert(hasComptimeNumbers(S3) == false);
-}
-
-fn hasComptimeFields(comptime T: type) bool {
-    return switch (@typeInfo(T)) {
-        .Struct => |st| find: {
-            inline for (st.fields) |field| {
-                if (field.is_comptime) {
-                    break :find true;
-                }
-            }
-            break :find false;
-        },
-        else => false,
-    };
-}
-
-test "hasComptimeFields" {
-    const S1 = struct {
-        size: u32,
-    };
-    const S2 = struct {
-        comptime size: u32 = 100,
-    };
-    assert(hasComptimeFields(S1) == false);
-    assert(hasComptimeFields(S2) == true);
-}
-
-fn WithoutComptimeFields(comptime T: type) type {
-    if (!hasComptimeFields(T)) {
-        return T;
-    }
-    const fields = @typeInfo(T).Struct.fields;
-    var new_fields: [fields.len]std.builtin.Type.StructField = undefined;
-    var count = 0;
-    for (fields) |field| {
-        if (!field.is_comptime) {
-            new_fields[count] = field;
-            count += 1;
-        }
-    }
-    return @Type(.{
-        .Struct = .{
-            .layout = .Auto,
-            .decls = &.{},
-            .fields = fields[0..count],
-            .is_tuple = false,
-        },
-    });
-}
-
-test "WithoutComptimeFields" {
-    const S1 = struct {
-        number1: i32,
-        number2: i32,
-    };
-    const WC1 = WithoutComptimeFields(S1);
-    const S2 = struct {
-        comptime number1: i32 = 0,
-        number2: i32,
-    };
-    const WC2 = WithoutComptimeFields(S2);
-    const S3 = struct {
-        comptime number1: i32 = 0,
-        number2: i32,
-        comptime number_type: type = i32,
-    };
-    const WC3 = WithoutComptimeFields(S3);
-    const S4 = comptime_int;
-    const WC4 = WithoutComptimeFields(S4);
-    assert(WC1 == S1);
-    assert(WC2 != S2);
-    assert(@typeInfo(WC2).Struct.fields.len == 1);
-    assert(WC3 != S3);
-    assert(@typeInfo(WC3).Struct.fields.len == 1);
-    assert(WC4 == S4);
-}
-
-fn abs(comptime v: comptime_int) comptime_int {
-    return if (v < 0) -v else v;
-}
-
-fn mergeValues(comptime a: anytype, comptime b: anytype) @TypeOf(a) {
-    const T = @TypeOf(a);
-    return switch (@typeInfo(T)) {
-        .ComptimeInt => merge: {
-            const negative = a < 0 or b < 0;
-            const value = @max(abs(a), abs(b));
-            break :merge if (negative) -value else value;
-        },
-        .Struct => |st| merge: {
-            var c: T = undefined;
-            inline for (st.fields) |field| {
-                @field(c, field.name) = mergeValues(@field(a, field.name), @field(b, field.name));
-            }
-            break :merge c;
-        },
-        .Optional => mergeValues(a orelse 0, b orelse 0),
-        .ErrorUnion => mergeValues(a catch 0, b catch 0),
-        else => a,
-    };
-}
-
-test "mergeValues" {
-    const v1 = mergeValues(-1, 1234);
-    assert(v1 == -1234);
-    const S = struct {
-        a: comptime_int,
-    };
-    const v2 = mergeValues(S{ .a = -2 }, S{ .a = -8 });
-    assert(v2.a == -8);
-    const v3 = mergeValues(S{ .a = 2 }, S{ .a = 1234 });
-    assert(v3.a == 1234);
-}
-
-fn initComptime(comptime T: type) T {
-    var c: T = undefined;
-    return switch (@typeInfo(T)) {
-        .ComptimeInt, .ComptimeFloat => 0,
-        .Array => |ar| init: {
-            comptime var i = 0;
-            while (i < c.len) : (i += 1) {
-                c[i] = initComptime(ar.child);
-            }
-            break :init c;
-        },
-        .Struct => |st| init: {
-            inline for (st.fields) |field| {
-                @field(c, field.name) = initComptime(field.type);
-            }
-            break :init c;
-        },
-        .Optional => |op| initComptime(op.child),
-        .ErrorUnion => |eu| initComptime(eu.payload),
-        else => c,
-    };
-}
-
-fn RuntimeType(comptime value: anytype) type {
-    const T = @TypeOf(value);
-    if (comptime !hasComptimeNumbers(T)) {
-        return T;
-    }
-    return switch (@typeInfo(T)) {
-        .ComptimeInt => IntType(i8, value),
-        .ComptimeFloat => f64,
-        .Array => |ar| derive: {
-            var combined_value = initComptime(ar.child);
-            inline for (value) |element| {
-                combined_value = mergeValues(combined_value, element);
-            }
-            const ET = RuntimeType(combined_value);
-            break :derive [ar.len]ET;
-        },
-        .Struct => |st| derive: {
-            var fields: [st.fields.len]std.builtin.Type.StructField = undefined;
-            inline for (st.fields, 0..) |field, index| {
-                const field_value = @field(value, field.name);
-                const FT = RuntimeType(field_value);
-                fields[index] = .{
-                    .name = field.name,
-                    .type = FT,
-                    .default_value = if (field.is_comptime) field.default_value else null,
-                    .is_comptime = field.is_comptime,
-                    .alignment = @alignOf(FT),
-                };
-            }
-            break :derive @Type(.{
-                .Struct = .{
-                    .layout = .Auto,
-                    .backing_integer = null,
-                    .fields = &fields,
-                    .decls = &.{},
-                    .is_tuple = st.is_tuple,
-                },
-            });
-        },
-        .Union => |un| derive: {
-            var fields: [un.fields.len]std.builtin.Type.UnionField = undefined;
-            if (un.tag_type) |Tag| {
-                const tag: Tag = value;
-                inline for (un.fields, 0..) |field, index| {
-                    const field_tag = @field(Tag, field.name);
-                    const field_value = if (tag == field_tag) @field(value, field.name) else initComptime(field.type);
-                    const FT = RuntimeType(field_value);
-                    fields[index] = .{
-                        .name = field.name,
-                        .type = FT,
-                        .alignment = @alignOf(FT),
-                    };
-                }
-            } else {
-                const TT = getUnionSelectorType(T);
-                const selector = comptime getUnionSelector(TT, value);
-                inline for (un.fields, 0..) |field, index| {
-                    const field_value = if (index == selector) @field(value, field.name) else initComptime(field.type);
-                    const FT = RuntimeType(field_value);
-                    fields[index] = .{
-                        .name = field.name,
-                        .type = FT,
-                        .alignment = @alignOf(FT),
-                    };
-                }
-            }
-            break :derive @Type(.{
-                .Union = .{
-                    .layout = .Auto,
-                    .tag_type = un.tag_type,
-                    .fields = &fields,
-                    .decls = &.{},
-                },
-            });
-        },
-        .Optional => |op| ?RuntimeType(value orelse @as(op.child, 0)),
-        .ErrorUnion => |eu| eu.error_set!RuntimeType(value catch @as(eu.payload, 0)),
-        else => T,
-    };
-}
-
-test "RuntimeType" {
-    const a = 1234;
-    const b = 0x10_0000_0000;
-    const c = 3.14;
-    const d: f32 = 3.14;
-    assert(RuntimeType(a) == i16);
-    assert(RuntimeType(b) == i64);
-    assert(RuntimeType(c) == f64);
-    assert(RuntimeType(d) == f32);
-    const e: anyerror!comptime_float = 3.14;
-    const f: anyerror!comptime_int = Error.PointerIsInvalid;
-    assert(RuntimeType(e) == anyerror!f64);
-    assert(RuntimeType(f) == anyerror!i8);
-    const S1 = struct {
-        a: comptime_int,
-        b: comptime_float,
-    };
-    const s1: S1 = .{ .a = 1234, .b = 3.14 };
-    const S2 = RuntimeType(s1);
-    const s2: S2 = .{ .a = s1.a, .b = s1.b };
-    assert(@TypeOf(s2.a) == i16);
-    assert(@TypeOf(s2.b) == f64);
-}
-
-fn RuntimeValue(comptime value: anytype) RuntimeType(value) {
-    const T = @TypeOf(value);
-    if (comptime !hasComptimeNumbers(T)) {
-        return value;
-    }
-    const RT = RuntimeType(value);
-    return switch (@typeInfo(T)) {
-        inline .ComptimeInt, .ComptimeFloat => value,
-        .Array => |ar| derive: {
-            var v: RT = undefined;
-            comptime var i = 0;
-            inline while (i < ar.len) : (i += 1) {
-                v[i] = RuntimeValue(value[i]);
-            }
-            break :derive v;
-        },
-        .Struct => |st| derive: {
-            var v: RT = undefined;
-            inline for (st.fields) |field| {
-                @field(v, field.name) = RuntimeValue(@field(value, field.name));
-            }
-            break :derive v;
-        },
-        .Union => |un| derive: {
-            var v: RT = undefined;
-            const tag_name = find: {
-                if (un.tag_type) |Tag| {
-                    const tag: Tag = value;
-                    break :find @tagName(tag);
-                } else {
-                    const TT = getUnionSelectorType(T);
-                    const selector = getUnionSelector(TT, value);
-                    break :find un.fields[selector].name;
-                }
-            };
-            v = @unionInit(RT, tag_name, @field(value, tag_name));
-            break :derive v;
-        },
-        .Optional => value orelse null,
-        .ErrorUnion => value catch |err| err,
-        else => value,
-    };
-}
-
-test "RuntimeValue" {
-    const v1: comptime_int = 1234;
-    const r1 = RuntimeValue(v1);
-    assert(@TypeOf(r1) == i16);
-    assert(r1 == 1234);
-    const v2: comptime_float = 1234;
-    const r2 = RuntimeValue(v2);
-    assert(@TypeOf(r2) == f64);
-    assert(r2 == 1234);
-    const S1 = struct {
-        a: comptime_int,
-        b: comptime_float,
-    };
-    const v3: S1 = .{ .a = 1234, .b = 3.14 };
-    const r3 = RuntimeValue(v3);
-    assert(@TypeOf(r3.a) == i16);
-    assert(r3.a == 1234);
-    assert(@TypeOf(r3.b) == f64);
-    assert(r3.b == 3.14);
-}
-
 fn getComptimeMemberType(comptime T: type) MemberType {
     return switch (@typeInfo(T)) {
         .Type => .Type,
@@ -1388,28 +1070,207 @@ fn getComptimeStructure(host: anytype, comptime T: type) !?Value {
     };
 }
 
+fn isComptimeOnly(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .ComptimeFloat, .ComptimeInt, .EnumLiteral, .Type => true,
+        .Array => |ar| isComptimeOnly(ar.child),
+        .Struct => |st| check: {
+            inline for (st.fields) |field| {
+                if (field.is_comptime or isComptimeOnly(field.type)) {
+                    break :check true;
+                }
+            }
+            break :check false;
+        },
+        .Union => |st| check: {
+            inline for (st.fields) |field| {
+                if (isComptimeOnly(field.type)) {
+                    break :check true;
+                }
+            }
+            break :check false;
+        },
+        .Optional => |op| isComptimeOnly(op.child),
+        .ErrorUnion => |eu| isComptimeOnly(eu.payload),
+        else => false,
+    };
+}
+
+fn ComptimeFree(comptime T: type) type {
+    return switch (@typeInfo(T)) {
+        .ComptimeFloat, .ComptimeInt, .EnumLiteral, .Type => void,
+        .Array => |ar| [ar.len]ComptimeFree(ar.child),
+        .Struct => |st| derive: {
+            var new_fields: [st.fields.len]std.builtin.Type.StructField = undefined;
+            inline for (st.fields, 0..) |field, index| {
+                const FT = if (field.is_comptime) void else ComptimeFree(field.type);
+                new_fields[index] = .{
+                    .name = field.name,
+                    .type = FT,
+                    .default_value = null,
+                    .is_comptime = false,
+                    .alignment = @alignOf(FT),
+                };
+            }
+            break :derive @Type(.{
+                .Struct = .{
+                    .layout = st.layout,
+                    .fields = &new_fields,
+                    .decls = &.{},
+                    .is_tuple = st.is_tuple,
+                },
+            });
+        },
+        .Union => |un| derive: {
+            var new_fields: [un.fields.len]std.builtin.Type.UnionField = undefined;
+            inline for (un.fields, 0..) |field, index| {
+                const FT = ComptimeFree(field.type);
+                new_fields[index] = .{
+                    .name = field.name,
+                    .type = FT,
+                    .alignment = @alignOf(FT),
+                };
+            }
+            break :derive @Type(.{
+                .Union = .{
+                    .layout = un.layout,
+                    .tag_type = un.tag_type,
+                    .fields = &new_fields,
+                    .decls = &.{},
+                },
+            });
+        },
+        .Optional => ?void,
+        .ErrorUnion => |eu| eu.error_set!void,
+        else => T,
+    };
+}
+
+fn removeComptimeValues(comptime value: anytype) ComptimeFree(@TypeOf(value)) {
+    const T = @TypeOf(value);
+    const RT = ComptimeFree(@TypeOf(value));
+    var result: RT = undefined;
+    switch (@typeInfo(T)) {
+        .ComptimeFloat, .ComptimeInt, .EnumLiteral, .Type => result = {},
+        .Array => {
+            inline for (value, 0..) |element, index| {
+                result[index] = removeComptimeValues(element);
+            }
+        },
+        .Struct => |st| {
+            inline for (st.fields) |field| {
+                @field(result, field.name) = removeComptimeValues(@field(value, field.name));
+            }
+        },
+        .Union => |un| {
+            const field_name = get: {
+                if (un.tag_type) |Tag| {
+                    const tag: Tag = value;
+                    break :get @tagName(tag);
+                }
+            };
+            const field_value = @field(value, field_name);
+            result = @unionInit(RT, field_name, removeComptimeValues(field_value));
+        },
+        .Optional => if (value) |v| removeComptimeValues(v) else null,
+        .ErrorUnion => if (value) |v| removeComptimeValues(v) else |e| e,
+        else => result = value,
+    }
+    return result;
+}
+
+fn exportComptimeValue(host: anytype, comptime value: anytype) !?Value {
+    return switch (@typeInfo(@TypeOf(value))) {
+        .ComptimeInt => exportPointerTarget(host, &@as(IntType(i8, value), value), true),
+        .ComptimeFloat => exportPointerTarget(host, &@as(f64, value), true),
+        .EnumLiteral => exportPointerTarget(host, &@as([]const u8, @tagName(value)), true),
+        else => return exportPointerTarget(host, &value, true),
+    };
+}
+
+fn attachComptimeValues(host: anytype, target: Value, comptime value: anytype) !void {
+    const T = @TypeOf(value);
+    switch (@typeInfo(T)) {
+        .ComptimeInt, .ComptimeFloat, .EnumLiteral => {
+            const obj = try exportComptimeValue(host, value);
+            try host.writeSlot(target, 0, obj);
+        },
+        .Array => {
+            inline for (value, 0..) |element, index| {
+                const obj = try exportComptimeValue(host, element);
+                try host.writeSlot(target, index, obj);
+            }
+        },
+        .Struct => |st| {
+            inline for (st.fields, 0..) |field, index| {
+                if (isComptimeOnly(field.type)) {
+                    const field_value = @field(value, field.name);
+                    const obj = try exportComptimeValue(host, field_value);
+                    const slot = getObjectSlot(T, index);
+                    try host.writeSlot(target, slot, obj);
+                }
+            }
+        },
+        .Union => |un| {
+            const active_index = get: {
+                if (un.tag_type) |Tag| {
+                    const tag: Tag = value;
+                    inline for (un.fields, 0..) |field, index| {
+                        if (@field(Tag, field.name) == tag) {
+                            break :get index;
+                        }
+                    }
+                }
+            };
+            const field = un.fields[active_index];
+            if (isComptimeOnly(field.type)) {
+                const field_value = @field(value, field.name);
+                const obj = try exportComptimeValue(host, field_value);
+                const slot = getObjectSlot(T, active_index);
+                try host.writeSlot(target, slot, obj);
+            }
+        },
+        .Optional => {
+            if (value) |v| {
+                const obj = try exportComptimeValue(host, v);
+                try host.writeSlot(target, 0, obj);
+            }
+        },
+        .ErrorUnion => {
+            if (value) |v| {
+                const obj = try exportComptimeValue(host, v);
+                try host.writeSlot(target, 0, obj);
+            } else |_| {}
+        },
+        else => {},
+    }
+}
+
 fn exportPointerTarget(host: anytype, comptime ptr: anytype, comptime is_comptime: bool) !?Value {
     const T = @TypeOf(ptr.*);
     if (T == type) {
         const FT = ptr.*;
-        if (comptime isSupported(FT) and !hasComptimeNumbers(FT)) {
+        if (comptime isSupported(FT) and !isComptimeOnly(FT)) {
             return getStructure(host, FT);
         }
     } else if (isSupported(T)) {
-        const value_ptr = switch (is_comptime) {
-            true => switch (@typeInfo(T)) {
-                .EnumLiteral => @tagName(ptr.*),
-                else => rt_ptr: {
-                    const rt_value: RuntimeType(ptr.*) = RuntimeValue(ptr.*);
-                    break :rt_ptr &rt_value;
-                },
-            },
-            false => ptr,
+        const value_ptr = get: {
+            // values that only exist at comptime need to have their comptime part replaced with void
+            // (comptime keyword needed here since expression evaluates to different pointer types)
+            if (comptime isComptimeOnly(T)) {
+                var runtime_value: ComptimeFree(T) = removeComptimeValues(ptr.*);
+                break :get &runtime_value;
+            } else {
+                break :get ptr;
+            }
         };
         const memory = toMemory(value_ptr, is_comptime);
         const dv = try host.captureView(memory);
-        const structure = try getStructure(host, @TypeOf(value_ptr.*));
+        const structure = try getStructure(host, T);
         const obj = try host.castView(structure, dv, !is_comptime);
+        if (isComptimeOnly(T)) {
+            try attachComptimeValues(host, obj, ptr.*);
+        }
         return obj;
     }
     return null;
@@ -1433,6 +1294,7 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
             }
         }
     }
+    comptime var comptimeFieldCount = 0;
     inline for (st.fields, 0..) |field, index| {
         if (!field.is_comptime) {
             try host.attachMember(structure, .{
@@ -1451,13 +1313,13 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
                 .name = getCString(field.name),
                 .member_type = getComptimeMemberType(field.type),
                 .slot = getObjectSlot(T, index),
-                .structure = try getComptimeStructure(host, RuntimeType(default_value_ptr.*)),
+                .structure = try getComptimeStructure(host, @TypeOf(default_value_ptr.*)),
             }, false);
+            comptimeFieldCount += 1;
         }
     }
-    if (!isArgumentStruct(T) and (@sizeOf(T) > 0 or hasComptimeFields(T))) {
-        // structs with comptime fields have issues--not sure why
-        var values: WithoutComptimeFields(T) = undefined;
+    if (!isArgumentStruct(T) and (@sizeOf(T) > 0 or comptimeFieldCount > 0)) {
+        var values: ComptimeFree(T) = undefined;
         // obtain byte array containing data of default values
         // can't use std.mem.zeroInit() here, since it'd fail with unions
         const bytes: []u8 = std.mem.asBytes(&values);
@@ -1478,7 +1340,7 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
         const template = try host.createTemplate(dv);
         inline for (st.fields, 0..) |field, index| {
             if (field.default_value) |opaque_ptr| {
-                if (field.is_comptime) {
+                if (field.is_comptime or isComptimeOnly(field.type)) {
                     // comptime members aren't stored in the struct's memory
                     // they're separate objects in the slots of the struct template
                     const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
@@ -1717,14 +1579,12 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                 const DT = @TypeOf(decl_value_ptr.*);
                 if (comptime isSupported(DT)) {
                     const is_const = comptime isConst(@TypeOf(decl_value_ptr));
-                    // can't pass decl_value_ptr.* to RuntimeType when it's var
-                    const RT = if (is_const) RuntimeType(decl_value_ptr.*) else DT;
                     const slot = getObjectSlot(Static, index);
                     try host.attachMember(structure, .{
                         .name = getCString(decl.name),
-                        .member_type = getStaticMemberType(RT, is_const),
+                        .member_type = getStaticMemberType(DT, is_const),
                         .slot = slot,
-                        .structure = try getComptimeStructure(host, RT),
+                        .structure = try getComptimeStructure(host, DT),
                     }, true);
                     const value_obj = try exportPointerTarget(host, decl_value_ptr, is_const);
                     try host.writeSlot(template, slot, value_obj);

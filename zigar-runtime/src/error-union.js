@@ -1,4 +1,4 @@
-import { ObjectCache, defineProperties } from './structure.js';
+import { ObjectCache, defineProperties, needSlots } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView } from './data-view.js';
@@ -66,7 +66,9 @@ export function defineErrorUnion(s, env) {
       self = Object.create(constructor.prototype); 
     }
     self[MEMORY] = dv;
-    self[SLOTS] = hasObject ? {} : undefined;
+    if (needSlots(s)) {
+      self[SLOTS] = {};
+    }
     if (creating) {
       initializer.call(this, arg);
     }

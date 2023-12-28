@@ -1,4 +1,4 @@
-import { ObjectCache, defineProperties } from './structure.js';
+import { ObjectCache, defineProperties, needSlots } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
@@ -51,7 +51,9 @@ export function defineArray(s, env) {
     self[MEMORY] = dv;
     self[GETTER] = null;
     self[SETTER] = null;
-    self[SLOTS] = hasObject ? {} : undefined;
+    if (needSlots(s)) {
+      self[SLOTS] = {};
+    }
     if (creating) {
       initializer.call(self, arg);
     }

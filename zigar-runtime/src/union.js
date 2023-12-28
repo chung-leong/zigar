@@ -1,4 +1,4 @@
-import { ObjectCache, StructureType, defineProperties, getSelf, removeSetters } from './structure.js';
+import { ObjectCache, StructureType, defineProperties, getSelf, needSlots, removeSetters } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView } from './data-view.js';
@@ -140,7 +140,9 @@ export function defineUnionShape(s, env) {
       self = Object.create(constructor.prototype);
     }
     self[MEMORY] = dv;
-    self[SLOTS] = hasObject ? {} : undefined;
+    if (needSlots(s)) {
+      self[SLOTS] = {};
+    }
     defineProperties(self, descriptors);
     if (hasInaccessiblePointer) {
       // make pointer access throw

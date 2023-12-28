@@ -80,14 +80,14 @@ export function addTests(importModule, options) {
       const { default: module, print } = await importTest('in-optional');
       expect(module.optional).to.equal('hello');
       const [ line ] = await capture(() => print());
-      expect(line).to.equal('hello');
+      expect(line).to.equal('.hello');
     })
     it('should handle enum literal in error union', async function() {
       this.timeout(120000);
       const { default: module, Error, print } = await importTest('in-error-union');
       expect(module.error_union).to.equal('hello');
       const [ line ] = await capture(() => print());
-      expect(line).to.equal('hello');
+      expect(line).to.equal('.hello');
     })
     it('should not compile code containing enum literal vector', async function() {
       this.timeout(120000);

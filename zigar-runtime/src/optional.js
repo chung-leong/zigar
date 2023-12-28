@@ -1,4 +1,4 @@
-import { ObjectCache, defineProperties } from './structure.js';
+import { ObjectCache, defineProperties, needSlots } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView }  from './data-view.js';
@@ -76,7 +76,9 @@ export function defineOptional(s, env) {
       self = Object.create(constructor.prototype); 
     }
     self[MEMORY] = dv;
-    self[SLOTS] = hasObject ? {} : undefined;
+    if (needSlots(s)) {
+      self[SLOTS] = {};
+    }
     if (creating) {
       initializer.call(self, arg);
     }

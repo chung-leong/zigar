@@ -11,6 +11,7 @@ import { defineSlice } from './slice.js';
 import { defineVector } from './vector.js';
 import { defineArgStruct } from './arg-struct.js';
 import { throwReadOnly } from './error.js';
+import { MemberType } from './member.js';
 
 export const StructureType = {
   Primitive: 0,
@@ -97,7 +98,9 @@ export function getStructureName(s, full = false) {
   let r = s.name;
   if (!full) {
     r = r.replace(/{.*}/, '');
-    r = r.replace(/[^. ]*?\./g, '');
+    if (!r.endsWith('.enum_literal)')) {
+      r = r.replace(/[^.]*?\./g, '');
+    }
   }
   return r;
 }
@@ -146,6 +149,20 @@ export function removeSetters(descriptors) {
     }
   }
   return newDescriptors;
+}
+
+export function needSlots(s) {
+  const { instance: { members } } = s;
+  for (const { type } of members) {
+    switch (type) {
+      case MemberType.Object:
+      case MemberType.Comptime:
+      case MemberType.Type:
+      case MemberType.Literal:
+        return true;
+    }
+  }
+  return false;
 }
 
 export function getSelf() {

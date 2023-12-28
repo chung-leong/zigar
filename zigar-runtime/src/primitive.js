@@ -1,9 +1,9 @@
-import { ObjectCache, defineProperties } from './structure.js';
+import { ObjectCache, defineProperties, needSlots } from './structure.js';
 import { MemberType, isByteAligned, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getCompatibleTags, addTypedArray, requireDataView } from './data-view.js';
 import { getSpecialKeys } from './special.js';
-import { ALIGN, COMPAT, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
+import { ALIGN, COMPAT, MEMORY, MEMORY_COPIER, SIZE, SLOTS } from './symbol.js';
 import { throwInvalidInitializer, throwNoInitializer, throwNoProperty, 
   throwReadOnly } from './error.js';
 
@@ -36,6 +36,9 @@ export function definePrimitive(s, env) {
       self = Object.create(constructor.prototype);
     }
     self[MEMORY] = dv;
+    if (needSlots(s)) {
+      self[SLOTS] = {};
+    }
     if (creating) {
       initializer.call(self, arg);
     } 
