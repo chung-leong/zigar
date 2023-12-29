@@ -14,6 +14,7 @@ export function definePrimitive(s, env) {
     instance: { members: [ member ] },
   } = s;
   addTypedArray(s);
+  const hasSlots = needSlots(s);
   const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
@@ -36,7 +37,7 @@ export function definePrimitive(s, env) {
       self = Object.create(constructor.prototype);
     }
     self[MEMORY] = dv;
-    if (needSlots(s)) {
+    if (hasSlots) {
       self[SLOTS] = {};
     }
     if (creating) {

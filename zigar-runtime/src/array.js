@@ -27,6 +27,7 @@ export function defineArray(s, env) {
   /* DEV-TEST-END */
   addTypedArray(s);
   const hasObject = (member.type === MemberType.Object);
+  const hasSlots = needSlots(s);
   const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
@@ -51,7 +52,7 @@ export function defineArray(s, env) {
     self[MEMORY] = dv;
     self[GETTER] = null;
     self[SETTER] = null;
-    if (needSlots(s)) {
+    if (hasSlots) {
       self[SLOTS] = {};
     }
     if (creating) {

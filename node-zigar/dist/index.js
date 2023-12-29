@@ -37,11 +37,12 @@ async function loadZig(url) {
     ...compileOptions
   } = options;
   const libPath = await compile(zigPath, compileOptions);
-  const structures = await exportStructures(libPath, { omitFunctions });
+  const definition = await exportStructures(libPath, { omitFunctions });
   const require = createRequire(import.meta.url);
   // get the absolute path to node-zigar-addon so the "transpiled" code can find it
   const runtimeURL = pathToFileURL(require.resolve('node-zigar-addon'));
-  const { code } = generateCodeForNode(structures, { runtimeURL, libPath });
+  const { code } = generateCodeForNode(definition, { runtimeURL, libPath });
+  // console.log(code);
   return {
     format: 'module',
     shortCircuit: true,

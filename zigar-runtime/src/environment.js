@@ -1,4 +1,4 @@
-import { defineProperties, getStructureFactory, getStructureName } from './structure.js';
+import { defineProperties, findAllObjects, getStructureFactory, getStructureName } from './structure.js';
 import { decodeText } from './text.js';
 import { initializeErrorSets } from './error-set.js';
 import { throwAlignmentConflict, throwNullPointer, throwZigError } from './error.js';
@@ -123,9 +123,6 @@ export class Environment {
 
   findMemory(address, len) {
     // check for null address (=== can't be used since address can be both number and bigint)
-    if (!address) {
-      return this.emptyView;
-    }
     if (this.context) {
       const { memoryList, shadowMap } = this.context;
       const index = findMemoryIndex(memoryList, address);
@@ -177,7 +174,9 @@ export class Environment {
   captureView(address, len, copy) {
     if (copy) {
       const dv = this.allocateMemory(len);
-      this.copyBytes(dv, address, len);
+      if (len > 0) {
+        this.copyBytes(dv, address, len);
+      }
       return dv;
     } else {
       return this.obtainFixedView(address, len);
@@ -293,15 +292,14 @@ export class Environment {
 
   exportStructures() {
     this.prepareObjectsForExport();
-    return this.structures;
+    const { structures } = this;
+    return { structures, keys: { MEMORY, SLOTS } };
   }
 
   prepareObjectsForExport() {
+    const objects = findAllObjects(this.structures, SLOTS);    
     const list = [];
-    const find = (object) => {
-      if (!object) {
-        return;
-      }
+    for (const object of objects) {
       if (object[MEMORY]) {
         let dv = object[MEMORY];
         if (this.inFixedMemory(object)) {
@@ -311,27 +309,10 @@ export class Environment {
           const len = dv.byteLength;
           const relocDV = this.captureView(address, len, true);
           relocDV.reloc = offset;
-          dv = relocDV;
+          object[MEMORY] = relocDV;
           list.push({ offset, len, owner: object, replaced: false });
         }
-        // use regular property since symbols are private to module
-        object.memory = dv;
       }
-      if (object[SLOTS]) {
-        const slots = object[SLOTS];
-        for (const child of Object.values(object[SLOTS])) {
-          // find() can throw when a bare union contains pointers
-          try {
-            find(child);         
-          } catch (err) {
-          }
-        }
-        object.slots = slots;
-      }
-    };
-    for (const structure of this.structures) {
-      find(structure.instance.template);
-      find(structure.static.template);
     }
     // larger memory blocks come first
     list.sort((a, b) => b.len - a.len);
@@ -340,11 +321,11 @@ export class Environment {
         if (a !== b && !a.replaced) {
           if (a.offset <= b.offset && b.offset + b.len <= a.offset + a.len) {
             // B is inside A--replace it with a view of A's buffer
-            const dv = a.owner.memory;
+            const dv = a.owner[MEMORY];
             const pos = b.offset - a.offset + dv.byteOffset;
             const newDV = this.obtainView(dv.buffer, pos, b.len);
             newDV.reloc = b.offset;
-            b.owner.memory = newDV;
+            b.owner[MEMORY] = newDV;
             b.replaced = true;
           }
         }
@@ -424,6 +405,7 @@ export class Environment {
     initializeErrorSets();
     const objectPlaceholders = new Map();
     for (const structure of structures) {
+      debugger;
       // recreate the actual template using the provided placeholder
       for (const scope of [ structure.instance, structure.static ]) {
         if (scope.template) {

@@ -390,6 +390,7 @@ fn getMemberType(comptime T: type) MemberType {
         .Type => .Type,
         .EnumLiteral => .Literal,
         .ComptimeInt, .ComptimeFloat => .Comptime,
+        .Null => .Null,
         else => .Void,
     };
 }
@@ -411,6 +412,7 @@ fn isSupported(comptime T: type) bool {
         .ComptimeFloat,
         .Void,
         .Null,
+        .Undefined,
         .ErrorSet,
         .Enum,
         .Opaque,
@@ -454,6 +456,7 @@ fn getStructureType(comptime T: type) StructureType {
         .Float,
         .ComptimeFloat,
         .Null,
+        .Undefined,
         .Void,
         .Type,
         .EnumLiteral,
@@ -490,7 +493,7 @@ test "getStructureType" {
 
 fn getStructureSize(comptime T: type) usize {
     return switch (@typeInfo(T)) {
-        .Null, .Opaque => 0,
+        .Null, .Opaque, .Undefined => 0,
         else => return @sizeOf(T),
     };
 }
@@ -503,7 +506,7 @@ test "getStructureSize" {
 
 fn getStructureBitSize(comptime T: type) usize {
     return switch (@typeInfo(T)) {
-        .Null, .Opaque => 0,
+        .Null, .Opaque, .Undefined => 0,
         else => return @bitSizeOf(T),
     };
 }
@@ -578,7 +581,12 @@ pub fn toMemory(ptr: anytype, is_comptime: bool) Memory {
         break :create @intFromPtr(invalid_ptr);
     };
     if (address == invalid_address) {
-        return .{};
+        return .{
+            .attributes = .{
+                .is_const = pt.is_const,
+                .is_comptime = is_comptime,
+            },
+        };
     }
     const len = switch (pt.size) {
         .One => getStructureSize(pt.child),
@@ -937,25 +945,16 @@ test "getUnionSelector" {
 }
 
 fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
-    return switch (@typeInfo(T)) {
-        .Bool,
-        .Int,
-        .Float,
-        .Void,
-        .Null,
-        .Type,
-        .ComptimeInt,
-        .ComptimeFloat,
-        .EnumLiteral,
-        => addPrimitiveMember(host, structure, T),
+    return switch (comptime getStructureType(T)) {
+        .Primitive => addPrimitiveMember(host, structure, T),
         .Array => addArrayMember(host, structure, T),
-        .Pointer => addPointerMember(host, structure, T),
-        .Struct => addStructMember(host, structure, T),
-        .Union => addUnionMember(host, structure, T),
-        .Enum => addEnumMember(host, structure, T),
-        .Optional => addOptionalMember(host, structure, T),
+        .Struct, .ArgStruct => addStructMember(host, structure, T),
+        .ExternUnion, .BareUnion, .TaggedUnion => addUnionMember(host, structure, T),
         .ErrorUnion => addErrorUnionMember(host, structure, T),
         .ErrorSet => addErrorSetMember(host, structure, T),
+        .Enumeration => addEnumMember(host, structure, T),
+        .Optional => addOptionalMember(host, structure, T),
+        .Pointer => addPointerMember(host, structure, T),
         .Vector => addVectorMember(host, structure, T),
         else => void{},
     };
@@ -1049,30 +1048,15 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
     }, false);
 }
 
-fn getComptimeMemberType(comptime T: type) MemberType {
-    return switch (@typeInfo(T)) {
-        .Type => .Type,
-        .EnumLiteral => .Literal,
-        else => if (isSupported(T)) .Comptime else .Void,
-    };
-}
-
-test "getComptimeMemberType" {
-    assert(getComptimeMemberType(type) == .Type);
-    assert(getComptimeMemberType(@TypeOf(.hello)) == .Literal);
-    assert(getComptimeMemberType(u8) == .Comptime);
-}
-
-fn getComptimeStructure(host: anytype, comptime T: type) !?Value {
-    return switch (@typeInfo(T)) {
-        .Type, .EnumLiteral => null,
-        else => getStructure(host, T),
-    };
-}
-
 fn isComptimeOnly(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        .ComptimeFloat, .ComptimeInt, .EnumLiteral, .Type => true,
+        .ComptimeFloat,
+        .ComptimeInt,
+        .EnumLiteral,
+        .Type,
+        .Null,
+        .Undefined,
+        => true,
         .Array => |ar| isComptimeOnly(ar.child),
         .Struct => |st| check: {
             inline for (st.fields) |field| {
@@ -1099,7 +1083,13 @@ fn isComptimeOnly(comptime T: type) bool {
 
 fn ComptimeFree(comptime T: type) type {
     return switch (@typeInfo(T)) {
-        .ComptimeFloat, .ComptimeInt, .EnumLiteral, .Type => void,
+        .ComptimeFloat,
+        .ComptimeInt,
+        .EnumLiteral,
+        .Type,
+        .Null,
+        .Undefined,
+        => void,
         .Array => |ar| [ar.len]ComptimeFree(ar.child),
         .Struct => |st| derive: {
             var new_fields: [st.fields.len]std.builtin.Type.StructField = undefined;
@@ -1152,7 +1142,13 @@ fn removeComptimeValues(comptime value: anytype) ComptimeFree(@TypeOf(value)) {
     const RT = ComptimeFree(@TypeOf(value));
     var result: RT = undefined;
     switch (@typeInfo(T)) {
-        .ComptimeFloat, .ComptimeInt, .EnumLiteral, .Type => result = {},
+        .ComptimeFloat,
+        .ComptimeInt,
+        .EnumLiteral,
+        .Type,
+        .Null,
+        .Undefined,
+        => result = {},
         .Array => {
             inline for (value, 0..) |element, index| {
                 result[index] = removeComptimeValues(element);
@@ -1184,7 +1180,7 @@ fn exportComptimeValue(host: anytype, comptime value: anytype) !?Value {
     return switch (@typeInfo(@TypeOf(value))) {
         .ComptimeInt => exportPointerTarget(host, &@as(IntType(i8, value), value), true),
         .ComptimeFloat => exportPointerTarget(host, &@as(f64, value), true),
-        .EnumLiteral => exportPointerTarget(host, &@as([]const u8, @tagName(value)), true),
+        .EnumLiteral => exportPointerTarget(host, @tagName(value), true),
         else => return exportPointerTarget(host, &value, true),
     };
 }
@@ -1192,6 +1188,10 @@ fn exportComptimeValue(host: anytype, comptime value: anytype) !?Value {
 fn attachComptimeValues(host: anytype, target: Value, comptime value: anytype) !void {
     const T = @TypeOf(value);
     switch (@typeInfo(T)) {
+        .Type => {
+            const obj = try getStructure(host, value);
+            try host.writeSlot(target, 0, obj);
+        },
         .ComptimeInt, .ComptimeFloat, .EnumLiteral => {
             const obj = try exportComptimeValue(host, value);
             try host.writeSlot(target, 0, obj);
@@ -1249,12 +1249,13 @@ fn attachComptimeValues(host: anytype, target: Value, comptime value: anytype) !
 
 fn exportPointerTarget(host: anytype, comptime ptr: anytype, comptime is_comptime: bool) !?Value {
     const T = @TypeOf(ptr.*);
-    if (T == type) {
-        const FT = ptr.*;
-        if (comptime isSupported(FT) and !isComptimeOnly(FT)) {
-            return getStructure(host, FT);
+    if (isSupported(T)) {
+        if (T == type) {
+            const FT = ptr.*;
+            if (comptime !isSupported(FT) or isComptimeOnly(FT)) {
+                return null;
+            }
         }
-    } else if (isSupported(T)) {
         const value_ptr = get: {
             // values that only exist at comptime need to have their comptime part replaced with void
             // (comptime keyword needed here since expression evaluates to different pointer types)
@@ -1303,8 +1304,8 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
                 .member_type = getMemberType(field.type),
                 .is_required = field.default_value == null,
                 .bit_offset = @bitOffsetOf(T, field.name),
-                .bit_size = @bitSizeOf(field.type),
-                .byte_size = if (isPacked(T)) missing else @sizeOf(field.type),
+                .bit_size = getStructureBitSize(field.type),
+                .byte_size = if (isPacked(T)) missing else getStructureSize(field.type),
                 .slot = getObjectSlot(T, index),
                 .structure = try getStructure(host, field.type),
             }, false);
@@ -1312,9 +1313,9 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
             const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
             try host.attachMember(structure, .{
                 .name = getCString(field.name),
-                .member_type = getComptimeMemberType(field.type),
+                .member_type = .Comptime,
                 .slot = getObjectSlot(T, index),
-                .structure = try getComptimeStructure(host, @TypeOf(default_value_ptr.*)),
+                .structure = try getStructure(host, @TypeOf(default_value_ptr.*)),
             }, false);
             comptimeFieldCount += 1;
         }
@@ -1330,9 +1331,11 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
         inline for (st.fields) |field| {
             if (field.default_value) |opaque_ptr| {
                 if (!field.is_comptime) {
-                    // set default value
-                    const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-                    @field(values, field.name) = default_value_ptr.*;
+                    if (@TypeOf(@field(values, field.name)) == field.type) {
+                        // set default value
+                        const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+                        @field(values, field.name) = default_value_ptr.*;
+                    }
                 }
             }
         }
@@ -1377,8 +1380,8 @@ fn addUnionMember(host: anytype, structure: Value, comptime T: type) !void {
             .name = getCString(field.name),
             .member_type = getMemberType(field.type),
             .bit_offset = value_offset,
-            .bit_size = @bitSizeOf(field.type),
-            .byte_size = if (isPacked(T)) missing else @sizeOf(field.type),
+            .bit_size = getStructureBitSize(field.type),
+            .byte_size = if (isPacked(T)) missing else getStructureSize(field.type),
             .slot = getObjectSlot(T, index),
             .structure = try getStructure(host, field.type),
         }, false);
@@ -1530,17 +1533,6 @@ test "containsSupported" {
     assert(containsSupported(S2) == false);
 }
 
-fn getStaticMemberType(comptime T: type, comptime is_const: bool) MemberType {
-    const member_type = getComptimeMemberType(T);
-    return if (member_type == .Comptime and !is_const) .Static else member_type;
-}
-
-test "getStaticMemberType" {
-    assert(getStaticMemberType(@TypeOf(.enum_literal), true) == .Literal);
-    assert(getStaticMemberType(u16, true) == .Comptime);
-    assert(getStaticMemberType(u16, false) == .Static);
-}
-
 fn hasStaticMembers(comptime T: type) bool {
     return switch (@typeInfo(T)) {
         // enum and error set always have static templates due to implicit members
@@ -1583,9 +1575,9 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                     const slot = getObjectSlot(Static, index);
                     try host.attachMember(structure, .{
                         .name = getCString(decl.name),
-                        .member_type = getStaticMemberType(DT, is_const),
+                        .member_type = if (is_const) .Comptime else .Static,
                         .slot = slot,
-                        .structure = try getComptimeStructure(host, DT),
+                        .structure = try getStructure(host, DT),
                     }, true);
                     const value_obj = try exportPointerTarget(host, decl_value_ptr, is_const);
                     try host.writeSlot(template, slot, value_obj);
@@ -1604,7 +1596,7 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                 const slot = getObjectSlot(Static, offset + index);
                 try host.attachMember(structure, .{
                     .name = getCString(field.name),
-                    .member_type = getStaticMemberType(T, true),
+                    .member_type = .Comptime,
                     .slot = slot,
                     .structure = structure,
                 }, true);
@@ -1619,7 +1611,7 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                 const slot = getObjectSlot(Static, offset + index);
                 try host.attachMember(structure, .{
                     .name = getCString(err_rec.name),
-                    .member_type = getStaticMemberType(T, true),
+                    .member_type = .Comptime,
                     .slot = slot,
                     .structure = structure,
                 }, true);

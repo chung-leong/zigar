@@ -118,6 +118,7 @@ export function defineUnionShape(s, env) {
   // non-tagged union as marked as not having pointers--if there're actually
   // members with pointers, we need to disable them
   const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
+  const hasSlots = needSlots(s);
   const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
@@ -140,7 +141,7 @@ export function defineUnionShape(s, env) {
       self = Object.create(constructor.prototype);
     }
     self[MEMORY] = dv;
-    if (needSlots(s)) {
+    if (hasSlots) {
       self[SLOTS] = {};
     }
     defineProperties(self, descriptors);

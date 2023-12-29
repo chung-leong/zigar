@@ -30,8 +30,6 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { default: module, StructA } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ empty1: undefined, empty2: undefined });
-      const b = new StructA({});
-      expect(b.valueOf()).to.eql({ empty1: undefined, empty2: undefined });
     })
     it('should not compile code with undefined in packed struct', async function() {
       this.timeout(120000);
@@ -71,15 +69,7 @@ export function addTests(importModule, options) {
       expect(module.union_a.empty).to.be.undefined;
       expect(TagType(module.union_a)).to.equal(TagType.empty);
       expect(module.union_a.number).to.be.null;
-      const b = new UnionA({ empty: undefined });
-      const c = new UnionA({ number: 123 });
-      expect(b.empty).to.be.undefined;
-      expect(c.number).to.equal(123);
-      expect(c.empty).to.be.null;
-      module.union_a = b;
-      expect(module.union_a.empty).to.be.undefined;
-      module.union_a = c;
-      expect(module.union_a.empty).to.be.null;
+      expect(UnionA).to.be.undefined;
     })
     it('should not compile code with undefined optional', async function() {
       this.timeout(120000);

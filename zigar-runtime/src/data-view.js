@@ -198,7 +198,9 @@ function getTypedArrayClass(structure) {
     }
   } else if (type === StructureType.Array || type === StructureType.Slice || type === StructureType.Vector) {
     const { structure: { typedArray } } = members[0];
-    return typedArray;
+    if (typedArray) {
+      return typedArray;
+    }
   }
   return null;
 }

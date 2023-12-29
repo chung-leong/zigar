@@ -22,9 +22,10 @@ export function defineStructShape(s, env) {
   }
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const comptimeMembers = members.filter(m => m.type === MemberType.Comptime);
+  const hasSlots = needSlots(s);
   const cache = new ObjectCache();
   // comptime fields are stored in the instance template's slots
-  const comptimeFields = getComptimeFields(members, template);
   const constructor = s.constructor = function(arg, options = {}) {
     const {
       writable = true,
@@ -46,10 +47,13 @@ export function defineStructShape(s, env) {
       self = Object.create(constructor.prototype);
     }
     self[MEMORY] = dv;
-    if (needSlots(s)) {
-      self[SLOTS] = { ...comptimeFields };
-    } else if (comptimeFields) {
-      self[SLOTS] = comptimeFields;
+    if (hasSlots) {
+      self[SLOTS] = {};
+      if (comptimeMembers.length > 0) {
+        for (const { slot } of comptimeMembers) {
+          self[SLOTS][slot] = template[SLOTS][slot];
+        } 
+      }
     }
     Object.defineProperties(self, descriptors);
     if (creating) {
@@ -146,20 +150,6 @@ export function defineStructShape(s, env) {
     [SIZE]: { value: byteSize },
   });
   return constructor;
-}
-
-
-export function getComptimeFields(members, template) {
-  if (template) {
-    const comptimeMembers = members.filter(m => [ MemberType.Comptime, MemberType.Static, MemberType.Literal, MemberType.Type ].includes(m.type));
-    if (comptimeMembers.length > 0) {
-      const slots = {};
-      for (const { slot } of comptimeMembers) {
-        slots[slot] = template[SLOTS][slot];
-      }
-      return slots;
-    }
-  }
 }
 
 export function getChildVivificators(s, writable) {

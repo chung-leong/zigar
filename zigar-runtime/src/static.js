@@ -32,7 +32,7 @@ export function addStaticMembers(s, env) {
         byIndex[index] = item;
         // attach name to item so tagged union code can quickly find it
         defineProperties(item, { [ENUM_NAME]: { value: name } });  
-      }
+      }      
     }
   } else if (type === StructureType.ErrorSet) {
     const currentErrorSets = getCurrentErrorSets();

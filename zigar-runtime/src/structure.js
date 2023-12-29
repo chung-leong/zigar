@@ -169,6 +169,32 @@ export function getSelf() {
   return this;
 }
 
+export function findAllObjects(structures, SLOTS) {
+  const list = [];
+  const found = new Map();
+  const find = (object) => {
+    if (!object || found.get(object)) {
+      return;
+    }
+    found.set(object, true);
+    list.push(object);
+    if (object[SLOTS]) {
+      for (const child of Object.values(object[SLOTS])) {
+        // find() can throw when a bare union contains pointers
+        try {
+          find(child);         
+        } catch (err) {
+        }
+      }
+    }
+  };
+  for (const structure of structures) {
+    find(structure.instance.template);
+    find(structure.static.template);
+  }
+  return list;
+}
+
 export function useAllStructureTypes() {
   usePrimitive();
   useArray();

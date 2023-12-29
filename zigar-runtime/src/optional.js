@@ -54,6 +54,7 @@ export function defineOptional(s, env) {
   };
   const check = getPresent;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const hasSlots = needSlots(s);
   const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
@@ -76,7 +77,7 @@ export function defineOptional(s, env) {
       self = Object.create(constructor.prototype); 
     }
     self[MEMORY] = dv;
-    if (needSlots(s)) {
+    if (hasSlots) {
       self[SLOTS] = {};
     }
     if (creating) {

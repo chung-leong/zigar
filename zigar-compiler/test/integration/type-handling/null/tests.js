@@ -27,9 +27,13 @@ export function addTests(importModule, options) {
       const { array } = await importTest('array-of');
       expect([ ...array ]).to.eql([ null, null, null, null ]);
     })
-    it('should not compile code with null in struct', async function() {
+    it('should handle null in struct', async function() {
       this.timeout(120000);
-      await expect(importTest('in-struct')).to.eventually.be.rejected;
+      const { struct_a, print, StructA } = await importTest('in-struct');
+      expect(struct_a.valueOf()).to.eql({ empty1: null, empty2: null, hello: 1234 });
+      expect(StructA).to.be.undefined;
+      const [ line ] = await capture(() => print());
+      expect(line).to.equal('in-struct.StructA{ .empty1 = null, .empty2 = null, .hello = 1234 }');
     })
     it('should not compile code with null in packed struct', async function() {
       this.timeout(120000);

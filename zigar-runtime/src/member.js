@@ -478,7 +478,7 @@ export function getStaticDescriptor(member, env) {
   if (structure.type === StructureType.Enumeration) {
     // enum needs to be dealt with separately, since the object reference changes
     const { instance: { members: [ member ] } } = structure;
-    const { get, set } = getEnumerationItemDescriptor(member, env);
+    const { get, set } = getEnumerationItemDescriptor({ ...member, structure }, env);
     descriptor = { 
       get: function getEnum(slot) {
         const object = this[SLOTS][slot];
@@ -492,13 +492,13 @@ export function getStaticDescriptor(member, env) {
   } else if (structure.type === StructureType.ErrorSet) {
     // ditto for error set
     const { instance: { members: [ member ] } } = structure;
-    const { get, set } = getErrorDescriptor(member, env);
+    const { get, set } = getErrorDescriptor({ ...member, structure }, env);
     descriptor = {
       get: function getError(slot) {
         const object = this[SLOTS][slot];
         return get.call(object);
       },
-      set: function setError(slot) {
+      set: function setError(slot, arg) {
         const object = this[SLOTS][slot];
         set.call(object, arg);
       },

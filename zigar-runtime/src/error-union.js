@@ -23,7 +23,6 @@ export function defineErrorUnion(s, env) {
     if (value instanceof Error) {
       setError.call(this, value);
       this[VALUE_RESETTER]();
-      debugger;
       this[POINTER_VISITOR]?.(resetPointer);
     } else {
       // call setValue() first, in case it throws
@@ -44,6 +43,7 @@ export function defineErrorUnion(s, env) {
     return !error;
   };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const hasSlots = needSlots(s);
   const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
@@ -66,7 +66,7 @@ export function defineErrorUnion(s, env) {
       self = Object.create(constructor.prototype); 
     }
     self[MEMORY] = dv;
-    if (needSlots(s)) {
+    if (hasSlots) {
       self[SLOTS] = {};
     }
     if (creating) {

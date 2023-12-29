@@ -1177,7 +1177,9 @@ function getTypedArrayClass(structure) {
     }
   } else if (type === StructureType.Array || type === StructureType.Slice || type === StructureType.Vector) {
     const { structure: { typedArray } } = members[0];
-    return typedArray;
+    if (typedArray) {
+      return typedArray;
+    }
   }
   return null;
 }
@@ -1973,6 +1975,11 @@ function getFloatDescriptorEx(member, env) {
   return getDescriptorUsing(member, env, getDataViewFloatAccessorEx)
 }
 
+function getEnumerationItemDescriptor(member, env) {
+  const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessor);
+  return getDescriptorUsing(member, env, getDataViewAccessor) ;
+}
+
 function getEnumerationItemDescriptorEx(member, env) {
   const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessorEx);
   return getDescriptorUsing(member, env, getDataViewAccessor) ;
@@ -2072,128 +2079,128 @@ function isValueExpected(structure) {
   }
 }
 
-function getObjectDescriptor(member, env) {
-  const { structure, slot } = member;
+function getValue(slot) {
+  const object = this[CHILD_VIVIFICATOR][slot].call(this);
+  return object.$;
+}
+
+function getObject(slot) {
+  const object = this[CHILD_VIVIFICATOR][slot].call(this);
+  return object;
+}
+
+function setValue(slot, value) {
+  const object = this[CHILD_VIVIFICATOR][slot].call(this);
+  object.$ = value;
+}
+
+function bindSlot(slot, { get, set }) {
   if (slot !== undefined) {
-    return {
-      get: (isValueExpected(structure))
-      ? function getValue() {
-        const object = this[CHILD_VIVIFICATOR][slot].call(this);
-        return object.$;
-      }
-      : function getObject() {
-        const object = this[CHILD_VIVIFICATOR][slot].call(this);
-        return object;
+    return { 
+      get: function() {
+        return get.call(this, slot);
       },
-      set: function setValue(value) {
-        const object = this[CHILD_VIVIFICATOR][slot].call(this);
-        object.$ = value;
-      },
+      set: (set) 
+      ? function(arg) {
+          return set.call(this, slot, arg);
+        } 
+      : undefined,
     };
   } else {
     // array accessors
-    return {
-      get: (isValueExpected(structure))
-      ? function getValue(index) {
-        const object = this[CHILD_VIVIFICATOR](index);
-        return object.$;
-      }
-      : function getObject(index) {
-        const object = this[CHILD_VIVIFICATOR](index);
-        return object;
-      },
-      set: function setValue(index, value) {
-        const object = this[CHILD_VIVIFICATOR](index);
-        object.$ = value;
-      },
-    };
+    return { get, set };
   }
+}
+
+function getObjectDescriptor(member, env) {
+  const { structure, slot } = member;
+  return bindSlot(slot, {
+    get: isValueExpected(structure) ? getValue : getObject,
+    set: setValue,
+  });
+}
+
+function getType(slot) {
+  // unsupported types will have undefined structure
+  const structure = this[SLOTS][slot];
+  return structure?.constructor;
 }
 
 function getTypeDescriptor(member, env) {
   const { slot } = member;
-  return {
-    get: function getType() {
-      // unsupported types will have undefined structure
-      console.log({ member });
-      const structure = this[SLOTS][slot];
-      return structure?.constructor;
-    },
-    // no setter
-  };
+  return bindSlot(slot, { get: getType });
+}
+
+function getStaticValue(slot) {
+  const object = this[SLOTS][slot];
+  return object.$;
+}
+
+function getStaticObject(slot) {
+  const object = this[SLOTS][slot];
+  return object;
+}
+
+function setStaticValue(slot, value) {
+  const object = this[SLOTS][slot];
+  object.$ = value;
 }
 
 function getComptimeDescriptor(member, env) {
   const { slot, structure } = member;
-  return {
-    get: (isValueExpected(structure))
-    ? function getValue() {
-      const object = this[SLOTS][slot];
-      return object.$;
-    }
-    : function getObject() {
-      const object = this[SLOTS][slot];
-      return object;
-    },
-  };
+  return bindSlot(slot, {
+    get: isValueExpected(structure) ? getStaticValue : getStaticObject,
+  });
 }
 
 function getStaticDescriptor(member, env) {
   const { slot, structure } = member;
+  let descriptor;
   if (structure.type === StructureType.Enumeration) {
     // enum needs to be dealt with separately, since the object reference changes
-    const { 
-      instance: { members: [ member ] },
-    } = structure;
-    const enumMember = { ...member, structure, type: MemberType.EnumerationItem };
-    const { get, set } = getDescriptor(enumMember, env);
-    return {
-      get: function getEnum() {
+    const { instance: { members: [ member ] } } = structure;
+    const { get, set } = getEnumerationItemDescriptor({ ...member, structure }, env);
+    descriptor = { 
+      get: function getEnum(slot) {
         const object = this[SLOTS][slot];
         return get.call(object);
-      },
-      set: function setEnum(arg) {
+      }, 
+      set: function setEnum(slot, arg) {
         const object = this[SLOTS][slot];
         return set.call(object, arg);
       },
     };
   } else if (structure.type === StructureType.ErrorSet) {
     // ditto for error set
-    const { 
-      instance: { members: [ member ] },
-    } = structure;
-    const errorMember = { ...member, structure, type: MemberType.Error };
-    const { get, set } = getDescriptor(errorMember, env);
-    return {
-      get: function getError() {
+    const { instance: { members: [ member ] } } = structure;
+    const { get, set } = getErrorDescriptor({ ...member, structure }, env);
+    descriptor = {
+      get: function getError(slot) {
         const object = this[SLOTS][slot];
         return get.call(object);
       },
-      set: function setError(arg) {
+      set: function setError(slot, arg) {
         const object = this[SLOTS][slot];
         set.call(object, arg);
       },
     };
   } else {
-    return {
-      ...getComptimeDescriptor(member),
-      set: function setValue(value) {
-        const object = this[SLOTS][slot];
-        object.$ = value;
-      },
-    };  
+    descriptor = {
+      get: isValueExpected(structure) ? getStaticValue : getStaticObject,
+      set: setStaticValue,
+    };
   }
+  return bindSlot(slot, descriptor);
+}
+
+function getLiteral(slot) {
+  const object = this[SLOTS][slot];
+  return object.string;
 }
 
 function getLiteralDescriptor(member, env) {
   const { slot } = member;
-  return {
-    get: function getType() {
-      const object = this[SLOTS][slot];
-      return object.string;
-    },
-    // no setter
-  };
+  return bindSlot(slot, { get: getLiteral });
 }
 
 function getDescriptorUsing(member, env, getDataViewAccessor) {
@@ -2534,6 +2541,7 @@ function definePrimitive(s, env) {
     instance: { members: [ member ] },
   } = s;
   addTypedArray(s);
+  const hasSlots = needSlots(s);
   const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
@@ -2556,6 +2564,9 @@ function definePrimitive(s, env) {
       self = Object.create(constructor.prototype);
     }
     self[MEMORY] = dv;
+    if (hasSlots) {
+      self[SLOTS] = {};
+    }
     if (creating) {
       initializer.call(self, arg);
     } 
@@ -2970,6 +2981,7 @@ function defineArray(s, env) {
   } = s;
   addTypedArray(s);
   const hasObject = (member.type === MemberType.Object);
+  const hasSlots = needSlots(s);
   const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
@@ -2994,7 +3006,9 @@ function defineArray(s, env) {
     self[MEMORY] = dv;
     self[GETTER] = null;
     self[SETTER] = null;
-    self[SLOTS] = hasObject ? {} : undefined;
+    if (hasSlots) {
+      self[SLOTS] = {};
+    }
     if (creating) {
       initializer.call(self, arg);
     }
@@ -3276,9 +3290,10 @@ function defineStructShape(s, env) {
   }
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const comptimeMembers = members.filter(m => m.type === MemberType.Comptime);
+  const hasSlots = needSlots(s);
   const cache = new ObjectCache();
   // comptime fields are stored in the instance template's slots
-  const slots = getComptimeFields(members, template);
   const constructor = s.constructor = function(arg, options = {}) {
     const {
       writable = true,
@@ -3300,10 +3315,13 @@ function defineStructShape(s, env) {
       self = Object.create(constructor.prototype);
     }
     self[MEMORY] = dv;
-    if (hasObject) {
-      self[SLOTS] = { ...slots };
-    } else if (slots) {
-      self[SLOTS] = slots;
+    if (hasSlots) {
+      self[SLOTS] = {};
+      if (comptimeMembers.length > 0) {
+        for (const { slot } of comptimeMembers) {
+          self[SLOTS][slot] = template[SLOTS][slot];
+        } 
+      }
     }
     Object.defineProperties(self, descriptors);
     if (creating) {
@@ -3400,17 +3418,6 @@ function defineStructShape(s, env) {
     [SIZE]: { value: byteSize },
   });
   return constructor;
-}
-
-function getComptimeFields(members, template) {
-  const comptimeMembers = members.filter(m => m.type === MemberType.Comptime);
-  if (comptimeMembers.length > 0) {
-    const slots = {};
-    for (const { slot } of comptimeMembers) {
-      slots[slot] = template[SLOTS][slot];
-    }
-    return slots;
-  }
 }
 
 function getChildVivificators(s, writable) {
@@ -3584,6 +3591,7 @@ function defineUnionShape(s, env) {
   // non-tagged union as marked as not having pointers--if there're actually
   // members with pointers, we need to disable them
   const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
+  const hasSlots = needSlots(s);
   const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
@@ -3606,7 +3614,9 @@ function defineUnionShape(s, env) {
       self = Object.create(constructor.prototype);
     }
     self[MEMORY] = dv;
-    self[SLOTS] = hasObject ? {} : undefined;
+    if (hasSlots) {
+      self[SLOTS] = {};
+    }
     defineProperties(self, descriptors);
     if (hasInaccessiblePointer) {
       // make pointer access throw
@@ -3744,7 +3754,6 @@ function defineErrorUnion(s, env) {
     if (value instanceof Error) {
       setError.call(this, value);
       this[VALUE_RESETTER]();
-      debugger;
       this[POINTER_VISITOR]?.(resetPointer);
     } else {
       // call setValue() first, in case it throws
@@ -3765,6 +3774,7 @@ function defineErrorUnion(s, env) {
     return !error;
   };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const hasSlots = needSlots(s);
   const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
@@ -3787,7 +3797,9 @@ function defineErrorUnion(s, env) {
       self = Object.create(constructor.prototype); 
     }
     self[MEMORY] = dv;
-    self[SLOTS] = hasObject ? {} : undefined;
+    if (hasSlots) {
+      self[SLOTS] = {};
+    }
     if (creating) {
       initializer.call(this, arg);
     }
@@ -3943,6 +3955,7 @@ function defineOptional(s, env) {
   };
   const check = getPresent;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const hasSlots = needSlots(s);
   const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
@@ -3965,7 +3978,9 @@ function defineOptional(s, env) {
       self = Object.create(constructor.prototype); 
     }
     self[MEMORY] = dv;
-    self[SLOTS] = hasObject ? {} : undefined;
+    if (hasSlots) {
+      self[SLOTS] = {};
+    }
     if (creating) {
       initializer.call(self, arg);
     }
@@ -4516,7 +4531,9 @@ function getStructureName(s, full = false) {
   let r = s.name;
   if (!full) {
     r = r.replace(/{.*}/, '');
-    r = r.replace(/[^. ]*?\./g, '');
+    if (!r.endsWith('.enum_literal)')) {
+      r = r.replace(/[^.]*?\./g, '');
+    }
   }
   return r;
 }
@@ -4560,8 +4577,48 @@ function removeSetters(descriptors) {
   return newDescriptors;
 }
 
+function needSlots(s) {
+  const { instance: { members } } = s;
+  for (const { type } of members) {
+    switch (type) {
+      case MemberType.Object:
+      case MemberType.Comptime:
+      case MemberType.Type:
+      case MemberType.Literal:
+        return true;
+    }
+  }
+  return false;
+}
+
 function getSelf() {
   return this;
+}
+
+function findAllObjects(structures, SLOTS) {
+  const list = [];
+  const found = new Map();
+  const find = (object) => {
+    if (!object || found.get(object)) {
+      return;
+    }
+    found.set(object, true);
+    list.push(object);
+    if (object[SLOTS]) {
+      for (const child of Object.values(object[SLOTS])) {
+        // find() can throw when a bare union contains pointers
+        try {
+          find(child);         
+        } catch (err) {
+        }
+      }
+    }
+  };
+  for (const structure of structures) {
+    find(structure.instance.template);
+    find(structure.static.template);
+  }
+  return list;
 }
 
 function useAllStructureTypes() {
@@ -4631,7 +4688,7 @@ function addStaticMembers(s, env) {
         byIndex[index] = item;
         // attach name to item so tagged union code can quickly find it
         defineProperties(item, { [ENUM_NAME]: { value: name } });  
-      }
+      }      
     }
   } else if (type === StructureType.ErrorSet) {
     const currentErrorSets = getCurrentErrorSets();
@@ -4818,9 +4875,6 @@ class Environment {
 
   findMemory(address, len) {
     // check for null address (=== can't be used since address can be both number and bigint)
-    if (!address) {
-      return this.emptyView;
-    }
     if (this.context) {
       const { memoryList, shadowMap } = this.context;
       const index = findMemoryIndex(memoryList, address);
@@ -4872,7 +4926,9 @@ class Environment {
   captureView(address, len, copy) {
     if (copy) {
       const dv = this.allocateMemory(len);
-      this.copyBytes(dv, address, len);
+      if (len > 0) {
+        this.copyBytes(dv, address, len);
+      }
       return dv;
     } else {
       return this.obtainFixedView(address, len);
@@ -4988,15 +5044,14 @@ class Environment {
 
   exportStructures() {
     this.prepareObjectsForExport();
-    return this.structures;
+    const { structures } = this;
+    return { structures, keys: { MEMORY, SLOTS } };
   }
 
   prepareObjectsForExport() {
+    const objects = findAllObjects(this.structures, SLOTS);    
     const list = [];
-    const find = (object) => {
-      if (!object) {
-        return;
-      }
+    for (const object of objects) {
       if (object[MEMORY]) {
         let dv = object[MEMORY];
         if (this.inFixedMemory(object)) {
@@ -5006,27 +5061,10 @@ class Environment {
           const len = dv.byteLength;
           const relocDV = this.captureView(address, len, true);
           relocDV.reloc = offset;
-          dv = relocDV;
+          object[MEMORY] = relocDV;
           list.push({ offset, len, owner: object, replaced: false });
         }
-        // use regular property since symbols are private to module
-        object.memory = dv;
       }
-      if (object[SLOTS]) {
-        const slots = object[SLOTS];
-        for (const child of Object.values(object[SLOTS])) {
-          // find() can throw when a bare union contains pointers
-          try {
-            find(child);         
-          } catch (err) {
-          }
-        }
-        object.slots = slots;
-      }
-    };
-    for (const structure of this.structures) {
-      find(structure.instance.template);
-      find(structure.static.template);
     }
     // larger memory blocks come first
     list.sort((a, b) => b.len - a.len);
@@ -5035,11 +5073,11 @@ class Environment {
         if (a !== b && !a.replaced) {
           if (a.offset <= b.offset && b.offset + b.len <= a.offset + a.len) {
             // B is inside A--replace it with a view of A's buffer
-            const dv = a.owner.memory;
+            const dv = a.owner[MEMORY];
             const pos = b.offset - a.offset + dv.byteOffset;
             const newDV = this.obtainView(dv.buffer, pos, b.len);
             newDV.reloc = b.offset;
-            b.owner.memory = newDV;
+            b.owner[MEMORY] = newDV;
             b.replaced = true;
           }
         }
@@ -5547,7 +5585,8 @@ function loadModule(source) {
   return env;
 }
 
-function generateCodeForWASM(structures, params) {
+function generateCodeForWASM(definition, params) {
+  const { structures, keys } = definition;
   const {
     runtimeURL,
     loadWASM,
@@ -5572,7 +5611,7 @@ function generateCodeForWASM(structures, params) {
   add(`\n// initiate loading and compilation of WASM bytecodes`);
   add(`const source = ${loadWASM ?? null};`);
   // write out the structures as object literals
-  lines.push(...generateStructureDefinitions(structures));
+  lines.push(...generateStructureDefinitions(structures, keys));
   lines.push(...generateLoadStatements('source', JSON.stringify(!topLevelAwait)));
   lines.push(...generateExportStatements(exports, omitExports));
   if (topLevelAwait && loadWASM) {
@@ -5582,7 +5621,8 @@ function generateCodeForWASM(structures, params) {
   return { code, exports, structures };
 }
 
-function generateCodeForNode(structures, params) {
+function generateCodeForNode(definition, params) {
+  const { structures, keys } = definition;
   const {
     runtimeURL,
     libPath,
@@ -5594,7 +5634,7 @@ function generateCodeForNode(structures, params) {
   const add = manageIndentation(lines);
   add(`import { loadModule } from ${JSON.stringify(runtimeURL)};`);
   // all features are enabled by default for Node
-  lines.push(...generateStructureDefinitions(structures));
+  lines.push(...generateStructureDefinitions(structures, keys));
   lines.push(...generateLoadStatements(JSON.stringify(libPath), 'false'));
   lines.push(...generateExportStatements(exports, omitExports));
   if (topLevelAwait) {
@@ -5640,105 +5680,93 @@ function generateExportStatements(exports, omitExports) {
   return lines;
 }
 
-function generateStructureDefinitions(structures, params) {
-  const addStructure = (varname, structure) => {
-    addBuffers(structure.instance.template);
-    addBuffers(structure.static.template);
-    // add static members; instance methods are also static methods, so
-    // we don't need to add them separately
-    for (const method of structure.static.methods) {
-      const varname = `f${methodCount++}`;
-      methodNames.set(method, varname);
-      add(`const ${varname} = {`);
-      for (const [ name, value ] of Object.entries(method)) {
-        switch (name) {
-          case 'argStruct':
-            add(`${name}: ${structureNames.get(value)},`);
-            break;
-          default:
-            add(`${name}: ${JSON.stringify(value)},`);
-        }
-      }
-      add(`};`);
-    }
-    //  no need to add them separately
-    add(`Object.assign(${varname}, {`);
-    add(`...s,`);
-    for (const [ name, value ] of Object.entries(structure)) {
-      if (isDifferent(value, defaultStructure[name])) {
-        switch (name) {
-          case 'constructor':
-          case 'sentinel':
-            break;
-          case 'instance':
-          case 'static':
-            addStructureContent(name, value);
-            break;
-          default:
-            add(`${name}: ${JSON.stringify(value)},`);
-        }
-      }
-    }
-    add(`});`);
+function generateStructureDefinitions(structures, keys) {
+  const { MEMORY, SLOTS } = keys;
+  const lines = [];
+  const add = manageIndentation(lines);
+  const defaultStructure = {
+    constructor: null,
+    typedArray: null,
+    type: StructureType.Primitive,
+    name: undefined,
+    byteSize: 0,
+    align: 0,
+    isConst: false,
+    hasPointer: false,
+    instance: {
+      members: [],
+      methods: [],
+      template: null,
+    },
+    static: {
+      members: [],
+      methods: [],
+      template: null,
+    },
   };
-  const addStructureContent = (name, { members, methods, template }) => {
-    add(`${name}: {`);
-    if (members.length > 0) {
-      add(`members: [`);
-      for (const member of members) {
-        add(`{`);
-        add(`...m,`);
-        for (const [ name, value ] of Object.entries(member)) {
-          if (isDifferent(value, defaultMember[name])) {
-            switch (name) {
-              case 'structure':
-                add(`${name}: ${structureNames.get(value)},`);
-                break;
-              default:
-                add(`${name}: ${JSON.stringify(value)},`);
-            }
-          }
-        }
-        add(`},`);
-      }
-      add(`],`);
-    } else {
-      add(`members: [],`);
-    }
-    const list = methods.map(m => methodNames.get(m));
-    if (list.length > 0) {
-      add(`methods: [ ${list.join(', ')} ],`);
-    } else {
-      add(`methods: [],`);
-    }
-    addObject('template', template);
-    add(`},`);
+  add(`\n// structure defaults`);
+  add(`const s = {`);
+  for (const [ name, value ] of Object.entries(defaultStructure)) {
+    add(`${name}: ${JSON.stringify(value)},`);
+  }
+  add(`};`);
+  const defaultMember = {
+    type: MemberType.Void,
+    isRequired: false,
   };
-  const addBuffers = (object) => {
-    if (object) {
-      const { memory: dv, slots: slots } = object;
-      if (dv && !arrayBufferNames.get(dv.buffer)) {
-        const varname = `a${arrayBufferCount++}`;
-        arrayBufferNames.set(dv.buffer, varname);
-        if (dv.byteLength > 0) {
-          const ta = new Uint8Array(dv.buffer);
-          add(`const ${varname} = new Uint8Array([ ${ta.join(', ')} ]);`);
-        } else {
-          add(`const ${varname} = new Uint8Array();`);
-        }
-      }
-      if (slots) {
-        for (const child of Object.values(slots)) {
-          addBuffers(child);
-        }
+  add(`\n// member defaults`);
+  add(`const m = {`);
+  for (const [ name, value ] of Object.entries(defaultMember)) {
+    add(`${name}: ${JSON.stringify(value)},`);
+  }
+  add(`};`);
+  // create empty objects first, to allow objects to reference each other
+  add(``);
+  const structureNames = new Map();
+  const structureMap = new Map();
+  for (const [ index, structure ] of structures.entries()) {
+    const varname = `s${index}`;
+    structureNames.set(structure, varname);
+    structureMap.set(structure.constructor, structure);
+  }
+  for (const slice of chunk(structureNames.values(), 10)) {
+    add(`const ${slice.map(n => `${n} = {}`).join(', ')};`);
+  }
+  const objects = findAllObjects(structures, SLOTS);
+  const objectNames = new Map();
+  const views = [];
+  for (const [ index, object ] of objects.entries()) {
+    const varname = `o${index}`;
+    objectNames.set(object, varname);
+    if (object[MEMORY]) {
+      views.push(object[MEMORY]);
+    }
+  }
+  for (const slice of chunk(objectNames.values(), 10)) {
+    add(`const ${slice.map(n => `${n} = {}`).join(', ')};`);
+  }
+  // define buffers
+  const arrayBufferNames = new Map();
+  for (const [ index, dv ] of views.entries()) {
+    if (!arrayBufferNames.get(dv.buffer)) {
+      const varname = `a${index}`;
+      arrayBufferNames.set(dv.buffer, varname);
+      if (dv.buffer.byteLength > 0) {
+        const ta = new Uint8Array(dv.buffer);
+        add(`const ${varname} = new Uint8Array([ ${ta.join(', ')} ]);`);
+      } else {
+        add(`const ${varname} = new Uint8Array();`);
       }
     }
-  };
-  const addObject = (name, object) => {
-    if (object) {
+  }
+  // add properties to objects
+  if (objects.length > 0) {
+    add('\n// define objects');
+    for (const object of objects) {
+      const varname = objectNames.get(object);
       const structure = structureMap.get(object.constructor);
-      const { memory: dv, slots: slots } = object;
-      add(`${name}: {`);
+      const { [MEMORY]: dv, [SLOTS]: slots } = object;
+      add(`Object.assign(${varname}, {`);
       if (structure) {
         add(`structure: ${structureNames.get(structure)},`);
       }
@@ -5757,108 +5785,110 @@ function generateStructureDefinitions(structures, params) {
           }
         }
       }
-      if (slots && Object.keys(slots).length > 0) {
+      const entries = (slots) ? Object.entries(slots) : [];
+      if (entries.length > 0) {
         add(`slots: {`);
-        for (const [ slot, child ] of Object.entries(slots)) {
-          addObject(slot, child);
+        const pairs = entries.map(([slot, child]) => `${slot}: ${objectNames.get(child)}`);
+        for (const slice of chunk(pairs, 10)) {
+          add(slice.join(', ') + ',');
         }
         add(`},`);
       }
-      add(`},`);
-    } else {
-      add(`${name}: null,`);
-    }
-  };
-  const isConst = (object) => {
-    const descriptor = Object.getOwnPropertyDescriptor(object, '$');
-    // the setter comes from the embedded source code and thus wouldn't match 
-    // if we compare it with the imported version--hence the check on the name 
-    return descriptor?.set?.name === 'throwReadOnly';
-  };
-
-  const lines = [];
-  const add = manageIndentation(lines);
-  const defaultStructure = {
-    constructor: null,
-    typedArray: null,
-    type: StructureType.Primitive,
-    name: undefined,
-    byteSize: 4,
-    align: 2,
-    isConst: false,
-    hasPointer: false,
-    instance: {
-      members: [],
-      methods: [],
-      template: null,
-    },
-    static: {
-      members: [],
-      methods: [],
-      template: null,
-    },
-  };
-  const defaultMember = {
-    type: MemberType.Void,
-    isRequired: true,
-  };
-  add(`\n// define structures`);
-  // default structure
-  add(`const s = {`);
-  for (const [ name, value ] of Object.entries(defaultStructure)) {
-    switch (name) {
-      case 'instance':
-      case 'static':
-        addStructureContent(name, value);
-        break;
-      default:
-        add(`${name}: ${JSON.stringify(value)},`);
+      add(`});`);
     }
   }
-  add(`};`);
-  // default member
-  add(`const m = {`);
-  for (const [ name, value ] of Object.entries(defaultMember)) {
-    add(`${name}: ${JSON.stringify(value)},`);
+  const methods = [];
+  for (const structure of structures) {
+    // add static members; instance methods are also static methods, so
+    // we don't need to add them separately
+    methods.push(...structure.static.methods);
   }
-  add(`};`);
-
-  // create empty objects first, to allow structs to reference themselves
-  const structureNames = new Map();
-  const structureMap = new Map();
   const methodNames = new Map();
-  const arrayBufferNames = new Map();
-  let arrayBufferCount = 0;
-  let methodCount = 0;
-  for (const [ index, structure ] of structures.entries()) {
-    const varname = `s${index}`;
-    structureNames.set(structure, varname);
-    structureMap.set(structure.constructor, structure);
-  }
-  const varnames = [ ...structureNames.values() ];
-  const initializations = varnames.map(n => `${n} = {}`);
-  for (let i = 0; i < initializations.length; i += 10) {
-    const slice = initializations.slice(i, i + 10);
-    add(`const ${slice.join(', ')};`);
-  }
-  for (const [ index, structure ] of structures.entries()) {
-    const varname = structureNames.get(structure);
-    addStructure(varname, structure);
-  }
-  if (varnames.length <= 10) {
-    add(`const structures = [ ${varnames.join(', ') } ];`);
-  } else {
-    add(`const structures = [`);
-    for (let i = 0; i < varnames.length; i += 10) {
-      const slice = varnames.slice(i, i + 10);
-      add(`${slice.join(', ')},`);
+  if (methods.length > 0) {
+    add(`\n// define functions`);
+    for (const [ index, method ] of methods.entries()) {
+      const varname = `f${index}`;
+      methodNames.set(method, varname);
+      add(`const ${varname} = {`);
+      for (const [ name, value ] of Object.entries(method)) {
+        switch (name) {
+          case 'argStruct':
+            add(`${name}: ${structureNames.get(value)},`);
+            break;
+          default:
+            add(`${name}: ${JSON.stringify(value)},`);
+        }
+      }
+      add(`};`);
     }
-    add(`];`);
   }
+  add('\n// define structures');
+  for (const structure of structures) {
+    const varname = structureNames.get(structure);
+    add(`Object.assign(${varname}, {`);
+    add(`...s,`);
+    for (const [ name, value ] of Object.entries(structure)) {
+      if (isDifferent(value, defaultStructure[name])) {
+        switch (name) {
+          case 'constructor':
+          case 'typedArray':
+          case 'sentinel':
+            break;
+          case 'instance':
+          case 'static': {
+            const { methods, members, template } = value;
+            add(`${name}: {`);
+            add(`members: [`);
+            for (const member of members) {
+              add(`{`);
+              add(`...m,`);
+              for (const [ name, value ] of Object.entries(member)) {
+                if (isDifferent(value, defaultMember[name])) {
+                  switch (name) {
+                    case 'structure':
+                      add(`${name}: ${structureNames.get(value)},`);
+                      break;
+                    default:
+                      add(`${name}: ${JSON.stringify(value)},`);
+                  }
+                }
+              }
+              add(`},`);
+            }
+            add(`],`);
+            add(`methods: [`);
+            for (const slice of chunk(methods, 10)) {
+              add(slice.map(m => methodNames.get(m)).join(', ') + ',');
+            }
+            add(`],`);
+            if (template) {
+              add(`template: ${objectNames.get(template)}`);
+            }
+            add(`},`);
+          } break;
+          default:
+            add(`${name}: ${JSON.stringify(value)},`);
+        }
+      }
+    }
+    add(`});`);
+  }
+  add(`const structures = [`);
+  for (const slice of chunk([ ...structureNames.values() ], 10)) {
+    add(slice.join(', ') + ',');
+  }
+  add(`];`);
   const root = structures[structures.length - 1];
   add(`const root = ${structureNames.get(root)};`);
   add(``);
   return lines;
+}
+
+function isConst(object) {
+  const descriptor = Object.getOwnPropertyDescriptor(object, '$');
+  // the setter comes from the embedded source code and thus wouldn't match if we compare 
+  // it with the imported version of the function--need to check the name 
+  return descriptor?.set?.name === 'throwReadOnly';
 }
 
 function getStructureFeatures(structures) {
@@ -5927,7 +5957,13 @@ function manageIndentation(lines) {
     if (/^\s*[\]\}]/.test(s)) {
       indent--;
     }
-    lines.push(' '.repeat(indent * 2) + s);
+    const lastLine = lines[lines.length - 1];
+    if ((lastLine?.endsWith('[') && s.startsWith(']')) 
+     || (lastLine?.endsWith('{') && s.startsWith('}'))) {
+      lines[lines.length - 1] += s;
+    } else {
+      lines.push(' '.repeat(indent * 2) + s);
+    }
     if (/[\[\{]\s*$/.test(s)) {
       indent++;
     }
@@ -5955,6 +5991,15 @@ function isDifferent(value, def) {
     return false;
   }
   return true;
+}
+
+function* chunk(arr, n) {
+  if (!Array.isArray(arr)) {
+    arr = [ ...arr ];
+  }
+  for (let i = 0; i < arr.length; i += n) {
+    yield arr.slice(i, i + n);
+  }
 }
 
 const MagicNumber = 0x6d736100;
@@ -7251,7 +7296,7 @@ async function transpile(path, options = {}) {
   const env = loadModule(content);
   await env.initPromise;
   env.acquireStructures({ omitFunctions });
-  const structures = env.exportStructures();
+  const definition = env.exportStructures();
   // all methods are static, so there's no need to check the instance methods
   const hasMethods = !!structures.find(s => s.static.methods.length > 0);
   const runtimeURL = moduleResolver('zigar-runtime');
@@ -7267,11 +7312,12 @@ async function transpile(path, options = {}) {
       loadWASM = await wasmLoader(path, dv);
     }
   }
-  return generateCodeForWASM(structures, {
+  return generateCodeForWASM(definition, {
     runtimeURL,
     loadWASM,
     topLevelAwait,
     omitExports,
+    keys,
   });
 }
 

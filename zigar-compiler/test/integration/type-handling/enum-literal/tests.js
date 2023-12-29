@@ -12,7 +12,7 @@ export function addTests(importModule, options) {
   describe('Enum literal', function() {
     it('should handle enum literal as static variables', async function() {
       this.timeout(120000);
-      const { hello, world } = await importTest('as-static-variables');
+      const { default: module, hello, world } = await importTest('as-static-variables');
       expect(hello).to.equal('hello');
       expect(world.valueOf()).to.eql({
         0: 'Asgard',
