@@ -37,18 +37,17 @@ export function addTests(importModule, options) {
     it('should ignore function in array', async function() {
       this.timeout(120000);
       const { default: module, Fn } = await importTest('array-of');      
-      expect(module).to.not.have.property('array');
-      expect(module).to.not.have.property('Fn');
+      expect(module.array).to.be.undefined;
+      expect(module.Fn).to.be.undefined;
     })
     it('should ignore function in struct', async function() {
       this.timeout(120000);
       const { default: module } = await importTest('in-struct');
       expect(module).to.not.have.property('struct_a');
     })
-    it('should ignore function in packed struct', async function() {
+    it('should not compile code with function in packed struct', async function() {
       this.timeout(120000);
-      const { default: module } = await importTest('in-packed-struct');
-      expect(module).to.not.have.property('struct_a');
+      await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
     it('should ignore function as comptime field', async function() {
       this.timeout(120000);

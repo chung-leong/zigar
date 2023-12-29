@@ -420,8 +420,16 @@ fn isSupported(comptime T: type) bool {
         .EnumLiteral,
         => true,
         .ErrorUnion => |eu| isSupported(eu.payload),
-        inline .Struct, .Union => |st| check_fields: {
+        .Struct => |st| check_fields: {
             inline for (st.fields) |field| {
+                if (!field.is_comptime and !isSupported(field.type)) {
+                    break :check_fields false;
+                }
+            }
+            break :check_fields true;
+        },
+        .Union => |un| check_fields: {
+            inline for (un.fields) |field| {
                 if (!isSupported(field.type)) {
                     break :check_fields false;
                 }
@@ -948,12 +956,12 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
     return switch (comptime getStructureType(T)) {
         .Primitive => addPrimitiveMember(host, structure, T),
         .Array => addArrayMember(host, structure, T),
-        .Struct, .ArgStruct => addStructMember(host, structure, T),
-        .ExternUnion, .BareUnion, .TaggedUnion => addUnionMember(host, structure, T),
-        .ErrorUnion => addErrorUnionMember(host, structure, T),
+        .Struct, .ArgStruct => addStructMembers(host, structure, T),
+        .ExternUnion, .BareUnion, .TaggedUnion => addUnionMembers(host, structure, T),
+        .ErrorUnion => addErrorUnionMembers(host, structure, T),
         .ErrorSet => addErrorSetMember(host, structure, T),
         .Enumeration => addEnumMember(host, structure, T),
-        .Optional => addOptionalMember(host, structure, T),
+        .Optional => addOptionalMembers(host, structure, T),
         .Pointer => addPointerMember(host, structure, T),
         .Vector => addVectorMember(host, structure, T),
         else => void{},
@@ -1182,7 +1190,7 @@ fn removeComptimeValues(comptime value: anytype) ComptimeFree(@TypeOf(value)) {
     return result;
 }
 
-fn exportComptimeValue(host: anytype, comptime value: anytype) !?Value {
+fn exportComptimeValue(host: anytype, comptime value: anytype) !Value {
     return switch (@typeInfo(@TypeOf(value))) {
         .ComptimeInt => exportPointerTarget(host, &@as(IntType(i8, value), value), true),
         .ComptimeFloat => exportPointerTarget(host, &@as(f64, value), true),
@@ -1251,35 +1259,26 @@ fn attachComptimeValues(host: anytype, target: Value, comptime value: anytype) !
     }
 }
 
-fn exportPointerTarget(host: anytype, comptime ptr: anytype, comptime is_comptime: bool) !?Value {
+fn exportPointerTarget(host: anytype, comptime ptr: anytype, comptime is_comptime: bool) !Value {
     const T = @TypeOf(ptr.*);
-    if (isSupported(T)) {
-        if (T == type) {
-            const FT = ptr.*;
-            if (comptime !isSupported(FT) or isComptimeOnly(FT)) {
-                return null;
-            }
-        }
-        const value_ptr = get: {
-            // values that only exist at comptime need to have their comptime part replaced with void
-            // (comptime keyword needed here since expression evaluates to different pointer types)
-            if (comptime isComptimeOnly(T)) {
-                var runtime_value: ComptimeFree(T) = removeComptimeValues(ptr.*);
-                break :get &runtime_value;
-            } else {
-                break :get ptr;
-            }
-        };
-        const memory = toMemory(value_ptr, is_comptime);
-        const dv = try host.captureView(memory);
-        const structure = try getStructure(host, T);
-        const obj = try host.castView(structure, dv, !is_comptime);
+    const value_ptr = get: {
+        // values that only exist at comptime need to have their comptime part replaced with void
+        // (comptime keyword needed here since expression evaluates to different pointer types)
         if (comptime isComptimeOnly(T)) {
-            try attachComptimeValues(host, obj, ptr.*);
+            var runtime_value: ComptimeFree(T) = removeComptimeValues(ptr.*);
+            break :get &runtime_value;
+        } else {
+            break :get ptr;
         }
-        return obj;
+    };
+    const memory = toMemory(value_ptr, is_comptime);
+    const dv = try host.captureView(memory);
+    const structure = try getStructure(host, T);
+    const obj = try host.castView(structure, dv, !is_comptime);
+    if (comptime isComptimeOnly(T)) {
+        try attachComptimeValues(host, obj, ptr.*);
     }
-    return null;
+    return obj;
 }
 
 fn exportError(host: anytype, err: anyerror, structure: Value) !Value {
@@ -1289,7 +1288,7 @@ fn exportError(host: anytype, err: anyerror, structure: Value) !Value {
     return obj;
 }
 
-fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
+fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
     const st = @typeInfo(T).Struct;
     // pre-allocate relocatable slots for fields that always need them
     inline for (st.fields, 0..) |field, index| {
@@ -1314,14 +1313,16 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
                 .structure = try getStructure(host, field.type),
             }, false);
         } else if (field.default_value) |opaque_ptr| {
-            const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-            try host.attachMember(structure, .{
-                .name = getCString(field.name),
-                .member_type = .Comptime,
-                .slot = getObjectSlot(T, index),
-                .structure = try getStructure(host, @TypeOf(default_value_ptr.*)),
-            }, false);
-            comptimeFieldCount += 1;
+            if (comptime isSupported(field.type)) {
+                const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+                try host.attachMember(structure, .{
+                    .name = getCString(field.name),
+                    .member_type = .Comptime,
+                    .slot = getObjectSlot(T, index),
+                    .structure = try getStructure(host, @TypeOf(default_value_ptr.*)),
+                }, false);
+                comptimeFieldCount += 1;
+            }
         }
     }
     if (!isArgumentStruct(T) and (@sizeOf(T) > 0 or comptimeFieldCount > 0)) {
@@ -1348,7 +1349,7 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
         const template = try host.createTemplate(dv);
         inline for (st.fields, 0..) |field, index| {
             if (field.default_value) |opaque_ptr| {
-                if (field.is_comptime or isComptimeOnly(field.type)) {
+                if (comptime (field.is_comptime or isComptimeOnly(field.type)) and isSupported(field.type)) {
                     // comptime members aren't stored in the struct's memory
                     // they're separate objects in the slots of the struct template
                     const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
@@ -1362,7 +1363,7 @@ fn addStructMember(host: anytype, structure: Value, comptime T: type) !void {
     }
 }
 
-fn addUnionMember(host: anytype, structure: Value, comptime T: type) !void {
+fn addUnionMembers(host: anytype, structure: Value, comptime T: type) !void {
     const un = @typeInfo(T).Union;
     inline for (un.fields, 0..) |field, index| {
         switch (getMemberType(field.type)) {
@@ -1429,7 +1430,7 @@ fn addEnumMember(host: anytype, structure: Value, comptime T: type) !void {
     }, false);
 }
 
-fn addOptionalMember(host: anytype, structure: Value, comptime T: type) !void {
+fn addOptionalMembers(host: anytype, structure: Value, comptime T: type) !void {
     const op = @typeInfo(T).Optional;
     // value always comes first
     try host.attachMember(structure, .{
@@ -1462,7 +1463,7 @@ fn addOptionalMember(host: anytype, structure: Value, comptime T: type) !void {
     }, false);
 }
 
-fn addErrorUnionMember(host: anytype, structure: Value, comptime T: type) !void {
+fn addErrorUnionMembers(host: anytype, structure: Value, comptime T: type) !void {
     const eu = @typeInfo(T).ErrorUnion;
     // value is placed after the error number if its alignment is smaller than that of anyerror
     const error_offset = if (@alignOf(anyerror) > @alignOf(eu.payload)) 0 else @sizeOf(eu.payload) * 8;
@@ -1574,7 +1575,7 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
             inline for (st.decls, 0..) |decl, index| {
                 const decl_value_ptr = &@field(T, decl.name);
                 const DT = @TypeOf(decl_value_ptr.*);
-                if (comptime isSupported(DT)) {
+                if (comptime isSupported(DT) and (DT != type or isSupported(decl_value_ptr.*))) {
                     const is_const = comptime isConst(@TypeOf(decl_value_ptr));
                     const slot = getObjectSlot(Static, index);
                     try host.attachMember(structure, .{
@@ -1679,6 +1680,11 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
                         }
                         if (comptime hasUnsupported(f.params)) {
                             continue;
+                        }
+                        if (f.return_type) |RT| {
+                            if (comptime !isSupported(RT)) {
+                                continue;
+                            }
                         }
                         const function = @field(T, decl.name);
                         const ArgT = ArgumentStruct(function);
