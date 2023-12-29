@@ -42,26 +42,9 @@ export function addTests(importModule, options) {
       const b = new StructA({ number: 500 });
       expect(b.empty).to.be.undefined;
     })
-    it('should handle undefined in bare union', async function() {
+    it('should not compile code with undefined in bare union', async function() {
       this.timeout(120000);
-      const { default: module, UnionA } = await importTest('in-bare-union');
-      expect(module.union_a.empty).to.be.undefined;
-      if (runtimeSafety) {
-        expect(() => module.union_a.number).to.throw();
-      }
-      const b = new UnionA({ empty: undefined });
-      const c = new UnionA({ number: 123 });
-      expect(b.empty).to.be.undefined;
-      expect(c.number).to.equal(123);
-      if (runtimeSafety) {
-        expect(() => c.empty).to.throw();
-      }
-      module.union_a = b;
-      expect(module.union_a.empty).to.be.undefined;
-      module.union_a = c;
-      if (runtimeSafety) {
-        expect(() => module.union_a.empty).to.throw();
-      }
+      await expect(importTest('in-bare-union')).to.eventually.be.rejected;
     })
     it('should handle undefined in tagged union', async function() {
       this.timeout(120000);

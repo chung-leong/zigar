@@ -60,13 +60,9 @@ export function addTests(importModule, options) {
       const [ line ] = await capture(() => print());
       expect(line).to.equal('as-comptime-field.StructA{ .number = 123, .literal = .hello }');
     })
-    it('should handle enum literal in bare union', async function() {
+    it('should not compile code with enum literal in bare union', async function() {
       this.timeout(120000);
-      const { default: module } = await importTest('in-bare-union');
-      expect(module.union_a.literal).to.equal('hello');
-      if (runtimeSafety) {
-        expect(() => module.union_a.number).to.throw();
-      }
+      await expect(importTest('in-bare-union')).to.eventually.be.rejected;
     })
     it('should handle enum literal in tagged union', async function() {
       this.timeout(120000);

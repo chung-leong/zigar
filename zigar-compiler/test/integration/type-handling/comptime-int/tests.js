@@ -53,14 +53,9 @@ export function addTests(importModule, options) {
       const b = new StructA({ state: false });
       expect(b.number).to.equal(1234);
     })
-    it('should handle comptime int in bare union', async function() {
+    it('should not compile code with comptime int in bare union', async function() {
       this.timeout(120000);
-      const { default: module, UnionA } = await importTest('in-bare-union');
-      expect(module.union_a.number).to.equal(123);
-      if (runtimeSafety) {
-        expect(() => module.union_a.state).to.throw();
-      }
-      expect(UnionA).to.be.undefined;
+      await expect(importTest('in-bare-union')).to.eventually.be.rejected;
     })
     it('should handle comptime int in tagged union', async function() {
       this.timeout(120000);
@@ -74,6 +69,7 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { default: module } = await importTest('in-optional');
       expect(module.optional1).to.equal(1234);
+      module.optional2
       expect(module.optional2).to.be.null;
     })
     it('should handle comptime int in error union', async function() {

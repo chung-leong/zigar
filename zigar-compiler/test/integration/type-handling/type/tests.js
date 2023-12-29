@@ -61,13 +61,9 @@ export function addTests(importModule, options) {
       const b = new StructA({ number: 500 });
       expect(b.Type).to.be.a('function');
     })
-    it('should handle type in bare union', async function() {
+    it('should not compile code with type in bare union', async function() {
       this.timeout(120000);
-      const { default: module } = await importTest('in-tagged-union');
-      expect(module.union_a.Type).to.be.a('function');
-      if (runtimeSafety) {
-        expect(() => module.union_a.number).to.throw();
-      }
+      await expect(importTest('in-bare-union')).to.eventually.be.rejected;
     })
     it('should handle type in tagged union', async function() {
       this.timeout(120000);

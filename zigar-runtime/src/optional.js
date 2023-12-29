@@ -18,7 +18,7 @@ export function defineOptional(s, env) {
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getPresent, set: setPresent } = getDescriptor(members[1], env);
   // optionals containing pointers use the pointer itself as indication of presence
-  const hasPresentFlag = members[1].bitOffset != members[0].bitOffset;
+  const hasPresentFlag = !(members[0].bitSize > 0 && members[0].bitOffset === members[1].bitOffset);
   const get = (hasPresentFlag)
   ? function() {
       const present = getPresent.call(this);

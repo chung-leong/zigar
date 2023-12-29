@@ -1160,14 +1160,14 @@ fn removeComptimeValues(comptime value: anytype) ComptimeFree(@TypeOf(value)) {
             }
         },
         .Union => |un| {
-            const field_name = get: {
-                if (un.tag_type) |Tag| {
-                    const tag: Tag = value;
-                    break :get @tagName(tag);
-                }
-            };
-            const field_value = @field(value, field_name);
-            result = @unionInit(RT, field_name, removeComptimeValues(field_value));
+            if (un.tag_type) |Tag| {
+                const tag: Tag = value;
+                const field_name = @tagName(tag);
+                const field_value = @field(value, field_name);
+                result = @unionInit(RT, field_name, removeComptimeValues(field_value));
+            } else {
+                @compileError("Unable to handle comptime value in bare union");
+            }
         },
         .Optional => result = if (value) |v| removeComptimeValues(v) else null,
         .ErrorUnion => result = if (value) |v| removeComptimeValues(v) else |e| e,
@@ -1213,22 +1213,20 @@ fn attachComptimeValues(host: anytype, target: Value, comptime value: anytype) !
             }
         },
         .Union => |un| {
-            const active_index = get: {
-                if (un.tag_type) |Tag| {
-                    const tag: Tag = value;
-                    inline for (un.fields, 0..) |field, index| {
-                        if (@field(Tag, field.name) == tag) {
-                            break :get index;
+            if (un.tag_type) |Tag| {
+                const tag: Tag = value;
+                inline for (un.fields, 0..) |field, index| {
+                    if (@field(Tag, field.name) == tag) {
+                        if (isComptimeOnly(field.type)) {
+                            const field_value = @field(value, field.name);
+                            const obj = try exportComptimeValue(host, field_value);
+                            const slot = getObjectSlot(T, index);
+                            try host.writeSlot(target, slot, obj);
                         }
                     }
                 }
-            };
-            const field = un.fields[active_index];
-            if (isComptimeOnly(field.type)) {
-                const field_value = @field(value, field.name);
-                const obj = try exportComptimeValue(host, field_value);
-                const slot = getObjectSlot(T, active_index);
-                try host.writeSlot(target, slot, obj);
+            } else {
+                @compileError("Unable to handle comptime value in bare union");
             }
         },
         .Optional => {

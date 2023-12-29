@@ -50,14 +50,9 @@ export function addTests(importModule, options) {
       const b = new StructA({ state: false });
       expect(b.number).to.equal(1.234);
     })
-    it('should handle comptime float in bare union', async function() {
+    it('should not compile code with comptime float in bare union', async function() {
       this.timeout(120000);
-      const { default: module, UnionA } = await importTest('in-bare-union');
-      expect(module.union_a.number).to.equal(1.23);
-      if (runtimeSafety) {
-        expect(() => module.union_a.state).to.throw();
-      }
-      expect(UnionA).to.be.undefined;
+      await expect(importTest('in-bare-union')).to.eventually.be.rejected;
     })
     it('should handle comptime float in tagged union', async function() {
       this.timeout(120000);
