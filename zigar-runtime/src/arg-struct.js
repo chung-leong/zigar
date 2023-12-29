@@ -1,7 +1,7 @@
 import { defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { throwArgumentCountMismatch, rethrowArgumentError } from './error.js';
-import { getChildVivificators, getPointerVisitor } from './struct.js';
+import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SIZE, SLOTS } from './symbol.js';
 import { getMemoryCopier } from './memory.js';
 
@@ -45,7 +45,7 @@ export function defineArgStruct(s, env) {
   defineProperties(constructor.prototype, {
     ...memberDescriptors,
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildMutable }) },
   });
   defineProperties(constructor, {

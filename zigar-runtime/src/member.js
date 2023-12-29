@@ -399,17 +399,17 @@ function isValueExpected(structure) {
 }
 
 function getValue(slot) {
-  const object = this[CHILD_VIVIFICATOR][slot].call(this);
+  const object = this[CHILD_VIVIFICATOR](slot);
   return object.$;
 }
 
 function getObject(slot) {
-  const object = this[CHILD_VIVIFICATOR][slot].call(this);
+  const object = this[CHILD_VIVIFICATOR](slot);
   return object;
 }
 
 function setValue(slot, value) {
-  const object = this[CHILD_VIVIFICATOR][slot].call(this);
+  const object = this[CHILD_VIVIFICATOR](slot);
   object.$ = value;
 }
 

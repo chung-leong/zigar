@@ -3,7 +3,7 @@ import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView } from './data-view.js';
 import { getSpecialKeys } from './special.js';
-import { getChildVivificators, getPointerVisitor } from './struct.js';
+import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { throwInvalidInitializer, throwMissingUnionInitializer, throwMultipleUnionInitializers,
   throwNoProperty, throwInactiveUnionProperty, throwNoInitializer, throwReadOnly } from './error.js';
 import { always, copyPointer, disablePointer, resetPointer } from './pointer.js';
@@ -250,7 +250,7 @@ export function defineUnionShape(s, env) {
     $: { get: getSelf, set: initializer, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [ENUM_ITEM]: isTagged && { get: getEnumItem, configurable: true },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
     [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor(s, { isChildActive }) },
   });
   defineProperties(constructor, {

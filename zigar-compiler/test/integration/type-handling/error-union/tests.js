@@ -38,8 +38,8 @@ export function addTests(importModule, options) {
       expect(() => module.void_error).to.throw()
         .with.property('message', 'Dog ate all memory');
       // check void setter
-      module.void_error = null;
-      expect(module.void_error).to.be.null;
+      module.void_error = undefined;
+      expect(module.void_error).to.be.undefined;
     })
     it('should print error union arguments', async function() {
       this.timeout(120000);
@@ -89,7 +89,7 @@ export function addTests(importModule, options) {
       const [ after ] = await capture(() => print());
       expect(after).to.equal('in-struct.StructA{ .number1 = 123, .number2 = error.NoMoney }');
     })
-    it('should handle error union in packed struct', async function() {
+    it('should not compile code with error union in packed struct', async function() {
       this.timeout(120000);
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })

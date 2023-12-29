@@ -4,7 +4,7 @@ import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView } from './data-view.js';
 import { throwNoInitializer, throwReadOnly } from './error.js';
 import { copyPointer, resetPointer } from './pointer.js';
-import { getChildVivificators, getPointerVisitor } from './struct.js';
+import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SIZE, SLOTS, 
   VALUE_RESETTER } from './symbol.js';
 
@@ -75,7 +75,7 @@ export function defineErrorUnion(s, env) {
     if (!writable) {
       defineProperties(self, {
         '$': { get, set: throwReadOnly, configurable: true },
-        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, false) },
+        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
       });   
     }
     return cache.save(dv, writable, self);
@@ -97,7 +97,7 @@ export function defineErrorUnion(s, env) {
     '$': { get, set, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, true) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildActive: check }) },
   });
   defineProperties(constructor, {

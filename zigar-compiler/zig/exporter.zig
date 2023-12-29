@@ -1082,6 +1082,9 @@ fn isComptimeOnly(comptime T: type) bool {
 }
 
 fn ComptimeFree(comptime T: type) type {
+    if (comptime !isComptimeOnly(T)) {
+        return T;
+    }
     return switch (@typeInfo(T)) {
         .ComptimeFloat,
         .ComptimeInt,
@@ -1131,15 +1134,18 @@ fn ComptimeFree(comptime T: type) type {
                 },
             });
         },
-        .Optional => ?void,
-        .ErrorUnion => |eu| eu.error_set!void,
+        .Optional => |op| ?ComptimeFree(op.child),
+        .ErrorUnion => |eu| eu.error_set!ComptimeFree(eu.payload),
         else => T,
     };
 }
 
 fn removeComptimeValues(comptime value: anytype) ComptimeFree(@TypeOf(value)) {
     const T = @TypeOf(value);
-    const RT = ComptimeFree(@TypeOf(value));
+    if (comptime !isComptimeOnly(T)) {
+        return value;
+    }
+    const RT = ComptimeFree(T);
     var result: RT = undefined;
     switch (@typeInfo(T)) {
         .ComptimeFloat,

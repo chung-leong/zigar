@@ -15,7 +15,7 @@ export function defineStructShape(s, env) {
     align,
     instance: { members, template },
     hasPointer,
-  } = s;
+  } = s;  
   const descriptors = {};
   for (const member of members) {
     descriptors[member.name] = getDescriptor(member, env);
@@ -62,7 +62,7 @@ export function defineStructShape(s, env) {
     if (!writable) {
       defineProperties(self, {
         '$': { get: getSelf, set: throwReadOnly, configurable: true },
-        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, false) },
+        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
         ...removeSetters(descriptors),
       });
     }
@@ -142,7 +142,7 @@ export function defineStructShape(s, env) {
     delete: { value: getDestructor(env), configurable: true },
     $: { get: getSelf, set: initializer, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, true) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
   });
   defineProperties(constructor, {
@@ -152,25 +152,24 @@ export function defineStructShape(s, env) {
   return constructor;
 }
 
-export function getChildVivificators(s, writable) {
+export function getChildVivificator(s, writable) {
   const { instance: { members } } = s;
-  const objectMembers = members.filter(m => m.type === MemberType.Object);
-  const vivificators = {};
-  for (const { slot, bitOffset, byteSize, structure } of objectMembers) {
-    vivificators[slot] = function getChild() {
-      let object = this[SLOTS][slot];
-      if (!object) {
-        const { constructor } = structure;
-        const dv = this[MEMORY];
-        const parentOffset = dv.byteOffset;
-        const offset = parentOffset + (bitOffset >> 3);
-        const childDV = new DataView(dv.buffer, offset, byteSize);
-        object = this[SLOTS][slot] = constructor.call(PARENT, childDV, { writable });
-      }
-      return object;
-    };
+  const objectMembers = {};
+  for (const member of members.filter(m => m.type === MemberType.Object)) {
+    objectMembers[member.slot] = member;
   }
-  return vivificators;
+  return function getChild(slot) {
+    let object = this[SLOTS][slot];
+    if (!object) {
+      const { bitOffset, byteSize, structure: { constructor } } = objectMembers[slot];
+      const dv = this[MEMORY];
+      const parentOffset = dv.byteOffset;
+      const offset = parentOffset + (bitOffset >> 3);
+      const childDV = new DataView(dv.buffer, offset, byteSize);
+      object = this[SLOTS][slot] = constructor.call(PARENT, childDV, { writable });
+    }
+    return object;
+  }
 }
 
 export function getPointerVisitor(s, visitorOptions = {}) {
@@ -207,7 +206,7 @@ export function getPointerVisitor(s, visitorOptions = {}) {
         }
         childOptions.source = srcChild;
       }
-      const child = (vivificate) ? this[CHILD_VIVIFICATOR][slot].call(this) : this[SLOTS][slot];
+      const child = (vivificate) ? this[CHILD_VIVIFICATOR](slot) : this[SLOTS][slot];
       if (child) {
         child[POINTER_VISITOR](cb, childOptions);
       }

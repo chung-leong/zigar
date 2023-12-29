@@ -2080,17 +2080,17 @@ function isValueExpected(structure) {
 }
 
 function getValue(slot) {
-  const object = this[CHILD_VIVIFICATOR][slot].call(this);
+  const object = this[CHILD_VIVIFICATOR](slot);
   return object.$;
 }
 
 function getObject(slot) {
-  const object = this[CHILD_VIVIFICATOR][slot].call(this);
+  const object = this[CHILD_VIVIFICATOR](slot);
   return object;
 }
 
 function setValue(slot, value) {
-  const object = this[CHILD_VIVIFICATOR][slot].call(this);
+  const object = this[CHILD_VIVIFICATOR](slot);
   object.$ = value;
 }
 
@@ -3016,7 +3016,7 @@ function defineArray(s, env) {
       defineProperties(self, {
         set: { value: throwReadOnly, configurable: true, writable: true },
         $: { get: getProxy, set: throwReadOnly, configurable: true },
-        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
+        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator$1(s, false) },
       });
     }
     const proxy = createProxy.call(self);
@@ -3082,7 +3082,7 @@ function defineArray(s, env) {
     $: { get: getProxy, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator$1(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1() },
   });
   defineProperties(constructor, {
@@ -3094,7 +3094,7 @@ function defineArray(s, env) {
   return constructor;
 }
 
-function getChildVivificator(s, writable) {
+function getChildVivificator$1(s, writable) {
   const { instance: { members: [ member ]} } = s;
   const { byteSize, structure } = member;
   return function getChild(index) {
@@ -3283,15 +3283,15 @@ function defineStructShape(s, env) {
     align,
     instance: { members, template },
     hasPointer,
-  } = s;
+  } = s;  
   const descriptors = {};
   for (const member of members) {
     descriptors[member.name] = getDescriptor(member, env);
   }
   const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const comptimeMembers = members.filter(m => m.type === MemberType.Comptime);
   const hasSlots = needSlots(s);
+  const comptimeMembers = members.filter(m => m.type === MemberType.Comptime);
   const cache = new ObjectCache();
   // comptime fields are stored in the instance template's slots
   const constructor = s.constructor = function(arg, options = {}) {
@@ -3317,7 +3317,7 @@ function defineStructShape(s, env) {
     self[MEMORY] = dv;
     if (hasSlots) {
       self[SLOTS] = {};
-      if (comptimeMembers.length > 0) {
+      if (comptimeMembers.length > 0 && template?.[SLOTS]) {
         for (const { slot } of comptimeMembers) {
           self[SLOTS][slot] = template[SLOTS][slot];
         } 
@@ -3330,7 +3330,7 @@ function defineStructShape(s, env) {
     if (!writable) {
       defineProperties(self, {
         '$': { get: getSelf, set: throwReadOnly, configurable: true },
-        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, false) },
+        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
         ...removeSetters(descriptors),
       });
     }
@@ -3410,7 +3410,7 @@ function defineStructShape(s, env) {
     delete: { value: getDestructor(env), configurable: true },
     $: { get: getSelf, set: initializer, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, true) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
   });
   defineProperties(constructor, {
@@ -3420,25 +3420,24 @@ function defineStructShape(s, env) {
   return constructor;
 }
 
-function getChildVivificators(s, writable) {
+function getChildVivificator(s, writable) {
   const { instance: { members } } = s;
-  const objectMembers = members.filter(m => m.type === MemberType.Object);
-  const vivificators = {};
-  for (const { slot, bitOffset, byteSize, structure } of objectMembers) {
-    vivificators[slot] = function getChild() {
-      let object = this[SLOTS][slot];
-      if (!object) {
-        const { constructor } = structure;
-        const dv = this[MEMORY];
-        const parentOffset = dv.byteOffset;
-        const offset = parentOffset + (bitOffset >> 3);
-        const childDV = new DataView(dv.buffer, offset, byteSize);
-        object = this[SLOTS][slot] = constructor.call(PARENT, childDV, { writable });
-      }
-      return object;
-    };
+  const objectMembers = {};
+  for (const member of members.filter(m => m.type === MemberType.Object)) {
+    objectMembers[member.slot] = member;
   }
-  return vivificators;
+  return function getChild(slot) {
+    let object = this[SLOTS][slot];
+    if (!object) {
+      const { bitOffset, byteSize, structure: { constructor } } = objectMembers[slot];
+      const dv = this[MEMORY];
+      const parentOffset = dv.byteOffset;
+      const offset = parentOffset + (bitOffset >> 3);
+      const childDV = new DataView(dv.buffer, offset, byteSize);
+      object = this[SLOTS][slot] = constructor.call(PARENT, childDV, { writable });
+    }
+    return object;
+  }
 }
 
 function getPointerVisitor(s, visitorOptions = {}) {
@@ -3475,7 +3474,7 @@ function getPointerVisitor(s, visitorOptions = {}) {
         }
         childOptions.source = srcChild;
       }
-      const child = (vivificate) ? this[CHILD_VIVIFICATOR][slot].call(this) : this[SLOTS][slot];
+      const child = (vivificate) ? this[CHILD_VIVIFICATOR](slot) : this[SLOTS][slot];
       if (child) {
         child[POINTER_VISITOR](cb, childOptions);
       }
@@ -3723,7 +3722,7 @@ function defineUnionShape(s, env) {
     $: { get: getSelf, set: initializer, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [ENUM_ITEM]: isTagged && { get: getEnumItem, configurable: true },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
     [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor(s, { isChildActive }) },
   });
   defineProperties(constructor, {
@@ -3806,7 +3805,7 @@ function defineErrorUnion(s, env) {
     if (!writable) {
       defineProperties(self, {
         '$': { get, set: throwReadOnly, configurable: true },
-        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, false) },
+        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
       });   
     }
     return cache.save(dv, writable, self);
@@ -3828,7 +3827,7 @@ function defineErrorUnion(s, env) {
     '$': { get, set, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, true) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildActive: check }) },
   });
   defineProperties(constructor, {
@@ -3919,7 +3918,7 @@ function defineOptional(s, env) {
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getPresent, set: setPresent } = getDescriptor(members[1], env);
   // optionals containing pointers use the pointer itself as indication of presence
-  const hasPresentFlag = members[1].bitOffset != members[0].bitOffset;
+  const hasPresentFlag = !(members[0].bitSize > 0 && members[0].bitOffset === members[1].bitOffset);
   const get = (hasPresentFlag)
   ? function() {
       const present = getPresent.call(this);
@@ -3987,7 +3986,7 @@ function defineOptional(s, env) {
     if (!writable) {
       defineProperties(self, {
         '$': { get, set: throwReadOnly, configurable: true },
-        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, false) },
+        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
       });
     }
     return cache.save(dv, writable, self);
@@ -4011,7 +4010,7 @@ function defineOptional(s, env) {
     $: { get, set, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s, true) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildActive: check }) },
   });
   defineProperties(constructor, {
@@ -4067,7 +4066,7 @@ function defineSlice(s, env) {
       defineProperties(self, {
         set: { value: throwReadOnly, configurable: true, writable: true },
         $: { get: getProxy, set: throwReadOnly, configurable: true },
-        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
+        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator$1(s, false) },
       });
     }
     const proxy = createProxy.call(self);
@@ -4200,7 +4199,7 @@ function defineSlice(s, env) {
     entries: { value: createArrayEntries, configurable: true, writable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(elementSize, true) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator$1(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1() }
   });
   defineProperties(constructor, {
@@ -4436,7 +4435,7 @@ function defineArgStruct(s, env) {
   defineProperties(constructor.prototype, {
     ...memberDescriptors,
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificators(s) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildMutable }) },
   });
   defineProperties(constructor, {

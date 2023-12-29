@@ -405,7 +405,6 @@ export class Environment {
     initializeErrorSets();
     const objectPlaceholders = new Map();
     for (const structure of structures) {
-      debugger;
       // recreate the actual template using the provided placeholder
       for (const scope of [ structure.instance, structure.static ]) {
         if (scope.template) {
