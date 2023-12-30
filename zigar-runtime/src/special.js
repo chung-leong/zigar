@@ -28,9 +28,8 @@ function getValueDescriptor(s) {
       return { value: toPrimitive, configurable: true, writable: true };
     case StructureType.ErrorSet:
       return;
-    default:
-      return { value: getValueOf, configurable: true, writable: true };
   }
+  return { value: getValueOf, configurable: true, writable: true };
 }
 
 function canBeString(s) {
@@ -94,7 +93,7 @@ export function getBase64Accessors() {
     },
     set(str) {
       if (typeof(str) !== 'string') {
-        throwTypeMismatch('a string', str);
+        throwTypeMismatch('string', str);
       }
       this.dataView = decodeBase64(str);
     }

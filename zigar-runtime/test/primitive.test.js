@@ -9,6 +9,7 @@ import {
 } from '../src/primitive.js';
 import { NodeEnvironment } from '../src/environment-node.js';
 import { encodeBase64 } from '../src/text.js';
+import { SLOTS } from '../src/symbol.js';
 
 describe('Primitive functions', function() {
   const env = new NodeEnvironment();
@@ -17,7 +18,7 @@ describe('Primitive functions', function() {
       useAllMemberTypes();
       useAllStructureTypes();
     })
-    it('should define a structure for holding a primitive', function() {
+    it('should define a structure for holding a integer', function() {
       const structure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Hello',
@@ -38,6 +39,28 @@ describe('Primitive functions', function() {
       const object = Hello(dv);
       expect(object.$).to.equal(0x7FFFFFFFFFFFFFFFn);
       expect(BigInt(object)).to.equal(0x7FFFFFFFFFFFFFFFn);
+    })
+    it('should define a structure for holding a type', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Hello',
+        byteSize: 0,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Type,
+        bitSize: 0,
+        bitOffset: 0,
+        byteSize: 0,
+        slot: 0,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      expect(Hello).to.be.a('function');
+      const dv = new DataView(new ArrayBuffer(0));
+      const object = Hello(dv);
+      object[SLOTS] = { 0: { constructor: String }};
+      expect(object.$).to.equal(String);
     })
     it('should cast the same buffer to the same object', function() {
       const structure = env.beginStructure({

@@ -123,6 +123,8 @@ describe('Special property functions', function() {
       };
       set.call(object2, base64);
       expect(object2.dataView.getInt32(0)).to.equal(1234);
+      expect(() => set.call(object2, undefined)).to.throw(TypeError)
+        .with.property('message').that.contains('a string').and.contains('undefined');
     })
   })
   describe('getStringAccessors', function() {
@@ -251,12 +253,14 @@ describe('Special property functions', function() {
         dog: { get() { return 1234; }, enumerable: true },
         cat: { get() { return 4567; }, enumerable: true },
         food: { get() { return [ 1, 2, 3, 4 ] }, enumerable: true },
+        cow: { get() { return 'Betsy' }, enumerable: true },
         self: { get() { return this }, enumerable: true },
         $: { get() { return this } }
       });
       const result = getValueOf.call(object);
       expect(result.dog).to.equal(1234);
       expect(result.cat).to.equal(4567);
+      expect(result.cow).to.equal('Betsy');
       expect(result.food).to.eql([ 1, 2, 3, 4 ]);
       expect(result.self).to.equal(result);
     })

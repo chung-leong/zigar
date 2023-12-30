@@ -17,7 +17,7 @@ describe('Error union functions', function() {
     it('should define an error union', function() {
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'Error',
+        name: 'MyError',
         byteSize: 2,
       });      
       env.attachMember(errorStructure, {
@@ -27,7 +27,7 @@ describe('Error union functions', function() {
         byteSize: 2,
       });
       env.finalizeShape(errorStructure);
-      const { constructor: Error } = errorStructure;
+      const { constructor: MyError } = errorStructure;
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Comptime,
@@ -42,8 +42,8 @@ describe('Error union functions', function() {
       }, true);
       env.attachTemplate(errorStructure, {
         [SLOTS]: {
-          0: Error.call(ENVIRONMENT, errorData(5)),
-          1: Error.call(ENVIRONMENT, errorData(8)),
+          0: MyError.call(ENVIRONMENT, errorData(5)),
+          1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(errorStructure);
@@ -79,7 +79,7 @@ describe('Error union functions', function() {
     it('should cast the same buffer to the same object', function() {
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'Error',
+        name: 'MyError',
         byteSize: 2,
       });      
       env.attachMember(errorStructure, {
@@ -89,7 +89,7 @@ describe('Error union functions', function() {
         byteSize: 2,
       });
       env.finalizeShape(errorStructure);
-      const { constructor: Error } = errorStructure;
+      const { constructor: MyError } = errorStructure;
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Comptime,
@@ -104,8 +104,8 @@ describe('Error union functions', function() {
       }, true);
       env.attachTemplate(errorStructure, {
         [SLOTS]: {
-          0: Error.call(ENVIRONMENT, errorData(5)),
-          1: Error.call(ENVIRONMENT, errorData(8)),
+          0: MyError.call(ENVIRONMENT, errorData(5)),
+          1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(errorStructure);
@@ -141,7 +141,7 @@ describe('Error union functions', function() {
     it('should throw when no initializer is provided', function() {
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'Error',
+        name: 'MyError',
         byteSize: 2,
       });      
       env.attachMember(errorStructure, {
@@ -151,7 +151,7 @@ describe('Error union functions', function() {
         byteSize: 2,
       });
       env.finalizeShape(errorStructure);
-      const { constructor: Error } = errorStructure;
+      const { constructor: MyError } = errorStructure;
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Comptime,
@@ -166,8 +166,8 @@ describe('Error union functions', function() {
       }, true);
       env.attachTemplate(errorStructure, {
         [SLOTS]: {
-          0: Error.call(ENVIRONMENT, errorData(5)),
-          1: Error.call(ENVIRONMENT, errorData(8)),
+          0: MyError.call(ENVIRONMENT, errorData(5)),
+          1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(errorStructure);
@@ -200,7 +200,7 @@ describe('Error union functions', function() {
     it('should define an error union with internal struct', function() {
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'Error',
+        name: 'MyError',
         byteSize: 2,
       });      
       env.attachMember(errorStructure, {
@@ -210,7 +210,7 @@ describe('Error union functions', function() {
         byteSize: 2,
       });
       env.finalizeShape(errorStructure);
-      const { constructor: Error } = errorStructure;
+      const { constructor: MyError } = errorStructure;
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Comptime,
@@ -225,8 +225,8 @@ describe('Error union functions', function() {
       }, true);
       env.attachTemplate(errorStructure, {
         [SLOTS]: {
-          0: Error.call(ENVIRONMENT, errorData(5)),
-          1: Error.call(ENVIRONMENT, errorData(8)),
+          0: MyError.call(ENVIRONMENT, errorData(5)),
+          1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(errorStructure);
@@ -280,14 +280,14 @@ describe('Error union functions', function() {
       const object = new Hello({ dog: 17, cat: 234 });
       expect(object).to.be.an('!Animal');
       expect(object.$).to.be.an('Animal');
-      object.$ = Error.UnableToCreateObject;
-      expect(() => object.$).to.throw(Error)
+      object.$ = MyError.UnableToCreateObject;
+      expect(() => object.$).to.throw(MyError)
         .with.property('message').that.equal('Unable to create object');
     })
     it('should define an error union with a pointer', function() {
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'Error',
+        name: 'MyError',
         byteSize: 2,
       });      
       env.attachMember(errorStructure, {
@@ -297,7 +297,7 @@ describe('Error union functions', function() {
         byteSize: 2,
       });
       env.finalizeShape(errorStructure);
-      const { constructor: Error } = errorStructure;
+      const { constructor: MyError } = errorStructure;
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Comptime,
@@ -312,8 +312,8 @@ describe('Error union functions', function() {
       }, true);
       env.attachTemplate(errorStructure, {
         [SLOTS]: {
-          0: Error.call(ENVIRONMENT, errorData(5)),
-          1: Error.call(ENVIRONMENT, errorData(8)),
+          0: MyError.call(ENVIRONMENT, errorData(5)),
+          1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(errorStructure);
@@ -384,7 +384,7 @@ describe('Error union functions', function() {
     it('should define an error union with a slice', function() {
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'Error',
+        name: 'MyError',
         byteSize: 2,
       });      
       env.attachMember(errorStructure, {
@@ -394,7 +394,7 @@ describe('Error union functions', function() {
         byteSize: 2,
       });
       env.finalizeShape(errorStructure);
-      const { constructor: Error } = errorStructure;
+      const { constructor: MyError } = errorStructure;
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Comptime,
@@ -409,8 +409,8 @@ describe('Error union functions', function() {
       }, true);
       env.attachTemplate(errorStructure, {
         [SLOTS]: {
-          0: Error.call(ENVIRONMENT, errorData(5)),
-          1: Error.call(ENVIRONMENT, errorData(8)),
+          0: MyError.call(ENVIRONMENT, errorData(5)),
+          1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(errorStructure);
@@ -481,7 +481,7 @@ describe('Error union functions', function() {
     it('should correctly copy an error union containing a pointer', function() {
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'Error',
+        name: 'MyError',
         byteSize: 2,
       });      
       env.attachMember(errorStructure, {
@@ -491,7 +491,7 @@ describe('Error union functions', function() {
         byteSize: 2,
       });
       env.finalizeShape(errorStructure);
-      const { constructor: Error } = errorStructure;
+      const { constructor: MyError } = errorStructure;
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Comptime,
@@ -506,8 +506,8 @@ describe('Error union functions', function() {
       }, true);
       env.attachTemplate(errorStructure, {
         [SLOTS]: {
-          0: Error.call(ENVIRONMENT, errorData(5)),
-          1: Error.call(ENVIRONMENT, errorData(8)),
+          0: MyError.call(ENVIRONMENT, errorData(5)),
+          1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(errorStructure);
@@ -576,7 +576,7 @@ describe('Error union functions', function() {
     it('should release pointer when error union is set to an error', function() {
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'Error',
+        name: 'MyError',
         byteSize: 2,
       });      
       env.attachMember(errorStructure, {
@@ -586,7 +586,7 @@ describe('Error union functions', function() {
         byteSize: 2,
       });
       env.finalizeShape(errorStructure);
-      const { constructor: Error } = errorStructure;
+      const { constructor: MyError } = errorStructure;
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Comptime,
@@ -601,8 +601,8 @@ describe('Error union functions', function() {
       }, true);
       env.attachTemplate(errorStructure, {
         [SLOTS]: {
-          0: Error.call(ENVIRONMENT, errorData(5)),
-          1: Error.call(ENVIRONMENT, errorData(8)),
+          0: MyError.call(ENVIRONMENT, errorData(5)),
+          1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(errorStructure);
@@ -665,13 +665,13 @@ describe('Error union functions', function() {
       const { constructor: Hello } = structure;
       const object = new Hello(new Int32(777));
       const ptr = object.$;
-      object.$ = Error.UnableToCreateObject;
+      object.$ = MyError.UnableToCreateObject;
       expect(ptr[SLOTS][0]).to.be.null;
     })
     it('should throw an error when error number is unknown', function() {
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'Error',
+        name: 'MyError',
         byteSize: 2,
       });      
       env.attachMember(errorStructure, {
@@ -681,7 +681,7 @@ describe('Error union functions', function() {
         byteSize: 2,
       });
       env.finalizeShape(errorStructure);
-      const { constructor: Error } = errorStructure;
+      const { constructor: MyError } = errorStructure;
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Comptime,
@@ -696,8 +696,8 @@ describe('Error union functions', function() {
       }, true);
       env.attachTemplate(errorStructure, {
         [SLOTS]: {
-          0: Error.call(ENVIRONMENT, errorData(5)),
-          1: Error.call(ENVIRONMENT, errorData(8)),
+          0: MyError.call(ENVIRONMENT, errorData(5)),
+          1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(errorStructure);
@@ -734,7 +734,7 @@ describe('Error union functions', function() {
     it('should throw when attempting to set an error that is not in the error set', function() {
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'Error',
+        name: 'MyError',
         byteSize: 2,
       });      
       env.attachMember(errorStructure, {
@@ -744,7 +744,7 @@ describe('Error union functions', function() {
         byteSize: 2,
       });
       env.finalizeShape(errorStructure);
-      const { constructor: Error } = errorStructure;
+      const { constructor: MyError } = errorStructure;
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Comptime,
@@ -759,8 +759,8 @@ describe('Error union functions', function() {
       }, true);
       env.attachTemplate(errorStructure, {
         [SLOTS]: {
-          0: Error.call(ENVIRONMENT, errorData(5)),
-          1: Error.call(ENVIRONMENT, errorData(8)),
+          0: MyError.call(ENVIRONMENT, errorData(5)),
+          1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(errorStructure);
@@ -796,7 +796,7 @@ describe('Error union functions', function() {
     it('should be able to create read-only object', function() {
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'Error',
+        name: 'MyError',
         byteSize: 2,
       });      
       env.attachMember(errorStructure, {
@@ -806,7 +806,7 @@ describe('Error union functions', function() {
         byteSize: 2,
       });
       env.finalizeShape(errorStructure);
-      const { constructor: Error } = errorStructure;
+      const { constructor: MyError } = errorStructure;
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Comptime,
@@ -821,8 +821,8 @@ describe('Error union functions', function() {
       }, true);
       env.attachTemplate(errorStructure, {
         [SLOTS]: {
-          0: Error.call(ENVIRONMENT, errorData(5)),
-          1: Error.call(ENVIRONMENT, errorData(8)),
+          0: MyError.call(ENVIRONMENT, errorData(5)),
+          1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(errorStructure);
@@ -853,145 +853,94 @@ describe('Error union functions', function() {
       const object = Hello(new ArrayBuffer(10), { writable: false });
       expect(() => object.$ = 1234n).to.throw(TypeError);
     })
+    it('should make child object read-only too', function() {
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 4 * 2,
+      });
+      env.attachMember(structStructure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isRequired: true,
+        byteSize: 4,
+        bitOffset: 0,
+        bitSize: 32,
+      });
+      env.attachMember(structStructure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isRequired: true,
+        byteSize: 4,
+        bitOffset: 32,
+        bitSize: 32,
+      });     
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const errorStructure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'MyError',
+        byteSize: 2,
+      });      
+      env.attachMember(errorStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+      });
+      env.finalizeShape(errorStructure);
+      const { constructor: MyError } = errorStructure;
+      env.attachMember(errorStructure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: errorStructure,
+      }, true);
+      env.attachMember(errorStructure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: errorStructure,
+      }, true);
+      env.attachTemplate(errorStructure, {
+        [SLOTS]: {
+          0: MyError.call(ENVIRONMENT, errorData(5)),
+          1: MyError.call(ENVIRONMENT, errorData(8)),
+        }
+      }, true);
+      env.finalizeStructure(errorStructure);
+      const structure = env.beginStructure({
+        type: StructureType.ErrorUnion,
+        name: 'Hello',
+        byteSize: structStructure.byteSize + 2,
+      });
+      env.attachMember(structure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: structStructure.byteSize * 8,
+        byteSize: structStructure.byteSize,
+        structure: structStructure,
+      });
+      env.attachMember(structure, {
+        name: 'error',
+        type: MemberType.Error,
+        bitOffset: structStructure.byteSize * 8,
+        bitSize: 16,
+        byteSize: 2,
+        structure: errorStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const object = Hello(new ArrayBuffer(structure.byteSize), { writable: false });
+      const pets = object.$;
+      expect(() => pets.dog = 123).to.throw(TypeError)
+        .with.property('message').that.contains('read-only');
+      expect(() => pets.$ = { cat: 123 }).to.throw(TypeError)
+        .with.property('message').that.contains('read-only');
+    });
   })
-  // describe('getErrorUnionAccessors', function() {
-  //   beforeEach(function() {
-  //     useStruct();
-  //     useErrorUnion();
-  //     useIntEx();
-  //     useFloatEx();
-  //     useObject();
-  //   })
-  //   it('should return a function for getting float with potential error', function() {
-  //     let errorNumber;
-  //     const DummyErrorSet = function(arg) {
-  //       if (this instanceof DummyErrorSet) {
-  //         this.index = arg;
-  //       } else {
-  //         errorNumber = arg;
-  //         return dummyError;
-  //       }
-  //     };
-  //     Object.setPrototypeOf(DummyErrorSet.prototype, Error.prototype);
-  //     const dummyError = new DummyErrorSet(18);
-  //     const members = [
-  //       {
-  //         type: MemberType.Float,
-  //         bitOffset: 0,
-  //         bitSize: 64,
-  //         byteSize: 8,
-  //         structure: {},
-  //       },
-  //       {
-  //         type: MemberType.Uint,
-  //         bitOffset: 64,
-  //         bitSize: 16,
-  //         byteSize: 2,
-  //         structure: { constructor: DummyErrorSet }
-  //       },
-  //     ];
-  //     const dv = new DataView(new ArrayBuffer(10));
-  //     dv.setUint16(8, 18, true);
-  //     const object = {
-  //       [MEMORY]: dv,
-  //     };
-  //     const { get } = getErrorUnionAccessors(members, dv.byteLength, {});
-  //     expect(() => get.call(object)).to.throw().equal(dummyError);
-  //     expect(errorNumber).to.equal(18);
-  //     dv.setUint16(8, 0, true);
-  //     dv.setFloat64(0, 3.14, true);
-  //     const result = get.call(object);
-  //     expect(result).to.equal(3.14);
-  //   })
-  //   it('should return a function for getting object value with potential error', function() {
-  //     let errorNumber;
-  //     const DummyErrorSet = function(arg) {
-  //       if (this instanceof DummyErrorSet) {
-  //         this.index = arg;
-  //       } else {
-  //         errorNumber = arg;
-  //         return dummyError;
-  //       }
-  //     };
-  //     Object.setPrototypeOf(DummyErrorSet.prototype, Error.prototype);
-  //     const dummyError = new DummyErrorSet(18);
-  //     const DummyClass = function() {};
-  //     const members = [
-  //       {
-  //         type: MemberType.Object,
-  //         bitOffset: 16,
-  //         bitSize: 0,
-  //         byteSize: 8,
-  //         slot: 0,
-  //         structure: {
-  //           type: StructureType.Struct,
-  //           constructor: DummyClass,
-  //         }
-  //       },
-  //       {
-  //         type: MemberType.Uint,
-  //         bitOffset: 64,
-  //         bitSize: 16,
-  //         byteSize: 2,
-  //         structure: { constructor: DummyErrorSet }
-  //       },
-  //     ];
-  //     const dv = new DataView(new ArrayBuffer(10));
-  //     dv.setUint16(8, 18, true);
-  //     const object = {
-  //       [MEMORY]: dv,
-  //       [CHILD_VIVIFICATOR]: { 0: () => dummyObject },
-  //     };
-  //     const dummyObject = new DummyClass();
-  //     const { get } = getErrorUnionAccessors(members, dv.byteLength, {});
-  //     expect(() => get.call(object)).to.throw().equal(dummyError);
-  //     expect(errorNumber).to.equal(18);
-  //     dv.setUint16(8, 0, true);
-  //     const result = get.call(object);
-  //     expect(result).to.equal(dummyObject);
-  //   })
-  //   it('should return a function for setting int or error', function() {
-  //     const DummyErrorSet = function(arg) {
-  //       if (this instanceof DummyErrorSet) {
-  //         this.index = arg;
-  //       } else {
-  //         return dummyError;
-  //       }
-  //     };
-  //     Object.setPrototypeOf(DummyErrorSet.prototype, Error.prototype);
-  //     const dummyError = new DummyErrorSet(18);
-  //     const members = [
-  //       {
-  //         type: MemberType.Float,
-  //         bitOffset: 0,
-  //         bitSize: 64,
-  //         byteSize: 8,
-  //         structure: {
-  //           type: StructureType.Primitive,
-  //         }
-  //       },
-  //       {
-  //         type: MemberType.Uint,
-  //         bitOffset: 64,
-  //         bitSize: 16,
-  //         byteSize: 2,
-  //         structure: { constructor: DummyErrorSet }
-  //       },
-  //     ];
-  //     const dv = new DataView(new ArrayBuffer(10));
-  //     dv.setFloat64(0, 3.14, true);
-  //     const object = {
-  //       [MEMORY]: dv,
-  //     };
-  //     const { set } = getErrorUnionAccessors(members, dv.byteLength, {});
-  //     set.call(object, dummyError);
-  //     expect(dv.getUint16(8, true)).to.equal(18);
-  //     expect(dv.getFloat64(0, true)).to.equal(0);
-  //     set.call(object, 1234.5678);
-  //     expect(dv.getUint16(8, true)).to.equal(0);
-  //     expect(dv.getFloat64(0, true)).to.equal(1234.5678);
-  //   })
-  // })
 })
 
 function errorData(index) {

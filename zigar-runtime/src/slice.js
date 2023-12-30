@@ -102,7 +102,7 @@ export function defineSlice(s, env) {
       }
       this[MEMORY_COPIER](arg);
       if (hasPointer) {
-        this[POINTER_VISITOR](copyPointer, { source: arg });
+        this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else {
       if (typeof(arg) === 'string' && specialKeys.includes('string')) {

@@ -25,12 +25,13 @@ export function defineOptional(s, env) {
       if (present) {
         return getValue.call(this);
       } else {
+        this[POINTER_VISITOR]?.(resetPointer);
         return null;
       }
     }
   : function() {
     const value = getValue.call(this);
-    return (value) ? value : null;
+    return (value[SLOTS][0]) ? value : null;
   };
   const set = (hasPresentFlag)
   ? function(value) {
@@ -52,7 +53,9 @@ export function defineOptional(s, env) {
       this[POINTER_VISITOR]?.(resetPointer);
     }
   };
-  const check = getPresent;
+  const check = (hasPresentFlag) ? getPresent : function() { 
+    return !!getValue.call(this)[SLOTS][0];
+  };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const hasSlots = needSlots(s);
   const cache = new ObjectCache();
@@ -96,7 +99,7 @@ export function defineOptional(s, env) {
       this[MEMORY_COPIER](arg);
       if (hasPointer) {
         // don't bother copying pointers when it's empty
-        if (check.call(this)) {
+        if (check.call(arg)) {
           this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }

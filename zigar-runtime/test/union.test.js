@@ -2,7 +2,7 @@ import { expect } from 'chai';
 
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { ENVIRONMENT, MEMORY, SLOTS } from '../src/symbol.js';
+import { ENVIRONMENT, MEMORY, POINTER_VISITOR, SLOTS } from '../src/symbol.js';
 import { NodeEnvironment } from '../src/environment-node.js';
 import { encodeBase64 } from '../src/text.js';
 
@@ -979,7 +979,6 @@ describe('Union functions', function() {
       });
       env.finalizeShape(ptrStructure);
       env.finalizeStructure(ptrStructure);
-      const { constructor: Int32Ptr } = ptrStructure;
       const enumStructure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',
@@ -1050,7 +1049,118 @@ describe('Union functions', function() {
       const pointer = object.pointer;
       object.$ = { number: 4567 };
       expect(pointer[SLOTS][0]).to.be.null;
+      object[POINTER_VISITOR](function({ isActive }) {
+        expect(isActive(this)).to.be.false;
+      })
     })
+    it('should release pointer when a different property is activated externally', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const enumStructure = env.beginStructure({
+        type: StructureType.Enumeration,
+        name: 'HelloTag',
+        byteSize: 2,
+      });
+      env.attachMember(enumStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+      });
+      env.finalizeShape(enumStructure);
+      const { constructor: HelloTag } = enumStructure;
+      env.attachMember(enumStructure, {
+        name: 'pointer',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: enumStructure,
+      }, true);
+      env.attachMember(enumStructure, {
+        name: 'number',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: enumStructure,
+      }, true);
+      env.attachTemplate(enumStructure, {
+        [SLOTS]: {
+          0: HelloTag.call(ENVIRONMENT, viewOf(new Uint16Array([ 0 ]))),
+          1: HelloTag.call(ENVIRONMENT, viewOf(new Uint16Array([ 1 ]))),
+        },
+      }, true);
+      env.finalizeStructure(enumStructure);
+      const structure = env.beginStructure({
+        type: StructureType.TaggedUnion,
+        name: 'Hello',
+        byteSize: 10,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        name: 'pointer',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.attachMember(structure, {
+        name: 'number',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.attachMember(structure, {
+        name: 'selector',
+        type: MemberType.EnumerationItem,
+        bitSize: 16,
+        bitOffset: 64,
+        byteSize: 2,
+        structure: enumStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const object = new Hello({ pointer: new Int32(1234) });
+      const pointer = object.pointer;
+      object[MEMORY].setInt32(0, 1234, true);
+      object[MEMORY].setInt16(8, 1, true);
+      expect(object.number).to.equal(1234);
+      expect(pointer[SLOTS][0]).to.be.null;
+      object[POINTER_VISITOR](function({ isActive }) {
+        expect(isActive(this)).to.be.false;
+      })
+    })
+
     it('should reapply pointer when initialized with no initializer', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,

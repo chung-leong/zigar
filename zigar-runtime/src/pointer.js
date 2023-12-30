@@ -170,10 +170,8 @@ export function getProxy() {
   return this[PROXY];
 }
 
-export function copyPointer({ source, isActive = always }) {
-  if (isActive(this)) {
-    this[SLOTS][0] = source[SLOTS][0];
-  }
+export function copyPointer({ source }) {
+  this[SLOTS][0] = source[SLOTS][0];
 }
 
 export function resetPointer() {
@@ -280,6 +278,7 @@ const proxyHandlers = {
     return name in target;
   },
   ownKeys(pointer) {
+    console.log(pointer);
     const targetKeys = Object.getOwnPropertyNames(pointer[SLOTS][0]);
     return [ ...targetKeys, PROXY, POINTER_VISITOR ];
   },

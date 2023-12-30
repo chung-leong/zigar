@@ -423,6 +423,23 @@ describe('Enumeration functions', function() {
       const desc = Object.prototype.toString.call(Hello.Dog);
       expect(desc).to.equal('[object zig.Hello]');
     })
+    it('should throw when no initializer is provided', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Enumeration,
+        name: 'Hello',
+        byteSize: 4,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(structure);
+      const { constructor: Hello } = structure;
+      env.finalizeStructure(structure);
+      expect(() => new Hello()).to.throw(TypeError);
+    })
   })
 })
 

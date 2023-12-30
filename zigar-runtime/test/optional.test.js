@@ -2,7 +2,7 @@ import { expect } from 'chai';
 
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { MEMORY, SLOTS } from '../src/symbol.js';
+import { MEMORY, POINTER_VISITOR, SLOTS } from '../src/symbol.js';
 import { NodeEnvironment } from '../src/environment-node.js';
 
 describe('Optional functions', function() {
@@ -130,7 +130,7 @@ describe('Optional functions', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: Hello } = structure;
-      const object = new Hello(undefined);
+      const object = new Hello(null);
       expect(object.$).to.equal(null);
       object.$ = 3.14;
       expect(object.$).to.equal(3.14);
@@ -251,7 +251,6 @@ describe('Optional functions', function() {
       });
       env.finalizeShape(ptrStructure);
       env.finalizeStructure(ptrStructure);
-      const { constructor: Int32Ptr } = ptrStructure;
       const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
@@ -365,7 +364,6 @@ describe('Optional functions', function() {
       });
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
-      const { constructor: Uint8Slice } = sliceStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]Uint8',
@@ -382,7 +380,6 @@ describe('Optional functions', function() {
       });
       env.finalizeShape(ptrStructure);
       env.finalizeStructure(ptrStructure);
-      const { constructor: Uint8SlicePtr } = ptrStructure;
       const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
@@ -412,6 +409,7 @@ describe('Optional functions', function() {
       const encoder = new TextEncoder();
       const array = encoder.encode('This is a test');
       const object = new Hello(array);
+      expect(object.$.string).to.equal('This is a test');
       const object2 = new Hello(object);
       expect(object2.$.string).to.equal('This is a test');
     })
@@ -520,7 +518,118 @@ describe('Optional functions', function() {
       expect(ptr[SLOTS][0]).to.not.be.null;
       object.$ = null;
       expect(ptr[SLOTS][0]).to.be.null;
+      object[POINTER_VISITOR](function({ isActive }) {
+        expect(isActive(this)).to.be.false;
+      });
     })
+    it('should release pointers in struct when it is set to null externally', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        byteSize: 8,
+        hasPointer: true
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const { constructor: Int32Ptr } = ptrStructure;
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 8 * 2,
+        hasPointer: true
+      });
+      env.attachMember(structStructure, {
+        name: 'dog',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.attachMember(structStructure, {
+        name: 'cat',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 64,
+        byteSize: 8,
+        slot: 1,
+        structure: ptrStructure,
+      })
+      const int1 = new Int32(1234);
+      const int2 = new Int32(4567);
+      const intPtr1 = new Int32Ptr(int1);
+      const intPtr2 = new Int32Ptr(int2);
+      env.attachTemplate(structStructure, {
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(8 * 2));
+          dv.setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
+          dv.setBigUint64(8, 0xaaaaaaaaaaaaaaaan, true);
+          return dv;
+        })(),
+        [SLOTS]: {
+          0: intPtr1,
+          1: intPtr2,
+        }
+      });
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Optional,
+        name: 'Hello',
+        byteSize: structStructure.byteSize + 4,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: structStructure.byteSize * 8,
+        byteSize: structStructure.byteSize,
+        slot: 0,
+        structure: structStructure,
+      });
+      env.attachMember(structure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: structStructure.byteSize * 8,
+        bitSize: 1,
+        byteSize: 1,
+        structure: {},
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const object = new Hello({});
+      const ptr = object.$.cat;
+      expect(ptr[SLOTS][0]).to.not.be.null;
+      object[MEMORY].setUint8(structStructure.byteSize, 0);
+      expect(object.$).to.be.null;
+      expect(ptr[SLOTS][0]).to.be.null;
+    })
+
     it('should release pointers in array when it is set to null', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -552,7 +661,6 @@ describe('Optional functions', function() {
       });
       env.finalizeShape(ptrStructure);
       env.finalizeStructure(ptrStructure);
-      const { constructor: Int32Ptr } = ptrStructure;
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         name: 'Hello',
@@ -634,110 +742,60 @@ describe('Optional functions', function() {
       const object = Hello(new ArrayBuffer(18), { writable: false });
       expect(() => object.$ = 3.14).to.throw(TypeError);
     })
+    it('should make child object read-only too', function() {
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 4 * 2,
+      });
+      env.attachMember(structStructure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isRequired: true,
+        byteSize: 4,
+        bitOffset: 0,
+        bitSize: 32,
+      });
+      env.attachMember(structStructure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isRequired: true,
+        byteSize: 4,
+        bitOffset: 32,
+        bitSize: 32,
+      });     
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Optional,
+        name: 'Hello',
+        byteSize: structStructure.byteSize + 4,
+      });
+      env.attachMember(structure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: structStructure.byteSize * 8,
+        byteSize: structStructure.byteSize,
+        structure: structStructure
+      });
+      env.attachMember(structure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: structStructure.byteSize * 8,
+        bitSize: 1,
+        byteSize: 1,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const object = Hello(new ArrayBuffer(structure.byteSize), { writable: false });
+      object[MEMORY].setUint8(structStructure.byteSize, 1);
+      const pets = object.$;
+      expect(() => pets.dog = 123).to.throw(TypeError)
+        .with.property('message').that.contains('read-only');
+      expect(() => pets.$ = { cat: 123 }).to.throw(TypeError)
+        .with.property('message').that.contains('read-only');
+    });
   })
-  // describe('getOptionalAccessors', function() {
-  //   beforeEach(function() {
-  //     useBool();
-  //     useFloatEx();
-  //     useObject();
-  //   })
-  //   it('should return a function for getting optional float', function() {
-  //     const members = [
-  //       {
-  //         type: MemberType.Float,
-  //         bitOffset: 0,
-  //         bitSize: 64,
-  //         byteSize: 8,
-  //         structure: {
-  //           type: StructureType.Primitive,
-  //         }
-  //       },
-  //       {
-  //         type: MemberType.Bool,
-  //         bitOffset: 64,
-  //         bitSize: 1,
-  //         byteSize: 1,
-  //       },
-  //     ];
-  //     const dv = new DataView(new ArrayBuffer(10));
-  //     dv.setFloat64(0, 3.14, true);
-  //     dv.setUint8(8, 1, true);
-  //     const object = {
-  //       [MEMORY]: dv,
-  //     };
-  //     const { get } = getOptionalAccessors(members, dv.byteLength, {});
-  //     const result1 = get.call(object);
-  //     expect(result1).to.equal(3.14);
-  //     dv.setUint8(8, 0, true);
-  //     const result2 = get.call(object);
-  //     expect(result2).to.be.null;
-  //   })
-  //   it('should return a function for getting optional object value', function() {
-  //     const DummyClass = function() {};
-  //     const members = [
-  //       {
-  //         type: MemberType.Object,
-  //         bitOffset: 0,
-  //         bitSize: 64,
-  //         byteSize: 8,
-  //         slot: 0,
-  //         structure: {
-  //           type: StructureType.Struct,
-  //           constructor: DummyClass,
-  //         }
-  //       },
-  //       {
-  //         type: MemberType.Bool,
-  //         bitOffset: 64,
-  //         bitSize: 1,
-  //         byteSize: 1,
-  //       },
-  //     ];
-  //     const dv = new DataView(new ArrayBuffer(10));
-  //     const object = {
-  //       [MEMORY]: dv,
-  //       [CHILD_VIVIFICATOR]: { 0: () => dummyObject },
-  //     };
-  //     const dummyObject = new DummyClass();
-  //     const { get } = getOptionalAccessors(members, dv.byteLength, {});
-  //     const result1 = get.call(object);
-  //     expect(result1).to.equal(null);
-  //     dv.setUint8(8, 1, true);
-  //     const result2 = get.call(object);
-  //     expect(result2).to.equal(dummyObject);
-  //   })
-  //   it('should return a function for setting float or null', function() {
-  //     const members = [
-  //       {
-  //         type: MemberType.Float,
-  //         bitOffset: 0,
-  //         bitSize: 64,
-  //         byteSize: 8,
-  //         structure: {
-  //           type: StructureType.Primitive,
-  //         }
-  //       },
-  //       {
-  //         type: MemberType.Bool,
-  //         bitOffset: 64,
-  //         bitSize: 1,
-  //         byteSize: 1,
-  //       },
-  //     ];
-  //     const dv = new DataView(new ArrayBuffer(10));
-  //     dv.setInt8(8, 1, true);
-  //     dv.setFloat64(0, 3.14, true);
-  //     const object = {
-  //       [MEMORY]: dv,
-  //     };
-  //     const { get, set } = getOptionalAccessors(members, dv.byteLength, {});
-  //     expect(get.call(object)).to.equal(3.14);
-  //     set.call(object, null);
-  //     expect(dv.getUint8(8, true)).to.equal(0);
-  //     expect(dv.getFloat64(0, true)).to.equal(0);
-  //     set.call(object, 1234.5678);
-  //     expect(dv.getUint8(8, true)).to.equal(1);
-  //     expect(dv.getFloat64(0, true)).to.equal(1234.5678);
-  //   })
-  // })
 })

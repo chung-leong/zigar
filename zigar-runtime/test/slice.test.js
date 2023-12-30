@@ -1060,7 +1060,6 @@ describe('Slice functions', function() {
       });
       env.finalizeShape(ptrStructure);
       env.finalizeStructure(ptrStructure);
-      const { constructor: Int32Ptr } = ptrStructure;
       const structure = env.beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
@@ -1078,6 +1077,7 @@ describe('Slice functions', function() {
       const { constructor: Int32PtrSlice } = structure;
       const slice1 = new Int32PtrSlice([ new Int32(1234), new Int32(4567), new Int32(7890) ]);
       const slice2 = new Int32PtrSlice(slice1);
+      expect(slice1[0]['*']).to.equal(1234);
       expect(slice2[0]['*']).to.equal(1234);
       expect(slice2[1]['*']).to.equal(4567);
       expect(slice2[2]['*']).to.equal(7890);
@@ -1231,6 +1231,8 @@ describe('Slice functions', function() {
         .with.property('message').that.contains(4);
     })
     it('should should throw when sentinel is missing even if runtimeSafety is false', function() {
+      const env = new NodeEnvironment();
+      env.runtimeSafety = false;
       const structure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_:0]u8',
@@ -1261,6 +1263,74 @@ describe('Slice functions', function() {
       const slice = new U8Slice(5);
       expect(() => slice.$.typedArray = new Uint8Array(array)).to.throw(TypeError)
         .with.property('message').that.contains(4);
+    })
+    it('should be able to create read-only object', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Slice,
+        name: 'Hello',
+        byteSize: 4,
+      });
+      const constructor = function() {};
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { constructor, typedArray: Uint32Array }
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      expect(Hello).to.be.a('function');
+      expect(Hello.child).to.equal(constructor);
+      const object = new Hello(new Uint32Array(12), { writable: false });
+      expect(() => object.set(0, 321)).to.throw();
+      expect(() => object[0] = 321).to.throw();
+    })
+    it('should make child object read-only too', function() {
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 4 * 2,
+      });
+      env.attachMember(structStructure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isRequired: true,
+        byteSize: 4,
+        bitOffset: 0,
+        bitSize: 32,
+      });
+      env.attachMember(structStructure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isRequired: true,
+        byteSize: 4,
+        bitOffset: 32,
+        bitSize: 32,
+      });
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Slice,
+        name: 'Hello',
+        length: 4,
+        byteSize: structStructure.byteSize,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: structStructure.byteSize * 8,
+        byteSize: structStructure.byteSize,
+        structure: structStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const objects = Hello(new ArrayBuffer(structure.byteSize * 3), { writable: false });
+      const [ object ] = objects;
+      expect(() => object.dog = 123).to.throw(TypeError)
+        .with.property('message').that.contains('read-only');
+      expect(() => objects[2] = { cat: 123 }).to.throw(TypeError)
+        .with.property('message').that.contains('read-only');
     })
   })
 })
