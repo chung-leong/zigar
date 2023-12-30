@@ -99,7 +99,7 @@ export function getStructureName(s, full = false) {
   if (!full) {
     r = r.replace(/{.*}/, '');
     if (!r.endsWith('.enum_literal)')) {
-      r = r.replace(/[^.]*?\./g, '');
+      r = r.replace(/[^\.\s]*?\./g, '');
     }
   }
   return r;
@@ -180,11 +180,7 @@ export function findAllObjects(structures, SLOTS) {
     list.push(object);
     if (object[SLOTS]) {
       for (const child of Object.values(object[SLOTS])) {
-        // find() can throw when a bare union contains pointers
-        try {
-          find(child);         
-        } catch (err) {
-        }
+        find(child);         
       }
     }
   };
