@@ -348,6 +348,7 @@ function addErrorLookup(getDataViewIntAccessor) {
     const accessor = getDataViewIntAccessor(access, intMember);
     const allErrors = getCurrentErrorSets();
     /* DEV-TEST */
+    /* c8 ignore next 3 */
     if (!accessor) {
       return;
     }

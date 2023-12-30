@@ -1483,5 +1483,42 @@ describe('Pointer functions', function() {
       expect(dv2.getBigUint64(0, true)).to.equal(0xbbbbbbbbn);
       expect(dv2.getBigUint64(8, true)).to.equal(3n);
     })
+    it('should be able to create read-only object', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
+      expect(Int32Ptr.child).to.equal(Int32);
+      const int32 = new Int32(1234);
+      const intPointer = new Int32Ptr(int32, { writable: false });
+      expect(() => intPointer.$ = int32).to.throw(TypeError);
+    }) 
   })
 })

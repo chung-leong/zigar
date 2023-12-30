@@ -3,6 +3,7 @@ import { expect } from 'chai';
 import { CHILD_VIVIFICATOR, MEMORY, SLOTS } from '../src/symbol.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { clearMethodCache } from '../src/data-view.js';
+import { getCurrentErrorSets, initializeErrorSets } from '../src/error-set.js';
 import {
   MemberType,
   useAllMemberTypes,
@@ -11,6 +12,7 @@ import {
   useFloat,
   useUint,
   useEnumerationItem,
+  isReadOnly,
   isByteAligned,
   getDescriptor,
   getMemberFeature
@@ -20,6 +22,14 @@ describe('Member functions', function() {
   beforeEach(function() {
     useAllMemberTypes();
     useAllStructureTypes()
+  })
+  describe('isReadOnly', function() {
+    it('should return true for certain types', function() {
+      expect(isReadOnly(MemberType.Comptime)).to.be.true;
+      expect(isReadOnly(MemberType.Type)).to.be.true;
+      expect(isReadOnly(MemberType.Literal)).to.be.true;
+      expect(isReadOnly(MemberType.Int)).to.be.false;
+    })
   })
   describe('isByteAligned', function() {
     it('should return true when member is byte-aligned', function() {
@@ -56,11 +66,124 @@ describe('Member functions', function() {
       const dv = new DataView(new ArrayBuffer(12));
       const object = { [MEMORY]: dv };
       const { get, set } = getDescriptor(member, env);
+      expect(get.call(object)).to.be.undefined;
+      expect(() => set.call(object, undefined)).to.not.throw();
+      expect(() => set.call(object, null)).to.throw();
+      expect(() => set.call(object, 0)).to.throw();
+      const { set: setNoCheck } = getDescriptor(member, { ...env, runtimeSafety: false });
+      expect(() => setNoCheck.call(object, undefined)).to.not.throw();
+    })
+    it('should return null accessors', function() {
+      const member = {
+        type: MemberType.Null,
+        bitSize: 0,
+        byteSize: 0,
+      };
+      const dv = new DataView(new ArrayBuffer(12));
+      const object = { [MEMORY]: dv };
+      const { get, set } = getDescriptor(member, env);
       expect(get.call(object)).to.be.null;
       expect(() => set.call(object, null)).to.not.throw();
+      expect(() => set.call(object, undefined)).to.throw();
       expect(() => set.call(object, 0)).to.throw();
       const { set: setNoCheck } = getDescriptor(member, { ...env, runtimeSafety: false });
       expect(() => setNoCheck.call(object, null)).to.not.throw();
+    })
+    it('should return error accessors', function() {
+      const MyError = function(index) {
+        if (this) {
+          this.index = index;
+        } else {
+          switch (index) {
+            case 1: return error1;
+            case 2: return error2;
+          }
+        }
+      };
+      Object.setPrototypeOf(MyError.prototype, Error.prototype);
+      const error1 = new MyError(1), error2 = new MyError(2);
+      const member = {
+        type: MemberType.Error,
+        bitSize: 16,
+        byteSize: 2,
+        bitOffset: 0,
+        structure: {
+          name: 'MyError',
+          constructor: MyError,
+          instance: {
+            members: [
+              {
+                type: MemberType.Uint,
+                bitSize: 16,
+                byteSize: 2,
+                bitOffset: 0
+              }
+            ]
+          }
+        }
+      };
+      const dv = new DataView(new ArrayBuffer(12));
+      const object = { [MEMORY]: dv };
+      const { get, set } = getDescriptor(member, env);
+      dv.setUint16(0, 1, true);
+      expect(get.call(object)).to.equal(error1);
+      set.call(object, error2);
+      expect(dv.getUint16(0, true)).to.equal(2);
+      expect(get.call(object)).to.equal(error2);
+      set.call(object, 1);
+      expect(get.call(object)).to.equal(error1);
+      expect(() => set.call(object, new Error)).to.throw(TypeError);
+      expect(() => set.call(object, 3)).to.throw(TypeError);
+    })
+    it('should return accessors for anyerror', function() {
+      const MyError = function(index) {
+        if (this) {
+          this.index = index;
+        } else {
+          switch (index) {
+            case 1: return error1;
+            case 2: return error2;
+          }
+        }
+      };
+      Object.setPrototypeOf(MyError.prototype, Error.prototype);
+      const error1 = new MyError(1), error2 = new MyError(2);
+      initializeErrorSets();
+      const allErrors = getCurrentErrorSets();
+      allErrors[1] = error1;
+      allErrors[2] = error2;
+      const member = {
+        type: MemberType.Error,
+        bitSize: 16,
+        byteSize: 2,
+        bitOffset: 0,
+        structure: {
+          name: 'anyerror',
+          constructor: Error,
+          instance: {
+            members: [
+              {
+                type: MemberType.Uint,
+                bitSize: 16,
+                byteSize: 2,
+                bitOffset: 0
+              }
+            ]
+          }
+        }
+      };
+      const dv = new DataView(new ArrayBuffer(12));
+      const object = { [MEMORY]: dv };
+      const { get, set } = getDescriptor(member, env);
+      dv.setUint16(0, 1, true);
+      expect(get.call(object)).to.equal(error1);
+      set.call(object, error2);
+      expect(dv.getUint16(0, true)).to.equal(2);
+      expect(get.call(object)).to.equal(error2);
+      set.call(object, 1);
+      expect(get.call(object)).to.equal(error1);
+      expect(() => set.call(object, new Error)).to.throw(TypeError);
+      expect(() => set.call(object, 3)).to.throw(TypeError);
     })
     it('should return bool accessors', function() {
       const object = {
@@ -439,7 +562,7 @@ describe('Member functions', function() {
         },
       };
       const object = {
-        [CHILD_VIVIFICATOR]: { 4: () => dummyObject },
+        [CHILD_VIVIFICATOR]: () => dummyObject,
       };
       const { get, set } = getDescriptor(member, env);
       expect(get.call(object)).to.equal(dummyObject);
@@ -470,7 +593,7 @@ describe('Member functions', function() {
         },
       };
       const object = {
-        [CHILD_VIVIFICATOR]: { 4: () => dummyObject },
+        [CHILD_VIVIFICATOR]: () => dummyObject,
       };
       const { get, set } = getDescriptor(member, env);
       expect(get.call(object)).to.equal(123);
@@ -506,7 +629,7 @@ describe('Member functions', function() {
         },
       };
       const object = {
-        [CHILD_VIVIFICATOR]: { 4: () => dummyObject },
+        [CHILD_VIVIFICATOR]: () => dummyObject,
       };
       const { get, set } = getDescriptor(member, env);
       expect(get.call(object)).to.equal(123);
@@ -973,6 +1096,15 @@ describe('Member functions', function() {
       const name = getMemberFeature(member);
       expect(name).to.equal('useEnumerationItemEx');
     })
+    it('should return name of function for handling error', function() {
+      const member = {
+        type: MemberType.Error,
+        bitSize: 8,
+        byteSize: 1,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useError');
+    })
     it('should return name of function for handling objects', function() {
       const member = {
         type: MemberType.Object,
@@ -996,5 +1128,33 @@ describe('Member functions', function() {
       const name = getMemberFeature(member);
       expect(name).to.equal('useVoid');
     })
+    it('should return name of function for handling comptime', function() {
+      const member = {
+        type: MemberType.Comptime,
+        bitSize: 8,
+        byteSize: 1,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useComptime');
+    })
+    it('should return name of function for handling static', function() {
+      const member = {
+        type: MemberType.Static,
+        bitSize: 8,
+        byteSize: 1,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useStatic');
+    })
+    it('should return name of function for handling literal', function() {
+      const member = {
+        type: MemberType.Literal,
+        bitSize: 8,
+        byteSize: 1,
+      };
+      const name = getMemberFeature(member);
+      expect(name).to.equal('useLiteral');
+    })
+
   })
 })
