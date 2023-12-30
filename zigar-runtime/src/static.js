@@ -2,7 +2,7 @@ import { StructureType, defineProperties } from './structure.js';
 import { getDescriptor } from './member.js';
 import { decamelizeErrorName } from './error.js';
 import { getCurrentErrorSets } from './error-set.js';
-import { ENUM_ITEMS, ENUM_NAME, ERROR_ITEMS, SLOTS } from './symbol.js';
+import { ENUM_ITEMS, ENUM_NAME, ERROR_ITEMS, ERROR_MESSAGES, SLOTS } from './symbol.js';
 
 export function addStaticMembers(s, env) {
   const {
@@ -37,6 +37,7 @@ export function addStaticMembers(s, env) {
   } else if (type === StructureType.ErrorSet) {
     const currentErrorSets = getCurrentErrorSets();
     const byIndex = constructor[ERROR_ITEMS];
+    const messages = constructor[ERROR_MESSAGES];
     for (const { name, slot } of members) {
       let error = constructor[name];
       const { index } = error;
@@ -64,11 +65,8 @@ export function addStaticMembers(s, env) {
         }
         error = constructor[SLOTS][slot] = previous;       
       } else {
-        // add message to error object
-        const message = decamelizeErrorName(name);
-        defineProperties(error, {
-          message: { value: message, configurable: true, enumerable: true, writable: false },
-        });
+        // set error message
+        messages[error.index] = decamelizeErrorName(name);
         currentErrorSets[index] = error;
       }
       byIndex[index] = error;

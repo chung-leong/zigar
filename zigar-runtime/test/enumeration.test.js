@@ -440,6 +440,23 @@ describe('Enumeration functions', function() {
       env.finalizeStructure(structure);
       expect(() => new Hello()).to.throw(TypeError);
     })
+    it('should throw when initializer is not one of the expected types', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Enumeration,
+        name: 'Hello',
+        byteSize: 4,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(structure);
+      const { constructor: Hello } = structure;
+      env.finalizeStructure(structure);
+      expect(() => new Hello(false)).to.throw(TypeError);
+    })
   })
 })
 

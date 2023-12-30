@@ -2,7 +2,7 @@ import { ObjectCache, defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
-import { throwInvalidInitializer, throwReadOnly } from './error.js';
+import { throwInvalidInitializer, throwNoInitializer, throwReadOnly } from './error.js';
 import { ALIGN, ENUM_ITEM, ENUM_ITEMS, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
 
 export function defineEnumerationShape(s, env) {

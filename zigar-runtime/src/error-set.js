@@ -2,8 +2,8 @@ import { ObjectCache, defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
-import { throwReadOnly } from './error.js';
-import { ALIGN, ERROR_ITEMS, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
+import { throwInvalidInitializer, throwNoInitializer, throwReadOnly } from './error.js';
+import { ALIGN, ERROR_ITEMS, ERROR_MESSAGES, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
 
 let currentErrorSets;
 
@@ -15,7 +15,8 @@ export function defineErrorSet(s, env) {
     instance: { members: [ member ] },
   } = s;
   const byIndex = {};
-  const cache = new ObjectCache();
+  const messages = {};
+  const cache = new ObjectCache();  
   const constructor = s.constructor = function(arg, options = {}) {
     const {
       writable = true,
@@ -38,6 +39,7 @@ export function defineErrorSet(s, env) {
             return err;
           }
         }
+        return;
       } else {
         dv = getDataView(s, arg, env);
         if (!dv) {
@@ -62,12 +64,17 @@ export function defineErrorSet(s, env) {
   };
   Object.setPrototypeOf(constructor.prototype, Error.prototype);
   const { get: getIndex } = getDescriptor(member, env);
+  const getMessage = function() {
+    const index = getIndex.call(this);
+    return messages[index];
+  };
   // get the enum descriptor instead of the int/uint descriptor
   const errorMember = { ...member, structure: s, type: MemberType.Error };
   const { get, set } = getDescriptor(errorMember, env);
   const toStringTag = function() { return 'Error' };
   defineProperties(constructor.prototype, {
     index: { get: getIndex, configurable: true },
+    message: { get: getMessage, configurable: true },
     delete: { value: getDestructor(env), configurable: true },
     $: { get, set: throwReadOnly, configurable: true },
     // ensure that libraries that rely on the string tag for type detection will
@@ -79,6 +86,7 @@ export function defineErrorSet(s, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
     [ERROR_ITEMS]: { value: byIndex },
+    [ERROR_MESSAGES]: { value: messages },
   });
   return constructor;
 

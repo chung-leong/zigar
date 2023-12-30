@@ -69,6 +69,80 @@ describe('Error set functions', function() {
       e.$ = Hello.UnableToRetrieveMemoryLocation;
       expect(e.$).to.equal(Hello.UnableToRetrieveMemoryLocation);
     })
+    it('should create an object for storing an error', function() {
+      const structure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Hello',
+        byteSize: 2,
+      });      
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+      });
+      env.finalizeShape(structure);
+      const { constructor: Hello } = structure;
+      env.attachMember(structure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure,
+      }, true);
+      env.attachMember(structure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure,
+      }, true);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
+          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+        }
+      }, true);
+      env.finalizeStructure(structure);
+      const error = new Hello(5);
+      expect(error.message).to.equal(Hello.UnableToRetrieveMemoryLocation.message);
+    })
+    it('should cast view used for storing an error', function() {
+      const structure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Hello',
+        byteSize: 2,
+      });      
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+      });
+      env.finalizeShape(structure);
+      const { constructor: Hello } = structure;
+      env.attachMember(structure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure,
+      }, true);
+      env.attachMember(structure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure,
+      }, true);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
+          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+        }
+      }, true);
+      env.finalizeStructure(structure);
+      const dv = new DataView(new ArrayBuffer(structure.byteSize));
+      dv.setUint16(0, 5, true);
+      const error = Hello(dv);
+      expect(error.message).to.equal(Hello.UnableToRetrieveMemoryLocation.message);
+    })
     it('should cast the same buffer to the same object', function() {
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
@@ -106,6 +180,81 @@ describe('Error set functions', function() {
       const object1 = Hello(buffer);
       const object2 = Hello(buffer);
       expect(object2).to.equal(object1);
+    })
+    it('should cast number to an error', function() {
+      const structure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Hello',
+        byteSize: 2,
+      });      
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+      });
+      env.finalizeShape(structure);
+      const { constructor: Hello } = structure;
+      env.attachMember(structure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure,
+      }, true);
+      env.attachMember(structure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure,
+      }, true);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
+          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+        }
+      }, true);
+      env.finalizeStructure(structure);
+      expect(Hello(5)).to.equal(Hello.UnableToRetrieveMemoryLocation);
+      expect(Hello(8)).to.equal(Hello.UnableToCreateObject);
+      expect(Hello(9)).to.be.undefined;
+    })
+    it('should cast string to an error', function() {
+      const structure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Hello',
+        byteSize: 2,
+      });      
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+      });
+      env.finalizeShape(structure);
+      const { constructor: Hello } = structure;
+      env.attachMember(structure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure,
+      }, true);
+      env.attachMember(structure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure,
+      }, true);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
+          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+        }
+      }, true);
+      env.finalizeStructure(structure);
+      const text = Hello.UnableToCreateObject.toString();
+      expect(text).to.equal('Error: Unable to create object');
+      expect(Hello(text)).to.equal(Hello.UnableToCreateObject);
+      expect(Hello('Dunno')).to.be.undefined;
     })
     it('should make previously defined error sets its subclasses if it has all their errors', function() {
       const catStructure = env.beginStructure({
@@ -338,6 +487,76 @@ describe('Error set functions', function() {
       expect(DogError.BathRequired).to.be.instanceOf(PetError);
       expect(CatError.CucumberEncountered).to.be.instanceOf(PetError);
     })
+    it('should throw when no initializer is provided', function() {
+      const structure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Hello',
+        byteSize: 2,
+      });      
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+      });
+      env.finalizeShape(structure);
+      const { constructor: Hello } = structure;
+      env.attachMember(structure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure,
+      }, true);
+      env.attachMember(structure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure,
+      }, true);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
+          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+        }
+      }, true);
+      env.finalizeStructure(structure);
+      expect(() => new Hello()).to.throw(TypeError);
+    }) 
+    it('should throw when initializer is not one of the expected types', function() {
+      const structure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Hello',
+        byteSize: 2,
+      });      
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+      });
+      env.finalizeShape(structure);
+      const { constructor: Hello } = structure;
+      env.attachMember(structure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure,
+      }, true);
+      env.attachMember(structure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure,
+      }, true);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
+          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+        }
+      }, true);
+      env.finalizeStructure(structure);
+      expect(() => Hello(false)).to.throw(TypeError);
+    }) 
   })
 })
 
