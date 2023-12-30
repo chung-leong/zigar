@@ -40,7 +40,7 @@ export function defineArgStruct(s, env) {
     memberDescriptors[member.name] = getDescriptor(member, env);
   }
   const isChildMutable = function(object) {
-    return (object === this.retval);
+      return (object === this.retval);
   };
   defineProperties(constructor.prototype, {
     ...memberDescriptors,

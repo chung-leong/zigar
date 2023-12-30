@@ -4,6 +4,7 @@ import 'mocha-skip-if';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { NodeEnvironment } from '../src/environment-node.js';
+import { POINTER_VISITOR } from '../src/symbol.js';
 
 describe('ArgStruct functions', function() {
   const env = new NodeEnvironment();
@@ -104,6 +105,77 @@ describe('ArgStruct functions', function() {
       const { constructor: ArgStruct } = structure;
       const object = new ArgStruct([ { dog: 1234, cat: 4567 }, 789 ]);
       expect(object.pet.valueOf()).to.eql({ dog: 1234, cat: 4567 });
+    })
+    it('should define an argument struct with pointer as return value', function() {      
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      })
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const structure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        name: 'Hello',
+        byteSize: ptrStructure.byteSize * 2,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: ptrStructure.byteSize * 8,
+        bitOffset: 0,
+        byteSize: ptrStructure.byteSize,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Object,
+        bitSize: ptrStructure.byteSize * 8,
+        bitOffset: ptrStructure.byteSize * 8,
+        byteSize: ptrStructure.byteSize,
+        slot: 1,
+        structure: ptrStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32 } = intStructure;
+      const { constructor: ArgStruct } = structure;
+      const int = new Int32(1234);
+      const object = new ArgStruct([ int ]);
+      const pointers = [], mutabilities = [];
+      object[POINTER_VISITOR](function({ isMutable }) {
+        pointers.push(this);
+        mutabilities.push(isMutable(this));
+      }, { vivificate: true });
+      expect(pointers).to.have.lengthOf(2);
+      expect(pointers[0]).to.equal(object['0']);
+      expect(pointers[1]).to.equal(object['retval']);
+      expect(mutabilities[0]).to.be.false;
+      expect(mutabilities[1]).to.be.true;
     })
     it('should throw when initialized with the wrong number of arguments', function() {
       const structure = env.beginStructure({

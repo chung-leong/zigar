@@ -1007,6 +1007,52 @@ describe('Array functions', function() {
       expect(() => object.set(0, 321)).to.throw();
       expect(() => object[0] = 321).to.throw();
     })
+    it('should make child object read-only too', function() {
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 4 * 2,
+      });
+      env.attachMember(structStructure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isRequired: true,
+        byteSize: 4,
+        bitOffset: 0,
+        bitSize: 32,
+      });
+      env.attachMember(structStructure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isRequired: true,
+        byteSize: 4,
+        bitOffset: 32,
+        bitSize: 32,
+      });
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        length: 4,
+        byteSize: structStructure.byteSize * 4,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: structStructure.byteSize * 8,
+        byteSize: structStructure.byteSize,
+        structure: structStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const objects = Hello(new ArrayBuffer(structure.byteSize), { writable: false });
+      const [ object ] = objects;
+      expect(() => object.dog = 123).to.throw(TypeError)
+        .with.property('message').that.contains('read-only');
+      expect(() => objects[2] = { cat: 123 }).to.throw(TypeError)
+        .with.property('message').that.contains('read-only');
+    })
   })
   describe('getArrayIterator', function() {
     it('should return a iterator', function() {
