@@ -15,7 +15,8 @@ export function decodeText(arrays, encoding = 'utf-8') {
       for (const a of arrays) {
         len += a.length;
       }
-      array = new Uint8Array(len);
+      const { constructor } = arrays[0];
+      array = new constructor(len);
       let offset = 0;
       for (const a of arrays) {
         array.set(a, offset);
@@ -50,7 +51,7 @@ export function encodeText(text, encoding = 'utf-8') {
 
 export function encodeBase64(dv) {
   /* NODE-ONLY */
-  if (typeof(process) === 'object' && process[Symbol.toStringTag] === 'process') {
+  if (typeof(Buffer) === 'function' && Buffer.prototype instanceof Uint8Array) {
     return Buffer.from(dv.buffer, dv.byteOffset, dv.byteLength).toString('base64');
   }
   /* NODE-ONLY-END */
