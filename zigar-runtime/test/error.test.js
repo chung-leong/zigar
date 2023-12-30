@@ -8,6 +8,7 @@ import {
   throwBufferExpected,
   throwInvalidEnum,
   throwEnumExpected,
+  throwErrorExpected,
   throwNotInErrorSet,
   throwUnknownErrorNumber,
   throwInvalidType,
@@ -25,13 +26,18 @@ import {
   throwConstantConstraint,
   throwMisplacedSentinel,
   throwMissingSentinel,
+  throwAlignmentConflict,
+  throwAssigningToConstant,
+  throwTypeMismatch,
   throwInaccessiblePointer,
+  throwNullPointer,
   throwInvalidPointerTarget,
   throwFixedMemoryTargetRequired,
   throwOverflow,
   throwOutOfBound,
   rethrowRangeError,
   throwNotNull,
+  throwNotUndefined,
   decamelizeErrorName,
   throwZigError,
   article,
@@ -139,6 +145,17 @@ describe('Error functions', function() {
         byteSize: 8,
       };
       expect(() => throwEnumExpected(structure, 16)).to.throw(TypeError)
+        .with.property('message').that.contains('Hello');
+    })
+  })
+  describe('throwErrorExpected', function() {
+    it('should throw a type error', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.ErrorSet,
+        byteSize: 8,
+      };
+      expect(() => throwErrorExpected(structure, 16)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
     })
   })
@@ -478,9 +495,41 @@ describe('Error functions', function() {
       expect(() => throwMissingSentinel(structure, 0, 8)).to.throw(TypeError);
     })
   })
+  describe('throwAlignmentConflict', function() {
+    it('should throw a type error', function() {
+      expect(() => throwAlignmentConflict(4, 3)).to.throw(TypeError)
+        .with.property('message').that.contains('4-byte').and.contains('3-byte');
+    })
+  })
+  describe('throwAssigningToConstant', function() {
+    it('should throw a type error', function() {
+      const pointer = { constructor: { name: 'Hello' }};
+      expect(() => throwAssigningToConstant(pointer)).to.throw(TypeError)
+        .with.property('message').that.contains('Hello');
+    })
+  })
+  describe('throwTypeMismatch', function() {
+    it('should throw a type error', function() {
+      expect(() => throwTypeMismatch('string', 8)).to.throw(TypeError)
+        .with.property('message').that.contains('a string');
+    })
+  })
   describe('throwInaccessiblePointer', function() {
     it('should throw a type error', function() {
       expect(() => throwInaccessiblePointer()).to.throw(TypeError);
+    })
+  })
+  describe('throwNullPointer', function() {
+    it('should throw a type error', function() {
+      expect(() => throwNullPointer(5)).to.throw(TypeError);
+    })
+    it('should use singular form when len is 1', function() {
+      expect(() => throwNullPointer(1)).to.throw(TypeError)
+        .with.property('message').that.match(/1 byte\b/);
+    })
+    it('should show different message when sentinel is missing', function() {
+      expect(() => throwNullPointer({})).to.throw(TypeError)
+        .with.property('message').that.contains('sentinel');
     })
   })
   describe('throwInvalidPointerTarget', function() {
@@ -570,7 +619,18 @@ describe('Error functions', function() {
         type: MemberType.Int,
         bitSize: 8,
       };
-      expect(() => throwNotNull(member)).to.throw(RangeError)
+      expect(() => throwNotNull(member)).to.throw(TypeError)
+        .with.property('message').that.contains('hello');
+    })
+  })
+  describe('throwNotUndefined', function() {
+    it('should throw a type error', function() {
+      const member = {
+        name: 'hello',
+        type: MemberType.Int,
+        bitSize: 8,
+      };
+      expect(() => throwNotUndefined(member)).to.throw(TypeError)
         .with.property('message').that.contains('hello');
     })
   })

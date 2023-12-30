@@ -274,17 +274,6 @@ function reset32(dest, offset) {
   dest.setInt32(offset + 28, 0, true);
 }
 
-/* c8 ignore start */
-export function showBits(object) {
-  const bitObj = {};
-  for (const [ name, value ] of Object.entries(object)) {
-    const s = value.toString(2);
-    bitObj[name] = s.padStart(Math.ceil(s.length / 8) * 8, '0');
-  }
-  console.log(bitObj);
-}
-/* c8 ignore end */
-
 export function restoreMemory() {
   const dv = this[MEMORY];
   const source = dv[MEMORY];
@@ -296,4 +285,13 @@ export function restoreMemory() {
   newDV[MEMORY] = source;
   this[MEMORY] = newDV;
   return true;
+}
+
+export function showBits(object) {
+  const bitObj = {};
+  for (const [ name, value ] of Object.entries(object)) {
+    const s = value.toString(2);
+    bitObj[name] = s.padStart(Math.ceil(s.length / 8) * 8, '0');
+  }
+  console.log(bitObj);
 }

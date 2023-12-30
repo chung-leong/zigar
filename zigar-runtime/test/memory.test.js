@@ -1,15 +1,38 @@
 import { expect } from 'chai';
 
 import {
+  getDestructor,
   getCopyFunction,
   getResetFunction,
   getBitAlignFunction,
   restoreMemory,
   getMemoryResetter,
+  showBits,
 } from '../src/memory.js';
-import { MEMORY } from '../src/symbol.js';
+import { MEMORY, SLOTS } from '../src/symbol.js';
 
 describe('Memory functions', function() {
+  describe('getDestructor', function() {
+    it('should try to release fixed memory', function() {
+      let released;
+      const env = {
+        releaseFixedView(dv) {
+          released = dv;
+        }
+      };
+      const dv = new DataView(new ArrayBuffer(4));
+      const slots = {};
+      const object = { 
+        [MEMORY]: dv,
+        [SLOTS]: slots,
+        delete: getDestructor(env),        
+      };
+      object.delete();
+      expect(released).to.equal(dv);
+      expect(object[MEMORY]).to.be.null;
+      expect(object[SLOTS]).to.not.equal(slots);
+    })
+  })
   describe('getCopyFunction', function() {
     it('should return optimal function for copying buffers of various sizes', function() {
       const functions = [];
@@ -58,7 +81,7 @@ describe('Memory functions', function() {
         if (!functions.includes(f)) {
           functions.push(f);
         }
-        f(dest, 0);
+        f(dest, 0, size);
         for (let i = 0; i < size; i++) {
           expect(dest.getInt8(i)).to.equal(0);
         }
@@ -176,4 +199,18 @@ describe('Memory functions', function() {
       expect(() => object[MEMORY].getInt8(0)).to.not.throw();
     })
   })
+  describe('showBits', function() {
+    it('should output numbers as bits to console',  function() {
+      const logFn = console.log;
+      try {
+        let output;
+        console.log = (arg) => { output = arg };
+        showBits({ number1: 0x1F, number2: 0x00F0n });
+        expect(output).to.eql({ number1: '00011111', number2: '11110000' });
+      } finally {
+        console.log = logFn;
+      }   
+    })
+  })
 })
+

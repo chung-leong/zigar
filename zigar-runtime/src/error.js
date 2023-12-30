@@ -215,7 +215,7 @@ export function throwInaccessiblePointer() {
 
 export function throwNullPointer(len) {
   const expected = (typeof(len) === 'object') ? `sentinel` : `${len} byte${len === 1 ? '' : 's'}`;
-  throw new Error(`Null pointer encountered (${expected} expected)`);
+  throw new TypeError(`Null pointer encountered (${expected} expected)`);
 }
 
 export function throwInvalidPointerTarget(structure, arg) {
@@ -257,7 +257,7 @@ export function rethrowRangeError(member, index, err) {
 
 export function throwNotNull(member) {
   const { name } = member;
-  throw new RangeError(`Property ${name} can only be null`);
+  throw new TypeError(`Property ${name} can only be null`);
 }
 
 export function throwNotUndefined(member) {
