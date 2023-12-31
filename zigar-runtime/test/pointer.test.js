@@ -1273,7 +1273,7 @@ describe('Pointer functions', function() {
       const intPtr = new Int32Ptr(int32);
       expect(() => intPtr.$ = int32).to.not.throw();
     })
-    it('should throw when garbage collected object is assigned to a pointer in shared memory', function() {
+    it('should throw when garbage collected object is assigned to a pointer in fixed memory', function() {
       const env = new NodeEnvironment();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -1286,9 +1286,6 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      env.obtainFixedView = (address, len) => {
-        return new DataView(new ArrayBuffer(4));
-      };
       env.finalizeShape(intStructure);
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
@@ -1307,12 +1304,18 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const dv = new DataView(new SharedArrayBuffer(8));
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: Int32Ptr } = structure;
-      const int32 = new Int32(1234);
+      env.allocateExternMemory = function(len, align) {
+        return new ArrayBuffer(len);
+      };
+      env.extractBufferAddress = function(buffer) {
+        return 0x1000n;
+      };
+      const dv = env.allocateFixedMemory(structure.byteSize, 0);
       const intPtr = Int32Ptr.call(ENVIRONMENT, dv);
+      const int32 = new Int32(1234);
       expect(() => intPtr.$ = int32).to.throw(TypeError)
         .with.property('message').that.contains('garbage');
     })
@@ -1350,17 +1353,23 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      const dv = new DataView(new SharedArrayBuffer(8));
-      env.finalizeShape(structure);
+      env.finalizeShape(structure);     
       env.finalizeStructure(structure);
       const { constructor: Int32Ptr } = structure;
-      const int32 = new Int32(1234);
+      env.allocateExternMemory = function(len, align) {
+        return new ArrayBuffer(len);
+      };
+      env.extractBufferAddress = function(buffer) {
+        return 0x1000n;
+      };
+      const dv = env.allocateFixedMemory(structure.byteSize, 0);
       const intPtr1 = Int32Ptr.call(ENVIRONMENT, dv);
+      const int32 = new Int32(1234);
       const intPtr2 = new Int32Ptr(int32);
       expect(() => intPtr1.$ = intPtr2).to.throw(TypeError)
         .with.property('message').that.contains('garbage');
     })
-    it('should immediately write to a pointer in shared memory', function() {
+    it('should immediately write to a pointer in fixed memory', function() {
       const env = new NodeEnvironment();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -1373,12 +1382,6 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      env.getBufferAddress = (buffer) => {
-        return buffer.address;
-      };
-      env.obtainFixedView = (address, len) => {
-        return new DataView(new ArrayBuffer(4));
-      };
       env.finalizeShape(intStructure);
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
@@ -1400,15 +1403,22 @@ describe('Pointer functions', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: Int32Ptr } = structure;
-      const dv1 = new DataView(new SharedArrayBuffer(4));
-      const dv2 = new DataView(new SharedArrayBuffer(8));
-      dv1.buffer.address = 0xbbbbbbbbn;
+      env.allocateExternMemory = function(len, align) {
+        return new ArrayBuffer(len);
+      };
+      let address = 0n;
+      env.extractBufferAddress = function(buffer) {
+        address += 1000n;
+        return address;
+      };
+      const dv1 = env.allocateFixedMemory(intStructure.byteSize, 0);
+      const dv2 = env.allocateFixedMemory(structure.byteSize, 0);
       const int32 = Int32.call(ENVIRONMENT, dv1);
       const intPtr = Int32Ptr.call(ENVIRONMENT, dv2);
       intPtr.$ = int32;
-      expect(dv2.getBigUint64(0, true)).to.equal(0xbbbbbbbbn);
+      expect(dv2.getBigUint64(0, true)).to.equal(1000n);
     })
-    it('should immediately write to slice pointer in shared memory', function() {
+    it('should immediately write to slice pointer in fixed memory', function() {
       const env = new NodeEnvironment();
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
@@ -1432,7 +1442,6 @@ describe('Pointer functions', function() {
       });
       env.finalizeShape(structStructure);
       env.finalizeStructure(structStructure);
-      const { constructor: Hello } = structStructure;
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Hello',
@@ -1447,7 +1456,6 @@ describe('Pointer functions', function() {
       });
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
-      const { constructor: HelloSlice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]Hello',
@@ -1465,23 +1473,32 @@ describe('Pointer functions', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: HelloPtr } = structure;
-      env.obtainFixedView = (address, len) => {
-        const buffer = new SharedArrayBuffer(len);
-        buffer.address = address;
-        return new DataView(buffer);
+      env.allocateExternMemory = function(len, align) {
+        return new ArrayBuffer(len);
       };
-      env.getBufferAddress = (buffer) => {
-        return buffer.address;
+      let nextAddress = 1000n;
+      const bufferAddresses = new Map();
+      env.extractBufferAddress = function(buffer) {
+        let address = bufferAddresses.get(buffer);
+        if (address === undefined) {
+          address = nextAddress;
+          bufferAddresses.set(buffer, address);
+          nextAddress += 1000n;
+        }
+        return address;
       };
-      const dv1 = new DataView(new SharedArrayBuffer(16));
-      const dv2 = new DataView(new SharedArrayBuffer(16));
-      dv1.setBigInt64(0, 0xbbbbbbbbn, true);
-      dv1.setBigInt64(8, 3n, true);
-      const pointer1 = HelloPtr.call(ENVIRONMENT, dv1);
-      const pointer2 = HelloPtr.call(ENVIRONMENT, dv2);
+      const dv1 = env.allocateFixedMemory(sliceStructure.byteSize * 4, 0);
+      const dv2 = env.allocateFixedMemory(structure.byteSize, 0);
+      const dv3 = env.allocateFixedMemory(structure.byteSize, 0);
+      const target = HelloPtr.child(dv1);
+      const pointer1 = HelloPtr.call(ENVIRONMENT, dv2);
+      pointer1.$ = target;
+      expect(dv2.getBigUint64(0, true)).to.equal(1000n);
+      expect(dv2.getBigUint64(8, true)).to.equal(4n);
+      const pointer2 = HelloPtr.call(ENVIRONMENT, dv3);
       pointer2.$ = pointer1;
-      expect(dv2.getBigUint64(0, true)).to.equal(0xbbbbbbbbn);
-      expect(dv2.getBigUint64(8, true)).to.equal(3n);
+      expect(dv3.getBigUint64(0, true)).to.equal(1000n);
+      expect(dv3.getBigUint64(8, true)).to.equal(4n);
     })
     it('should be able to create read-only object', function() {
       const intStructure = env.beginStructure({

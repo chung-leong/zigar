@@ -636,21 +636,6 @@ describe('Member functions', function() {
       set.call(object, new Error('Pants on fire'));
       expect(() => get.call(object)).to.throw();
     })
-    it('should return type accessors', function() {
-      const DummyClass = function(value) {};
-      const member = {
-        type: MemberType.Type,
-        slot: 5,
-      };
-      const object = {
-        [SLOTS]: {
-          5: { constructor: DummyClass },
-        }
-      };
-      const { get, set } = getDescriptor(member, env);
-      expect(get.call(object)).to.equal(DummyClass);
-      expect(set).to.be.undefined;
-    })
     it('should return int array accessors', function() {
       const member = {
         type: MemberType.Int,
@@ -950,6 +935,102 @@ describe('Member functions', function() {
       set.call(object, 123);
       expect(get.call(object)).to.equal(123);
       expect(() => set.call(object, 123n)).to.throw(TypeError);
+    })
+    it('should return type accessors', function() {
+      const DummyClass = function(value) {};
+      const member = {
+        type: MemberType.Type,
+        slot: 5,
+      };
+      const object = {
+        [SLOTS]: {
+          5: { constructor: DummyClass },
+        }
+      };
+      const { get, set } = getDescriptor(member, env);
+      expect(get.call(object)).to.equal(DummyClass);
+      expect(set).to.be.undefined;
+    })
+    it('should return literal accessors', function() {
+      const literal = { string: 'Hello' };
+      const member = {
+        type: MemberType.Literal,
+        slot: 5,
+      };
+      const object = {
+        [SLOTS]: {
+          5: literal,
+        }
+      };
+      const { get, set } = getDescriptor(member, env);
+      expect(get.call(object)).to.equal('Hello');
+      expect(set).to.be.undefined;
+    })
+    it('should return comptime value accessors', function() {
+      const comptime = { $: 1234 };
+      const member = {
+        type: MemberType.Comptime,
+        slot: 5,
+        structure: { type: StructureType.Primitive },
+      };
+      const object = {
+        [SLOTS]: {
+          5: comptime,
+        }
+      };
+      const { get, set } = getDescriptor(member, env);
+      expect(get.call(object)).to.equal(1234);
+      expect(set).to.be.undefined;
+    })
+    it('should return comptime object accessors', function() {
+      const comptime = { hello: 1234 };
+      const member = {
+        type: MemberType.Comptime,
+        slot: 5,
+        structure: { type: StructureType.Struct },
+      };
+      const object = {
+        [SLOTS]: {
+          5: comptime,
+        }
+      };
+      const { get, set } = getDescriptor(member, env);
+      expect(get.call(object)).to.equal(comptime);
+      expect(set).to.be.undefined;
+    })
+    it('should return static value accessors', function() {
+      const staticObj = { $: 1234 };
+      const member = {
+        type: MemberType.Static,
+        slot: 5,
+        structure: { type: StructureType.Primitive },
+      };
+      const object = {
+        [SLOTS]: {
+          5: staticObj,
+        }
+      };
+      const { get, set } = getDescriptor(member, env);
+      expect(get.call(object)).to.equal(1234);
+      set.call(object, 4567);
+      expect(staticObj.$).to.equal(4567);
+    })
+    it('should return static object accessors', function() {
+      const staticObj = { $: 1234 };
+      const member = {
+        type: MemberType.Static,
+        slot: 5,
+        structure: { type: StructureType.Struct },
+      };
+      const object = {
+        [SLOTS]: {
+          5: staticObj,
+        }
+      };
+      const { get, set } = getDescriptor(member, env);
+      expect(get.call(object)).to.equal(staticObj);
+      set.call(object, 4567);
+      expect(staticObj.$).to.equal(4567);
     })
   })
   describe('getMemberFeature', function() {

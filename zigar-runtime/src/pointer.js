@@ -278,7 +278,6 @@ const proxyHandlers = {
     return name in target;
   },
   ownKeys(pointer) {
-    console.log(pointer);
     const targetKeys = Object.getOwnPropertyNames(pointer[SLOTS][0]);
     return [ ...targetKeys, PROXY, POINTER_VISITOR ];
   },
