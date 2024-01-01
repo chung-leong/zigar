@@ -4,9 +4,9 @@ import { MemberType } from '../src/member.js';
 import {
   StructureType,
   useOpaque,
-  getStructureFeature,
   getStructureName,
   getStructureFactory,
+  getFeaturesUsed,
   defineProperties,
   removeSetters,
   needSlots,
@@ -33,17 +33,6 @@ describe('Structure functions', function() {
       expect(Hello).to.be.an('function');
     })
   })
-  describe('getStructureFeature', function() {
-    it(`should return the name of the function needed by structure`, function() {
-      const structure = env.beginStructure({
-        type: StructureType.Opaque,
-        name: 'Hello',
-        byteSize: 0
-      });
-      const name = getStructureFeature(structure);
-      expect(name).to.equal('useOpaque');
-    })
-  })
   describe('getStructureName', function() {
     it('should shorten names by removing namespace qualifiers', function() {
       expect(getStructureName({ name: 'u8' })).to.equal('u8');
@@ -58,6 +47,635 @@ describe('Structure functions', function() {
       useOpaque();
       const f = getStructureFactory(StructureType.Opaque);
       expect(f).to.be.a('function');
+    })
+  })
+  describe('getFeaturesUsed', function() {
+    it('should report the need for standard int support', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Int,
+                bitSize: 32,
+                byteSize: 4,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useInt');
+    })
+    it('should report the need for extended int support when unaligned int is used', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Int,
+                bitOffset: 2,
+                bitSize: 32,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useIntEx');
+    })
+    it('should report the need for extended int support when non-standard int is used', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Int,
+                bitSize: 35,
+                byteSize: 8,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useIntEx');
+    })
+    it('should omit useInt when useIntEx is present', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Int,
+                bitSize: 35,
+                byteSize: 8,
+              },
+              {
+                type: MemberType.Int,
+                bitSize: 32,
+                byteSize: 4,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useIntEx');
+      expect(features).to.not.contain('useInt');
+    })
+    it('should report the need for standard uint support', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Uint,
+                bitSize: 32,
+                byteSize: 4,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useUint');
+    })
+    it('should report the need for extended int support when unaligned uint is used', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Uint,
+                bitOffset: 2,
+                bitSize: 32,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useUintEx');
+    })
+    it('should report the need for extended int support when non-standard uint is used', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Uint,
+                bitSize: 35,
+                byteSize: 8,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useUintEx');
+    })
+    it('should omit useUint when useUintEx is present', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Uint,
+                bitSize: 35,
+                byteSize: 8,
+              },
+              {
+                type: MemberType.Uint,
+                bitSize: 32,
+                byteSize: 4,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useUintEx');
+      expect(features).to.not.contain('useUint');
+    })
+    it('should report the need for standard float support', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Float,
+                bitSize: 32,
+                byteSize: 4,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useFloat');
+    })
+    it('should report the need for extended float support when unaligned float is used', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Float,
+                bitOffset: 2,
+                bitSize: 32,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useFloatEx');
+    })
+    it('should report the need for extended float support when non-standard float is used', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Float,
+                bitSize: 80,
+                byteSize: 128,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useFloatEx');
+    })
+    it('should omit useFloat when useFloatEx is present', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Float,
+                bitSize: 80,
+                byteSize: 8,
+              },
+              {
+                type: MemberType.Float,
+                bitSize: 32,
+                byteSize: 4,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useFloatEx');
+      expect(features).to.not.contain('useFloat');
+    })
+    it('should report the need for standard bool support', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Bool,
+                bitSize: 1,
+                byteSize: 1,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useBool');
+    })
+    it('should report the need for extended bool support when bitfield is used', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Bool,
+                bitOffset: 1,
+                bitSize: 1,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useBoolEx');
+    })
+    it('should omit useBool when useBoolEx is present', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Bool,
+                bitSize: 1,
+                byteSize: 1,
+              },
+              {
+                type: MemberType.Bool,
+                bitOffset: 1,
+                bitSize: 1,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useBoolEx');
+      expect(features).to.not.contain('useBool');
+    })
+    it('should report the need for standard enum support', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.EnumerationItem,
+                bitSize: 32,
+                byteSize: 4,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useEnumerationItem');
+    })
+    it('should report the need for extended enum support when unaligned enum is used', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.EnumerationItem,
+                bitOffset: 2,
+                bitSize: 32,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useEnumerationItemEx');
+    })
+    it('should report the need for extended enum support when non-standard enum is used', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.EnumerationItem,
+                bitSize: 35,
+                byteSize: 8,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useEnumerationItemEx');
+    })
+    it('should omit useEnumerationItem when useEnumerationItemEx is present', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.EnumerationItem,
+                bitSize: 35,
+                byteSize: 8,
+              },
+              {
+                type: MemberType.EnumerationItem,
+                bitSize: 32,
+                byteSize: 4,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useEnumerationItemEx');
+      expect(features).to.not.contain('useEnumerationItem');
+    })
+    it('should report the need for enum support when enum structure is used', function() {
+      const structures = [ 
+        {
+          type: StructureType.Enumeration,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Uint,
+                bitSize: 32,
+                byteSize: 4,
+              },
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useEnumeration');
+      expect(features).to.contain('useEnumerationItem');
+      expect(features).to.contain('useUintEx');
+    })
+    it('should report the need for extended enum support when non-standard int is involved', function() {
+      const structures = [ 
+        {
+          type: StructureType.Enumeration,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Uint,
+                bitSize: 35,
+                byteSize: 8,
+              },
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useEnumeration');
+      expect(features).to.contain('useEnumerationItemEx');
+      expect(features).to.contain('useUintEx');
+      expect(features).to.not.contain('useEnumerationItem');
+    })
+
+    it('should report the need for error support', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Error,
+                bitSize: 16,
+                byteSize: 2,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useError');
+    })
+    it('should report the need for error support when error set structure is used', function() {
+      const structures = [ 
+        {
+          type: StructureType.ErrorSet,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Uint,
+                bitSize: 16,
+                byteSize: 2,
+              },
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useErrorSet');
+      expect(features).to.contain('useError');
+      expect(features).to.contain('useUint');
+    })
+    it('should report the need for uint support when pointer structure is used', function() {
+      const structures = [ 
+        {
+          type: StructureType.Pointer,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Object,
+                slot: 0
+              },
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('usePointer');
+      expect(features).to.contain('useObject');
+      expect(features).to.contain('useUint');
+    })
+    it('should report the need for object support', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Object,
+                bitSize: 16,
+                byteSize: 2,
+                slot: 1,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useObject');
+    })
+    it('should report the need for type support', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Type,
+                slot: 1,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useType');
+    })
+    it('should report the need for void support', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Void,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useVoid');
+    })
+    it('should report the need for comptime support', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Comptime,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useComptime');
+    })
+    it('should report the need for literal support', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Literal,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useLiteral');
+    })
+    it('should report the need for static support', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          static: { 
+            members: [
+              {
+                type: MemberType.Static,
+              }
+            ]
+          },
+          instance: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useStatic');
     })
   })
   describe('defineProperties', function() {

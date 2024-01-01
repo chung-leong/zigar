@@ -1,5 +1,5 @@
-import { MemberType, getMemberFeature, isReadOnly } from '../../zigar-runtime/src/member.js';
-import { StructureType, findAllObjects, getStructureFeature } from '../../zigar-runtime/src/structure.js';
+import { MemberType, isReadOnly } from '../../zigar-runtime/src/member.js';
+import { StructureType, findAllObjects, getFeaturesUsed } from '../../zigar-runtime/src/structure.js';
 
 export function generateCodeForWASM(definition, params) {
   const { structures, keys } = definition;
@@ -9,7 +9,7 @@ export function generateCodeForWASM(definition, params) {
     topLevelAwait = true,
     omitExports = false,
   } = params;
-  const features = getStructureFeatures(structures);
+  const features = getFeaturesUsed(structures);
   const exports = getExports(structures);
   const lines = [];
   const add = manageIndentation(lines);
@@ -305,41 +305,6 @@ function isConst(object) {
   // the setter comes from the embedded source code and thus wouldn't match if we compare 
   // it with the imported version of the function--need to check the name 
   return descriptor?.set?.name === 'throwReadOnly';
-}
-
-function getStructureFeatures(structures) {
-  const structureFeatures = {}, memberFeatures = {};
-  for (const structure of structures) {
-    structureFeatures[ getStructureFeature(structure) ] = true;
-    for (const members of [ structure.instance.members, structure.static.members ]) {
-      for (const member of members) {
-        const feature = getMemberFeature(member);
-        if (feature) {
-          memberFeatures[feature] = true;
-        }
-      }
-    }
-    if (structure.type === StructureType.Pointer) {
-      // pointer need uint support
-      memberFeatures.useUint = true;
-    }
-  }
-  if (memberFeatures.useIntEx) {
-    delete memberFeatures.useInt;
-  }
-  if (memberFeatures.useUintEx) {
-    delete memberFeatures.useUint;
-  }
-  if (memberFeatures.useEnumerationItemEx) {
-    delete memberFeatures.useEnumerationItem;
-  }
-  if (memberFeatures.useFloatEx) {
-    delete memberFeatures.useFloat;
-  }
-  if (memberFeatures.useBoolEx) {
-    delete memberFeatures.useBool;
-  }
-  return [ ...Object.keys(structureFeatures), ...Object.keys(memberFeatures) ];
 }
 
 function getExports(structures) {

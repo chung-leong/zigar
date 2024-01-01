@@ -126,58 +126,16 @@ export function useNull() {
   factories[MemberType.Null] = getNullDescriptor;
 }
 
-export function getMemberFeature(member) {
-  const { type, bitSize } = member;
-  switch (type) {
-    case MemberType.Int:
-      if(isByteAligned(member) && (bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64)) {
-        return 'useInt';
-      } else {
-        return 'useIntEx';
-      }
-    case MemberType.Uint:
-      if(isByteAligned(member) && (bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64)) {
-        return 'useUint';
-      } else {
-        return 'useUintEx';
-      }
-    case MemberType.EnumerationItem:
-      if(isByteAligned(member) && bitSize <= 64) {
-        return 'useEnumerationItem';
-      } else {
-        return 'useEnumerationItemEx';
-      }
-    case MemberType.Error:
-      return 'useError';
-    case MemberType.Float:
-      if (isByteAligned(member) && (bitSize === 32 || bitSize === 64)) {
-        return 'useFloat';
-      } else {
-        return 'useFloatEx';
-      }
-    case MemberType.Bool:
-      if (isByteAligned(member)) {
-        return 'useBool';
-      } else {
-        return 'useBoolEx';
-      }
-    case MemberType.Object:
-      return 'useObject';
-    case MemberType.Void:
-      return 'useVoid';
-    case MemberType.Type:
-      return 'useType';
-    case MemberType.Comptime:
-      return 'useComptime';
-    case MemberType.Static:
-      return 'useStatic';
-    case MemberType.Literal:
-      return 'useLiteral';
-  }
-}
-
 export function isByteAligned({ bitOffset, bitSize, byteSize }) {
   return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
+}
+
+export function hasStandardIntSize({ bitSize }) {
+  return bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64;
+}
+
+export function hasStandardFloatSize({ bitSize }) {
+  return bitSize === 32 || bitSize === 64;
 }
 
 export function getDescriptor(member, env) {
@@ -479,8 +437,8 @@ export function getStaticDescriptor(member, env) {
   if (structure.type === StructureType.Enumeration) {
     // enum needs to be dealt with separately, since the object reference changes
     const { instance: { members: [ member ] } } = structure;
-    // TODO
-    const { get, set } = getEnumerationItemDescriptor({ ...member, structure }, env);
+    const enumMember = { ...member, type: MemberType.EnumerationItem, structure };
+    const { get, set } = getDescriptor(enumMember, env);
     descriptor = { 
       get: function getEnum(slot) {
         const object = this[SLOTS][slot];
@@ -494,8 +452,8 @@ export function getStaticDescriptor(member, env) {
   } else if (structure.type === StructureType.ErrorSet) {
     // ditto for error set
     const { instance: { members: [ member ] } } = structure;
-    // TODO
-    const { get, set } = getErrorDescriptor({ ...member, structure }, env);
+    const errorMember = { ...member, type: MemberType.Error, structure };
+    const { get, set } = getDescriptor(errorMember, env);
     descriptor = {
       get: function getError(slot) {
         const object = this[SLOTS][slot];

@@ -11,7 +11,7 @@ import { defineSlice } from './slice.js';
 import { defineVector } from './vector.js';
 import { defineArgStruct } from './arg-struct.js';
 import { throwReadOnly } from './error.js';
-import { MemberType } from './member.js';
+import { MemberType, hasStandardFloatSize, hasStandardIntSize, isByteAligned } from './member.js';
 
 export const StructureType = {
   Primitive: 0,
@@ -117,10 +117,111 @@ export function getStructureFactory(type) {
   return f;
 }
 
-export function getStructureFeature(structure) {
-  const { type } = structure;
-  const [ name ] = Object.entries(StructureType).find(a => a[1] === type);
-  return `use${name}`;
+export function getFeaturesUsed(structures) {
+  const features = {};
+  for (const structure of structures) {
+    const { type } = structure;
+    const [ name ] = Object.entries(StructureType).find(a => a[1] === type);
+    features[`use${name}`] = true;
+    for (const members of [ structure.instance.members, structure.static.members ]) {
+      for (const member of members) {
+        const { type, bitSize } = member;
+        switch (type) {
+          case MemberType.Int:
+            if(isByteAligned(member) && hasStandardIntSize(member)) {
+              features.useInt = true;
+            } else {
+              features.useIntEx = true;
+            }
+            break;
+          case MemberType.Uint:
+            if(isByteAligned(member) && hasStandardIntSize(member)) {
+              features.useUint = true;
+            } else {
+              features.useUintEx = true;
+            }
+            break;
+          case MemberType.EnumerationItem:
+            if(isByteAligned(member) && hasStandardIntSize(member)) {
+              features.useEnumerationItem = true;
+            } else {
+              features.useEnumerationItemEx = true;
+            }
+            break;
+          case MemberType.Error:
+            features.useError = true;
+            break;
+          case MemberType.Float:
+            if (isByteAligned(member) && hasStandardFloatSize(member)) {
+              features.useFloat = true;
+            } else {
+              features.useFloatEx = true;
+            }
+            break;
+          case MemberType.Bool:
+            if (isByteAligned(member)) {
+              features.useBool = true;
+            } else {
+              features.useBoolEx = true;
+            }
+            break;
+          case MemberType.Object:
+            features.useObject = true;
+            break;
+          case MemberType.Void:
+            features.useVoid = true;
+            break;
+          case MemberType.Type:
+            features.useType = true;
+            break;
+          case MemberType.Comptime:
+            features.useComptime = true;
+            break;
+          case MemberType.Static:
+            features.useStatic = true;
+            break;
+          case MemberType.Literal:
+            features.useLiteral = true;
+            break;
+        }         
+      }
+    }
+    switch (type) {
+      case StructureType.Pointer:
+        // pointer structure have Object member, while needing support for Uint
+        features.useUint = true;
+        break;
+      case StructureType.Enumeration: {
+        // enumeration structures have Int/Uint member, while needing support for EnumerationItem
+        const [ member ] = structure.instance.members;
+        if(isByteAligned(member) && hasStandardIntSize(member)) {
+          features.useEnumerationItem = true;
+        } else {
+          features.useEnumerationItemEx = true;
+        }
+      } break;
+      case StructureType.ErrorSet:
+        // error set structures have Uint member, while needing support for Error
+        features.useError = true;
+        break;
+    } 
+  }
+  if (features.useIntEx) {
+    delete features.useInt;
+  }
+  if (features.useUintEx) {
+    delete features.useUint;
+  }
+  if (features.useEnumerationItemEx) {
+    delete features.useEnumerationItem;
+  }
+  if (features.useFloatEx) {
+    delete features.useFloat;
+  }
+  if (features.useBoolEx) {
+    delete features.useBool;
+  }
+  return Object.keys(features);
 }
 
 export function defineProperties(object, descriptors) {
