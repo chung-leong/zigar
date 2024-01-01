@@ -159,15 +159,12 @@ export function getChildVivificator(s, writable) {
     objectMembers[member.slot] = member;
   }
   return function getChild(slot) {
-    let object = this[SLOTS][slot];
-    if (!object) {
-      const { bitOffset, byteSize, structure: { constructor } } = objectMembers[slot];
-      const dv = this[MEMORY];
-      const parentOffset = dv.byteOffset;
-      const offset = parentOffset + (bitOffset >> 3);
-      const childDV = new DataView(dv.buffer, offset, byteSize);
-      object = this[SLOTS][slot] = constructor.call(PARENT, childDV, { writable });
-    }
+    const { bitOffset, byteSize, structure: { constructor } } = objectMembers[slot];
+    const dv = this[MEMORY];
+    const parentOffset = dv.byteOffset;
+    const offset = parentOffset + (bitOffset >> 3);
+    const childDV = new DataView(dv.buffer, offset, byteSize);
+    const object = this[SLOTS][slot] = constructor.call(PARENT, childDV, { writable });
     return object;
   }
 }
@@ -206,7 +203,7 @@ export function getPointerVisitor(s, visitorOptions = {}) {
         }
         childOptions.source = srcChild;
       }
-      const child = (vivificate) ? this[CHILD_VIVIFICATOR](slot) : this[SLOTS][slot];
+      const child = this[SLOTS][slot] ?? (vivificate ? this[CHILD_VIVIFICATOR](slot) : null);
       if (child) {
         child[POINTER_VISITOR](cb, childOptions);
       }

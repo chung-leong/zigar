@@ -562,6 +562,7 @@ describe('Member functions', function() {
       };
       const object = {
         [CHILD_VIVIFICATOR]: () => dummyObject,
+        [SLOTS]: {},
       };
       const { get, set } = getDescriptor(member, env);
       expect(get.call(object)).to.equal(dummyObject);
@@ -593,8 +594,11 @@ describe('Member functions', function() {
       };
       const object = {
         [CHILD_VIVIFICATOR]: () => dummyObject,
+        [SLOTS]: {},
       };
       const { get, set } = getDescriptor(member, env);
+      debugger;
+      get.call(object);
       expect(get.call(object)).to.equal(123);
       set.call(object, 456);
       expect(get.call(object)).to.equal(456);
@@ -629,6 +633,10 @@ describe('Member functions', function() {
       };
       const object = {
         [CHILD_VIVIFICATOR]: () => dummyObject,
+        [SLOTS]: {
+          // pre-fill the slot here
+          4: dummyObject,
+        },
       };
       const { get, set } = getDescriptor(member, env);
       expect(get.call(object)).to.equal(123);
@@ -719,6 +727,7 @@ describe('Member functions', function() {
       };
       const object = {
         [CHILD_VIVIFICATOR]: index => slots[index],
+        [SLOTS]: {},
       };
       const { get, set } = getDescriptor(member, env);
       expect(get.call(object, 0)).to.equal(dummyObject1);
@@ -763,6 +772,7 @@ describe('Member functions', function() {
       };
       const object = {
         [CHILD_VIVIFICATOR]: index => slots[index],
+        [SLOTS]: {},
       };
       const { get, set } = getDescriptor(member, env);
       expect(get.call(object, 0)).to.equal(123);

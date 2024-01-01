@@ -351,6 +351,8 @@ function isValueExpected(structure) {
     case StructureType.Primitive:
     case StructureType.ErrorUnion:
     case StructureType.Optional:
+    case StructureType.Enumeration:
+    case StructureType.ErrorSet:
       return true;
     default:
       return false;
@@ -358,17 +360,17 @@ function isValueExpected(structure) {
 }
 
 function getValue(slot) {
-  const object = this[CHILD_VIVIFICATOR](slot);
+  const object = this[SLOTS][slot] ?? this[CHILD_VIVIFICATOR](slot);
   return object.$;
 }
 
 function getObject(slot) {
-  const object = this[CHILD_VIVIFICATOR](slot);
+  const object = this[SLOTS][slot] ?? this[CHILD_VIVIFICATOR](slot);
   return object;
 }
 
 function setValue(slot, value) {
-  const object = this[CHILD_VIVIFICATOR](slot);
+  const object = this[SLOTS][slot] ?? this[CHILD_VIVIFICATOR](slot);
   object.$ = value;
 }
 
@@ -409,68 +411,19 @@ export function getTypeDescriptor(member, env) {
   return bindSlot(slot, { get: getType });
 }
 
-function getStaticValue(slot) {
-  const object = this[SLOTS][slot];
-  return object.$;
-}
-
-function getStaticObject(slot) {
-  const object = this[SLOTS][slot];
-  return object;
-}
-
-function setStaticValue(slot, value) {
-  const object = this[SLOTS][slot];
-  object.$ = value;
-}
-
 export function getComptimeDescriptor(member, env) {
   const { slot, structure } = member;
   return bindSlot(slot, {
-    get: isValueExpected(structure) ? getStaticValue : getStaticObject,
+    get: isValueExpected(structure) ? getValue : getObject,
   });
 }
 
 export function getStaticDescriptor(member, env) {
   const { slot, structure } = member;
-  let descriptor;
-  if (structure.type === StructureType.Enumeration) {
-    // enum needs to be dealt with separately, since the object reference changes
-    const { instance: { members: [ member ] } } = structure;
-    const enumMember = { ...member, type: MemberType.EnumerationItem, structure };
-    const { get, set } = getDescriptor(enumMember, env);
-    descriptor = { 
-      get: function getEnum(slot) {
-        const object = this[SLOTS][slot];
-        return get.call(object);
-      }, 
-      set: function setEnum(slot, arg) {
-        const object = this[SLOTS][slot];
-        return set.call(object, arg);
-      },
-    };
-  } else if (structure.type === StructureType.ErrorSet) {
-    // ditto for error set
-    const { instance: { members: [ member ] } } = structure;
-    const errorMember = { ...member, type: MemberType.Error, structure };
-    const { get, set } = getDescriptor(errorMember, env);
-    descriptor = {
-      get: function getError(slot) {
-        const object = this[SLOTS][slot];
-        return get.call(object);
-      },
-      set: function setError(slot, arg) {
-        const object = this[SLOTS][slot];
-        set.call(object, arg);
-      },
-    };
-  } else {
-    descriptor = {
-      get: isValueExpected(structure) ? getStaticValue : getStaticObject,
-      set: setStaticValue,
-    };
-  }
-  return bindSlot(slot, descriptor);
+  return bindSlot(slot, {
+    get: isValueExpected(structure) ? getValue : getObject,
+    set: setValue,
+  });
 }
 
 function getLiteral(slot) {

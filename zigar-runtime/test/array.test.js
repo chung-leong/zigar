@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { MEMORY } from '../src/symbol.js';
+import { MEMORY, POINTER_VISITOR } from '../src/symbol.js';
 import { MemberType, useAllMemberTypes, getDescriptor } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { NodeEnvironment } from '../src/environment-node.js';
@@ -833,6 +833,121 @@ describe('Array functions', function() {
         expect(object.get(i)).to.equal(BigInt(i + 1) * 1000n);
       }
     })
+    it('should permit visitation of invalid pointers', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure)
+      env.finalizeStructure(intStructure)
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        length: 4,
+        byteSize: 8 * 4,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        byteSize: 8,
+        structure: ptrStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32PtrArray } = structure;
+      const dv = new DataView(new ArrayBuffer(structure.byteSize));
+      const array = Int32PtrArray(dv);
+      const pointers = [];
+      // make sure that children don't get vivificated unless the vivificate option is set
+      array[POINTER_VISITOR](function() {
+        pointers.push(this);
+      }, {});
+      expect(pointers).to.have.lengthOf(0);
+      // look for the pointers for real
+      array[POINTER_VISITOR](function() {
+        expect(this['*']).to.be.null;
+        pointers.push(this);
+      }, { vivificate: true });
+      expect(pointers).to.have.lengthOf(4);
+    })
+    it('should correctly copy array holding pointers', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure)
+      env.finalizeStructure(intStructure)
+      const { constructor: Int32 } = intStructure;
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        length: 4,
+        byteSize: 8 * 4,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        byteSize: 8,
+        structure: ptrStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32PtrArray } = structure;
+      const array1 = new Int32PtrArray([ new Int32(1234), new Int32(4567), new Int32(7890), new Int32(12345) ]);
+      const array2 = new Int32PtrArray(array1);
+      expect(array2[0]['*']).to.equal(1234);
+      expect(array2[1]['*']).to.equal(4567);
+      expect(array2[2]['*']).to.equal(7890);
+      expect(array2[3]['*']).to.equal(12345);
+    })
     it('should correctly copy array holding pointers', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -888,6 +1003,7 @@ describe('Array functions', function() {
       expect(array2[2]['*']).to.equal(7890);
       expect(array2[3]['*']).to.equal(12345);
     })
+
     it('should allow casting to array from a slice with same element type', function() {
       const Int64 = function() {};
       const sliceStructure = env.beginStructure({

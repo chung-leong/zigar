@@ -42,7 +42,6 @@ async function loadZig(url) {
   // get the absolute path to node-zigar-addon so the "transpiled" code can find it
   const runtimeURL = pathToFileURL(require.resolve('node-zigar-addon'));
   const { code } = generateCodeForNode(definition, { runtimeURL, libPath });
-  // console.log(code);
   return {
     format: 'module',
     shortCircuit: true,
