@@ -267,7 +267,7 @@ describe('Pointer functions', function() {
       expect(pointer['*']).to.equal(object2);
       expect(object1.cat).to.equal(123);
     })
-    it('should make keys from target available', function() {
+    it('should iterate through properties of target', function() {
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -311,10 +311,13 @@ describe('Pointer functions', function() {
       const pointer = new HelloPtr(new Hello({ cat: 123, dog: 456 }));
       expect('cat' in pointer).to.be.true;
       expect('cow' in pointer).to.be.false;
-      expect(Object.getOwnPropertyNames(pointer)).to.eql([ 'cat', 'dog' ]);
-      expect(Object.keys(pointer)).to.eql([ 'cat', 'dog' ]);
-      expect(Object.getOwnPropertyDescriptor(pointer, 'cow')).to.be.undefined;
-      expect(Object.getOwnPropertyDescriptor(pointer, 'cat')).to.be.an('object');
+      const entries = [];
+      for (const entry of pointer) {
+        entries.push(entry);
+      }
+      expect(entries).to.eql([ [ 'cat', 123 ], [ 'dog', 456 ] ]);
+      //console.log(entries.valueOf());
+      //expect(entries.valueOf())
     })
     it('should convert target of pointer to read-only when it is const', function() {
       const structStructure = env.beginStructure({

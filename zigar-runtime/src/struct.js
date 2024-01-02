@@ -3,11 +3,13 @@ import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView } from './data-view.js';
 import { always, copyPointer } from './pointer.js';
-import { getSpecialKeys } from './special.js';
+import { getBase64Accessors, getDataViewAccessors, getSpecialKeys, 
+  getValueOf } from './special.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer, 
   throwNoProperty } from './error.js';
 import { ALIGN, CHILD_VIVIFICATOR, CONST, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR, SIZE, 
-  SLOTS } from './symbol.js';
+  SLOTS, 
+  VALUE_NORMALIZER} from './symbol.js';
 
 export function defineStructShape(s, env) {
   const {
@@ -21,7 +23,6 @@ export function defineStructShape(s, env) {
   for (const member of members) {
     const { get, set } = getDescriptor(member, env);
     memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
-    setters[member.name] = set;
   }
   const keys = Object.keys(memberDescriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
@@ -136,12 +137,24 @@ export function defineStructShape(s, env) {
   };
   const instanceDescriptors = {
     ...memberDescriptors,
-    delete: { value: getDestructor(env), configurable: true },
-    $: { get: getSelf, set: initializer, configurable: true },
+    $: { get: getSelf, set: initializer },
+    dataView: getDataViewAccessors(s),
+    base64: getBase64Accessors(),
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    delete: { value: getDestructor(env) },
+    [Symbol.iterator]: { value: getStructIteratorCreator(s) },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
+    [VALUE_NORMALIZER]: { value: normalizeStruct },
   };
+  // need setters for initialization of read-only objects
+  for (const [ name, { set } ] of Object.entries(instanceDescriptors)) {
+    if (set) {
+      setters[name] = set;
+    }
+  }
   const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
@@ -149,8 +162,44 @@ export function defineStructShape(s, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-export function getChildVivificator(s) {
-  const { instance: { members } } = s;
+export function normalizeStruct(map) {
+  let object = map.get(this);
+  if (!object) {
+    object = {};
+    for (const [ name, value ] of this) {      
+      object[name] = value[VALUE_NORMALIZER]?.(map) ?? value;
+    }
+    map.set(this, object);
+  }
+  return object;
+}
+
+export function getStructIteratorCreator(structure) {
+  const { instance: { members } } = structure;
+  const names = members.map(m => m.name);
+  const { length } = names;
+  return function getStructIterator() {
+    let index = 0;
+    const self = this;
+    return {
+      next() {
+        let value, done;
+        if (index < length) {
+          const name = names[index];
+          value = [ name, self[name] ];
+          done = false;
+          index++;
+        } else {
+          done = true;
+        }
+        return { value, done };
+      },
+    };
+  };
+}
+
+export function getChildVivificator(structure) {
+  const { instance: { members } } = structure;
   const objectMembers = {};
   for (const member of members.filter(m => m.type === MemberType.Object)) {
     objectMembers[member.slot] = member;

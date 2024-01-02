@@ -18,6 +18,7 @@ export const SELF = Symbol('self');
 export const CONST = Symbol('const');
 export const MEMORY_COPIER = Symbol('memoryCopier');
 export const VALUE_RESETTER = Symbol('valueResetter');
+export const VALUE_NORMALIZER = Symbol('valueNormalizer');
 export const CHILD_VIVIFICATOR = Symbol('childVivificator');
 export const POINTER_SELF = Symbol('pointer');
 export const POINTER_VISITOR = Symbol('pointerVisitor');

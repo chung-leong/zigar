@@ -2,13 +2,13 @@ import { ObjectCache, StructureType, attachDescriptors, getSelf, needSlots } fro
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView } from './data-view.js';
-import { getSpecialKeys } from './special.js';
+import { getBase64Accessors, getDataViewAccessors, getSpecialKeys, getValueOf } from './special.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { throwInvalidInitializer, throwMissingUnionInitializer, throwMultipleUnionInitializers,
   throwNoProperty, throwInactiveUnionProperty, throwNoInitializer } from './error.js';
 import { always, copyPointer, disablePointer, resetPointer } from './pointer.js';
 import { ACTIVE_FIELD, ALIGN, CHILD_VIVIFICATOR, CONST, ENUM_ITEM, ENUM_NAME, MEMORY, MEMORY_COPIER,
-  POINTER_VISITOR, PROXY, SIZE, SLOTS } from './symbol.js';
+  POINTER_VISITOR, PROXY, SIZE, SLOTS, VALUE_NORMALIZER } from './symbol.js';
 
 export function defineUnionShape(s, env) {
   const {
@@ -241,12 +241,17 @@ export function defineUnionShape(s, env) {
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
   const instanceDescriptors = {
     ...memberDescriptors,
-    delete: { value: getDestructor(env), configurable: true },
     $: { get: getSelf, set: initializer, configurable: true },
+    dataView: getDataViewAccessors(s),
+    base64: getBase64Accessors(),
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    delete: { value: getDestructor(env) },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [ENUM_ITEM]: isTagged && { get: getEnumItem, configurable: true },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
     [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor(s, { isChildActive }) },
+    [VALUE_NORMALIZER]: { value: createNormalizationFunction(s) },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
@@ -254,6 +259,13 @@ export function defineUnionShape(s, env) {
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };
+
+export function createNormalizationFunction(s) {
+  // TODO
+  return function normalizeUnion(map) {
+    return null;
+  };
+}
 
 const taggedProxyHandlers = {
   ownKeys(union) {

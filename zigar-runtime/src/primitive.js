@@ -1,11 +1,10 @@
-import { ObjectCache, attachDescriptors, defineProperties, needSlots } from './structure.js';
+import { ObjectCache, attachDescriptors, needSlots } from './structure.js';
 import { MemberType, isByteAligned, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getCompatibleTags, addTypedArray, requireDataView } from './data-view.js';
-import { getSpecialKeys } from './special.js';
+import { getBase64Accessors, getDataViewAccessors, getSpecialKeys, getTypedArrayAccessors } from './special.js';
 import { ALIGN, COMPAT, CONST, MEMORY, MEMORY_COPIER, SIZE, SLOTS } from './symbol.js';
-import { throwInvalidInitializer, throwNoInitializer, throwNoProperty, 
-  throwReadOnly } from './error.js';
+import { throwInvalidInitializer, throwNoInitializer, throwNoProperty } from './error.js';
 
 export function definePrimitive(s, env) {
   const {
@@ -79,9 +78,14 @@ export function definePrimitive(s, env) {
   };
   const { get, set } = getDescriptor(member, env);
   const instanceDescriptors = {
-    delete: { value: getDestructor(env), configurable: true },
-    $: { get, set, configurable: true },
-    [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
+    $: { get, set },
+    dataView: getDataViewAccessors(s),
+    base64: getBase64Accessors(),
+    typedArray: s.typedArray && getTypedArrayAccessors(s),
+    valueOf: { value: get },
+    toJSON: { value: get },
+    delete: { value: getDestructor(env) },
+    [Symbol.toPrimitive]: { value: get },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
   };
   const staticDescriptors = {

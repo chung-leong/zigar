@@ -37,7 +37,8 @@ describe('Primitive functions', function() {
       const dv = new DataView(new ArrayBuffer(8));
       dv.setBigUint64(0, 0x7FFFFFFFFFFFFFFFn, true);
       const object = Hello(dv);
-      expect(object.$).to.equal(0x7FFFFFFFFFFFFFFFn);
+      expect(object.$).to.equal(0x7FFFFFFFFFFFFFFFn);      
+      expect(object.valueOf()).to.equal(0x7FFFFFFFFFFFFFFFn);
       expect(BigInt(object)).to.equal(0x7FFFFFFFFFFFFFFFn);
     })
     it('should define a structure for holding a type', function() {
@@ -331,9 +332,11 @@ describe('Primitive functions', function() {
       const dv = new DataView(new ArrayBuffer(8));
       dv.setBigUint64(0, 0x7FFFFFFFFFFFFFFFn, true);
       const object = Hello(dv, { writable: false });
+      expect(object.constructor).to.equal(Hello);
       expect(() => object.$ = 100n).to.throw(TypeError);
       const writable = Hello(object);
       expect(() => writable.$ = 100n).to.not.throw();
+      expect(writable).to.not.equal(object);
       expect(object.$).to.equal(100n);
       const readOnly = Hello(writable, { writable: false });
       expect(readOnly).to.equal(object);

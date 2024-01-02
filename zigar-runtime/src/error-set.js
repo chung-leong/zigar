@@ -3,7 +3,8 @@ import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { throwInvalidInitializer, throwNoInitializer } from './error.js';
-import { ALIGN, CONST, ERROR_ITEMS, ERROR_MESSAGES, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
+import { ALIGN, CONST, ERROR_ITEMS, ERROR_MESSAGES, MEMORY, MEMORY_COPIER, SIZE, VALUE_NORMALIZER } from './symbol.js';
+import { getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
 
 let currentErrorSets;
 
@@ -69,14 +70,19 @@ export function defineErrorSet(s, env) {
   const { get, set } = getDescriptor(errorMember, env);
   const toStringTag = function() { return 'Error' };
   const instanceDescriptors = {
-    index: { get: getIndex, configurable: true },
-    message: { get: getMessage, configurable: true },
-    delete: { value: getDestructor(env), configurable: true },
-    $: { get, set, configurable: true },
+    $: { get, set },
+    index: { get: getIndex },
+    message: { get: getMessage },
+    dataView: getDataViewAccessors(s),
+    base64: getBase64Accessors(),
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    delete: { value: getDestructor(env) },
     // ensure that libraries that rely on the string tag for type detection will
     // correctly identify the object as an error
-    [Symbol.toStringTag]: { get: toStringTag, configurable: true },
+    [Symbol.toStringTag]: { get: toStringTag },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
+    [VALUE_NORMALIZER]: { value: normalizeError },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
@@ -86,6 +92,10 @@ export function defineErrorSet(s, env) {
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };
+
+export function normalizeError(map) {
+  return this.$;
+}
 
 export function initializeErrorSets() {
   currentErrorSets = {};

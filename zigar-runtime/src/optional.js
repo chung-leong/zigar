@@ -1,12 +1,13 @@
-import { ObjectCache, attachDescriptors, defineProperties, needSlots } from './structure.js';
+import { ObjectCache, attachDescriptors, needSlots } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView }  from './data-view.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
-import { throwNoInitializer, throwReadOnly } from './error.js';
+import { throwNoInitializer } from './error.js';
 import { copyPointer, resetPointer } from './pointer.js';
 import { ALIGN, CHILD_VIVIFICATOR, CONST, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SIZE, SLOTS, 
-  VALUE_RESETTER } from './symbol.js';
+  VALUE_NORMALIZER, VALUE_RESETTER } from './symbol.js';
+import { getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
 
 export function defineOptional(s, env) {
   const {
@@ -104,16 +105,26 @@ export function defineOptional(s, env) {
   };
   const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
   const instanceDescriptors = {
-    delete: { value: getDestructor(env), configurable: true },
-    $: { get, set, configurable: true },
+    $: { get, set },
+    dataView: getDataViewAccessors(s),
+    base64: getBase64Accessors(),
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    delete: { value: getDestructor(env) },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildActive: check }) },
+    [VALUE_NORMALIZER]: { value: normalizeOptional },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+
+export function normalizeOptional(map) {
+  const value = this.$;
+  return value[VALUE_NORMALIZER]?.(map) ?? value;
 }

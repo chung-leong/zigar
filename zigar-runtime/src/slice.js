@@ -1,14 +1,14 @@
-import { ObjectCache, attachDescriptors, defineProperties } from './structure.js';
+import { ObjectCache, attachDescriptors } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, checkDataViewSize, getCompatibleTags } from './data-view.js';
-import { getArrayIterator, createProxy, createArrayEntries, getChildVivificator, getPointerVisitor } from './array.js';
+import { getArrayIterator, createProxy, getArrayEntries, getChildVivificator, getPointerVisitor, canBeString, normalizeArray } from './array.js';
 import { copyPointer, getProxy } from './pointer.js';
-import { checkDataView, getDataViewFromTypedArray, getDataViewFromUTF8, getSpecialKeys } from './special.js';
+import { checkDataView, getBase64Accessors, getDataViewAccessors, getDataViewFromTypedArray, getDataViewFromUTF8, getSpecialKeys, getStringAccessors, getTypedArrayAccessors, getValueOf } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoProperty,
-  throwMisplacedSentinel, throwMissingSentinel, throwNoInitializer, throwReadOnly } from './error.js';
+  throwMisplacedSentinel, throwMissingSentinel, throwNoInitializer } from './error.js';
 import { ALIGN, CHILD_VIVIFICATOR, COMPAT, CONST, GETTER, LENGTH, MEMORY, MEMORY_COPIER, POINTER_VISITOR,
-  SENTINEL, SETTER, SIZE, SLOTS } from './symbol.js';
+  SENTINEL, SETTER, SIZE, SLOTS, VALUE_NORMALIZER } from './symbol.js';
 import { decodeBase64 } from './text.js';
 
 export function defineSlice(s, env) {
@@ -185,16 +185,23 @@ export function defineSlice(s, env) {
   };
   const { get, set } = getDescriptor(member, env);
   const instanceDescriptors = {
-    get: { value: get, configurable: true, writable: true },
-    set: { value: set, configurable: true, writable: true },
-    length: { get: getLength, configurable: true },
-    delete: { value: getDestructor(env), configurable: true },
-    $: { get: getProxy, set: initializer, configurable: true },
-    entries: { value: createArrayEntries, configurable: true, writable: true },
-    [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
+    $: { get: getProxy, set: initializer },
+    length: { get: getLength },
+    dataView: getDataViewAccessors(s),
+    base64: getBase64Accessors(),
+    string: canBeString(member) && getStringAccessors(s),
+    typedArray: s.typedArray && getTypedArrayAccessors(s),
+    get: { value: get },
+    set: { value: set },
+    entries: { value: getArrayEntries },
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    delete: { value: getDestructor(env) },
+    [Symbol.iterator]: { value: getArrayIterator },
     [MEMORY_COPIER]: { value: getMemoryCopier(elementSize, true) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s) }
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s) },
+    [VALUE_NORMALIZER]: { value: normalizeArray },
   };
   const staticDescriptors = {
     child: { get: () => elementStructure.constructor },

@@ -3,21 +3,26 @@ import { MemberType } from './member.js';
 import { restoreMemory } from './memory.js';
 import { decodeBase64, decodeText, encodeBase64, encodeText } from './text.js';
 import { throwBufferSizeMismatch, throwTypeMismatch } from './error.js';
-import { MEMORY, MEMORY_COPIER } from './symbol.js';
+import { MEMORY, MEMORY_COPIER, VALUE_NORMALIZER } from './symbol.js';
 import { isTypedArray } from './data-view.js';
 
 export function addSpecialAccessors(s) {
-  const { constructor } = s;
-  // use toPrimitive() as valueOf() when there's one
-  const valueDescriptor = getValueDescriptor(s);
-  defineProperties(constructor.prototype, {
-    dataView: { ...getDataViewAccessors(s), configurable: true },
-    base64: { ...getBase64Accessors(), configurable: true },
-    toJSON:  valueDescriptor,
-    valueOf: valueDescriptor,
-    string: canBeString(s) && { ...getStringAccessors(s), configurable: true },
-    typedArray: canBeTypedArray(s) && { ...getTypedArrayAccessors(s), configurable: true },
-  });
+  // const { constructor } = s;
+  // // use toPrimitive() as valueOf() when there's one
+  // const valueDescriptor = getValueDescriptor(s);
+  // defineProperties(constructor.prototype, {
+  //   dataView: { ...getDataViewAccessors(s), configurable: true },
+  //   base64: { ...getBase64Accessors(), configurable: true },
+  //   toJSON:  valueDescriptor,
+  //   valueOf: valueDescriptor,
+  //   string: canBeString(s) && { ...getStringAccessors(s), configurable: true },
+  //   typedArray: canBeTypedArray(s) && { ...getTypedArrayAccessors(s), configurable: true },
+  // });
+}
+
+export function getValueOf() {
+  const map = new Map();
+  return this[VALUE_NORMALIZER](map);
 }
 
 function getValueDescriptor(s) {
@@ -151,32 +156,3 @@ export function getDataViewFromTypedArray(ta, TypedArray) {
   return new DataView(ta.buffer, ta.byteOffset, ta.byteLength);;
 }
 
-export function getValueOf() {
-  const map = new WeakMap();
-  function extract(object) {
-    let f;
-    if (typeof(object) === 'string') {
-      return object;
-    } else if (object?.[Symbol.iterator]) {
-      const array = [];
-      for (const element of object) {
-        array.push(extract(element));
-      }
-      return array;
-    } else if (object && (typeof(object) === 'object' || typeof(object) === 'function')) {
-      let result = map.get(object);
-      if (!result) {
-        result = {};
-        map.set(object, result);
-        for (const [ name, child ] of Object.entries(object)) {
-          result[name] = extract(child);
-        }
-        return result;
-      }
-      return result;
-    } else {
-      return object;
-    }
-  };
-  return extract(this.$);
-}

@@ -636,7 +636,7 @@ describe('Slice functions', function() {
         expect(slice[i]).to.equal(i);
       }
     })
-    it('should correctly initialize an slice of structs', function() {
+    it('should correctly initialize a slice of structs', function() {
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',

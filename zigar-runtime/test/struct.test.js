@@ -49,9 +49,14 @@ describe('Struct functions', function() {
       const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
       expect(object).to.be.an.instanceOf(Hello);
-      expect(Object.keys(object)).to.have.lengthOf(2);
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(4567);
+      const entries = [];
+      for (const entry of object) {
+        entries.push(entry);
+      }
+      expect(entries).to.eql([ [ 'dog', 1234 ], [ 'cat', 4567 ] ]);
+      expect(object.valueOf()).to.eql({ dog: 1234, cat: 4567 });
     })
     it('should cast the same buffer to the same object', function() {
       const structure = env.beginStructure({
@@ -216,11 +221,7 @@ describe('Struct functions', function() {
       const { constructor: Hello } = structure;
       expect(Hello).to.be.a('function');
       const object = new Hello({});
-      expect(object).to.be.an.instanceOf(Object);
-      expect(object).to.be.an.instanceOf(Hello);
-      expect(Object.keys(object)).to.have.lengthOf(2);
-      expect(object.dog).to.equal(1234);
-      expect(object.cat).to.equal(4567);
+      expect(object.valueOf()).to.eql({ dog: 1234, cat: 4567 });
     })
     it('should create functional setters', function() {
       const structure = env.beginStructure({

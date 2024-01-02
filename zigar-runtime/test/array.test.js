@@ -8,7 +8,7 @@ import { encodeBase64 } from '../src/text.js';
 import {
   getArrayIterator,
   getArrayEntriesIterator,
-  createArrayEntries,
+  getArrayEntries,
 } from '../src/array.js';
 
 describe('Array functions', function() {
@@ -42,6 +42,7 @@ describe('Array functions', function() {
       expect(object.get(0)).to.equal(321);
       expect(object.$).to.equal(object);
       expect([ ...object ]).to.eql([ 321, 0, 0, 0, 0, 0, 0, 0 ]);
+      expect(object.valueOf()).to.eql([ 321, 0, 0, 0, 0, 0, 0, 0 ]);
       expect(object.length).to.equal(8);
       expect(object.typedArray).to.be.instanceOf(Uint32Array);
     })
@@ -1241,7 +1242,7 @@ describe('Array functions', function() {
       expect(valueList).to.eql([ 1234, -2, -1]);
     })
   })
-  describe('createArrayEntries', function() {
+  describe('getArrayEntries', function() {
     it('should create an entries object from an array', function() {
       const member = {
         type: MemberType.Int,
@@ -1261,7 +1262,7 @@ describe('Array functions', function() {
           return dv.byteLength / 4;
         },
       });
-      const entries = createArrayEntries.call(object);
+      const entries = getArrayEntries.call(object);
       const indexList = [];
       const valueList = [];
       for (const [ index, value ] of entries) {

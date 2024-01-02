@@ -1,12 +1,14 @@
-import { ObjectCache, attachDescriptors, defineProperties, needSlots } from './structure.js';
+import { ObjectCache, attachDescriptors, needSlots } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
-import { getSpecialKeys } from './special.js';
-import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer, throwReadOnly } from './error.js';
+import { getBase64Accessors, getDataViewAccessors, getSpecialKeys, getStringAccessors,
+  getTypedArrayAccessors, getValueOf } from './special.js';
+import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer, 
+  throwNoProperty } from './error.js';
 import { always, copyPointer, getProxy } from './pointer.js';
 import { ALIGN, CHILD_VIVIFICATOR, COMPAT, CONST, GETTER, MEMORY, MEMORY_COPIER, PARENT, 
-  POINTER_VISITOR, PROXY, SELF, SETTER, SIZE, SLOTS } from './symbol.js';
+  POINTER_VISITOR, PROXY, SELF, SETTER, SIZE, SLOTS, VALUE_NORMALIZER } from './symbol.js';
 
 export function defineArray(s, env) {
   const {
@@ -114,16 +116,23 @@ export function defineArray(s, env) {
   };
   const { get, set } = getDescriptor(member, env);
   const instanceDescriptors = {
-    get: { value: get, configurable: true, writable: true },
-    set: { value: set, configurable: true, writable: true },
-    length: { value: length, configurable: true },
-    entries: { value: createArrayEntries, configurable: true, writable: true },
-    delete: { value: getDestructor(env), configurable: true },
-    $: { get: getProxy, set: initializer, configurable: true },
-    [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
+    $: { get: getProxy, set: initializer },
+    length: { value: length },
+    dataView: getDataViewAccessors(s),
+    base64: getBase64Accessors(),
+    string: canBeString(member) && getStringAccessors(s),
+    typedArray: s.typedArray && getTypedArrayAccessors(s),
+    get: { value: get },
+    set: { value: set },
+    entries: { value: getArrayEntries },
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    delete: { value: getDestructor(env) },
+    [Symbol.iterator]: { value: getArrayIterator },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s) },
+    [VALUE_NORMALIZER]: { value: normalizeArray },
   };
   const staticDescriptors = {
     child: { get: () => elementStructure.constructor },
@@ -134,44 +143,20 @@ export function defineArray(s, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-export function getChildVivificator(s) {
-  const { instance: { members: [ member ]} } = s;
-  const { byteSize, structure } = member;
-  return function getChild(index, writable = true) {
-    const { constructor } = structure;
-    const dv = this[MEMORY];
-    const parentOffset = dv.byteOffset;
-    const offset = parentOffset + byteSize * index;
-    const childDV = new DataView(dv.buffer, offset, byteSize);
-    const object = this[SLOTS][index] = constructor.call(PARENT, childDV, { writable });
-    return object;
-  };
+export function canBeString(member) {
+  return member.type === MemberType.Uint && [ 8, 16 ].includes(member.bitSize);
 }
 
-export function getPointerVisitor(s) {
-  return function visitPointers(cb, options = {}) {
-    const {
-      source,
-      vivificate = false,
-      isActive = always,
-      isMutable = always,
-    } = options;
-    const childOptions = {
-      ...options,
-      isActive: () => isActive(this),
-      isMutable: () => isMutable(this),
-    };
-    for (let i = 0, len = this.length; i < len; i++) {
-      // no need to check for empty slots, since that isn't possible
-      if (source) {
-        childOptions.source = source?.[SLOTS][i];
-      }
-      const child = this[SLOTS][i] ?? (vivificate ? this[CHILD_VIVIFICATOR](i) : null);
-      if (child) {
-        child[POINTER_VISITOR](cb, childOptions);
-      }
+export function normalizeArray(map) {
+  let array = map.get(this);
+  if (!array) {
+    array = [];
+    for (const value of this) {      
+      array.push(typeof(value) === 'object' ? value[VALUE_NORMALIZER](map) : value);
     }
-  };
+    map.set(this, array);
+  }
+  return array;
 }
 
 export function getArrayIterator() {
@@ -212,10 +197,50 @@ export function getArrayEntriesIterator() {
   };
 }
 
-export function createArrayEntries() {
+export function getArrayEntries() {
   return {
     [Symbol.iterator]: getArrayEntriesIterator.bind(this),
     length: this.length,
+  };
+}
+
+export function getChildVivificator(s) {
+  const { instance: { members: [ member ]} } = s;
+  const { byteSize, structure } = member;
+  return function getChild(index, writable = true) {
+    const { constructor } = structure;
+    const dv = this[MEMORY];
+    const parentOffset = dv.byteOffset;
+    const offset = parentOffset + byteSize * index;
+    const childDV = new DataView(dv.buffer, offset, byteSize);
+    const object = this[SLOTS][index] = constructor.call(PARENT, childDV, { writable });
+    return object;
+  };
+}
+
+export function getPointerVisitor(s) {
+  return function visitPointers(cb, options = {}) {
+    const {
+      source,
+      vivificate = false,
+      isActive = always,
+      isMutable = always,
+    } = options;
+    const childOptions = {
+      ...options,
+      isActive: () => isActive(this),
+      isMutable: () => isMutable(this),
+    };
+    for (let i = 0, len = this.length; i < len; i++) {
+      // no need to check for empty slots, since that isn't possible
+      if (source) {
+        childOptions.source = source?.[SLOTS][i];
+      }
+      const child = this[SLOTS][i] ?? (vivificate ? this[CHILD_VIVIFICATOR](i) : null);
+      if (child) {
+        child[POINTER_VISITOR](cb, childOptions);
+      }
+    }
   };
 }
 

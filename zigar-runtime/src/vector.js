@@ -5,6 +5,7 @@ import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.j
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, 
   throwNoInitializer } from './error.js';
 import { ALIGN, COMPAT, CONST, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
+import { getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors } from './special.js';
 
 export function defineVector(s, env) {
   const {
@@ -83,11 +84,14 @@ export function defineVector(s, env) {
   }
   const instanceDescriptors = {
     ...elementDescriptors,
-    length: { value: length, configurable: true },
-    entries: { value: createVectorEntries, configurable: true, writable: true },
-    delete: { value: getDestructor(s), configurable: true },
-    $: { get: getSelf, set: initializer, configurable: true },
-    [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
+    $: { get: getSelf, set: initializer },
+    length: { value: length },
+    dataView: getDataViewAccessors(s),
+    base64: getBase64Accessors(),
+    typedArray: s.typedArray && getTypedArrayAccessors(s),
+    entries: { value: createVectorEntries },
+    delete: { value: getDestructor(s) },
+    [Symbol.iterator]: { value: getVectorIterator },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
   };
   const staticDescriptors = {

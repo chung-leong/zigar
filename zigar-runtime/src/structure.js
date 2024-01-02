@@ -228,7 +228,18 @@ export function getFeaturesUsed(structures) {
 export function defineProperties(object, descriptors) {
   for (const [ name, descriptor ] of Object.entries(descriptors)) {
     if (descriptor) {
-      Object.defineProperty(object, name, descriptor);
+      const { 
+        set,
+        get,
+        value,
+        enumerable,
+        configurable = true,
+        writable = true,
+      } = descriptor;
+      Object.defineProperty(object, name, (get) 
+        ? { get, set, configurable, enumerable } 
+        : { value, configurable, enumerable, writable }
+      );
     }
   }
   for (const symbol of Object.getOwnPropertySymbols(descriptors)) {
@@ -240,27 +251,19 @@ export function defineProperties(object, descriptors) {
 }
 
 export function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) {
-  // create constructor for read-only objects
-  const constructorRO = function(arg, options = {}) {
-    const {
-      writable = false,
-      fixed = false,
-    } = options;
-    if (this instanceof constructor) {
-      return new constructor(arg, { writable, fixed });
-    } else {
-      return constructor.call(this, { writable, fixed });
-    }
-  };
+  // create constructor for read-only objects (not actually accessible)
+  const constructorRO = function() {};
   Object.setPrototypeOf(constructorRO.prototype, constructor.prototype);
   Object.setPrototypeOf(constructorRO, constructor);
+  // replace constructor in prototype
+  Object.defineProperty(constructorRO.prototype, 'constructor', { value: constructor, configurable: true });
   // inherit name from regular constructor
   delete constructorRO.name;
   instanceDescriptors[CONST] = { value: false };
   staticDescriptors[CONST] = { value: constructorRO };
   const instanceDescriptorsRO = {};
   for (const [ name, descriptor ] of Object.entries(instanceDescriptors)) {
-    if (descriptor.set) {
+    if (descriptor?.set) {
       instanceDescriptorsRO[name] = { ...descriptor, set: throwReadOnly };
     } else if (name === 'set') {
       instanceDescriptorsRO[name] = { value: throwReadOnly, configurable: true, writable: true };

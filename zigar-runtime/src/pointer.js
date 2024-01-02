@@ -1,5 +1,5 @@
-import { ObjectCache, StructureType, defineProperties } from './structure.js';
-import { getMemoryCopier } from './memory.js';
+import { ObjectCache, StructureType, attachDescriptors, defineProperties } from './structure.js';
+import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView, getDataView, isCompatible, isBuffer } from './data-view.js';
 import { MemberType, getDescriptor } from './member.js';
 import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerTarget,
@@ -7,7 +7,8 @@ import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerT
   throwFixedMemoryTargetRequired, addArticle, throwReadOnly, throwNullPointer, throwReadOnlyTarget } from './error.js';
 import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, CONST, ENVIRONMENT, 
   LENGTH_GETTER, LENGTH_SETTER, MEMORY, MEMORY_COPIER, PARENT, POINTER_SELF, POINTER_VISITOR, 
-  PROXY, SLOTS, SIZE } from './symbol.js';
+  PROXY, SLOTS, SIZE, VALUE_NORMALIZER } from './symbol.js';
+import { getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
 
 export function definePointer(s, env) {
   const {
@@ -146,9 +147,14 @@ export function definePointer(s, env) {
     }
   };
   const { get, set } = getDescriptor(member, env);
-  defineProperties(constructor.prototype, {
-    '*': { get, set, configurable: true },
-    '$': { get: getProxy, set: initializer, configurable: true, },
+  const instanceDescriptors = {
+    '*': { get, set },
+    '$': { get: getProxy, set: initializer },
+    dataView: getDataViewAccessors(s),
+    base64: getBase64Accessors(),
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    delete: { value: getDestructor(env) },
     [ADDRESS_GETTER]: { value: getAddress },
     [ADDRESS_SETTER]: { value: setAddress },
     [LENGTH_GETTER]: hasLength && { value: getLength },
@@ -156,14 +162,20 @@ export function definePointer(s, env) {
     [POINTER_VISITOR]: { value: visitPointer },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: { value: throwNullPointer },
-  });
-  defineProperties(constructor, {
+    [VALUE_NORMALIZER]: { value: normalizePointer },
+  };
+  const staticDescriptors = {
     child: { get: () => targetStructure.constructor },
     const: { value: isConst },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-  });
-  return constructor;
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+
+function normalizePointer(map) {
+  const target = this['*'];
+  return target?.[VALUE_NORMALIZER]?.(map) ?? target;
 }
 
 export function getProxy() {
@@ -223,6 +235,8 @@ const isPointerKeys = {
   [LENGTH_GETTER]: true,
   [LENGTH_SETTER]: true,
   [POINTER_VISITOR]: true,
+  [CHILD_VIVIFICATOR]: true,
+  [VALUE_NORMALIZER]: true,
   [Symbol.toStringTag]: true,
   [Symbol.toPrimitive]: true,
 };
