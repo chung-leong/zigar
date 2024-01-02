@@ -3,7 +3,7 @@ import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { throwInvalidInitializer, throwNoInitializer, throwReadOnly } from './error.js';
-import { ALIGN, ERROR_ITEMS, ERROR_MESSAGES, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
+import { ALIGN, CONST, ERROR_ITEMS, ERROR_MESSAGES, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
 
 let currentErrorSets;
 
@@ -56,8 +56,9 @@ export function defineErrorSet(s, env) {
       set.call(self, arg);
     }
     if (writable) {
-      defineProperties(constructor.prototype, {
+      defineProperties(self, {
         $: { get, set, configurable: true },
+        [CONST]: { value: undefined, configurable: true },
       });
     }
     return cache.save(dv, writable, self);
@@ -81,6 +82,7 @@ export function defineErrorSet(s, env) {
     // correctly identify the object as an error
     [Symbol.toStringTag]: { get: toStringTag, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
+    [CONST]: { value: true, configurable: true },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },

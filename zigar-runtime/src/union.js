@@ -7,7 +7,7 @@ import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { throwInvalidInitializer, throwMissingUnionInitializer, throwMultipleUnionInitializers,
   throwNoProperty, throwInactiveUnionProperty, throwNoInitializer, throwReadOnly } from './error.js';
 import { always, copyPointer, disablePointer, resetPointer } from './pointer.js';
-import { ACTIVE_FIELD, ALIGN, CHILD_VIVIFICATOR, ENUM_ITEM, ENUM_NAME, MEMORY, MEMORY_COPIER, 
+import { ACTIVE_FIELD, ALIGN, CHILD_VIVIFICATOR, CONST, ENUM_ITEM, ENUM_NAME, MEMORY, MEMORY_COPIER,
   POINTER_VISITOR, PROXY, SIZE, SLOTS } from './symbol.js';
 
 export function defineUnionShape(s, env) {
@@ -155,6 +155,7 @@ export function defineUnionShape(s, env) {
     if (!writable) {
       defineProperties(self, {
         '$': { get: getSelf, set: throwReadOnly, configurable: true },
+        [CONST]: { value: true, configurable: true },
         ...removeSetters(descriptors),
       });
     }

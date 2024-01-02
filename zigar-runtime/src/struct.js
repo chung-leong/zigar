@@ -6,7 +6,7 @@ import { always, copyPointer } from './pointer.js';
 import { getSpecialKeys } from './special.js';
 import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer, throwNoProperty,
   throwReadOnly } from './error.js';
-import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR, SIZE, 
+import { ALIGN, CHILD_VIVIFICATOR, CONST, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR, SIZE, 
   SLOTS } from './symbol.js';
 
 export function defineStructShape(s, env) {
@@ -63,6 +63,7 @@ export function defineStructShape(s, env) {
       defineProperties(self, {
         '$': { get: getSelf, set: throwReadOnly, configurable: true },
         [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
+        [CONST]: { value: true, configurable: true },
         ...removeSetters(descriptors),
       });
     }

@@ -4,9 +4,10 @@ import { requireDataView, getDataView, isCompatible, isBuffer } from './data-vie
 import { MemberType, getDescriptor } from './member.js';
 import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerTarget,
   throwAssigningToConstant, throwConstantConstraint, throwNoInitializer,
-  throwFixedMemoryTargetRequired, addArticle, throwReadOnly } from './error.js';
-import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, ENVIRONMENT, LENGTH_GETTER, LENGTH_SETTER, MEMORY,
-  MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, PARENT, PROXY, SLOTS, SIZE } from './symbol.js';
+  throwFixedMemoryTargetRequired, addArticle, throwReadOnly, throwNullPointer } from './error.js';
+import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, CONST, ENVIRONMENT, 
+  LENGTH_GETTER, LENGTH_SETTER, MEMORY, MEMORY_COPIER, PARENT, POINTER_SELF, POINTER_VISITOR, 
+  PROXY, SLOTS, SIZE } from './symbol.js';
 
 export function definePointer(s, env) {
   const {
@@ -68,7 +69,7 @@ export function definePointer(s, env) {
         } else if (isTargetSlice) {
           // allow casting to slice through constructor of its pointer
           creating = true;
-          arg = Target(arg);
+          arg = Target(arg, { writable: isConst });
         } else {
           throwNoCastingToPointer(s);
         }
@@ -84,6 +85,7 @@ export function definePointer(s, env) {
     if (!writable) {
       defineProperties(self, {
         '$': { get: getProxy, set: throwReadOnly, configurable: true, },
+        [CONST]: { value: true, configurable: true },
       });
     }
     const proxy = createProxy.call(self, isConst, isTargetPointer);
@@ -111,7 +113,7 @@ export function definePointer(s, env) {
           if (isCompatible(arg, Target)) {
             // autocast to target type
             const dv = getDataView(targetStructure, arg, env);
-            arg = Target(dv);
+            arg = Target(dv, { writable: isConst });
           } else if (isTargetSlice) {
             // autovivificate target object
             const autoObj = new Target(arg);
@@ -146,16 +148,17 @@ export function definePointer(s, env) {
       }
     }
   };
+  const { get, set } = getDescriptor(member, env);
   defineProperties(constructor.prototype, {
-    '*': { get: getTarget, set: (isConst) ? throwReadOnly : setTarget, configurable: true },
+    '*': { get, set, configurable: true },
     '$': { get: getProxy, set: initializer, configurable: true, },
-    'valueOf': { value: getTargetValue, configurable: true, writable: true },
     [ADDRESS_GETTER]: { value: getAddress },
     [ADDRESS_SETTER]: { value: setAddress },
     [LENGTH_GETTER]: hasLength && { value: getLength },
     [LENGTH_SETTER]: hasLength && { value: setLength },
     [POINTER_VISITOR]: { value: visitPointer },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
+    [CHILD_VIVIFICATOR]: { value: throwNullPointer },
   });
   defineProperties(constructor, {
     child: { get: () => targetStructure.constructor },
@@ -186,21 +189,6 @@ export function disablePointer() {
   });
 }
 
-function getTarget() {
-  const object = this[SLOTS][0];
-  return object?.$ ?? null;
-}
-
-function setTarget(value) {
-  const object = this[SLOTS][0];
-  object.$ = value;
-}
-
-function getTargetValue() {
-  const object = this[SLOTS][0];
-  return object.$.valueOf();
-}
-
 function visitPointer(fn, options = {}) {
   const {
     source,
@@ -229,6 +217,7 @@ const isPointerKeys = {
   valueOf: true,
   memory: true,
   slots: true,
+  [CONST]: true,
   [SLOTS]: true,
   [MEMORY]: true,
   [PROXY]: true,

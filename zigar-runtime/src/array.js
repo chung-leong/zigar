@@ -5,8 +5,8 @@ import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.j
 import { getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer, throwReadOnly } from './error.js';
 import { always, copyPointer, getProxy } from './pointer.js';
-import { ALIGN, CHILD_VIVIFICATOR, COMPAT, GETTER, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR,
-  PROXY, SELF, SETTER, SIZE, SLOTS } from './symbol.js';
+import { ALIGN, CHILD_VIVIFICATOR, COMPAT, CONST, GETTER, MEMORY, MEMORY_COPIER, PARENT, 
+  POINTER_VISITOR, PROXY, SELF, SETTER, SIZE, SLOTS } from './symbol.js';
 
 export function defineArray(s, env) {
   const {
@@ -63,6 +63,7 @@ export function defineArray(s, env) {
         set: { value: throwReadOnly, configurable: true, writable: true },
         $: { get: getProxy, set: throwReadOnly, configurable: true },
         [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
+        [CONST]: { value: true, configurable: true },
       });
     }
     const proxy = createProxy.call(self);

@@ -213,9 +213,8 @@ export function throwInaccessiblePointer() {
   throw new TypeError(`Pointers within an untagged union are not accessible`);
 }
 
-export function throwNullPointer(len) {
-  const expected = (typeof(len) === 'object') ? `sentinel` : `${len} byte${len === 1 ? '' : 's'}`;
-  throw new TypeError(`Null pointer encountered (${expected} expected)`);
+export function throwNullPointer() {
+  throw new TypeError(`Null pointer`);
 }
 
 export function throwInvalidPointerTarget(structure, arg) {

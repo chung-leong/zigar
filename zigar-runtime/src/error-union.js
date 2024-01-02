@@ -5,7 +5,7 @@ import { requireDataView } from './data-view.js';
 import { throwNoInitializer, throwReadOnly } from './error.js';
 import { copyPointer, resetPointer } from './pointer.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
-import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SIZE, SLOTS, 
+import { ALIGN, CHILD_VIVIFICATOR, CONST, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SIZE, SLOTS,
   VALUE_RESETTER } from './symbol.js';
 
 export function defineErrorUnion(s, env) {
@@ -76,6 +76,7 @@ export function defineErrorUnion(s, env) {
       defineProperties(self, {
         '$': { get, set: throwReadOnly, configurable: true },
         [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
+        [CONST]: { value: true, configurable: true },
       });   
     }
     return cache.save(dv, writable, self);

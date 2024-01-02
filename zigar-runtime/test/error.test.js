@@ -521,15 +521,7 @@ describe('Error functions', function() {
   })
   describe('throwNullPointer', function() {
     it('should throw a type error', function() {
-      expect(() => throwNullPointer(5)).to.throw(TypeError);
-    })
-    it('should use singular form when len is 1', function() {
-      expect(() => throwNullPointer(1)).to.throw(TypeError)
-        .with.property('message').that.match(/1 byte\b/);
-    })
-    it('should show different message when sentinel is missing', function() {
-      expect(() => throwNullPointer({})).to.throw(TypeError)
-        .with.property('message').that.contains('sentinel');
+      expect(() => throwNullPointer()).to.throw(TypeError);
     })
   })
   describe('throwInvalidPointerTarget', function() {

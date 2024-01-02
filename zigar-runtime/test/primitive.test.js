@@ -311,7 +311,32 @@ describe('Primitive functions', function() {
       const dv = new DataView(new ArrayBuffer(8));
       dv.setBigUint64(0, 0x7FFFFFFFFFFFFFFFn, true);
       const object = Hello(dv, { writable: false });
-      expect(() => object.$ = 100n);
+      expect(() => object.$ = 100n).to.throw(TypeError);
+    })
+    it('should cast read-only object to writable and vice-versa', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Hello',
+        byteSize: 8,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setBigUint64(0, 0x7FFFFFFFFFFFFFFFn, true);
+      const object = Hello(dv, { writable: false });
+      expect(() => object.$ = 100n).to.throw(TypeError);
+      const writable = Hello(object);
+      expect(() => writable.$ = 100n).to.not.throw();
+      expect(object.$).to.equal(100n);
+      const readOnly = Hello(writable, { writable: false });
+      expect(readOnly).to.equal(object);
     })
   })
   describe('getIntRange', function() {

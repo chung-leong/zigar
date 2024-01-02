@@ -3,7 +3,7 @@ import { MemberType, isByteAligned, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getCompatibleTags, addTypedArray, requireDataView } from './data-view.js';
 import { getSpecialKeys } from './special.js';
-import { ALIGN, COMPAT, MEMORY, MEMORY_COPIER, SIZE, SLOTS } from './symbol.js';
+import { ALIGN, COMPAT, CONST, MEMORY, MEMORY_COPIER, SIZE, SLOTS } from './symbol.js';
 import { throwInvalidInitializer, throwNoInitializer, throwNoProperty, 
   throwReadOnly } from './error.js';
 
@@ -46,6 +46,7 @@ export function definePrimitive(s, env) {
     if (!writable) {
       defineProperties(self, {
         $: { get, set: throwReadOnly, configurable: true },
+        [CONST]: { value: true, configurable: true },
       });
     }
     return cache.save(dv, writable, self);

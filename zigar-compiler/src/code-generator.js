@@ -97,7 +97,7 @@ function generateExportStatements(exports, omitExports) {
 }
 
 function generateStructureDefinitions(structures, keys) {
-  const { MEMORY, SLOTS } = keys;
+  const { MEMORY, SLOTS, CONST } = keys;
   const lines = [];
   const add = manageIndentation(lines);
   const defaultStructure = {
@@ -196,7 +196,7 @@ function generateStructureDefinitions(structures, keys) {
         add(`memory: { ${pairs.join(', ')} },`);
         if (dv.hasOwnProperty('reloc')) {
           add(`reloc: ${dv.reloc},`);
-          if (isConst(object)) {
+          if (object[CONST]) {
             add(`const: true,`);
           }
         }
@@ -298,13 +298,6 @@ function generateStructureDefinitions(structures, keys) {
   add(`const root = ${structureNames.get(root)};`);
   add(``);
   return lines;
-}
-
-function isConst(object) {
-  const descriptor = Object.getOwnPropertyDescriptor(object, '$');
-  // the setter comes from the embedded source code and thus wouldn't match if we compare 
-  // it with the imported version of the function--need to check the name 
-  return descriptor?.set?.name === 'throwReadOnly';
 }
 
 function getExports(structures) {

@@ -15,6 +15,7 @@ export const COMPAT = Symbol('compat');
 export const SIZE = Symbol('size');
 export const ALIGN = Symbol('align');
 export const SELF = Symbol('self');
+export const CONST = Symbol('const');
 export const MEMORY_COPIER = Symbol('memoryCopier');
 export const VALUE_RESETTER = Symbol('valueResetter');
 export const CHILD_VIVIFICATOR = Symbol('childVivificator');

@@ -7,7 +7,7 @@ import { copyPointer, getProxy } from './pointer.js';
 import { checkDataView, getDataViewFromTypedArray, getDataViewFromUTF8, getSpecialKeys } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoProperty,
   throwMisplacedSentinel, throwMissingSentinel, throwNoInitializer, throwReadOnly } from './error.js';
-import { ALIGN, CHILD_VIVIFICATOR, COMPAT, GETTER, LENGTH, MEMORY, MEMORY_COPIER, POINTER_VISITOR,
+import { ALIGN, CHILD_VIVIFICATOR, COMPAT, CONST, GETTER, LENGTH, MEMORY, MEMORY_COPIER, POINTER_VISITOR,
   SENTINEL, SETTER, SIZE, SLOTS } from './symbol.js';
 import { decodeBase64 } from './text.js';
 
@@ -67,6 +67,7 @@ export function defineSlice(s, env) {
         set: { value: throwReadOnly, configurable: true, writable: true },
         $: { get: getProxy, set: throwReadOnly, configurable: true },
         [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
+        [CONST]: { value: true, configurable: true },
       });
     }
     const proxy = createProxy.call(self);

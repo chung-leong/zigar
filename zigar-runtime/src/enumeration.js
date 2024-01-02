@@ -3,7 +3,7 @@ import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
 import { throwInvalidInitializer, throwNoInitializer, throwReadOnly } from './error.js';
-import { ALIGN, ENUM_ITEM, ENUM_ITEMS, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
+import { ALIGN, CONST, ENUM_ITEM, ENUM_ITEMS, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
 
 export function defineEnumerationShape(s, env) {
   const {
@@ -52,8 +52,9 @@ export function defineEnumerationShape(s, env) {
       set.call(self, arg);
     }
     if (writable) {
-      defineProperties(constructor.prototype, {
+      defineProperties(self, {
         $: { get, set, configurable: true },
+        [CONST]: { value: undefined, configurable: true },
       });
     }
     return cache.save(dv, writable, self); 
@@ -67,6 +68,7 @@ export function defineEnumerationShape(s, env) {
     $: { get, set: throwReadOnly, configurable: true },
     [Symbol.toPrimitive]: { value: getIndex, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
+    [CONST]: { value: true, configurable: true },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },

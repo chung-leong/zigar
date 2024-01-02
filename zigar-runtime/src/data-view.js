@@ -126,16 +126,20 @@ export function getDataView(structure, arg, env) {
     dv = env.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);
   } else {
     const memory = arg?.[MEMORY];
-    if (memory && (type === StructureType.Array || type === StructureType.Slice || type === StructureType.Vector)) {
-      const { instance: { members: [ member ] } } = structure;
-      const { byteSize: elementSize, structure: { constructor: Child } } = member;
-      const number = findElements(arg, Child);
-      if (number !== undefined) {
-        if (type === StructureType.Slice || number * elementSize === byteSize) {
-          return memory;
-        } else {
-          throwArrayLengthMismatch(structure, null, arg);
-        }
+    if (memory) {
+      const { constructor, instance: { members: [ member ] } } = structure;
+      if (arg instanceof constructor) {
+        return memory;
+      } else if (type === StructureType.Array || type === StructureType.Slice || type === StructureType.Vector) {
+        const { byteSize: elementSize, structure: { constructor: Child } } = member;
+        const number = findElements(arg, Child);
+        if (number !== undefined) {
+          if (type === StructureType.Slice || number * elementSize === byteSize) {
+            return memory;
+          } else {
+            throwArrayLengthMismatch(structure, null, arg);
+          }
+        } 
       }
     }
   }

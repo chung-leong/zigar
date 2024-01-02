@@ -6,8 +6,8 @@ import { getMemoryCopier } from './memory.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
 import { addSpecialAccessors } from './special.js';
-import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, ENVIRONMENT, LENGTH_GETTER, LENGTH_SETTER, MEMORY,
-  MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES, SIZE, 
+import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CONST, ENVIRONMENT, LENGTH_GETTER, LENGTH_SETTER, 
+  MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES, SIZE, 
   SLOTS } from './symbol.js';
 
 const defAlign = 16;
@@ -293,7 +293,7 @@ export class Environment {
   exportStructures() {
     this.prepareObjectsForExport();
     const { structures } = this;
-    return { structures, keys: { MEMORY, SLOTS } };
+    return { structures, keys: { MEMORY, SLOTS, CONST } };
   }
 
   prepareObjectsForExport() {
@@ -794,10 +794,7 @@ export class Environment {
         if (len === undefined) {
           const sentinel = Target[SENTINEL];
           if (sentinel) {
-            if (address === 0) {
-              throwNullPointer(address, sentinel);
-            }
-            len = env.findSentinel(address, sentinel.bytes) + 1;
+            len = (address) ? env.findSentinel(address, sentinel.bytes) + 1 : 0;
           } else {
             len = 1;
           }

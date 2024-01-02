@@ -3,7 +3,7 @@ import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer, throwReadOnly } from './error.js';
-import { ALIGN, COMPAT, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
+import { ALIGN, COMPAT, CONST, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
 
 export function defineVector(s, env) {
   const {
@@ -51,6 +51,7 @@ export function defineVector(s, env) {
       defineProperties(self, {
         ...removeSetters(elementDescriptors),
         $: { get: getSelf, set: throwReadOnly, configurable: true },
+        [CONST]: { value: true, configurable: true },
       });
     }
     return cache.save(dv, writable, self);
