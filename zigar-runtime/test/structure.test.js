@@ -8,7 +8,7 @@ import {
   getStructureFactory,
   getFeaturesUsed,
   defineProperties,
-  removeSetters,
+  attachDescriptors,
   needSlots,
   getSelf,
   findAllObjects,
@@ -691,18 +691,8 @@ describe('Structure functions', function() {
       expect(object).to.not.have.property('universe');
     })
   })
-  describe('removeSetters', function() {
-    it('should remove setters from an object', function() {
-      const object = {};
-      Object.defineProperties(object, {
-        hello: { get: () => 5, configurable: true },
-        world: { get: () => 6, set: () => {}, configurable: true },
-      });
-      expect(() => object.world = 6).to.not.throw();
-      const descriptors = Object.getOwnPropertyDescriptors(object);
-      const newDescriptors = removeSetters(descriptors);
-      Object.defineProperties(object, newDescriptors);
-      expect(() => object.world = 6).to.throw();
+  describe('attachDescriptors', function() {
+    it('should attach descriptors to a constructor', function() {
     })
   })
   describe('needSlots', function() {

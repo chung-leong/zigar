@@ -1,4 +1,4 @@
-import { ObjectCache, defineProperties, needSlots } from './structure.js';
+import { ObjectCache, attachDescriptors, defineProperties, needSlots } from './structure.js';
 import { MemberType, isByteAligned, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getCompatibleTags, addTypedArray, requireDataView } from './data-view.js';
@@ -27,14 +27,15 @@ export function definePrimitive(s, env) {
       if (arguments.length === 0) {
         throwNoInitializer(s);
       }
-      self = this;
+      self = (writable) ? this : Object.create(constructor[CONST].prototype);
       dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       dv = requireDataView(s, arg, env);
       if (self = cache.find(dv, writable)) {
         return self;
       }
-      self = Object.create(constructor.prototype);
+      const c = (writable) ? constructor : constructor[CONST];
+      self = Object.create(c.prototype);
     }
     self[MEMORY] = dv;
     if (hasSlots) {
@@ -43,12 +44,6 @@ export function definePrimitive(s, env) {
     if (creating) {
       initializer.call(self, arg);
     } 
-    if (!writable) {
-      defineProperties(self, {
-        $: { get, set: throwReadOnly, configurable: true },
-        [CONST]: { value: true, configurable: true },
-      });
-    }
     return cache.save(dv, writable, self);
   };
   const specialKeys = getSpecialKeys(s);
@@ -83,18 +78,18 @@ export function definePrimitive(s, env) {
     }
   };
   const { get, set } = getDescriptor(member, env);
-  defineProperties(constructor.prototype, {
+  const instanceDescriptors = {
     delete: { value: getDestructor(env), configurable: true },
     $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-  });
-  defineProperties(constructor, {
+  };
+  const staticDescriptors = {
     [COMPAT]: { value: getCompatibleTags(s) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-  });
-  return constructor;
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };
 
 export function getIntRange(member) {

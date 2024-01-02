@@ -1,4 +1,4 @@
-import { ObjectCache, defineProperties, needSlots } from './structure.js';
+import { ObjectCache, attachDescriptors, defineProperties, needSlots } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
@@ -40,14 +40,15 @@ export function defineArray(s, env) {
       if (arguments.length === 0) {
         throwNoInitializer(s);
       }
-      self = this;
+      self = (writable) ? this : Object.create(constructor[CONST].prototype);
       dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       dv = requireDataView(s, arg, env);
       if (self = cache.find(dv, writable)) {
         return self;
       }
-      self = Object.create(constructor.prototype); 
+      const c = (writable) ? constructor : constructor[CONST];
+      self = Object.create(c.prototype);
     }
     self[MEMORY] = dv;
     self[GETTER] = null;
@@ -57,14 +58,6 @@ export function defineArray(s, env) {
     }
     if (creating) {
       initializer.call(self, arg);
-    }
-    if (!writable) {
-      defineProperties(self, {
-        set: { value: throwReadOnly, configurable: true, writable: true },
-        $: { get: getProxy, set: throwReadOnly, configurable: true },
-        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
-        [CONST]: { value: true, configurable: true },
-      });
     }
     const proxy = createProxy.call(self);
     return cache.save(dv, writable, proxy);
@@ -120,7 +113,7 @@ export function defineArray(s, env) {
     }
   };
   const { get, set } = getDescriptor(member, env);
-  defineProperties(constructor.prototype, {
+  const instanceDescriptors = {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { value: length, configurable: true },
@@ -129,22 +122,22 @@ export function defineArray(s, env) {
     $: { get: getProxy, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s) },
-  });
-  defineProperties(constructor, {
+  };
+  const staticDescriptors = {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(s) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-  });
-  return constructor;
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-export function getChildVivificator(s, writable) {
+export function getChildVivificator(s) {
   const { instance: { members: [ member ]} } = s;
   const { byteSize, structure } = member;
-  return function getChild(index) {
+  return function getChild(index, writable = true) {
     const { constructor } = structure;
     const dv = this[MEMORY];
     const parentOffset = dv.byteOffset;

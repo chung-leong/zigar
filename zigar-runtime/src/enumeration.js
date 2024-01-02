@@ -1,4 +1,4 @@
-import { ObjectCache, defineProperties } from './structure.js';
+import { ObjectCache, attachDescriptors, defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
@@ -26,7 +26,7 @@ export function defineEnumerationShape(s, env) {
       if (arguments.length === 0) {
         throwNoInitializer(s);
       }
-      self = this;
+      self = (writable) ? this : Object.create(constructor[CONST].prototype);
       dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       if (typeof(arg)  === 'string') {
@@ -44,18 +44,13 @@ export function defineEnumerationShape(s, env) {
         if (self = cache.find(dv, writable)) {
           return self;
         }
-        self = Object.create(constructor.prototype); 
+        const c = (writable) ? constructor : constructor[CONST];
+        self = Object.create(c.prototype);
       }
     }
     self[MEMORY] = dv;
     if (creating) {
       set.call(self, arg);
-    }
-    if (writable) {
-      defineProperties(self, {
-        $: { get, set, configurable: true },
-        [CONST]: { value: undefined, configurable: true },
-      });
     }
     return cache.save(dv, writable, self); 
   };
@@ -63,18 +58,17 @@ export function defineEnumerationShape(s, env) {
   // get the enum descriptor instead of the int/uint descriptor
   const enumMember = { ...member, structure: s, type: MemberType.EnumerationItem };
   const { get, set } = getDescriptor(enumMember, env);
-  defineProperties(constructor.prototype, {
+  const instanceDescriptors = {
     delete: { value: getDestructor(env), configurable: true },
-    $: { get, set: throwReadOnly, configurable: true },
+    $: { get, set, configurable: true },
     [Symbol.toPrimitive]: { value: getIndex, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CONST]: { value: true, configurable: true },
-  });
-  defineProperties(constructor, {
+  };
+  const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
     [ENUM_ITEMS]: { value: byIndex },
-  });
-  return constructor;
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };
 

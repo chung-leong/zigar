@@ -147,7 +147,7 @@ export function getDescriptor(member, env) {
     throw new Error(`No factory for ${name}: ${member.name}`);
   }
   /* DEV-TEST-END */
-  return { ...f(member, env), configurable: true, enumerable: true };
+  return f(member, env);
 }
 
 export function getVoidDescriptor(member, env) {

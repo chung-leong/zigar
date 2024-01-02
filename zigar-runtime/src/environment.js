@@ -338,12 +338,13 @@ export class Environment {
     const f = getStructureFactory(s.type);
     const constructor = f(s, this);
     if (typeof(constructor) === 'function') {
+      const name = getStructureName(s);
       defineProperties(constructor, {
-        name: { value: getStructureName(s), writable: false }
+        name: { value: name, configurable: true },
       });
       if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
         defineProperties(constructor.prototype, {
-          [Symbol.toStringTag]: { value: s.name, configurable: true, writable: false }
+          [Symbol.toStringTag]: { value: s.name, configurable: true },
         });
       }
     }

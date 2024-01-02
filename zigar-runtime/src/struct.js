@@ -1,11 +1,11 @@
-import { ObjectCache, defineProperties, getSelf, needSlots, removeSetters } from './structure.js';
+import { ObjectCache, attachDescriptors, getSelf, needSlots } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView } from './data-view.js';
 import { always, copyPointer } from './pointer.js';
 import { getSpecialKeys } from './special.js';
-import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer, throwNoProperty,
-  throwReadOnly } from './error.js';
+import { throwInvalidInitializer, throwMissingInitializers, throwNoInitializer, 
+  throwNoProperty } from './error.js';
 import { ALIGN, CHILD_VIVIFICATOR, CONST, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR, SIZE, 
   SLOTS } from './symbol.js';
 
@@ -16,11 +16,14 @@ export function defineStructShape(s, env) {
     instance: { members, template },
     hasPointer,
   } = s;  
-  const descriptors = {};
+  const memberDescriptors = {};
+  const setters = {};
   for (const member of members) {
-    descriptors[member.name] = getDescriptor(member, env);
+    const { get, set } = getDescriptor(member, env);
+    memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
+    setters[member.name] = set;
   }
-  const keys = Object.keys(descriptors);
+  const keys = Object.keys(memberDescriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const hasSlots = needSlots(s);
   const comptimeMembers = members.filter(m => m.type === MemberType.Comptime);
@@ -37,14 +40,15 @@ export function defineStructShape(s, env) {
       if (arguments.length === 0) {
         throwNoInitializer(s);
       }
-      self = this;
+      self = (writable) ? this : Object.create(constructor[CONST].prototype);
       dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       dv = requireDataView(s, arg, env);
       if (self = cache.find(dv, writable)) {
         return self;
       }
-      self = Object.create(constructor.prototype);
+      const c = (writable) ? constructor : constructor[CONST];
+      self = Object.create(c.prototype);
     }
     self[MEMORY] = dv;
     if (hasSlots) {
@@ -55,17 +59,8 @@ export function defineStructShape(s, env) {
         } 
       }
     }
-    Object.defineProperties(self, descriptors);
     if (creating) {
       initializer.call(self, arg);
-    }
-    if (!writable) {
-      defineProperties(self, {
-        '$': { get: getSelf, set: throwReadOnly, configurable: true },
-        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
-        [CONST]: { value: true, configurable: true },
-        ...removeSetters(descriptors),
-      });
     }
     return cache.save(dv, writable, self);
   };
@@ -124,13 +119,13 @@ export function defineStructShape(s, env) {
         if (specialFound > 0) {
           for (const key of specialKeys) {
             if (key in arg) {
-              this[key] = arg[key];
+              setters[key].call(this, arg[key]);
             }
           }
         } else if (found > 0) {
           for (const key of keys) {
             if (key in arg) {
-              this[key] = arg[key];
+              setters[key].call(this, arg[key]);
             }
           }
         }
@@ -139,27 +134,28 @@ export function defineStructShape(s, env) {
       }
     }
   };
-  defineProperties(constructor.prototype, {
+  const instanceDescriptors = {
+    ...memberDescriptors,
     delete: { value: getDestructor(env), configurable: true },
     $: { get: getSelf, set: initializer, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
-  });
-  defineProperties(constructor, {
+  };
+  const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-  });
-  return constructor;
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-export function getChildVivificator(s, writable) {
+export function getChildVivificator(s) {
   const { instance: { members } } = s;
   const objectMembers = {};
   for (const member of members.filter(m => m.type === MemberType.Object)) {
     objectMembers[member.slot] = member;
   }
-  return function getChild(slot) {
+  return function vivificateChild(slot, writable = true) {
     const { bitOffset, byteSize, structure: { constructor } } = objectMembers[slot];
     const dv = this[MEMORY];
     const parentOffset = dv.byteOffset;

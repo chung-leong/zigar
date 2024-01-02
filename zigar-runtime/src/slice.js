@@ -1,4 +1,4 @@
-import { ObjectCache, defineProperties } from './structure.js';
+import { ObjectCache, attachDescriptors, defineProperties } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, checkDataViewSize, getCompatibleTags } from './data-view.js';
@@ -51,7 +51,7 @@ export function defineSlice(s, env) {
       if (arguments.length === 0) {
         throwNoInitializer(s);
       }
-      self = this;
+      self = (writable) ? this : Object.create(constructor[CONST].prototype);
       initializer.call(self, arg, fixed);
       dv = self[MEMORY];
     } else {
@@ -59,16 +59,9 @@ export function defineSlice(s, env) {
       if (self = cache.find(dv, writable)) {
         return self;
       }
-      self = Object.create(constructor.prototype);
+      const c = (writable) ? constructor : constructor[CONST];
+      self = Object.create(c.prototype);
       shapeDefiner.call(self, dv, dv.byteLength / elementSize);
-    }
-    if (!writable) {
-      defineProperties(self, {
-        set: { value: throwReadOnly, configurable: true, writable: true },
-        $: { get: getProxy, set: throwReadOnly, configurable: true },
-        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
-        [CONST]: { value: true, configurable: true },
-      });
     }
     const proxy = createProxy.call(self);
     return cache.save(dv, writable, proxy);
@@ -191,7 +184,7 @@ export function defineSlice(s, env) {
     }
   };
   const { get, set } = getDescriptor(member, env);
-  defineProperties(constructor.prototype, {
+  const instanceDescriptors = {
     get: { value: get, configurable: true, writable: true },
     set: { value: set, configurable: true, writable: true },
     length: { get: getLength, configurable: true },
@@ -202,15 +195,15 @@ export function defineSlice(s, env) {
     [MEMORY_COPIER]: { value: getMemoryCopier(elementSize, true) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s) }
-  });
-  defineProperties(constructor, {
+  };
+  const staticDescriptors = {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(s) },
     [ALIGN]: { value: align },
     [SIZE]: { value: elementSize },
     [SENTINEL]: sentinel && { value: sentinel },
-  });
-  return constructor;
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
 function getLength() {

@@ -12,6 +12,7 @@ import { defineVector } from './vector.js';
 import { defineArgStruct } from './arg-struct.js';
 import { throwReadOnly } from './error.js';
 import { MemberType, hasStandardFloatSize, hasStandardIntSize, isByteAligned } from './member.js';
+import { CHILD_VIVIFICATOR, CONST } from './symbol.js';
 
 export const StructureType = {
   Primitive: 0,
@@ -238,18 +239,47 @@ export function defineProperties(object, descriptors) {
   }
 }
 
-export function removeSetters(descriptors) {
-  const newDescriptors = {};
-  for (const [ name, descriptor ] of Object.entries(descriptors)) {
-    if (descriptor) {
-      if (descriptor.set) {
-        newDescriptors[name] = { ...descriptor, set: throwReadOnly };
-      } else {
-        newDescriptors[name] = descriptor;
-      }
+export function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) {
+  // create constructor for read-only objects
+  const constructorRO = function(arg, options = {}) {
+    const {
+      writable = false,
+      fixed = false,
+    } = options;
+    if (this instanceof constructor) {
+      return new constructor(arg, { writable, fixed });
+    } else {
+      return constructor.call(this, { writable, fixed });
+    }
+  };
+  Object.setPrototypeOf(constructorRO.prototype, constructor.prototype);
+  Object.setPrototypeOf(constructorRO, constructor);
+  // inherit name from regular constructor
+  delete constructorRO.name;
+  instanceDescriptors[CONST] = { value: false };
+  staticDescriptors[CONST] = { value: constructorRO };
+  const instanceDescriptorsRO = {};
+  for (const [ name, descriptor ] of Object.entries(instanceDescriptors)) {
+    if (descriptor.set) {
+      instanceDescriptorsRO[name] = { ...descriptor, set: throwReadOnly };
+    } else if (name === 'set') {
+      instanceDescriptorsRO[name] = { value: throwReadOnly, configurable: true, writable: true };
     }
   }
-  return newDescriptors;
+  const vivificateDescriptor = instanceDescriptors[CHILD_VIVIFICATOR];
+  if (vivificateDescriptor) {
+  // vivificate child objects as read-only too
+  const vivificate = vivificateDescriptor.value;
+    const vivificateRO = function(slot) {
+      return vivificate.call(this, slot, false);
+    };
+    instanceDescriptorsRO[CHILD_VIVIFICATOR] = { value: vivificateRO };
+  }
+  instanceDescriptorsRO[CONST] = { value: true };
+  defineProperties(constructor.prototype, instanceDescriptors);
+  defineProperties(constructor, staticDescriptors); 
+  defineProperties(constructorRO.prototype, instanceDescriptorsRO);
+  return constructor;
 }
 
 export function needSlots(s) {

@@ -1,8 +1,9 @@
-import { ObjectCache, defineProperties, getSelf, removeSetters } from './structure.js';
+import { ObjectCache, attachDescriptors, getSelf } from './structure.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
-import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer, throwReadOnly } from './error.js';
+import { throwInvalidArrayInitializer, throwArrayLengthMismatch, 
+  throwNoInitializer } from './error.js';
 import { ALIGN, COMPAT, CONST, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
 
 export function defineVector(s, env) {
@@ -34,25 +35,19 @@ export function defineVector(s, env) {
       if (arguments.length === 0) {
         throwNoInitializer(s);
       }
-      self = this;
+      self = (writable) ? this : Object.create(constructor[CONST].prototype);
       dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       dv = requireDataView(s, arg, env);
       if (self = cache.find(dv, writable)) {
         return self;
       }
-      self = Object.create(constructor.prototype);
+      const c = (writable) ? constructor : constructor[CONST];
+      self = Object.create(c.prototype);
     }
     self[MEMORY] = dv;
     if (creating) {
       initializer.call(self, arg);
-    }
-    if (!writable) {
-      defineProperties(self, {
-        ...removeSetters(elementDescriptors),
-        $: { get: getSelf, set: throwReadOnly, configurable: true },
-        [CONST]: { value: true, configurable: true },
-      });
     }
     return cache.save(dv, writable, self);
   };
@@ -72,7 +67,7 @@ export function defineVector(s, env) {
         }
         let i = 0;
         for (const value of arg) {
-          this[i++] = value;
+          setters[i++].call(this, value);
         }
       } else if (arg !== undefined) {
         throwInvalidArrayInitializer(s, arg);
@@ -80,11 +75,13 @@ export function defineVector(s, env) {
     }
   };
   const elementDescriptors = {};
+  const setters = {};
   for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
     const { get, set } = getDescriptor({ ...member, bitOffset }, env);
     elementDescriptors[i] = { get, set, configurable: true };
+    setters[i] = set;
   }
-  defineProperties(constructor.prototype, {
+  const instanceDescriptors = {
     ...elementDescriptors,
     length: { value: length, configurable: true },
     entries: { value: createVectorEntries, configurable: true, writable: true },
@@ -92,14 +89,14 @@ export function defineVector(s, env) {
     $: { get: getSelf, set: initializer, configurable: true },
     [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-  });
-  defineProperties(constructor, {
+  };
+  const staticDescriptors = {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(s) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-  });
-  return constructor;
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
 export function getVectorIterator() {

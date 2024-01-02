@@ -1,4 +1,4 @@
-import { ObjectCache, defineProperties, needSlots } from './structure.js';
+import { ObjectCache, attachDescriptors, defineProperties, needSlots } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier, getMemoryResetter } from './memory.js';
 import { requireDataView } from './data-view.js';
@@ -56,14 +56,15 @@ export function defineErrorUnion(s, env) {
       if (arguments.length === 0) {
         throwNoInitializer(s);
       }
-      self = this;
+      self = (writable) ? this : Object.create(constructor[CONST].prototype);
       dv = env.allocateMemory(byteSize, align, fixed);
     } else {
       dv = requireDataView(s, arg, env);
       if (self = cache.find(dv, writable)) {
         return self;
       }
-      self = Object.create(constructor.prototype); 
+      const c = (writable) ? constructor : constructor[CONST];
+      self = Object.create(c.prototype);
     }
     self[MEMORY] = dv;
     if (hasSlots) {
@@ -71,13 +72,6 @@ export function defineErrorUnion(s, env) {
     }
     if (creating) {
       initializer.call(this, arg);
-    }
-    if (!writable) {
-      defineProperties(self, {
-        '$': { get, set: throwReadOnly, configurable: true },
-        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
-        [CONST]: { value: true, configurable: true },
-      });   
     }
     return cache.save(dv, writable, self);
   };
@@ -94,17 +88,17 @@ export function defineErrorUnion(s, env) {
     }
   };
   const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
-  defineProperties(constructor.prototype, {
+  const instanceDescriptors = {
     '$': { get, set, configurable: true },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildActive: check }) },
-  });
-  defineProperties(constructor, {
+  };
+  const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-  })
-  return constructor;
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
