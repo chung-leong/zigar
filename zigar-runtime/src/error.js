@@ -268,6 +268,11 @@ export function throwReadOnly() {
   throw new TypeError(`Unable to modify read-only object`);
 }
 
+export function throwReadOnlyTarget(structure) {
+  const name = getStructureName(structure);
+  throw new TypeError(`${name} cannot point to a read-only object`);
+}
+
 export function throwZigError(name) {
   throw new Error(decamelizeErrorName(name));
 }

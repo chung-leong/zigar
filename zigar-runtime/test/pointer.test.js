@@ -316,7 +316,57 @@ describe('Pointer functions', function() {
       expect(Object.getOwnPropertyDescriptor(pointer, 'cow')).to.be.undefined;
       expect(Object.getOwnPropertyDescriptor(pointer, 'cat')).to.be.an('object');
     })
-    it('should not return setters from target when it is const', function() {
+    it('should convert target of pointer to read-only when it is const', function() {
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 8,
+        hasPointer: false,
+      });
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'cat',
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'dog',
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const { constructor: Hello } = structStructure;
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*const Hello',
+        byteSize: 4,
+        isConst: true,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        slot: 0,
+        structure: structStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtr } = structure;
+      const object = new Hello({ cat: 123, dog: 456 });
+      const pointer = new HelloPtr(object);
+      const target = pointer['*'];
+      expect(target).to.not.equal(object);
+      expect(target.cat).to.equal(123);
+      object.cat = 777;
+      expect(target.cat).to.equal(777);
+    })
+    it('should throw when read-only object is assigned to non-const pointer', function() {
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -344,7 +394,7 @@ describe('Pointer functions', function() {
         type: StructureType.Pointer,
         name: '*Hello',
         byteSize: 4,
-        isConst: true,
+        isConst: false,
         hasPointer: true,
       });
       env.attachMember(structure, {
@@ -358,10 +408,13 @@ describe('Pointer functions', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: HelloPtr } = structure;
-      const pointer = new HelloPtr(new Hello({ cat: 123, dog: 456 }));
-      const descriptor = Object.getOwnPropertyDescriptor(pointer, 'cat');
-      expect(descriptor.set).to.be.undefined;
-      expect(Object.getOwnPropertyDescriptor(pointer, 'cow')).to.be.undefined;
+      const object1 = new Hello({ cat: 123, dog: 456 });
+      const object2 = new Hello({ cat: 123, dog: 456 }, { writable: false });
+      const pointer = new HelloPtr(object1);
+      expect(() => pointer.$ = object2).to.throw(TypeError)
+        .with.property('message').that.contains('read-only');
+        expect(() => new HelloPtr(object2)).to.throw(TypeError)
+        .with.property('message').that.contains('read-only');
     })
     it('should automatically dereference pointers a single-level only', function() {
       const structStructure = env.beginStructure({
@@ -1110,12 +1163,13 @@ describe('Pointer functions', function() {
       }
       const nonConstPointer = new U8SlicePtr(buffer);
       const constPointer = ConstU8SlicePtr(nonConstPointer);
-      expect(constPointer['*']).to.equal(nonConstPointer['*']);
+      expect(constPointer['*']).to.not.equal(nonConstPointer['*']);
+      expect(constPointer['*']).to.equal(U8Slice(nonConstPointer['*'], { writable: false }));
       nonConstPointer[2] = 3;
       expect(() => nonConstPointer[2] = 3).to.not.throw();
       expect(() => constPointer[2] = 3).to.throw(TypeError);
       const constPointer2 = new ConstU8SlicePtr(nonConstPointer);
-      expect(constPointer2['*']).to.equal(nonConstPointer['*']);
+      expect(constPointer2['*']).to.equal(U8Slice(nonConstPointer['*'], { writable: false }));
     })
     it('should require explicit cast to convert const pointer to non-const pointer', function() {
       const uintStructure = env.beginStructure({
@@ -1191,7 +1245,10 @@ describe('Pointer functions', function() {
       }
       const constPointer = new ConstU8SlicePtr(buffer);
       expect(() => new U8SlicePtr(constPointer)).to.throw(TypeError);
-      expect(() => U8SlicePtr(constPointer)).to.not.throw();
+      debugger;
+      const nonConstPointer = U8SlicePtr(constPointer);
+      nonConstPointer[2] = 123;
+      expect(constPointer[2]).to.equal(123);
     })
     it('should permit assignment and delete operations like regular objects', function() {
       const intStructure = env.beginStructure({

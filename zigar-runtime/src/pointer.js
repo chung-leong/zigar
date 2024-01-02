@@ -4,7 +4,7 @@ import { requireDataView, getDataView, isCompatible, isBuffer } from './data-vie
 import { MemberType, getDescriptor } from './member.js';
 import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerTarget,
   throwAssigningToConstant, throwConstantConstraint, throwNoInitializer,
-  throwFixedMemoryTargetRequired, addArticle, throwReadOnly, throwNullPointer } from './error.js';
+  throwFixedMemoryTargetRequired, addArticle, throwReadOnly, throwNullPointer, throwReadOnlyTarget } from './error.js';
 import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, CONST, ENVIRONMENT, 
   LENGTH_GETTER, LENGTH_SETTER, MEMORY, MEMORY_COPIER, PARENT, POINTER_SELF, POINTER_VISITOR, 
   PROXY, SLOTS, SIZE } from './symbol.js';
@@ -65,11 +65,11 @@ export function definePointer(s, env) {
         const Target = targetStructure.constructor;
         if (isPointerOf(arg, Target)) {
           creating = true;
-          arg = arg['*'];
+          arg = Target(arg['*'], { writable: !isConst });
         } else if (isTargetSlice) {
           // allow casting to slice through constructor of its pointer
           creating = true;
-          arg = Target(arg, { writable: isConst });
+          arg = Target(arg, { writable: !isConst });
         } else {
           throwNoCastingToPointer(s);
         }
@@ -92,60 +92,57 @@ export function definePointer(s, env) {
     return cache.save(dv, writable, proxy);
   };
   const initializer = function(arg) {
-    if (arg instanceof constructor) {
-      if (env.inFixedMemory(this)) {
-        // initialize with the other pointer's target
-        initializer.call(this, arg[SLOTS][0]);
-      } else {
-        // copy the object stored in slots 0, not copying memory of the other object
-        // since the value stored there likely isn't valid
-        copyPointer.call(this, { source: arg });
+    const Target = targetStructure.constructor;
+    if (isPointerOf(arg, Target)) {
+      // initialize with the other pointer's target
+      if (!isConst && arg.constructor.const) {
+        throwConstantConstraint(s, arg);
       }
+      initializer.call(this, arg[SLOTS][0]);
     } else {
-      const Target = targetStructure.constructor;
-      if (isPointerOf(arg, Target)) {
-        if (!isConst && arg.constructor.const) {
-          throwConstantConstraint(s, arg);
+      if (arg instanceof Target) {
+        if (isConst && !arg[CONST]) {
+          // create read-only version
+          arg = Target(arg, { writable: false });
+        } else if (!isConst && arg[CONST]) {
+          throwReadOnlyTarget(s);
         }
-        copyPointer.call(this, { source: arg });
       } else {
-        if (!(arg instanceof Target)) {
-          if (isCompatible(arg, Target)) {
-            // autocast to target type
-            const dv = getDataView(targetStructure, arg, env);
-            arg = Target(dv, { writable: isConst });
-          } else if (isTargetSlice) {
-            // autovivificate target object
-            const autoObj = new Target(arg);
-            if (runtimeSafety) {
-              // creation of a new slice using a typed array is probably
-              // not what the user wants; it's more likely that the intention
-              // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
-              if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
-                const created = addArticle(targetStructure.typedArray.name);
-                const source = addArticle(arg.constructor.name);
-                console.warn(`Implicitly creating ${created} from ${source}`);
-              }
+        if (isCompatible(arg, Target)) {
+          // autocast to target type
+          const dv = getDataView(targetStructure, arg, env);
+          arg = Target(dv, { writable: !isConst });
+        } else if (isTargetSlice) {
+          // autovivificate target object
+          const autoObj = new Target(arg, { writable: !isConst });
+          if (runtimeSafety) {
+            // creation of a new slice using a typed array is probably
+            // not what the user wants; it's more likely that the intention
+            // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
+            if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
+              const created = addArticle(targetStructure.typedArray.name);
+              const source = addArticle(arg.constructor.name);
+              console.warn(`Implicitly creating ${created} from ${source}`);
             }
-            arg = autoObj;
-          } else {
-            throwInvalidPointerTarget(s, arg);
           }
+          arg = autoObj;
+        } else {
+          throwInvalidPointerTarget(s, arg);
         }
-        if (env.inFixedMemory(this)) {
-          // the pointer sits in shared memory--apply the change immediately
-          if (env.inFixedMemory(arg)) {
-            const address = env.getViewAddress(arg[MEMORY]);
-            setAddress.call(this, address);
-            if (setLength) {
-              setLength.call(this, arg.length);
-            }
-          } else {
-            throwFixedMemoryTargetRequired(s, arg);
-          }
-        }
-        this[SLOTS][0] = arg;
       }
+      if (env.inFixedMemory(this)) {
+        // the pointer sits in shared memory--apply the change immediately
+        if (env.inFixedMemory(arg)) {
+          const address = env.getViewAddress(arg[MEMORY]);
+          setAddress.call(this, address);
+          if (setLength) {
+            setLength.call(this, arg.length);
+          }
+        } else {
+          throwFixedMemoryTargetRequired(s, arg);
+        }
+      }
+      this[SLOTS][0] = arg;
     }
   };
   const { get, set } = getDescriptor(member, env);
