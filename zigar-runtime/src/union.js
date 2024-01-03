@@ -3,12 +3,12 @@ import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { requireDataView } from './data-view.js';
 import { getBase64Accessors, getDataViewAccessors, getSpecialKeys, getValueOf } from './special.js';
-import { getChildVivificator, getPointerVisitor } from './struct.js';
+import { getChildVivificator, getPointerVisitor, normalizeStruct } from './struct.js';
 import { throwInvalidInitializer, throwMissingUnionInitializer, throwMultipleUnionInitializers,
   throwNoProperty, throwInactiveUnionProperty, throwNoInitializer } from './error.js';
 import { always, copyPointer, disablePointer, resetPointer } from './pointer.js';
-import { ACTIVE_FIELD, ALIGN, CHILD_VIVIFICATOR, CONST, ENUM_ITEM, ENUM_NAME, MEMORY, MEMORY_COPIER,
-  POINTER_VISITOR, PROXY, SIZE, SLOTS, VALUE_NORMALIZER } from './symbol.js';
+import { ALIGN, CHILD_VIVIFICATOR, CONST, ENUM_ITEM, ENUM_NAME, MEMORY, MEMORY_COPIER,
+  POINTER_VISITOR, SIZE, SLOTS, VALUE_NORMALIZER } from './symbol.js';
 
 export function defineUnionShape(s, env) {
   const {
@@ -19,58 +19,38 @@ export function defineUnionShape(s, env) {
     hasPointer,
   } = s;
   const { runtimeSafety } = env;
-  let getEnumItem;
-  let valueMembers;
-  let getName, setName;
   const isTagged = (type === StructureType.TaggedUnion);
   const exclusion = (isTagged || (type === StructureType.BareUnion && runtimeSafety));
   const memberDescriptors = {};
-  if (exclusion) {
-    valueMembers = members.slice(0, -1);
-    const selectorMember = members[members.length - 1];
-    const { get: getSelector, set: setSelector } = getDescriptor(selectorMember, env);
-    if (type === StructureType.TaggedUnion) {
-      const { structure: { constructor } } = selectorMember;
-      getEnumItem = getSelector;
-      getName = function() {
-        const item = getSelector.call(this);
-        return item[ENUM_NAME];
-      };
-      setName = function(name) {
-        setSelector.call(this, constructor[name]);
-      };
-    } else {
-      const names = valueMembers.map(m => m.name);
-      getName = function() {
-        const index = getSelector.call(this);
-        return names[index];
-      };
-      setName = function(name) {
-        const index = names.indexOf(name);
-        setSelector.call(this, index);
-      };
+  const memberInitializers = {};
+  const memberValueGetters = {};
+  const valueMembers = (exclusion) ? members.slice(0, -1) : members;
+  const selectorMember = (exclusion) ? members[members.length - 1] : null;  
+  const { get: getSelector, set: setSelector } = (exclusion) ? getDescriptor(selectorMember, env) : {};
+  const getActiveField = (isTagged)
+  ? function() {
+      const item = getSelector.call(this);
+      return item[ENUM_NAME];
     }
-    const pointerSlots = {};
-    for (const member of valueMembers) {
-      const { name, slot, structure: { hasPointer } } = member;
-      const { get: getValue, set: setValue } = getDescriptor(member, env);
-      const update = function(name) {
-        const prevActiveField = this[ACTIVE_FIELD];
-        if (prevActiveField !== name) {
-          this[ACTIVE_FIELD] = name;
-          if (prevActiveField) {
-            // release pointers in deactivated field
-            const slot = pointerSlots[prevActiveField];
-            if (slot !== undefined) {
-              const object = this[SLOTS][slot];
-              object?.[POINTER_VISITOR](resetPointer);  
-            }
-          }
-        }
-      };
-      const get = function() {
-        const currentName = getName.call(this);
-        update.call(this, currentName);
+  : function() {
+      const index = getSelector.call(this);
+      return valueMembers[index].name;
+    };
+  const setActiveField = (isTagged)
+  ? function(name) {
+      const { constructor } = selectorMember.structure;
+      setSelector.call(this, constructor[name]);
+    }
+  : function(name) {
+      const index = valueMembers.findIndex(m => m.name === name);
+      setSelector.call(this, index);
+    };
+  for (const member of valueMembers) {
+    const { name } = member;
+    const { get: getValue, set: setValue } = getDescriptor(member, env);
+    const get = (exclusion)
+    ? function() {
+        const currentName = getActiveField.call(this);
         if (name !== currentName) {
           if (isTagged) {
             // tagged union allows inactive member to be queried
@@ -81,38 +61,31 @@ export function defineUnionShape(s, env) {
             throwInactiveUnionProperty(s, name, currentName);
           }
         }
+        this[POINTER_VISITOR]?.(resetPointer);
         return getValue.call(this);
-      };
-      const set = function(value) {
-        const currentName = getName.call(this);
-        update.call(this, currentName);
+      }
+    : getValue;
+    const set = (exclusion) 
+    ? function(value) {
+        const currentName = getActiveField.call(this);
         if (name !== currentName) {
           throwInactiveUnionProperty(s, name, currentName);
         }
         setValue.call(this, value);
-      };
-      const init = function(value) {
-        setName.call(this, name);
-        setValue.call(this, value);
-        update.call(this, name);
-      };
-      if (hasPointer) {
-        pointerSlots[name] = slot;
+        this[POINTER_VISITOR]?.(resetPointer);
       }
-      memberDescriptors[member.name] = { get, set, init, update, configurable: true, enumerable: true };
-    }
-  } else {
-    // extern union or bare union with runtime safety disabled
-    valueMembers = members;
-    for (const member of members) {
-      const { get, set } = getDescriptor(member, env);
-      memberDescriptors[member.name] = { get, set, init: set, configurable: true, enumerable: true };
-    }
+    : setValue;
+    const init = (exclusion)
+    ? function(value) {
+        setActiveField.call(this, name);
+        setValue.call(this, value);
+        this[POINTER_VISITOR]?.(resetPointer);
+      }
+    : setValue;
+    memberDescriptors[name] = { get, set, configurable: true, enumerable: true };
+    memberInitializers[name] = init;
+    memberValueGetters[name] = getValue;
   }
-  if (isTagged) {
-    memberDescriptors[ACTIVE_FIELD] = { value: undefined, writable: true };
-  }
-  const keys = Object.keys(memberDescriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const pointerMembers = members.filter(m => m.structure.hasPointer);
   // non-tagged union as marked as not having pointers--if there're actually
@@ -152,15 +125,10 @@ export function defineUnionShape(s, env) {
     if (creating) {
       initializer.call(self, arg);
     }
-    if (isTagged) {
-      const proxy = new Proxy(self, taggedProxyHandlers);
-      Object.defineProperty(self, PROXY, { value: proxy });
-      return cache.save(dv, writable, proxy);
-    } else {
-      return cache.save(dv, writable, self);
-    }
+    return cache.save(dv, writable, self);
   };
   const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
+  const keys = Object.keys(memberDescriptors);
   const specialKeys = getSpecialKeys(s);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -204,7 +172,7 @@ export function defineUnionShape(s, env) {
         if (specialFound > 0) {
           for (const key of specialKeys) {
             if (key in arg) {
-              this[key] = arg[key];
+              memberInitializers[key].call(this, arg[key]);
             }
           }
         } else if (found === 0) {
@@ -219,10 +187,7 @@ export function defineUnionShape(s, env) {
         } else {
           for (const key of keys) {
             if (key in arg) {
-              // can't just set the property, since it would throw when a field other than the
-              // active one is being set
-              const { init } = memberDescriptors[key];
-              init.call(this, arg[key]);
+              memberInitializers[key].call(this, arg[key]);
             }
           }
         }
@@ -231,10 +196,36 @@ export function defineUnionShape(s, env) {
       }
     }
   };
+  // for bare and extern union, all members will be included 
+  // tagged union meanwhile will only give the entity for the active field
+  const memberNames = (isTagged) ? [ '' ] : valueMembers.map(m => m.name);
+  const interatorCreator = function() {
+    const self = this;
+    let index = 0;
+    if (isTagged) {
+      memberNames[0] = getActiveField.call(this);
+    }
+    return {
+      next() {
+        let value, done;
+        if (index < memberNames.length) {
+          const name = memberNames[index];
+          // get value of field with no check
+          const get = memberValueGetters[name];
+          value = [ name, get.call(self) ];
+          done = false;
+          index++;
+        } else {
+          done = true;
+        }
+        return { value, done };
+      },
+    };
+  };
   const isChildActive = (isTagged)
   ? function(child) {
-      const name = getName.call(this);
-      const active = this[name];
+      const name = getActiveField.call(this);
+      const active = memberValueGetters[name].call(this);
       return child === active;
     }
   : always;
@@ -247,12 +238,19 @@ export function defineUnionShape(s, env) {
     valueOf: { value: getValueOf },
     toJSON: { value: getValueOf },
     delete: { value: getDestructor(env) },
+    [Symbol.iterator]: { value: interatorCreator },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [ENUM_ITEM]: isTagged && { get: getEnumItem, configurable: true },
+    [ENUM_ITEM]: isTagged && { get: getSelector, configurable: true },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
     [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor(s, { isChildActive }) },
-    [VALUE_NORMALIZER]: { value: createNormalizationFunction(s) },
+    [VALUE_NORMALIZER]: { value: normalizeStruct },
   };
+  for (const [ name, desc ] of Object.entries(instanceDescriptors)) {
+    // add setters of special props
+    if (desc?.set && !memberInitializers[name]) {
+      memberInitializers[name] = desc.set;
+    }
+  }
   const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
@@ -260,17 +258,26 @@ export function defineUnionShape(s, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };
 
-export function createNormalizationFunction(s) {
-  // TODO
-  return function normalizeUnion(map) {
-    return null;
+export function getUnionIteratorCreator(structure) {
+  const { instance: { members } } = structure;
+  const names = members.map(m => m.name);
+  const { length } = names;
+  return function getStructIterator() {
+    let index = 0;
+    const self = this;
+    return {
+      next() {
+        let value, done;
+        if (index < length) {
+          const name = names[index];
+          value = [ name, self[name] ];
+          done = false;
+          index++;
+        } else {
+          done = true;
+        }
+        return { value, done };
+      },
+    };
   };
 }
-
-const taggedProxyHandlers = {
-  ownKeys(union) {
-    const item = union[ENUM_ITEM];
-    const name = item[ENUM_NAME];
-    return [ name, MEMORY, ACTIVE_FIELD, PROXY ];
-  },
-};

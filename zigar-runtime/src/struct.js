@@ -19,7 +19,7 @@ export function defineStructShape(s, env) {
     hasPointer,
   } = s;  
   const memberDescriptors = {};
-  const setters = {};
+  const memberSetters = {};
   for (const member of members) {
     const { get, set } = getDescriptor(member, env);
     memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
@@ -120,13 +120,13 @@ export function defineStructShape(s, env) {
         if (specialFound > 0) {
           for (const key of specialKeys) {
             if (key in arg) {
-              setters[key].call(this, arg[key]);
+              memberSetters[key].call(this, arg[key]);
             }
           }
         } else if (found > 0) {
           for (const key of keys) {
             if (key in arg) {
-              setters[key].call(this, arg[key]);
+              memberSetters[key].call(this, arg[key]);
             }
           }
         }
@@ -134,6 +134,25 @@ export function defineStructShape(s, env) {
         throwInvalidInitializer(s, 'object', arg);
       }
     }
+  };
+  const memberNames = members.map(m => m.name);
+  const interatorCreator = function() {
+    const self = this;
+    let index = 0;
+    return {
+      next() {
+        let value, done;
+        if (index < memberNames.length) {
+          const name = memberNames[index];
+          value = [ name, self[name] ];
+          done = false;
+          index++;
+        } else {
+          done = true;
+        }
+        return { value, done };
+      },
+    };
   };
   const instanceDescriptors = {
     ...memberDescriptors,
@@ -143,16 +162,16 @@ export function defineStructShape(s, env) {
     valueOf: { value: getValueOf },
     toJSON: { value: getValueOf },
     delete: { value: getDestructor(env) },
-    [Symbol.iterator]: { value: getStructIteratorCreator(s) },
+    [Symbol.iterator]: { value: interatorCreator },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
     [VALUE_NORMALIZER]: { value: normalizeStruct },
   };
   // need setters for initialization of read-only objects
-  for (const [ name, { set } ] of Object.entries(instanceDescriptors)) {
-    if (set) {
-      setters[name] = set;
+  for (const [ name, desc ] of Object.entries(instanceDescriptors)) {
+    if (desc?.set) {
+      memberSetters[name] = desc.set;
     }
   }
   const staticDescriptors = {
@@ -172,30 +191,6 @@ export function normalizeStruct(map) {
     map.set(this, object);
   }
   return object;
-}
-
-export function getStructIteratorCreator(structure) {
-  const { instance: { members } } = structure;
-  const names = members.map(m => m.name);
-  const { length } = names;
-  return function getStructIterator() {
-    let index = 0;
-    const self = this;
-    return {
-      next() {
-        let value, done;
-        if (index < length) {
-          const name = names[index];
-          value = [ name, self[name] ];
-          done = false;
-          index++;
-        } else {
-          done = true;
-        }
-        return { value, done };
-      },
-    };
-  };
 }
 
 export function getChildVivificator(structure) {

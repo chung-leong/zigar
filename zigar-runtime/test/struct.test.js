@@ -51,11 +51,7 @@ describe('Struct functions', function() {
       expect(object).to.be.an.instanceOf(Hello);
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(4567);
-      const entries = [];
-      for (const entry of object) {
-        entries.push(entry);
-      }
-      expect(entries).to.eql([ [ 'dog', 1234 ], [ 'cat', 4567 ] ]);
+      expect([ ...object ]).to.eql([ [ 'dog', 1234 ], [ 'cat', 4567 ] ]);
       expect(object.valueOf()).to.eql({ dog: 1234, cat: 4567 });
     })
     it('should cast the same buffer to the same object', function() {

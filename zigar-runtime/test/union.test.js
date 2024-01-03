@@ -50,13 +50,13 @@ describe('Union functions', function() {
       const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
       expect(object).to.be.an.instanceOf(Hello);
-      expect(Object.keys(object)).to.have.lengthOf(2);
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(1234);
+      expect([ ...object ]).to.eql([ [ 'dog', 1234 ], [ 'cat', 1234 ] ]);
       object.dog = 777;
       expect(object.dog).to.equal(777);
       expect(object.cat).to.equal(777);
-      expect(Object.keys(object)).to.eql([ 'dog', 'cat' ]);
+      expect(object.valueOf()).to.eql({ dog: 777, cat: 777 });
     })
     it('should cast the same buffer to the same object', function() {
       const structure = env.beginStructure({
@@ -168,7 +168,7 @@ describe('Union functions', function() {
       const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
       expect(object).to.be.an.instanceOf(Hello);
-      expect(Object.keys(object)).to.have.lengthOf(2);
+      expect([ ...object ]).to.have.lengthOf(2);
       expect(object.dog).to.equal(1234);
       expect(() => object.cat).to.throw(TypeError);
       expect(() => object.cat = 567).to.throw(TypeError);
@@ -178,7 +178,7 @@ describe('Union functions', function() {
       expect(object.cat).to.equal(567);
       expect(() => object.cat = 123).to.not.throw();
       expect(object.cat).to.equal(123);
-      expect(Object.keys(object)).to.eql([ 'dog', 'cat' ]);
+      expect(object.valueOf()).to.eql({ dog: 123, cat: 123 });
     })
     it('should initialize a simple bare union', function() {
       const structure = env.beginStructure({
@@ -224,6 +224,11 @@ describe('Union functions', function() {
       const object = new Hello({ cat: 123 });
       expect(object.cat).to.equal(123);
       expect(() => object.dog).to.throw(TypeError);
+      expect([ ...object ]).to.eql([ [ 'dog', 123 ], [ 'cat', 123 ] ]);
+      object.cat = 777;
+      expect(() => object.dog).to.throw(TypeError);
+      expect(object.cat).to.equal(777);
+      expect(object.valueOf()).to.eql({ dog: 777, cat: 777 });
     })
     it('should initialize a simple bare union using inenumerable property', function() {
       const structure = env.beginStructure({
@@ -659,7 +664,8 @@ describe('Union functions', function() {
       const object = new Hello({});
       expect(object).to.be.an.instanceOf(Object);
       expect(object).to.be.an.instanceOf(Hello);
-      expect(Object.keys(object)).to.have.lengthOf(1);
+      expect([ ...object ]).to.eql([ [ 'dog', 1234 ] ]);
+      expect(object.valueOf()).to.eql({ dog: 1234 });
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.be.null;
       expect(() => object.cat = 567).to.throw(TypeError);
@@ -1349,9 +1355,6 @@ describe('Union functions', function() {
       env.finalizeStructure(structure);
       const { constructor: Hello } = structure;
       expect(() => new Hello({ dog: 1234, cat: 4567 })).to.throw(TypeError);
-      const object = new Hello({ dog: 1234 });
-      expect(object.dog).to.equal(1234);
-      expect(() => { return { ...object } }).to.throw(TypeError);
     })
     it('should throw when an unknown initializer is encountered', function() {
       const structure = env.beginStructure({

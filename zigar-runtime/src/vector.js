@@ -24,6 +24,14 @@ export function defineVector(s, env) {
     throw new Error(`slot must be undefined for vector member`);
   }
   /* DEV-TEST-END */
+  const { bitSize: elementBitSize, structure: elementStructure } = member;
+  const elementDescriptors = {};
+  const elementSetters = {};
+  for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
+    const { get, set } = getDescriptor({ ...member, bitOffset }, env);
+    elementDescriptors[i] = { get, set, configurable: true };
+    elementSetters[i] = set;
+  }
   const cache = new ObjectCache();
   const constructor = s.constructor = function(arg, options = {}) {
     const {
@@ -52,7 +60,6 @@ export function defineVector(s, env) {
     }
     return cache.save(dv, writable, self);
   };
-  const { bitSize: elementBitSize, structure: elementStructure } = member;
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[MEMORY_COPIER](arg);
@@ -68,20 +75,13 @@ export function defineVector(s, env) {
         }
         let i = 0;
         for (const value of arg) {
-          setters[i++].call(this, value);
+          elementSetters[i++].call(this, value);
         }
       } else if (arg !== undefined) {
         throwInvalidArrayInitializer(s, arg);
       }
     }
   };
-  const elementDescriptors = {};
-  const setters = {};
-  for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
-    const { get, set } = getDescriptor({ ...member, bitOffset }, env);
-    elementDescriptors[i] = { get, set, configurable: true };
-    setters[i] = set;
-  }
   const instanceDescriptors = {
     ...elementDescriptors,
     $: { get: getSelf, set: initializer },

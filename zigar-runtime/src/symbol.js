@@ -6,7 +6,6 @@ export const ENUM_ITEM = Symbol('enumItem');
 export const ENUM_ITEMS = Symbol('enumItems');
 export const ERROR_ITEMS = Symbol('errorItems');
 export const ERROR_MESSAGES = Symbol('errorMessages');
-export const ACTIVE_FIELD = Symbol('activeField');
 export const GETTER = Symbol('getter');
 export const SETTER = Symbol('setter');
 export const LENGTH = Symbol('length');
