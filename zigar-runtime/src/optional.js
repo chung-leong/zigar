@@ -93,5 +93,5 @@ export function defineOptional(structure, env) {
 
 export function normalizeOptional(map) {
   const value = this.$;
-  return value[VALUE_NORMALIZER]?.(map) ?? value;
+  return value[VALUE_NORMALIZER](map);
 }

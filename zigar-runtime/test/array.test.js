@@ -882,7 +882,7 @@ describe('Array functions', function() {
       const { constructor: Int32PtrArray } = structure;
       const dv = new DataView(new ArrayBuffer(structure.byteSize));
       const array = Int32PtrArray(dv);
-      const pointers = [];
+      const pointers = [], errors = [];
       // make sure that children don't get vivificated unless the vivificate option is set
       array[POINTER_VISITOR](function() {
         pointers.push(this);
@@ -890,10 +890,16 @@ describe('Array functions', function() {
       expect(pointers).to.have.lengthOf(0);
       // look for the pointers for real
       array[POINTER_VISITOR](function() {
-        expect(this['*']).to.be.null;
+        try {
+          expect(this['*']).to.be.null;
+        } catch (err) {
+          // null pointer error
+          errors.push(err);
+        }
         pointers.push(this);
       }, { vivificate: true });
       expect(pointers).to.have.lengthOf(4);
+      expect(errors).to.have.lengthOf(4);
     })
     it('should correctly copy array holding pointers', function() {
       const intStructure = env.beginStructure({

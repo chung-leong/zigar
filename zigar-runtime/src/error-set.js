@@ -1,10 +1,10 @@
 import { ObjectCache, attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { getDataView } from './data-view.js';
+import { getDataView, getTypedArrayClass } from './data-view.js';
 import { throwInvalidInitializer, throwNoInitializer } from './error.js';
 import { ALIGN, CONST, ERROR_ITEMS, ERROR_MESSAGES, MEMORY, MEMORY_COPIER, SIZE, VALUE_NORMALIZER } from './symbol.js';
-import { getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
+import { getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors, getValueOf } from './special.js';
 
 let currentErrorSets;
 
@@ -19,11 +19,11 @@ export function defineErrorSet(structure, env) {
   // get the enum descriptor instead of the int/uint descriptor
   const { get, set } = getDescriptor({ ...member, type: MemberType.Error, structure }, env);
   const expected = [ 'string', 'number' ];
-  const propApplier = createPropertyApplier(s);
+  const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
     if (arg && typeof(arg) === 'object') {
       if (propApplier.call(this, arg) === 0) {
-        throwInvalidInitializer(s, expected, arg);
+        throwInvalidInitializer(structure, expected, arg);
       }
     } else {
       set.call(this, arg);
@@ -46,6 +46,7 @@ export function defineErrorSet(structure, env) {
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
   Object.setPrototypeOf(constructor.prototype, Error.prototype);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
   const getMessage = function() {
     const index = getIndex.call(this);
     return constructor[ERROR_MESSAGES][index];
@@ -57,6 +58,7 @@ export function defineErrorSet(structure, env) {
     message: { get: getMessage },
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
+    typedArray: typedArray && getTypedArrayAccessors(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: getValueOf },
     delete: { value: getDestructor(env) },

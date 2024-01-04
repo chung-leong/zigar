@@ -7,13 +7,13 @@ import { ALIGN, CHILD_VIVIFICATOR, MEMORY_COPIER, POINTER_VISITOR, SIZE, VALUE_N
   VALUE_RESETTER } from './symbol.js';
 import { getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
 
-export function defineErrorUnion(s, env) {
+export function defineErrorUnion(structure, env) {
   const {
     byteSize,
     align,
     instance: { members },
     hasPointer,
-  } = s;
+  } = structure;
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getError, set: setError } = getDescriptor(members[1], env);
   const set = function(value) {
@@ -52,19 +52,19 @@ export function defineErrorUnion(s, env) {
       this.$ = arg;
     }
   };
-  const constructor = s.constructor = createConstructor(s, { initializer }, env);
+  const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
   const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
   const instanceDescriptors = {
     '$': { get, set },
-    dataView: getDataViewAccessors(s),
+    dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: getValueOf },
     delete: { value: getDestructor(env) },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildActive: check }) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive: check }) },
     [VALUE_NORMALIZER]: { value: normalizeErrorUnion },
   };
   const staticDescriptors = {
@@ -76,5 +76,5 @@ export function defineErrorUnion(s, env) {
 
 export function normalizeErrorUnion(map) {
   const value = this.$;
-  return value[VALUE_NORMALIZER]?.(map) ?? value;
+  return value[VALUE_NORMALIZER](map);
 }

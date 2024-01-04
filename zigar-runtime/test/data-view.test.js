@@ -227,6 +227,7 @@ describe('Data view functions', function() {
             }
           ]
         },
+        constructor: function() {},
       };
       const arrayConstructor = function() {};
       arrayConstructor.child = elementConstructor;
@@ -242,6 +243,7 @@ describe('Data view functions', function() {
         type: StructureType.Array,
         name: 'Test',
         byteSize: 6,
+        length: 3,
         instance: {
           members: [
             {
@@ -252,6 +254,7 @@ describe('Data view functions', function() {
             }
           ]
         },
+        constructor: function() {},
       };
       const arrayConstructor = function() {};
       arrayConstructor.child = elementConstructor;
@@ -260,6 +263,32 @@ describe('Data view functions', function() {
       array.length = 3;
       const dv = getDataView(structure, array, env);
       expect(dv).to.equal(array[MEMORY]);
+    })
+    it('should fail when slice length does not match size of array', function() {
+      const elementConstructor = function() {};
+      const structure = {
+        type: StructureType.Array,
+        name: 'Test',
+        byteSize: 6,
+        length: 3,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: { constructor: elementConstructor }
+            }
+          ]
+        },
+        constructor: function() {},
+      };
+      const arrayConstructor = function() {};
+      arrayConstructor.child = elementConstructor;
+      const array = new arrayConstructor();
+      array[MEMORY] = new DataView(new ArrayBuffer(8));
+      array.length = 4;
+      expect(() => dv = getDataView(structure, array, env)).to.throw(TypeError);
     })
     it('should return memory of compatible object', function() {
       const elementConstructor = function() {};
@@ -277,35 +306,12 @@ describe('Data view functions', function() {
             }
           ]
         },
+        constructor: function() {},
       };
       const object = new elementConstructor();
       object[MEMORY] = new DataView(new ArrayBuffer(2));
       const dv = getDataView(structure, object, env);
       expect(dv).to.equal(object[MEMORY]);
-    })
-    it('should return memory of compatible slice', function() {
-      const elementConstructor = function() {};
-      const structure = {
-        type: StructureType.Array,
-        name: 'Test',
-        byteSize: 6,
-        instance: {
-          members: [
-            {
-              type: MemberType.Object,
-              bitOffset: 0,
-              byteSize: 2,
-              structure: { constructor: elementConstructor }
-            }
-          ]
-        },
-      };
-      const arrayConstructor = function() {};
-      arrayConstructor.child = elementConstructor;
-      const array = new arrayConstructor();
-      array[MEMORY] = new DataView(new ArrayBuffer(8));
-      array.length = 4;
-      expect(() => getDataView(structure, array, env)).to.throw(TypeError);
     })
   })
   describe('requireDataView', function() {

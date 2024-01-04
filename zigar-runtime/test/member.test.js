@@ -529,9 +529,8 @@ describe('Member functions', function() {
           }
         },
       };
-      const { get, set } = getDescriptor(member, env);
-      expect(get).to.be.undefined;
-      expect(set).to.be.undefined;
+      const descriptor = getDescriptor(member, env);
+      expect(descriptor).to.be.undefined;
     })
     it('should return object accessors (Struct)', function() {
       const DummyClass = function(arg) {

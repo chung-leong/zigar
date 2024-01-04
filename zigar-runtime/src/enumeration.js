@@ -1,10 +1,10 @@
 import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { getDataView } from './data-view.js';
+import { getDataView, getTypedArrayClass } from './data-view.js';
 import { throwInvalidInitializer } from './error.js';
 import { ALIGN, ENUM_ITEM, ENUM_ITEMS, MEMORY_COPIER, SIZE, VALUE_NORMALIZER } from './symbol.js';
-import { getBase64Accessors, getDataViewAccessors } from './special.js';
+import { getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors } from './special.js';
 
 export function defineEnumerationShape(structure, env) {
   const {
@@ -43,10 +43,12 @@ export function defineEnumerationShape(structure, env) {
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
   const instanceDescriptors = {
     $: { get, set },
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
+    typedArray: typedArray && getTypedArrayAccessors(structure),
     valueOf: { value: getIndex },
     toJSON: { value: getIndex },
     delete: { value: getDestructor(env) },
