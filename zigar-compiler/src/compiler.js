@@ -13,6 +13,7 @@ export async function compile(path, options = {}) {
     clean = false,
     platform = os.platform(),
     arch = os.arch(),
+    nativeCpu = false,
     buildDir = tmpdir(),
     cacheDir = join(cwd, 'zigar-cache'),
     zigCmd = `zig build -Doptimize=${optimize}`,
@@ -24,6 +25,7 @@ export async function compile(path, options = {}) {
   const config = {
     platform,
     arch,
+    nativeCpu,
     packageName: rootFile.name,
     packagePath: fullPath,
     packageRoot: rootFile.dir,
@@ -247,8 +249,9 @@ export async function createProject(config, dir) {
     win32: 'windows',
   };
   const cpuArch = cpuArchs[config.arch] ?? config.arch;
+  const cpuModel = (config.nativeCpu) ? 'native' : 'baseline';
   const osTag = osTags[config.platform] ?? config.platform;
-  const target = `.{ .cpu_arch = .${cpuArch}, .os_tag = .${osTag} }`;
+  const target = `.{ .cpu_arch = .${cpuArch}, .cpu_model = .${cpuModel}, .os_tag = .${osTag} }`;
   const lines = [];
   lines.push(`const std = @import("std");\n`);
   lines.push(`pub const target: std.zig.CrossTarget = ${target};`);

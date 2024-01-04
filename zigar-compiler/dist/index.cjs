@@ -16,6 +16,7 @@ async function compile(path$1, options = {}) {
     clean = false,
     platform = os.platform(),
     arch = os.arch(),
+    nativeCpu = false,
     buildDir = os.tmpdir(),
     cacheDir = path.join(cwd, 'zigar-cache'),
     zigCmd = `zig build -Doptimize=${optimize}`,
@@ -27,6 +28,7 @@ async function compile(path$1, options = {}) {
   const config = {
     platform,
     arch,
+    nativeCpu,
     packageName: rootFile.name,
     packagePath: fullPath,
     packageRoot: rootFile.dir,
@@ -249,8 +251,9 @@ async function createProject(config, dir) {
     win32: 'windows',
   };
   const cpuArch = cpuArchs[config.arch] ?? config.arch;
+  const cpuModel = (config.nativeCpu) ? 'native' : 'baseline';
   const osTag = osTags[config.platform] ?? config.platform;
-  const target = `.{ .cpu_arch = .${cpuArch}, .os_tag = .${osTag} }`;
+  const target = `.{ .cpu_arch = .${cpuArch}, .cpu_model = .${cpuModel}, .os_tag = .${osTag} }`;
   const lines = [];
   lines.push(`const std = @import("std");\n`);
   lines.push(`pub const target: std.zig.CrossTarget = ${target};`);
@@ -374,9 +377,10 @@ const ENUM_ITEM = Symbol('enumItem');
 const ENUM_ITEMS = Symbol('enumItems');
 const ERROR_ITEMS = Symbol('errorItems');
 const ERROR_MESSAGES = Symbol('errorMessages');
-const ACTIVE_FIELD = Symbol('activeField');
 const GETTER = Symbol('getter');
 const SETTER = Symbol('setter');
+const SETTERS = Symbol('const');
+const ALL_KEYS = Symbol('allKeys');
 const LENGTH = Symbol('length');
 const PROXY = Symbol('proxy');
 const COMPAT = Symbol('compat');
@@ -384,8 +388,10 @@ const SIZE = Symbol('size');
 const ALIGN = Symbol('align');
 const SELF = Symbol('self');
 const CONST = Symbol('const');
+const CONST_PROTO = Symbol('constProto');
 const MEMORY_COPIER = Symbol('memoryCopier');
 const VALUE_RESETTER = Symbol('valueResetter');
+const VALUE_NORMALIZER = Symbol('valueNormalizer');
 const CHILD_VIVIFICATOR = Symbol('childVivificator');
 const POINTER_SELF = Symbol('pointer');
 const POINTER_VISITOR = Symbol('pointerVisitor');
@@ -810,21 +816,12 @@ function throwArrayLengthMismatch(structure, target, arg) {
   throw new TypeError(`${name} has ${actualLength} element${s}, received ${received}`);
 }
 
-function throwMissingInitializers(structure, arg) {
-  const { instance: { members } } = structure;
+function throwMissingInitializers(structure, missing) {
   const name = getStructureName(structure);
-  const missing = [];
-  for (const { name, isRequired } of members) {
-    if (isRequired) {
-      if (arg?.[name] === undefined) {
-        missing.push(name);
-      }
-    }
-  }
   throw new TypeError(`Missing initializers for ${name}: ${missing.join(', ')}`);
 }
 
-function throwNoProperty$1(structure, propName) {
+function throwNoProperty(structure, propName) {
   const name = getStructureName(structure);
   throw new TypeError(`${name} does not have a property with that name: ${propName}`);
 }
@@ -871,11 +868,6 @@ function throwMissingSentinel(structure, value, length) {
   throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}`);
 }
 
-function throwAssigningToConstant(pointer) {
-  const { constructor: { name } } = pointer;
-  throw new TypeError(`${name} cannot be modified`);
-}
-
 function throwTypeMismatch(expected, arg) {
   const received = getDescription(arg);
   throw new TypeError(`Expected ${addArticle(expected)}, received ${received}`)
@@ -885,9 +877,8 @@ function throwInaccessiblePointer() {
   throw new TypeError(`Pointers within an untagged union are not accessible`);
 }
 
-function throwNullPointer(len) {
-  const expected = (typeof(len) === 'object') ? `sentinel` : `${len} byte${len === 1 ? '' : 's'}`;
-  throw new TypeError(`Null pointer encountered (${expected} expected)`);
+function throwNullPointer() {
+  throw new TypeError(`Null pointer`);
 }
 
 function throwInvalidPointerTarget(structure, arg) {
@@ -939,6 +930,11 @@ function throwNotUndefined(member) {
 
 function throwReadOnly() {
   throw new TypeError(`Unable to modify read-only object`);
+}
+
+function throwReadOnlyTarget(structure) {
+  const name = getStructureName(structure);
+  throw new TypeError(`${name} cannot point to a read-only object`);
 }
 
 function throwZigError(name) {
@@ -1050,7 +1046,6 @@ function getDataViewBuiltInAccessor(access, member) {
   });
 }
 
-
 function getDataViewIntAccessor(access, member) {
   return getDataViewBuiltInAccessor(access, member);
 }
@@ -1127,15 +1122,47 @@ function getDataView(structure, arg, env) {
     }
   }
   if (dv) {
-    checkDataViewSize(structure, dv);
+    checkDataViewSize(dv, structure);
   }
   return dv;
 }
 
-function checkDataViewSize(structure, dv) {
-  const { type, byteSize } = structure;
-  if (type === StructureType.Slice ? dv.byteLength % byteSize !== 0 : dv.byteLength !== byteSize) {
+function checkDataView(dv) {
+  if (dv?.[Symbol.toStringTag] !== 'DataView') {
+    throwTypeMismatch('a DataView', dv);
+  }
+  return dv;
+}
+
+function checkDataViewSize(dv, structure) {
+  const { byteSize, type } = structure;
+  const multiple = type === StructureType.Slice;
+  if (multiple ? dv.byteLength % byteSize !== 0 : dv.byteLength !== byteSize) {
     throwBufferSizeMismatch(structure, dv);
+  }
+}
+
+function setDataView(dv, structure, copy, handlers) {
+  const { byteSize, type, sentinel } = structure;
+  const multiple = type === StructureType.Slice;
+  if (!this[MEMORY]) {
+    const { shapeDefiner } = handlers;
+    checkDataViewSize(dv, structure);
+    const len = dv.byteLength / byteSize;
+    const source = { [MEMORY]: dv };
+    sentinel?.validateData(source, len);
+    shapeDefiner.call(this, copy ? null : dv, len);
+    if (copy) {
+      this[MEMORY_COPIER](source);
+    }  
+  } else {
+    const byteLength = multiple ? byteSize * this.length : byteSize;
+    if (dv.byteLength !== byteLength) {
+      throwBufferSizeMismatch(structure, dv, this);
+    }
+    const source = { [MEMORY]: dv };
+    sentinel?.validateData(source, this.length);
+    this[MEMORY_COPIER](source); 
   }
 }
 
@@ -1159,41 +1186,29 @@ function requireDataView(structure, arg, env) {
   return dv;
 }
 
-function getTypedArrayClass(structure) {
-  const { type, instance: { members } } = structure;
-  if (type === StructureType.Primitive) {
-    const { type: memberType, byteSize } = members[0];
-    if (memberType === MemberType.Int) {
-      switch (byteSize) {
-        case 1: return Int8Array;
-        case 2: return Int16Array;
-        case 4: return Int32Array;
-        case 8: return BigInt64Array;
-      }
-    } else if (memberType === MemberType.Uint) {
-      switch (byteSize) {
-        case 1: return Uint8Array;
-        case 2: return Uint16Array;
-        case 4: return Uint32Array;
-        case 8: return BigUint64Array;
-      }
-    } else if (memberType === MemberType.Float) {
-      switch (byteSize) {
-        case 4: return Float32Array;
-        case 8: return Float64Array;
-      }
+function getTypedArrayClass(member) {
+  const { type: memberType, byteSize } = member;
+  if (memberType === MemberType.Int) {
+    switch (byteSize) {
+      case 1: return Int8Array;
+      case 2: return Int16Array;
+      case 4: return Int32Array;
+      case 8: return BigInt64Array;
     }
-  } else if (type === StructureType.Array || type === StructureType.Slice || type === StructureType.Vector) {
-    const { structure: { typedArray } } = members[0];
-    if (typedArray) {
-      return typedArray;
+  } else if (memberType === MemberType.Uint) {
+    switch (byteSize) {
+      case 1: return Uint8Array;
+      case 2: return Uint16Array;
+      case 4: return Uint32Array;
+      case 8: return BigUint64Array;
+    }
+  } else if (memberType === MemberType.Float) {
+    switch (byteSize) {
+      case 4: return Float32Array;
+      case 8: return Float64Array;
     }
   }
   return null;
-}
-
-function addTypedArray(structure) {
-  return structure.typedArray = getTypedArrayClass(structure);
 }
 
 function isTypedArray(arg, TypedArray) {
@@ -1688,94 +1703,231 @@ function cacheMethod(access, member, cb) {
 
 const methodCache = {};
 
+const decoders = {};
+const encoders = {};
+
+function decodeText(arrays, encoding = 'utf-8') {
+  let decoder = decoders[encoding];
+  if (!decoder) {
+    decoder = decoders[encoding] = new TextDecoder(encoding);
+  }
+  let array;
+  if (Array.isArray(arrays)) {
+    if (arrays.length === 1) {
+      array = arrays[0];
+    } else {
+      let len = 0;
+      for (const a of arrays) {
+        len += a.length;
+      }
+      const { constructor } = arrays[0];
+      array = new constructor(len);
+      let offset = 0;
+      for (const a of arrays) {
+        array.set(a, offset);
+        offset += a.length;
+      }
+    }
+  } else {
+    array = arrays;
+  }
+  return decoder.decode(array);
+}
+
+function encodeText(text, encoding = 'utf-8') {
+  switch (encoding) {
+    case 'utf-16': {
+      const { length } = text;
+      const ta = new Uint16Array(length);
+      for (let i = 0; i < length; i++) {
+        ta[i] = text.charCodeAt(i);
+      }
+      return ta;
+    }
+    default: {
+      let encoder = encoders[encoding];
+      if (!encoder) {
+        encoder = encoders[encoding] = new TextEncoder();
+      }
+      return encoder.encode(text);
+    }
+  }
+}
+
+function encodeBase64(dv) {
+  const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+  const bstr = String.fromCharCode.apply(null, ta);
+  return btoa(bstr);
+}
+
+function decodeBase64(str) {
+  const bstr = atob(str);
+  const ta = new Uint8Array(bstr.length);
+  for (let i = 0; i < ta.byteLength; i++) {
+    ta[i] = bstr.charCodeAt(i);
+  }
+  return new DataView(ta.buffer);  
+}
+
+function getValueOf() {
+  const map = new Map();
+  return this[VALUE_NORMALIZER](map);
+}
+
+function getDataViewAccessors(structure, handlers = {}) {
+  return markAsSpecial({
+    get() {
+      /* WASM-ONLY */
+      restoreMemory.call(this);
+      /* WASM-ONLY-END */
+      return this[MEMORY];
+    },
+    set(dv) {
+      checkDataView(dv);
+      setDataView.call(this, dv, structure, true, handlers);
+    },
+  });
+}
+
+function getBase64Accessors(structure, handlers = {}) {
+  return markAsSpecial({
+    get() {
+      return encodeBase64(this.dataView);
+    },
+    set(str) {
+      if (typeof(str) !== 'string') {
+        throwTypeMismatch('string', str);
+      }
+      const dv = decodeBase64(str);
+      setDataView.call(this, dv, structure, false, handlers);
+    }
+  });
+}
+
+function getStringAccessors(structure, handlers = {}) {
+  const { sentinel, instance: { members }} = structure;
+  const { byteSize: charSize } = members[0];
+  return markAsSpecial({
+    get() {
+      const dv = this.dataView;
+      const TypedArray = (charSize === 1) ? Int8Array : Int16Array;
+      const ta = new TypedArray(dv.buffer, dv.byteOffset, this.length);
+      const s = decodeText(ta, `utf-${charSize * 8}`);
+      return (sentinel?.value === undefined) ? s : s.slice(0, -1);
+    },
+    set(str) {
+      if (typeof(str) !== 'string') {
+        throwTypeMismatch('a string', str);
+      }
+      if (sentinel?.value !== undefined) {
+        if (str.charCodeAt(str.length - 1) !== sentinel.value) {
+          str = str + String.fromCharCode(sentinel.value);
+        }
+      }
+      const ta = encodeText(str, `utf-${charSize * 8}`);
+      const dv = new DataView(ta.buffer);   
+      setDataView.call(this, dv, structure, false, handlers);
+    },
+  });
+}
+
+function getTypedArrayAccessors(structure, handlers = {}) {
+  const { typedArray } = structure;
+  return markAsSpecial({
+    get() {
+      const dv = this.dataView;
+      const length = dv.byteLength / typedArray.BYTES_PER_ELEMENT;
+      return new typedArray(dv.buffer, dv.byteOffset, length);
+    },
+    set(ta) {
+      if (!isTypedArray(ta, typedArray)) {
+        throwTypeMismatch(typedArray.name, ta);
+      }
+      const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
+      setDataView.call(this, dv, structure, true, handlers);
+    },
+  });
+}
+
+function markAsSpecial({ get, set }) {
+  get.special = set.special = true;
+  return { get, set };
+}
+
 let currentErrorSets;
 
-function defineErrorSet(s, env) {
+function defineErrorSet(structure, env) {
   const {
     name,
     byteSize,
     align,
     instance: { members: [ member ] },
-  } = s;
-  const byIndex = {};
-  const messages = {};
-  const cache = new ObjectCache();  
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = this;
-      dv = env.allocateMemory(byteSize, align, fixed);
-    } else {
-      if (typeof(arg) === 'number') {
-        return byIndex[arg];  
-      } else if (typeof(arg) === 'string') {
-        for (const err of Object.values(constructor)) {
-          if (err.toString() === arg) {
-            return err;
-          }
-        }
-        return;
-      } else {
-        dv = getDataView(s, arg, env);
-        if (!dv) {
-          throwInvalidInitializer(s, [ 'string', 'number' ], arg);
-        }
-        if (self = cache.find(dv, writable)) {
-          return self;
-        }
-        self = Object.create(constructor.prototype); 
-      }
-    }
-    self[MEMORY] = dv;
-    if (creating) {
-      set.call(self, arg);
-    }
-    if (writable) {
-      defineProperties(self, {
-        $: { get, set, configurable: true },
-        [CONST]: { value: undefined, configurable: true },
-      });
-    }
-    return cache.save(dv, writable, self);
-  };
-  Object.setPrototypeOf(constructor.prototype, Error.prototype);
+  } = structure;
   const { get: getIndex } = getDescriptor(member, env);
+  // get the enum descriptor instead of the int/uint descriptor
+  const { get, set } = getDescriptor({ ...member, type: MemberType.Error, structure }, env);
+  const expected = [ 'string', 'number' ];
+  const propApplier = createPropertyApplier(structure);
+  const initializer = function(arg) {
+    if (arg && typeof(arg) === 'object') {
+      if (propApplier.call(this, arg) === 0) {
+        throwInvalidInitializer(structure, expected, arg);
+      }
+    } else {
+      set.call(this, arg);
+    }
+  };
+  const alternateCaster = function(arg) {
+    if (typeof(arg) === 'number') {
+      return constructor[ERROR_ITEMS][arg];
+    } else if (typeof(arg) === 'string') {
+      for (const err of Object.values(constructor[ERROR_ITEMS])) {
+        if (err.toString() === arg) {
+          return err;
+        }
+      }
+    } else if (!getDataView(structure, arg, env)) {
+      throwInvalidInitializer(structure, expected, arg);
+    } else {
+      return false;
+    }
+  };
+  const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
+  Object.setPrototypeOf(constructor.prototype, Error.prototype);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
   const getMessage = function() {
     const index = getIndex.call(this);
-    return messages[index];
+    return constructor[ERROR_MESSAGES][index];
   };
-  // get the enum descriptor instead of the int/uint descriptor
-  const errorMember = { ...member, structure: s, type: MemberType.Error };
-  const { get, set } = getDescriptor(errorMember, env);
   const toStringTag = function() { return 'Error' };
-  defineProperties(constructor.prototype, {
-    index: { get: getIndex, configurable: true },
-    message: { get: getMessage, configurable: true },
-    delete: { value: getDestructor(env), configurable: true },
-    $: { get, set: throwReadOnly, configurable: true },
+  const instanceDescriptors = {
+    $: { get, set },
+    index: { get: getIndex },
+    message: { get: getMessage },
+    dataView: getDataViewAccessors(structure),
+    base64: getBase64Accessors(structure),
+    typedArray: typedArray && getTypedArrayAccessors(structure),
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    delete: { value: getDestructor(env) },
     // ensure that libraries that rely on the string tag for type detection will
     // correctly identify the object as an error
-    [Symbol.toStringTag]: { get: toStringTag, configurable: true },
+    [Symbol.toStringTag]: { get: toStringTag },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CONST]: { value: true, configurable: true },
-  });
-  defineProperties(constructor, {
+    [VALUE_NORMALIZER]: { value: normalizeError },
+  };
+  const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-    [ERROR_ITEMS]: { value: byIndex },
-    [ERROR_MESSAGES]: { value: messages },
-  });
-  return constructor;
-
+    [ERROR_ITEMS]: { value: {} },
+    [ERROR_MESSAGES]: { value: {} },
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
+function normalizeError(map) {
+  return this.$;
+}
+
 function initializeErrorSets() {
   currentErrorSets = {};
 }
@@ -1879,7 +2031,7 @@ function hasStandardFloatSize({ bitSize }) {
 
 function getDescriptor(member, env) {
   const f = factories$1[member.type];
-  return { ...f(member, env), configurable: true, enumerable: true };
+  return f(member, env);
 }
 
 function getVoidDescriptor(member, env) {
@@ -1985,7 +2137,7 @@ function addEnumerationLookup(getDataViewIntAccessor) {
         if (!item) {
           throwEnumExpected(structure, value);
         }
-        accessor.call(this, offset, item.valueOf(), littleEndian);
+        accessor.call(this, offset, item[Symbol.toPrimitive](), littleEndian);
       };
     }
   };
@@ -2222,332 +2374,47 @@ function useAllMemberTypes() {
   useLiteral();
 }
 
-const decoders = {};
-const encoders = {};
-
-function decodeText(arrays, encoding = 'utf-8') {
-  let decoder = decoders[encoding];
-  if (!decoder) {
-    decoder = decoders[encoding] = new TextDecoder(encoding);
-  }
-  let array;
-  if (Array.isArray(arrays)) {
-    if (arrays.length === 1) {
-      array = arrays[0];
-    } else {
-      let len = 0;
-      for (const a of arrays) {
-        len += a.length;
-      }
-      const { constructor } = arrays[0];
-      array = new constructor(len);
-      let offset = 0;
-      for (const a of arrays) {
-        array.set(a, offset);
-        offset += a.length;
-      }
-    }
-  } else {
-    array = arrays;
-  }
-  return decoder.decode(array);
-}
-
-function encodeText(text, encoding = 'utf-8') {
-  switch (encoding) {
-    case 'utf-16': {
-      const { length } = text;
-      const ta = new Uint16Array(length);
-      for (let i = 0; i < length; i++) {
-        ta[i] = text.charCodeAt(i);
-      }
-      return ta;
-    }
-    default: {
-      let encoder = encoders[encoding];
-      if (!encoder) {
-        encoder = encoders[encoding] = new TextEncoder();
-      }
-      return encoder.encode(text);
-    }
-  }
-}
-
-function encodeBase64(dv) {
-  const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
-  const bstr = String.fromCharCode.apply(null, ta);
-  return btoa(bstr);
-}
-
-function decodeBase64(str) {
-  const bstr = atob(str);
-  const ta = new Uint8Array(bstr.length);
-  for (let i = 0; i < ta.byteLength; i++) {
-    ta[i] = bstr.charCodeAt(i);
-  }
-  return new DataView(ta.buffer);  
-}
-
-function addSpecialAccessors(s) {
-  const { constructor } = s;
-  // use toPrimitive() as valueOf() when there's one
-  const valueDescriptor = getValueDescriptor(s);
-  defineProperties(constructor.prototype, {
-    dataView: { ...getDataViewAccessors(s), configurable: true },
-    base64: { ...getBase64Accessors(), configurable: true },
-    toJSON:  valueDescriptor,
-    valueOf: valueDescriptor,
-    string: canBeString(s) && { ...getStringAccessors(s), configurable: true },
-    typedArray: canBeTypedArray(s) && { ...getTypedArrayAccessors(s), configurable: true },
-  });
-}
-
-function getValueDescriptor(s) {
-  switch (s.type) {
-    case StructureType.Primitive:
-    case StructureType.Enumeration:
-      const toPrimitive = s.constructor.prototype[Symbol.toPrimitive];
-      return { value: toPrimitive, configurable: true, writable: true };
-    case StructureType.ErrorSet:
-      return;
-  }
-  return { value: getValueOf, configurable: true, writable: true };
-}
-
-function canBeString(s) {
-  if (s.type === StructureType.Array || s.type === StructureType.Slice) {
-    const { type, bitSize } = s.instance.members[0];
-    if (type === MemberType.Uint && (bitSize === 8 || bitSize === 16)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function canBeTypedArray(s) {
-  return !!s.typedArray;
-}
-
-function getSpecialKeys(s) {
-  const keys = [ 'dataView', 'base64' ];
-  if (canBeString(s)) {
-    keys.push('string');
-  }
-  if (canBeTypedArray(s)) {
-    keys.push('typedArray');
-  }
-  return keys;
-}
-
-function getDataViewAccessors(structure) {
-  const { sentinel, type, byteSize } = structure;
-  return {
-    get() {
-      /* WASM-ONLY */
-      restoreMemory.call(this);
-      /* WASM-ONLY-END */
-      return this[MEMORY];
-    },
-    set(dv) {
-      checkDataView(dv);
-      const byteLength = byteSize * ((type === StructureType.Slice) ? this.length : 1);
-      if (dv.byteLength !== byteLength) {
-        throwBufferSizeMismatch(structure, dv, this);
-      }
-      const source = { [MEMORY]: dv };
-      sentinel?.validateData(source, this.length);
-      this[MEMORY_COPIER](source);
-    },
-  };
-}
-
-function checkDataView(dv) {
-  if (dv?.[Symbol.toStringTag] !== 'DataView') {
-    throwTypeMismatch('a DataView', dv);
-  }
-  return dv;
-}
-
-function getBase64Accessors() {
-  return {
-    get() {
-      return encodeBase64(this.dataView);
-    },
-    set(str) {
-      if (typeof(str) !== 'string') {
-        throwTypeMismatch('string', str);
-      }
-      this.dataView = decodeBase64(str);
-    }
-  }
-}
-
-function getStringAccessors(structure) {
-  const { sentinel, instance: { members: [ member ] } } = structure;
-  const { byteSize } = member;
-  return {
-    get() {
-      const dv = this.dataView;
-      const TypedArray = (byteSize === 1) ? Int8Array : Int16Array;
-      const ta = new TypedArray(dv.buffer, dv.byteOffset, this.length);
-      const s = decodeText(ta, `utf-${byteSize * 8}`);
-      return (sentinel?.value === undefined) ? s : s.slice(0, -1);
-    },
-    set(src) {
-      this.dataView = getDataViewFromUTF8(src, byteSize, sentinel?.value);
-    },
-  };
-}
-
-function getDataViewFromUTF8(str, byteSize, sentinelValue) {
-  if (typeof(str) !== 'string') {
-    throwTypeMismatch('a string', str);
-  }
-  if (sentinelValue !== undefined) {
-    if (str.charCodeAt(str.length - 1) !== sentinelValue) {
-      str = str + String.fromCharCode(sentinelValue);
-    }
-  }
-  const ta = encodeText(str, `utf-${byteSize * 8}`);
-  return new DataView(ta.buffer);
-}
-
-function getTypedArrayAccessors(structure) {
-  const { typedArray } = structure;
-  return {
-    get() {
-      const dv = this.dataView;
-      const length = dv.byteLength / typedArray.BYTES_PER_ELEMENT;
-      return new typedArray(dv.buffer, dv.byteOffset, length);
-    },
-    set(ta) {
-      this.dataView = getDataViewFromTypedArray(ta, typedArray);
-    },
-  };
-}
-
-function getDataViewFromTypedArray(ta, TypedArray) {
-  if (!isTypedArray(ta, TypedArray)) {
-    throwTypeMismatch(TypedArray.name, ta);
-  }
-  return new DataView(ta.buffer, ta.byteOffset, ta.byteLength);}
-
-function getValueOf() {
-  const map = new WeakMap();
-  function extract(object) {
-    if (typeof(object) === 'string') {
-      return object;
-    } else if (object?.[Symbol.iterator]) {
-      const array = [];
-      for (const element of object) {
-        array.push(extract(element));
-      }
-      return array;
-    } else if (object && (typeof(object) === 'object' || typeof(object) === 'function')) {
-      let result = map.get(object);
-      if (!result) {
-        result = {};
-        map.set(object, result);
-        for (const [ name, child ] of Object.entries(object)) {
-          result[name] = extract(child);
-        }
-        return result;
-      }
-      return result;
-    } else {
-      return object;
-    }
-  }  return extract(this.$);
-}
-
-function definePrimitive(s, env) {
+function definePrimitive(structure, env) {
   const {
     byteSize,
     align,
     instance: { members: [ member ] },
-  } = s;
-  addTypedArray(s);
-  const hasSlots = needSlots(s);
-  const cache = new ObjectCache();
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = this;
-      dv = env.allocateMemory(byteSize, align, fixed);
-    } else {
-      dv = requireDataView(s, arg, env);
-      if (self = cache.find(dv, writable)) {
-        return self;
-      }
-      self = Object.create(constructor.prototype);
-    }
-    self[MEMORY] = dv;
-    if (hasSlots) {
-      self[SLOTS] = {};
-    }
-    if (creating) {
-      initializer.call(self, arg);
-    } 
-    if (!writable) {
-      defineProperties(self, {
-        $: { get, set: throwReadOnly, configurable: true },
-        [CONST]: { value: true, configurable: true },
-      });
-    }
-    return cache.save(dv, writable, self);
-  };
-  const specialKeys = getSpecialKeys(s);
+  } = structure;
+  const { get, set } = getDescriptor(member, env);
+  const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[MEMORY_COPIER](arg);
     } else {
       if (arg && typeof(arg) === 'object') {
-        for (const key of Object.keys(arg)) {
-          if (!(key in this)) {
-            throwNoProperty$1(s, key);
-          }
-        }
-        let specialFound = 0;
-        for (const key of specialKeys) {
-          if (key in arg) {
-            specialFound++;
-          }
-        }
-        if (specialFound === 0) {
+        if (propApplier.call(this, arg) === 0) {
           const type = getPrimitiveType(member);
-          throwInvalidInitializer(s, type, arg);
-        }
-        for (const key of specialKeys) {
-          if (key in arg) {
-            this[key] = arg[key];
-          }
+          throwInvalidInitializer(structure, type, arg);
         }
       } else if (arg !== undefined) {
-        this.$ = arg;
+        set.call(this, arg);
       }
     }
   };
-  const { get, set } = getDescriptor(member, env);
-  defineProperties(constructor.prototype, {
-    delete: { value: getDestructor(env), configurable: true },
-    $: { get, set, configurable: true },
-    [Symbol.toPrimitive]: { value: get, configurable: true, writable: true },
+  const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const instanceDescriptors = {
+    $: { get, set },
+    dataView: getDataViewAccessors(structure),
+    base64: getBase64Accessors(structure),
+    typedArray: typedArray && getTypedArrayAccessors(structure),
+    valueOf: { value: get },
+    toJSON: { value: get },
+    delete: { value: getDestructor(env) },
+    [Symbol.toPrimitive]: { value: get },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-  });
-  defineProperties(constructor, {
-    [COMPAT]: { value: getCompatibleTags(s) },
+  };
+  const staticDescriptors = {
+    [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-  });
-  return constructor;
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 function getIntRange(member) {
   const { type, bitSize } = member;
@@ -2586,13 +2453,13 @@ function getPrimitiveType(member) {
   }
 }
 
-function definePointer(s, env) {
+function definePointer(structure, env) {
   const {
     byteSize,
     align,
     instance: { members: [ member ] },
     isConst,
-  } = s;
+  } = structure;
   const {
     runtimeSafety = true,
   } = env;
@@ -2615,134 +2482,112 @@ function definePointer(s, env) {
     byteSize: addressSize,
     structure: { name: 'usize', byteSize: addressSize },
   }, env) : {};
-  const cache = new ObjectCache();
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const calledFromEnviroment = this === ENVIRONMENT;
-    const calledFromParent = this === PARENT;
-    let creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = this;
-      dv = env.allocateMemory(byteSize, align, fixed);
+  const { get, set } = getDescriptor(member, env);
+  const alternateCaster = function(arg) {
+    const Target = targetStructure.constructor;
+    if (isPointerOf(arg, Target)) {
+      return new constructor(arg['*'], { writable: !isConst });
+    } else if (isTargetSlice) {
+      // allow casting to slice through constructor of its pointer
+      return new constructor(arg, { writable: !isConst });
     } else {
-      if (calledFromEnviroment || calledFromParent) {
-        dv = requireDataView(s, arg, env);
-        if (self = cache.find(dv, writable)) {
-          return self;
-        }
-        self = Object.create(constructor.prototype); 
-      } else {
-        const Target = targetStructure.constructor;
-        if (isPointerOf(arg, Target)) {
-          creating = true;
-          arg = arg['*'];
-        } else if (isTargetSlice) {
-          // allow casting to slice through constructor of its pointer
-          creating = true;
-          arg = Target(arg);
-        } else {
-          throwNoCastingToPointer();
-        }
-        dv = env.allocateMemory(byteSize, align, fixed);
-        self = Object.create(constructor.prototype); 
+      if (this !== ENVIRONMENT && this !== PARENT) {
+        // don't allow casting to pointer unless it's done by the runtime environment
+        throwNoCastingToPointer();
       }
+      return false;
     }
-    self[MEMORY] = dv;
-    self[SLOTS] = { 0: null };
-    if (creating) {
-      initializer.call(self, arg);
-    }
-    if (!writable) {
-      defineProperties(self, {
-        '$': { get: getProxy, set: throwReadOnly, configurable: true, },
-        [CONST]: { value: true, configurable: true },
-      });
-    }
-    const proxy = createProxy$1.call(self, isConst, isTargetPointer);
-    return cache.save(dv, writable, proxy);
+  };
+  const finalizer = function() {
+    const handlers = (isTargetPointer) ? {} : proxyHandlers$1;
+    const proxy = new Proxy(this, handlers);
+    // hide the proxy so console wouldn't display a recursive structure
+    Object.defineProperty(this, PROXY, { value: proxy });
+    return proxy;
   };
   const initializer = function(arg) {
-    if (arg instanceof constructor) {
-      if (env.inFixedMemory(this)) {
-        // initialize with the other pointer's target
-        initializer.call(this, arg[SLOTS][0]);
-      } else {
-        // copy the object stored in slots 0, not copying memory of the other object
-        // since the value stored there likely isn't valid
-        copyPointer.call(this, { source: arg });
+    const Target = targetStructure.constructor;
+    if (isPointerOf(arg, Target)) {
+      // initialize with the other pointer'structure target
+      if (!isConst && arg.constructor.const) {
+        throwConstantConstraint(structure, arg);
+      }
+      arg = arg[SLOTS][0];
+    }
+    if (arg instanceof Target) {
+      if (isConst && !arg[CONST]) {
+        // create read-only version
+        arg = Target(arg, { writable: false });
+      } else if (!isConst && arg[CONST]) {
+        throwReadOnlyTarget(structure);
       }
     } else {
-      const Target = targetStructure.constructor;
-      if (isPointerOf(arg, Target)) {
-        if (!isConst && arg.constructor.const) {
-          throwConstantConstraint(s, arg);
+      if (isCompatible(arg, Target)) {
+        // autocast to target type
+        const dv = getDataView(targetStructure, arg, env);
+        arg = Target(dv, { writable: !isConst });
+      } else if (isTargetSlice) {
+        // autovivificate target object
+        const autoObj = new Target(arg, { writable: !isConst });
+        if (runtimeSafety) {
+          // creation of a new slice using a typed array is probably
+          // not what the user wants; it's more likely that the intention
+          // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
+          if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
+            const created = addArticle(targetStructure.typedArray.name);
+            const source = addArticle(arg.constructor.name);
+            console.warn(`Implicitly creating ${created} from ${source}`);
+          }
         }
-        copyPointer.call(this, { source: arg });
+        arg = autoObj;
       } else {
-        if (!(arg instanceof Target)) {
-          if (isCompatible(arg, Target)) {
-            // autocast to target type
-            const dv = getDataView(targetStructure, arg, env);
-            arg = Target(dv);
-          } else if (isTargetSlice) {
-            // autovivificate target object
-            const autoObj = new Target(arg);
-            if (runtimeSafety) {
-              // creation of a new slice using a typed array is probably
-              // not what the user wants; it's more likely that the intention
-              // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
-              if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
-                const created = addArticle(targetStructure.typedArray.name);
-                const source = addArticle(arg.constructor.name);
-                console.warn(`Implicitly creating ${created} from ${source}`);
-              }
-            }
-            arg = autoObj;
-          } else {
-            throwInvalidPointerTarget(s, arg);
-          }
-        }
-        if (env.inFixedMemory(this)) {
-          // the pointer sits in shared memory--apply the change immediately
-          if (env.inFixedMemory(arg)) {
-            const address = env.getViewAddress(arg[MEMORY]);
-            setAddress.call(this, address);
-            if (setLength) {
-              setLength.call(this, arg.length);
-            }
-          } else {
-            throwFixedMemoryTargetRequired();
-          }
-        }
-        this[SLOTS][0] = arg;
+        throwInvalidPointerTarget(structure, arg);
       }
     }
+    if (env.inFixedMemory(this)) {
+      // the pointer sits in shared memory--apply the change immediately
+      if (env.inFixedMemory(arg)) {
+        const address = env.getViewAddress(arg[MEMORY]);
+        setAddress.call(this, address);
+        if (setLength) {
+          setLength.call(this, arg.length);
+        }
+      } else {
+        throwFixedMemoryTargetRequired();
+      }
+    }
+    this[SLOTS][0] = arg;
   };
-  const { get, set } = getDescriptor(member, env);
-  defineProperties(constructor.prototype, {
-    '*': { get, set, configurable: true },
-    '$': { get: getProxy, set: initializer, configurable: true, },
+  const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster, finalizer }, env);
+  const instanceDescriptors = {
+    '*': { get, set },
+    '$': { get: getProxy, set: initializer },
+    dataView: getDataViewAccessors(structure),
+    base64: getBase64Accessors(structure),
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    delete: { value: getDestructor(env) },
     [ADDRESS_GETTER]: { value: getAddress },
     [ADDRESS_SETTER]: { value: setAddress },
     [LENGTH_GETTER]: hasLength && { value: getLength },
     [LENGTH_SETTER]: hasLength && { value: setLength },
     [POINTER_VISITOR]: { value: visitPointer },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-  });
-  defineProperties(constructor, {
+    [CHILD_VIVIFICATOR]: { value: throwNullPointer },
+    [VALUE_NORMALIZER]: { value: normalizePointer },
+  };
+  const staticDescriptors = {
     child: { get: () => targetStructure.constructor },
     const: { value: isConst },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-  });
-  return constructor;
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+
+function normalizePointer(map) {
+  const target = this['*'];
+  return target?.[VALUE_NORMALIZER]?.(map) ?? target;
 }
 
 function getProxy() {
@@ -2753,12 +2598,14 @@ function copyPointer({ source }) {
   this[SLOTS][0] = source[SLOTS][0];
 }
 
-function resetPointer() {
-  this[SLOTS][0] = null;
+function resetPointer({ isActive }) {
+  if (this[SLOTS][0] && !isActive(this)) {
+    this[SLOTS][0] = null;
+  }
 }
 
 function disablePointer() {
-  Object.defineProperty(this[SLOTS], 0, {
+  Object.defineProperty(this[SLOTS], '0', {
     get: throwInaccessiblePointer,
     set: throwInaccessiblePointer,
     configurable: true
@@ -2778,14 +2625,6 @@ function isPointerOf(arg, Target) {
   return (arg?.constructor?.child === Target && arg['*']);
 }
 
-function createProxy$1(isConst, isTargetPointer) {
-  const handlers = (!isTargetPointer) ? (isConst) ? constProxyHandlers : proxyHandlers$1 : {};
-  const proxy = new Proxy(this, handlers);
-  // hide the proxy so console wouldn't display a recursive structure
-  Object.defineProperty(this, PROXY, { value: proxy });
-  return proxy;
-}
-
 const isPointerKeys = {
   '$': true,
   '*': true,
@@ -2802,6 +2641,8 @@ const isPointerKeys = {
   [LENGTH_GETTER]: true,
   [LENGTH_SETTER]: true,
   [POINTER_VISITOR]: true,
+  [CHILD_VIVIFICATOR]: true,
+  [VALUE_NORMALIZER]: true,
   [Symbol.toStringTag]: true,
   [Symbol.toPrimitive]: true,
 };
@@ -2855,88 +2696,21 @@ const proxyHandlers$1 = {
   },
 };
 
-const constProxyHandlers = {
-  ...proxyHandlers$1,
-  set(pointer, name, value) {
-    if (isPointerKeys[name]) {
-      pointer[name] = value;
-    } else {
-      throwAssigningToConstant(pointer);
-    }
-    return true;
-  },
-  getOwnPropertyDescriptor(pointer, name) {
-    if (isPointerKeys[name]) {
-      return Object.getOwnPropertyDescriptor(pointer, name);
-    } else {
-      const descriptor = Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
-      if (descriptor?.set) {
-        descriptor.set = undefined;
-      }
-      return descriptor;
-    }
-    /* c8 ignore next -- unreachable */
-  },
-};
-
 function always() {
   return true;
 }
 
-function defineArray(s, env) {
+function defineArray(structure, env) {
   const {
     length,
     byteSize,
     align,
     instance: { members: [ member ] },
     hasPointer,
-  } = s;
-  addTypedArray(s);
-  const hasObject = (member.type === MemberType.Object);
-  const hasSlots = needSlots(s);
-  const cache = new ObjectCache();
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = this;
-      dv = env.allocateMemory(byteSize, align, fixed);
-    } else {
-      dv = requireDataView(s, arg, env);
-      if (self = cache.find(dv, writable)) {
-        return self;
-      }
-      self = Object.create(constructor.prototype); 
-    }
-    self[MEMORY] = dv;
-    self[GETTER] = null;
-    self[SETTER] = null;
-    if (hasSlots) {
-      self[SLOTS] = {};
-    }
-    if (creating) {
-      initializer.call(self, arg);
-    }
-    if (!writable) {
-      defineProperties(self, {
-        set: { value: throwReadOnly, configurable: true, writable: true },
-        $: { get: getProxy, set: throwReadOnly, configurable: true },
-        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator$1(s, false) },
-        [CONST]: { value: true, configurable: true },
-      });
-    }
-    const proxy = createProxy.call(self);
-    return cache.save(dv, writable, proxy);
-  };
-  const { structure: elementStructure } = member;
-  const specialKeys = getSpecialKeys(s);
+  } = structure;
+  const { get, set } = getDescriptor(member, env);
+  const hasStringProp = canBeString(member);
+  const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[MEMORY_COPIER](arg);
@@ -2944,7 +2718,7 @@ function defineArray(s, env) {
         this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else {
-      if (typeof(arg) === 'string' && specialKeys.includes('string')) {
+      if (typeof(arg) === 'string' && hasStringProp) {
         arg = { string: arg };
       }
       if (arg?.[Symbol.iterator]) {
@@ -2954,97 +2728,75 @@ function defineArray(s, env) {
           argLen = arg.length;
         }
         if (argLen !== length) {
-          throwArrayLengthMismatch(s, this, arg);
+          throwArrayLengthMismatch(structure, this, arg);
         }
         let i = 0;
         for (const value of arg) {
+          debugger;
           set.call(this, i++, value);
         }
       } else if (arg && typeof(arg) === 'object') {
-        for (const key of Object.keys(arg)) {
-          if (!(key in this)) {
-            throwNoProperty(s, key);
-          }
-        }
-        let specialFound = 0;
-        for (const key of specialKeys) {
-          if (key in arg) {
-            specialFound++;
-          }
-        }
-        if (specialFound === 0) {
-          throwInvalidArrayInitializer(s, arg);
-        }
-        for (const key of specialKeys) {
-          if (key in arg) {
-            this[key] = arg[key];
-          }
+        if (propApplier.call(this, arg) === 0) {
+          throwInvalidArrayInitializer(structure, arg);
         }
       } else if (arg !== undefined) {
-        throwInvalidArrayInitializer(s, arg);
+        throwInvalidArrayInitializer(structure, arg);
       }
     }
   };
-  const { get, set } = getDescriptor(member, env);
-  defineProperties(constructor.prototype, {
-    get: { value: get, configurable: true, writable: true },
-    set: { value: set, configurable: true, writable: true },
-    length: { value: length, configurable: true },
-    entries: { value: createArrayEntries, configurable: true, writable: true },
-    delete: { value: getDestructor(env), configurable: true },
-    $: { get: getProxy, set: initializer, configurable: true },
-    [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
+  const finalizer = createArrayProxy;
+  const constructor = structure.constructor = createConstructor(structure, { initializer, finalizer }, env);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const hasObject = member.type === MemberType.Object;
+  const instanceDescriptors = {
+    $: { get: getProxy, set: initializer },
+    length: { value: length },
+    dataView: getDataViewAccessors(structure),
+    base64: getBase64Accessors(structure),
+    string: hasStringProp && getStringAccessors(structure),
+    typedArray: typedArray && getTypedArrayAccessors(structure),
+    get: { value: get },
+    set: { value: set },
+    entries: { value: getArrayEntries },
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    delete: { value: getDestructor(env) },
+    [Symbol.iterator]: { value: getArrayIterator },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator$1(s, true) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1() },
-  });
-  defineProperties(constructor, {
-    child: { get: () => elementStructure.constructor },
-    [COMPAT]: { value: getCompatibleTags(s) },
+    [VALUE_NORMALIZER]: { value: normalizeArray },
+  };
+  const staticDescriptors = {
+    child: { get: () => member.structure.constructor },
+    [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-  });
-  return constructor;
-}
-
-function getChildVivificator$1(s, writable) {
-  const { instance: { members: [ member ]} } = s;
-  const { byteSize, structure } = member;
-  return function getChild(index) {
-    const { constructor } = structure;
-    const dv = this[MEMORY];
-    const parentOffset = dv.byteOffset;
-    const offset = parentOffset + byteSize * index;
-    const childDV = new DataView(dv.buffer, offset, byteSize);
-    const object = this[SLOTS][index] = constructor.call(PARENT, childDV, { writable });
-    return object;
   };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-function getPointerVisitor$1(s) {
-  return function visitPointers(cb, options = {}) {
-    const {
-      source,
-      vivificate = false,
-      isActive = always,
-      isMutable = always,
-    } = options;
-    const childOptions = {
-      ...options,
-      isActive: () => isActive(this),
-      isMutable: () => isMutable(this),
-    };
-    for (let i = 0, len = this.length; i < len; i++) {
-      // no need to check for empty slots, since that isn't possible
-      if (source) {
-        childOptions.source = source?.[SLOTS][i];
-      }
-      const child = this[SLOTS][i] ?? (vivificate ? this[CHILD_VIVIFICATOR](i) : null);
-      if (child) {
-        child[POINTER_VISITOR](cb, childOptions);
-      }
+function createArrayProxy() {
+  const proxy = new Proxy(this, proxyHandlers);
+  // hide the proxy so console wouldn't display a recursive structure
+  Object.defineProperty(this, PROXY, { value: proxy }); 
+  return proxy;
+}
+
+function canBeString(member) {
+  return member.type === MemberType.Uint && [ 8, 16 ].includes(member.bitSize);
+}
+
+function normalizeArray(map) {
+  let array = map.get(this);
+  if (!array) {
+    array = [];
+    for (const value of this) {      
+      array.push(typeof(value) === 'object' ? value[VALUE_NORMALIZER](map) : value);
     }
-  };
+    map.set(this, array);
+  }
+  return array;
 }
 
 function getArrayIterator() {
@@ -3085,18 +2837,51 @@ function getArrayEntriesIterator() {
   };
 }
 
-function createArrayEntries() {
+function getArrayEntries() {
   return {
     [Symbol.iterator]: getArrayEntriesIterator.bind(this),
     length: this.length,
   };
 }
 
-function createProxy() {
-  const proxy = new Proxy(this, proxyHandlers);
-  // hide the proxy so console wouldn't display a recursive structure
-  Object.defineProperty(this, PROXY, { value: proxy });
-  return proxy;
+function getChildVivificator$1(structure) {
+  const { instance: { members: [ member ]} } = structure;
+  const { byteSize, structure: elementStructure } = member;
+  return function getChild(index, writable = true) {
+    const { constructor } = elementStructure;
+    const dv = this[MEMORY];
+    const parentOffset = dv.byteOffset;
+    const offset = parentOffset + byteSize * index;
+    const childDV = new DataView(dv.buffer, offset, byteSize);
+    const object = this[SLOTS][index] = constructor.call(PARENT, childDV, { writable });
+    return object;
+  };
+}
+
+function getPointerVisitor$1(structure) {
+  return function visitPointers(cb, options = {}) {
+    const {
+      source,
+      vivificate = false,
+      isActive = always,
+      isMutable = always,
+    } = options;
+    const childOptions = {
+      ...options,
+      isActive: () => isActive(this),
+      isMutable: () => isMutable(this),
+    };
+    for (let i = 0, len = this.length; i < len; i++) {
+      // no need to check for empty slots, since that isn't possible
+      if (source) {
+        childOptions.source = source?.[SLOTS][i];
+      }
+      const child = this[SLOTS][i] ?? (vivificate ? this[CHILD_VIVIFICATOR](i) : null);
+      if (child) {
+        child[POINTER_VISITOR](cb, childOptions);
+      }
+    }
+  };
 }
 
 const proxyHandlers = {
@@ -3187,157 +2972,95 @@ const proxyHandlers = {
   },
 };
 
-function defineStructShape(s, env) {
+function defineStructShape(structure, env) {
   const {
     byteSize,
     align,
-    instance: { members, template },
+    instance: { members },
     hasPointer,
-  } = s;  
-  const descriptors = {};
+  } = structure;  
+  const memberDescriptors = {};
   for (const member of members) {
-    descriptors[member.name] = getDescriptor(member, env);
+    const { get, set } = getDescriptor(member, env);
+    memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
+    if (member.isRequired) {
+      set.required = true;
+    }
   }
-  const keys = Object.keys(descriptors);
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const hasSlots = needSlots(s);
-  const comptimeMembers = members.filter(m => m.type === MemberType.Comptime);
-  const cache = new ObjectCache();
-  // comptime fields are stored in the instance template's slots
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = this;
-      dv = env.allocateMemory(byteSize, align, fixed);
-    } else {
-      dv = requireDataView(s, arg, env);
-      if (self = cache.find(dv, writable)) {
-        return self;
-      }
-      self = Object.create(constructor.prototype);
-    }
-    self[MEMORY] = dv;
-    if (hasSlots) {
-      self[SLOTS] = {};
-      if (comptimeMembers.length > 0 && template?.[SLOTS]) {
-        for (const { slot } of comptimeMembers) {
-          self[SLOTS][slot] = template[SLOTS][slot];
-        } 
-      }
-    }
-    Object.defineProperties(self, descriptors);
-    if (creating) {
-      initializer.call(self, arg);
-    }
-    if (!writable) {
-      defineProperties(self, {
-        '$': { get: getSelf, set: throwReadOnly, configurable: true },
-        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
-        [CONST]: { value: true, configurable: true },
-        ...removeSetters(descriptors),
-      });
-    }
-    return cache.save(dv, writable, self);
-  };
-  const specialKeys = getSpecialKeys(s);
-  const requiredKeys = members.filter(m => m.isRequired).map(m => m.name);
+  const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[MEMORY_COPIER](arg);
       if (hasPointer) {
         this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
-    } else {
-      if (arg && typeof(arg) === 'object') {
-        // checking each name so that we would see inenumerable initializers as well
-        let found = 0;
-        for (const key of keys) {
-          if (key in arg) {
-            found++;
-          }
-        }
-        let requiredFound = 0;
-        for (const key of requiredKeys) {
-          if (key in arg) {
-            requiredFound++;
-          }
-        }
-        let specialFound = 0;
-        if (!arg[MEMORY]) {
-          // only look for special keys in non-zigar objects
-          for (const key of specialKeys) {
-            if (key in arg) {
-              specialFound++;
-            }
-          }
-        }
-        // don't accept unknown enumerable props
-        for (const key of Object.keys(arg)) {
-          if (!(key in this)) {
-            throwNoProperty$1(s, key);
-          }
-        }
-        if (specialFound === 0 && requiredFound < requiredKeys.length) {
-          throwMissingInitializers(s, arg);
-        }
-        // apply default values unless all properties are initialized
-        if (specialFound === 0 && found < keys.length) {
-          if (template) {
-            if (template[MEMORY]) {
-              this[MEMORY_COPIER](template);
-            }
-            if (hasPointer) {
-              this[POINTER_VISITOR](copyPointer, { vivificate: true, source: template });
-            } 
-          }
-        }
-        if (specialFound > 0) {
-          for (const key of specialKeys) {
-            if (key in arg) {
-              this[key] = arg[key];
-            }
-          }
-        } else if (found > 0) {
-          for (const key of keys) {
-            if (key in arg) {
-              this[key] = arg[key];
-            }
-          }
-        }
-      } else if (arg !== undefined) {
-        throwInvalidInitializer(s, 'object', arg);
-      }
+    } else if (arg && typeof(arg) === 'object') {
+      propApplier.call(this, arg);
+    } else if (arg !== undefined) {
+      throwInvalidInitializer(structure, 'object', arg);
     }
   };
-  defineProperties(constructor.prototype, {
-    delete: { value: getDestructor(env), configurable: true },
-    $: { get: getSelf, set: initializer, configurable: true },
+  const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
+  const memberNames = members.map(m => m.name);
+  const interatorCreator = function() {
+    const self = this;
+    let index = 0;
+    return {
+      next() {
+        let value, done;
+        if (index < memberNames.length) {
+          const name = memberNames[index];
+          value = [ name, self[name] ];
+          done = false;
+          index++;
+        } else {
+          done = true;
+        }
+        return { value, done };
+      },
+    };
+  };
+  const instanceDescriptors = {
+    $: { get: getSelf, set: initializer },
+    dataView: getDataViewAccessors(structure),
+    base64: getBase64Accessors(structure),
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    delete: { value: getDestructor(env) },
+    ...memberDescriptors,
+    [Symbol.iterator]: { value: interatorCreator },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, always) },
-  });
-  defineProperties(constructor, {
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, always) },
+    [VALUE_NORMALIZER]: { value: normalizeStruct },
+  };
+  const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-  });
-  return constructor;
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-function getChildVivificator(s, writable) {
-  const { instance: { members } } = s;
+function normalizeStruct(map) {
+  let object = map.get(this);
+  if (!object) {
+    object = {};
+    for (const [ name, value ] of this) {      
+      object[name] = value[VALUE_NORMALIZER]?.(map) ?? value;
+    }
+    map.set(this, object);
+  }
+  return object;
+}
+
+function getChildVivificator(structure) {
+  const { instance: { members } } = structure;
   const objectMembers = {};
   for (const member of members.filter(m => m.type === MemberType.Object)) {
     objectMembers[member.slot] = member;
   }
-  return function getChild(slot) {
+  return function vivificateChild(slot, writable = true) {
     const { bitOffset, byteSize, structure: { constructor } } = objectMembers[slot];
     const dv = this[MEMORY];
     const parentOffset = dv.byteOffset;
@@ -3348,12 +3071,12 @@ function getChildVivificator(s, writable) {
   }
 }
 
-function getPointerVisitor(s, visitorOptions = {}) {
+function getPointerVisitor(structure, visitorOptions = {}) {
   const {
     isChildActive = always,
     isChildMutable = always,
   } = visitorOptions;
-  const { instance: { members } } = s;
+  const { instance: { members } } = structure;
   const pointerMembers = members.filter(m => m.structure.hasPointer);
   return function visitPointers(cb, options = {}) {
     const {
@@ -3390,67 +3113,47 @@ function getPointerVisitor(s, visitorOptions = {}) {
   };
 }
 
-function defineUnionShape(s, env) {
+function defineUnionShape(structure, env) {
   const {
     type,
     byteSize,
     align,
     instance: { members, template },
     hasPointer,
-  } = s;
+  } = structure;
   const { runtimeSafety } = env;
-  const descriptors = {};
-  let getEnumItem;
-  let valueMembers;
   const isTagged = (type === StructureType.TaggedUnion);
   const exclusion = (isTagged || (type === StructureType.BareUnion && runtimeSafety));
-  let getName, setName;
-  if (exclusion) {
-    valueMembers = members.slice(0, -1);
-    const selectorMember = members[members.length - 1];
-    const { get: getSelector, set: setSelector } = getDescriptor(selectorMember, env);
-    if (type === StructureType.TaggedUnion) {
-      const { structure: { constructor } } = selectorMember;
-      getEnumItem = getSelector;
-      getName = function() {
-        const item = getSelector.call(this);
-        return item[ENUM_NAME];
-      };
-      setName = function(name) {
-        setSelector.call(this, constructor[name]);
-      };
-    } else {
-      const names = valueMembers.map(m => m.name);
-      getName = function() {
-        const index = getSelector.call(this);
-        return names[index];
-      };
-      setName = function(name) {
-        const index = names.indexOf(name);
-        setSelector.call(this, index);
-      };
+  const memberDescriptors = {};
+  const memberInitializers = {};
+  const memberValueGetters = {};
+  const valueMembers = (exclusion) ? members.slice(0, -1) : members;
+  const selectorMember = (exclusion) ? members[members.length - 1] : null;  
+  const { get: getSelector, set: setSelector } = (exclusion) ? getDescriptor(selectorMember, env) : {};
+  const getActiveField = (isTagged)
+  ? function() {
+      const item = getSelector.call(this);
+      return item[ENUM_NAME];
     }
-    const pointerSlots = {};
-    for (const member of valueMembers) {
-      const { name, slot, structure: { hasPointer } } = member;
-      const { get: getValue, set: setValue } = getDescriptor(member, env);
-      const update = function(name) {
-        const prevActiveField = this[ACTIVE_FIELD];
-        if (prevActiveField !== name) {
-          this[ACTIVE_FIELD] = name;
-          if (prevActiveField) {
-            // release pointers in deactivated field
-            const slot = pointerSlots[prevActiveField];
-            if (slot !== undefined) {
-              const object = this[SLOTS][slot];
-              object?.[POINTER_VISITOR](resetPointer);  
-            }
-          }
-        }
-      };
-      const get = function() {
-        const currentName = getName.call(this);
-        update.call(this, currentName);
+  : function() {
+      const index = getSelector.call(this);
+      return valueMembers[index].name;
+    };
+  const setActiveField = (isTagged)
+  ? function(name) {
+      const { constructor } = selectorMember.structure;
+      setSelector.call(this, constructor[name]);
+    }
+  : function(name) {
+      const index = valueMembers.findIndex(m => m.name === name);
+      setSelector.call(this, index);
+    };
+  for (const member of valueMembers) {
+    const { name } = member;
+    const { get: getValue, set: setValue } = getDescriptor(member, env);
+    const get = (exclusion)
+    ? function() {
+        const currentName = getActiveField.call(this);
         if (name !== currentName) {
           if (isTagged) {
             // tagged union allows inactive member to be queried
@@ -3458,97 +3161,36 @@ function defineUnionShape(s, env) {
           } else {
             // whereas bare union does not, since the condition is not detectable 
             // when runtime safety is off
-            throwInactiveUnionProperty(s, name, currentName);
+            throwInactiveUnionProperty(structure, name, currentName);
           }
         }
+        this[POINTER_VISITOR]?.(resetPointer);
         return getValue.call(this);
-      };
-      const set = function(value) {
-        const currentName = getName.call(this);
-        update.call(this, currentName);
+      }
+    : getValue;
+    const set = (exclusion) 
+    ? function(value) {
+        const currentName = getActiveField.call(this);
         if (name !== currentName) {
-          throwInactiveUnionProperty(s, name, currentName);
+          throwInactiveUnionProperty(structure, name, currentName);
         }
         setValue.call(this, value);
-      };
-      const init = function(value) {
-        setName.call(this, name);
+      }
+    : setValue;
+    const init = (exclusion)
+    ? function(value) {
+        setActiveField.call(this, name);
         setValue.call(this, value);
-        update.call(this, name);
-      };
-      if (hasPointer) {
-        pointerSlots[name] = slot;
+        this[POINTER_VISITOR]?.(resetPointer);
       }
-      descriptors[member.name] = { get, set, init, update, configurable: true, enumerable: true };
-    }
-  } else {
-    // extern union or bare union with runtime safety disabled
-    valueMembers = members;
-    for (const member of members) {
-      const { get, set } = getDescriptor(member, env);
-      descriptors[member.name] = { get, set, init: set, configurable: true, enumerable: true };
-    }
+    : setValue;
+    memberDescriptors[name] = { get, set, configurable: true, enumerable: true };
+    memberInitializers[name] = init;
+    memberValueGetters[name] = getValue;
   }
-  if (isTagged) {
-    descriptors[ACTIVE_FIELD] = { value: undefined, writable: true };
-  }
-  const keys = Object.keys(descriptors);
-  const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const pointerMembers = members.filter(m => m.structure.hasPointer);
-  // non-tagged union as marked as not having pointers--if there're actually
-  // members with pointers, we need to disable them
-  const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
-  const hasSlots = needSlots(s);
-  const cache = new ObjectCache();
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = this;
-      dv = env.allocateMemory(byteSize, align, fixed);
-    } else {
-      dv = requireDataView(s, arg, env);
-      if (self = cache.find(dv, writable)) {
-        return self;
-      }
-      self = Object.create(constructor.prototype);
-    }
-    self[MEMORY] = dv;
-    if (hasSlots) {
-      self[SLOTS] = {};
-    }
-    defineProperties(self, descriptors);
-    if (hasInaccessiblePointer) {
-      // make pointer access throw
-      self[POINTER_VISITOR](disablePointer, { vivificate: true });
-    }
-    if (creating) {
-      initializer.call(self, arg);
-    }
-    if (!writable) {
-      defineProperties(self, {
-        '$': { get: getSelf, set: throwReadOnly, configurable: true },
-        [CONST]: { value: true, configurable: true },
-        ...removeSetters(descriptors),
-      });
-    }
-    if (isTagged) {
-      const proxy = new Proxy(self, taggedProxyHandlers);
-      Object.defineProperty(self, PROXY, { value: proxy });
-      return cache.save(dv, writable, proxy);
-    } else {
-      return cache.save(dv, writable, self);
-    }
-  };
   const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
-  const specialKeys = getSpecialKeys(s);
+  const memberKeys = Object.keys(memberDescriptors);
+  const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       /* WASM-ONLY-END */
@@ -3556,108 +3198,105 @@ function defineUnionShape(s, env) {
       if (hasPointer) {
         this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
-    } else {
-      if (arg && typeof(arg) === 'object') {
-        // checking each name so that we would see inenumerable initializers as well
-        let found = 0;
-        for (const key of keys) {
-          if (key in arg) {
-            found++;
-          }
+    } else if (arg && typeof(arg) === 'object') {
+      let found = 0;
+      for (const key of memberKeys) {
+        if (key in arg) {
+          found++;
         }
-        let specialFound = 0;
-        if (!arg[MEMORY]) {
-          for (const key of specialKeys) {
-            if (key in arg) {
-              specialFound++;
-            }
-          }
-        }
-        // don't accept unknown enumerable props
-        for (const key of Object.keys(arg)) {
-          if (!(key in this)) {
-            throwNoProperty$1(s, key);
-          }
-        }
-        if (found !== 1) {
-          if (found === 0) {
-            if (specialFound === 0 && !hasDefaultMember) {
-              throwMissingUnionInitializer(s, arg, exclusion);
-            }
-          } else {
-            throwMultipleUnionInitializers(s);
-          }
-        }
-        if (specialFound > 0) {
-          for (const key of specialKeys) {
-            if (key in arg) {
-              this[key] = arg[key];
-            }
-          }
-        } else if (found === 0) {
-          if (template) {
-            if (template[MEMORY]) {
-              this[MEMORY_COPIER](template);
-            }
-            if (hasPointer) {
-              this[POINTER_VISITOR](copyPointer, { vivificate: true, source: template });
-            }
-          }
-        } else {
-          for (const key of keys) {
-            if (key in arg) {
-              // can't just set the property, since it would throw when a field other than the
-              // active one is being set
-              const { init } = descriptors[key];
-              init.call(this, arg[key]);
-            }
-          }
-        }
-      } else if (arg !== undefined) {
-        throwInvalidInitializer(s, 'object with a single property', arg);
       }
+      if (found > 1) {
+        throwMultipleUnionInitializers(structure);
+      }
+      if (propApplier.call(this, arg) === 0 && !hasDefaultMember) {
+        throwMissingUnionInitializer(structure, arg, exclusion);
+      }
+    } else if (arg !== undefined) {
+      throwInvalidInitializer(structure, 'object with a single property', arg);
     }
+  };
+  // non-tagged union as marked as not having pointers--if there're actually
+  // members with pointers, we need to disable them
+  const pointerMembers = members.filter(m => m.structure.hasPointer);
+  const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
+  const modifier = (hasInaccessiblePointer) 
+  ? function() {
+      // make pointer access throw
+      this[POINTER_VISITOR](disablePointer, { vivificate: true });
+    }
+  : undefined;
+  const constructor = structure.constructor = createConstructor(structure, { modifier, initializer }, env);
+  // for bare and extern union, all members will be included 
+  // tagged union meanwhile will only give the entity for the active field
+  const memberNames = (isTagged) ? [ '' ] : valueMembers.map(m => m.name);
+  const interatorCreator = function() {
+    const self = this;
+    let index = 0;
+    if (isTagged) {
+      memberNames[0] = getActiveField.call(this);
+    }
+    return {
+      next() {
+        let value, done;
+        if (index < memberNames.length) {
+          const name = memberNames[index];
+          // get value of field with no check
+          const get = memberValueGetters[name];
+          value = [ name, get.call(self) ];
+          done = false;
+          index++;
+        } else {
+          done = true;
+        }
+        return { value, done };
+      },
+    };
   };
   const isChildActive = (isTagged)
   ? function(child) {
-      const name = getName.call(this);
-      const active = this[name];
+      const name = getActiveField.call(this);
+      const active = memberValueGetters[name].call(this);
       return child === active;
     }
   : always;
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
-  defineProperties(constructor.prototype, {
-    delete: { value: getDestructor(env), configurable: true },
+  const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const instanceDescriptors = {
     $: { get: getSelf, set: initializer, configurable: true },
+    dataView: getDataViewAccessors(structure),
+    base64: getBase64Accessors(structure),
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    delete: { value: getDestructor(env) },
+    ...memberDescriptors,
+    [Symbol.iterator]: { value: interatorCreator },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [ENUM_ITEM]: isTagged && { get: getEnumItem, configurable: true },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
-    [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor(s, { isChildActive }) },
-  });
-  defineProperties(constructor, {
+    [ENUM_ITEM]: isTagged && { get: getSelector, configurable: true },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor(structure, { isChildActive }) },
+    [VALUE_NORMALIZER]: { value: normalizeStruct },
+  };  
+  const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-  });
-  return constructor;
+  };
+  attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+  // replace regular setters with ones that change the active field
+  const setters = constructor.prototype[SETTERS];
+  for (const [ name, init ] of Object.entries(memberInitializers)) {
+    setters[name] = init;
+  }
 }
-const taggedProxyHandlers = {
-  ownKeys(union) {
-    const item = union[ENUM_ITEM];
-    const name = item[ENUM_NAME];
-    return [ name, MEMORY, ACTIVE_FIELD, PROXY ];
-  },
-};
 
-function defineErrorUnion(s, env) {
+function defineErrorUnion(structure, env) {
   const {
     byteSize,
     align,
     instance: { members },
     hasPointer,
-  } = s;
+  } = structure;
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getError, set: setError } = getDescriptor(members[1], env);
-  members[1];
   const set = function(value) {
     if (value instanceof Error) {
       setError.call(this, value);
@@ -3682,44 +3321,6 @@ function defineErrorUnion(s, env) {
     return !error;
   };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const hasSlots = needSlots(s);
-  const cache = new ObjectCache();
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = this;
-      dv = env.allocateMemory(byteSize, align, fixed);
-    } else {
-      dv = requireDataView(s, arg, env);
-      if (self = cache.find(dv, writable)) {
-        return self;
-      }
-      self = Object.create(constructor.prototype); 
-    }
-    self[MEMORY] = dv;
-    if (hasSlots) {
-      self[SLOTS] = {};
-    }
-    if (creating) {
-      initializer.call(this, arg);
-    }
-    if (!writable) {
-      defineProperties(self, {
-        '$': { get, set: throwReadOnly, configurable: true },
-        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
-        [CONST]: { value: true, configurable: true },
-      });   
-    }
-    return cache.save(dv, writable, self);
-  };
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[MEMORY_COPIER](arg);
@@ -3732,101 +3333,101 @@ function defineErrorUnion(s, env) {
       this.$ = arg;
     }
   };
+  const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
   const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
-  defineProperties(constructor.prototype, {
-    '$': { get, set, configurable: true },
+  const instanceDescriptors = {
+    '$': { get, set },
+    dataView: getDataViewAccessors(structure),
+    base64: getBase64Accessors(structure),
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    delete: { value: getDestructor(env) },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildActive: check }) },
-  });
-  defineProperties(constructor, {
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive: check }) },
+    [VALUE_NORMALIZER]: { value: normalizeErrorUnion },
+  };
+  const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-  });
-  return constructor;
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-function defineEnumerationShape(s, env) {
+function normalizeErrorUnion(map) {
+  const value = this.$;
+  return value[VALUE_NORMALIZER](map);
+}
+
+function defineEnumerationShape(structure, env) {
   const {
     byteSize,
     align,
     instance: {
       members: [ member ],
     },
-  } = s;
-  const byIndex = {};
-  const cache = new ObjectCache();
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = this;
-      dv = env.allocateMemory(byteSize, align, fixed);
-    } else {
-      if (typeof(arg)  === 'string') {
-        return constructor[arg];
-      } else if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
-        return byIndex[arg];
-      } else if (arg && typeof(arg) === 'object' && arg[ENUM_ITEM]) {
-        // a tagged union, return the active tag
-        return arg[ENUM_ITEM];
-      } else {
-        dv = getDataView(s, arg, env);
-        if (!dv) {
-          throwInvalidInitializer(s, [ 'string', 'number', 'tagged union' ], arg);
-        } 
-        if (self = cache.find(dv, writable)) {
-          return self;
-        }
-        self = Object.create(constructor.prototype); 
-      }
-    }
-    self[MEMORY] = dv;
-    if (creating) {
-      set.call(self, arg);
-    }
-    if (writable) {
-      defineProperties(self, {
-        $: { get, set, configurable: true },
-        [CONST]: { value: undefined, configurable: true },
-      });
-    }
-    return cache.save(dv, writable, self); 
-  };
+  } = structure;
   const { get: getIndex } = getDescriptor(member, env);
   // get the enum descriptor instead of the int/uint descriptor
-  const enumMember = { ...member, structure: s, type: MemberType.EnumerationItem };
-  const { get, set } = getDescriptor(enumMember, env);
-  defineProperties(constructor.prototype, {
-    delete: { value: getDestructor(env), configurable: true },
-    $: { get, set: throwReadOnly, configurable: true },
-    [Symbol.toPrimitive]: { value: getIndex, configurable: true, writable: true },
+  const { get, set } = getDescriptor({ ...member, type: MemberType.EnumerationItem, structure }, env);
+  const expected = [ 'string', 'number', 'tagged union' ];
+  const propApplier = createPropertyApplier(structure);
+  const initializer = function(arg) {
+    if (arg && typeof(arg) === 'object') {
+      if (propApplier.call(this, arg) === 0) {
+        throwInvalidInitializer(structure, expected, arg);
+      }
+    } else {
+      set.call(this, arg);
+    }
+  };
+  const alternateCaster = function(arg) {
+    if (typeof(arg)  === 'string') {
+      return constructor[arg];
+    } else if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+      return constructor[ENUM_ITEMS][arg];
+    } else if (arg?.[ENUM_ITEM] instanceof constructor) {
+      // a tagged union, return the active tag
+      return arg[ENUM_ITEM];
+    } else if (!getDataView(structure, arg, env)) {
+      throwInvalidInitializer(structure, expected, arg);
+    } else {
+      return false;
+    }
+  };
+  const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const instanceDescriptors = {
+    $: { get, set },
+    dataView: getDataViewAccessors(structure),
+    base64: getBase64Accessors(structure),
+    typedArray: typedArray && getTypedArrayAccessors(structure),
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    delete: { value: getDestructor(env) },
+    [Symbol.toPrimitive]: { value: getIndex },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CONST]: { value: true, configurable: true },
-  });
-  defineProperties(constructor, {
+    [VALUE_NORMALIZER]: { value: normalizeEnumerationItem },
+  };
+  const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-    [ENUM_ITEMS]: { value: byIndex },
-  });
-  return constructor;
+    [ENUM_ITEMS]: { value: {} },
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+function normalizeEnumerationItem(map) {
+  return this[ENUM_NAME];
 }
 
-function defineOptional(s, env) {
+function defineOptional(structure, env) {
   const {
     byteSize,
     align,
     instance: { members },
     hasPointer,
-  } = s;
+  } = structure;
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getPresent, set: setPresent } = getDescriptor(members[1], env);
   // optionals containing pointers use the pointer itself as indication of presence
@@ -3868,45 +3469,6 @@ function defineOptional(s, env) {
   const check = (hasPresentFlag) ? getPresent : function() { 
     return !!getValue.call(this)[SLOTS][0];
   };
-  const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const hasSlots = needSlots(s);
-  const cache = new ObjectCache();
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = this;
-      dv = env.allocateMemory(byteSize, align, fixed);
-    } else {
-      dv = requireDataView(s, arg, env);
-      if (self = cache.find(dv, writable)) {
-        return self;
-      }
-      self = Object.create(constructor.prototype); 
-    }
-    self[MEMORY] = dv;
-    if (hasSlots) {
-      self[SLOTS] = {};
-    }
-    if (creating) {
-      initializer.call(self, arg);
-    }
-    if (!writable) {
-      defineProperties(self, {
-        '$': { get, set: throwReadOnly, configurable: true },
-        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, false) },
-        [CONST]: { value: true, configurable: true },
-      });
-    }
-    return cache.save(dv, writable, self);
-  };
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[MEMORY_COPIER](arg);
@@ -3917,102 +3479,72 @@ function defineOptional(s, env) {
         }
       }
     } else {
-      this.$ = arg;
+      set.call(this, arg);
     }
   };
+  const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
   const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
-  defineProperties(constructor.prototype, {
-    delete: { value: getDestructor(env), configurable: true },
-    $: { get, set, configurable: true },
+  const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const instanceDescriptors = {
+    $: { get, set },
+    dataView: getDataViewAccessors(structure),
+    base64: getBase64Accessors(structure),
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    delete: { value: getDestructor(env) },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildActive: check }) },
-  });
-  defineProperties(constructor, {
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive: check }) },
+    [VALUE_NORMALIZER]: { value: normalizeOptional },
+  };
+  const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-  });
-  return constructor;
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-function defineSlice(s, env) {
+function normalizeOptional(map) {
+  const value = this.$;
+  return value[VALUE_NORMALIZER](map);
+}
+
+function defineSlice(structure, env) {
   const {
     align,
     instance: {
       members: [ member ],
     },
     hasPointer,
-  } = s;
-  const typedArray = addTypedArray(s);
-  const hasObject = (member.type === MemberType.Object);
+  } = structure;
+  const { get, set } = getDescriptor(member, env);
   const { byteSize: elementSize, structure: elementStructure } = member;
-  const sentinel = getSentinel(s, env);
+  const sentinel = getSentinel(structure, env);
   if (sentinel) {
     // zero-terminated strings aren't expected to be commonly used
     // so we're not putting this prop into the standard structure
-    s.sentinel = sentinel;
+    structure.sentinel = sentinel;
   }
-  const cache = new ObjectCache();
-  // the slices are different from other structures due to variability of their sizes
-  // we only know the "shape" of an object after we've processed the initializers
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = this;
-      initializer.call(self, arg, fixed);
-      dv = self[MEMORY];
-    } else {
-      dv = requireDataView(s, arg, env);
-      if (self = cache.find(dv, writable)) {
-        return self;
-      }
-      self = Object.create(constructor.prototype);
-      shapeDefiner.call(self, dv, dv.byteLength / elementSize);
-    }
-    if (!writable) {
-      defineProperties(self, {
-        set: { value: throwReadOnly, configurable: true, writable: true },
-        $: { get: getProxy, set: throwReadOnly, configurable: true },
-        [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator$1(s, false) },
-        [CONST]: { value: true, configurable: true },
-      });
-    }
-    const proxy = createProxy.call(self);
-    return cache.save(dv, writable, proxy);
-  };
-  const specialKeys = getSpecialKeys(s);
-  const shapeDefiner = function(dv, length, fixed) {
+  const hasStringProp = canBeString(member);
+  const shapeDefiner = function(dv, length, fixed = false) {
     if (!dv) {
       dv = env.allocateMemory(length * elementSize, align, fixed);
     }
     this[MEMORY] = dv;
-    this[GETTER] = null;
-    this[SETTER] = null;
     this[LENGTH] = length;
-    if (hasObject) {
-      this[SLOTS] = {};
-    }
   };
   const shapeChecker = function(arg, length) {
     if (length !== this[LENGTH]) {
-      throwArrayLengthMismatch(s, this, arg);
+      throwArrayLengthMismatch(structure, this, arg);
     }
   };
   // the initializer behave differently depending on whether it's called by the
   // constructor or by a member setter (i.e. after object's shape has been established)
-  const initializer = function(arg, fixed) {
-    let shapeless = !this.hasOwnProperty(MEMORY);
+  const propApplier = createPropertyApplier(structure);
+  const initializer = function(arg, fixed = false) {
     if (arg instanceof constructor) {
-      if (shapeless) {
+      if (!this[MEMORY]) {
         shapeDefiner.call(this, null, arg.length, fixed);
       } else {
         shapeChecker.call(this, arg, arg.length);
@@ -4021,112 +3553,70 @@ function defineSlice(s, env) {
       if (hasPointer) {
         this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
-    } else {
-      if (typeof(arg) === 'string' && specialKeys.includes('string')) {
-        arg = { string: arg };
+    } else if (typeof(arg) === 'string' && hasStringProp) {
+      initializer.call(this, { string: arg }, fixed);
+    } else if (arg?.[Symbol.iterator]) {
+      let argLen = arg.length;
+      if (typeof(argLen) !== 'number') {
+        arg = [ ...arg ];
+        argLen = arg.length;
       }
-      if (arg?.[Symbol.iterator]) {
-        let argLen = arg.length;
-        if (typeof(argLen) !== 'number') {
-          arg = [ ...arg ];
-          argLen = arg.length;
-        }
-        if (!this[MEMORY]) {
-          shapeDefiner.call(this, null, argLen, fixed);
-        } else {
-          shapeChecker.call(this, arg, argLen);
-        }
-        let i = 0;
-        for (const value of arg) {
-          sentinel?.validateValue(value, i, argLen);
-          set.call(this, i++, value);
-        }
-      } else if (typeof(arg) === 'number') {
-        if (shapeless && arg >= 0 && isFinite(arg)) {
-          shapeDefiner.call(this, null, arg);
-        } else {
-          throwInvalidArrayInitializer(s, arg, shapeless);
-        }
-      } else if (arg && typeof(arg) === 'object') {
-        for (const key of Object.keys(arg)) {
-          if (!(key in this)) {
-            throwNoProperty$1(s, key);
-          }
-        }
-        let specialFound = 0;
-        for (const key of specialKeys) {
-          if (key in arg) {
-            specialFound++;
-          }
-        }
-        if (specialFound === 0) {
-          throwInvalidArrayInitializer(s, arg);
-        }
-        for (const key of specialKeys) {
-          if (key in arg) {
-            if (shapeless) {
-              // can't use accessors since the object has no memory yet
-              let dv, dup = true;
-              switch (key) {
-                case 'dataView':
-                  dv = arg[key];
-                  checkDataView(dv);
-                  break;
-                case 'typedArray':
-                  dv = getDataViewFromTypedArray(arg[key], typedArray);
-                  break;
-                case 'string':
-                  dv = getDataViewFromUTF8(arg[key], elementSize, sentinel?.value);
-                  dup = false;
-                  break;
-                case 'base64':
-                  dv = decodeBase64(arg[key]);
-                  dup = false;
-                  break;
-              }
-              checkDataViewSize(s, dv);
-              const len = dv.byteLength / elementSize;
-              const source = { [MEMORY]: dv };
-              sentinel?.validateData(source, len);
-              if (dup) {
-                shapeDefiner.call(this, null, len);
-                this[MEMORY_COPIER](source);
-              } else {
-                // reuse memory from string decoding
-                shapeDefiner.call(this, dv, len);
-              }
-              shapeless = false;
-            } else {
-              this[key] = arg[key];
-            }
-          }
-        }
-      } else if (arg !== undefined) {
-        throwInvalidArrayInitializer(s, arg);
+      if (!this[MEMORY]) {
+        shapeDefiner.call(this, null, argLen, fixed);
+      } else {
+        shapeChecker.call(this, arg, argLen);
       }
+      let i = 0;
+      for (const value of arg) {
+        sentinel?.validateValue(value, i, argLen);
+        set.call(this, i++, value);
+      }
+    } else if (typeof(arg) === 'number') {
+      if (!this[MEMORY] && arg >= 0 && isFinite(arg)) {
+        shapeDefiner.call(this, null, arg);
+      } else {
+        throwInvalidArrayInitializer(structure, arg, !this[MEMORY]);
+      }
+    } else if (arg && typeof(arg) === 'object') {
+      if (propApplier.call(this, arg) === 0) {
+        throwInvalidArrayInitializer(structure, arg);
+      }
+    } else if (arg !== undefined) {
+      throwInvalidArrayInitializer(structure, arg);
     }
   };
-  const { get, set } = getDescriptor(member, env);
-  defineProperties(constructor.prototype, {
-    get: { value: get, configurable: true, writable: true },
-    set: { value: set, configurable: true, writable: true },
-    length: { get: getLength, configurable: true },
-    delete: { value: getDestructor(env), configurable: true },
-    $: { get: getProxy, set: initializer, configurable: true },
-    entries: { value: createArrayEntries, configurable: true, writable: true },
-    [Symbol.iterator]: { value: getArrayIterator, configurable: true, writable: true },
+  const finalizer = createArrayProxy;
+  const constructor = structure.constructor = createConstructor(structure, { initializer, shapeDefiner, finalizer }, env);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const hasObject = member.type === MemberType.Object;
+  const shapeHandlers = { shapeDefiner };
+  const instanceDescriptors = {
+    $: { get: getProxy, set: initializer },
+    length: { get: getLength },
+    dataView: getDataViewAccessors(structure, shapeHandlers),
+    base64: getBase64Accessors(structure, shapeHandlers),
+    string: hasStringProp && getStringAccessors(structure, shapeHandlers),
+    typedArray: typedArray && getTypedArrayAccessors(structure, shapeHandlers),
+    get: { value: get },
+    set: { value: set },
+    entries: { value: getArrayEntries },
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    delete: { value: getDestructor(env) },
+    [Symbol.iterator]: { value: getArrayIterator },
     [MEMORY_COPIER]: { value: getMemoryCopier(elementSize, true) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator$1(s, true) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1() }
-  });
-  defineProperties(constructor, {
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1() },
+    [VALUE_NORMALIZER]: { value: normalizeArray },
+  };
+  const staticDescriptors = {
     child: { get: () => elementStructure.constructor },
-    [COMPAT]: { value: getCompatibleTags(s) },
+    [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: elementSize },
     [SENTINEL]: sentinel && { value: sentinel },
-  });
-  return constructor;
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
 function getLength() {
@@ -4180,92 +3670,77 @@ function getSentinel(structure, env) {
   return { value, bytes, validateValue, validateData };
 }
 
-function defineVector(s, env) {
+function defineVector(structure, env) {
   const {
     length,
     byteSize,
     align,
     instance: { members: [ member ] },
-  } = s;
-  addTypedArray(s);
-  const cache = new ObjectCache();
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = this;
-      dv = env.allocateMemory(byteSize, align, fixed);
-    } else {
-      dv = requireDataView(s, arg, env);
-      if (self = cache.find(dv, writable)) {
-        return self;
-      }
-      self = Object.create(constructor.prototype);
-    }
-    self[MEMORY] = dv;
-    if (creating) {
-      initializer.call(self, arg);
-    }
-    if (!writable) {
-      defineProperties(self, {
-        ...removeSetters(elementDescriptors),
-        $: { get: getSelf, set: throwReadOnly, configurable: true },
-        [CONST]: { value: true, configurable: true },
-      });
-    }
-    return cache.save(dv, writable, self);
-  };
+  } = structure;
   const { bitSize: elementBitSize, structure: elementStructure } = member;
-  const initializer = function(arg) {
-    if (arg instanceof constructor) {
-      this[MEMORY_COPIER](arg);
-    } else {
-      if (arg?.[Symbol.iterator]) {
-        let argLen = arg.length;
-        if (typeof(argLen) !== 'number') {
-          arg = [ ...arg ];
-          argLen = arg.length;
-        }
-        if (argLen !== length) {
-          throwArrayLengthMismatch(s, this, arg);
-        }
-        let i = 0;
-        for (const value of arg) {
-          this[i++] = value;
-        }
-      } else if (arg !== undefined) {
-        throwInvalidArrayInitializer(s, arg);
-      }
-    }
-  };
   const elementDescriptors = {};
   for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
     const { get, set } = getDescriptor({ ...member, bitOffset }, env);
     elementDescriptors[i] = { get, set, configurable: true };
   }
-  defineProperties(constructor.prototype, {
+  const propApplier = createPropertyApplier(structure);
+  const initializer = function(arg) {
+    if (arg instanceof constructor) {
+      this[MEMORY_COPIER](arg);
+    } else if (arg?.[Symbol.iterator]) {
+      let argLen = arg.length;
+      if (typeof(argLen) !== 'number') {
+        arg = [ ...arg ];
+        argLen = arg.length;
+      }
+      if (argLen !== length) {
+        throwArrayLengthMismatch(structure, this, arg);
+      }
+      let i = 0;
+      for (const value of arg) {
+        this[SETTERS][i++].call(this, value);
+      }
+    } else if (arg && typeof(arg) === 'object') {
+      if (propApplier.call(this, arg) === 0) {
+        throwInvalidArrayInitializer(structure, arg);
+      }
+    } else if (arg !== undefined) {
+      throwInvalidArrayInitializer(structure, arg);
+    }
+  };
+  const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const instanceDescriptors = {
     ...elementDescriptors,
-    length: { value: length, configurable: true },
-    entries: { value: createVectorEntries, configurable: true, writable: true },
-    delete: { value: getDestructor(s), configurable: true },
-    $: { get: getSelf, set: initializer, configurable: true },
-    [Symbol.iterator]: { value: getVectorIterator, configurable: true, writable: true },
+    $: { get: getSelf, set: initializer },
+    length: { value: length },
+    dataView: getDataViewAccessors(structure),
+    base64: getBase64Accessors(structure),
+    typedArray: typedArray && getTypedArrayAccessors(structure),
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
+    entries: { value: createVectorEntries },
+    delete: { value: getDestructor(structure) },
+    [Symbol.iterator]: { value: getVectorIterator },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-  });
-  defineProperties(constructor, {
+    [VALUE_NORMALIZER]: { value: normalizeVector },
+  };
+  const staticDescriptors = {
     child: { get: () => elementStructure.constructor },
-    [COMPAT]: { value: getCompatibleTags(s) },
+    [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-  });
-  return constructor;
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+
+function normalizeVector(map) {
+  let array = map.get(this);
+  if (!array) {
+    array = [ ...this ];
+    map.set(this, array);
+  }
+  return array;
 }
 
 function getVectorIterator() {
@@ -4313,15 +3788,15 @@ function createVectorEntries() {
   };
 }
 
-function defineArgStruct(s, env) {
+function defineArgStruct(structure, env) {
   const {
     byteSize,
     align,
     instance: { members },
     hasPointer,
-  } = s;
+  } = structure;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const constructor = s.constructor = function(args) {
+  const constructor = structure.constructor = function(args) {
     const dv = env.allocateMemory(byteSize, align);
     this[MEMORY] = dv;
     if (hasObject) {
@@ -4333,13 +3808,13 @@ function defineArgStruct(s, env) {
   const argCount = argNames.length;
   const initializer = function(args) {
     if (args.length !== argCount) {
-      throwArgumentCountMismatch(s, args.length);
+      throwArgumentCountMismatch(structure, args.length);
     }
     for (const [ index, name ] of argNames.entries()) {
       try {
         this[name] = args[index];
       } catch (err) {
-        rethrowArgumentError(s, index, err);
+        rethrowArgumentError(structure, index, err);
       }
     }
   };
@@ -4353,8 +3828,8 @@ function defineArgStruct(s, env) {
   defineProperties(constructor.prototype, {
     ...memberDescriptors,
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildMutable }) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildMutable }) },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },
@@ -4444,8 +3919,8 @@ function useArgStruct() {
   factories[StructureType.ArgStruct] = defineArgStruct;
 }
 
-function getStructureName(s, full = false) {
-  let r = s.name;
+function getStructureName(structure, full = false) {
+  let r = structure.name;
   if (!full) {
     r = r.replace(/{.*}/, '');
     if (!r.endsWith('.enum_literal)')) {
@@ -4570,7 +4045,18 @@ function getFeaturesUsed(structures) {
 function defineProperties(object, descriptors) {
   for (const [ name, descriptor ] of Object.entries(descriptors)) {
     if (descriptor) {
-      Object.defineProperty(object, name, descriptor);
+      const { 
+        set,
+        get,
+        value,
+        enumerable,
+        configurable = true,
+        writable = true,
+      } = descriptor;
+      Object.defineProperty(object, name, (get) 
+        ? { get, set, configurable, enumerable } 
+        : { value, configurable, enumerable, writable }
+      );
     }
   }
   for (const symbol of Object.getOwnPropertySymbols(descriptors)) {
@@ -4581,22 +4067,193 @@ function defineProperties(object, descriptors) {
   }
 }
 
-function removeSetters(descriptors) {
-  const newDescriptors = {};
-  for (const [ name, descriptor ] of Object.entries(descriptors)) {
-    if (descriptor) {
-      if (descriptor.set) {
-        newDescriptors[name] = { ...descriptor, set: throwReadOnly };
-      } else {
-        newDescriptors[name] = descriptor;
+function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) {
+  // create prototype for read-only objects
+  const prototypeRO = {};
+  Object.setPrototypeOf(prototypeRO, constructor.prototype);
+  const instanceDescriptorsRO = {};
+  const setters = {};
+  for (const [ name, descriptor ] of Object.entries(instanceDescriptors)) {
+    if (descriptor?.set) {
+      instanceDescriptorsRO[name] = { ...descriptor, set: throwReadOnly };
+      // save the setters so we can initialize read-only objects
+      if (name !== '$') {
+        setters[name] = descriptor.set;
       }
+    } else if (name === 'set') {
+      instanceDescriptorsRO[name] = { value: throwReadOnly, configurable: true, writable: true };
     }
   }
-  return newDescriptors;
+  const vivificate = instanceDescriptors[CHILD_VIVIFICATOR]?.value;
+  const vivificateDescriptor = { 
+    // vivificate child objects as read-only too
+    value: function(slot) { 
+      return vivificate.call(this, slot, false);
+    }
+  };
+  defineProperties(constructor.prototype, { 
+    [CONST]: { value: false },
+    [ALL_KEYS]: { value: Object.keys(setters) },
+    [SETTERS]: { value: setters },
+    ...instanceDescriptors,
+  });
+  defineProperties(constructor, {
+    [CONST_PROTO]: { value: prototypeRO },
+    ...staticDescriptors,
+  }); 
+  defineProperties(prototypeRO, { 
+    constructor: { value: constructor, configurable: true },
+    [CONST]: { value: true },
+    [CHILD_VIVIFICATOR]: vivificate && vivificateDescriptor,
+    ...instanceDescriptorsRO,
+  });
+  return constructor;
 }
 
-function needSlots(s) {
-  const { instance: { members } } = s;
+function createConstructor(structure, handlers, env) {
+  const {
+    byteSize,
+    align,
+    instance: { members, template },
+  } = structure;
+  const {
+    modifier,
+    initializer,
+    finalizer,
+    alternateCaster,
+    shapeDefiner,
+  } = handlers;
+  const hasSlots = needSlots(members);
+  // comptime fields are stored in the instance template's slots
+  const comptimeFieldSlots = members.filter(m => m.type === MemberType.Comptime).map(m => m.slot);
+  const cache = new ObjectCache();
+  const constructor = function(arg, options = {}) {
+    const {
+      writable = true,
+      fixed = false,
+    } = options;
+    const creating = this instanceof constructor;
+    let self, dv;
+    if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer(structure);
+      }
+      self = (writable) ? this : Object.create(constructor[CONST_PROTO]);
+      if (hasSlots) {
+        self[SLOTS] = {};
+      }
+      if (shapeDefiner) {
+        // provided by defineSlice(); the slice is different from other structures as it does not have 
+        // a fixed size; memory is allocated by the slice initializer based on the argument given
+        initializer.call(self, arg, fixed);
+        dv = self[MEMORY]; 
+      } else {
+        self[MEMORY] = dv = env.allocateMemory(byteSize, align, fixed);
+      }
+    } else {
+      if (alternateCaster) {
+        self = alternateCaster.call(this, arg);
+        if (self !== false) {
+          return self;
+        }
+      }
+      dv = requireDataView(structure, arg, env);
+      if (self = cache.find(dv, writable)) {
+        return self;
+      }
+      self = Object.create(writable ? constructor.prototype : constructor[CONST_PROTO]);
+      if (hasSlots) {
+        self[SLOTS] = {};
+      }
+      if (shapeDefiner) {
+        setDataView.call(self, dv, structure, false, { shapeDefiner });
+      } else {
+        self[MEMORY] = dv;
+      }
+    }
+    if (comptimeFieldSlots.length > 0 && template?.[SLOTS]) {
+      for (const slot of comptimeFieldSlots) {
+        self[SLOTS][slot] = template[SLOTS][slot];
+      }
+    }
+    if (modifier) {
+      modifier.call(self);
+    }
+    if (creating && !shapeDefiner) {
+      initializer.call(self, arg);
+    }
+    if (finalizer) {
+      self = finalizer.call(self);
+    }
+    return cache.save(dv, writable, self); 
+  };
+  return constructor;
+}
+
+function createPropertyApplier(structure) {
+  const { instance: { template } } = structure;  
+  return function(arg) {
+    const argKeys = Object.keys(arg);
+    const setters = this[SETTERS];
+    const allKeys = this[ALL_KEYS];
+    // don't accept unknown props
+    for (const key of argKeys) {
+      if (!(key in setters)) {
+        throwNoProperty(structure, key);
+      }
+    }
+    // checking each name so that we would see inenumerable initializers as well
+    let normalCount = 0;
+    let normalFound = 0;
+    let normalMissing = 0;
+    let specialFound = 0;
+    for (const key of allKeys) {
+      const set = setters[key];
+      if (set.special) {
+        if (key in arg) {
+          specialFound++;
+        }
+      } else {
+        normalCount++;
+        if (key in arg) {
+          normalFound++;
+        } else if (set.required) {
+          normalMissing++;
+        }
+      }
+    }
+    if (normalMissing !== 0 && specialFound === 0) {
+      const missing = allKeys.filter(k => setters[k].required && !(k in arg));
+      throwMissingInitializers(structure, missing);
+    }
+    if (specialFound + normalFound > argKeys.length) {
+      // some props aren't enumerable
+      for (const key of allKeys) {
+        if (key in arg) {
+          if (!argKeys.includes(key)) {
+            argKeys.push(key);
+          }
+        }
+      }
+    }
+    // apply default values unless all properties are initialized
+    if (normalFound < normalCount && specialFound === 0) {
+      if (template) {
+        if (template[MEMORY]) {
+          this[MEMORY_COPIER](template);
+        }
+        this[POINTER_VISITOR]?.(copyPointer, { vivificate: true, source: template });
+      }
+    }
+    for (const key of argKeys) {
+      const set = setters[key];
+      set.call(this, arg[key]);
+    }
+    return argKeys.length;
+  };
+}
+
+function needSlots(members) {
   for (const { type } of members) {
     switch (type) {
       case MemberType.Object:
@@ -4674,12 +4331,12 @@ class ObjectCache {
   }
 }
 
-function addStaticMembers(s, env) {
+function addStaticMembers(structure, env) {
   const {
     type,
     constructor,
     static: { members, template },
-  } = s;
+  } = structure;
   if (members.length === 0) {
     return;
   }
@@ -4713,6 +4370,7 @@ function addStaticMembers(s, env) {
       const { index } = error;
       const previous = currentErrorSets[index];
       if (previous) {
+        debugger;
         if (!(previous instanceof constructor)) {
           // error already exists in a previously defined set
           // see if we should make that set a subclass or superclass of this one
@@ -5102,12 +4760,13 @@ class Environment {
     const f = getStructureFactory(s.type);
     const constructor = f(s, this);
     if (typeof(constructor) === 'function') {
+      const name = getStructureName(s);
       defineProperties(constructor, {
-        name: { value: getStructureName(s), writable: false }
+        name: { value: name, configurable: true },
       });
       if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
         defineProperties(constructor.prototype, {
-          [Symbol.toStringTag]: { value: s.name, configurable: true, writable: false }
+          [Symbol.toStringTag]: { value: s.name, configurable: true },
         });
       }
     }
@@ -5116,7 +4775,6 @@ class Environment {
   finalizeStructure(s) {
     addStaticMembers(s, this);
     addMethods(s, this);
-    addSpecialAccessors(s);
   }
 
   createCaller(method, useThis) {
@@ -5162,10 +4820,7 @@ class Environment {
         if (len === undefined) {
           const sentinel = Target[SENTINEL];
           if (sentinel) {
-            if (address === 0) {
-              throwNullPointer(address);
-            }
-            len = env.findSentinel(address, sentinel.bytes) + 1;
+            len = (address) ? env.findSentinel(address, sentinel.bytes) + 1 : 0;
           } else {
             len = 1;
           }

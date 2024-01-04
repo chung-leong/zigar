@@ -19,6 +19,7 @@ async function loadZig(url) {
   const options = {
     clean: process.env.NODE_ENV === 'production',
     optimize: (process.env.NODE_ENV === 'production') ? 'ReleaseFast' : 'Debug',
+    nativeCpu: true,
   };
   // variables from environment
   for (const [ name, value ] of Object.entries(process.env)) {
@@ -49,7 +50,7 @@ async function loadZig(url) {
   };
 }
 
-const boolFields = [ 'clean', 'omitFunctions' ];
+const boolFields = [ 'clean', 'omitFunctions', 'nativeCpu' ];
 
 function camelCase(name) {
   return name.toLowerCase().replace(/_(\w)/g, (m0, m1) => m1.toUpperCase());
