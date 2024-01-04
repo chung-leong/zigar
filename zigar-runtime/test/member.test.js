@@ -9,8 +9,10 @@ import {
   useAllMemberTypes,
   useBool,
   useInt,
+  useIntEx,
   useFloat,
   useUint,
+  useUintEx,
   useEnumerationItem,
   isReadOnly,
   isByteAligned,
@@ -226,9 +228,8 @@ describe('Member functions', function() {
         bitSize: 1,
         bitOffset: 33,
       };
-      const { get, set } = getDescriptor(member, env);
-      expect(get).to.be.undefined;
-      expect(set).to.be.undefined;
+      const descriptor = getDescriptor(member, env);
+      expect(descriptor).to.be.undefined;
     })
     it('should return int accessors', function() {
       const object = {
@@ -268,9 +269,9 @@ describe('Member functions', function() {
       set.call(object, 3456);
       expect(get.call(object)).to.equal(3456);
     })
-    it('should return standard int accessors when only useIntEx is not set', function() {
+    it('should return standard int accessors when only useIntEx is active', function() {
       clearMethodCache();
-      useInt();
+      useIntEx();
       const object = {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
@@ -289,9 +290,9 @@ describe('Member functions', function() {
       set.call(object, 3456);
       expect(get.call(object)).to.equal(3456);
     })
-    it('should return standard int accessors when only useUintEx is not active', function() {
+    it('should return standard int accessors when only useUintEx is active', function() {
       clearMethodCache();
-      useUint();
+      useUintEx();
       const object = {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
@@ -300,7 +301,7 @@ describe('Member functions', function() {
         })(),
       };
       const member = {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -352,9 +353,8 @@ describe('Member functions', function() {
         bitSize: 4,
         bitOffset: 33,
       };
-      const { get, set } = getDescriptor(member, env);
-      expect(get).to.be.undefined;
-      expect(set).to.be.undefined;
+      const descriptor = getDescriptor(member, env);
+      expect(descriptor).to.be.undefined;
     })
     it('should not return small uint accessors when useUintEx is not active', function() {
       clearMethodCache();
@@ -364,9 +364,8 @@ describe('Member functions', function() {
         bitSize: 4,
         bitOffset: 33,
       };
-      const { get, set } = getDescriptor(member, env);
-      expect(get).to.be.undefined;
-      expect(set).to.be.undefined;
+      const descriptor = getDescriptor(member, env);
+      expect(descriptor).to.be.undefined;
     })
     it('should return float accessors', function() {
       const object = {
@@ -414,9 +413,8 @@ describe('Member functions', function() {
         bitOffset: 4,
         byteSize: 8,
       };
-      const { get, set } = getDescriptor(member, env);
-      expect(get).to.be.undefined;
-      expect(set).to.be.undefined;
+      const descriptor = getDescriptor(member, env);
+      expect(descriptor).to.be.undefined;
     })
     it('should return enum item accessors', function() {
       const DummyValue1 = {

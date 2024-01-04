@@ -47,7 +47,7 @@ describe('Enumeration functions', function() {
       env.finalizeStructure(structure);
       expect(Number(Hello.Dog)).to.equal(0);
       expect(Number(Hello.Cat)).to.equal(1);
-      expect(Hello.Dog.valueOf()).to.equal(0);
+      expect(Hello.Dog.valueOf()).to.equal('Dog');
       expect(Hello.Dog === Hello.Dog).to.be.true;
       expect(Hello.Dog === Hello.Cat).to.be.false;
       expect(() => Hello.Dog.$ = Hello.Dog).to.throw(TypeError);
@@ -278,7 +278,7 @@ describe('Enumeration functions', function() {
       // BigInt suffix missing on purpose
       expect(Hello(4567)).to.equal(Hello.Cat);
     })
-    it('should produce the expect output when JSON.stringify() is used', function() {
+    it('should produce the expected output when JSON.stringify() is used', function() {
       const structure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'Hello',
@@ -311,8 +311,8 @@ describe('Enumeration functions', function() {
         },
       }, true);
       env.finalizeStructure(structure);
-      expect(JSON.stringify(Hello.Dog)).to.equal('0');
-      expect(JSON.stringify(Hello.Cat)).to.equal('1');
+      expect(JSON.stringify(Hello.Dog)).to.equal('"Dog"');
+      expect(JSON.stringify(Hello.Cat)).to.equal('"Cat"');
     })
     it('should return undefined when look-up of enum item fails', function() {
       const structure = env.beginStructure({
@@ -457,7 +457,123 @@ describe('Enumeration functions', function() {
       env.finalizeStructure(structure);
       expect(() => new Hello(false)).to.throw(TypeError);
     })
-  })
+    it('should accept special initializers', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Enumeration,
+        name: 'Hello',
+        byteSize: 4,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(structure);
+      const { constructor: Hello } = structure;
+      env.attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure,
+      }, true);
+      env.attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure,
+      }, true);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 456 ])), { writable: false }),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 123 ])), { writable: false }),
+        },
+      }, true);
+      env.finalizeStructure(structure);
+      const object = new Hello({ typedArray: new Uint32Array([ 123 ])});
+      expect(object.$).to.equal(Hello.Cat);
+    })
+    it('should throw when initializer is empty', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Enumeration,
+        name: 'Hello',
+        byteSize: 4,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(structure);
+      const { constructor: Hello } = structure;
+      env.attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure,
+      }, true);
+      env.attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure,
+      }, true);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 456 ])), { writable: false }),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 123 ])), { writable: false }),
+        },
+      }, true);
+      env.finalizeStructure(structure);
+      expect(() => new Hello({})).to.throw(TypeError);
+    })
+    it('should throw when invalid indices are encountered', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Enumeration,
+        name: 'Hello',
+        byteSize: 4,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(structure);
+      const { constructor: Hello } = structure;
+      env.attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure,
+      }, true);
+      env.attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure,
+      }, true);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 456 ])), { writable: false }),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 123 ])), { writable: false }),
+        },
+      }, true);
+      env.finalizeStructure(structure);
+      const dv = new DataView(new ArrayBuffer(structure.byteSize));
+      dv.setUint32(0, 1234, true);
+      const object = Hello(dv);
+      expect(() => object.$).to.throw(TypeError)
+        .with.property('message').that.contains('1234');
+      dv.setUint32(0, 123, true);
+      expect(object.$).to.equal(Hello.Cat);
+      expect(() => object.$ = 4567).to.throw(TypeError)
+        .with.property('message').that.contains('4567');
+      object.$ = 456;      
+      expect(object.$).to.equal(Hello.Dog);
+    })
+  }) 
 })
 
 function viewOf(ta) {

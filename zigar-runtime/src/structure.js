@@ -302,6 +302,7 @@ export function createConstructor(structure, handlers, env) {
     instance: { members, template },
   } = structure;
   const {
+    modifier,
     initializer,
     finalizer,
     alternateCaster,
@@ -359,6 +360,9 @@ export function createConstructor(structure, handlers, env) {
       for (const slot of comptimeFieldSlots) {
         self[SLOTS][slot] = template[SLOTS][slot];
       }
+    }
+    if (modifier) {
+      modifier.call(self);
     }
     if (creating && !shapeDefiner) {
       initializer.call(self, arg);

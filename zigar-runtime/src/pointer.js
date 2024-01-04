@@ -162,7 +162,7 @@ export function resetPointer({ isActive }) {
 }
 
 export function disablePointer() {
-  Object.defineProperty(this[SLOTS], 0, {
+  Object.defineProperty(this[SLOTS], '0', {
     get: throwInaccessiblePointer,
     set: throwInaccessiblePointer,
     configurable: true

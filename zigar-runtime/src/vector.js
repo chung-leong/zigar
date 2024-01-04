@@ -3,8 +3,8 @@ import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getTypedArrayClass, getCompatibleTags } from './data-view.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
-import { ALIGN, COMPAT, MEMORY_COPIER, SETTERS, SIZE } from './symbol.js';
-import { getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors } from './special.js';
+import { ALIGN, COMPAT, MEMORY_COPIER, SETTERS, SIZE, VALUE_NORMALIZER } from './symbol.js';
+import { getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors, getValueOf } from './special.js';
 
 export function defineVector(structure, env) {
   const {
@@ -62,10 +62,13 @@ export function defineVector(structure, env) {
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
     typedArray: typedArray && getTypedArrayAccessors(structure),
+    valueOf: { value: getValueOf },
+    toJSON: { value: getValueOf },
     entries: { value: createVectorEntries },
     delete: { value: getDestructor(structure) },
     [Symbol.iterator]: { value: getVectorIterator },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
+    [VALUE_NORMALIZER]: { value: normalizeVector },
   };
   const staticDescriptors = {
     child: { get: () => elementStructure.constructor },
@@ -74,6 +77,15 @@ export function defineVector(structure, env) {
     [SIZE]: { value: byteSize },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+
+export function normalizeVector(map) {
+  let array = map.get(this);
+  if (!array) {
+    array = [ ...this ];
+    map.set(this, array);
+  }
+  return array;
 }
 
 export function getVectorIterator() {

@@ -36,6 +36,8 @@ describe('Vector functions', function() {
       expect(object[3]).to.equal(16);
       expect(object.$).to.equal(object);
       expect([ ...object ]).to.eql([ 1, 2, 3, 16 ]);
+      expect(object.valueOf()).to.eql([ 1, 2, 3, 16 ]);
+      expect(JSON.stringify(object)).to.equal('[1,2,3,16]');
       expect(object.length).to.equal(4);
       expect(object.typedArray).to.be.instanceOf(Uint32Array);
     })
@@ -378,6 +380,29 @@ describe('Vector functions', function() {
         .with.property('message').that.contains('an array')
         .and.that.contains('Uint32Array');
     })
+    it('should throw when initializer is en empty object', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Vector,
+        name: 'Hello',
+        length: 4,
+        byteSize: 4 * 4,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: {
+          constructor: function() {},
+          typedArray: Uint32Array,
+        },
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      expect(() => new Hello({})).to.throw(TypeError)
+        .with.property('message').that.contains('an array')
+        .and.that.contains('Uint32Array');
+    })
     it('should be able to create read-only object', function() {
       const structure = env.beginStructure({
         type: StructureType.Vector,
@@ -398,6 +423,34 @@ describe('Vector functions', function() {
       const object = new Hello(new Uint32Array([ 1, 2, 3, 4 ]), { writable: false });
       expect(() => object[0] = 2).to.throw(TypeError);
       expect(() => object[0].$ = [ 0, 0, 0, 0 ]).to.throw(TypeError);
+    })
+    it('should accept special initializers', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Vector,
+        name: 'Hello',
+        length: 4,
+        byteSize: 4 * 4,
+      });
+      const constructor = function() {};
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { constructor, typedArray: Uint32Array },
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const dv = new DataView(new ArrayBuffer(4 * 4));
+      dv.setUint32(0, 123, true);
+      dv.setUint32(4, 234, true);
+      dv.setUint32(8, 345, true);
+      dv.setUint32(12, 456, true);
+      const object = new Hello({ dataView: dv });
+      expect([ ...object ]).to.eql([ 123, 234, 345, 456 ]);
+      object[2] = 777;
+      // make sure a copy was made
+      expect(dv.getUint32(8, true)).to.equal(345);
     })
   })
 })

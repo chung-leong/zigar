@@ -48,7 +48,6 @@ export function getStringAccessors(structure, handlers = {}) {
       const TypedArray = (charSize === 1) ? Int8Array : Int16Array;
       const ta = new TypedArray(dv.buffer, dv.byteOffset, this.length);
       const s = decodeText(ta, `utf-${charSize * 8}`);
-      debugger;
       return (sentinel?.value === undefined) ? s : s.slice(0, -1);
     },
     set(str) {

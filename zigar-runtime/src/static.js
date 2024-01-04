@@ -4,12 +4,12 @@ import { decamelizeErrorName } from './error.js';
 import { getCurrentErrorSets } from './error-set.js';
 import { ENUM_ITEMS, ENUM_NAME, ERROR_ITEMS, ERROR_MESSAGES, SLOTS } from './symbol.js';
 
-export function addStaticMembers(s, env) {
+export function addStaticMembers(structure, env) {
   const {
     type,
     constructor,
     static: { members, template },
-  } = s;
+  } = structure;
   if (members.length === 0) {
     return;
   }

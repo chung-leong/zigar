@@ -286,7 +286,7 @@ function addEnumerationLookup(getDataViewIntAccessor) {
         if (!item) {
           throwEnumExpected(structure, value);
         }
-        accessor.call(this, offset, item.valueOf(), littleEndian);
+        accessor.call(this, offset, item[Symbol.toPrimitive](), littleEndian);
       };
     }
   };

@@ -71,7 +71,6 @@ export function defineUnionShape(structure, env) {
           throwInactiveUnionProperty(structure, name, currentName);
         }
         setValue.call(this, value);
-        this[POINTER_VISITOR]?.(resetPointer);
       }
     : setValue;
     const init = (exclusion)
@@ -116,14 +115,13 @@ export function defineUnionShape(structure, env) {
   // members with pointers, we need to disable them
   const pointerMembers = members.filter(m => m.structure.hasPointer);
   const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
-  const finalizer = function() {
-    if (hasInaccessiblePointer) {
+  const modifier = (hasInaccessiblePointer) 
+  ? function() {
       // make pointer access throw
       this[POINTER_VISITOR](disablePointer, { vivificate: true });
     }
-    return this;
-  };
-  const constructor = structure.constructor = createConstructor(structure, { initializer, finalizer }, env);
+  : undefined;
+  const constructor = structure.constructor = createConstructor(structure, { modifier, initializer }, env);
   // for bare and extern union, all members will be included 
   // tagged union meanwhile will only give the entity for the active field
   const memberNames = (isTagged) ? [ '' ] : valueMembers.map(m => m.name);
@@ -185,27 +183,3 @@ export function defineUnionShape(structure, env) {
     setters[name] = init;
   }
 };
-
-export function getUnionIteratorCreator(structure) {
-  const { instance: { members } } = structure;
-  const names = members.map(m => m.name);
-  const { length } = names;
-  return function getStructIterator() {
-    let index = 0;
-    const self = this;
-    return {
-      next() {
-        let value, done;
-        if (index < length) {
-          const name = names[index];
-          value = [ name, self[name] ];
-          done = false;
-          index++;
-        } else {
-          done = true;
-        }
-        return { value, done };
-      },
-    };
-  };
-}

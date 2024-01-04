@@ -103,20 +103,27 @@ describe('Special property functions', function() {
   })
   describe('getBase64Accessors', function() {
     it('should return getter and setter for base64 encoded binary', function() {
-      const structure = {};
+      const structure = { 
+        name: 'int',
+        byteSize: 4,
+      };
       const { get, set } = getBase64Accessors(structure);
       expect(get).to.be.a('function');
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(4));
-      const object = {
-        dataView: dv
-      };
       dv.setInt32(0, 1234);
+      const object = {
+        dataView: dv,
+        [MEMORY]: dv,
+        [MEMORY_COPIER]: getMemoryCopier(4, false),
+      };
       const base64 = get.call(object);
       expect(base64).to.be.a('string');
       const dv2 = new DataView(new ArrayBuffer(4));
       const object2 = {
-        dataView: dv2
+        dataView: dv2,
+        [MEMORY]: dv2,
+        [MEMORY_COPIER]: getMemoryCopier(4, false),
       };
       set.call(object2, base64);
       expect(object2.dataView.getInt32(0)).to.equal(1234);
@@ -127,6 +134,8 @@ describe('Special property functions', function() {
   describe('getStringAccessors', function() {
     it('should return getter and setter for UTF-8 string', function() {
       const structure = {
+        name: '[4]u8',
+        byteSize: 4,
         instance: {
           members: [
             {
@@ -142,7 +151,9 @@ describe('Special property functions', function() {
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(4));
       const object = {
-        dataView: dv
+        dataView: dv,
+        [MEMORY]: dv,
+        [MEMORY_COPIER]: getMemoryCopier(4, false),
       };
       dv.setUint8(0, 'A'.charCodeAt(0));
       dv.setUint8(1, 'B'.charCodeAt(0));
@@ -157,6 +168,8 @@ describe('Special property functions', function() {
     })
     it('should return getter and setter for UTF-16 string', function() {
       const structure = {
+        name: '[4]u16',
+        byteSize: 8,
         instance: {
           members: [
             {
@@ -172,7 +185,10 @@ describe('Special property functions', function() {
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(8));
       const object = {
-        dataView: dv
+        dataView: dv,
+        length: 4,
+        [MEMORY]: dv,
+        [MEMORY_COPIER]: getMemoryCopier(4, true),        
       };
       dv.setUint16(0, 'A'.charCodeAt(0), true);
       dv.setUint16(2, 'B'.charCodeAt(0), true);
@@ -187,6 +203,8 @@ describe('Special property functions', function() {
     })
     it('should return getter and setter for array with sentinel value', function() {
       const structure = {
+        name: '[4]u8',
+        byteSize: 5,
         instance: {
           members: [
             {
@@ -207,7 +225,9 @@ describe('Special property functions', function() {
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(5));
       const object = {
-        dataView: dv
+        dataView: dv,
+        [MEMORY]: dv,
+        [MEMORY_COPIER]: getMemoryCopier(4, false),
       };
       dv.setUint8(0, 'A'.charCodeAt(0));
       dv.setUint8(1, 'B'.charCodeAt(0));
@@ -222,17 +242,47 @@ describe('Special property functions', function() {
       }
       expect(dv2.getUint8(4)).to.equal(0);
     })
-
+    it('should throw when argument is not a string', function() {
+      const structure = {
+        name: '[4]u8',
+        byteSize: 4,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+            }
+          ]
+        }
+      };
+      const { get, set } = getStringAccessors(structure);
+      expect(get).to.be.a('function');
+      expect(set).to.be.a('function');
+      const dv = new DataView(new ArrayBuffer(4));
+      const object = {
+        dataView: dv,
+        [MEMORY]: dv,
+        [MEMORY_COPIER]: getMemoryCopier(4, false),
+      };
+      set.call(object, 1234);
+    })
   })
   describe('getTypedArrayAccessors', function() {
     it('should return getter and setter for typed array', function() {
-      const structure = { typedArray: Int32Array };
+      const structure = { 
+        name: '[4]i32',
+        byteSize: 16,
+        typedArray: Int32Array 
+      };
       const { get, set } = getTypedArrayAccessors(structure);
       expect(get).to.be.a('function');
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(16));
       const object = {
-        dataView: dv
+        dataView: dv,
+        [MEMORY]: dv,
+        [MEMORY_COPIER]: getMemoryCopier(4, true),
       };
       for (let i = 0; i < 4; i++) {
         dv.setInt32(i * 4, i * 100, true);

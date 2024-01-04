@@ -815,6 +815,7 @@ describe('Struct functions', function() {
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
+        slot: 0,
         structure: intStructure,
       });
       env.finalizeShape(ptrStructure);

@@ -492,7 +492,6 @@ describe('Union functions', function() {
       });
       env.finalizeShape(ptrStructure);
       env.finalizeStructure(ptrStructure);
-      const { constructor: Int32Ptr } = ptrStructure;
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'SomeStruct',
@@ -510,7 +509,6 @@ describe('Union functions', function() {
       });
       env.finalizeShape(structStructure);
       env.finalizeStructure(structStructure);
-      const { constructor: SomeStruct } = structStructure;
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         name: '[4]*Int32',
@@ -526,7 +524,6 @@ describe('Union functions', function() {
       });
       env.finalizeShape(arrayStructure);
       env.finalizeStructure(arrayStructure);
-      const { constructor: Int32PtrArray } = arrayStructure;
       const structure = env.beginStructure({
         type: StructureType.BareUnion,
         name: 'Hello',
@@ -665,6 +662,7 @@ describe('Union functions', function() {
       expect(object).to.be.an.instanceOf(Object);
       expect(object).to.be.an.instanceOf(Hello);
       expect([ ...object ]).to.eql([ [ 'dog', 1234 ] ]);
+      const [ [ name, value ] ] = object;
       expect(object.valueOf()).to.eql({ dog: 1234 });
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.be.null;
@@ -776,7 +774,6 @@ describe('Union functions', function() {
       });
       env.finalizeShape(ptrStructure);
       env.finalizeStructure(ptrStructure);
-      const { constructor: Int32Ptr } = ptrStructure;
       const enumStructure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'HelloTag',

@@ -25,8 +25,6 @@ export function definePrimitive(structure, env) {
         }
       } else if (arg !== undefined) {
         set.call(this, arg);
-      } else {
-        throwInvalidInitializer(structure, type, arg);
       }
     }
   };
