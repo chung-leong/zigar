@@ -134,17 +134,8 @@ export function throwArrayLengthMismatch(structure, target, arg) {
   throw new TypeError(`${name} has ${actualLength} element${s}, received ${received}`);
 }
 
-export function throwMissingInitializers(structure, arg) {
-  const { instance: { members } } = structure;
+export function throwMissingInitializers(structure, missing) {
   const name = getStructureName(structure);
-  const missing = [];
-  for (const { name, isRequired } of members) {
-    if (isRequired) {
-      if (arg?.[name] === undefined) {
-        missing.push(name);
-      }
-    }
-  }
   throw new TypeError(`Missing initializers for ${name}: ${missing.join(', ')}`);
 }
 

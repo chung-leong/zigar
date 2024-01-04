@@ -1,23 +1,22 @@
-import { ObjectCache, attachDescriptors, needSlots } from './structure.js';
+import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
-import { getBase64Accessors, getDataViewAccessors, getSpecialKeys, getStringAccessors,
+import { getTypedArrayClass, getCompatibleTags } from './data-view.js';
+import { getBase64Accessors, getDataViewAccessors, getStringAccessors,
   getTypedArrayAccessors, getValueOf } from './special.js';
-import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoInitializer, 
-  throwNoProperty } from './error.js';
+import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
 import { always, copyPointer, getProxy } from './pointer.js';
-import { ALIGN, CHILD_VIVIFICATOR, COMPAT, CONST, GETTER, MEMORY, MEMORY_COPIER, PARENT, 
-  POINTER_VISITOR, PROXY, SELF, SETTER, SIZE, SLOTS, VALUE_NORMALIZER } from './symbol.js';
+import { ALIGN, CHILD_VIVIFICATOR, COMPAT, GETTER, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR, 
+  PROXY, SELF, SETTER, SIZE, SLOTS, VALUE_NORMALIZER } from './symbol.js';
 
-export function defineArray(s, env) {
+export function defineArray(structure, env) {
   const {
     length,
     byteSize,
     align,
     instance: { members: [ member ] },
     hasPointer,
-  } = s;
+  } = structure;
   /* DEV-TEST */
   /* c8 ignore next 6 */
   if (member.bitOffset !== undefined) {
@@ -27,45 +26,9 @@ export function defineArray(s, env) {
     throw new Error(`slot must be undefined for array member`);
   }
   /* DEV-TEST-END */
-  addTypedArray(s);
-  const hasObject = (member.type === MemberType.Object);
-  const hasSlots = needSlots(s);
-  const cache = new ObjectCache();
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = (writable) ? this : Object.create(constructor[CONST].prototype);
-      dv = env.allocateMemory(byteSize, align, fixed);
-    } else {
-      dv = requireDataView(s, arg, env);
-      if (self = cache.find(dv, writable)) {
-        return self;
-      }
-      const c = (writable) ? constructor : constructor[CONST];
-      self = Object.create(c.prototype);
-    }
-    self[MEMORY] = dv;
-    self[GETTER] = null;
-    self[SETTER] = null;
-    if (hasSlots) {
-      self[SLOTS] = {};
-    }
-    if (creating) {
-      initializer.call(self, arg);
-    }
-    const proxy = createProxy.call(self);
-    return cache.save(dv, writable, proxy);
-  };
-  const { structure: elementStructure } = member;
-  const specialKeys = getSpecialKeys(s);
+  const { get, set } = getDescriptor(member, env);
+  const hasStringProp = canBeString(member);
+  const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[MEMORY_COPIER](arg);
@@ -73,7 +36,7 @@ export function defineArray(s, env) {
         this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else {
-      if (typeof(arg) === 'string' && specialKeys.includes('string')) {
+      if (typeof(arg) === 'string' && hasStringProp) {
         arg = { string: arg };
       }
       if (arg?.[Symbol.iterator]) {
@@ -83,45 +46,33 @@ export function defineArray(s, env) {
           argLen = arg.length;
         }
         if (argLen !== length) {
-          throwArrayLengthMismatch(s, this, arg);
+          throwArrayLengthMismatch(structure, this, arg);
         }
         let i = 0;
         for (const value of arg) {
+          debugger;
           set.call(this, i++, value);
         }
       } else if (arg && typeof(arg) === 'object') {
-        for (const key of Object.keys(arg)) {
-          if (!(key in this)) {
-            throwNoProperty(s, key);
-          }
-        }
-        let specialFound = 0;
-        for (const key of specialKeys) {
-          if (key in arg) {
-            specialFound++;
-          }
-        }
-        if (specialFound === 0) {
-          throwInvalidArrayInitializer(s, arg);
-        }
-        for (const key of specialKeys) {
-          if (key in arg) {
-            this[key] = arg[key];
-          }
+        if (propApplier.call(this, arg) === 0) {
+          throwInvalidArrayInitializer(structure, arg);
         }
       } else if (arg !== undefined) {
-        throwInvalidArrayInitializer(s, arg);
+        throwInvalidArrayInitializer(structure, arg);
       }
     }
   };
-  const { get, set } = getDescriptor(member, env);
+  const finalizer = createArrayProxy;
+  const constructor = structure.constructor = createConstructor(structure, { initializer, finalizer }, env);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const hasObject = member.type === MemberType.Object;
   const instanceDescriptors = {
     $: { get: getProxy, set: initializer },
     length: { value: length },
-    dataView: getDataViewAccessors(s),
-    base64: getBase64Accessors(),
-    string: canBeString(member) && getStringAccessors(s),
-    typedArray: s.typedArray && getTypedArrayAccessors(s),
+    dataView: getDataViewAccessors(structure),
+    base64: getBase64Accessors(structure),
+    string: hasStringProp && getStringAccessors(structure),
+    typedArray: typedArray && getTypedArrayAccessors(structure),
     get: { value: get },
     set: { value: set },
     entries: { value: getArrayEntries },
@@ -130,17 +81,24 @@ export function defineArray(s, env) {
     delete: { value: getDestructor(env) },
     [Symbol.iterator]: { value: getArrayIterator },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
     [VALUE_NORMALIZER]: { value: normalizeArray },
   };
   const staticDescriptors = {
-    child: { get: () => elementStructure.constructor },
-    [COMPAT]: { value: getCompatibleTags(s) },
+    child: { get: () => member.structure.constructor },
+    [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+
+export function createArrayProxy() {
+  const proxy = new Proxy(this, proxyHandlers);
+  // hide the proxy so console wouldn't display a recursive structure
+  Object.defineProperty(this, PROXY, { value: proxy }); 
+  return proxy;
 }
 
 export function canBeString(member) {
@@ -204,11 +162,11 @@ export function getArrayEntries() {
   };
 }
 
-export function getChildVivificator(s) {
-  const { instance: { members: [ member ]} } = s;
-  const { byteSize, structure } = member;
+export function getChildVivificator(structure) {
+  const { instance: { members: [ member ]} } = structure;
+  const { byteSize, structure: elementStructure } = member;
   return function getChild(index, writable = true) {
-    const { constructor } = structure;
+    const { constructor } = elementStructure;
     const dv = this[MEMORY];
     const parentOffset = dv.byteOffset;
     const offset = parentOffset + byteSize * index;
@@ -218,7 +176,7 @@ export function getChildVivificator(s) {
   };
 }
 
-export function getPointerVisitor(s) {
+export function getPointerVisitor(structure) {
   return function visitPointers(cb, options = {}) {
     const {
       source,
@@ -242,13 +200,6 @@ export function getPointerVisitor(s) {
       }
     }
   };
-}
-
-export function createProxy() {
-  const proxy = new Proxy(this, proxyHandlers);
-  // hide the proxy so console wouldn't display a recursive structure
-  Object.defineProperty(this, PROXY, { value: proxy });
-  return proxy;
 }
 
 const proxyHandlers = {

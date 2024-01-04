@@ -5,7 +5,6 @@ import { throwAlignmentConflict, throwNullPointer, throwZigError } from './error
 import { getMemoryCopier } from './memory.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
-import { addSpecialAccessors } from './special.js';
 import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CONST, ENVIRONMENT, LENGTH_GETTER, LENGTH_SETTER, 
   MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES, SIZE, 
   SLOTS } from './symbol.js';
@@ -353,7 +352,6 @@ export class Environment {
   finalizeStructure(s) {
     addStaticMembers(s, this);
     addMethods(s, this);
-    addSpecialAccessors(s, this);
   }
 
   createCaller(method, useThis) {

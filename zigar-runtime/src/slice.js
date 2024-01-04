@@ -1,25 +1,25 @@
-import { ObjectCache, attachDescriptors } from './structure.js';
+import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { requireDataView, addTypedArray, checkDataViewSize, getCompatibleTags } from './data-view.js';
-import { getArrayIterator, createProxy, getArrayEntries, getChildVivificator, getPointerVisitor, canBeString, normalizeArray } from './array.js';
+import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
+import { canBeString, createArrayProxy, getArrayIterator, getArrayEntries, getChildVivificator, 
+  getPointerVisitor, normalizeArray } from './array.js';
 import { copyPointer, getProxy } from './pointer.js';
-import { checkDataView, getBase64Accessors, getDataViewAccessors, getDataViewFromTypedArray, getDataViewFromUTF8, getSpecialKeys, getStringAccessors, getTypedArrayAccessors, getValueOf } from './special.js';
-import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwNoProperty,
-  throwMisplacedSentinel, throwMissingSentinel, throwNoInitializer } from './error.js';
-import { ALIGN, CHILD_VIVIFICATOR, COMPAT, CONST, GETTER, LENGTH, MEMORY, MEMORY_COPIER, POINTER_VISITOR,
-  SENTINEL, SETTER, SIZE, SLOTS, VALUE_NORMALIZER } from './symbol.js';
-import { decodeBase64 } from './text.js';
+import { getBase64Accessors, getDataViewAccessors, getStringAccessors, getTypedArrayAccessors,
+  getValueOf } from './special.js';
+import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwMisplacedSentinel,
+  throwMissingSentinel } from './error.js';
+import { ALIGN, CHILD_VIVIFICATOR, COMPAT, LENGTH, MEMORY, MEMORY_COPIER, POINTER_VISITOR, 
+  SENTINEL, SIZE, VALUE_NORMALIZER } from './symbol.js';
 
-export function defineSlice(s, env) {
+export function defineSlice(structure, env) {
   const {
     align,
     instance: {
       members: [ member ],
     },
     hasPointer,
-  } = s;
-  const typedArray = addTypedArray(s);
+  } = structure;
   /* DEV-TEST */
   /* c8 ignore next 6 */
   if (member.bitOffset !== undefined) {
@@ -29,67 +29,33 @@ export function defineSlice(s, env) {
     throw new Error(`slot must be undefined for slice member`);
   }
   /* DEV-TEST-END */
-  const hasObject = (member.type === MemberType.Object);
+  const { get, set } = getDescriptor(member, env);
   const { byteSize: elementSize, structure: elementStructure } = member;
-  const sentinel = getSentinel(s, env);
+  const sentinel = getSentinel(structure, env);
   if (sentinel) {
     // zero-terminated strings aren't expected to be commonly used
     // so we're not putting this prop into the standard structure
-    s.sentinel = sentinel;
+    structure.sentinel = sentinel;
   }
-  const cache = new ObjectCache();
-  // the slices are different from other structures due to variability of their sizes
-  // we only know the "shape" of an object after we've processed the initializers
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = (writable) ? this : Object.create(constructor[CONST].prototype);
-      initializer.call(self, arg, fixed);
-      dv = self[MEMORY];
-    } else {
-      dv = requireDataView(s, arg, env);
-      if (self = cache.find(dv, writable)) {
-        return self;
-      }
-      const c = (writable) ? constructor : constructor[CONST];
-      self = Object.create(c.prototype);
-      shapeDefiner.call(self, dv, dv.byteLength / elementSize);
-    }
-    const proxy = createProxy.call(self);
-    return cache.save(dv, writable, proxy);
-  };
-  const specialKeys = getSpecialKeys(s);
-  const shapeDefiner = function(dv, length, fixed) {
+  const hasStringProp = canBeString(member);
+  const shapeDefiner = function(dv, length, fixed = false) {
     if (!dv) {
       dv = env.allocateMemory(length * elementSize, align, fixed);
     }
     this[MEMORY] = dv;
-    this[GETTER] = null;
-    this[SETTER] = null;
     this[LENGTH] = length;
-    if (hasObject) {
-      this[SLOTS] = {};
-    }
   };
   const shapeChecker = function(arg, length) {
     if (length !== this[LENGTH]) {
-      throwArrayLengthMismatch(s, this, arg);
+      throwArrayLengthMismatch(structure, this, arg);
     }
   };
   // the initializer behave differently depending on whether it's called by the
   // constructor or by a member setter (i.e. after object's shape has been established)
-  const initializer = function(arg, fixed) {
-    let shapeless = !this.hasOwnProperty(MEMORY);
+  const propApplier = createPropertyApplier(structure);
+  const initializer = function(arg, fixed = false) {
     if (arg instanceof constructor) {
-      if (shapeless) {
+      if (!this[MEMORY]) {
         shapeDefiner.call(this, null, arg.length, fixed);
       } else {
         shapeChecker.call(this, arg, arg.length);
@@ -98,99 +64,50 @@ export function defineSlice(s, env) {
       if (hasPointer) {
         this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
-    } else {
-      if (typeof(arg) === 'string' && specialKeys.includes('string')) {
-        arg = { string: arg };
+    } else if (typeof(arg) === 'string' && hasStringProp) {
+      initializer.call(this, { string: arg }, fixed);
+    } else if (arg?.[Symbol.iterator]) {
+      let argLen = arg.length;
+      if (typeof(argLen) !== 'number') {
+        arg = [ ...arg ];
+        argLen = arg.length;
       }
-      if (arg?.[Symbol.iterator]) {
-        let argLen = arg.length;
-        if (typeof(argLen) !== 'number') {
-          arg = [ ...arg ];
-          argLen = arg.length;
-        }
-        if (!this[MEMORY]) {
-          shapeDefiner.call(this, null, argLen, fixed);
-        } else {
-          shapeChecker.call(this, arg, argLen);
-        }
-        let i = 0;
-        for (const value of arg) {
-          sentinel?.validateValue(value, i, argLen);
-          set.call(this, i++, value);
-        }
-      } else if (typeof(arg) === 'number') {
-        if (shapeless && arg >= 0 && isFinite(arg)) {
-          shapeDefiner.call(this, null, arg);
-        } else {
-          throwInvalidArrayInitializer(s, arg, shapeless);
-        }
-      } else if (arg && typeof(arg) === 'object') {
-        for (const key of Object.keys(arg)) {
-          if (!(key in this)) {
-            throwNoProperty(s, key);
-          }
-        }
-        let specialFound = 0;
-        for (const key of specialKeys) {
-          if (key in arg) {
-            specialFound++;
-          }
-        }
-        if (specialFound === 0) {
-          throwInvalidArrayInitializer(s, arg);
-        }
-        for (const key of specialKeys) {
-          if (key in arg) {
-            if (shapeless) {
-              // can't use accessors since the object has no memory yet
-              let dv, dup = true;
-              switch (key) {
-                case 'dataView':
-                  dv = arg[key];
-                  checkDataView(dv);
-                  break;
-                case 'typedArray':
-                  dv = getDataViewFromTypedArray(arg[key], typedArray);
-                  break;
-                case 'string':
-                  dv = getDataViewFromUTF8(arg[key], elementSize, sentinel?.value);
-                  dup = false;
-                  break;
-                case 'base64':
-                  dv = decodeBase64(arg[key]);
-                  dup = false;
-                  break;
-              }
-              checkDataViewSize(s, dv);
-              const len = dv.byteLength / elementSize;
-              const source = { [MEMORY]: dv };
-              sentinel?.validateData(source, len);
-              if (dup) {
-                shapeDefiner.call(this, null, len);
-                this[MEMORY_COPIER](source);
-              } else {
-                // reuse memory from string decoding
-                shapeDefiner.call(this, dv, len);
-              }
-              shapeless = false;
-            } else {
-              this[key] = arg[key];
-            }
-          }
-        }
-      } else if (arg !== undefined) {
-        throwInvalidArrayInitializer(s, arg);
+      if (!this[MEMORY]) {
+        shapeDefiner.call(this, null, argLen, fixed);
+      } else {
+        shapeChecker.call(this, arg, argLen);
       }
+      let i = 0;
+      for (const value of arg) {
+        sentinel?.validateValue(value, i, argLen);
+        set.call(this, i++, value);
+      }
+    } else if (typeof(arg) === 'number') {
+      if (!this[MEMORY] && arg >= 0 && isFinite(arg)) {
+        shapeDefiner.call(this, null, arg);
+      } else {
+        throwInvalidArrayInitializer(structure, arg, !this[MEMORY]);
+      }
+    } else if (arg && typeof(arg) === 'object') {
+      if (propApplier.call(this, arg) === 0) {
+        throwInvalidArrayInitializer(structure, arg);
+      }
+    } else if (arg !== undefined) {
+      throwInvalidArrayInitializer(structure, arg);
     }
   };
-  const { get, set } = getDescriptor(member, env);
+  const finalizer = createArrayProxy;
+  const constructor = structure.constructor = createConstructor(structure, { initializer, shapeDefiner, finalizer }, env);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const hasObject = member.type === MemberType.Object;
+  const shapeHandlers = { shapeDefiner };
   const instanceDescriptors = {
     $: { get: getProxy, set: initializer },
     length: { get: getLength },
-    dataView: getDataViewAccessors(s),
-    base64: getBase64Accessors(),
-    string: canBeString(member) && getStringAccessors(s),
-    typedArray: s.typedArray && getTypedArrayAccessors(s),
+    dataView: getDataViewAccessors(structure, shapeHandlers),
+    base64: getBase64Accessors(structure, shapeHandlers),
+    string: hasStringProp && getStringAccessors(structure, shapeHandlers),
+    typedArray: typedArray && getTypedArrayAccessors(structure, shapeHandlers),
     get: { value: get },
     set: { value: set },
     entries: { value: getArrayEntries },
@@ -199,13 +116,13 @@ export function defineSlice(s, env) {
     delete: { value: getDestructor(env) },
     [Symbol.iterator]: { value: getArrayIterator },
     [MEMORY_COPIER]: { value: getMemoryCopier(elementSize, true) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s, true) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
     [VALUE_NORMALIZER]: { value: normalizeArray },
   };
   const staticDescriptors = {
     child: { get: () => elementStructure.constructor },
-    [COMPAT]: { value: getCompatibleTags(s) },
+    [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: elementSize },
     [SENTINEL]: sentinel && { value: sentinel },

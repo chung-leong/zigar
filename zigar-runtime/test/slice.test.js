@@ -130,7 +130,7 @@ describe('Slice functions', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        byteSize: 4,
+        byteSize: 1,
       });
       env.attachMember(structure, {
         type: MemberType.Uint,
@@ -154,7 +154,7 @@ describe('Slice functions', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
         name: 'Hello',
-        byteSize: 8,
+        byteSize: 2,
       });
       env.attachMember(structure, {
         type: MemberType.Uint,

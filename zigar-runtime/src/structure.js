@@ -6,13 +6,15 @@ import { defineErrorUnion } from './error-union.js'
 import { defineErrorSet } from './error-set.js';
 import { defineEnumerationShape } from './enumeration.js';
 import { defineOptional } from './optional.js';
-import { definePointer } from './pointer.js';
+import { copyPointer, definePointer } from './pointer.js';
 import { defineSlice } from './slice.js';
 import { defineVector } from './vector.js';
 import { defineArgStruct } from './arg-struct.js';
-import { throwReadOnly } from './error.js';
+import { throwMissingInitializers, throwNoInitializer, throwNoProperty, throwReadOnly } from './error.js';
 import { MemberType, hasStandardFloatSize, hasStandardIntSize, isByteAligned } from './member.js';
-import { CHILD_VIVIFICATOR, CONST } from './symbol.js';
+import { requireDataView, setDataView } from './data-view.js';
+import { ALL_KEYS, CHILD_VIVIFICATOR, CONST, CONST_PROTO, IS_REQUIRED, IS_SPECIAL, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SETTERS, 
+  SLOTS } from './symbol.js';
 
 export const StructureType = {
   Primitive: 0,
@@ -95,8 +97,8 @@ export function useArgStruct() {
   factories[StructureType.ArgStruct] = defineArgStruct;
 }
 
-export function getStructureName(s, full = false) {
-  let r = s.name;
+export function getStructureName(structure, full = false) {
+  let r = structure.name;
   if (!full) {
     r = r.replace(/{.*}/, '');
     if (!r.endsWith('.enum_literal)')) {
@@ -251,42 +253,188 @@ export function defineProperties(object, descriptors) {
 }
 
 export function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) {
-  // create constructor for read-only objects (not actually accessible)
-  const constructorRO = function() {};
-  Object.setPrototypeOf(constructorRO.prototype, constructor.prototype);
-  Object.setPrototypeOf(constructorRO, constructor);
-  // replace constructor in prototype
-  Object.defineProperty(constructorRO.prototype, 'constructor', { value: constructor, configurable: true });
-  // inherit name from regular constructor
-  delete constructorRO.name;
-  instanceDescriptors[CONST] = { value: false };
-  staticDescriptors[CONST] = { value: constructorRO };
+  // create prototype for read-only objects
+  const prototypeRO = {};
+  Object.setPrototypeOf(prototypeRO, constructor.prototype);
   const instanceDescriptorsRO = {};
+  const setters = {};
   for (const [ name, descriptor ] of Object.entries(instanceDescriptors)) {
     if (descriptor?.set) {
       instanceDescriptorsRO[name] = { ...descriptor, set: throwReadOnly };
+      // save the setters so we can initialize read-only objects
+      if (name !== '$') {
+        setters[name] = descriptor.set;
+      }
     } else if (name === 'set') {
       instanceDescriptorsRO[name] = { value: throwReadOnly, configurable: true, writable: true };
     }
   }
-  const vivificateDescriptor = instanceDescriptors[CHILD_VIVIFICATOR];
-  if (vivificateDescriptor) {
-  // vivificate child objects as read-only too
-  const vivificate = vivificateDescriptor.value;
-    const vivificateRO = function(slot) {
+  const vivificate = instanceDescriptors[CHILD_VIVIFICATOR]?.value;
+  const vivificateDescriptor = { 
+    // vivificate child objects as read-only too
+    value: function(slot) { 
       return vivificate.call(this, slot, false);
-    };
-    instanceDescriptorsRO[CHILD_VIVIFICATOR] = { value: vivificateRO };
-  }
-  instanceDescriptorsRO[CONST] = { value: true };
-  defineProperties(constructor.prototype, instanceDescriptors);
-  defineProperties(constructor, staticDescriptors); 
-  defineProperties(constructorRO.prototype, instanceDescriptorsRO);
+    }
+  };
+  defineProperties(constructor.prototype, { 
+    [CONST]: { value: false },
+    [ALL_KEYS]: { value: Object.keys(setters) },
+    [SETTERS]: { value: setters },
+    ...instanceDescriptors,
+  });
+  defineProperties(constructor, {
+    [CONST_PROTO]: { value: prototypeRO },
+    ...staticDescriptors,
+  }); 
+  defineProperties(prototypeRO, { 
+    constructor: { value: constructor, configurable: true },
+    [CONST]: { value: true },
+    [CHILD_VIVIFICATOR]: vivificate && vivificateDescriptor,
+    ...instanceDescriptorsRO,
+  });
   return constructor;
 }
 
-export function needSlots(s) {
-  const { instance: { members } } = s;
+export function createConstructor(structure, handlers, env) {
+  const {
+    byteSize,
+    align,
+    instance: { members, template },
+  } = structure;
+  const {
+    initializer,
+    finalizer,
+    alternateCaster,
+    shapeDefiner,
+  } = handlers;
+  const hasSlots = needSlots(members);
+  // comptime fields are stored in the instance template's slots
+  const comptimeFieldSlots = members.filter(m => m.type === MemberType.Comptime).map(m => m.slot);
+  const cache = new ObjectCache();
+  const constructor = function(arg, options = {}) {
+    const {
+      writable = true,
+      fixed = false,
+    } = options;
+    const creating = this instanceof constructor;
+    let self, dv;
+    if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer(structure);
+      }
+      self = (writable) ? this : Object.create(constructor[CONST_PROTO]);
+      if (hasSlots) {
+        self[SLOTS] = {};
+      }
+      if (shapeDefiner) {
+        // provided by defineSlice(); the slice is different from other structures as it does not have 
+        // a fixed size; memory is allocated by the slice initializer based on the argument given
+        initializer.call(self, arg, fixed);
+        dv = self[MEMORY]; 
+      } else {
+        self[MEMORY] = dv = env.allocateMemory(byteSize, align, fixed);
+      }
+    } else {
+      if (alternateCaster) {
+        self = alternateCaster.call(this, arg);
+        if (self !== false) {
+          return self;
+        }
+      }
+      dv = requireDataView(structure, arg, env);
+      if (self = cache.find(dv, writable)) {
+        return self;
+      }
+      self = Object.create(writable ? constructor.prototype : constructor[CONST_PROTO]);
+      if (hasSlots) {
+        self[SLOTS] = {};
+      }
+      if (shapeDefiner) {
+        setDataView.call(self, dv, structure, false, { shapeDefiner });
+      } else {
+        self[MEMORY] = dv;
+      }
+    }
+    if (comptimeFieldSlots.length > 0 && template?.[SLOTS]) {
+      for (const slot of comptimeFieldSlots) {
+        self[SLOTS][slot] = template[SLOTS][slot];
+      }
+    }
+    if (creating && !shapeDefiner) {
+      initializer.call(self, arg);
+    }
+    if (finalizer) {
+      self = finalizer.call(self);
+    }
+    return cache.save(dv, writable, self); 
+  };
+  return constructor;
+}
+
+export function createPropertyApplier(structure) {
+  const { instance: { template } } = structure;  
+  return function(arg) {
+    const argKeys = Object.keys(arg);
+    const setters = this[SETTERS];
+    const allKeys = this[ALL_KEYS];
+    // don't accept unknown props
+    for (const key of argKeys) {
+      if (!(key in setters)) {
+        throwNoProperty(structure, key);
+      }
+    }
+    // checking each name so that we would see inenumerable initializers as well
+    let normalCount = 0;
+    let normalFound = 0;
+    let normalMissing = 0;
+    let specialFound = 0;
+    for (const key of allKeys) {
+      const set = setters[key];
+      if (set.special) {
+        if (key in arg) {
+          specialFound++;
+        }
+      } else {
+        normalCount++;
+        if (key in arg) {
+          normalFound++;
+        } else if (set.required) {
+          normalMissing++;
+        }
+      }
+    }
+    if (normalMissing !== 0 && specialFound === 0) {
+      const missing = allKeys.filter(k => setters[k].required && !(k in arg));
+      throwMissingInitializers(structure, missing)
+    }
+    if (specialFound + normalFound > argKeys.length) {
+      // some props aren't enumerable
+      for (const key of allKeys) {
+        if (key in arg) {
+          if (!argKeys.includes(key)) {
+            argKeys.push(key)
+          }
+        }
+      }
+    }
+    // apply default values unless all properties are initialized
+    if (normalFound < normalCount && specialFound === 0) {
+      if (template) {
+        if (template[MEMORY]) {
+          this[MEMORY_COPIER](template);
+        }
+        this[POINTER_VISITOR]?.(copyPointer, { vivificate: true, source: template });
+      }
+    }
+    for (const key of argKeys) {
+      const set = setters[key];
+      set.call(this, arg[key]);
+    }
+    return argKeys.length;
+  };
+}
+
+export function needSlots(members) {
   for (const { type } of members) {
     switch (type) {
       case MemberType.Object:

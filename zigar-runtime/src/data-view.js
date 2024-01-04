@@ -1,8 +1,8 @@
 import { StructureType } from './structure.js';
 import { MemberType, isByteAligned } from './member.js';
 import { getBitAlignFunction } from './memory.js';
-import { throwBufferSizeMismatch, throwBufferExpected, throwArrayLengthMismatch } from './error.js';
-import { MEMORY, COMPAT } from './symbol.js';
+import { throwBufferSizeMismatch, throwBufferExpected, throwArrayLengthMismatch, throwTypeMismatch } from './error.js';
+import { MEMORY, COMPAT, MEMORY_COPIER } from './symbol.js';
 
 export function getDataViewBoolAccessor(access, member) {
   return cacheMethod(access, member, () => {
@@ -58,7 +58,6 @@ function getDataViewBuiltInAccessor(access, member) {
     return DataView.prototype[name];
   });
 }
-
 
 export function getDataViewIntAccessor(access, member) {
   return getDataViewBuiltInAccessor(access, member);
@@ -144,15 +143,47 @@ export function getDataView(structure, arg, env) {
     }
   }
   if (dv) {
-    checkDataViewSize(structure, dv);
+    checkDataViewSize(dv, structure);
   }
   return dv;
 }
 
-export function checkDataViewSize(structure, dv) {
-  const { type, byteSize } = structure;
-  if (type === StructureType.Slice ? dv.byteLength % byteSize !== 0 : dv.byteLength !== byteSize) {
+export function checkDataView(dv) {
+  if (dv?.[Symbol.toStringTag] !== 'DataView') {
+    throwTypeMismatch('a DataView', dv);
+  }
+  return dv;
+}
+
+export function checkDataViewSize(dv, structure) {
+  const { byteSize, type } = structure;
+  const multiple = type === StructureType.Slice;
+  if (multiple ? dv.byteLength % byteSize !== 0 : dv.byteLength !== byteSize) {
     throwBufferSizeMismatch(structure, dv);
+  }
+}
+
+export function setDataView(dv, structure, copy, handlers) {
+  const { byteSize, type, sentinel } = structure;
+  const multiple = type === StructureType.Slice;
+  if (!this[MEMORY]) {
+    const { shapeDefiner } = handlers;
+    checkDataViewSize(dv, structure);
+    const len = dv.byteLength / byteSize;
+    const source = { [MEMORY]: dv };
+    sentinel?.validateData(source, len);
+    shapeDefiner.call(this, copy ? null : dv, len);
+    if (copy) {
+      this[MEMORY_COPIER](source);
+    }  
+  } else {
+    const byteLength = multiple ? byteSize * this.length : byteSize;
+    if (dv.byteLength !== byteLength) {
+      throwBufferSizeMismatch(structure, dv, this);
+    }
+    const source = { [MEMORY]: dv };
+    sentinel?.validateData(source, this.length);
+    this[MEMORY_COPIER](source); 
   }
 }
 
@@ -176,41 +207,29 @@ export function requireDataView(structure, arg, env) {
   return dv;
 }
 
-function getTypedArrayClass(structure) {
-  const { type, instance: { members } } = structure;
-  if (type === StructureType.Primitive) {
-    const { type: memberType, byteSize } = members[0];
-    if (memberType === MemberType.Int) {
-      switch (byteSize) {
-        case 1: return Int8Array;
-        case 2: return Int16Array;
-        case 4: return Int32Array;
-        case 8: return BigInt64Array;
-      }
-    } else if (memberType === MemberType.Uint) {
-      switch (byteSize) {
-        case 1: return Uint8Array;
-        case 2: return Uint16Array;
-        case 4: return Uint32Array;
-        case 8: return BigUint64Array;
-      }
-    } else if (memberType === MemberType.Float) {
-      switch (byteSize) {
-        case 4: return Float32Array;
-        case 8: return Float64Array;
-      }
+export function getTypedArrayClass(member) {
+  const { type: memberType, byteSize } = member;
+  if (memberType === MemberType.Int) {
+    switch (byteSize) {
+      case 1: return Int8Array;
+      case 2: return Int16Array;
+      case 4: return Int32Array;
+      case 8: return BigInt64Array;
     }
-  } else if (type === StructureType.Array || type === StructureType.Slice || type === StructureType.Vector) {
-    const { structure: { typedArray } } = members[0];
-    if (typedArray) {
-      return typedArray;
+  } else if (memberType === MemberType.Uint) {
+    switch (byteSize) {
+      case 1: return Uint8Array;
+      case 2: return Uint16Array;
+      case 4: return Uint32Array;
+      case 8: return BigUint64Array;
+    }
+  } else if (memberType === MemberType.Float) {
+    switch (byteSize) {
+      case 4: return Float32Array;
+      case 8: return Float64Array;
     }
   }
   return null;
-}
-
-export function addTypedArray(structure) {
-  return structure.typedArray = getTypedArrayClass(structure);
 }
 
 export function isTypedArray(arg, TypedArray) {

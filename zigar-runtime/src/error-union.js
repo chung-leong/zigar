@@ -1,12 +1,9 @@
-import { ObjectCache, attachDescriptors, needSlots } from './structure.js';
+import { attachDescriptors, createConstructor } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
-import { requireDataView } from './data-view.js';
-import { throwNoInitializer } from './error.js';
 import { copyPointer, resetPointer } from './pointer.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
-import { ALIGN, CHILD_VIVIFICATOR, CONST, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SIZE, SLOTS,
-  VALUE_NORMALIZER,
+import { ALIGN, CHILD_VIVIFICATOR, MEMORY_COPIER, POINTER_VISITOR, SIZE, VALUE_NORMALIZER,
   VALUE_RESETTER } from './symbol.js';
 import { getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
 
@@ -19,8 +16,6 @@ export function defineErrorUnion(s, env) {
   } = s;
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getError, set: setError } = getDescriptor(members[1], env);
-  const { structure: errorStructure } = members[1];
-  const { constructor: ErrorSet } = errorStructure;
   const set = function(value) {
     if (value instanceof Error) {
       setError.call(this, value);
@@ -45,38 +40,6 @@ export function defineErrorUnion(s, env) {
     return !error;
   };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const hasSlots = needSlots(s);
-  const cache = new ObjectCache();
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = (writable) ? this : Object.create(constructor[CONST].prototype);
-      dv = env.allocateMemory(byteSize, align, fixed);
-    } else {
-      dv = requireDataView(s, arg, env);
-      if (self = cache.find(dv, writable)) {
-        return self;
-      }
-      const c = (writable) ? constructor : constructor[CONST];
-      self = Object.create(c.prototype);
-    }
-    self[MEMORY] = dv;
-    if (hasSlots) {
-      self[SLOTS] = {};
-    }
-    if (creating) {
-      initializer.call(this, arg);
-    }
-    return cache.save(dv, writable, self);
-  };
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[MEMORY_COPIER](arg);
@@ -89,11 +52,12 @@ export function defineErrorUnion(s, env) {
       this.$ = arg;
     }
   };
+  const constructor = s.constructor = createConstructor(s, { initializer }, env);
   const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
   const instanceDescriptors = {
     '$': { get, set },
     dataView: getDataViewAccessors(s),
-    base64: getBase64Accessors(),
+    base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: getValueOf },
     delete: { value: getDestructor(env) },

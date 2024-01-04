@@ -1,22 +1,20 @@
-import { ObjectCache, attachDescriptors, getSelf } from './structure.js';
+import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { requireDataView, addTypedArray, getCompatibleTags } from './data-view.js';
-import { throwInvalidArrayInitializer, throwArrayLengthMismatch, 
-  throwNoInitializer } from './error.js';
-import { ALIGN, COMPAT, CONST, MEMORY, MEMORY_COPIER, SIZE } from './symbol.js';
+import { getTypedArrayClass, getCompatibleTags } from './data-view.js';
+import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
+import { ALIGN, COMPAT, MEMORY_COPIER, SETTERS, SIZE } from './symbol.js';
 import { getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors } from './special.js';
 
-export function defineVector(s, env) {
+export function defineVector(structure, env) {
   const {
     length,
     byteSize,
     align,
     instance: { members: [ member ] },
-  } = s;
-  addTypedArray(s);
+  } = structure;
   /* DEV-TEST */
-  /* c8 ignore next 6 */
+  /* c8 ignore next 6 */  
   if (member.bitOffset !== undefined) {
     throw new Error(`bitOffset must be undefined for vector member`);
   }
@@ -26,77 +24,52 @@ export function defineVector(s, env) {
   /* DEV-TEST-END */
   const { bitSize: elementBitSize, structure: elementStructure } = member;
   const elementDescriptors = {};
-  const elementSetters = {};
   for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
     const { get, set } = getDescriptor({ ...member, bitOffset }, env);
     elementDescriptors[i] = { get, set, configurable: true };
-    elementSetters[i] = set;
   }
-  const cache = new ObjectCache();
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = (writable) ? this : Object.create(constructor[CONST].prototype);
-      dv = env.allocateMemory(byteSize, align, fixed);
-    } else {
-      dv = requireDataView(s, arg, env);
-      if (self = cache.find(dv, writable)) {
-        return self;
-      }
-      const c = (writable) ? constructor : constructor[CONST];
-      self = Object.create(c.prototype);
-    }
-    self[MEMORY] = dv;
-    if (creating) {
-      initializer.call(self, arg);
-    }
-    return cache.save(dv, writable, self);
-  };
+  const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[MEMORY_COPIER](arg);
-    } else {
-      if (arg?.[Symbol.iterator]) {
-        let argLen = arg.length;
-        if (typeof(argLen) !== 'number') {
-          arg = [ ...arg ];
-          argLen = arg.length;
-        }
-        if (argLen !== length) {
-          throwArrayLengthMismatch(s, this, arg);
-        }
-        let i = 0;
-        for (const value of arg) {
-          elementSetters[i++].call(this, value);
-        }
-      } else if (arg !== undefined) {
-        throwInvalidArrayInitializer(s, arg);
+    } else if (arg?.[Symbol.iterator]) {
+      let argLen = arg.length;
+      if (typeof(argLen) !== 'number') {
+        arg = [ ...arg ];
+        argLen = arg.length;
       }
+      if (argLen !== length) {
+        throwArrayLengthMismatch(structure, this, arg);
+      }
+      let i = 0;
+      for (const value of arg) {
+        this[SETTERS][i++].call(this, value);
+      }
+    } else if (arg && typeof(arg) === 'object') {
+      if (propApplier.call(this, arg) === 0) {
+        throwInvalidArrayInitializer(structure, arg);
+      }
+    } else if (arg !== undefined) {
+      throwInvalidArrayInitializer(structure, arg);
     }
   };
+  const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
   const instanceDescriptors = {
     ...elementDescriptors,
     $: { get: getSelf, set: initializer },
     length: { value: length },
-    dataView: getDataViewAccessors(s),
-    base64: getBase64Accessors(),
-    typedArray: s.typedArray && getTypedArrayAccessors(s),
+    dataView: getDataViewAccessors(structure),
+    base64: getBase64Accessors(structure),
+    typedArray: typedArray && getTypedArrayAccessors(structure),
     entries: { value: createVectorEntries },
-    delete: { value: getDestructor(s) },
+    delete: { value: getDestructor(structure) },
     [Symbol.iterator]: { value: getVectorIterator },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
   };
   const staticDescriptors = {
     child: { get: () => elementStructure.constructor },
-    [COMPAT]: { value: getCompatibleTags(s) },
+    [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   };

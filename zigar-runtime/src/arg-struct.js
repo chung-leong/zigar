@@ -5,15 +5,15 @@ import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { ALIGN, CHILD_VIVIFICATOR, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SIZE, SLOTS } from './symbol.js';
 import { getMemoryCopier } from './memory.js';
 
-export function defineArgStruct(s, env) {
+export function defineArgStruct(structure, env) {
   const {
     byteSize,
     align,
     instance: { members },
     hasPointer,
-  } = s;
+  } = structure;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const constructor = s.constructor = function(args) {
+  const constructor = structure.constructor = function(args) {
     const dv = env.allocateMemory(byteSize, align);
     this[MEMORY] = dv;
     if (hasObject) {
@@ -25,13 +25,13 @@ export function defineArgStruct(s, env) {
   const argCount = argNames.length;
   const initializer = function(args) {
     if (args.length !== argCount) {
-      throwArgumentCountMismatch(s, args.length);
+      throwArgumentCountMismatch(structure, args.length);
     }
     for (const [ index, name ] of argNames.entries()) {
       try {
         this[name] = args[index];
       } catch (err) {
-        rethrowArgumentError(s, index, err);
+        rethrowArgumentError(structure, index, err);
       }
     }
   };
@@ -45,8 +45,8 @@ export function defineArgStruct(s, env) {
   defineProperties(constructor.prototype, {
     ...memberDescriptors,
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(s) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(s, { isChildMutable }) },
+    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildMutable }) },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },

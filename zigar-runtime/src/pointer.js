@@ -1,22 +1,22 @@
-import { ObjectCache, StructureType, attachDescriptors, defineProperties } from './structure.js';
+import { StructureType, attachDescriptors, createConstructor } from './structure.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { requireDataView, getDataView, isCompatible, isBuffer } from './data-view.js';
+import { getDataView, isCompatible, isBuffer } from './data-view.js';
 import { MemberType, getDescriptor } from './member.js';
 import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerTarget,
-  throwAssigningToConstant, throwConstantConstraint, throwNoInitializer,
-  throwFixedMemoryTargetRequired, addArticle, throwReadOnly, throwNullPointer, throwReadOnlyTarget } from './error.js';
+  throwAssigningToConstant, throwConstantConstraint, throwFixedMemoryTargetRequired, addArticle, 
+  throwNullPointer, throwReadOnlyTarget } from './error.js';
 import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, CONST, ENVIRONMENT, 
   LENGTH_GETTER, LENGTH_SETTER, MEMORY, MEMORY_COPIER, PARENT, POINTER_SELF, POINTER_VISITOR, 
   PROXY, SLOTS, SIZE, VALUE_NORMALIZER } from './symbol.js';
 import { getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
 
-export function definePointer(s, env) {
+export function definePointer(structure, env) {
   const {
     byteSize,
     align,
     instance: { members: [ member ] },
     isConst,
-  } = s;
+  } = structure;
   const {
     runtimeSafety = true,
   } = env;
@@ -39,119 +39,88 @@ export function definePointer(s, env) {
     byteSize: addressSize,
     structure: { name: 'usize', byteSize: addressSize },
   }, env) : {};
-  const cache = new ObjectCache();
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const calledFromEnviroment = this === ENVIRONMENT;
-    const calledFromParent = this === PARENT;
-    let creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = this;
-      dv = env.allocateMemory(byteSize, align, fixed);
+  const { get, set } = getDescriptor(member, env);
+  const alternateCaster = function(arg) {
+    const Target = targetStructure.constructor;
+    if (isPointerOf(arg, Target)) {
+      return new constructor(arg['*'], { writable: !isConst });
+    } else if (isTargetSlice) {
+      // allow casting to slice through constructor of its pointer
+      return new constructor(arg, { writable: !isConst });
     } else {
-      if (calledFromEnviroment || calledFromParent) {
-        dv = requireDataView(s, arg, env);
-        if (self = cache.find(dv, writable)) {
-          return self;
-        }
-        self = Object.create(constructor.prototype); 
-      } else {
-        const Target = targetStructure.constructor;
-        if (isPointerOf(arg, Target)) {
-          creating = true;
-          arg = Target(arg['*'], { writable: !isConst });
-        } else if (isTargetSlice) {
-          // allow casting to slice through constructor of its pointer
-          creating = true;
-          arg = Target(arg, { writable: !isConst });
-        } else {
-          throwNoCastingToPointer(s);
-        }
-        dv = env.allocateMemory(byteSize, align, fixed);
-        self = Object.create(constructor.prototype); 
+      if (this !== ENVIRONMENT && this !== PARENT) {
+        // don't allow casting to pointer unless it's done by the runtime environment
+        throwNoCastingToPointer(structure);
       }
+      return false;
     }
-    self[MEMORY] = dv;
-    self[SLOTS] = { 0: null };
-    if (creating) {
-      initializer.call(self, arg);
-    }
-    if (!writable) {
-      defineProperties(self, {
-        '$': { get: getProxy, set: throwReadOnly, configurable: true, },
-        [CONST]: { value: true, configurable: true },
-      });
-    }
-    const proxy = createProxy.call(self, isConst, isTargetPointer);
-    return cache.save(dv, writable, proxy);
+  };
+  const finalizer = function() {
+    const handlers = (isTargetPointer) ? {} : proxyHandlers;
+    const proxy = new Proxy(this, handlers);
+    // hide the proxy so console wouldn't display a recursive structure
+    Object.defineProperty(this, PROXY, { value: proxy });
+    return proxy;
   };
   const initializer = function(arg) {
     const Target = targetStructure.constructor;
     if (isPointerOf(arg, Target)) {
-      // initialize with the other pointer's target
+      // initialize with the other pointer'structure target
       if (!isConst && arg.constructor.const) {
-        throwConstantConstraint(s, arg);
+        throwConstantConstraint(structure, arg);
       }
-      initializer.call(this, arg[SLOTS][0]);
+      arg = arg[SLOTS][0];
+    }
+    if (arg instanceof Target) {
+      if (isConst && !arg[CONST]) {
+        // create read-only version
+        arg = Target(arg, { writable: false });
+      } else if (!isConst && arg[CONST]) {
+        throwReadOnlyTarget(structure);
+      }
     } else {
-      if (arg instanceof Target) {
-        if (isConst && !arg[CONST]) {
-          // create read-only version
-          arg = Target(arg, { writable: false });
-        } else if (!isConst && arg[CONST]) {
-          throwReadOnlyTarget(s);
+      if (isCompatible(arg, Target)) {
+        // autocast to target type
+        const dv = getDataView(targetStructure, arg, env);
+        arg = Target(dv, { writable: !isConst });
+      } else if (isTargetSlice) {
+        // autovivificate target object
+        const autoObj = new Target(arg, { writable: !isConst });
+        if (runtimeSafety) {
+          // creation of a new slice using a typed array is probably
+          // not what the user wants; it's more likely that the intention
+          // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
+          if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
+            const created = addArticle(targetStructure.typedArray.name);
+            const source = addArticle(arg.constructor.name);
+            console.warn(`Implicitly creating ${created} from ${source}`);
+          }
+        }
+        arg = autoObj;
+      } else {
+        throwInvalidPointerTarget(structure, arg);
+      }
+    }
+    if (env.inFixedMemory(this)) {
+      // the pointer sits in shared memory--apply the change immediately
+      if (env.inFixedMemory(arg)) {
+        const address = env.getViewAddress(arg[MEMORY]);
+        setAddress.call(this, address);
+        if (setLength) {
+          setLength.call(this, arg.length);
         }
       } else {
-        if (isCompatible(arg, Target)) {
-          // autocast to target type
-          const dv = getDataView(targetStructure, arg, env);
-          arg = Target(dv, { writable: !isConst });
-        } else if (isTargetSlice) {
-          // autovivificate target object
-          const autoObj = new Target(arg, { writable: !isConst });
-          if (runtimeSafety) {
-            // creation of a new slice using a typed array is probably
-            // not what the user wants; it's more likely that the intention
-            // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
-            if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
-              const created = addArticle(targetStructure.typedArray.name);
-              const source = addArticle(arg.constructor.name);
-              console.warn(`Implicitly creating ${created} from ${source}`);
-            }
-          }
-          arg = autoObj;
-        } else {
-          throwInvalidPointerTarget(s, arg);
-        }
+        throwFixedMemoryTargetRequired(structure, arg);
       }
-      if (env.inFixedMemory(this)) {
-        // the pointer sits in shared memory--apply the change immediately
-        if (env.inFixedMemory(arg)) {
-          const address = env.getViewAddress(arg[MEMORY]);
-          setAddress.call(this, address);
-          if (setLength) {
-            setLength.call(this, arg.length);
-          }
-        } else {
-          throwFixedMemoryTargetRequired(s, arg);
-        }
-      }
-      this[SLOTS][0] = arg;
     }
+    this[SLOTS][0] = arg;
   };
-  const { get, set } = getDescriptor(member, env);
+  const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster, finalizer }, env);
   const instanceDescriptors = {
     '*': { get, set },
     '$': { get: getProxy, set: initializer },
-    dataView: getDataViewAccessors(s),
-    base64: getBase64Accessors(),
+    dataView: getDataViewAccessors(structure),
+    base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: getValueOf },
     delete: { value: getDestructor(env) },
@@ -187,7 +156,7 @@ export function copyPointer({ source }) {
 }
 
 export function resetPointer({ isActive }) {
-  if (this[SLOTS][0] && !isActive()) {
+  if (this[SLOTS][0] && !isActive(this)) {
     this[SLOTS][0] = null;
   }
 }
@@ -211,14 +180,6 @@ function visitPointer(fn, options = {}) {
 
 function isPointerOf(arg, Target) {
   return (arg?.constructor?.child === Target && arg['*']);
-}
-
-function createProxy(isConst, isTargetPointer) {
-  const handlers = (!isTargetPointer) ? (isConst) ? constProxyHandlers : proxyHandlers : {};
-  const proxy = new Proxy(this, handlers);
-  // hide the proxy so console wouldn't display a recursive structure
-  Object.defineProperty(this, PROXY, { value: proxy });
-  return proxy;
 }
 
 const isPointerKeys = {

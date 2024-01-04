@@ -707,7 +707,7 @@ describe('Structure functions', function() {
           ]
         }
       };
-      expect(needSlots(structure)).to.be.true;
+      expect(needSlots(structure.instance.members)).to.be.true;
     });
     it('should return true when a structure has comptime fields', function() {
       const structure = {
@@ -720,7 +720,7 @@ describe('Structure functions', function() {
           ]
         }
       };
-      expect(needSlots(structure)).to.be.true;
+      expect(needSlots(structure.instance.members)).to.be.true;
     });
   })
   describe('getSelf', function() {

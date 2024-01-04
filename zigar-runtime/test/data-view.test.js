@@ -7,7 +7,7 @@ import { getIntRange } from '../src/primitive.js';
 import {
   isBuffer,
   isTypedArray,
-  addTypedArray,
+  getTypedArrayClass,
   getTypeName,
   getDataView,
   requireDataView,
@@ -20,6 +20,8 @@ import {
   getDataViewFloatAccessor,
   getDataViewFloatAccessorEx,
   clearMethodCache,
+  checkDataView,
+  checkDataViewSize,
 } from '../src/data-view.js';
 import { Environment } from '../src/environment.js';
 import { MEMORY } from '../src/symbol.js';
@@ -63,8 +65,8 @@ describe('Data view functions', function() {
       expect(isTypedArray(ta)).to.be.false;
     })
   })
-  describe('addTypedArray', function() {
-    it('should add typed array to integer primitive', function() {
+  describe('getTypedArrayClass', function() {
+    it('should return typed array constructor for integer primitive', function() {
       let index = 0;
       const types = [
         Int8Array,
@@ -78,42 +80,27 @@ describe('Data view functions', function() {
       ];
       for (const byteSize of [ 1, 2, 4, 8 ]) {
         for (const type of [ MemberType.Int, MemberType.Uint ]) {
-          const structure = {
-            type: StructureType.Primitive,
-            instance: {
-              members: [
-                {
-                  type,
-                  bitSize: byteSize * 8,
-                  byteSize,
-                },
-              ],
-            },
-          }
-          const f = addTypedArray(structure);
-          expect(f).to.equal(structure.typedArray);
+          const member = {
+            type,
+            bitSize: byteSize * 8,
+            byteSize,
+          };
+          const f = getTypedArrayClass(member)
           expect(f).to.be.a('function');
           expect(f).to.equal(types[index++]);
         }
       }
     })
-    it('should add typed array to non-standard integer when byte size match', function() {
-      const structure = {
-        type: StructureType.Primitive,
-        instance: {
-          members: [
-            {
-              type: MemberType.Uint,
-              bitSize: 36,
-              byteSize: 8,
-            },
-          ],
-        },
+    it('should return a typed array constructor for non-standard integer', function() {
+      const member = {
+        type: MemberType.Uint,
+        bitSize: 36,
+        byteSize: 8,
       };
-      const f = addTypedArray(structure);
+      const f = getTypedArrayClass(member);
       expect(f).to.equal(BigUint64Array);
     })
-    it('should add typed array to floating point primitive', function() {
+    it('should return typed array constructor for floating point', function() {
       let index = 0;
       const types = [
         null,
@@ -122,78 +109,14 @@ describe('Data view functions', function() {
         null,
       ];
       for (const byteSize of [ 2, 4, 8, 16 ]) {
-        const structure = {
-          type: StructureType.Primitive,
-          instance: {
-            members: [
-              {
-                type: MemberType.Float,
-                bitSize: byteSize * 8,
-                byteSize,
-              },
-            ],
-          },
+        const member = {
+          type: MemberType.Float,
+          bitSize: byteSize * 8,
+          byteSize,
         };
-        const f = addTypedArray(structure);
+        const f = getTypedArrayClass(member);
         expect(f).to.equal(types[index++]);
       }
-    })
-    it('should add typed array of child element to array', function() {
-      const structure = {
-        type: StructureType.Array,
-        instance: {
-          members: [
-            {
-              type: MemberType.Float,
-              bitSize: 64,
-              byteSize: 8,
-              structure: {
-                typedArray: Float64Array,
-              },
-            },
-          ],
-        }
-      };
-      const f = addTypedArray(structure);
-      expect(f).to.equal(Float64Array);
-    })
-    it('should add typed array of child element to slice', function() {
-      const structure = {
-        type: StructureType.Slice,
-        instance: {
-          members: [
-            {
-              type: MemberType.Float,
-              bitSize: 64,
-              byteSize: 8,
-              structure: {
-                typedArray: Float64Array,
-              },
-            },
-          ],
-        }
-      };
-      const f = addTypedArray(structure);
-      expect(f).to.equal(Float64Array);
-    })
-    it('should add typed array of child element to vector', function() {
-      const structure = {
-        type: StructureType.Vector,
-        instance: {
-          members: [
-            {
-              type: MemberType.Float,
-              bitSize: 64,
-              byteSize: 8,
-              structure: {
-                typedArray: Float64Array,
-              },
-            },
-          ],
-        }
-      };
-      const f = addTypedArray(structure);
-      expect(f).to.equal(Float64Array);
     })
   })
   describe('getDataView', function() {
@@ -1650,6 +1573,19 @@ describe('Data view functions', function() {
           }
         }
       }
+    })
+  })
+  describe('checkDataView', function() {
+    it('should not throw when a DataView is given', function() {
+      const arg = new DataView(new ArrayBuffer(4));
+      expect(() => checkDataView(arg)).to.not.throw();
+    })
+    it('should throw when the given object is not a DataView', function() {
+      const arg = new ArrayBuffer(4);
+      expect(() => checkDataView(arg)).to.throw(TypeError);
+      expect(() => checkDataView(1)).to.throw(TypeError);
+      expect(() => checkDataView(null)).to.throw(TypeError);
+      expect(() => checkDataView(undefined)).to.throw(TypeError);
     })
   })
 })

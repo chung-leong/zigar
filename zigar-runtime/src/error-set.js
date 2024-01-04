@@ -1,4 +1,4 @@
-import { ObjectCache, attachDescriptors } from './structure.js';
+import { ObjectCache, attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView } from './data-view.js';
@@ -8,73 +8,55 @@ import { getBase64Accessors, getDataViewAccessors, getValueOf } from './special.
 
 let currentErrorSets;
 
-export function defineErrorSet(s, env) {
+export function defineErrorSet(structure, env) {
   const {
     name,
     byteSize,
     align,
     instance: { members: [ member ] },
-  } = s;
-  const byIndex = {};
-  const messages = {};
-  const cache = new ObjectCache();  
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = (writable) ? this : Object.create(constructor[CONST].prototype);
-      dv = env.allocateMemory(byteSize, align, fixed);
-    } else {
-      if (typeof(arg) === 'number') {
-        return byIndex[arg];  
-      } else if (typeof(arg) === 'string') {
-        for (const err of Object.values(constructor)) {
-          if (err.toString() === arg) {
-            return err;
-          }
-        }
-        return;
-      } else {
-        dv = getDataView(s, arg, env);
-        if (!dv) {
-          throwInvalidInitializer(s, [ 'string', 'number' ], arg);
-        }
-        if (self = cache.find(dv, writable)) {
-          return self;
-        }
-        const c = (writable) ? constructor : constructor[CONST];
-        self = Object.create(c.prototype);
-      }
-    }
-    self[MEMORY] = dv;
-    if (creating) {
-      set.call(self, arg);
-    }
-    return cache.save(dv, writable, self);
-  };
-  Object.setPrototypeOf(constructor.prototype, Error.prototype);
+  } = structure;
   const { get: getIndex } = getDescriptor(member, env);
+  // get the enum descriptor instead of the int/uint descriptor
+  const { get, set } = getDescriptor({ ...member, type: MemberType.Error, structure }, env);
+  const expected = [ 'string', 'number' ];
+  const propApplier = createPropertyApplier(s);
+  const initializer = function(arg) {
+    if (arg && typeof(arg) === 'object') {
+      if (propApplier.call(this, arg) === 0) {
+        throwInvalidInitializer(s, expected, arg);
+      }
+    } else {
+      set.call(this, arg);
+    }
+  };
+  const alternateCaster = function(arg) {
+    if (typeof(arg) === 'number') {
+      return constructor[ERROR_ITEMS][arg];
+    } else if (typeof(arg) === 'string') {
+      for (const err of Object.values(constructor[ERROR_ITEMS])) {
+        if (err.toString() === arg) {
+          return err;
+        }
+      }
+    } else if (!getDataView(structure, arg, env)) {
+      throwInvalidInitializer(structure, expected, arg);
+    } else {
+      return false;
+    }
+  };
+  const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
+  Object.setPrototypeOf(constructor.prototype, Error.prototype);
   const getMessage = function() {
     const index = getIndex.call(this);
-    return messages[index];
+    return constructor[ERROR_MESSAGES][index];
   };
-  // get the enum descriptor instead of the int/uint descriptor
-  const errorMember = { ...member, structure: s, type: MemberType.Error };
-  const { get, set } = getDescriptor(errorMember, env);
   const toStringTag = function() { return 'Error' };
   const instanceDescriptors = {
     $: { get, set },
     index: { get: getIndex },
     message: { get: getMessage },
-    dataView: getDataViewAccessors(s),
-    base64: getBase64Accessors(),
+    dataView: getDataViewAccessors(structure),
+    base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: getValueOf },
     delete: { value: getDestructor(env) },
@@ -87,8 +69,8 @@ export function defineErrorSet(s, env) {
   const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-    [ERROR_ITEMS]: { value: byIndex },
-    [ERROR_MESSAGES]: { value: messages },
+    [ERROR_ITEMS]: { value: {} },
+    [ERROR_MESSAGES]: { value: {} },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };

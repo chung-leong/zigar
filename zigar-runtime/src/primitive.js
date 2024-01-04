@@ -1,87 +1,42 @@
-import { ObjectCache, attachDescriptors, needSlots } from './structure.js';
+import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import { MemberType, isByteAligned, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { getCompatibleTags, addTypedArray, requireDataView } from './data-view.js';
-import { getBase64Accessors, getDataViewAccessors, getSpecialKeys, getTypedArrayAccessors } from './special.js';
-import { ALIGN, COMPAT, CONST, MEMORY, MEMORY_COPIER, SIZE, SLOTS } from './symbol.js';
-import { throwInvalidInitializer, throwNoInitializer, throwNoProperty } from './error.js';
+import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
+import { getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors } from './special.js';
+import { ALIGN, COMPAT, MEMORY_COPIER, SIZE } from './symbol.js';
+import { throwInvalidInitializer } from './error.js';
 
-export function definePrimitive(s, env) {
+export function definePrimitive(structure, env) {
   const {
     byteSize,
     align,
     instance: { members: [ member ] },
-  } = s;
-  addTypedArray(s);
-  const hasSlots = needSlots(s);
-  const cache = new ObjectCache();
-  const constructor = s.constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(s);
-      }
-      self = (writable) ? this : Object.create(constructor[CONST].prototype);
-      dv = env.allocateMemory(byteSize, align, fixed);
-    } else {
-      dv = requireDataView(s, arg, env);
-      if (self = cache.find(dv, writable)) {
-        return self;
-      }
-      const c = (writable) ? constructor : constructor[CONST];
-      self = Object.create(c.prototype);
-    }
-    self[MEMORY] = dv;
-    if (hasSlots) {
-      self[SLOTS] = {};
-    }
-    if (creating) {
-      initializer.call(self, arg);
-    } 
-    return cache.save(dv, writable, self);
-  };
-  const specialKeys = getSpecialKeys(s);
+  } = structure;
+  const { get, set } = getDescriptor(member, env);
+  const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[MEMORY_COPIER](arg);
     } else {
       if (arg && typeof(arg) === 'object') {
-        for (const key of Object.keys(arg)) {
-          if (!(key in this)) {
-            throwNoProperty(s, key);
-          }
-        }
-        let specialFound = 0;
-        for (const key of specialKeys) {
-          if (key in arg) {
-            specialFound++;
-          }
-        }
-        if (specialFound === 0) {
+        if (propApplier.call(this, arg) === 0) {
           const type = getPrimitiveType(member);
-          throwInvalidInitializer(s, type, arg);
-        }
-        for (const key of specialKeys) {
-          if (key in arg) {
-            this[key] = arg[key];
-          }
+          throwInvalidInitializer(structure, type, arg);
         }
       } else if (arg !== undefined) {
-        this.$ = arg;
+        set.call(this, arg);
+      } else {
+        throwInvalidInitializer(structure, type, arg);
       }
     }
   };
-  const { get, set } = getDescriptor(member, env);
+  const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
   const instanceDescriptors = {
     $: { get, set },
-    dataView: getDataViewAccessors(s),
-    base64: getBase64Accessors(),
-    typedArray: s.typedArray && getTypedArrayAccessors(s),
+    dataView: getDataViewAccessors(structure),
+    base64: getBase64Accessors(structure),
+    typedArray: typedArray && getTypedArrayAccessors(structure),
     valueOf: { value: get },
     toJSON: { value: get },
     delete: { value: getDestructor(env) },
@@ -89,7 +44,7 @@ export function definePrimitive(s, env) {
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
   };
   const staticDescriptors = {
-    [COMPAT]: { value: getCompatibleTags(s) },
+    [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   };
