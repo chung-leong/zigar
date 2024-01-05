@@ -265,7 +265,7 @@ describe('Special property functions', function() {
         [MEMORY]: dv,
         [MEMORY_COPIER]: getMemoryCopier(4, false),
       };
-      set.call(object, 1234);
+      expect(() => set.call(object, 1234)).to.throw(TypeError);
     })
   })
   describe('getTypedArrayAccessors', function() {

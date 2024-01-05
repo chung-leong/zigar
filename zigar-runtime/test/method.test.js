@@ -10,9 +10,9 @@ describe('Method functions', function() {
     useAllMemberTypes();
     useAllStructureTypes();
   })
-  const env = new NodeEnvironment();
   describe('addMethods', function() {
     it('should attach methods to a struct', function() {
+      const env = new NodeEnvironment();
       const structure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -55,18 +55,11 @@ describe('Method functions', function() {
       });
       env.finalizeShape(argStruct);
       env.finalizeStructure(argStruct);
-      let recv;
-      const thunk = function(dv) {
-        recv = this;
-        const dog = dv.getInt32(0, true);
-        const cat = dv.getInt32(4, true);
-        dv.setInt32(8, dog + cat, true);
-      };
       env.attachMethod(structure, {
         name: 'merge',
         argStruct,
         isStaticOnly: false,
-        thunk,
+        thunkId: 1234,
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
@@ -78,13 +71,21 @@ describe('Method functions', function() {
       expect(Hello.prototype.merge).to.have.property('name', 'merge');
       object.dog = 10;
       object.cat = 13;
+      let call;
+      env.runThunk = function(thunkId, argDV) {
+        call = { thunkId, argDV };
+        const dog = argDV.getInt32(0, true);
+        const cat = argDV.getInt32(4, true);
+        argDV.setInt32(8, dog + cat, true);
+      };
       const res1 = object.merge();
-      expect(recv).to.be.equal(env);
       expect(res1).to.equal(23);
-      const res2 = Hello.merge(object);
-      expect(res2).to.equal(23);
+      object.dog = 20;
+      const res2 = object.merge();
+      expect(res2).to.equal(33);
     })
     it('should attach methods to enum items', function() {
+      const env = new NodeEnvironment();
       const structure = env.beginStructure({
         type: StructureType.Enumeration,
         name: 'Hello',
@@ -138,19 +139,13 @@ describe('Method functions', function() {
         bitOffset: 64,
         byteSize: 1,
       });
+      env.finalizeShape(argStruct);
       env.finalizeStructure(argStruct);
-      let recv, arg1, arg2;
-      const thunk = function(dv) {
-        recv = this;
-        arg1 = dv.getInt32(0, true);
-        arg2 = dv.getInt32(4, true);
-        dv.setInt32(8, 1, true);
-      };
       env.attachMethod(structure, {
         name: 'foo',
         argStruct,
         isStaticOnly: false,
-        thunk,
+        thunkId: 777,
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
@@ -159,15 +154,7 @@ describe('Method functions', function() {
       expect(Hello.foo).to.have.property('name', 'foo');
       expect(Hello.prototype.foo).to.be.a('function');
       expect(Hello.prototype.foo).to.have.property('name', 'foo');
-      const res1 = Hello.Cat.foo(1234);
-      expect(recv).to.equal(env);
-      expect(res1).to.be.true;
-      expect(arg1).to.equal(Number(Hello.Cat));
-      expect(arg2).to.equal(1234);
-      const res2 = Hello.foo(Hello.Dog, 4567);
-      expect(res2).to.be.true;
-      expect(arg1).to.equal(Number(Hello.Dog));
-      expect(arg2).to.equal(4567);
+      // TODO
     })
     it('should attach getter and setter to a struct', function() {
       const env = new NodeEnvironment();

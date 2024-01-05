@@ -479,7 +479,7 @@ describe('Structure functions', function() {
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useEnumeration');
       expect(features).to.contain('useEnumerationItem');
-      expect(features).to.contain('useUintEx');
+      expect(features).to.contain('useUint');
     })
     it('should report the need for extended enum support when non-standard int is involved', function() {
       const structures = [ 
