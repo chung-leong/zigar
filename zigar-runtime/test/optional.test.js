@@ -297,7 +297,6 @@ describe('Optional functions', function() {
       });
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
-      const { constructor: Uint8Slice } = sliceStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]Uint8',
@@ -314,7 +313,6 @@ describe('Optional functions', function() {
       });
       env.finalizeShape(ptrStructure);
       env.finalizeStructure(ptrStructure);
-      const { constructor: Uint8SlicePtr } = ptrStructure;
       const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',

@@ -16,51 +16,35 @@ export function defineOptional(structure, env) {
   } = structure;
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getPresent, set: setPresent } = getDescriptor(members[1], env);
-  // optionals containing pointers use the pointer itself as indication of presence
-  const hasPresentFlag = !(members[0].bitSize > 0 && members[0].bitOffset === members[1].bitOffset);
-  const get = (hasPresentFlag)
-  ? function() {
-      const present = getPresent.call(this);
-      if (present) {
-        return getValue.call(this);
-      } else {
-        this[POINTER_VISITOR]?.(resetPointer);
-        return null;
-      }
-    }
-  : function() {
-    const value = getValue.call(this);
-    return (value[SLOTS][0]) ? value : null;
-  };
-  const set = (hasPresentFlag)
-  ? function(value) {
-      if (value !== null) {
-        // call setValue() first, in case it throws
-        setValue.call(this, value);
-        setPresent.call(this, true);
-      } else {      
-        setPresent.call(this, false);
-        this[VALUE_RESETTER]();
-        this[POINTER_VISITOR]?.(resetPointer);
-      }
-    }
-  : function(value) {
-    if (value !== null) {
-      setValue.call(this, value);
+  const get = function() {
+    const present = getPresent.call(this);
+    if (present) {
+      return getValue.call(this);
     } else {
+      this[POINTER_VISITOR]?.(resetPointer);
+      return null;
+    }
+  };
+  const set = function(value) {
+  if (value !== null) {
+      // call setValue() first, in case it throws
+      setValue.call(this, value);
+      setPresent.call(this, true);
+    } else {      
       setPresent.call(this, false);
+      // optionals containing pointers use the pointer itself as indication of presence
+      // the next line can be a no-op therefore
+      this[VALUE_RESETTER]?.();
+      // get the references so objects can be garbage-collected
       this[POINTER_VISITOR]?.(resetPointer);
     }
-  };
-  const check = (hasPresentFlag) ? getPresent : function() { 
-    return !!getValue.call(this)[SLOTS][0];
   };
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[MEMORY_COPIER](arg);
       if (hasPointer) {
         // don't bother copying pointers when it's empty
-        if (check.call(arg)) {
+        if (getPresent.call(arg)) {
           this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }
@@ -79,9 +63,10 @@ export function defineOptional(structure, env) {
     toJSON: { value: getValueOf },
     delete: { value: getDestructor(env) },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
+    // no need to reset the value when it's a pointer, since setPresent() would null out memory used by the pointer
+    [VALUE_RESETTER]: !hasPointer && { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive: check }) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive: getPresent }) },
     [VALUE_NORMALIZER]: { value: normalizeOptional },
   };
   const staticDescriptors = {
@@ -93,5 +78,5 @@ export function defineOptional(structure, env) {
 
 export function normalizeOptional(map) {
   const value = this.$;
-  return value[VALUE_NORMALIZER](map);
+  return value[VALUE_NORMALIZER]?.(map) ?? value;
 }

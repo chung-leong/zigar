@@ -110,7 +110,7 @@ export function normalizeArray(map) {
   if (!array) {
     array = [];
     for (const value of this) {      
-      array.push(typeof(value) === 'object' ? value[VALUE_NORMALIZER](map) : value);
+      array.push(value[VALUE_NORMALIZER]?.(map) ?? value);
     }
     map.set(this, array);
   }

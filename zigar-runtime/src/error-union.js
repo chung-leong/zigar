@@ -76,5 +76,5 @@ export function defineErrorUnion(structure, env) {
 
 export function normalizeErrorUnion(map) {
   const value = this.$;
-  return value[VALUE_NORMALIZER](map);
+  return value[VALUE_NORMALIZER]?.(map) ?? value;
 }

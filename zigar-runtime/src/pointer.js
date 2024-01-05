@@ -3,8 +3,8 @@ import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView, isCompatible, isBuffer } from './data-view.js';
 import { MemberType, getDescriptor } from './member.js';
 import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerTarget,
-  throwAssigningToConstant, throwConstantConstraint, throwFixedMemoryTargetRequired, addArticle, 
-  throwNullPointer, throwReadOnlyTarget } from './error.js';
+  throwConstantConstraint, throwFixedMemoryTargetRequired, addArticle, throwNullPointer,
+  throwReadOnlyTarget } from './error.js';
 import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, CONST, ENVIRONMENT, 
   LENGTH_GETTER, LENGTH_SETTER, MEMORY, MEMORY_COPIER, PARENT, POINTER_SELF, POINTER_VISITOR, 
   PROXY, SLOTS, SIZE, VALUE_NORMALIZER } from './symbol.js';
@@ -78,31 +78,29 @@ export function definePointer(structure, env) {
       } else if (!isConst && arg[CONST]) {
         throwReadOnlyTarget(structure);
       }
-    } else {
-      if (isCompatible(arg, Target)) {
-        // autocast to target type
-        const dv = getDataView(targetStructure, arg, env);
-        arg = Target(dv, { writable: !isConst });
-      } else if (isTargetSlice) {
-        // autovivificate target object
-        const autoObj = new Target(arg, { writable: !isConst });
-        if (runtimeSafety) {
-          // creation of a new slice using a typed array is probably
-          // not what the user wants; it's more likely that the intention
-          // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
-          if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
-            const created = addArticle(targetStructure.typedArray.name);
-            const source = addArticle(arg.constructor.name);
-            console.warn(`Implicitly creating ${created} from ${source}`);
-          }
+    } else if (isCompatible(arg, Target)) {
+      // autocast to target type
+      const dv = getDataView(targetStructure, arg, env);
+      arg = Target(dv, { writable: !isConst });
+    } else if (isTargetSlice) {
+      // autovivificate target object
+      const autoObj = new Target(arg, { writable: !isConst });
+      if (runtimeSafety) {
+        // creation of a new slice using a typed array is probably
+        // not what the user wants; it's more likely that the intention
+        // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
+        if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
+          const created = addArticle(targetStructure.typedArray.name);
+          const source = addArticle(arg.constructor.name);
+          console.warn(`Implicitly creating ${created} from ${source}`);
         }
-        arg = autoObj;
-      } else {
-        throwInvalidPointerTarget(structure, arg);
       }
+      arg = autoObj;
+    } else {
+      throwInvalidPointerTarget(structure, arg);
     }
     if (env.inFixedMemory(this)) {
-      // the pointer sits in shared memory--apply the change immediately
+      // the pointer sits in fixed memory--apply the change immediately
       if (env.inFixedMemory(arg)) {
         const address = env.getViewAddress(arg[MEMORY]);
         setAddress.call(this, address);
@@ -144,7 +142,7 @@ export function definePointer(structure, env) {
 
 function normalizePointer(map) {
   const target = this['*'];
-  return target?.[VALUE_NORMALIZER]?.(map) ?? target;
+  return target[VALUE_NORMALIZER]?.(map) ?? target;
 }
 
 export function getProxy() {
@@ -162,7 +160,7 @@ export function resetPointer({ isActive }) {
 }
 
 export function disablePointer() {
-  Object.defineProperty(this[SLOTS], '0', {
+  Object.defineProperty(this[SLOTS], 0, {
     get: throwInaccessiblePointer,
     set: throwInaccessiblePointer,
     configurable: true
@@ -250,30 +248,6 @@ const proxyHandlers = {
     } else {
       return Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
     }
-  },
-};
-
-const constProxyHandlers = {
-  ...proxyHandlers,
-  set(pointer, name, value) {
-    if (isPointerKeys[name]) {
-      pointer[name] = value;
-    } else {
-      throwAssigningToConstant(pointer);
-    }
-    return true;
-  },
-  getOwnPropertyDescriptor(pointer, name) {
-    if (isPointerKeys[name]) {
-      return Object.getOwnPropertyDescriptor(pointer, name);
-    } else {
-      const descriptor = Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
-      if (descriptor?.set) {
-        descriptor.set = undefined;
-      }
-      return descriptor;
-    }
-    /* c8 ignore next -- unreachable */
   },
 };
 
