@@ -26,16 +26,19 @@ export function defineOptional(structure, env) {
     }
   };
   const set = function(value) {
-  if (value !== null) {
+    if (value !== null) {
       // call setValue() first, in case it throws
       setValue.call(this, value);
-      setPresent.call(this, true);
+      if (hasPointer || !env.inFixedMemory(this)) {
+        // since setValue() wouldn't write address into memory when the pointer is in 
+        // relocatable memory, we need to use setPresent() in order to write something 
+        // non-zero there so that's we know the field is populated
+        setPresent.call(this, true);
+      }
     } else {      
       setPresent.call(this, false);
-      // optionals containing pointers use the pointer itself as indication of presence
-      // the next line can be a no-op therefore
       this[VALUE_RESETTER]?.();
-      // get the references so objects can be garbage-collected
+      // clear references so objects can be garbage-collected
       this[POINTER_VISITOR]?.(resetPointer);
     }
   };
