@@ -183,8 +183,6 @@ const isPointerKeys = {
   '*': true,
   constructor: true,
   valueOf: true,
-  memory: true,
-  slots: true,
   [CONST]: true,
   [SLOTS]: true,
   [MEMORY]: true,
@@ -225,27 +223,6 @@ const proxyHandlers = {
       delete pointer[SLOTS][0][name];
     }
     return true;
-  },
-  has(pointer, name) {
-    if (isPointerKeys[name]) {
-      return true;
-    }
-    const target = pointer[SLOTS][0];
-    if (!target) {
-      return false;
-    }
-    return name in target;
-  },
-  ownKeys(pointer) {
-    const targetKeys = Object.getOwnPropertyNames(pointer[SLOTS][0]);
-    return [ ...targetKeys, PROXY, POINTER_VISITOR ];
-  },
-  getOwnPropertyDescriptor(pointer, name) {
-    if (isPointerKeys[name]) {
-      return Object.getOwnPropertyDescriptor(pointer, name);
-    } else {
-      return Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
-    }
   },
 };
 

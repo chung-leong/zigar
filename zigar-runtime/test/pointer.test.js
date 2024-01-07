@@ -2,7 +2,7 @@ import { expect } from 'chai';
 
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { ENVIRONMENT, MEMORY } from '../src/symbol.js';
+import { ENVIRONMENT, MEMORY, POINTER_SELF } from '../src/symbol.js';
 import { NodeEnvironment } from '../src/environment-node.js';
 
 describe('Pointer functions', function() {
@@ -309,15 +309,12 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structure);
       const { constructor: HelloPtr } = structure;
       const pointer = new HelloPtr(new Hello({ cat: 123, dog: 456 }));
-      expect('cat' in pointer).to.be.true;
-      expect('cow' in pointer).to.be.false;
       const entries = [];
       for (const entry of pointer) {
         entries.push(entry);
       }
       expect(entries).to.eql([ [ 'cat', 123 ], [ 'dog', 456 ] ]);
-      //console.log(entries.valueOf());
-      //expect(entries.valueOf())
+      expect(entries.valueOf()).to.eql([ [ 'cat', 123 ], [ 'dog', 456 ] ]);
     })
     it('should convert target of pointer to read-only when it is const', function() {
       const structStructure = env.beginStructure({
@@ -1647,6 +1644,81 @@ describe('Pointer functions', function() {
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32, { writable: false });
       expect(() => intPointer.$ = int32).to.throw(TypeError);
+    }) 
+    it('should yield underlying pointer object', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
+      expect(Int32Ptr.child).to.equal(Int32);
+      const int32 = new Int32(1234);
+      const intPointer = new Int32Ptr(int32);
+      const actualIntPointer = intPointer[POINTER_SELF];      
+      expect(actualIntPointer).to.be.instanceOf(Int32Ptr);
+    }) 
+    it('should detect property of pointer object', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
+      expect(Int32Ptr.child).to.equal(Int32);
+      const int32 = new Int32(1234);
+      const intPointer = new Int32Ptr(int32);
+      expect('$' in intPointer).to.be.true;
     }) 
   })
 })
