@@ -50,7 +50,6 @@ export function defineArray(structure, env) {
         }
         let i = 0;
         for (const value of arg) {
-          debugger;
           set.call(this, i++, value);
         }
       } else if (arg && typeof(arg) === 'object') {

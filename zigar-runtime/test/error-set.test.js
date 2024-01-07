@@ -367,7 +367,6 @@ describe('Error set functions', function() {
         },
       }, true);
       env.finalizeStructure(petStructure);
-      debugger;
       PetError.BathRequired;
       // expect(PetError.BathRequired).to.equal(DogError.BathRequired);
       // expect(DogError.BathRequired).to.be.instanceOf(PetError);

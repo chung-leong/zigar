@@ -268,6 +268,12 @@ export function throwZigError(name) {
   throw new Error(decamelizeErrorName(name));
 }
 
+export function warnImplicitArrayCreation(structure, arg) {
+  const created = addArticle(structure.typedArray.name);
+  const source = addArticle(arg.constructor.name);
+  console.warn(`Implicitly creating ${created} from ${source}`);
+}
+
 export function decamelizeErrorName(name) {
   // use a try block in case Unicode regex fails
   try {

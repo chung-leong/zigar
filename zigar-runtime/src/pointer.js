@@ -3,9 +3,9 @@ import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView, isCompatible, isBuffer } from './data-view.js';
 import { MemberType, getDescriptor } from './member.js';
 import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerTarget,
-  throwConstantConstraint, throwFixedMemoryTargetRequired, addArticle, throwNullPointer,
-  throwReadOnlyTarget } from './error.js';
-import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, CONST, ENVIRONMENT, 
+  throwConstantConstraint, throwFixedMemoryTargetRequired, throwNullPointer,
+  throwReadOnlyTarget, warnImplicitArrayCreation} from './error.js';
+import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, COMPAT, CONST, ENVIRONMENT, 
   LENGTH_GETTER, LENGTH_SETTER, MEMORY, MEMORY_COPIER, PARENT, POINTER_SELF, POINTER_VISITOR, 
   PROXY, SLOTS, SIZE, VALUE_NORMALIZER } from './symbol.js';
 import { getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
@@ -40,19 +40,19 @@ export function definePointer(structure, env) {
     structure: { name: 'usize', byteSize: addressSize },
   }, env) : {};
   const { get, set } = getDescriptor(member, env);
-  const alternateCaster = function(arg) {
+  const alternateCaster = function(arg, options) {
     const Target = targetStructure.constructor;
     if (isPointerOf(arg, Target)) {
-      return new constructor(arg['*'], { writable: !isConst });
+      // const/non-const casting
+      return new constructor(Target(arg['*'], { writable: !isConst }), options);
+    } else if (this === ENVIRONMENT || this === PARENT) {
+      // allow the runtime environment to cast to pointer
+      return false;
     } else if (isTargetSlice) {
       // allow casting to slice through constructor of its pointer
-      return new constructor(arg, { writable: !isConst });
+      return new constructor(Target(arg), options);
     } else {
-      if (this !== ENVIRONMENT && this !== PARENT) {
-        // don't allow casting to pointer unless it's done by the runtime environment
-        throwNoCastingToPointer(structure);
-      }
-      return false;
+      throwNoCastingToPointer(structure);
     }
   };
   const finalizer = function() {
@@ -90,9 +90,7 @@ export function definePointer(structure, env) {
         // not what the user wants; it's more likely that the intention
         // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
         if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
-          const created = addArticle(targetStructure.typedArray.name);
-          const source = addArticle(arg.constructor.name);
-          console.warn(`Implicitly creating ${created} from ${source}`);
+          warnImplicitArrayCreation(targetStructure, arg);
         }
       }
       arg = autoObj;

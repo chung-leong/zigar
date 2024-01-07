@@ -43,7 +43,6 @@ export function addStaticMembers(structure, env) {
       const { index } = error;
       const previous = currentErrorSets[index];
       if (previous) {
-        debugger;
         if (!(previous instanceof constructor)) {
           // error already exists in a previously defined set
           // see if we should make that set a subclass or superclass of this one

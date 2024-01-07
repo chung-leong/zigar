@@ -771,6 +771,8 @@ describe('Pointer functions', function() {
       expect(message).to.be.a('string');
     })
     it('should not show warning when runtime safety is off', function() {
+      const env = new NodeEnvironment();
+      env.runtimeSafety = false;
       const intStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Int32',
@@ -784,7 +786,6 @@ describe('Pointer functions', function() {
       });
       env.finalizeShape(intStructure);
       env.finalizeStructure(intStructure);
-      const { constructor: Int32 } = intStructure;
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Int32',
@@ -799,7 +800,6 @@ describe('Pointer functions', function() {
       });
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
-      const { constructor: Int32Slice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]Int32',
@@ -814,12 +814,10 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      const before = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'production';
       try {
         env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Int32SlicePtr } = structure;
+        env.finalizeStructure(structure);
+        const { constructor: Int32SlicePtr } = structure;
         const origFn = console.warn;
         let message;
         try {
@@ -906,7 +904,6 @@ describe('Pointer functions', function() {
       });
       env.finalizeShape(intStructure);
       env.finalizeStructure(intStructure);
-      const { constructor: Int32 } = intStructure;
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Int32',
@@ -976,15 +973,14 @@ describe('Pointer functions', function() {
       });
       env.finalizeShape(uintStructure);
       env.finalizeStructure(uintStructure);
-      const { constructor: U8 } = uintStructure;
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        byteSize: 8,
+        byteSize: 1,
         hasPointer: false,
       });
       env.attachMember(sliceStructure, {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: uintStructure,
@@ -1018,6 +1014,63 @@ describe('Pointer functions', function() {
       expect(pointer['*']).to.be.instanceOf(U8Slice);
       expect([ ...pointer ]).to.eql([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
     })
+    it('should allow casting of a buffer to a slice of i8', function() {
+      const uintStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i8',
+        byteSize: 1,
+        hasPointer: false,
+      });
+      env.attachMember(uintStructure, {
+        type: MemberType.Int,
+        bitSize: 8,
+        bitOffset: 0,
+        byteSize: 1,
+      });
+      env.finalizeShape(uintStructure);
+      env.finalizeStructure(uintStructure);
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]i8',
+        byteSize: 1,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Int,
+        bitSize: 8,
+        byteSize: 1,
+        structure: uintStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const { constructor: I8Slice } = sliceStructure;
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '[]i8',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: I8SlicePtr } = structure;
+      const buffer = new ArrayBuffer(8);
+      const dv = new DataView(buffer);
+      for (let i = 0; i < dv.byteLength; i++) {
+        dv.setUint8(i, i + 1);
+      }
+      const pointer = new I8SlicePtr(buffer);
+      expect(pointer['*']).to.be.instanceOf(I8Slice);
+      expect([ ...pointer ]).to.eql([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
+    })
+
     it('should require explicit casting of a buffer to a slice of structs', function() {
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
@@ -1111,7 +1164,7 @@ describe('Pointer functions', function() {
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        byteSize: 8,
+        byteSize: 1,
         hasPointer: false,
       });
       env.attachMember(sliceStructure, {
@@ -1189,11 +1242,10 @@ describe('Pointer functions', function() {
       });
       env.finalizeShape(uintStructure);
       env.finalizeStructure(uintStructure);
-      const { constructor: U8 } = uintStructure;
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
-        byteSize: 8,
+        byteSize: 1,
         hasPointer: false,
       });
       env.attachMember(sliceStructure, {
@@ -1204,7 +1256,6 @@ describe('Pointer functions', function() {
       });
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
-      const { constructor: U8Slice } = sliceStructure;
       const constStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]const u8',
@@ -1248,7 +1299,6 @@ describe('Pointer functions', function() {
       }
       const constPointer = new ConstU8SlicePtr(buffer);
       expect(() => new U8SlicePtr(constPointer)).to.throw(TypeError);
-      debugger;
       const nonConstPointer = U8SlicePtr(constPointer);
       nonConstPointer[2] = 123;
       expect(constPointer[2]).to.equal(123);
@@ -1550,6 +1600,7 @@ describe('Pointer functions', function() {
       const dv1 = env.allocateFixedMemory(sliceStructure.byteSize * 4, 0);
       const dv2 = env.allocateFixedMemory(structure.byteSize, 0);
       const dv3 = env.allocateFixedMemory(structure.byteSize, 0);
+      debugger;
       const target = HelloPtr.child(dv1);
       const pointer1 = HelloPtr.call(ENVIRONMENT, dv2);
       pointer1.$ = target;

@@ -309,7 +309,7 @@ follows:
 | Zig pointer type | JavaScript object types                                                |
 |------------------|------------------------------------------------------------------------|
 | `[]u8`, `*u8`    | `ArrayBuffer`, `Uint8Array`, `Uint8ClampedArray`, `Buffer`, `DataView` |
-| `[]i8`, `*i8`    | `Int8Array`, `Buffer`, `DataView`                                      |
+| `[]i8`, `*i8`    | `ArrayBuffer`, `Int8Array`, `Buffer`, `DataView`                       |
 | `[]u16`, `*u16`  | `Unt16Array`, `Buffer`, `DataView`                                     |
 | `[]i16`, `*i16`  | `Int16Array`, `Buffer`, `DataView`                                     |
 | `[]u32`, `*u32`  | `Uint32Array`, `Buffer`, `DataView`,                                   |

@@ -259,7 +259,7 @@ export function getCompatibleTags(structure) {
   if (typedArray) {
     tags.push(typedArray.name);
     tags.push('DataView');
-    if (typedArray === Uint8Array) {
+    if (typedArray === Uint8Array || typedArray === Int8Array) {
       tags.push('Uint8ClampedArray');
       tags.push('ArrayBuffer');
       tags.push('SharedArrayBuffer');

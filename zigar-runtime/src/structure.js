@@ -337,7 +337,7 @@ export function createConstructor(structure, handlers, env) {
       }
     } else {
       if (alternateCaster) {
-        self = alternateCaster.call(this, arg);
+        self = alternateCaster.call(this, arg, options);
         if (self !== false) {
           return self;
         }

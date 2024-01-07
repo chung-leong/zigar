@@ -257,7 +257,7 @@ describe('Slice functions', function() {
     it('should accept string as initializer for []u16', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: '[_]u8',
+        name: '[_]u16',
         byteSize: 2,
       });
       env.attachMember(structure, {
@@ -1012,7 +1012,6 @@ describe('Slice functions', function() {
       });
       env.finalizeShape(structStructure);
       env.finalizeStructure(structStructure);
-      const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Slice,
         name: 'Hello',

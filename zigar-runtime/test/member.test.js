@@ -594,7 +594,6 @@ describe('Member functions', function() {
         [SLOTS]: {},
       };
       const { get, set } = getDescriptor(member, env);
-      debugger;
       get.call(object);
       expect(get.call(object)).to.equal(123);
       set.call(object, 456);
