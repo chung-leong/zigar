@@ -4,7 +4,7 @@ import { getDestructor, getMemoryCopier } from './memory.js';
 import { getTypedArrayClass, getCompatibleTags } from './data-view.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
 import { ALIGN, COMPAT, MEMORY_COPIER, SETTERS, SIZE, VALUE_NORMALIZER } from './symbol.js';
-import { getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors, getValueOf } from './special.js';
+import { convertToJSON, getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors, getValueOf } from './special.js';
 
 export function defineVector(structure, env) {
   const {
@@ -63,7 +63,7 @@ export function defineVector(structure, env) {
     base64: getBase64Accessors(structure),
     typedArray: typedArray && getTypedArrayAccessors(structure),
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     entries: { value: createVectorEntries },
     delete: { value: getDestructor(structure) },
     [Symbol.iterator]: { value: getVectorIterator },
@@ -79,7 +79,7 @@ export function defineVector(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-export function normalizeVector(map) {
+export function normalizeVector(map, forJSON) {
   let array = map.get(this);
   if (!array) {
     array = [ ...this ];

@@ -2,7 +2,7 @@ import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } 
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { always, copyPointer } from './pointer.js';
-import { getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
+import { convertToJSON, getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
 import { throwInvalidInitializer, throwMissingInitializers,
   throwNoProperty } from './error.js';
 import { ALIGN, CHILD_VIVIFICATOR, IS_REQUIRED, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR, SIZE, SLOTS, 
@@ -62,7 +62,7 @@ export function defineStructShape(structure, env) {
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     ...memberDescriptors,
     [Symbol.iterator]: { value: interatorCreator },
@@ -78,12 +78,12 @@ export function defineStructShape(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-export function normalizeStruct(map) {
+export function normalizeStruct(map, forJSON) {
   let object = map.get(this);
   if (!object) {
     object = {};
     for (const [ name, value ] of this) {      
-      object[name] = value[VALUE_NORMALIZER]?.(map) ?? value;
+      object[name] = value[VALUE_NORMALIZER]?.(map, forJSON) ?? value;
     }
     map.set(this, object);
   }

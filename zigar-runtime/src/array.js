@@ -2,7 +2,7 @@ import { attachDescriptors, createConstructor, createPropertyApplier } from './s
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getTypedArrayClass, getCompatibleTags } from './data-view.js';
-import { getBase64Accessors, getDataViewAccessors, getStringAccessors,
+import { convertToJSON, getBase64Accessors, getDataViewAccessors, getStringAccessors,
   getTypedArrayAccessors, getValueOf } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
 import { always, copyPointer, getProxy } from './pointer.js';
@@ -76,7 +76,7 @@ export function defineArray(structure, env) {
     set: { value: set },
     entries: { value: getArrayEntries },
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.iterator]: { value: getArrayIterator },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
@@ -104,12 +104,12 @@ export function canBeString(member) {
   return member.type === MemberType.Uint && [ 8, 16 ].includes(member.bitSize);
 }
 
-export function normalizeArray(map) {
+export function normalizeArray(map, forJSON) {
   let array = map.get(this);
   if (!array) {
     array = [];
     for (const value of this) {      
-      array.push(value[VALUE_NORMALIZER]?.(map) ?? value);
+      array.push(value[VALUE_NORMALIZER]?.(map, forJSON) ?? value);
     }
     map.set(this, array);
   }

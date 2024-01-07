@@ -313,6 +313,9 @@ describe('Enumeration functions', function() {
       env.finalizeStructure(structure);
       expect(JSON.stringify(Hello.Dog)).to.equal('"Dog"');
       expect(JSON.stringify(Hello.Cat)).to.equal('"Cat"');
+      const object = new Hello(undefined);
+      object.dataView.setInt32(0, -1, true);
+      expect(() => JSON.stringify(object)).to.throw(TypeError);
     })
     it('should return undefined when look-up of enum item fails', function() {
       const structure = env.beginStructure({

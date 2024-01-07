@@ -189,6 +189,9 @@ function copy32(dest, src) {
 export function getMemoryResetter(offset, size) {
   const reset = getResetFunction(size);
   return function() {
+    /* WASM-ONLY */
+    restoreMemory.call(this);
+    /* WASM-ONLY-END */
     const dest = this[MEMORY];
     reset(dest, offset, size);
   };

@@ -21,6 +21,7 @@ import {
   getStringAccessors,
   getTypedArrayAccessors,
   getValueOf,
+  convertToJSON,
 } from '../src/special.js';
 import { Environment } from '../src/environment.js'
 import { getMemoryCopier } from '../src/memory.js';
@@ -308,16 +309,34 @@ describe('Special property functions', function() {
   })
   describe('getValueOf', function() {
     it('should invoke normalizer function', function() {
-      let map;
+      let map, forJSON;
       const object = {
-        [VALUE_NORMALIZER](arg) {
-          map = arg;
+        [VALUE_NORMALIZER](arg1, arg2) {
+          map = arg1;
+          forJSON = arg2;
           return 1234;
         }
       };
       const result = getValueOf.call(object);
       expect(result).to.equal(1234);
       expect(map).to.be.an.instanceOf(Map);
+      expect(forJSON).to.be.false;
+    })
+  })
+  describe('convertTOJSON', function() {
+    it('should invoke normalizer function', function() {
+      let map, forJSON;
+      const object = {
+        [VALUE_NORMALIZER](arg1, arg2) {
+          map = arg1;
+          forJSON = arg2;
+          return 1234;
+        }
+      };
+      const result = convertTOJSON.call(object);
+      expect(result).to.equal(1234);
+      expect(map).to.be.an.instanceOf(Map);
+      expect(forJSON).to.be.true;
     })
     it('should enable correct output from JSON.stringify()', function() {
       usePrimitive();

@@ -8,7 +8,7 @@ import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerT
 import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, COMPAT, CONST, ENVIRONMENT, 
   LENGTH_GETTER, LENGTH_SETTER, MEMORY, MEMORY_COPIER, PARENT, POINTER_SELF, POINTER_VISITOR, 
   PROXY, SLOTS, SIZE, VALUE_NORMALIZER } from './symbol.js';
-import { getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
+import { convertToJSON, getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
 
 export function definePointer(structure, env) {
   const {
@@ -118,7 +118,7 @@ export function definePointer(structure, env) {
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [ADDRESS_GETTER]: { value: getAddress },
     [ADDRESS_SETTER]: { value: setAddress },
@@ -138,9 +138,9 @@ export function definePointer(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-function normalizePointer(map) {
+function normalizePointer(map, forJSON) {
   const target = this['*'];
-  return target[VALUE_NORMALIZER]?.(map) ?? target;
+  return target[VALUE_NORMALIZER]?.(map, forJSON) ?? target;
 }
 
 export function getProxy() {

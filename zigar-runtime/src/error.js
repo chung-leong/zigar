@@ -57,7 +57,12 @@ export function throwNotInErrorSet(structure) {
 
 export function throwUnknownErrorNumber(structure, number) {
   const name = getStructureName(structure);
-  throw new TypeError(`Error number does not corresponds to any error in error set ${name}: #${number}`);
+  throw new TypeError(`Error number does not corresponds to any error in error set ${name}: ${number}`);
+}
+
+export function throwUnknownErrorMessage(structure, message) {
+  const name = getStructureName(structure);
+  throw new TypeError(`Error message does not corresponds to any error in error set ${name}: ${message}`);
 }
 
 export function throwInvalidType(structure) {

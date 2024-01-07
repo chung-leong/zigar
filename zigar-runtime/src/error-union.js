@@ -1,11 +1,12 @@
-import { attachDescriptors, createConstructor } from './structure.js';
+import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
 import { copyPointer, resetPointer } from './pointer.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { ALIGN, CHILD_VIVIFICATOR, MEMORY_COPIER, POINTER_VISITOR, SIZE, VALUE_NORMALIZER,
   VALUE_RESETTER } from './symbol.js';
-import { getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
+import { convertToJSON, getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
+import { throwInvalidInitializer } from './error.js';
 
 export function defineErrorUnion(structure, env) {
   const {
@@ -27,7 +28,12 @@ export function defineErrorUnion(structure, env) {
   const isChildActive = function() {
     return !getError.call(this);
   };
+  const clearValue = function() {
+    this[VALUE_RESETTER]();
+    this[POINTER_VISITOR]?.(resetPointer);
+  };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[MEMORY_COPIER](arg);
@@ -38,12 +44,31 @@ export function defineErrorUnion(structure, env) {
       }
     } else if (arg instanceof Error) {
       setError.call(this, arg);
-      this[VALUE_RESETTER]();
-      this[POINTER_VISITOR]?.(resetPointer);
-    } else {
-      // call setValue() first, in case it throws
-      setValue.call(this, arg);
-      setError.call(this, null);
+      clearValue.call(this);
+    } else if (arg !== undefined) {
+      try {
+        // call setValue() first, in case it throws
+        setValue.call(this, arg);
+        setError.call(this, null);
+      } catch (err) {
+        if (arg && typeof(arg) === 'object') {
+          try {
+            if (propApplier.call(this, arg) === 0) {
+              throw err;
+            }
+          } catch (err) {
+            const { error } = arg;
+            if (typeof(error) === 'string') {
+              setError.call(this, error);
+              clearValue.call(this);
+            } else {
+              throw err;
+            }   
+          }                   
+        } else {
+          throw err;
+        }
+      }
     }
   };  
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
@@ -53,7 +78,7 @@ export function defineErrorUnion(structure, env) {
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
@@ -68,7 +93,18 @@ export function defineErrorUnion(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-export function normalizeErrorUnion(map) {
-  const value = this.$;
-  return value[VALUE_NORMALIZER]?.(map) ?? value;
+export function normalizeErrorUnion(map, forJSON) {
+  try {
+    const value = this.$;
+    return value[VALUE_NORMALIZER]?.(map, forJSON) ?? value;
+  } catch (err) {
+    if (forJSON) {
+      return (forJSON) ? { error: err.message } : err;
+    } else {
+      throw err;
+    }
+  }
+}
+
+export function jsonizeErrorUnion(map) {
 }

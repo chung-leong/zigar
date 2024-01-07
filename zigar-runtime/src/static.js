@@ -66,8 +66,10 @@ export function addStaticMembers(structure, env) {
         error = constructor[SLOTS][slot] = previous;       
       } else {
         // set error message
-        messages[error.index] = decamelizeErrorName(name);
+        const message = decamelizeErrorName(name);
+        messages[error.index] = message;
         currentErrorSets[index] = error;
+        currentErrorSets[message] = error;
       }
       byIndex[index] = error;
     }

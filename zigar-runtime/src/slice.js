@@ -5,7 +5,7 @@ import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
 import { canBeString, createArrayProxy, getArrayIterator, getArrayEntries, getChildVivificator, 
   getPointerVisitor, normalizeArray } from './array.js';
 import { copyPointer, getProxy } from './pointer.js';
-import { getBase64Accessors, getDataViewAccessors, getStringAccessors, getTypedArrayAccessors,
+import { convertToJSON, getBase64Accessors, getDataViewAccessors, getStringAccessors, getTypedArrayAccessors,
   getValueOf } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwMisplacedSentinel,
   throwMissingSentinel } from './error.js';
@@ -112,7 +112,7 @@ export function defineSlice(structure, env) {
     set: { value: set },
     entries: { value: getArrayEntries },
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.iterator]: { value: getArrayIterator },
     [MEMORY_COPIER]: { value: getMemoryCopier(elementSize, true) },

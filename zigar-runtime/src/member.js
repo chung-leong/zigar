@@ -20,6 +20,7 @@ import {
   throwErrorExpected,
   throwUnknownErrorNumber,
   throwNotUndefined,
+  throwUnknownErrorMessage,
 } from './error.js';
 import { restoreMemory } from './memory.js';
 import { getCurrentErrorSets } from './error-set.js';
@@ -334,10 +335,16 @@ function addErrorLookup(getDataViewIntAccessor) {
             throwNotInErrorSet(structure);
           }
           object = value;
-        } else if (value !== null) {
+        } else {
           object = acceptAny ? allErrors[value] : constructor(value);
           if (!object) {
-            throwErrorExpected(structure, value);
+            if (typeof(value) === 'number') {
+              throwUnknownErrorNumber(structure, value);
+            } else if (typeof(value) === 'string') {
+              throwUnknownErrorMessage(structure, value);
+            } else {
+              throwErrorExpected(structure, value);
+            }
           } 
         }  
         accessor.call(this, offset, object?.index ?? zero, littleEndian);

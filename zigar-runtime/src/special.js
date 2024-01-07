@@ -6,7 +6,12 @@ import { checkDataView, isTypedArray, setDataView } from './data-view.js';
 
 export function getValueOf() {
   const map = new Map();
-  return this[VALUE_NORMALIZER](map);
+  return this[VALUE_NORMALIZER](map, false);
+}
+
+export function convertToJSON() {
+  const map = new Map();
+  return this[VALUE_NORMALIZER](map, true);
 }
 
 export function getDataViewAccessors(structure, handlers = {}) {

@@ -5,7 +5,7 @@ import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { copyPointer, resetPointer } from './pointer.js';
 import { ALIGN, CHILD_VIVIFICATOR, MEMORY_COPIER, POINTER_VISITOR, SIZE, SLOTS, VALUE_NORMALIZER, 
   VALUE_RESETTER } from './symbol.js';
-import { getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
+import { convertToJSON, getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
 
 export function defineOptional(structure, env) {
   const {
@@ -59,7 +59,7 @@ export function defineOptional(structure, env) {
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     // no need to reset the value when it's a pointer, since setPresent() would null out memory used by the pointer
@@ -75,7 +75,7 @@ export function defineOptional(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-export function normalizeOptional(map) {
+export function normalizeOptional(map, forJSON) {
   const value = this.$;
-  return value?.[VALUE_NORMALIZER]?.(map) ?? value;
+  return value?.[VALUE_NORMALIZER]?.(map, forJSON) ?? value;
 }

@@ -4,7 +4,7 @@ import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView, getTypedArrayClass } from './data-view.js';
 import { throwInvalidInitializer } from './error.js';
 import { ALIGN, ENUM_ITEM, ENUM_ITEMS, ENUM_NAME, MEMORY_COPIER, SIZE, VALUE_NORMALIZER } from './symbol.js';
-import { getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors, getValueOf } from './special.js';
+import { convertToJSON, getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors, getValueOf } from './special.js';
 
 export function defineEnumerationShape(structure, env) {
   const {
@@ -24,7 +24,7 @@ export function defineEnumerationShape(structure, env) {
       if (propApplier.call(this, arg) === 0) {
         throwInvalidInitializer(structure, expected, arg);
       }
-    } else {
+    } else if (arg !== undefined) {
       set.call(this, arg);
     }
   };
@@ -50,7 +50,7 @@ export function defineEnumerationShape(structure, env) {
     base64: getBase64Accessors(structure),
     typedArray: typedArray && getTypedArrayAccessors(structure),
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.toPrimitive]: { value: getIndex },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
@@ -64,6 +64,7 @@ export function defineEnumerationShape(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };
 
-export function normalizeEnumerationItem(map) {
-  return this[ENUM_NAME];
+export function normalizeEnumerationItem(map, forJSON) {
+  const item = this.$;
+  return item[ENUM_NAME];
 }

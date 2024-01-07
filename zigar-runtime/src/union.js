@@ -1,7 +1,7 @@
 import { StructureType, attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
+import { convertToJSON, getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
 import { getChildVivificator, getPointerVisitor, normalizeStruct } from './struct.js';
 import { throwInvalidInitializer, throwMissingUnionInitializer, throwMultipleUnionInitializers,
   throwInactiveUnionProperty } from './error.js';
@@ -162,7 +162,7 @@ export function defineUnionShape(structure, env) {
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     ...memberDescriptors,
     [Symbol.iterator]: { value: interatorCreator },

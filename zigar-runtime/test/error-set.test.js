@@ -64,10 +64,14 @@ describe('Error set functions', function() {
         expect(err).to.equal(Hello.UnableToCreateObject);
       }
       expect(() => Hello.UnableToCreateObject.$ = Hello.UnableToCreateObject).to.throw(TypeError);
-      const e = new Hello(Hello.UnableToCreateObject);
-      expect(e.$).to.equal(Hello.UnableToCreateObject);
-      e.$ = Hello.UnableToRetrieveMemoryLocation;
-      expect(e.$).to.equal(Hello.UnableToRetrieveMemoryLocation);
+      const object = new Hello(Hello.UnableToCreateObject);
+      expect(object.$).to.equal(Hello.UnableToCreateObject);
+      object.$ = Hello.UnableToRetrieveMemoryLocation;
+      expect(object.$).to.equal(Hello.UnableToRetrieveMemoryLocation);
+      expect(object.valueOf()).to.equal(Hello.UnableToRetrieveMemoryLocation);
+      expect(JSON.stringify(object)).to.equal('{"error":"Unable to retrieve memory location"}');
+      object.dataView.setInt16(0, -1);
+      expect(() => JSON.stringify(object)).to.throw(TypeError);
     })
     it('should create an object for storing an error', function() {
       const structure = env.beginStructure({
@@ -368,9 +372,9 @@ describe('Error set functions', function() {
       }, true);
       env.finalizeStructure(petStructure);
       PetError.BathRequired;
-      // expect(PetError.BathRequired).to.equal(DogError.BathRequired);
-      // expect(DogError.BathRequired).to.be.instanceOf(PetError);
-      // expect(CatError.CucumberEncountered).to.be.instanceOf(PetError);
+      expect(PetError.BathRequired).to.equal(DogError.BathRequired);
+      expect(DogError.BathRequired).to.be.instanceOf(PetError);
+      expect(CatError.CucumberEncountered).to.be.instanceOf(PetError);
     })
     it('should use previously defined error set as parent class if the other has all its error numbers', function() {
       // same test as above, with the error sets processed in different order
@@ -628,6 +632,46 @@ describe('Error set functions', function() {
       }, true);
       env.finalizeStructure(structure);
       expect(() => new Hello({})).to.throw(TypeError);
+    })
+    it('should initialize error object from toJSON output', function() {
+      const structure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'Hello',
+        byteSize: 2,
+      });      
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+      });
+      env.finalizeShape(structure);
+      const { constructor: Hello } = structure;
+      env.attachMember(structure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure,
+      }, true);
+      env.attachMember(structure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure,
+      }, true);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
+          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+        }
+      }, true);
+      env.finalizeStructure(structure);
+      const object1 = new Hello(Hello.UnableToCreateObject);
+      const json = object1.toJSON();
+      const object2 = new Hello(json);
+      expect(object2.$).to.equal(Hello.UnableToCreateObject);
+      expect(() => new Hello({ error: 'Something' })).to.throw(TypeError)
+        .with.property('message').to.contain('Something');
     })
   })
 })
