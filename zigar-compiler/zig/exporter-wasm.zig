@@ -12,9 +12,7 @@ const MemberType = exporter.MemberType;
 const Member = exporter.Member;
 const Method = exporter.Method;
 const Memory = exporter.Memory;
-const MemoryDisposition = exporter.MemoryDisposition;
 const MemoryAttributes = exporter.MemoryAttributes;
-const Template = exporter.Template;
 const Error = exporter.Error;
 const missing = exporter.missing;
 
@@ -43,8 +41,8 @@ extern fn _finalizeShape(structure: Value) void;
 extern fn _endStructure(structure: Value) void;
 extern fn _createTemplate(buffer: ?Value) ?Value;
 extern fn _writeToConsole(dv: Value) bool;
-extern fn _startCall(call: Call, arg_struct: ?Value) *anyopaque;
-extern fn _endCall(call: Call, arg_struct: ?Value) void;
+extern fn _startCall(call: Call, arg_struct: Value) *anyopaque;
+extern fn _endCall(call: Call, arg_struct: Value) void;
 
 fn strlen(s: [*:0]const u8) usize {
     var len: usize = 0;
@@ -95,15 +93,22 @@ pub fn freeShadowMemory(call: Call, bytes: [*]u8, len: usize, alignment: u16) vo
 
 var initial_context: ?Call = null;
 
+pub const HostOptions = packed struct {
+    omit_methods: bool = false,
+    _: u31 = 0,
+};
+
 pub const Host = struct {
     context: Call,
+    options: HostOptions,
 
-    pub fn init(ptr: *anyopaque) Host {
-        const context: Call = @ptrCast(@alignCast(ptr));
+    pub fn init(call_ptr: *anyopaque, arg_ptr: ?*anyopaque) Host {
+        const context: Call = @ptrCast(@alignCast(call_ptr));
+        const options_ptr: ?*HostOptions = @ptrCast(@alignCast(arg_ptr));
         if (initial_context == null) {
             initial_context = context;
         }
-        return .{ .context = context };
+        return .{ .context = context, .options = if (options_ptr) |ptr| *ptr else .{} };
     }
 
     pub fn release(self: Host) void {
@@ -289,7 +294,7 @@ pub const Host = struct {
 
     pub fn write(ptr: [*]const u8, len: usize) !void {
         if (initial_context) |context| {
-            const host = Host.init(@ptrCast(@constCast(context)));
+            const host = Host.init(@ptrCast(@constCast(context)), null);
             const memory: Memory = .{
                 .bytes = @constCast(ptr),
                 .len = len,
@@ -302,7 +307,7 @@ pub const Host = struct {
     }
 };
 
-pub fn runThunk(thunk_id: usize, arg_struct: ?Value) ?Value {
+pub fn runThunk(thunk_id: usize, arg_struct: Value) ?Value {
     // note that std.debug.print() doesn't work here since the initial context is not set
     var fallback_allocator: std.mem.Allocator = .{ .ptr = undefined, .vtable = &std.heap.WasmAllocator.vtable };
     var stack_allocator = std.heap.stackFallback(1024 * 8, fallback_allocator);
@@ -319,10 +324,10 @@ pub fn runThunk(thunk_id: usize, arg_struct: ?Value) ?Value {
     }
 }
 
-pub fn defineStructures(comptime T: type) ?Value {
+pub fn defineStructures(comptime T: type, arg_struct: ?Value) ?Value {
     const factory = exporter.createRootFactory(Host, T);
     const factory_id = @intFromPtr(factory);
-    return runThunk(factory_id, null);
+    return runThunk(factory_id, arg_struct);
 }
 
 pub fn isRuntimeSafetyActive() bool {

@@ -1,7 +1,7 @@
 import { defineProperties, findAllObjects, getStructureFactory, getStructureName } from './structure.js';
 import { decodeText } from './text.js';
 import { initializeErrorSets } from './error-set.js';
-import { throwAlignmentConflict, throwNullPointer, throwZigError } from './error.js';
+import { throwAlignmentConflict, throwZigError } from './error.js';
 import { getMemoryCopier } from './memory.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
@@ -9,7 +9,7 @@ import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CONST, ENVIRONMENT, LENGTH_GETTE
   MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES, SIZE, 
   SLOTS } from './symbol.js';
 
-const defAlign = 16;
+const OMIT_FUNCTIONS = 0x00000001;
 
 export class Environment {
   context;
@@ -274,11 +274,14 @@ export class Environment {
     const {
       omitFunctions = false,
     } = options;
-    if (omitFunctions) {
-      this.attachMethod = () => {};
-    }
     initializeErrorSets();
-    const result = this.defineStructures();
+    const arg = new DataView(new ArrayBuffer(4));
+    let flags = 0;
+    if (omitFunctions) {
+      flags |= OMIT_FUNCTIONS;
+    }
+    arg.setUint32(0, flags, true);
+    const result = this.defineStructures(arg);
     if (typeof(result) === 'string') {
       throwZigError(result);
     }

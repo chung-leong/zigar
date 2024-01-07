@@ -23,15 +23,25 @@ pub const Result = enum(u32) {
 threadlocal var initial_context: ?Call = null;
 
 // host interface
+pub const HostOptions = packed struct {
+    omit_methods: bool = false,
+    _: u31 = 0,
+};
+
 pub const Host = struct {
     context: Call,
+    options: HostOptions,
 
-    pub fn init(ptr: *anyopaque) Host {
-        const context: Call = @ptrCast(@alignCast(ptr));
+    pub fn init(call_ptr: *anyopaque, arg_ptr: ?*anyopaque) Host {
+        const context: Call = @ptrCast(@alignCast(call_ptr));
+        const options_ptr: ?*HostOptions = @ptrCast(@alignCast(arg_ptr));
+        if (options_ptr) |ptr| {
+            std.debug.print("{any}\n", .{ptr.*});
+        }
         if (initial_context == null) {
             initial_context = context;
         }
-        return .{ .context = context };
+        return .{ .context = context, .options = if (options_ptr) |ptr| ptr.* else .{} };
     }
 
     pub fn release(self: Host) void {
@@ -190,7 +200,7 @@ fn freeFixedMemory(memory: *const Memory) callconv(.C) Result {
 
 pub fn overrideWrite(bytes: [*]const u8, len: usize) callconv(.C) Result {
     if (initial_context) |context| {
-        const host = Host.init(context);
+        const host = Host.init(context, null);
         if (host.writeBytesToConsole(bytes, len)) {
             return .OK;
         } else |_| {}

@@ -11,7 +11,7 @@ import {
   add,
   subtract,
 } from '../src/environment.js'
-import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR } from '../src/symbol.js';
+import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CONST } from '../src/symbol.js';
 
 describe('Environment', function() {
   beforeEach(function() {
@@ -174,7 +174,7 @@ describe('Environment', function() {
         dv.setInt32(0, address, true);
         dv.setInt32(4, len, true);
       };
-      const dv = env.captureView(1234, 32, 3, true);
+      const dv = env.captureView(1234, 32, true);
       expect(dv).to.be.instanceOf(DataView);
       expect(dv.getInt32(0, true)).to.equal(1234);
       expect(dv.getInt32(4, true)).to.equal(32);
@@ -185,7 +185,7 @@ describe('Environment', function() {
       env.obtainFixedView = (address, len) => {
         return { address, len };
       };
-      const result = env.captureView(1234, 32, 3, false);
+      const result = env.captureView(1234, 32, false);
       expect(result).to.eql({ address: 1234, len: 32 });
     })
   })
@@ -423,17 +423,87 @@ describe('Environment', function() {
       expect(s.static.template).to.equal(templ);
     })
   })
-  describe('endStructure', function() {   
+  describe('endStructure', function() {
+    it('should add structure to list', function() {
+      const env = new Environment();
+      const s = {
+        instance: { members: [], methods: [] },
+        static: { members: [], methods: [] },
+      };
+      env.endStructure(s);
+      expect(env.structures[0]).to.equal(s);
+    })
   })
   describe('acquireStructures', function() {    
+    it('should invoke the defineStructures method', function() {
+      const env = new Environment();
+      let options;
+      env.defineStructures = function(arg) {
+        options = arg;
+      };
+      env.acquireStructures({ omitFunctions: true });
+      expect(options).to.be.instanceOf(DataView);
+      expect(options.getUint32(0, true)).to.equal(0x00000001);
+    })
+    it('should throw if defineStructures() returns a string', function() {
+      const env = new Environment();
+      env.defineStructures = function(arg) {
+        return 'SystemOnFire';
+      };
+      expect(() => env.acquireStructures({})).to.throw(Error)
+        .with.property('message').to.equal('System on fire');
+    })
   })
-  describe('getRootModule', function() {    
+  describe('getRootModule', function() {
+    it('should return constructor of the last structure added', function() {
+      const env = new Environment();
+      const s1 = {
+        instance: { members: [], methods: [] },
+        static: { members: [], methods: [] },
+        constructor: function() {},
+      };
+      env.endStructure(s1);
+      const s2 = {
+        instance: { members: [], methods: [] },
+        static: { members: [], methods: [] },
+        constructor: function() {},
+      };
+      env.endStructure(s2);
+      const constructor = env.getRootModule();
+      expect(constructor).to.equal(s2.constructor);
+    })
   })
   describe('exportStructures', function() {    
+    it('should return list of structures and keys for accessing them', function() {
+      const env = new Environment();
+      const s1 = {
+        instance: { members: [], methods: [] },
+        static: { members: [], methods: [] },
+        constructor: function() {},
+      };
+      env.endStructure(s1);
+      const s2 = {
+        instance: { members: [], methods: [] },
+        static: { members: [], methods: [] },
+        constructor: function() {},
+      };
+      env.endStructure(s2);
+      const { structures, keys } = env.exportStructures();
+      expect(structures[0]).to.equal(s1);
+      expect(structures[1]).to.equal(s2);
+      expect(Object.values(keys)).to.include(MEMORY);
+      expect(Object.values(keys)).to.include(SLOTS);
+      expect(Object.values(keys)).to.include(CONST);
+    })
   })
   describe('prepareObjectsForExport', function() {
     it('should combine data views that overlaps the same memory region', function() {
       const env = new Environment();
+      env.inFixedMemory = (object) => true;
+      const addressMap = new Map();
+      env.getViewAddress = (dv) => addressMap.get(dv);
+      env.getMemoryOffset = (address) => Number(address);
+      env.copyBytes = (dv, address, len) => {};
       const templ1 = {
         [MEMORY]: new DataView(new ArrayBuffer(8))
       };
@@ -446,20 +516,20 @@ describe('Environment', function() {
           0: object,
         },
       };
-      const structures = env.structures = [
+      env.structures = [
         {
           instance: { template: templ1 },
           static: {}
         },
         {
-          instance: { template: templ2 },
-          static: {}
+          instance: {},
+          static: { template: templ2 },
         },
       ];
-      templ1[MEMORY].address = 1002;
-      templ2[MEMORY].address = 1000;
-      object[MEMORY].address = 1016;
-      env.prepareObjectsForExport();
+      addressMap.set(templ1[MEMORY], 1002n);
+      addressMap.set(templ2[MEMORY], 1000n);
+      addressMap.set(object[MEMORY], 1016n);
+      env.prepareObjectsForExport();      
       expect(templ1[MEMORY].buffer).to.equal(templ2[MEMORY].buffer);
       expect(templ1[MEMORY].byteOffset).to.equal(2);
       expect(object[MEMORY].buffer).to.equal(templ2[MEMORY].buffer);
@@ -493,12 +563,7 @@ describe('Environment', function() {
     })
   })
   describe('finalizeStructure', function() {
-    it('should add structure to list', function() {
-      const env = new Environment();
-      const s = {};
-      env.finalizeStructure(s);
-      expect(env.structures[0]).to.equal(s);
-    })
+    
   })
   describe('createCaller', function() {    
   })

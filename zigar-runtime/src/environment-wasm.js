@@ -6,7 +6,7 @@ import { ALIGN, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SHADOW_ATTRIBUTES } from
 
 export class WebAssemblyEnvironment extends Environment {
   imports = {
-    defineStructures: { argType: '', returnType: 'v' },
+    defineStructures: { argType: 'v', returnType: 'v' },
     allocateExternMemory: { argType: 'ii', returnType: 'v' },
     freeExternMemory: { argType: 'iii' },
     allocateShadowMemory: { argType: 'cii', returnType: 'v' },

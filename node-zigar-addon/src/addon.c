@@ -482,15 +482,20 @@ napi_value find_sentinel(napi_env env,
 
 napi_value define_structures(napi_env env,
                              napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
     napi_value js_env;
     void* data;
-    if (napi_get_cb_info(env, info, NULL, NULL, &js_env, &data) != napi_ok) {
+    void* args_ptr;
+    if (napi_get_cb_info(env, info, &argc, args, &js_env, &data) != napi_ok) {
         return throw_last_error(env);
+    } else if (napi_get_dataview_info(env, args[0], NULL, &args_ptr, NULL, NULL) != napi_ok) {
+        return throw_error(env, "Arguments must be a DataView");
     }
     module_data* md = (module_data*) data;
     call_context ctx = { env, js_env, md };
     napi_value result;
-    if (md->mod->imports->define_structures(&ctx, NULL, &result) != OK) {
+    if (md->mod->imports->define_structures(&ctx, args_ptr, &result) != OK) {
         return throw_error(env, "Unable to define structures");
     }
     return result;
@@ -503,12 +508,11 @@ napi_value run_thunk(napi_env env,
     napi_value js_env;
     void* data;
     double thunk_id;
-    size_t args_len;
     void* args_ptr;
     if (napi_get_cb_info(env, info, &argc, args, &js_env, &data) != napi_ok
      || napi_get_value_double(env, args[0], &thunk_id) != napi_ok) {
         return throw_error(env, "Thunk id must be a number");
-    } else if (napi_get_dataview_info(env, args[1], &args_len, &args_ptr, NULL, NULL) != napi_ok) {
+    } else if (napi_get_dataview_info(env, args[1], NULL, &args_ptr, NULL, NULL) != napi_ok) {
         return throw_error(env, "Arguments must be a DataView");
     }
     module_data* md = (module_data*) data;
