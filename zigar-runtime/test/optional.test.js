@@ -42,8 +42,10 @@ describe('Optional functions', function() {
       expect(object.$).to.equal(null);
       object.$ = 3.14;
       expect(object.$).to.equal(3.14);
+      expect(object.valueOf()).to.equal(3.14);
       object.$ = null;
       expect(object.$).to.equal(null);
+      expect(object.valueOf()).to.equal(null);
     })
     it('should cast the same buffer to the same object', function() {
       const structure = env.beginStructure({
@@ -218,7 +220,10 @@ describe('Optional functions', function() {
       object.$ = { dog: 1, cat: 2 };
       expect(object.$).to.be.instanceOf(Animal);
       object.$ = null;
+      expect(object.valueOf()).to.equal(null);
       expect(object.$).to.equal(null);
+      object.$ = new Hello({ dog: 3, cat: 3 });
+      expect(object.valueOf()).to.eql({ dog: 3, cat: 3 });
     })
     it('should define a structure for storing an optional pointer', function() {
       const intStructure = env.beginStructure({

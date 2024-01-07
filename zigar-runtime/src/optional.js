@@ -25,14 +25,23 @@ export function defineOptional(structure, env) {
       return null;
     }
   };
-  const set = function(value) {
-    if (value !== null) {
+  const isChildActive = getPresent;
+  const initializer = function(arg) {
+    if (arg instanceof constructor) {
+      this[MEMORY_COPIER](arg);
+      if (hasPointer) {
+        // don't bother copying pointers when it's empty
+        if (isChildActive.call(arg)) {
+          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
+        }
+      }      
+    } else if (arg !== null) {
       // call setValue() first, in case it throws
-      setValue.call(this, value);
+      setValue.call(this, arg);
       if (hasPointer || !env.inFixedMemory(this)) {
         // since setValue() wouldn't write address into memory when the pointer is in 
         // relocatable memory, we need to use setPresent() in order to write something 
-        // non-zero there so that's we know the field is populated
+        // non-zero there so that we know the field is populated
         setPresent.call(this, true);
       }
     } else {      
@@ -42,24 +51,11 @@ export function defineOptional(structure, env) {
       this[POINTER_VISITOR]?.(resetPointer);
     }
   };
-  const initializer = function(arg) {
-    if (arg instanceof constructor) {
-      this[MEMORY_COPIER](arg);
-      if (hasPointer) {
-        // don't bother copying pointers when it's empty
-        if (getPresent.call(arg)) {
-          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
-        }
-      }
-    } else {
-      set.call(this, arg);
-    }
-  };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
   const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const instanceDescriptors = {
-    $: { get, set },
+    $: { get, set: initializer },
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
@@ -69,7 +65,7 @@ export function defineOptional(structure, env) {
     // no need to reset the value when it's a pointer, since setPresent() would null out memory used by the pointer
     [VALUE_RESETTER]: !hasPointer && { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive: getPresent }) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     [VALUE_NORMALIZER]: { value: normalizeOptional },
   };
   const staticDescriptors = {
@@ -81,5 +77,5 @@ export function defineOptional(structure, env) {
 
 export function normalizeOptional(map) {
   const value = this.$;
-  return value[VALUE_NORMALIZER]?.(map) ?? value;
+  return value?.[VALUE_NORMALIZER]?.(map) ?? value;
 }

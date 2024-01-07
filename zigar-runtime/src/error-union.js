@@ -16,17 +16,6 @@ export function defineErrorUnion(structure, env) {
   } = structure;
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getError, set: setError } = getDescriptor(members[1], env);
-  const set = function(value) {
-    if (value instanceof Error) {
-      setError.call(this, value);
-      this[VALUE_RESETTER]();
-      this[POINTER_VISITOR]?.(resetPointer);
-    } else {
-      // call setValue() first, in case it throws
-      setValue.call(this, value);
-      setError.call(this, null);
-    }
-  };
   const get = function() {
     const error = getError.call(this);
     if (error) {
@@ -35,27 +24,32 @@ export function defineErrorUnion(structure, env) {
       return getValue.call(this);
     }
   };
-  const check = function() {
-    const error = getError.call(this);
-    return !error;
+  const isChildActive = function() {
+    return !getError.call(this);
   };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[MEMORY_COPIER](arg);
       if (hasPointer) {
-        if (check.call(this)) {
+        if (isChildActive.call(this)) {
           this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }
+    } else if (arg instanceof Error) {
+      setError.call(this, arg);
+      this[VALUE_RESETTER]();
+      this[POINTER_VISITOR]?.(resetPointer);
     } else {
-      this.$ = arg;
+      // call setValue() first, in case it throws
+      setValue.call(this, arg);
+      setError.call(this, null);
     }
-  };
+  };  
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
   const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
   const instanceDescriptors = {
-    '$': { get, set },
+    '$': { get, set: initializer },
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
@@ -64,7 +58,7 @@ export function defineErrorUnion(structure, env) {
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive: check }) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     [VALUE_NORMALIZER]: { value: normalizeErrorUnion },
   };
   const staticDescriptors = {

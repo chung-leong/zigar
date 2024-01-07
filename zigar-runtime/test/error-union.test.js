@@ -75,6 +75,7 @@ describe('Error union functions', function() {
       expect(object.$).to.equal(0n);
       object.$ = 1234n;
       expect(object.$).to.equal(1234n);
+      expect(object.valueOf()).to.equal(1234n);
     })
     it('should cast the same buffer to the same object', function() {
       const errorStructure = env.beginStructure({
@@ -251,7 +252,6 @@ describe('Error union functions', function() {
       });
       env.finalizeShape(structStructure);
       env.finalizeStructure(structStructure);
-      const { constructor: Animal } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         name: '!Animal',
@@ -283,6 +283,8 @@ describe('Error union functions', function() {
       object.$ = MyError.UnableToCreateObject;
       expect(() => object.$).to.throw(MyError)
         .with.property('message').that.equal('Unable to create object');
+      object.$ = { dog: 1, cat: 1234 };
+      expect(object.valueOf()).to.eql({ dog: 1, cat: 1234 });
     })
     it('should define an error union with a pointer', function() {
       const errorStructure = env.beginStructure({

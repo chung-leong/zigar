@@ -1597,7 +1597,6 @@ describe('Pointer functions', function() {
       const dv1 = env.allocateFixedMemory(sliceStructure.byteSize * 4, 0);
       const dv2 = env.allocateFixedMemory(structure.byteSize, 0);
       const dv3 = env.allocateFixedMemory(structure.byteSize, 0);
-      debugger;
       const target = HelloPtr.child(dv1);
       const pointer1 = HelloPtr.call(ENVIRONMENT, dv2);
       pointer1.$ = target;
