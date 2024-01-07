@@ -367,7 +367,7 @@ describe('Error functions', function() {
           ],
         }
       };
-      expect(() => throwMissingInitializers(structure, {})).to.throw(TypeError)
+      expect(() => throwMissingInitializers(structure, [ 'dog' ])).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
     })
   })
@@ -622,7 +622,7 @@ describe('Error functions', function() {
         type: MemberType.Int,
         bitSize: 8,
       };
-      expect(() => throwNotUndefined(member)).to.throw(TypeError)
+      expect(() => throwNotUndefined(member)).to.throw(RangeError)
         .with.property('message').that.contains('hello');
     })
   })

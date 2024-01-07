@@ -418,10 +418,10 @@ describe('Member functions', function() {
     })
     it('should return enum item accessors', function() {
       const DummyValue1 = {
-        valueOf() { return 1 }
+        [Symbol.toPrimitive]() { return 1 }
       };
       const DummyValue2 = {
-        valueOf() { return 2 }
+        [Symbol.toPrimitive]() { return 2 }
       };
       const DummyEnum = function(v) {
         if (v === 1) {
@@ -467,10 +467,10 @@ describe('Member functions', function() {
     })
     it('should return small enum item accessors', function() {
       const DummyValue1 = {
-        valueOf() { return 1 }
+        [Symbol.toPrimitive]() { return 1 }
       };
       const DummyValue2 = {
-        valueOf() { return 2 }
+        [Symbol.toPrimitive]() { return 2 }
       };
       const DummyEnum = function(v) {
         if (v === 1) {
