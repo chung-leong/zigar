@@ -78,10 +78,10 @@ export class WebAssemblyEnvironment extends Environment {
 
   allocateFixedMemory(len, align) {
     if (len === 0) {
-      return this.emptyView;
+      return new DataView(new ArrayBuffer(0));
     }
     const address = this.allocateExternMemory(len, align);
-    const dv = this.obtainView(buffer, address, len);
+    const dv = this.obtainFixedView(address, len);
     dv[ALIGN] = align;
     return dv;
   }
@@ -95,7 +95,7 @@ export class WebAssemblyEnvironment extends Environment {
 
   obtainFixedView(address, len) {
     if (len === 0) {
-      return this.emptyView;
+      return new DataView(new ArrayBuffer(0));
     }
     const { memory } = this;
     const dv = this.obtainView(memory.buffer, address, len);
@@ -105,8 +105,9 @@ export class WebAssemblyEnvironment extends Environment {
 
   releaseFixedView(dv) {
     const buffer = dv.buffer;
-    const address = buffer.byteOffset;
+    const address = dv.byteOffset;
     const len = dv.byteLength;
+    // only allocated memory would have align attached
     const align = dv[ALIGN];
     if (align !== undefined) {
       this.freeFixedMemory(address, len, align);
