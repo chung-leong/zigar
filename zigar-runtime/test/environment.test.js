@@ -11,7 +11,8 @@ import {
   add,
   subtract,
 } from '../src/environment.js'
-import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CONST } from '../src/symbol.js';
+import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CONST, MEMORY_COPIER } from '../src/symbol.js';
+import { getMemoryCopier } from '../src/memory.js';
 
 describe('Environment', function() {
   beforeEach(function() {
@@ -574,14 +575,91 @@ describe('Environment', function() {
   describe('linkObject', function() {    
   })
   describe('unlinkVariables', function() {    
+    it('should pass variables to unlinkObject', function() {
+      const env = new Environment();
+      env.allocateFixedMemory = (len, align) => {
+        const buffer = new ArrayBuffer(len);
+        buffer.align = align;
+        return new DataView(buffer);
+      };
+      env.inFixedMemory = (object) => {
+        return object[MEMORY].buffer.align !== undefined;
+      };
+      const Type = function() {};
+      Type.prototype[MEMORY_COPIER] = getMemoryCopier(16);
+      const object1 = new Type();
+      object1[MEMORY] = env.allocateMemory(16, 8, true);
+      const object2 = new Type();
+      object2[MEMORY] = env.allocateMemory(16, 8, true);
+      env.variables.push({ name: 'a', object: object1 });
+      env.variables.push({ name: 'b', object: object2 });
+      env.unlinkVariables();
+      expect(object1[MEMORY].buffer.align).to.be.undefined;
+      expect(object2[MEMORY].buffer.align).to.be.undefined;
+    })
   })
   describe('unlinkObject', function() {    
+    it('should replace buffer in fixed memory with ones in relocatable memory', function() {
+      const env = new Environment();
+      env.allocateFixedMemory = (len, align) => {
+        const buffer = new ArrayBuffer(len);
+        buffer.align = align;
+        return new DataView(buffer);
+      };
+      env.inFixedMemory = (object) => {
+        return object[MEMORY].buffer.align !== undefined;
+      };
+      const Type = function() {};
+      Type.prototype[MEMORY_COPIER] = getMemoryCopier(16);
+      const object = new Type();
+      const dv = object[MEMORY] = env.allocateMemory(16, 8, true);
+      expect(dv.buffer.align).to.equal(8);
+      dv.setUint32(12, 1234, true);
+      env.unlinkObject(object);
+      expect(object[MEMORY]).to.not.equal(dv);
+      expect(dv.getUint32(12, true)).to.equal(1234);
+      expect(object[MEMORY].buffer.align).to.be.undefined;
+      // should do nothing
+      env.unlinkObject(object);
+    })
   })
   describe('releaseFunctions', function() {    
+    it('should make all imported functions throw', function() {
+      const env = new Environment();
+      env.imports = {
+        runThunk: function() {},
+      };
+      for (const [ name, f ] of Object.entries(env.imports)) {
+        env[name] = f;
+      }
+      expect(() => env.runThunk()).to.not.throw();
+      env.releaseFunctions();
+      expect(() => env.runThunk()).to.throw();
+    })
   })
   describe('getControlObject', function() {    
+    it('should return object for controlling module', function() {
+      const env = new Environment();
+      const object = env.getControlObject();
+      expect(object.init).to.be.a('function');
+      expect(object.abandon).to.be.a('function');
+      expect(object.released).to.be.a('function');
+    })    
   })
   describe('abandon', function() {
+    it('should release imported functions and variables', function() {
+      const env = new Environment();
+      env.imports = {
+        runThunk: function() {},
+      };
+      for (const [ name, f ] of Object.entries(env.imports)) {
+        env[name] = f;
+      }
+      expect(() => env.runThunk()).to.not.throw();
+      env.abandon();
+      expect(() => env.runThunk()).to.throw();
+      expect(env.abandoned).to.be.true;
+    })
   })
   describe('writeToConsole', function() {
     const encoder = new TextEncoder();

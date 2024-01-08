@@ -11,6 +11,8 @@ export class NodeEnvironment extends Environment {
     obtainExternBuffer: null,
     copyBytes: null,
     findSentinel: null,
+    defineStructures: null,
+    runThunk: null,
     getMemoryOffset: null,
     recreateAddress: null,
   };
