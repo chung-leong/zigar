@@ -16,7 +16,6 @@ export class Environment {
   contextStack = [];
   consolePending = [];
   consoleTimeout = 0;
-  emptyView = new DataView(new ArrayBuffer(0));
   viewMap = new WeakMap();
   initPromise;
   abandoned = false;
@@ -804,10 +803,8 @@ export class Environment {
         // get view of memory that pointer points to
         const byteLength = len * Target[SIZE];
         const dv = env.findMemory(address, byteLength);
-        if (dv !== env.emptyView || byteLength == 0) {
-          // create the target
-          target = this[SLOTS][0] = Target.call(this, dv, { writable });
-        }
+        // create the target
+        target = this[SLOTS][0] = Target.call(this, dv, { writable });
       }
       if (target?.[POINTER_VISITOR]) {
         // acquire objects pointed to by pointers in target

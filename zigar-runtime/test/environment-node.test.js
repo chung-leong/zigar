@@ -5,7 +5,7 @@ import { useAllStructureTypes } from '../src/structure.js';
 import {
   NodeEnvironment,
 } from '../src/environment-node.js'
-import { MEMORY, SLOTS, POINTER_VISITOR, CHILD_VIVIFICATOR } from '../src/symbol.js';
+import { ALIGN, MEMORY, POINTER_VISITOR, SLOTS } from '../src/symbol.js';
 
 describe('NodeEnvironment', function() {
   beforeEach(function() {
@@ -89,7 +89,7 @@ describe('NodeEnvironment', function() {
       const dv2 = env.allocateFixedMemory(0, 1);
       expect(dv1.byteLength).to.equal(0);
       expect(dv2.byteLength).to.equal(0);
-      expect(dv1).to.equal(dv2);
+      expect(dv1).to.not.equal(dv2);
     })
   })
   describe('freeFixedMemory', function() {
@@ -122,7 +122,7 @@ describe('NodeEnvironment', function() {
       const dv2 = env.obtainFixedView(0x2000n, 0);
       expect(dv1.byteLength).to.equal(0);
       expect(dv2.byteLength).to.equal(0);
-      expect(dv1).to.equal(dv2);
+      expect(dv1).to.not.equal(dv2);
     })
   })
   describe('releaseFixedView', function() {    
@@ -142,39 +142,175 @@ describe('NodeEnvironment', function() {
     })
   })
   describe('inFixedMemory', function() {
-    it('should return true when view points to a SharedArrayBuffer', function() {
+    it('should return true when memory is obtained from allocateFixedMemory', function() {
       const env = new NodeEnvironment();
+      env.allocateExternMemory = function(len, align) {
+        return new ArrayBuffer(len);
+      };
+      env.extractBufferAddress = function() { return 0x1000n };
       const object = {
-        [MEMORY]: new DataView(new SharedArrayBuffer(16)),
+        [MEMORY]: env.allocateMemory(64, 8, true),
+      };
+      const result = env.inFixedMemory(object);
+      expect(result).to.be.true;
+    })
+    it('should return true when memory is obtained from obtainFixedView', function() {
+      const env = new NodeEnvironment();
+      env.obtainExternBuffer = function(address, len) {
+        return new ArrayBuffer(len);
+      };
+      env.extractBufferAddress = function() { return 0x1000n };
+      const object = {
+        [MEMORY]: env.obtainFixedView(0x1000n, 64),
       };
       const result = env.inFixedMemory(object);
       expect(result).to.be.true;
     })
   })
   describe('getTargetAddress', function() {
+    it('should return address when address is correctly aligned', function() {
+      const env = new NodeEnvironment();
+      env.extractBufferAddress = function(buffer) {
+        return 0x1000n;
+      };
+      env.startContext();
+      const Type = function() {};
+      Type[ALIGN] = 8;
+      const object = new Type();
+      object[MEMORY] = new DataView(new ArrayBuffer(64));
+      const address = env.getTargetAddress(object);
+      expect(address).to.equal(0x1000n);
+    })
+    it('should return false when address is misaligned', function() {
+      const env = new NodeEnvironment();
+      env.extractBufferAddress = function(buffer) {
+        return 0x1004;
+      };
+      env.startContext();
+      const Type = function() {};
+      Type[ALIGN] = 8;
+      const object = new Type();
+      object[MEMORY] = new DataView(new ArrayBuffer(64));
+      const address = env.getTargetAddress(object);
+      expect(address).to.be.false;
+    })
+    it('should return address when cluster is correctly aligned', function() {
+      const env = new NodeEnvironment();
+      env.extractBufferAddress = function(buffer) {
+        return 0x1006n;
+      };
+      env.startContext();
+      const Type = function() {};
+      Type[ALIGN] = 8;
+      const object1 = new Type();
+      const object2 = new Type();
+      const buffer = new ArrayBuffer(64);
+      object1[MEMORY] = new DataView(buffer, 2, 32);
+      object2[MEMORY] = new DataView(buffer, 10, 8);
+      const cluster = {
+        targets: [ object1, object2 ],
+        start: 2,
+        end: 32,
+        address: undefined,
+        misaligned: undefined,
+      };
+      const address1 = env.getTargetAddress(object1, cluster);
+      expect(address1).to.equal(0x1008n);
+      expect(cluster.misaligned).to.be.false;
+      const address2 = env.getTargetAddress(object2, cluster);
+      expect(address2).to.equal(0x1010n);
+    })
+    it('should return false when cluster is misaligned', function() {
+      const env = new NodeEnvironment();
+      env.extractBufferAddress = function(buffer) {
+        return 0x1000n;
+      };
+      env.startContext();
+      const Type = function() {};
+      Type[ALIGN] = 8;
+      const object1 = new Type();
+      const object2 = new Type();
+      const buffer = new ArrayBuffer(64);
+      object1[MEMORY] = new DataView(buffer, 2, 32);
+      object2[MEMORY] = new DataView(buffer, 10, 8);
+      const cluster = {
+        targets: [ object1, object2 ],
+        start: 2,
+        end: 32,
+        address: undefined,
+        misaligned: undefined,
+      };
+      const address1 = env.getTargetAddress(object1, cluster);
+      expect(address1).to.be.false;
+      expect(cluster.misaligned).to.be.true;
+      const address2 = env.getTargetAddress(object2, cluster);
+      expect(address2).to.be.false;
+    })
   })
   describe('createAlignedBuffer', function() {
+    it('should allocate extra bytes to account for alignment', function() {
+      const env = new NodeEnvironment();
+      env.extractBufferAddress = function(buffer) {
+        return 0x1000n;
+      };
+      const dv = env.createAlignedBuffer(64, 32);
+      expect(dv.byteLength).to.equal(64);
+      expect(dv.buffer.byteLength).to.equal(96);
+    })
   })
   describe('invokeThunk', function() {
     it('should invoke the given thunk with the expected arguments', function() {
       const env = new NodeEnvironment();
+      let recv, thunkId, argDV;
+      env.runThunk = function(arg1, arg2) {
+        recv = this;
+        thunkId = arg1;
+        argDV = arg2;
+      };
       const argStruct = {
         [MEMORY]: new DataView(new ArrayBuffer(16)),
         [SLOTS]: { 0: {} },
       };
-      let recv, arg;
-      env.invokeThunk(thunk, argStruct);
+      env.invokeThunk(100, argStruct);
       expect(recv).to.equal(env);
-      expect(arg).to.equal(argStruct[MEMORY]);
+      expect(thunkId).to.equal(100);
+      expect(argDV).to.equal(argStruct[MEMORY]);
     })
     it('should throw an error if thunk returns a string', function() {
       const env = new NodeEnvironment();
+      env.runThunk = function(arg1, arg2) {
+        return 'JellyDonutInsurrection';
+      };
       const argStruct = {
         [MEMORY]: new DataView(new ArrayBuffer(16)),
         [SLOTS]: { 0: {} },
       };
-      expect(() => env.invokeThunk(thunk, argStruct)).to.throw(Error)
+      expect(() => env.invokeThunk(100, argStruct)).to.throw(Error)
         .with.property('message').that.equals('Jelly donut insurrection') ;
+    })
+    it('should activate pointer visitor before and after the call', function() {
+      const env = new NodeEnvironment();
+      let thunkCalled = false;
+      let visitorCalledBefore = false;
+      let visitorCalledAfter = false;
+      env.runThunk = function(arg1, arg2) {
+        thunkCalled = true;
+      };
+      const argStruct = {
+        [MEMORY]: new DataView(new ArrayBuffer(16)),
+        [SLOTS]: { 0: {} },
+        [POINTER_VISITOR]: () => {
+          if (thunkCalled) {
+            visitorCalledAfter = true;
+          } else {
+            visitorCalledBefore = true;
+          }
+        }
+      };
+      env.invokeThunk(100, argStruct);
+      expect(thunkCalled).to.be.true;
+      expect(visitorCalledBefore).to.be.true;
+      expect(visitorCalledAfter).to.be.true;
     })
   })
 })

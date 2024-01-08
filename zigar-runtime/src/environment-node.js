@@ -48,6 +48,9 @@ export class NodeEnvironment extends Environment {
   }
 
   allocateFixedMemory(len, align) {
+    if (len === 0) {
+      return this.obtainView(new ArrayBuffer(0));
+    }
     const buffer = this.allocateExternMemory(len, align);
     const address = this.extractBufferAddress(buffer);
     this.addressMap.set(buffer, address);
@@ -65,7 +68,7 @@ export class NodeEnvironment extends Environment {
 
   obtainFixedView(address, len) {
     if (len === 0) {
-      return this.emptyView;
+      return this.obtainView(new ArrayBuffer(0));
     }
     const buffer = this.obtainExternBuffer(address, len);
     this.addressMap.set(buffer, address);
@@ -107,7 +110,7 @@ export class NodeEnvironment extends Environment {
           cluster.address = address;
         }
       }
-      return (cluster.misaligned) ? false : cluster.address + dv.byteOffset;
+      return (cluster.misaligned) ? false : add(cluster.address, dv.byteOffset);
     } else {
       const align = target.constructor[ALIGN];
       const address = this.getViewAddress(dv);
@@ -115,7 +118,7 @@ export class NodeEnvironment extends Environment {
         return false;
       }
       this.registerMemory(dv);
-      return  address;
+      return address;
     }
   }
 
