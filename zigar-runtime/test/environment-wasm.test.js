@@ -88,6 +88,17 @@ describe('WebAssemblyEnvironment', function() {
       expect(dv.buffer).to.equal(memory.buffer);
       expect(dv[ALIGN]).to.equal(32);
     })
+    it('should return empty buffer when len is zero', function() {
+      const env = new WebAssemblyEnvironment();
+      const memory = env.memory = new WebAssembly.Memory({
+        initial: 128,
+        maximum: 1024,
+      });
+      env.startContext();
+      const dv = env.allocateFixedMemory(0, 0);
+      expect(dv.byteLength).to.equal(0);
+      expect(dv.buffer).to.equal(memory.buffer);
+    })
   })
   describe('freeFixedMemory', function() {
     it('shoud call freeExternMemory to free allocated block', function() {
@@ -112,6 +123,24 @@ describe('WebAssemblyEnvironment', function() {
       expect(len).to.equal(64);
       expect(align).to.equal(32);
     })
+    it('shoud do nothing when len is zero', function() {
+      const env = new WebAssemblyEnvironment();
+      const memory = env.memory = new WebAssembly.Memory({
+        initial: 128,
+        maximum: 1024,
+      });
+      env.allocateExternMemory = function(len, align) {
+        return 128;
+      };
+      let called = false;
+      env.freeExternMemory = function(address, len, align) {
+        called = true;
+      };
+      env.startContext();
+      const dv = env.allocateFixedMemory(0, 0);
+      env.freeFixedMemory(128, 0, 0);
+      expect(called).to.equal(false);
+    })
   })
   describe('obtainFixedView', function() {
     it('should return a view to WASM memory', function() {
@@ -126,6 +155,19 @@ describe('WebAssemblyEnvironment', function() {
       expect(dv.byteOffset).to.equal(128);
       expect(dv[ALIGN]).to.be.undefined;
     })
+    it('should return a view to WASM memory', function() {
+      const env = new WebAssemblyEnvironment();
+      const memory = env.memory = new WebAssembly.Memory({
+        initial: 128,
+        maximum: 1024,
+      }); 
+      const dv = env.obtainFixedView(128, 16);
+      expect(dv.buffer).to.equal(memory.buffer);
+      expect(dv.byteLength).to.equal(16);
+      expect(dv.byteOffset).to.equal(128);
+      expect(dv[ALIGN]).to.be.undefined;
+    })
+
   })
   describe('releaseFixedView', function() {
     it('should free memory from allocatedFixedMemory', function() {
@@ -166,12 +208,85 @@ describe('WebAssemblyEnvironment', function() {
     })
   })
   describe('copyBytes', function() {
+    it('should copy bytes from specified address', function() {
+      const env = new WebAssemblyEnvironment();
+      const memory = env.memory = new WebAssembly.Memory({
+        initial: 128,
+        maximum: 1024,
+      });
+      const src = new DataView(memory.buffer, 128, 4);
+      src.setUint32(0, 1234);
+      const dest = new DataView(new ArrayBuffer(4));
+      env.copyBytes(dest, 128, 4);
+      expect(dest.getUint32(0)).to.equal(1234);
+    })
   })
   describe('findSentinel', function() {
+    it('should find length of zero-terminated string at address', function() {
+      const env = new WebAssemblyEnvironment();
+      const memory = env.memory = new WebAssembly.Memory({
+        initial: 128,
+        maximum: 1024,
+      });
+      const text = 'Hello';
+      const src = new DataView(memory.buffer, 128, 16);
+      for (let i = 0; i < text.length; i++) {
+        src.setUint8(i, text.charCodeAt(i));
+      }
+      const byte = new DataView(new ArrayBuffer(1));
+      const len = env.findSentinel(128, byte);
+      expect(len).to.equal(5);
+    })
   })
   describe('captureString', function() {
+    it('should return string located at address', function() {
+      const env = new WebAssemblyEnvironment();
+      const memory = env.memory = new WebAssembly.Memory({
+        initial: 128,
+        maximum: 1024,
+      });
+      const text = 'Hello';
+      const src = new DataView(memory.buffer, 128, 16);
+      for (let i = 0; i < text.length; i++) {
+        src.setUint8(i, text.charCodeAt(i));
+      }
+      const string = env.captureString(128, 5);
+      expect(string).to.equal('Hello');
+    })
   })
   describe('getTargetAddress', function() {
+    it('should return false when object is located in relocatable memory', function() {
+      const env = new WebAssemblyEnvironment();
+      const object = { 
+        [MEMORY]: env.allocateMemory(16, 8, false)
+      };
+      const address = env.getTargetAddress(object);
+      expect(address).to.be.false;
+    })
+    it('should return zero when object has no bytes', function() {
+      const env = new WebAssemblyEnvironment();
+      const object = { 
+        [MEMORY]: env.allocateMemory(0, 0, false)
+      };
+      const address = env.getTargetAddress(object);
+      expect(address).to.equal(0);
+    })
+    it('should return the address when object is in fixed memory', function() {
+      const env = new WebAssemblyEnvironment();
+      const memory = env.memory = new WebAssembly.Memory({
+        initial: 128,
+        maximum: 1024,
+      });
+      env.allocateExternMemory = function(len, align) {
+        return 256;
+      };
+      env.startContext();
+      const object = { 
+        [MEMORY]: env.allocateMemory(64, 16, true)
+      };
+      const address = env.getTargetAddress(object);
+      expect(address).to.equal(256);
+    })
   })
   describe('clearExchangeTable', function() {
     it('should release objects stored in value table', function() {
