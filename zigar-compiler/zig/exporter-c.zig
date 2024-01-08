@@ -172,9 +172,41 @@ pub const Host = struct {
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = gpa.allocator();
 
-fn allocateFixedMemory(len: usize, alignment: u8, memory: *Memory) callconv(.C) Result {
+fn clearBytes(bytes: [*]u8, len: usize, ptr_align: u8) void {
+    switch (ptr_align) {
+        0 => {
+            for (bytes[0..len]) |*ptr| ptr.* = 0;
+        },
+        1 => {
+            for (std.mem.bytesAsSlice(u16, bytes[0..len])) |*ptr| ptr.* = 0;
+        },
+        2 => {
+            for (std.mem.bytesAsSlice(u32, bytes[0..len])) |*ptr| ptr.* = 0;
+        },
+        else => {
+            for (std.mem.bytesAsSlice(u64, bytes[0..len])) |*ptr| ptr.* = 0;
+        },
+    }
+}
+
+test "clearBytes" {
+    var len: usize = 64;
+    var ptr_align: u8 = 0;
+    while (ptr_align <= 4) : (ptr_align += 1) {
+        if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
+            clearBytes(bytes, len, ptr_align);
+            for (bytes[0..len]) |byte| {
+                assert(byte == 0);
+            }
+            allocator.rawFree(bytes[0..len], ptr_align, 0);
+        }
+    }
+}
+
+fn allocateExternMemory(len: usize, alignment: u8, memory: *Memory) callconv(.C) Result {
     const ptr_align = if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
     if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
+        clearBytes(bytes, len, ptr_align);
         memory.bytes = bytes;
         memory.len = len;
         memory.attributes.alignment = alignment;
@@ -186,7 +218,7 @@ fn allocateFixedMemory(len: usize, alignment: u8, memory: *Memory) callconv(.C) 
     }
 }
 
-fn freeFixedMemory(memory: *const Memory) callconv(.C) Result {
+fn freeExternMemory(memory: *const Memory) callconv(.C) Result {
     if (memory.bytes) |bytes| {
         const alignment = memory.attributes.alignment;
         const len = memory.len;
@@ -283,8 +315,8 @@ pub fn createModule(comptime T: type) Module {
         },
         .imports = &imports,
         .exports = &.{
-            .allocate_fixed_memory = allocateFixedMemory,
-            .free_fixed_memory = freeFixedMemory,
+            .allocate_fixed_memory = allocateExternMemory,
+            .free_fixed_memory = freeExternMemory,
             .define_structures = createDescribeStructures(T),
             .run_thunk = runThunk,
             .override_write = overrideWrite,

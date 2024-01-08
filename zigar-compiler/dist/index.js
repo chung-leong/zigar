@@ -589,6 +589,9 @@ function copy32(dest, src) {
 function getMemoryResetter(offset, size) {
   const reset = getResetFunction(size);
   return function() {
+    /* WASM-ONLY */
+    restoreMemory.call(this);
+    /* WASM-ONLY-END */
     const dest = this[MEMORY];
     reset(dest, offset, size);
   };
@@ -719,29 +722,28 @@ function throwBufferExpected(structure) {
   }
 }
 
-function throwInvalidEnum(structure, value) {
-  const name = getStructureName(structure);
-  throw new TypeError(`Value given does not correspond to an item of enum ${name}: ${value}`);
-}
-
 function throwEnumExpected(structure, arg) {
   const name = getStructureName(structure);
-  throw new TypeError(`Enum item of the type ${name} expected, received ${arg}`);
+  if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+    throw new TypeError(`Value given does not correspond to an item of enum ${name}: ${arg}`);
+  } else {
+    throw new TypeError(`Enum item of the type ${name} expected, received ${arg}`);
+  }
 }
 
 function throwErrorExpected(structure, arg) {
   const name = getStructureName(structure);
-  throw new TypeError(`Error of the type ${name} expected, received ${arg}`);
+  const type = typeof(arg);
+  if (type === 'string' || type === 'number') {
+    throw new TypeError(`Error ${type} does not corresponds to any error in error set ${name}: ${arg}`);
+  } else {
+    throw new TypeError(`Error of the type ${name} expected, received ${arg}`);
+  }
 }
 
 function throwNotInErrorSet(structure) {
   const name = getStructureName(structure);
   throw new TypeError(`Error given is not a part of error set ${name}`);
-}
-
-function throwUnknownErrorNumber(structure, number) {
-  const name = getStructureName(structure);
-  throw new TypeError(`Error number does not corresponds to any error in error set ${name}: #${number}`);
 }
 
 function throwMultipleUnionInitializers(structure) {
@@ -936,6 +938,12 @@ function throwReadOnlyTarget(structure) {
 
 function throwZigError(name) {
   throw new Error(decamelizeErrorName(name));
+}
+
+function warnImplicitArrayCreation(structure, arg) {
+  const created = addArticle(structure.typedArray.name);
+  const source = addArticle(arg.constructor.name);
+  console.warn(`Implicitly creating ${created} from ${source}`);
 }
 
 function decamelizeErrorName(name) {
@@ -1235,7 +1243,7 @@ function getCompatibleTags(structure) {
   if (typedArray) {
     tags.push(typedArray.name);
     tags.push('DataView');
-    if (typedArray === Uint8Array) {
+    if (typedArray === Uint8Array || typedArray === Int8Array) {
       tags.push('Uint8ClampedArray');
       tags.push('ArrayBuffer');
       tags.push('SharedArrayBuffer');
@@ -1768,7 +1776,12 @@ function decodeBase64(str) {
 
 function getValueOf() {
   const map = new Map();
-  return this[VALUE_NORMALIZER](map);
+  return this[VALUE_NORMALIZER](map, false);
+}
+
+function convertToJSON() {
+  const map = new Map();
+  return this[VALUE_NORMALIZER](map, true);
 }
 
 function getDataViewAccessors(structure, handlers = {}) {
@@ -1855,34 +1868,36 @@ let currentErrorSets;
 
 function defineErrorSet(structure, env) {
   const {
-    name,
     byteSize,
     align,
     instance: { members: [ member ] },
   } = structure;
   const { get: getIndex } = getDescriptor(member, env);
-  // get the enum descriptor instead of the int/uint descriptor
+  // get the error descriptor instead of the int/uint descriptor
   const { get, set } = getDescriptor({ ...member, type: MemberType.Error, structure }, env);
   const expected = [ 'string', 'number' ];
   const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
     if (arg && typeof(arg) === 'object') {
-      if (propApplier.call(this, arg) === 0) {
-        throwInvalidInitializer(structure, expected, arg);
+      try {
+        if (propApplier.call(this, arg) === 0) {
+          throwInvalidInitializer(structure, expected, arg);
+        } 
+      } catch (err) {
+        const { error } = arg;
+        if (typeof(error) === 'string') {
+          set.call(this, error);
+        } else {
+          throw err;
+        }
       }
-    } else {
+    } else if (arg !== undefined) {
       set.call(this, arg);
     }
   };
   const alternateCaster = function(arg) {
-    if (typeof(arg) === 'number') {
+    if (typeof(arg) === 'number' || typeof(arg) === 'string') {
       return constructor[ERROR_ITEMS][arg];
-    } else if (typeof(arg) === 'string') {
-      for (const err of Object.values(constructor[ERROR_ITEMS])) {
-        if (err.toString() === arg) {
-          return err;
-        }
-      }
     } else if (!getDataView(structure, arg, env)) {
       throwInvalidInitializer(structure, expected, arg);
     } else {
@@ -1905,7 +1920,7 @@ function defineErrorSet(structure, env) {
     base64: getBase64Accessors(structure),
     typedArray: typedArray && getTypedArrayAccessors(structure),
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     // ensure that libraries that rely on the string tag for type detection will
     // correctly identify the object as an error
@@ -1921,8 +1936,14 @@ function defineErrorSet(structure, env) {
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
-function normalizeError(map) {
-  return this.$;
+function normalizeError(map, forJSON) {
+  const err = this.$;
+  if (forJSON) {
+    const { message } = err;
+    return { error: message };
+  } else {
+    return err;
+  }
 }
 
 function initializeErrorSets() {
@@ -2118,7 +2139,7 @@ function addEnumerationLookup(getDataViewIntAccessor) {
         // the enumeration constructor returns the object for the int value
         const object = constructor(value);
         if (!object) {
-          throwInvalidEnum(structure, value);
+          throwEnumExpected(structure, value);
         }
         return object;
       };
@@ -2160,9 +2181,9 @@ function addErrorLookup(getDataViewIntAccessor) {
         if (index) {
           const object = acceptAny ? allErrors[index] : constructor(index);
           if (!object) {
-            throwUnknownErrorNumber(structure, index);
+            throwErrorExpected(structure, index);
           }
-        return object;
+          return object;
         }
       };
     } else {
@@ -2172,10 +2193,11 @@ function addErrorLookup(getDataViewIntAccessor) {
         const { constructor } = structure;
         let object;
         if (value instanceof Error) {
-          if (!(acceptAny ? value.index : value instanceof constructor)) {
+          if (acceptAny ? value.hasOwnProperty('index') : value instanceof constructor) {
+            object = value;
+          } else {
             throwNotInErrorSet(structure);
           }
-          object = value;
         } else if (value !== null) {
           object = acceptAny ? allErrors[value] : constructor(value);
           if (!object) {
@@ -2480,19 +2502,19 @@ function definePointer(structure, env) {
     structure: { name: 'usize', byteSize: addressSize },
   }, env) : {};
   const { get, set } = getDescriptor(member, env);
-  const alternateCaster = function(arg) {
+  const alternateCaster = function(arg, options) {
     const Target = targetStructure.constructor;
     if (isPointerOf(arg, Target)) {
-      return new constructor(arg['*'], { writable: !isConst });
+      // const/non-const casting
+      return new constructor(Target(arg['*'], { writable: !isConst }), options);
+    } else if (this === ENVIRONMENT || this === PARENT) {
+      // allow the runtime environment to cast to pointer
+      return false;
     } else if (isTargetSlice) {
       // allow casting to slice through constructor of its pointer
-      return new constructor(arg, { writable: !isConst });
+      return new constructor(Target(arg), options);
     } else {
-      if (this !== ENVIRONMENT && this !== PARENT) {
-        // don't allow casting to pointer unless it's done by the runtime environment
-        throwNoCastingToPointer();
-      }
-      return false;
+      throwNoCastingToPointer();
     }
   };
   const finalizer = function() {
@@ -2518,31 +2540,27 @@ function definePointer(structure, env) {
       } else if (!isConst && arg[CONST]) {
         throwReadOnlyTarget(structure);
       }
-    } else {
-      if (isCompatible(arg, Target)) {
-        // autocast to target type
-        const dv = getDataView(targetStructure, arg, env);
-        arg = Target(dv, { writable: !isConst });
-      } else if (isTargetSlice) {
-        // autovivificate target object
-        const autoObj = new Target(arg, { writable: !isConst });
-        if (runtimeSafety) {
-          // creation of a new slice using a typed array is probably
-          // not what the user wants; it's more likely that the intention
-          // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
-          if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
-            const created = addArticle(targetStructure.typedArray.name);
-            const source = addArticle(arg.constructor.name);
-            console.warn(`Implicitly creating ${created} from ${source}`);
-          }
+    } else if (isCompatible(arg, Target)) {
+      // autocast to target type
+      const dv = getDataView(targetStructure, arg, env);
+      arg = Target(dv, { writable: !isConst });
+    } else if (isTargetSlice) {
+      // autovivificate target object
+      const autoObj = new Target(arg, { writable: !isConst });
+      if (runtimeSafety) {
+        // creation of a new slice using a typed array is probably
+        // not what the user wants; it's more likely that the intention
+        // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
+        if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
+          warnImplicitArrayCreation(targetStructure, arg);
         }
-        arg = autoObj;
-      } else {
-        throwInvalidPointerTarget(structure, arg);
       }
+      arg = autoObj;
+    } else {
+      throwInvalidPointerTarget(structure, arg);
     }
     if (env.inFixedMemory(this)) {
-      // the pointer sits in shared memory--apply the change immediately
+      // the pointer sits in fixed memory--apply the change immediately
       if (env.inFixedMemory(arg)) {
         const address = env.getViewAddress(arg[MEMORY]);
         setAddress.call(this, address);
@@ -2562,7 +2580,7 @@ function definePointer(structure, env) {
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [ADDRESS_GETTER]: { value: getAddress },
     [ADDRESS_SETTER]: { value: setAddress },
@@ -2582,9 +2600,9 @@ function definePointer(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-function normalizePointer(map) {
+function normalizePointer(map, forJSON) {
   const target = this['*'];
-  return target?.[VALUE_NORMALIZER]?.(map) ?? target;
+  return target[VALUE_NORMALIZER]?.(map, forJSON) ?? target;
 }
 
 function getProxy() {
@@ -2602,7 +2620,7 @@ function resetPointer({ isActive }) {
 }
 
 function disablePointer() {
-  Object.defineProperty(this[SLOTS], '0', {
+  Object.defineProperty(this[SLOTS], 0, {
     get: throwInaccessiblePointer,
     set: throwInaccessiblePointer,
     configurable: true
@@ -2627,8 +2645,6 @@ const isPointerKeys = {
   '*': true,
   constructor: true,
   valueOf: true,
-  memory: true,
-  slots: true,
   [CONST]: true,
   [SLOTS]: true,
   [MEMORY]: true,
@@ -2670,27 +2686,6 @@ const proxyHandlers$1 = {
     }
     return true;
   },
-  has(pointer, name) {
-    if (isPointerKeys[name]) {
-      return true;
-    }
-    const target = pointer[SLOTS][0];
-    if (!target) {
-      return false;
-    }
-    return name in target;
-  },
-  ownKeys(pointer) {
-    const targetKeys = Object.getOwnPropertyNames(pointer[SLOTS][0]);
-    return [ ...targetKeys, PROXY, POINTER_VISITOR ];
-  },
-  getOwnPropertyDescriptor(pointer, name) {
-    if (isPointerKeys[name]) {
-      return Object.getOwnPropertyDescriptor(pointer, name);
-    } else {
-      return Object.getOwnPropertyDescriptor(pointer[SLOTS][0], name);
-    }
-  },
 };
 
 function always() {
@@ -2729,7 +2724,6 @@ function defineArray(structure, env) {
         }
         let i = 0;
         for (const value of arg) {
-          debugger;
           set.call(this, i++, value);
         }
       } else if (arg && typeof(arg) === 'object') {
@@ -2756,7 +2750,7 @@ function defineArray(structure, env) {
     set: { value: set },
     entries: { value: getArrayEntries },
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.iterator]: { value: getArrayIterator },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
@@ -2784,12 +2778,12 @@ function canBeString(member) {
   return member.type === MemberType.Uint && [ 8, 16 ].includes(member.bitSize);
 }
 
-function normalizeArray(map) {
+function normalizeArray(map, forJSON) {
   let array = map.get(this);
   if (!array) {
     array = [];
     for (const value of this) {      
-      array.push(typeof(value) === 'object' ? value[VALUE_NORMALIZER](map) : value);
+      array.push(value[VALUE_NORMALIZER]?.(map, forJSON) ?? value);
     }
     map.set(this, array);
   }
@@ -3023,7 +3017,7 @@ function defineStructShape(structure, env) {
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     ...memberDescriptors,
     [Symbol.iterator]: { value: interatorCreator },
@@ -3039,12 +3033,12 @@ function defineStructShape(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-function normalizeStruct(map) {
+function normalizeStruct(map, forJSON) {
   let object = map.get(this);
   if (!object) {
     object = {};
     for (const [ name, value ] of this) {      
-      object[name] = value[VALUE_NORMALIZER]?.(map) ?? value;
+      object[name] = value[VALUE_NORMALIZER]?.(map, forJSON) ?? value;
     }
     map.set(this, object);
   }
@@ -3263,7 +3257,7 @@ function defineUnionShape(structure, env) {
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     ...memberDescriptors,
     [Symbol.iterator]: { value: interatorCreator },
@@ -3294,17 +3288,6 @@ function defineErrorUnion(structure, env) {
   } = structure;
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getError, set: setError } = getDescriptor(members[1], env);
-  const set = function(value) {
-    if (value instanceof Error) {
-      setError.call(this, value);
-      this[VALUE_RESETTER]();
-      this[POINTER_VISITOR]?.(resetPointer);
-    } else {
-      // call setValue() first, in case it throws
-      setValue.call(this, value);
-      setError.call(this, null);
-    }
-  };
   const get = function() {
     const error = getError.call(this);
     if (error) {
@@ -3313,36 +3296,65 @@ function defineErrorUnion(structure, env) {
       return getValue.call(this);
     }
   };
-  const check = function() {
-    const error = getError.call(this);
-    return !error;
+  const isChildActive = function() {
+    return !getError.call(this);
+  };
+  const clearValue = function() {
+    this[VALUE_RESETTER]();
+    this[POINTER_VISITOR]?.(resetPointer);
   };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[MEMORY_COPIER](arg);
       if (hasPointer) {
-        if (check.call(this)) {
+        if (isChildActive.call(this)) {
           this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }
-    } else {
-      this.$ = arg;
+    } else if (arg instanceof Error) {
+      setError.call(this, arg);
+      clearValue.call(this);
+    } else if (arg !== undefined) {
+      try {
+        // call setValue() first, in case it throws
+        setValue.call(this, arg);
+        setError.call(this, null);
+      } catch (err) {
+        if (arg && typeof(arg) === 'object') {
+          try {
+            if (propApplier.call(this, arg) === 0) {
+              throw err;
+            }
+          } catch (err) {
+            const { error } = arg;
+            if (typeof(error) === 'string') {
+              setError.call(this, error);
+              clearValue.call(this);
+            } else {
+              throw err;
+            }   
+          }                   
+        } else {
+          throw err;
+        }
+      }
     }
-  };
+  };  
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
   const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
   const instanceDescriptors = {
-    '$': { get, set },
+    '$': { get, set: initializer },
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive: check }) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     [VALUE_NORMALIZER]: { value: normalizeErrorUnion },
   };
   const staticDescriptors = {
@@ -3352,9 +3364,17 @@ function defineErrorUnion(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-function normalizeErrorUnion(map) {
-  const value = this.$;
-  return value[VALUE_NORMALIZER](map);
+function normalizeErrorUnion(map, forJSON) {
+  try {
+    const value = this.$;
+    return value[VALUE_NORMALIZER]?.(map, forJSON) ?? value;
+  } catch (err) {
+    if (forJSON) {
+      return { error: err.message };
+    } else {
+      throw err;
+    }
+  }
 }
 
 function defineEnumerationShape(structure, env) {
@@ -3375,7 +3395,7 @@ function defineEnumerationShape(structure, env) {
       if (propApplier.call(this, arg) === 0) {
         throwInvalidInitializer(structure, expected, arg);
       }
-    } else {
+    } else if (arg !== undefined) {
       set.call(this, arg);
     }
   };
@@ -3401,7 +3421,7 @@ function defineEnumerationShape(structure, env) {
     base64: getBase64Accessors(structure),
     typedArray: typedArray && getTypedArrayAccessors(structure),
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.toPrimitive]: { value: getIndex },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
@@ -3414,8 +3434,9 @@ function defineEnumerationShape(structure, env) {
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
-function normalizeEnumerationItem(map) {
-  return this[ENUM_NAME];
+function normalizeEnumerationItem(map, forJSON) {
+  const item = this.$;
+  return item[ENUM_NAME];
 }
 
 function defineOptional(structure, env) {
@@ -3427,72 +3448,56 @@ function defineOptional(structure, env) {
   } = structure;
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getPresent, set: setPresent } = getDescriptor(members[1], env);
-  // optionals containing pointers use the pointer itself as indication of presence
-  const hasPresentFlag = !(members[0].bitSize > 0 && members[0].bitOffset === members[1].bitOffset);
-  const get = (hasPresentFlag)
-  ? function() {
-      const present = getPresent.call(this);
-      if (present) {
-        return getValue.call(this);
-      } else {
-        this[POINTER_VISITOR]?.(resetPointer);
-        return null;
-      }
-    }
-  : function() {
-    const value = getValue.call(this);
-    return (value[SLOTS][0]) ? value : null;
-  };
-  const set = (hasPresentFlag)
-  ? function(value) {
-      if (value !== null) {
-        // call setValue() first, in case it throws
-        setValue.call(this, value);
-        setPresent.call(this, true);
-      } else {      
-        setPresent.call(this, false);
-        this[VALUE_RESETTER]();
-        this[POINTER_VISITOR]?.(resetPointer);
-      }
-    }
-  : function(value) {
-    if (value !== null) {
-      setValue.call(this, value);
+  const get = function() {
+    const present = getPresent.call(this);
+    if (present) {
+      return getValue.call(this);
     } else {
-      setPresent.call(this, false);
       this[POINTER_VISITOR]?.(resetPointer);
+      return null;
     }
   };
-  const check = (hasPresentFlag) ? getPresent : function() { 
-    return !!getValue.call(this)[SLOTS][0];
-  };
+  const isChildActive = getPresent;
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[MEMORY_COPIER](arg);
       if (hasPointer) {
         // don't bother copying pointers when it's empty
-        if (check.call(arg)) {
+        if (isChildActive.call(arg)) {
           this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
         }
+      }      
+    } else if (arg !== null) {
+      // call setValue() first, in case it throws
+      setValue.call(this, arg);
+      if (hasPointer || !env.inFixedMemory(this)) {
+        // since setValue() wouldn't write address into memory when the pointer is in 
+        // relocatable memory, we need to use setPresent() in order to write something 
+        // non-zero there so that we know the field is populated
+        setPresent.call(this, true);
       }
-    } else {
-      set.call(this, arg);
+    } else {      
+      setPresent.call(this, false);
+      this[VALUE_RESETTER]?.();
+      // clear references so objects can be garbage-collected
+      this[POINTER_VISITOR]?.(resetPointer);
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
   const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const instanceDescriptors = {
-    $: { get, set },
+    $: { get, set: initializer },
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
+    // no need to reset the value when it's a pointer, since setPresent() would null out memory used by the pointer
+    [VALUE_RESETTER]: !hasPointer && { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive: check }) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     [VALUE_NORMALIZER]: { value: normalizeOptional },
   };
   const staticDescriptors = {
@@ -3502,9 +3507,9 @@ function defineOptional(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-function normalizeOptional(map) {
+function normalizeOptional(map, forJSON) {
   const value = this.$;
-  return value[VALUE_NORMALIZER](map);
+  return value?.[VALUE_NORMALIZER]?.(map, forJSON) ?? value;
 }
 
 function defineSlice(structure, env) {
@@ -3598,7 +3603,7 @@ function defineSlice(structure, env) {
     set: { value: set },
     entries: { value: getArrayEntries },
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.iterator]: { value: getArrayIterator },
     [MEMORY_COPIER]: { value: getMemoryCopier(elementSize, true) },
@@ -3715,7 +3720,7 @@ function defineVector(structure, env) {
     base64: getBase64Accessors(structure),
     typedArray: typedArray && getTypedArrayAccessors(structure),
     valueOf: { value: getValueOf },
-    toJSON: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     entries: { value: createVectorEntries },
     delete: { value: getDestructor(structure) },
     [Symbol.iterator]: { value: getVectorIterator },
@@ -3731,7 +3736,7 @@ function defineVector(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-function normalizeVector(map) {
+function normalizeVector(map, forJSON) {
   let array = map.get(this);
   if (!array) {
     array = [ ...this ];
@@ -4149,7 +4154,7 @@ function createConstructor(structure, handlers, env) {
       }
     } else {
       if (alternateCaster) {
-        self = alternateCaster.call(this, arg);
+        self = alternateCaster.call(this, arg, options);
         if (self !== false) {
           return self;
         }
@@ -4347,27 +4352,26 @@ function addStaticMembers(structure, env) {
     [SLOTS]: { value: template[SLOTS] },
   });
   if (type === StructureType.Enumeration) {
-    const byIndex = constructor[ENUM_ITEMS];
+    const enums = constructor[ENUM_ITEMS];
     for (const { name, slot } of members) {
       // place item in hash to facilitate lookup, 
       const item = constructor[SLOTS][slot];
       if (item instanceof constructor) {
         const index = item[Symbol.toPrimitive]();
-        byIndex[index] = item;
+        enums[index] = item;
         // attach name to item so tagged union code can quickly find it
         defineProperties(item, { [ENUM_NAME]: { value: name } });  
       }      
     }
   } else if (type === StructureType.ErrorSet) {
-    const currentErrorSets = getCurrentErrorSets();
-    const byIndex = constructor[ERROR_ITEMS];
+    const allErrors = getCurrentErrorSets();
+    const errors = constructor[ERROR_ITEMS];
     const messages = constructor[ERROR_MESSAGES];
     for (const { name, slot } of members) {
       let error = constructor[SLOTS][slot];
       const { index } = error;
-      const previous = currentErrorSets[index];
+      const previous = allErrors[index];
       if (previous) {
-        debugger;
         if (!(previous instanceof constructor)) {
           // error already exists in a previously defined set
           // see if we should make that set a subclass or superclass of this one
@@ -4391,10 +4395,16 @@ function addStaticMembers(structure, env) {
         error = constructor[SLOTS][slot] = previous;       
       } else {
         // set error message
-        messages[error.index] = decamelizeErrorName(name);
-        currentErrorSets[index] = error;
+        const message = decamelizeErrorName(name);
+        messages[error.index] = message;
+        // add to hash
+        allErrors[index] = error;
+        allErrors[message] = error;
+        allErrors[`${error}`] = error;
       }
-      byIndex[index] = error;
+      errors[index] = error;
+      errors[error.message] = error;
+      errors[`${error}`] = error;
     }
   }
 }
@@ -4433,6 +4443,8 @@ function getArgumentCount(method, pushThis) {
   const { argStruct: { instance: { members } } } = method;  
   return members.length - (pushThis ? 2 : 1);
 }
+
+const OMIT_FUNCTIONS = 0x00000001;
 
 class Environment {
   context;
@@ -4694,11 +4706,14 @@ class Environment {
     const {
       omitFunctions = false,
     } = options;
-    if (omitFunctions) {
-      this.attachMethod = () => {};
-    }
     initializeErrorSets();
-    const result = this.defineStructures();
+    const arg = new DataView(new ArrayBuffer(4));
+    let flags = 0;
+    if (omitFunctions) {
+      flags |= OMIT_FUNCTIONS;
+    }
+    arg.setUint32(0, flags, true);
+    const result = this.defineStructures(arg);
     if (typeof(result) === 'string') {
       throwZigError(result);
     }
@@ -4890,7 +4905,7 @@ function add(address, len) {
 
 class WebAssemblyEnvironment extends Environment {
   imports = {
-    defineStructures: { argType: '', returnType: 'v' },
+    defineStructures: { argType: 'v', returnType: 'v' },
     allocateExternMemory: { argType: 'ii', returnType: 'v' },
     freeExternMemory: { argType: 'iii' },
     allocateShadowMemory: { argType: 'cii', returnType: 'v' },

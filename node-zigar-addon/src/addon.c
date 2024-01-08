@@ -370,7 +370,7 @@ napi_value allocate_external_memory(napi_env env,
     }
     module_data* md = (module_data*) data;
     memory mem;
-    if (md->mod->imports->allocate_fixed_memory(len, align, &mem) != OK) {
+    if (md->mod->imports->allocate_extern_memory(len, align, &mem) != OK) {
         return throw_error(env, "Unable to allocate fixed memory");
     }
     napi_value buffer;
@@ -400,7 +400,7 @@ napi_value free_external_memory(napi_env env,
     }
     module_data* md = (module_data*) data;
     memory mem = { (void*) address, len, { align, false, false } };
-    md->mod->imports->free_fixed_memory(&mem);
+    md->mod->imports->free_extern_memory(&mem);
 }
 
 napi_value obtain_external_buffer(napi_env env,

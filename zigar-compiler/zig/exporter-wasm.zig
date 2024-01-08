@@ -1,6 +1,7 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const exporter = @import("exporter.zig");
+const builtin = @import("builtin");
+const assert = std.debug.assert;
 
 pub const Value = exporter.Value;
 pub const Thunk = exporter.Thunk;
@@ -57,13 +58,46 @@ const allocator: std.mem.Allocator = .{
     .vtable = &std.heap.WasmAllocator.vtable,
 };
 
+fn clearBytes(bytes: [*]u8, len: usize, ptr_align: u8) void {
+    switch (ptr_align) {
+        0 => {
+            for (bytes[0..len]) |*ptr| ptr.* = 0;
+        },
+        1 => {
+            for (std.mem.bytesAsSlice(u16, bytes[0..len])) |*ptr| ptr.* = 0;
+        },
+        else => {
+            for (std.mem.bytesAsSlice(u32, bytes[0..len])) |*ptr| ptr.* = 0;
+        },
+    }
+}
+
+test "clearBytes" {
+    var len: usize = 64;
+    var ptr_align: u8 = 0;
+    while (ptr_align <= 4) : (ptr_align += 1) {
+        if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
+            clearBytes(bytes, len, ptr_align);
+            for (bytes[0..len]) |byte| {
+                assert(byte == 0);
+            }
+            allocator.rawFree(bytes[0..len], ptr_align, 0);
+        }
+    }
+}
+
 pub fn getPtrAlign(alignment: u16) u8 {
     return if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
 }
 
 pub fn allocateExternMemory(len: usize, alignment: u16) ?[*]u8 {
     const ptr_align = getPtrAlign(alignment);
-    return allocator.rawAlloc(len, ptr_align, 0);
+    if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
+        @memset(bytes, 0);
+        return bytes;
+    } else {
+        return null;
+    }
 }
 
 pub fn freeExternMemory(bytes: [*]u8, len: usize, alignment: u16) void {
