@@ -23,25 +23,25 @@ export function addStaticMembers(structure, env) {
     [SLOTS]: { value: template[SLOTS] },
   });
   if (type === StructureType.Enumeration) {
-    const byIndex = constructor[ENUM_ITEMS];
+    const enums = constructor[ENUM_ITEMS];
     for (const { name, slot } of members) {
       // place item in hash to facilitate lookup, 
       const item = constructor[SLOTS][slot];
       if (item instanceof constructor) {
         const index = item[Symbol.toPrimitive]();
-        byIndex[index] = item;
+        enums[index] = item;
         // attach name to item so tagged union code can quickly find it
         defineProperties(item, { [ENUM_NAME]: { value: name } });  
       }      
     }
   } else if (type === StructureType.ErrorSet) {
-    const currentErrorSets = getCurrentErrorSets();
-    const byIndex = constructor[ERROR_ITEMS];
+    const allErrors = getCurrentErrorSets();
+    const errors = constructor[ERROR_ITEMS];
     const messages = constructor[ERROR_MESSAGES];
     for (const { name, slot } of members) {
       let error = constructor[SLOTS][slot];
       const { index } = error;
-      const previous = currentErrorSets[index];
+      const previous = allErrors[index];
       if (previous) {
         if (!(previous instanceof constructor)) {
           // error already exists in a previously defined set
@@ -68,10 +68,14 @@ export function addStaticMembers(structure, env) {
         // set error message
         const message = decamelizeErrorName(name);
         messages[error.index] = message;
-        currentErrorSets[index] = error;
-        currentErrorSets[message] = error;
+        // add to hash
+        allErrors[index] = error;
+        allErrors[message] = error;
+        allErrors[`${error}`] = error;
       }
-      byIndex[index] = error;
+      errors[index] = error;
+      errors[error.message] = error;
+      errors[`${error}`] = error;
     }
   }
 }

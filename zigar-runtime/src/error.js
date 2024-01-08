@@ -35,34 +35,28 @@ export function throwBufferExpected(structure) {
   }
 }
 
-export function throwInvalidEnum(structure, value) {
-  const name = getStructureName(structure);
-  throw new TypeError(`Value given does not correspond to an item of enum ${name}: ${value}`);
-}
-
 export function throwEnumExpected(structure, arg) {
   const name = getStructureName(structure);
-  throw new TypeError(`Enum item of the type ${name} expected, received ${arg}`);
+  if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+    throw new TypeError(`Value given does not correspond to an item of enum ${name}: ${arg}`);
+  } else {
+    throw new TypeError(`Enum item of the type ${name} expected, received ${arg}`);
+  }
 }
 
 export function throwErrorExpected(structure, arg) {
   const name = getStructureName(structure);
-  throw new TypeError(`Error of the type ${name} expected, received ${arg}`);
+  const type = typeof(arg);
+  if (type === 'string' || type === 'number') {
+    throw new TypeError(`Error ${type} does not corresponds to any error in error set ${name}: ${arg}`);
+  } else {
+    throw new TypeError(`Error of the type ${name} expected, received ${arg}`);
+  }
 }
 
 export function throwNotInErrorSet(structure) {
   const name = getStructureName(structure);
   throw new TypeError(`Error given is not a part of error set ${name}`);
-}
-
-export function throwUnknownErrorNumber(structure, number) {
-  const name = getStructureName(structure);
-  throw new TypeError(`Error number does not corresponds to any error in error set ${name}: ${number}`);
-}
-
-export function throwUnknownErrorMessage(structure, message) {
-  const name = getStructureName(structure);
-  throw new TypeError(`Error message does not corresponds to any error in error set ${name}: ${message}`);
 }
 
 export function throwInvalidType(structure) {

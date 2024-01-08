@@ -6,11 +6,9 @@ import {
   throwNoInitializer,
   throwBufferSizeMismatch,
   throwBufferExpected,
-  throwInvalidEnum,
   throwEnumExpected,
   throwErrorExpected,
   throwNotInErrorSet,
-  throwUnknownErrorNumber,
   throwInvalidType,
   throwMultipleUnionInitializers,
   throwInactiveUnionProperty,
@@ -126,17 +124,6 @@ describe('Error functions', function() {
     })
 
   })
-  describe('throwInvalidEnum', function() {
-    it('should throw a type error', function() {
-      const structure = {
-        name: 'Hello',
-        type: StructureType.Enumeration,
-        byteSize: 8,
-      };
-      expect(() => throwInvalidEnum(structure, 16)).to.throw(TypeError)
-        .with.property('message').that.contains('Hello');
-    })
-  })
   describe('throwEnumExpected', function() {
     it('should throw a type error', function() {
       const structure = {
@@ -144,8 +131,11 @@ describe('Error functions', function() {
         type: StructureType.Enumeration,
         byteSize: 8,
       };
-      expect(() => throwEnumExpected(structure, 16)).to.throw(TypeError)
+      expect(() => throwEnumExpected(structure, {})).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
+      expect(() => throwEnumExpected(structure, 16)).to.throw(TypeError)
+        .with.property('message').that.contains('16');
+
     })
   })
   describe('throwErrorExpected', function() {
@@ -155,8 +145,13 @@ describe('Error functions', function() {
         type: StructureType.ErrorSet,
         byteSize: 8,
       };
-      expect(() => throwErrorExpected(structure, 16)).to.throw(TypeError)
+      expect(() => throwErrorExpected(structure, {})).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
+      expect(() => throwErrorExpected(structure, 1)).to.throw(TypeError)
+        .with.property('message').that.contains('1');
+      expect(() => throwErrorExpected(structure, 'cow')).to.throw(TypeError)
+        .with.property('message').that.contains('cow');
+
     })
   })
   describe('throwNotInErrorSet', function() {
@@ -167,17 +162,6 @@ describe('Error functions', function() {
         byteSize: 8,
       };
       expect(() => throwNotInErrorSet(structure)).to.throw(TypeError)
-        .with.property('message').that.contains('Hello');
-    })
-  })
-  describe('throwUnknownErrorNumber', function() {
-    it('should throw a type error', function() {
-      const structure = {
-        name: 'Hello',
-        type: StructureType.ErrorSet,
-        byteSize: 8,
-      };
-      expect(() => throwUnknownErrorNumber(structure)).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
     })
   })

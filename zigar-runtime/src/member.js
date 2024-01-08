@@ -13,14 +13,11 @@ import { getIntRange, getPrimitiveClass } from './primitive.js';
 import {
   throwOverflow,
   throwNotNull,
-  throwInvalidEnum,
   throwEnumExpected,
   throwNotInErrorSet,
   rethrowRangeError,
   throwErrorExpected,
-  throwUnknownErrorNumber,
   throwNotUndefined,
-  throwUnknownErrorMessage,
 } from './error.js';
 import { restoreMemory } from './memory.js';
 import { getCurrentErrorSets } from './error-set.js';
@@ -271,7 +268,7 @@ function addEnumerationLookup(getDataViewIntAccessor) {
         // the enumeration constructor returns the object for the int value
         const object = constructor(value);
         if (!object) {
-          throwInvalidEnum(structure, value)
+          throwEnumExpected(structure, value)
         }
         return object;
       };
@@ -319,9 +316,9 @@ function addErrorLookup(getDataViewIntAccessor) {
         if (index) {
           const object = acceptAny ? allErrors[index] : constructor(index);
           if (!object) {
-            throwUnknownErrorNumber(structure, index);
+            throwErrorExpected(structure, index);
           }
-        return object;
+          return object;
         }
       };
     } else {
@@ -331,20 +328,15 @@ function addErrorLookup(getDataViewIntAccessor) {
         const { constructor } = structure;
         let object;
         if (value instanceof Error) {
-          if (!(acceptAny ? value.index : value instanceof constructor)) {
+          if (acceptAny ? value.hasOwnProperty('index') : value instanceof constructor) {
+            object = value;
+          } else {
             throwNotInErrorSet(structure);
           }
-          object = value;
-        } else {
+        } else if (value !== null) {
           object = acceptAny ? allErrors[value] : constructor(value);
           if (!object) {
-            if (typeof(value) === 'number') {
-              throwUnknownErrorNumber(structure, value);
-            } else if (typeof(value) === 'string') {
-              throwUnknownErrorMessage(structure, value);
-            } else {
-              throwErrorExpected(structure, value);
-            }
+            throwErrorExpected(structure, value);
           } 
         }  
         accessor.call(this, offset, object?.index ?? zero, littleEndian);

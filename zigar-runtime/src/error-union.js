@@ -6,7 +6,6 @@ import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { ALIGN, CHILD_VIVIFICATOR, MEMORY_COPIER, POINTER_VISITOR, SIZE, VALUE_NORMALIZER,
   VALUE_RESETTER } from './symbol.js';
 import { convertToJSON, getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
-import { throwInvalidInitializer } from './error.js';
 
 export function defineErrorUnion(structure, env) {
   const {
@@ -99,12 +98,9 @@ export function normalizeErrorUnion(map, forJSON) {
     return value[VALUE_NORMALIZER]?.(map, forJSON) ?? value;
   } catch (err) {
     if (forJSON) {
-      return (forJSON) ? { error: err.message } : err;
+      return { error: err.message };
     } else {
       throw err;
     }
   }
-}
-
-export function jsonizeErrorUnion(map) {
 }

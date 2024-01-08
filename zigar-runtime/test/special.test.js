@@ -323,7 +323,7 @@ describe('Special property functions', function() {
       expect(forJSON).to.be.false;
     })
   })
-  describe('convertTOJSON', function() {
+  describe('convertToJSON', function() {
     it('should invoke normalizer function', function() {
       let map, forJSON;
       const object = {
@@ -333,7 +333,7 @@ describe('Special property functions', function() {
           return 1234;
         }
       };
-      const result = convertTOJSON.call(object);
+      const result = convertToJSON.call(object);
       expect(result).to.equal(1234);
       expect(map).to.be.an.instanceOf(Map);
       expect(forJSON).to.be.true;

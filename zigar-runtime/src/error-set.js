@@ -2,7 +2,7 @@ import { attachDescriptors, createConstructor, createPropertyApplier } from './s
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView, getTypedArrayClass } from './data-view.js';
-import { throwInvalidInitializer, throwUnknownErrorMessage } from './error.js';
+import { throwInvalidInitializer } from './error.js';
 import { ALIGN, ERROR_ITEMS, ERROR_MESSAGES, MEMORY_COPIER, SIZE, VALUE_NORMALIZER } from './symbol.js';
 import { convertToJSON, getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors, getValueOf } from './special.js';
 
@@ -10,7 +10,6 @@ let currentErrorSets;
 
 export function defineErrorSet(structure, env) {
   const {
-    name,
     byteSize,
     align,
     instance: { members: [ member ] },
@@ -39,17 +38,8 @@ export function defineErrorSet(structure, env) {
     }
   };
   const alternateCaster = function(arg) {
-    if (typeof(arg) === 'number') {
+    if (typeof(arg) === 'number' || typeof(arg) === 'string') {
       return constructor[ERROR_ITEMS][arg];
-    } else if (typeof(arg) === 'string') {
-      for (const err of Object.values(constructor[ERROR_ITEMS])) {
-        if (err.message === arg) {
-          return err;
-        }
-      }
-      if (arg.startsWith('Error: ')) {
-        return alternateCaster(arg.substring(7));
-      }
     } else if (!getDataView(structure, arg, env)) {
       throwInvalidInitializer(structure, expected, arg);
     } else {
