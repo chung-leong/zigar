@@ -736,8 +736,272 @@ describe('Environment', function() {
   describe('releaseShadow', function() {    
   })
   describe('acquirePointerTargets', function() {    
+    it('should set pointer slot to null when pointer is inactive', function() {
+      const env = new Environment();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Optional,
+        name: 'Hello',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.attachMember(structure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: 0,
+        bitSize: 1,
+        byteSize: 8,
+        structure: {},
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      env.inFixedMemory = function() {
+        return false;
+      };
+      const { constructor: Hello } = structure;    
+      const object = new Hello(new Int32(123));
+      expect(object.$['*']).to.equal(123);
+      object[MEMORY].setBigUint64(0, 0n);
+      env.acquirePointerTargets(object);
+      expect(object[SLOTS][0][SLOTS][0]).to.be.null;
+      expect(object.$).to.be.null;
+    })
+    it('should be able to handle self-referencing structures', function() {
+      const env = new Environment();
+      const structure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 12,
+        hasPointer: true,
+      });
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Hello',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const optionalStructure = env.beginStructure({
+        type: StructureType.Optional,
+        name: '?*Hello',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(optionalStructure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.attachMember(optionalStructure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: 0,
+        bitSize: 1,
+        byteSize: 8,
+        structure: {},
+      });
+      env.finalizeShape(optionalStructure);
+      env.finalizeStructure(optionalStructure);
+      env.attachMember(structure, {
+        name: 'sibling',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: optionalStructure,
+      });
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      env.attachMember(structure, {
+        name: 'number',
+        type: MemberType.Int,
+        bitOffset: 64,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      env.inFixedMemory = function() {
+        return false;
+      };
+      const { constructor: Hello } = structure;    
+      const object1 = new Hello({ sibling: null });
+      const object2 = new Hello({ sibling: object1 });
+      const object3 = new Hello({ sibling: object2 });      
+      object1.sibling = object3;
+      expect(object3.sibling['*']).to.equal(object2);
+      expect(object3.sibling['*'].sibling['*']).to.equal(object1);
+      expect(object3.sibling['*'].sibling['*'].sibling['*']).to.equal(object3);
+      const map = new Map([
+        [ 0x1000n, object1[MEMORY] ],
+        [ 0x2000n, object2[MEMORY] ],
+        [ 0x3000n, object3[MEMORY] ],
+      ]);      
+      env.obtainFixedView = function(address, len) {
+        return map.get(address);
+      };
+      object1[MEMORY].setBigUint64(0, 0x3000n, true); // obj1 -> obj3
+      object2[MEMORY].setBigUint64(0, 0x1000n, true); // obj2 -> obj1
+      object3[MEMORY].setBigUint64(0, 0x0000n, true); // obj3 -> null
+      env.acquirePointerTargets(object3);
+      expect(object3.sibling).to.be.null;
+      expect(object2.sibling['*']).to.equal(object1);
+      expect(object1.sibling['*']).to.equal(object3);     
+    })
   })
-  describe('acquireDefaultPointers', function() {    
+  describe('acquireDefaultPointers', function() {
+    it('should acquire targets of pointers in structure template slots ', function() {
+      const env = new Environment();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        byteSize: 8,
+        hasPointer: true
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const { constructor: Int32Ptr } = ptrStructure;
+      const structure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 8 * 2,
+        hasPointer: true
+      });
+      env.attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 64,
+        byteSize: 8,
+        slot: 1,
+        structure: ptrStructure,
+      })
+      const dv = new DataView(new ArrayBuffer(8 * 2));
+      dv.setBigUint64(0, 0x1000n, true);
+      dv.setBigUint64(8, 0x2000n, true);
+      const template = env.createTemplate(dv);
+      env.attachTemplate(structure, template);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      // function mocks
+      env.inFixedMemory = function() {
+        return true;
+      };
+      const requests = [];
+      env.obtainFixedView = function(address, len) {
+        requests.push({ address, len });
+        const dv = new DataView(new ArrayBuffer(len));
+        dv.setUint32(0, Number(address), true);
+        return dv;
+      };
+      env.acquireDefaultPointers(structure);
+      expect(requests).to.eql([ 
+        { address: 0x1000n, len: 4 }, 
+        { address: 0x2000n, len: 4 } 
+      ]);
+      expect(template[SLOTS][0]).to.be.instanceOf(Int32Ptr);
+      expect(template[SLOTS][0][SLOTS][0]).to.be.instanceOf(Int32);
+      expect(template[SLOTS][0]['*']).to.equal(0x1000);
+      expect(template[SLOTS][1]).to.be.instanceOf(Int32Ptr);
+      expect(template[SLOTS][1][SLOTS][0]).to.be.instanceOf(Int32);
+      expect(template[SLOTS][1][SLOTS][0]).to.not.equal(template[SLOTS][0][SLOTS][0]);
+      expect(template[SLOTS][1]['*']).to.equal(0x2000);
+    })
   })
   describe('findSortedIndex', function() {
     it('should return correct indices for the addresses given', function() {

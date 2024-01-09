@@ -82,10 +82,10 @@ export function normalizeStruct(map, forJSON) {
   let object = map.get(this);
   if (!object) {
     object = {};
+    map.set(this, object);
     for (const [ name, value ] of this) {      
       object[name] = value[VALUE_NORMALIZER]?.(map, forJSON) ?? value;
     }
-    map.set(this, object);
   }
   return object;
 }

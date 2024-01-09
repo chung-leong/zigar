@@ -810,40 +810,43 @@ export class Environment {
     const pointerMap = new Map();
     const callback = function({ isActive, isMutable }) {
       const pointer = this[POINTER_SELF];
-      if (isActive(this) === false) {
-        pointer[SLOTS][0] = null;
-        return;
-      }
       if (pointerMap.get(pointer)) {
         return;
       } else {
         pointerMap.set(pointer, true);
       }
-      const Target = pointer.constructor.child;
       const writable = !pointer.constructor.const;
-      let target = this[SLOTS][0];
-      if (!target || isMutable(this)) {
-        // obtain address (and possibly length) from memory
-        const address = pointer[ADDRESS_GETTER]();
-        let len = pointer[LENGTH_GETTER]?.();
-        if (len === undefined) {
-          const sentinel = Target[SENTINEL];
-          if (sentinel) {
-            len = (address) ? env.findSentinel(address, sentinel.bytes) + 1 : 0;
-          } else {
-            len = 1;
+      const currentTarget = pointer[SLOTS][0];
+      let newTarget = null;
+      if (isActive(this)) {
+        const Target = pointer.constructor.child;
+        if (!currentTarget || isMutable(this)) {
+          // obtain address (and possibly length) from memory
+          const address = pointer[ADDRESS_GETTER]();
+          let len = pointer[LENGTH_GETTER]?.();
+          if (len === undefined) {
+            const sentinel = Target[SENTINEL];
+            if (sentinel) {
+              len = (address) ? env.findSentinel(address, sentinel.bytes) + 1 : 0;
+            } else {
+              len = 1;
+            }
           }
+          // get view of memory that pointer points to
+          const byteLength = len * Target[SIZE];
+          const dv = env.findMemory(address, byteLength);
+          // create the target
+          debugger;
+          newTarget = Target.call(ENVIRONMENT, dv, { writable });
+        } else {
+          newTarget = currentTarget;
         }
-        // get view of memory that pointer points to
-        const byteLength = len * Target[SIZE];
-        const dv = env.findMemory(address, byteLength);
-        // create the target
-        target = this[SLOTS][0] = Target.call(this, dv, { writable });
       }
-      if (target?.[POINTER_VISITOR]) {
-        // acquire objects pointed to by pointers in target
-        const isMutable = () => writable;
-        target[POINTER_VISITOR](callback, { vivificate: true, isMutable });
+      // acquire objects pointed to by pointers in target
+      currentTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
+      if (newTarget !== currentTarget) {
+        newTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
+        pointer[SLOTS][0] = newTarget;
       }
     }
     args[POINTER_VISITOR](callback, { vivificate: true });

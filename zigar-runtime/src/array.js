@@ -108,10 +108,10 @@ export function normalizeArray(map, forJSON) {
   let array = map.get(this);
   if (!array) {
     array = [];
+    map.set(this, array);
     for (const value of this) {      
       array.push(value[VALUE_NORMALIZER]?.(map, forJSON) ?? value);
     }
-    map.set(this, array);
   }
   return array;
 }
