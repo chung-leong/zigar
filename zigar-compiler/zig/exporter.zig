@@ -95,6 +95,10 @@ fn getCString(comptime s: []const u8) [*:0]const u8 {
 }
 
 // enums and external structs
+pub const HostOptions = struct {
+    omit_methods: bool = false,
+};
+
 pub const StructureType = enum(u32) {
     Primitive = 0,
     Array,
@@ -1938,10 +1942,11 @@ pub fn createRootFactory(comptime HostT: type, comptime T: type) Thunk {
         fn exportStructure(ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
             const host = HostT.init(ptr, arg_ptr);
             defer host.release();
-            const result = getStructure(host, T) catch |err| {
+            if (getStructure(host, T)) |_| {
+                return null;
+            } else |err| {
                 return createErrorMessage(host, err) catch null;
-            };
-            return result;
+            }
         }
     };
     return RootFactory.exportStructure;

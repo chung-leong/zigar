@@ -33,7 +33,7 @@ export async function transpile(path, options = {}) {
   env.acquireStructures({ omitFunctions });
   const definition = env.exportStructures();
   // all methods are static, so there's no need to check the instance methods
-  const hasMethods = !!structures.find(s => s.static.methods.length > 0);
+  const hasMethods = !!definition.structures.find(s => s.static.methods.length > 0);
   const runtimeURL = moduleResolver('zigar-runtime');
   let loadWASM;
   if (hasMethods) {
@@ -52,7 +52,6 @@ export async function transpile(path, options = {}) {
     loadWASM,
     topLevelAwait,
     omitExports,
-    keys,
   });
 }
 

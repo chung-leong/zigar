@@ -262,10 +262,10 @@ describe('NodeEnvironment', function() {
     it('should invoke the given thunk with the expected arguments', function() {
       const env = new NodeEnvironment();
       let recv, thunkId, argDV;
-      env.runThunk = function(arg1, arg2) {
+      env.runThunk = function(...args) {
         recv = this;
-        thunkId = arg1;
-        argDV = arg2;
+        thunkId = args[0];
+        argDV = args[1];
       };
       const argStruct = {
         [MEMORY]: new DataView(new ArrayBuffer(16)),
@@ -278,7 +278,7 @@ describe('NodeEnvironment', function() {
     })
     it('should throw an error if thunk returns a string', function() {
       const env = new NodeEnvironment();
-      env.runThunk = function(arg1, arg2) {
+      env.runThunk = function(...args) {
         return 'JellyDonutInsurrection';
       };
       const argStruct = {
@@ -293,7 +293,7 @@ describe('NodeEnvironment', function() {
       let thunkCalled = false;
       let visitorCalledBefore = false;
       let visitorCalledAfter = false;
-      env.runThunk = function(arg1, arg2) {
+      env.runThunk = function(...args) {
         thunkCalled = true;
       };
       const argStruct = {

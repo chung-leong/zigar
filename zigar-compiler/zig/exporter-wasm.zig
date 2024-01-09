@@ -7,6 +7,7 @@ pub const Value = exporter.Value;
 pub const Thunk = exporter.Thunk;
 pub const Call = *const CallContext;
 
+const HostOptions = exporter.HostOptions;
 const StructureType = exporter.StructureType;
 const Structure = exporter.Structure;
 const MemberType = exporter.MemberType;
@@ -93,7 +94,7 @@ pub fn getPtrAlign(alignment: u16) u8 {
 pub fn allocateExternMemory(len: usize, alignment: u16) ?[*]u8 {
     const ptr_align = getPtrAlign(alignment);
     if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
-        @memset(bytes, 0);
+        clearBytes(bytes, len, ptr_align);
         return bytes;
     } else {
         return null;
@@ -127,11 +128,6 @@ pub fn freeShadowMemory(call: Call, bytes: [*]u8, len: usize, alignment: u16) vo
 
 var initial_context: ?Call = null;
 
-pub const HostOptions = packed struct {
-    omit_methods: bool = false,
-    _: u31 = 0,
-};
-
 pub const Host = struct {
     context: Call,
     options: HostOptions,
@@ -142,7 +138,7 @@ pub const Host = struct {
         if (initial_context == null) {
             initial_context = context;
         }
-        return .{ .context = context, .options = if (options_ptr) |ptr| *ptr else .{} };
+        return .{ .context = context, .options = if (options_ptr) |ptr| ptr.* else .{} };
     }
 
     pub fn release(self: Host) void {
@@ -358,10 +354,9 @@ pub fn runThunk(thunk_id: usize, arg_struct: Value) ?Value {
     }
 }
 
-pub fn defineStructures(comptime T: type, arg_struct: ?Value) ?Value {
+pub fn getFactoryThunk(comptime T: type) usize {
     const factory = exporter.createRootFactory(Host, T);
-    const factory_id = @intFromPtr(factory);
-    return runThunk(factory_id, arg_struct);
+    return @intFromPtr(factory);
 }
 
 pub fn isRuntimeSafetyActive() bool {

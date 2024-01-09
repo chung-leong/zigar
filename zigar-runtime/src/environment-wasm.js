@@ -6,7 +6,7 @@ import { ALIGN, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SHADOW_ATTRIBUTES } from
 
 export class WebAssemblyEnvironment extends Environment {
   imports = {
-    defineStructures: { argType: 'v', returnType: 'v' },
+    getFactoryThunk: { argType: '', returnType: 'i' },
     allocateExternMemory: { argType: 'ii', returnType: 'v' },
     freeExternMemory: { argType: 'iii' },
     allocateShadowMemory: { argType: 'cii', returnType: 'v' },
@@ -310,27 +310,21 @@ export class WebAssemblyEnvironment extends Environment {
     this.startContext();
     // call context, used by allocateShadowMemory and freeShadowMemory
     this.context.call = call;
-    if (args) {
-      if (args[POINTER_VISITOR]) {
-        this.updatePointerAddresses(args);
-      }
-      // return address of shadow for argumnet struct
-      const address = this.getShadowAddress(args);
-      this.updateShadows();
-      return address;
+    if (args[POINTER_VISITOR]) {
+      this.updatePointerAddresses(args);
     }
-    // can't be 0 since that sets off Zig's runtime safety check
-    return 0xaaaaaaaa;
+    // return address of shadow for argumnet struct
+    const address = this.getShadowAddress(args);
+    this.updateShadows();
+    return address;
   }
 
   endCall(call, args) {
-    if (args) {
-      this.updateShadowTargets();
-      if (args[POINTER_VISITOR]) {
-        this.acquirePointerTargets(args);
-      }
-      this.releaseShadows();
+    this.updateShadowTargets();
+    if (args[POINTER_VISITOR]) {
+      this.acquirePointerTargets(args);
     }
+    this.releaseShadows();
     // restore the previous context if there's one
     this.endContext();
     if (!this.context && this.flushConsole) {

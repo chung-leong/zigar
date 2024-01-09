@@ -183,10 +183,7 @@ describe('Memory functions', function() {
   })
   describe('restoreMemory', function() {
     it('should restore WASM memory buffer that has become detached', function() {
-      const memory = new WebAssembly.Memory({
-        initial: 128,
-        maximum: 1024,
-      });
+      const memory = new WebAssembly.Memory({ initial: 1 });
       const dv = new DataView(memory.buffer, 0, 8);
       dv[MEMORY] = { memory, address: 0, len: 8 };
       const object = {

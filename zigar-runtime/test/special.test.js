@@ -65,10 +65,7 @@ describe('Special property functions', function() {
         byteSize: 4,
       };
       const { get, set } = getDataViewAccessors(structure);
-      const memory = new WebAssembly.Memory({
-        initial: 128,
-        maximum: 1024,
-      });
+      const memory = new WebAssembly.Memory({ initial: 1 });
       const dv = new DataView(memory.buffer, 0, 4);
       dv[MEMORY] = { memory, address: 0, len: 4 };
       const object = {

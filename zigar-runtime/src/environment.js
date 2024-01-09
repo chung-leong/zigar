@@ -1,4 +1,4 @@
-import { defineProperties, findAllObjects, getStructureFactory, getStructureName } from './structure.js';
+import { StructureType, defineProperties, findAllObjects, getStructureFactory, getStructureName, useArgStruct } from './structure.js';
 import { decodeText } from './text.js';
 import { initializeErrorSets } from './error-set.js';
 import { throwAlignmentConflict, throwZigError } from './error.js';
@@ -8,8 +8,7 @@ import { addMethods } from './method.js';
 import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CONST, ENVIRONMENT, LENGTH_GETTER, LENGTH_SETTER, 
   MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES, SIZE, 
   SLOTS } from './symbol.js';
-
-const OMIT_FUNCTIONS = 0x00000001;
+import { MemberType, useBool, useObject } from './member.js';
 
 export class Environment {
   context;
@@ -244,46 +243,81 @@ export class Environment {
     };
   }
 
-  attachMember(s, member, isStatic = false) {
-    const target = (isStatic) ? s.static : s.instance;
+  attachMember(structure, member, isStatic = false) {
+    const target = (isStatic) ? structure.static : structure.instance;
     target.members.push(member);
   }
 
-  attachMethod(s, method, isStaticOnly = false) {
-    s.static.methods.push(method);
+  attachMethod(structure, method, isStaticOnly = false) {
+    structure.static.methods.push(method);
     if (!isStaticOnly) {
-      s.instance.methods.push(method);
+      structure.instance.methods.push(method);
     }
   }
 
-  attachTemplate(s, template, isStatic = false) {
-    const target = (isStatic) ? s.static : s.instance;
+  attachTemplate(structure, template, isStatic = false) {
+    const target = (isStatic) ? structure.static : structure.instance;
     target.template = template;
   }
 
-  endStructure(s) {
-    this.structures.push(s);
-    this.finalizeStructure(s);
-    for (const s of this.structures) {
-      this.acquireDefaultPointers(s);
+  endStructure(structure) {
+    this.structures.push(structure);
+    this.finalizeStructure(structure);
+    for (const structure of this.structures) {
+      this.acquireDefaultPointers(structure);
     }
   }
 
+  defineFactoryArgStruct() {
+    useBool();
+    useObject();
+    useArgStruct();
+    const options = this.beginStructure({
+      type: StructureType.Struct,
+      name: 'Options',
+      byteSize: 1,
+      hasPointer: false,
+    })
+    this.attachMember(options, {
+      type: MemberType.Bool,
+      name: 'omitFunctions',
+      bitOffset: 0,
+      bitSize: 1,
+      byteSize: 1,      
+    });
+    this.finalizeShape(options);
+    const structure = this.beginStructure({
+      type: StructureType.ArgStruct,
+      name: 'factory',
+      byteSize: 1,
+      hasPointer: false,
+    });
+    this.attachMember(structure, {
+      type: MemberType.Object,
+      name: '0',
+      bitOffset: 0,
+      bitSize: 1,
+      byteSize: 1,
+      slot: 0,
+      structure: options,
+    });
+    this.attachMember(structure, {
+      type: MemberType.Void,
+      name: 'retval',
+      bitOffset: 8,
+      bitSize: 0,
+      byteSize: 0
+    });
+    this.finalizeShape(structure);
+    return structure.constructor;
+  }
+
   acquireStructures(options) {
-    const {
-      omitFunctions = false,
-    } = options;
     initializeErrorSets();
-    const arg = new DataView(new ArrayBuffer(4));
-    let flags = 0;
-    if (omitFunctions) {
-      flags |= OMIT_FUNCTIONS;
-    }
-    arg.setUint32(0, flags, true);
-    const result = this.defineStructures(arg);
-    if (typeof(result) === 'string') {
-      throwZigError(result);
-    }
+    const thunkId = this.getFactoryThunk();
+    const ArgStruct = this.defineFactoryArgStruct();
+    const args = new ArgStruct([ options ]);
+    this.invokeThunk(thunkId, args);
   }
 
   getRootModule() {
@@ -335,25 +369,25 @@ export class Environment {
   }
   /* COMPTIME-ONLY-END */
 
-  finalizeShape(s) {
-    const f = getStructureFactory(s.type);
-    const constructor = f(s, this);
+  finalizeShape(structure) {
+    const f = getStructureFactory(structure.type);
+    const constructor = f(structure, this);
     if (typeof(constructor) === 'function') {
-      const name = getStructureName(s);
+      const name = getStructureName(structure);
       defineProperties(constructor, {
         name: { value: name, configurable: true },
       });
       if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
         defineProperties(constructor.prototype, {
-          [Symbol.toStringTag]: { value: s.name, configurable: true },
+          [Symbol.toStringTag]: { value: structure.name, configurable: true },
         });
       }
     }
   }
 
-  finalizeStructure(s) {
-    addStaticMembers(s, this);
-    addMethods(s, this);
+  finalizeStructure(structure) {
+    addStaticMembers(structure, this);
+    addMethods(structure, this);
   }
 
   createCaller(method, useThis) {
@@ -644,33 +678,6 @@ export class Environment {
     return clusters;
   }
 
-  getShadowAddress(target, cluster) {
-    if (cluster) {
-      const dv = target[MEMORY];
-      if (cluster.address === undefined) {
-        const shadow = this.createClusterShadow(cluster);
-        cluster.address = this.getViewAddress(shadow[MEMORY]);
-      }
-      return add(cluster.address, dv.byteOffset);
-    } else {
-      const shadow = this.createShadow(target);
-      return this.getViewAddress(shadow[MEMORY]);
-    }
-  }
-
-  createShadow(object) {
-    const dv = object[MEMORY]
-    const align = object.constructor[ALIGN];
-    const shadow = Object.create(object.constructor.prototype);
-    const shadowDV = shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
-    shadow[SHADOW_ATTRIBUTES] = {
-      address: this.getViewAddress(shadowDV),
-      len: shadowDV.byteLength,
-      align: align,
-    };
-    return this.addShadow(shadow, object);
-  }
-
   createClusterShadow(cluster) {
     const { start, end, targets } = cluster;
     // look for largest align
@@ -715,6 +722,34 @@ export class Environment {
       align: 1,
     };
     return this.addShadow(shadow, source);
+  }
+  /* RUNTIME-ONLY-END */
+
+  getShadowAddress(target, cluster) {
+    if (cluster) {
+      const dv = target[MEMORY];
+      if (cluster.address === undefined) {
+        const shadow = this.createClusterShadow(cluster);
+        cluster.address = this.getViewAddress(shadow[MEMORY]);
+      }
+      return add(cluster.address, dv.byteOffset);
+    } else {
+      const shadow = this.createShadow(target);
+      return this.getViewAddress(shadow[MEMORY]);
+    }
+  }
+
+  createShadow(object) {
+    const dv = object[MEMORY]
+    const align = object.constructor[ALIGN];
+    const shadow = Object.create(object.constructor.prototype);
+    const shadowDV = shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
+    shadow[SHADOW_ATTRIBUTES] = {
+      address: this.getViewAddress(shadowDV),
+      len: shadowDV.byteLength,
+      align: align,
+    };
+    return this.addShadow(shadow, object);
   }
 
   addShadow(shadow, object) {
@@ -769,7 +804,6 @@ export class Environment {
       this.freeShadowMemory(address, len, align);
     }
   }
-  /* RUNTIME-ONLY-END */
 
   acquirePointerTargets(args) {
     const env = this;
@@ -816,8 +850,8 @@ export class Environment {
   }
 
   /* COMPTIME-ONLY */
-  acquireDefaultPointers(s) {
-    const { constructor, hasPointer, instance: { template } } = s;
+  acquireDefaultPointers(structure) {
+    const { constructor, hasPointer, instance: { template } } = structure;
     if (hasPointer && template && template[MEMORY]) {
       // create a placeholder for retrieving default pointers
       const placeholder = Object.create(constructor.prototype);

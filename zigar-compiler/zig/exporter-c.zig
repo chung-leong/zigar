@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 const assert = std.debug.assert;
 
 const Value = exporter.Value;
+const HostOptions = exporter.HostOptions;
 const StructureType = exporter.StructureType;
 const Structure = exporter.Structure;
 const MemberType = exporter.MemberType;
@@ -23,11 +24,6 @@ pub const Result = enum(u32) {
 threadlocal var initial_context: ?Call = null;
 
 // host interface
-pub const HostOptions = packed struct {
-    omit_methods: bool = false,
-    _: u31 = 0,
-};
-
 pub const Host = struct {
     context: Call,
     options: HostOptions,
@@ -35,9 +31,6 @@ pub const Host = struct {
     pub fn init(call_ptr: *anyopaque, arg_ptr: ?*anyopaque) Host {
         const context: Call = @ptrCast(@alignCast(call_ptr));
         const options_ptr: ?*HostOptions = @ptrCast(@alignCast(arg_ptr));
-        if (options_ptr) |ptr| {
-            std.debug.print("{any}\n", .{ptr.*});
-        }
         if (initial_context == null) {
             initial_context = context;
         }
@@ -274,7 +267,7 @@ var imports: Imports = undefined;
 const Exports = extern struct {
     allocate_fixed_memory: *const fn (usize, u8, *Memory) callconv(.C) Result,
     free_fixed_memory: *const fn (*const Memory) callconv(.C) Result,
-    define_structures: *const fn (Call, *anyopaque, *?Value) callconv(.C) Result,
+    get_factory_thunk: *const fn (*usize) callconv(.C) Result,
     run_thunk: *const fn (Call, usize, *anyopaque, *?Value) callconv(.C) Result,
     override_write: *const fn ([*]const u8, usize) callconv(.C) Result,
 };
@@ -292,15 +285,15 @@ pub const Module = extern struct {
     exports: *const Exports,
 };
 
-pub fn createDescribeStructures(comptime T: type) fn (Call, *anyopaque, *?Value) callconv(.C) Result {
+pub fn createGetFactoryThunk(comptime T: type) fn (*usize) callconv(.C) Result {
     const ns = struct {
-        fn describeStructures(call: Call, args: *anyopaque, dest: *?Value) callconv(.C) Result {
+        fn getFactoryThunk(dest: *usize) callconv(.C) Result {
             const factory = exporter.createRootFactory(Host, T);
-            const factory_address = @intFromPtr(factory);
-            return runThunk(call, factory_address, args, dest);
+            dest.* = @intFromPtr(factory);
+            return .OK;
         }
     };
-    return ns.describeStructures;
+    return ns.getFactoryThunk;
 }
 
 pub fn createModule(comptime T: type) Module {
@@ -317,7 +310,7 @@ pub fn createModule(comptime T: type) Module {
         .exports = &.{
             .allocate_fixed_memory = allocateExternMemory,
             .free_fixed_memory = freeExternMemory,
-            .define_structures = createDescribeStructures(T),
+            .get_factory_thunk = createGetFactoryThunk(T),
             .run_thunk = runThunk,
             .override_write = overrideWrite,
         },

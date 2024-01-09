@@ -23,11 +23,11 @@ export fn freeShadowMemory(call: Call, bytes: [*]u8, len: usize, alignment: u16)
     exporter.freeShadowMemory(call, bytes, len, alignment);
 }
 
-export fn defineStructures() ?Value {
-    return exporter.defineStructures(package);
+export fn getFactoryThunk() usize {
+    return exporter.getFactoryThunk(package);
 }
 
-export fn runThunk(thunk_id: usize, arg_struct: ?Value) ?Value {
+export fn runThunk(thunk_id: usize, arg_struct: Value) ?Value {
     return exporter.runThunk(thunk_id, arg_struct);
 }
 

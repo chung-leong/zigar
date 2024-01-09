@@ -435,24 +435,31 @@ describe('Environment', function() {
       expect(env.structures[0]).to.equal(s);
     })
   })
-  describe('acquireStructures', function() {    
-    it('should invoke the defineStructures method', function() {
+  describe('defineFactoryArgStruct', function() {
+    it('should return constructor for factory function argument struct', function() {
       const env = new Environment();
-      let options;
-      env.defineStructures = function(arg) {
-        options = arg;
+      const ArgStruct = env.defineFactoryArgStruct();
+      const args = new ArgStruct([ { omitFunctions: true } ]);
+      expect(args[0]).to.be.an('Options');
+      expect(args.retval).to.be.undefined;
+      const options = args[0];
+      expect(options.omitFunctions).to.be.true;
+    })
+  })
+  describe('acquireStructures', function() {    
+    it('should invoke the factory thunk', function() {
+      const env = new Environment();
+      env.getFactoryThunk = function() {
+        return 1234;
+      };
+      let thunkId, options;
+      env.invokeThunk = function(...args) {
+        thunkId = args[0];
+        options = args[1][0];
       };
       env.acquireStructures({ omitFunctions: true });
-      expect(options).to.be.instanceOf(DataView);
-      expect(options.getUint32(0, true)).to.equal(0x00000001);
-    })
-    it('should throw if defineStructures() returns a string', function() {
-      const env = new Environment();
-      env.defineStructures = function(arg) {
-        return 'SystemOnFire';
-      };
-      expect(() => env.acquireStructures({})).to.throw(Error)
-        .with.property('message').to.equal('System on fire');
+      expect(thunkId).to.equal(1234);
+      expect(options.omitFunctions).to.be.true;
     })
   })
   describe('getRootModule', function() {

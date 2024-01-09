@@ -821,10 +821,7 @@ describe('Member functions', function() {
       expect(get.call(object, 2, false)).to.equal(-2);
     })
     it('should return accessors for accessing WASM memory', function() {
-      const memory = new WebAssembly.Memory({
-        initial: 128,
-        maximum: 1024,
-      });
+      const memory = new WebAssembly.Memory({ initial: 1 });
       const dv = new DataView(memory.buffer, 0, 8);
       dv[MEMORY] = { memory, address: 0, len: 8 };
       const object = {
@@ -848,10 +845,7 @@ describe('Member functions', function() {
       expect(dv3).to.not.equal(dv2);
     })
     it('should return array accessors for accessing WASM memory', function() {
-      const memory = new WebAssembly.Memory({
-        initial: 128,
-        maximum: 1024,
-      });
+      const memory = new WebAssembly.Memory({ initial: 1 });
       const dv = new DataView(memory.buffer, 0, 8);
       dv[MEMORY] = { memory, address: 0, len: 8 };
       const object = {
@@ -875,10 +869,7 @@ describe('Member functions', function() {
       expect(dv3).to.not.equal(dv2);
     })
     it('should not trap errors unrelated to WASM buffer detachment', function() {
-      const memory = new WebAssembly.Memory({
-        initial: 128,
-        maximum: 1024,
-      });
+      const memory = new WebAssembly.Memory({ initial: 1 });
       const dv = new DataView(memory.buffer, 0, 8);
       dv[MEMORY] = { memory, address: 0, len: 8 };
       const object = {
@@ -902,10 +893,7 @@ describe('Member functions', function() {
       expect(() => set.call(object, 123)).to.throw();
     })
     it('should throw range error when indexing beyond an array after WASM memory detachment', function() {
-      const memory = new WebAssembly.Memory({
-        initial: 128,
-        maximum: 1024,
-      });
+      const memory = new WebAssembly.Memory({ initial: 1 });
       const dv = new DataView(memory.buffer, 0, 8);
       dv[MEMORY] = { memory, address: 0, len: 8 };
       const object = {

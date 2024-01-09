@@ -480,25 +480,23 @@ napi_value find_sentinel(napi_env env,
     return NULL;
 }
 
-napi_value define_structures(napi_env env,
+napi_value get_factory_thunk(napi_env env,
                              napi_callback_info info) {
-    size_t argc = 1;
-    napi_value args[1];
-    napi_value js_env;
     void* data;
-    void* args_ptr;
-    if (napi_get_cb_info(env, info, &argc, args, &js_env, &data) != napi_ok) {
+    if (napi_get_cb_info(env, info, NULL, NULL, NULL, &data) != napi_ok) {
         return throw_last_error(env);
-    } else if (napi_get_dataview_info(env, args[0], NULL, &args_ptr, NULL, NULL) != napi_ok) {
-        return throw_error(env, "Arguments must be a DataView");
     }
     module_data* md = (module_data*) data;
-    call_context ctx = { env, js_env, md };
-    napi_value result;
-    if (md->mod->imports->define_structures(&ctx, args_ptr, &result) != OK) {
+    size_t thunk_address;
+    if (md->mod->imports->get_factory_thunk(&thunk_address) != OK) {
         return throw_error(env, "Unable to define structures");
     }
-    return result;
+    size_t adjusted_thunk_id = thunk_address - md->base_address;
+    napi_value thunk_id;
+    if (napi_create_double(env, adjusted_thunk_id, &thunk_id) != napi_ok) {
+        return throw_last_error(env);
+    }
+    return thunk_id;
 }
 
 napi_value run_thunk(napi_env env,
@@ -599,7 +597,7 @@ bool export_functions(napi_env env,
         && export_function(env, js_env, "obtainExternBuffer", obtain_external_buffer, md)
         && export_function(env, js_env, "copyBytes", copy_bytes, md)
         && export_function(env, js_env, "findSentinel", find_sentinel, md)
-        && export_function(env, js_env, "defineStructures", define_structures, md)
+        && export_function(env, js_env, "getFactoryThunk", get_factory_thunk, md)
         && export_function(env, js_env, "runThunk", run_thunk, md)
         && export_function(env, js_env, "getMemoryOffset", get_memory_offset, md)
         && export_function(env, js_env, "recreateAddress", recreate_address, md);

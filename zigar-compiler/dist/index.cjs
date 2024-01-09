@@ -1990,6 +1990,10 @@ function useVoid() {
   factories$1[MemberType.Void] = getVoidDescriptor;
 }
 
+function useBool() {
+  factories$1[MemberType.Bool] = getBoolDescriptor;
+}
+
 function useBoolEx() {
   factories$1[MemberType.Bool] = getBoolDescriptorEx;
 }
@@ -2085,6 +2089,10 @@ function getNullDescriptor(member, env) {
       }
     : function() {},
   }
+}
+
+function getBoolDescriptor(member, env) {
+  return getDescriptorUsing(member, env, getDataViewBoolAccessor)
 }
 
 function getBoolDescriptorEx(member, env) {
@@ -4447,14 +4455,11 @@ function getArgumentCount(method, pushThis) {
   return members.length - (pushThis ? 2 : 1);
 }
 
-const OMIT_FUNCTIONS = 0x00000001;
-
 class Environment {
   context;
   contextStack = [];
   consolePending = [];
   consoleTimeout = 0;
-  emptyView = new DataView(new ArrayBuffer(0));
   viewMap = new WeakMap();
   initPromise;
   abandoned = false;
@@ -4680,46 +4685,81 @@ class Environment {
     };
   }
 
-  attachMember(s, member, isStatic = false) {
-    const target = (isStatic) ? s.static : s.instance;
+  attachMember(structure, member, isStatic = false) {
+    const target = (isStatic) ? structure.static : structure.instance;
     target.members.push(member);
   }
 
-  attachMethod(s, method, isStaticOnly = false) {
-    s.static.methods.push(method);
+  attachMethod(structure, method, isStaticOnly = false) {
+    structure.static.methods.push(method);
     if (!isStaticOnly) {
-      s.instance.methods.push(method);
+      structure.instance.methods.push(method);
     }
   }
 
-  attachTemplate(s, template, isStatic = false) {
-    const target = (isStatic) ? s.static : s.instance;
+  attachTemplate(structure, template, isStatic = false) {
+    const target = (isStatic) ? structure.static : structure.instance;
     target.template = template;
   }
 
-  endStructure(s) {
-    this.structures.push(s);
-    this.finalizeStructure(s);
-    for (const s of this.structures) {
-      this.acquireDefaultPointers(s);
+  endStructure(structure) {
+    this.structures.push(structure);
+    this.finalizeStructure(structure);
+    for (const structure of this.structures) {
+      this.acquireDefaultPointers(structure);
     }
   }
 
+  defineFactoryArgStruct() {
+    useBool();
+    useObject();
+    useArgStruct();
+    const options = this.beginStructure({
+      type: StructureType.Struct,
+      name: 'Options',
+      byteSize: 1,
+      hasPointer: false,
+    });
+    this.attachMember(options, {
+      type: MemberType.Bool,
+      name: 'omitFunctions',
+      bitOffset: 0,
+      bitSize: 1,
+      byteSize: 1,      
+    });
+    this.finalizeShape(options);
+    const structure = this.beginStructure({
+      type: StructureType.ArgStruct,
+      name: 'factory',
+      byteSize: 1,
+      hasPointer: false,
+    });
+    this.attachMember(structure, {
+      type: MemberType.Object,
+      name: '0',
+      bitOffset: 0,
+      bitSize: 1,
+      byteSize: 1,
+      slot: 0,
+      structure: options,
+    });
+    this.attachMember(structure, {
+      type: MemberType.Void,
+      name: 'retval',
+      bitOffset: 8,
+      bitSize: 0,
+      byteSize: 0
+    });
+    this.finalizeShape(structure);
+    return structure.constructor;
+  }
+
   acquireStructures(options) {
-    const {
-      omitFunctions = false,
-    } = options;
     initializeErrorSets();
-    const arg = new DataView(new ArrayBuffer(4));
-    let flags = 0;
-    if (omitFunctions) {
-      flags |= OMIT_FUNCTIONS;
-    }
-    arg.setUint32(0, flags, true);
-    const result = this.defineStructures(arg);
-    if (typeof(result) === 'string') {
-      throwZigError(result);
-    }
+    const thunkId = this.getFactoryThunk();
+    const ArgStruct = this.defineFactoryArgStruct();
+    const args = new ArgStruct([ options ]);
+    this.invokeThunk(thunkId, args);
   }
 
   getRootModule() {
@@ -4771,25 +4811,25 @@ class Environment {
   }
   /* COMPTIME-ONLY-END */
 
-  finalizeShape(s) {
-    const f = getStructureFactory(s.type);
-    const constructor = f(s, this);
+  finalizeShape(structure) {
+    const f = getStructureFactory(structure.type);
+    const constructor = f(structure, this);
     if (typeof(constructor) === 'function') {
-      const name = getStructureName(s);
+      const name = getStructureName(structure);
       defineProperties(constructor, {
         name: { value: name, configurable: true },
       });
       if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
         defineProperties(constructor.prototype, {
-          [Symbol.toStringTag]: { value: s.name, configurable: true },
+          [Symbol.toStringTag]: { value: structure.name, configurable: true },
         });
       }
     }
   }
 
-  finalizeStructure(s) {
-    addStaticMembers(s, this);
-    addMethods(s, this);
+  finalizeStructure(structure) {
+    addStaticMembers(structure, this);
+    addMethods(structure, this);
   }
 
   createCaller(method, useThis) {
@@ -4810,6 +4850,86 @@ class Environment {
     return f;
   }
 
+
+  getShadowAddress(target, cluster) {
+    if (cluster) {
+      const dv = target[MEMORY];
+      if (cluster.address === undefined) {
+        const shadow = this.createClusterShadow(cluster);
+        cluster.address = this.getViewAddress(shadow[MEMORY]);
+      }
+      return add(cluster.address, dv.byteOffset);
+    } else {
+      const shadow = this.createShadow(target);
+      return this.getViewAddress(shadow[MEMORY]);
+    }
+  }
+
+  createShadow(object) {
+    const dv = object[MEMORY];
+    const align = object.constructor[ALIGN];
+    const shadow = Object.create(object.constructor.prototype);
+    const shadowDV = shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
+    shadow[SHADOW_ATTRIBUTES] = {
+      address: this.getViewAddress(shadowDV),
+      len: shadowDV.byteLength,
+      align: align,
+    };
+    return this.addShadow(shadow, object);
+  }
+
+  addShadow(shadow, object) {
+    let { shadowMap } = this.context;
+    if (!shadowMap) {
+      shadowMap = this.context.shadowMap = new Map();
+    }
+    shadowMap.set(shadow, object);
+    this.registerMemory(shadow[MEMORY], object[MEMORY]);
+    return shadow;
+  }
+
+  removeShadow(dv) {
+    const { shadowMap } = this.context;
+    if (shadowMap) {
+      for (const [ shadow ] of shadowMap) {
+        if (shadow[MEMORY] === dv) {
+          shadowMap.delete(shadow);
+          break;
+        }
+      }
+    }
+  }
+
+  updateShadows() {
+    const { shadowMap } = this.context;
+    if (!shadowMap) {
+      return;
+    }
+    for (const [ shadow, object ] of shadowMap) {
+      shadow[MEMORY_COPIER](object);
+    }
+  }
+
+  updateShadowTargets() {
+    const { shadowMap } = this.context;
+    if (!shadowMap) {
+      return;
+    }
+    for (const [ shadow, object ] of shadowMap) {
+      object[MEMORY_COPIER](shadow);
+    }
+  }
+
+  releaseShadows() {
+    const { shadowMap } = this.context;
+    if (!shadowMap) {
+      return;
+    }
+    for (const [ shadow ] of shadowMap) {
+      const { address, len, align } = shadow[SHADOW_ATTRIBUTES];
+      this.freeShadowMemory(address, len, align);
+    }
+  }
 
   acquirePointerTargets(args) {
     const env = this;
@@ -4843,10 +4963,8 @@ class Environment {
         // get view of memory that pointer points to
         const byteLength = len * Target[SIZE];
         const dv = env.findMemory(address, byteLength);
-        if (dv !== env.emptyView || byteLength == 0) {
-          // create the target
-          target = this[SLOTS][0] = Target.call(this, dv, { writable });
-        }
+        // create the target
+        target = this[SLOTS][0] = Target.call(this, dv, { writable });
       }
       if (target?.[POINTER_VISITOR]) {
         // acquire objects pointed to by pointers in target
@@ -4858,8 +4976,8 @@ class Environment {
   }
 
   /* COMPTIME-ONLY */
-  acquireDefaultPointers(s) {
-    const { constructor, hasPointer, instance: { template } } = s;
+  acquireDefaultPointers(structure) {
+    const { constructor, hasPointer, instance: { template } } = structure;
     if (hasPointer && template && template[MEMORY]) {
       // create a placeholder for retrieving default pointers
       const placeholder = Object.create(constructor.prototype);
@@ -4908,7 +5026,7 @@ function add(address, len) {
 
 class WebAssemblyEnvironment extends Environment {
   imports = {
-    defineStructures: { argType: 'v', returnType: 'v' },
+    getFactoryThunk: { argType: '', returnType: 'i' },
     allocateExternMemory: { argType: 'ii', returnType: 'v' },
     freeExternMemory: { argType: 'iii' },
     allocateShadowMemory: { argType: 'cii', returnType: 'v' },
@@ -4975,25 +5093,22 @@ class WebAssemblyEnvironment extends Environment {
 
   allocateFixedMemory(len, align) {
     if (len === 0) {
-      return this.emptyView;
+      return new DataView(this.memory.buffer, 0, 0);
     }
     const address = this.allocateExternMemory(len, align);
-    const dv = this.obtainView(buffer, address, len);
+    const dv = this.obtainFixedView(address, len);
     dv[ALIGN] = align;
     return dv;
   }
 
   freeFixedMemory(address, len, align) {
-    if (!len === 0) {
+    if (len === 0) {
       return;
     }
     this.freeExternMemory(address, len, align);
   }
 
   obtainFixedView(address, len) {
-    if (len === 0) {
-      return this.emptyView;
-    }
     const { memory } = this;
     const dv = this.obtainView(memory.buffer, address, len);
     dv[MEMORY] = { memory, address, len };
@@ -5001,9 +5116,10 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   releaseFixedView(dv) {
-    const buffer = dv.buffer;
-    const address = buffer.byteOffset;
+    dv.buffer;
+    const address = dv.byteOffset;
     const len = dv.byteLength;
+    // only allocated memory would have align attached
     const align = dv[ALIGN];
     if (align !== undefined) {
       this.freeFixedMemory(address, len, align);
@@ -5209,27 +5325,21 @@ class WebAssemblyEnvironment extends Environment {
     this.startContext();
     // call context, used by allocateShadowMemory and freeShadowMemory
     this.context.call = call;
-    if (args) {
-      if (args[POINTER_VISITOR]) {
-        this.updatePointerAddresses(args);
-      }
-      // return address of shadow for argumnet struct
-      const address = this.getShadowAddress(args);
-      this.updateShadows();
-      return address;
+    if (args[POINTER_VISITOR]) {
+      this.updatePointerAddresses(args);
     }
-    // can't be 0 since that sets off Zig's runtime safety check
-    return 0xaaaaaaaa;
+    // return address of shadow for argumnet struct
+    const address = this.getShadowAddress(args);
+    this.updateShadows();
+    return address;
   }
 
   endCall(call, args) {
-    if (args) {
-      this.updateShadowTargets();
-      if (args[POINTER_VISITOR]) {
-        this.acquirePointerTargets(args);
-      }
-      this.releaseShadows();
+    this.updateShadowTargets();
+    if (args[POINTER_VISITOR]) {
+      this.acquirePointerTargets(args);
     }
+    this.releaseShadows();
     // restore the previous context if there's one
     this.endContext();
     if (!this.context && this.flushConsole) {
@@ -6938,7 +7048,7 @@ async function transpile(path, options = {}) {
   env.acquireStructures({ omitFunctions });
   const definition = env.exportStructures();
   // all methods are static, so there's no need to check the instance methods
-  const hasMethods = !!structures.find(s => s.static.methods.length > 0);
+  const hasMethods = !!definition.structures.find(s => s.static.methods.length > 0);
   const runtimeURL = moduleResolver('zigar-runtime');
   let loadWASM;
   if (hasMethods) {
@@ -6957,7 +7067,6 @@ async function transpile(path, options = {}) {
     loadWASM,
     topLevelAwait,
     omitExports,
-    keys,
   });
 }
 
