@@ -23,6 +23,7 @@ export function defineOptional(structure, env) {
   } = structure;
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getPresent, set: setPresent } = getDescriptor(members[1], env);
+  const hasPresentFlag = !(members[0].bitSize > 0 && members[0].bitOffset === members[1].bitOffset);  
   const get = function() {
     const present = getPresent.call(this);
     if (present) {
@@ -45,7 +46,7 @@ export function defineOptional(structure, env) {
     } else if (arg !== null) {
       // call setValue() first, in case it throws
       setValue.call(this, arg);
-      if (hasPointer || !env.inFixedMemory(this)) {
+      if (hasPresentFlag || !env.inFixedMemory(this)) {
         // since setValue() wouldn't write address into memory when the pointer is in 
         // relocatable memory, we need to use setPresent() in order to write something 
         // non-zero there so that we know the field is populated
