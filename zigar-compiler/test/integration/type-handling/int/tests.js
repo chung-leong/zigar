@@ -1,13 +1,13 @@
 import { expect } from 'chai';
-import { arch } from 'os';
 import { capture } from '../../capture.js';
 
 export function addTests(importModule, options) {
-  const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(options.optimize);
+  const { optimize, addressSize } = options;
+  const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(optimize);
   const importTest = async (name) => {
-      const url = new URL(`./${name}.zig`, import.meta.url).href;
-      return importModule(url);
-  };    
+    const url = new URL(`./${name}.zig`, import.meta.url).href;
+    return importModule(url);
+  };
   describe('Int', function() {
     it('should import int as static variables', async function() {
       this.timeout(120000);
@@ -60,7 +60,7 @@ export function addTests(importModule, options) {
       expect(module.getInt64()).to.equal(0x1FFF_FFFF_FFFF_FFFFn);
       expect(module.getUint64()).to.equal(0xFFFF_FFFF_FFFF_FFFFn);
       expect(module.getIsize()).to.equal(1000);
-      if (/32/.test(arch())) {
+      if (addressSize === 32) {
         expect(module.getUsize()).to.equal(0x7FFF_FFFF);
       } else {
         expect(module.getUsize()).to.equal(0x7FFF_FFFF_FFFF_FFFFn);

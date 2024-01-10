@@ -1,17 +1,17 @@
-import { join, parse } from 'path';
 import { createHash } from 'crypto';
-import { tmpdir } from 'os';
-import webpack from 'webpack'
-import { addTests } from '../../zigar-compiler/test/integration/index.js';
 import 'mocha-skip-if';
+import { tmpdir } from 'os';
+import { join, parse } from 'path';
 import { fileURLToPath } from 'url';
+import webpack from 'webpack';
+import { addTests } from '../../zigar-compiler/test/integration/index.js';
 
 for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]) {
   skip.permanently.if(process.env.npm_lifecycle_event === 'coverage').
   describe(`Integration tests (zigar-loader, ${optimize})`, function() {
     addTests(url => importModule(url, optimize), {
       littleEndian: true,
-      target: 'WASM-COMPTIME',
+      addressSize: 32,
       optimize,
     });
   })

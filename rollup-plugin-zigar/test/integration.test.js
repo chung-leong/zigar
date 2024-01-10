@@ -1,19 +1,19 @@
-import { join } from 'path';
-import { tmpdir } from 'os';
-import { fileURLToPath } from 'url';
-import { createHash } from 'crypto';
-import { rollup } from 'rollup'
 import NodeResolve from '@rollup/plugin-node-resolve';
-import Zigar from '../dist/index.js';
-import { addTests } from '../../zigar-compiler/test/integration/index.js';
+import { createHash } from 'crypto';
 import 'mocha-skip-if';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { rollup } from 'rollup';
+import { fileURLToPath } from 'url';
+import { addTests } from '../../zigar-compiler/test/integration/index.js';
+import Zigar from '../dist/index.js';
 
 for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]) {
   skip.permanently.if(process.env.npm_lifecycle_event === 'coverage').
   describe(`Integration tests (rollup-plugin-zigar, ${optimize})`, function() {
     addTests(url => importModule(url, optimize), {
       littleEndian: true,
-      target: 'WASM-COMPTIME',
+      addressSize: 32,
       optimize,
     });
   })
