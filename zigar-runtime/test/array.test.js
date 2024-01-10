@@ -889,13 +889,15 @@ describe('Array functions', function() {
       }, {});
       expect(pointers).to.have.lengthOf(0);
       // look for the pointers for real
-      array[VISITOR](function() {
+      array[VISITOR](function({ isMutable, isActive }) {
         try {
           expect(this['*']).to.be.null;
         } catch (err) {
           // null pointer error
           errors.push(err);
         }
+        expect(isMutable()).to.be.true;
+        expect(isActive()).to.be.true;
         pointers.push(this);
       }, { vivificate: true });
       expect(pointers).to.have.lengthOf(4);

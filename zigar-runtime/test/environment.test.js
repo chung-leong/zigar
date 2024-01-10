@@ -990,12 +990,20 @@ describe('Environment', function() {
     })
   })
   describe('getControlObject', function() {    
-    it('should return object for controlling module', function() {
+    it('should return object for controlling module', async function() {
       const env = new Environment();
+      env.imports = {
+        runThunk: function() {},
+      };
       const object = env.getControlObject();
       expect(object.init).to.be.a('function');
       expect(object.abandon).to.be.a('function');
       expect(object.released).to.be.a('function');
+      await object.init();
+      expect(env.abandoned).to.be.false;
+      object.abandon();
+      expect(env.abandoned).to.be.true;
+      expect(object.released()).to.be.false;
     })    
   })
   describe('abandon', function() {
@@ -1847,7 +1855,9 @@ describe('Environment', function() {
       const { constructor: Hello } = structure;    
       const object1 = new Hello({ sibling: null });
       const object2 = new Hello({ sibling: object1 });
-      const object3 = new Hello({ sibling: object2 });      
+      const object3 = new Hello({ sibling: object2 });
+      const object4 = new Hello({ sibling: null });
+      const object5 = new Hello({ sibling: object4 });
       object1.sibling = object3;
       expect(object3.sibling['*']).to.equal(object2);
       expect(object3.sibling['*'].sibling['*']).to.equal(object1);
@@ -1856,17 +1866,21 @@ describe('Environment', function() {
         [ 0x1000n, object1[MEMORY] ],
         [ 0x2000n, object2[MEMORY] ],
         [ 0x3000n, object3[MEMORY] ],
+        [ 0x4000n, object4[MEMORY] ],
+        [ 0x5000n, object5[MEMORY] ],
       ]);      
       env.obtainFixedView = function(address, len) {
         return map.get(address);
       };
-      object1[MEMORY].setBigUint64(0, 0x3000n, true); // obj1 -> obj3
+      object1[MEMORY].setBigUint64(0, 0x5000n, true); // obj1 -> obj5
       object2[MEMORY].setBigUint64(0, 0x1000n, true); // obj2 -> obj1
       object3[MEMORY].setBigUint64(0, 0x0000n, true); // obj3 -> null
+      object5[MEMORY].setBigUint64(0, 0x4000n, true); // obj5 -> obj4
       env.acquirePointerTargets(object3);
       expect(object3.sibling).to.be.null;
       expect(object2.sibling['*']).to.equal(object1);
-      expect(object1.sibling['*']).to.equal(object3);     
+      expect(object1.sibling['*']).to.equal(object5);
+      expect(object5.sibling['*']).to.equal(object4);
     })
     it('should acquire missing objects', function() {
       const env = new Environment();
