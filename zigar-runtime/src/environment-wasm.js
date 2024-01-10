@@ -2,7 +2,7 @@ import { Environment } from './environment.js';
 import { decodeText } from './text.js';
 import { throwZigError } from './error.js';
 import { getCopyFunction, getMemoryCopier, restoreMemory } from './memory.js';
-import { ALIGN, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SHADOW_ATTRIBUTES } from './symbol.js';
+import { ALIGN, MEMORY, MEMORY_COPIER, POINTER_VISITOR, ATTRIBUTES } from './symbol.js';
 
 export class WebAssemblyEnvironment extends Environment {
   imports = {
@@ -55,7 +55,7 @@ export class WebAssemblyEnvironment extends Environment {
     // create a shadow for the relocatable memory
     const object = { constructor, [MEMORY]: dv, [MEMORY_COPIER]: copier };
     const shadow = { constructor, [MEMORY]: shadowDV, [MEMORY_COPIER]: copier };
-    shadow[SHADOW_ATTRIBUTES] = { address: this.getViewAddress(shadowDV), len, align };
+    shadow[ATTRIBUTES] = { address: this.getViewAddress(shadowDV), len, align };
     this.addShadow(shadow, object);
     return shadowDV;
   }

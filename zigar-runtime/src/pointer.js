@@ -5,9 +5,9 @@ import { MemberType, getDescriptor } from './member.js';
 import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerTarget,
   throwConstantConstraint, throwFixedMemoryTargetRequired, throwNullPointer,
   throwReadOnlyTarget, warnImplicitArrayCreation} from './error.js';
-import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, COMPAT, CONST, ENVIRONMENT, 
-  LENGTH_GETTER, LENGTH_SETTER, MEMORY, MEMORY_COPIER, PARENT, POINTER_SELF, POINTER_VISITOR, 
-  PROXY, SLOTS, SIZE, VALUE_NORMALIZER } from './symbol.js';
+import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, CONST, ENVIRONMENT, MEMORY, 
+  MEMORY_COPIER, PARENT, POINTER_SELF, POINTER_VISITOR, PROXY, SLOTS, SIZE, 
+  VALUE_NORMALIZER } from './symbol.js';
 import { convertToJSON, getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
 
 export function definePointer(structure, env) {
@@ -21,9 +21,10 @@ export function definePointer(structure, env) {
     runtimeSafety = true,
   } = env;
   const { structure: targetStructure } = member;
+  const { sentinel } = targetStructure;
   const isTargetSlice = (targetStructure.type === StructureType.Slice);
   const isTargetPointer = (targetStructure.type === StructureType.Pointer);
-  const hasLength = isTargetSlice && !targetStructure.sentinel;
+  const hasLength = isTargetSlice && !sentinel;  
   const addressSize = (hasLength) ? byteSize / 2 : byteSize;
   const { get: getAddress, set: setAddress } = getDescriptor({
     type: MemberType.Uint,
@@ -112,6 +113,28 @@ export function definePointer(structure, env) {
     this[SLOTS][0] = arg;
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster, finalizer }, env);
+  const addressSetter = (hasLength) 
+  ? function(address, length) {
+      setAddress.call(this, address);
+      setLength.call(this, length);
+    }
+  : setAddress;
+  const addressGetter = (hasLength)
+  ? function() {
+    const address = getAddress.call(this);
+    const length = getLength.call(this);
+    return [ address, length ];
+  } 
+  : (sentinel)
+  ? function() {
+    const address = getAddress.call(this);
+    const length = (address) ? env.findSentinel(address, sentinel.bytes) + 1 : 0;
+    return [ address, length ];
+  }
+  : function() {
+    const address = getAddress.call(this);
+    return [ address, 1 ];
+  };
   const instanceDescriptors = {
     '*': { get, set },
     '$': { get: getProxy, set: initializer },
@@ -120,10 +143,8 @@ export function definePointer(structure, env) {
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    [ADDRESS_GETTER]: { value: getAddress },
-    [ADDRESS_SETTER]: { value: setAddress },
-    [LENGTH_GETTER]: hasLength && { value: getLength },
-    [LENGTH_SETTER]: hasLength && { value: setLength },
+    [ADDRESS_GETTER]: { value: addressGetter },
+    [ADDRESS_SETTER]: { value: addressSetter },
     [POINTER_VISITOR]: { value: visitPointer },
     [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
     [CHILD_VIVIFICATOR]: { value: throwNullPointer },
@@ -189,8 +210,6 @@ const isPointerKeys = {
   [PROXY]: true,
   [ADDRESS_GETTER]: true,
   [ADDRESS_SETTER]: true,
-  [LENGTH_GETTER]: true,
-  [LENGTH_SETTER]: true,
   [POINTER_VISITOR]: true,
   [CHILD_VIVIFICATOR]: true,
   [VALUE_NORMALIZER]: true,

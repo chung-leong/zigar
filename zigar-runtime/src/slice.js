@@ -9,8 +9,8 @@ import { convertToJSON, getBase64Accessors, getDataViewAccessors, getStringAcces
   getValueOf } from './special.js';
 import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwMisplacedSentinel,
   throwMissingSentinel } from './error.js';
-import { ALIGN, CHILD_VIVIFICATOR, COMPAT, LENGTH, MEMORY, MEMORY_COPIER, POINTER_VISITOR, 
-  SENTINEL, SIZE, VALUE_NORMALIZER } from './symbol.js';
+import { ALIGN, CHILD_VIVIFICATOR, COMPAT, LENGTH, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SIZE,
+  VALUE_NORMALIZER } from './symbol.js';
 
 export function defineSlice(structure, env) {
   const {
@@ -125,7 +125,6 @@ export function defineSlice(structure, env) {
     [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: elementSize },
-    [SENTINEL]: sentinel && { value: sentinel },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }

@@ -11,7 +11,7 @@ import {
   add,
   subtract,
 } from '../src/environment.js'
-import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CONST, MEMORY_COPIER } from '../src/symbol.js';
+import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CONST, MEMORY_COPIER, ATTRIBUTES } from '../src/symbol.js';
 import { getMemoryCopier } from '../src/memory.js';
 
 describe('Environment', function() {
@@ -721,26 +721,200 @@ describe('Environment', function() {
   })
   describe('findTargetClusters', function() {    
   })
-  describe('getShadowAddress', function() {    
+  describe('getShadowAddress', function() {
+    it('should create a shadow of an object and return the its address', function() {
+      const env = new Environment();
+      const Type = function() {};
+      Type.prototype[MEMORY_COPIER] = getMemoryCopier(8);
+      const object = new Type();
+      object[MEMORY] = new DataView(new ArrayBuffer(8));
+      env.allocateShadowMemory = function(len, align) {
+        return new DataView(new ArrayBuffer(len));
+      };
+      env.getBufferAddress = function() {
+        return 0x1000;
+      };
+      env.startContext();
+      const address = env.getShadowAddress(object);
+      expect(address).to.equal(0x1000);
+    })
+    it('should return shadow addresses of objects in a cluster', function() {
+      const env = new Environment();
+      const Type = function() {};
+      Type.prototype[MEMORY_COPIER] = getMemoryCopier(8);
+      const object1 = new Type();
+      const object2 = new Type();
+      const buffer = new ArrayBuffer(16);
+      object1[MEMORY] = new DataView(buffer, 0, 8);
+      object2[MEMORY] = new DataView(buffer, 4, 8);
+      const cluster = {
+        targets: [ object1, object2 ],
+        start: 0,
+        end: 12,
+        address: undefined,        
+      };
+      env.allocateShadowMemory = function(len, align) {
+        return new DataView(new ArrayBuffer(len));
+      };
+      env.getBufferAddress = function() {
+        return 0x1000;
+      };
+      env.startContext();
+      const address1 = env.getShadowAddress(object1, cluster);
+      const address2 = env.getShadowAddress(object2, cluster);
+      expect(address1).to.equal(0x1000);
+      expect(address2).to.equal(0x1004);
+    })
   })
-  describe('createShadow', function() {    
+  describe('createShadow', function() {
+    it('should create a shadow of an object', function() {
+      const env = new Environment();
+      const Type = function() {};
+      Type.prototype[MEMORY_COPIER] = getMemoryCopier(8);
+      const object = new Type();
+      object[MEMORY] = new DataView(new ArrayBuffer(8));
+      env.allocateShadowMemory = function(len, align) {
+        return new DataView(new ArrayBuffer(len));
+      };
+      env.getBufferAddress = function() {
+        return 0x1000;
+      };
+      env.startContext();
+      const shadow = env.createShadow(object);
+      expect(shadow).to.be.instanceOf(Type);
+      expect(shadow[MEMORY].byteLength).to.equal(8);
+    })
   })
-  describe('createClusterShadow', function() {    
+  describe('createClusterShadow', function() {
   })
   describe('addShadow', function() {    
+    it('should add a shadow', function() {
+      const env = new Environment();
+      const object = {
+        [MEMORY]: new DataView(new ArrayBuffer(4))
+      };
+      const shadow = {
+        [MEMORY]: new DataView(new ArrayBuffer(4))
+      };
+      env.getBufferAddress = function() {
+        return 0x1000;
+      };
+      env.startContext();
+      expect(env.context.shadowMap).to.be.null;
+      env.addShadow(shadow, object);
+      expect(env.context.shadowMap.size).to.equal(1);
+    })
   })
-  describe('removeShadow', function() {    
+  describe('removeShadow', function() {   
+    it('should remove a previously added shadow', function() {
+      const env = new Environment();
+      const object = {
+        [MEMORY]: new DataView(new ArrayBuffer(4))
+      };
+      const shadow = {
+        [MEMORY]: new DataView(new ArrayBuffer(4))
+      };
+      env.getBufferAddress = function() {
+        return 0x1000;
+      };
+      env.startContext();
+      env.addShadow(shadow, object);
+      env.removeShadow(shadow[MEMORY]);
+      expect(env.context.shadowMap.size).to.equal(0);
+    }) 
   })
-  describe('updateShadow', function() {    
+  describe('updateShadows', function() {    
+    it('should do nothing where there are no shadows', function() {
+      const env = new Environment();
+      env.startContext();
+      env.updateShadows();
+    })
+    it('should copy data from targets to shadows', function() {
+      const env = new Environment();
+      const object = {
+        [MEMORY]: new DataView(new ArrayBuffer(4)),
+      };
+      const shadow = {
+        [MEMORY]: new DataView(new ArrayBuffer(4)),
+        [MEMORY_COPIER]: getMemoryCopier(4),
+      };
+      env.getBufferAddress = function() {
+        return 0x1000;
+      };
+      env.startContext();
+      env.addShadow(shadow, object);
+      object[MEMORY].setUint32(0, 1234, true);
+      env.updateShadows();
+      expect(shadow[MEMORY].getUint32(0, true)).to.equal(1234);
+    })
   })
-  describe('releaseShadow', function() {    
+  describe('updateShadowTargets', function() {
+    it('should do nothing where there are no shadows', function() {
+      const env = new Environment();
+      env.startContext();
+      env.updateShadowTargets();
+    })
+    it('should copy data from targets to shadows', function() {
+      const env = new Environment();
+      const object = {
+        [MEMORY]: new DataView(new ArrayBuffer(4)),
+        [MEMORY_COPIER]: getMemoryCopier(4),
+      };
+      const shadow = {
+        [MEMORY]: new DataView(new ArrayBuffer(4)),
+      };
+      env.getBufferAddress = function() {
+        return 0x1000;
+      };
+      env.startContext();
+      env.addShadow(shadow, object);
+      shadow[MEMORY].setUint32(0, 1234, true);
+      env.updateShadowTargets();
+      expect(object[MEMORY].getUint32(0, true)).to.equal(1234);
+    })
+  })
+  describe('releaseShadows', function() {    
+    it('should do nothing where there are no shadows', function() {
+      const env = new Environment();
+      env.startContext();
+      env.releaseShadows();
+    })
+    it('should free the memory of shadows', function() {
+      const env = new Environment();
+      const object = {
+        [MEMORY]: new DataView(new ArrayBuffer(4)),
+      };
+      const shadow = {
+        [MEMORY]: new DataView(new ArrayBuffer(4)),
+        [ATTRIBUTES]: {
+          address: 0x1000,
+          len: 4,
+          align: 1,
+        },
+      };
+      env.getBufferAddress = function() {
+        return 0x1000;
+      };
+      let address, len, align;
+      env.freeShadowMemory = function(...args) {
+        address = args[0];
+        len = args[1];
+        align = args[2];
+      }
+      env.startContext();
+      env.addShadow(shadow, object);
+      env.releaseShadows();
+      expect(address).to.equal(0x1000);
+      expect(len).to.equal(4);
+      expect(align).to.equal(1);
+    })
   })
   describe('acquirePointerTargets', function() {    
     it('should set pointer slot to null when pointer is inactive', function() {
       const env = new Environment();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -754,7 +928,7 @@ describe('Environment', function() {
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        name: '*Int32',
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -803,7 +977,73 @@ describe('Environment', function() {
       env.acquirePointerTargets(object);
       expect(object[SLOTS][0][SLOTS][0]).to.be.null;
       expect(object.$).to.be.null;
-    })
+    })    
+    it('should ignore const pointers', function() {
+      const env = new Environment();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const structure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        name: 'Hello',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        name: '0',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Bool,
+        bitOffset: 0,
+        bitSize: 1,
+        byteSize: 8,
+        structure: {},
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      env.inFixedMemory = function() {
+        return false;
+      };
+      const { constructor: Hello } = structure;    
+      const object = new Hello([ new Int32(123) ]);
+      expect(object[0]['*']).to.equal(123);
+      env.acquirePointerTargets(object);
+      expect(object[0]['*']).to.equal(123);
+    })    
     it('should be able to handle self-referencing structures', function() {
       const env = new Environment();
       const structure = env.beginStructure({
@@ -909,6 +1149,110 @@ describe('Environment', function() {
       object3[MEMORY].setBigUint64(0, 0x0000n, true); // obj3 -> null
       env.acquirePointerTargets(object3);
       expect(object3.sibling).to.be.null;
+      expect(object2.sibling['*']).to.equal(object1);
+      expect(object1.sibling['*']).to.equal(object3);     
+    })
+    it('should acquire missing objects', function() {
+      const env = new Environment();
+      const structure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 12,
+        hasPointer: true,
+      });
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Hello',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const optionalStructure = env.beginStructure({
+        type: StructureType.Optional,
+        name: '?*Hello',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(optionalStructure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.attachMember(optionalStructure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: 0,
+        bitSize: 1,
+        byteSize: 8,
+        structure: {},
+      });
+      env.finalizeShape(optionalStructure);
+      env.finalizeStructure(optionalStructure);
+      env.attachMember(structure, {
+        name: 'sibling',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: optionalStructure,
+      });
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      env.attachMember(structure, {
+        name: 'number',
+        type: MemberType.Int,
+        bitOffset: 64,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      env.inFixedMemory = function() {
+        return false;
+      };
+      const { constructor: Hello } = structure;    
+      const object1 = new Hello({ sibling: null });
+      const object2 = new Hello({ sibling: null });
+      const object3 = new Hello({ sibling: null });
+      const map = new Map([
+        [ 0x1000n, object1[MEMORY] ],
+        [ 0x2000n, object2[MEMORY] ],
+        [ 0x3000n, object3[MEMORY] ],
+      ]);      
+      env.obtainFixedView = function(address, len) {
+        return map.get(address);
+      };
+      object1[MEMORY].setBigUint64(0, 0x3000n, true); // obj1 -> obj3
+      object2[MEMORY].setBigUint64(0, 0x1000n, true); // obj2 -> obj1
+      object3[MEMORY].setBigUint64(0, 0x2000n, true); // obj3 -> obj2
+      env.acquirePointerTargets(object3);
+      expect(object3.sibling['*']).to.equal(object2);
       expect(object2.sibling['*']).to.equal(object1);
       expect(object1.sibling['*']).to.equal(object3);     
     })

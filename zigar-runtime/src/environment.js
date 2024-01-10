@@ -1,13 +1,12 @@
 import { StructureType, defineProperties, findAllObjects, getStructureFactory, getStructureName, useArgStruct } from './structure.js';
 import { decodeText } from './text.js';
 import { initializeErrorSets } from './error-set.js';
-import { throwAlignmentConflict, throwZigError } from './error.js';
+import { throwAlignmentConflict } from './error.js';
 import { getMemoryCopier } from './memory.js';
 import { addStaticMembers } from './static.js';
 import { addMethods } from './method.js';
-import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CONST, ENVIRONMENT, LENGTH_GETTER, LENGTH_SETTER, 
-  MEMORY, MEMORY_COPIER, POINTER_SELF, POINTER_VISITOR, SENTINEL, SHADOW_ATTRIBUTES, SIZE, 
-  SLOTS } from './symbol.js';
+import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CONST, ENVIRONMENT, MEMORY, MEMORY_COPIER, 
+  POINTER_SELF, POINTER_VISITOR, ATTRIBUTES, SIZE, SLOTS } from './symbol.js';
 import { MemberType, useBool, useObject } from './member.js';
 
 export class Environment {
@@ -628,8 +627,7 @@ export class Environment {
         address = this.getShadowAddress(target, cluster);
       }
       // update the pointer
-      pointer[ADDRESS_SETTER](address);
-      pointer[LENGTH_SETTER]?.(target.length);
+      pointer[ADDRESS_SETTER](address, target.length);
     }
   }
 
@@ -716,7 +714,7 @@ export class Environment {
     const shadow = Object.create(prototype);
     source[MEMORY] = new DataView(targets[0][MEMORY].buffer, Number(start), len);
     shadow[MEMORY] = shadowDV;
-    shadow[SHADOW_ATTRIBUTES] = {
+    shadow[ATTRIBUTES] = {
       address: unalignedAddress,
       len: unalignedShadowDV.byteLength,
       align: 1,
@@ -744,7 +742,7 @@ export class Environment {
     const align = object.constructor[ALIGN];
     const shadow = Object.create(object.constructor.prototype);
     const shadowDV = shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
-    shadow[SHADOW_ATTRIBUTES] = {
+    shadow[ATTRIBUTES] = {
       address: this.getViewAddress(shadowDV),
       len: shadowDV.byteLength,
       align: align,
@@ -800,7 +798,7 @@ export class Environment {
       return;
     }
     for (const [ shadow ] of shadowMap) {
-      const { address, len, align } = shadow[SHADOW_ATTRIBUTES];
+      const { address, len, align } = shadow[ATTRIBUTES];
       this.freeShadowMemory(address, len, align);
     }
   }
@@ -822,22 +820,13 @@ export class Environment {
         const Target = pointer.constructor.child;
         if (!currentTarget || isMutable(this)) {
           // obtain address (and possibly length) from memory
-          const address = pointer[ADDRESS_GETTER]();
-          let len = pointer[LENGTH_GETTER]?.();
-          if (len === undefined) {
-            const sentinel = Target[SENTINEL];
-            if (sentinel) {
-              len = (address) ? env.findSentinel(address, sentinel.bytes) + 1 : 0;
-            } else {
-              len = 1;
-            }
-          }
+          const [ address, length ] = pointer[ADDRESS_GETTER]();
           // get view of memory that pointer points to
-          const byteLength = len * Target[SIZE];
+          const byteLength = length * Target[SIZE];
           const dv = env.findMemory(address, byteLength);
           // create the target
-          debugger;
           newTarget = Target.call(ENVIRONMENT, dv, { writable });
+
         } else {
           newTarget = currentTarget;
         }
