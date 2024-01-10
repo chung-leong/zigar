@@ -1,8 +1,8 @@
-import { StructureType } from './structure.js';
+import { throwArrayLengthMismatch, throwBufferExpected, throwBufferSizeMismatch, throwTypeMismatch } from './error.js';
 import { MemberType, isByteAligned } from './member.js';
 import { getBitAlignFunction } from './memory.js';
-import { throwBufferSizeMismatch, throwBufferExpected, throwArrayLengthMismatch, throwTypeMismatch } from './error.js';
-import { MEMORY, COMPAT, MEMORY_COPIER } from './symbol.js';
+import { StructureType } from './structure.js';
+import { COMPAT, COPIER, MEMORY } from './symbol.js';
 
 export function getDataViewBoolAccessor(access, member) {
   return cacheMethod(access, member, () => {
@@ -174,7 +174,7 @@ export function setDataView(dv, structure, copy, handlers) {
     sentinel?.validateData(source, len);
     shapeDefiner.call(this, copy ? null : dv, len);
     if (copy) {
-      this[MEMORY_COPIER](source);
+      this[COPIER](source);
     }  
   } else {
     const byteLength = multiple ? byteSize * this.length : byteSize;
@@ -183,7 +183,7 @@ export function setDataView(dv, structure, copy, handlers) {
     }
     const source = { [MEMORY]: dv };
     sentinel?.validateData(source, this.length);
-    this[MEMORY_COPIER](source); 
+    this[COPIER](source); 
   }
 }
 

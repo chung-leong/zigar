@@ -1,10 +1,10 @@
-import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
-import { MemberType, isByteAligned, getDescriptor } from './member.js';
-import { getDestructor, getMemoryCopier } from './memory.js';
 import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
-import { getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors } from './special.js';
-import { ALIGN, COMPAT, MEMORY_COPIER, SIZE } from './symbol.js';
 import { throwInvalidInitializer } from './error.js';
+import { MemberType, getDescriptor, isByteAligned } from './member.js';
+import { getDestructor, getMemoryCopier } from './memory.js';
+import { getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors } from './special.js';
+import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
+import { ALIGN, COMPAT, COPIER, SIZE } from './symbol.js';
 
 export function definePrimitive(structure, env) {
   const {
@@ -16,7 +16,7 @@ export function definePrimitive(structure, env) {
   const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      this[MEMORY_COPIER](arg);
+      this[COPIER](arg);
     } else {
       if (arg && typeof(arg) === 'object') {
         if (propApplier.call(this, arg) === 0) {
@@ -39,7 +39,7 @@ export function definePrimitive(structure, env) {
     toJSON: { value: get },
     delete: { value: getDestructor(env) },
     [Symbol.toPrimitive]: { value: get },
-    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
   };
   const staticDescriptors = {
     [COMPAT]: { value: getCompatibleTags(structure) },

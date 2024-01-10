@@ -1,8 +1,8 @@
-import { StructureType, defineProperties } from './structure.js';
-import { getDescriptor } from './member.js';
-import { decamelizeErrorName } from './error.js';
 import { getCurrentErrorSets } from './error-set.js';
-import { ENUM_ITEMS, ENUM_NAME, ERROR_ITEMS, ERROR_MESSAGES, SLOTS } from './symbol.js';
+import { decamelizeErrorName } from './error.js';
+import { getDescriptor } from './member.js';
+import { StructureType, defineProperties } from './structure.js';
+import { ITEMS, MESSAGES, NAME, SLOTS } from './symbol.js';
 
 export function addStaticMembers(structure, env) {
   const {
@@ -23,7 +23,7 @@ export function addStaticMembers(structure, env) {
     [SLOTS]: { value: template[SLOTS] },
   });
   if (type === StructureType.Enumeration) {
-    const enums = constructor[ENUM_ITEMS];
+    const enums = constructor[ITEMS];
     for (const { name, slot } of members) {
       // place item in hash to facilitate lookup, 
       const item = constructor[SLOTS][slot];
@@ -31,13 +31,13 @@ export function addStaticMembers(structure, env) {
         const index = item[Symbol.toPrimitive]();
         enums[index] = item;
         // attach name to item so tagged union code can quickly find it
-        defineProperties(item, { [ENUM_NAME]: { value: name } });  
+        defineProperties(item, { [NAME]: { value: name } });  
       }      
     }
   } else if (type === StructureType.ErrorSet) {
     const allErrors = getCurrentErrorSets();
-    const errors = constructor[ERROR_ITEMS];
-    const messages = constructor[ERROR_MESSAGES];
+    const errors = constructor[ITEMS];
+    const messages = constructor[MESSAGES];
     for (const { name, slot } of members) {
       let error = constructor[SLOTS][slot];
       const { index } = error;

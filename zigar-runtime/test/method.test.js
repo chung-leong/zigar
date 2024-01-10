@@ -1,9 +1,9 @@
 import { expect } from 'chai';
 
+import { NodeEnvironment } from '../src/environment-node.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';
-import { NodeEnvironment } from '../src/environment-node.js';
 
 describe('Method functions', function() {
   beforeEach(function() {

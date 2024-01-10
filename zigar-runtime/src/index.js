@@ -17,39 +17,16 @@ export function loadModule(source) {
 
 /* RUNTIME-ONLY */
 export {
-  usePrimitive,
-  useArray,
-  useStruct,
-  useExternUnion,
-  useBareUnion,
-  useTaggedUnion,
-  useErrorUnion,
-  useErrorSet,
-  useEnumeration,
-  useOptional,
-  usePointer,
-  useSlice,
-  useVector,
-  useOpaque,
-  useArgStruct,
-} from './structure.js';
-export {
-  useVoid,
   useBool,
-  useBoolEx,
-  useInt,
-  useIntEx,
-  useUint,
-  useUintEx,
-  useFloat,
-  useFloatEx,
-  useEnumerationItem,
+  useBoolEx, useComptime, useEnumerationItem,
   useEnumerationItemEx,
-  useError,
-  useObject,
-  useType,
-  useComptime,
-  useStatic,
-  useLiteral,
+  useError, useFloat,
+  useFloatEx, useInt,
+  useIntEx, useLiteral, useObject, useStatic, useType, useUint,
+  useUintEx, useVoid
 } from './member.js';
+export {
+  useArgStruct, useArray, useBareUnion, useEnumeration, useErrorSet, useErrorUnion, useExternUnion, useOpaque, useOptional,
+  usePointer, usePrimitive, useSlice, useStruct, useTaggedUnion, useVector
+} from './structure.js';
 /* RUNTIME-ONLY-END */

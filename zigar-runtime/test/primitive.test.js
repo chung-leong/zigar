@@ -1,15 +1,15 @@
 import { expect } from 'chai';
 
+import { NodeEnvironment } from '../src/environment-node.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
-import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import {
   getIntRange,
   getPrimitiveClass,
   isExtendedType,
 } from '../src/primitive.js';
-import { NodeEnvironment } from '../src/environment-node.js';
-import { encodeBase64 } from '../src/text.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { SLOTS } from '../src/symbol.js';
+import { encodeBase64 } from '../src/text.js';
 
 describe('Primitive functions', function() {
   const env = new NodeEnvironment();

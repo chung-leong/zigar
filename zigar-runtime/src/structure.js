@@ -1,20 +1,27 @@
-import { definePrimitive } from './primitive.js';
-import { defineArray } from './array.js';
-import { defineStructShape } from './struct.js';
-import { defineUnionShape } from './union.js';
-import { defineErrorUnion } from './error-union.js'
-import { defineErrorSet } from './error-set.js';
-import { defineEnumerationShape } from './enumeration.js';
-import { defineOptional } from './optional.js';
-import { copyPointer, definePointer } from './pointer.js';
-import { defineSlice } from './slice.js';
-import { defineVector } from './vector.js';
 import { defineArgStruct } from './arg-struct.js';
+import { defineArray } from './array.js';
+import { requireDataView, setDataView } from './data-view.js';
+import { defineEnumerationShape } from './enumeration.js';
+import { defineErrorSet } from './error-set.js';
+import { defineErrorUnion } from './error-union.js';
 import { throwMissingInitializers, throwNoInitializer, throwNoProperty, throwReadOnly } from './error.js';
 import { MemberType, hasStandardFloatSize, hasStandardIntSize, isByteAligned } from './member.js';
-import { requireDataView, setDataView } from './data-view.js';
-import { ALL_KEYS, CHILD_VIVIFICATOR, CONST, CONST_PROTO, IS_REQUIRED, IS_SPECIAL, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SETTERS, 
-  SLOTS } from './symbol.js';
+import { defineOptional } from './optional.js';
+import { copyPointer, definePointer } from './pointer.js';
+import { definePrimitive } from './primitive.js';
+import { defineSlice } from './slice.js';
+import { defineStructShape } from './struct.js';
+import {
+  ALL_KEYS,
+  CONST, CONST_PROTO,
+  COPIER,
+  MEMORY,
+  SETTERS, SLOTS,
+  VISITOR,
+  VIVIFICATOR
+} from './symbol.js';
+import { defineUnionShape } from './union.js';
+import { defineVector } from './vector.js';
 
 export const StructureType = {
   Primitive: 0,
@@ -269,7 +276,7 @@ export function attachDescriptors(constructor, instanceDescriptors, staticDescri
       instanceDescriptorsRO[name] = { value: throwReadOnly, configurable: true, writable: true };
     }
   }
-  const vivificate = instanceDescriptors[CHILD_VIVIFICATOR]?.value;
+  const vivificate = instanceDescriptors[VIVIFICATOR]?.value;
   const vivificateDescriptor = { 
     // vivificate child objects as read-only too
     value: function(slot) { 
@@ -289,7 +296,7 @@ export function attachDescriptors(constructor, instanceDescriptors, staticDescri
   defineProperties(prototypeRO, { 
     constructor: { value: constructor, configurable: true },
     [CONST]: { value: true },
-    [CHILD_VIVIFICATOR]: vivificate && vivificateDescriptor,
+    [VIVIFICATOR]: vivificate && vivificateDescriptor,
     ...instanceDescriptorsRO,
   });
   return constructor;
@@ -425,9 +432,9 @@ export function createPropertyApplier(structure) {
     if (normalFound < normalCount && specialFound === 0) {
       if (template) {
         if (template[MEMORY]) {
-          this[MEMORY_COPIER](template);
+          this[COPIER](template);
         }
-        this[POINTER_VISITOR]?.(copyPointer, { vivificate: true, source: template });
+        this[VISITOR]?.(copyPointer, { vivificate: true, source: template });
       }
     }
     for (const key of argKeys) {

@@ -1,10 +1,10 @@
-import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
-import { MemberType, getDescriptor } from './member.js';
-import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView, getTypedArrayClass } from './data-view.js';
 import { throwInvalidInitializer } from './error.js';
-import { ALIGN, ERROR_ITEMS, ERROR_MESSAGES, MEMORY_COPIER, SIZE, VALUE_NORMALIZER } from './symbol.js';
+import { MemberType, getDescriptor } from './member.js';
+import { getDestructor, getMemoryCopier } from './memory.js';
 import { convertToJSON, getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors, getValueOf } from './special.js';
+import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
+import { ALIGN, COPIER, ITEMS, MESSAGES, NORMALIZER, SIZE } from './symbol.js';
 
 let currentErrorSets;
 
@@ -39,7 +39,7 @@ export function defineErrorSet(structure, env) {
   };
   const alternateCaster = function(arg) {
     if (typeof(arg) === 'number' || typeof(arg) === 'string') {
-      return constructor[ERROR_ITEMS][arg];
+      return constructor[ITEMS][arg];
     } else if (!getDataView(structure, arg, env)) {
       throwInvalidInitializer(structure, expected, arg);
     } else {
@@ -51,7 +51,7 @@ export function defineErrorSet(structure, env) {
   const typedArray = structure.typedArray = getTypedArrayClass(member);
   const getMessage = function() {
     const index = getIndex.call(this);
-    return constructor[ERROR_MESSAGES][index];
+    return constructor[MESSAGES][index];
   };
   const toStringTag = function() { return 'Error' };
   const instanceDescriptors = {
@@ -67,14 +67,14 @@ export function defineErrorSet(structure, env) {
     // ensure that libraries that rely on the string tag for type detection will
     // correctly identify the object as an error
     [Symbol.toStringTag]: { get: toStringTag },
-    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [VALUE_NORMALIZER]: { value: normalizeError },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [NORMALIZER]: { value: normalizeError },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-    [ERROR_ITEMS]: { value: {} },
-    [ERROR_MESSAGES]: { value: {} },
+    [ITEMS]: { value: {} },
+    [MESSAGES]: { value: {} },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };

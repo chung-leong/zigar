@@ -1,11 +1,18 @@
-import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
 import { copyPointer, resetPointer } from './pointer.js';
-import { getChildVivificator, getPointerVisitor } from './struct.js';
-import { ALIGN, CHILD_VIVIFICATOR, MEMORY_COPIER, POINTER_VISITOR, SIZE, VALUE_NORMALIZER,
-  VALUE_RESETTER } from './symbol.js';
 import { convertToJSON, getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
+import { getChildVivificator, getPointerVisitor } from './struct.js';
+import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
+import {
+  ALIGN,
+  COPIER,
+  NORMALIZER,
+  RESETTER,
+  SIZE,
+  VISITOR,
+  VIVIFICATOR
+} from './symbol.js';
 
 export function defineErrorUnion(structure, env) {
   const {
@@ -28,17 +35,17 @@ export function defineErrorUnion(structure, env) {
     return !getError.call(this);
   };
   const clearValue = function() {
-    this[VALUE_RESETTER]();
-    this[POINTER_VISITOR]?.(resetPointer);
+    this[RESETTER]();
+    this[VISITOR]?.(resetPointer);
   };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      this[MEMORY_COPIER](arg);
+      this[COPIER](arg);
       if (hasPointer) {
         if (isChildActive.call(this)) {
-          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
+          this[VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }
     } else if (arg instanceof Error) {
@@ -79,11 +86,11 @@ export function defineErrorUnion(structure, env) {
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [VALUE_RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
-    [VALUE_NORMALIZER]: { value: normalizeErrorUnion },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
+    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
+    [NORMALIZER]: { value: normalizeErrorUnion },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
@@ -95,7 +102,7 @@ export function defineErrorUnion(structure, env) {
 export function normalizeErrorUnion(map, forJSON) {
   try {
     const value = this.$;
-    return value[VALUE_NORMALIZER]?.(map, forJSON) ?? value;
+    return value[NORMALIZER]?.(map, forJSON) ?? value;
   } catch (err) {
     if (forJSON) {
       return { error: err.message };

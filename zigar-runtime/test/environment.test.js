@@ -1,18 +1,18 @@
 import { expect } from 'chai';
 
-import { MemberType, useAllMemberTypes } from '../src/member.js';
-import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import {
-  Environment,
   CallContext,
-  findSortedIndex,
-  isMisaligned,
-  getAlignedAddress,
+  Environment,
   add,
+  findSortedIndex,
+  getAlignedAddress,
+  isMisaligned,
   subtract,
-} from '../src/environment.js'
-import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CONST, MEMORY_COPIER, ATTRIBUTES, ALIGN } from '../src/symbol.js';
+} from '../src/environment.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
+import { ALIGN, ATTRIBUTES, CONST, COPIER, ENVIRONMENT, MEMORY, SLOTS, VISITOR } from '../src/symbol.js';
 
 describe('Environment', function() {
   beforeEach(function() {
@@ -212,7 +212,7 @@ describe('Environment', function() {
       const structure = {
         constructor: function(dv) {
           return {
-            [POINTER_VISITOR]: function(f) { visitor = f },
+            [VISITOR]: function(f) { visitor = f },
           };
         },
         hasPointer: true,
@@ -850,7 +850,7 @@ describe('Environment', function() {
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      Test.prototype[MEMORY_COPIER] = getMemoryCopier(4);
+      Test.prototype[COPIER] = getMemoryCopier(4);
       const object = new Test(new DataView(new ArrayBuffer(4)));
       const dv = object[MEMORY];
       dv.setUint32(0, 1234, true);
@@ -877,7 +877,7 @@ describe('Environment', function() {
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      Test.prototype[MEMORY_COPIER] = getMemoryCopier(4);
+      Test.prototype[COPIER] = getMemoryCopier(4);
       const object = new Test(new DataView(new ArrayBuffer(4)));
       const dv = object[MEMORY];
       dv.setUint32(0, 1234, true);
@@ -901,7 +901,7 @@ describe('Environment', function() {
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      Test.prototype[MEMORY_COPIER] = getMemoryCopier(4);
+      Test.prototype[COPIER] = getMemoryCopier(4);
       const object = new Test(new DataView(new ArrayBuffer(4)));
       const dv = object[MEMORY];
       dv.setUint32(0, 1234, true);
@@ -917,7 +917,7 @@ describe('Environment', function() {
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      Test.prototype[MEMORY_COPIER] = getMemoryCopier(4);
+      Test.prototype[COPIER] = getMemoryCopier(4);
       const object = new Test(new DataView(new ArrayBuffer(4)));
       const dv = object[MEMORY];
       env.linkObject(object, 0x1000, true);
@@ -938,7 +938,7 @@ describe('Environment', function() {
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      Test.prototype[MEMORY_COPIER] = getMemoryCopier(16);
+      Test.prototype[COPIER] = getMemoryCopier(16);
       const object1 = new Test(env.allocateMemory(16, 8, true));
       const object2 = new Test(env.allocateMemory(16, 8, true));
       env.variables.push({ name: 'a', object: object1 });
@@ -962,7 +962,7 @@ describe('Environment', function() {
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      Test.prototype[MEMORY_COPIER] = getMemoryCopier(16);
+      Test.prototype[COPIER] = getMemoryCopier(16);
       const object = new Test(env.allocateMemory(16, 8, true));
       const dv = object[MEMORY];
       expect(dv.buffer.align).to.equal(8);
@@ -1385,7 +1385,7 @@ describe('Environment', function() {
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      Test.prototype[MEMORY_COPIER] = getMemoryCopier(8);
+      Test.prototype[COPIER] = getMemoryCopier(8);
       const object = new Test(new DataView(new ArrayBuffer(8)));
       env.allocateShadowMemory = function(len, align) {
         return new DataView(new ArrayBuffer(len));
@@ -1402,7 +1402,7 @@ describe('Environment', function() {
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      Test.prototype[MEMORY_COPIER] = getMemoryCopier(8);
+      Test.prototype[COPIER] = getMemoryCopier(8);
       Test[ALIGN] = 4;
       const buffer = new ArrayBuffer(16);
       const object1 = new Test(new DataView(buffer, 0, 8));
@@ -1432,7 +1432,7 @@ describe('Environment', function() {
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      Test.prototype[MEMORY_COPIER] = getMemoryCopier(8);
+      Test.prototype[COPIER] = getMemoryCopier(8);
       const object = new Test(new DataView(new ArrayBuffer(8)));
       env.allocateShadowMemory = function(len, align) {
         return new DataView(new ArrayBuffer(len));
@@ -1458,7 +1458,7 @@ describe('Environment', function() {
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      Test.prototype[MEMORY_COPIER] = getMemoryCopier(8);
+      Test.prototype[COPIER] = getMemoryCopier(8);
       Test[ALIGN] = 4;
       const buffer = new ArrayBuffer(32);
       const object1 = new Test(new DataView(buffer, 3, 8));
@@ -1488,7 +1488,7 @@ describe('Environment', function() {
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      Test.prototype[MEMORY_COPIER] = getMemoryCopier(8);
+      Test.prototype[COPIER] = getMemoryCopier(8);
       Test[ALIGN] = 4;
       const buffer = new ArrayBuffer(32);
       const object1 = new Test(new DataView(buffer, 4, 8));
@@ -1552,7 +1552,7 @@ describe('Environment', function() {
       };
       const shadow = {
         [MEMORY]: new DataView(new ArrayBuffer(4)),
-        [MEMORY_COPIER]: getMemoryCopier(4),
+        [COPIER]: getMemoryCopier(4),
       };
       env.getBufferAddress = function() {
         return 0x1000;
@@ -1574,7 +1574,7 @@ describe('Environment', function() {
       const env = new Environment();
       const object = {
         [MEMORY]: new DataView(new ArrayBuffer(4)),
-        [MEMORY_COPIER]: getMemoryCopier(4),
+        [COPIER]: getMemoryCopier(4),
       };
       const shadow = {
         [MEMORY]: new DataView(new ArrayBuffer(4)),

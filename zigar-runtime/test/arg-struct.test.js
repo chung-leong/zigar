@@ -1,10 +1,10 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
 
+import { NodeEnvironment } from '../src/environment-node.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { NodeEnvironment } from '../src/environment-node.js';
-import { POINTER_VISITOR } from '../src/symbol.js';
+import { VISITOR } from '../src/symbol.js';
 
 describe('ArgStruct functions', function() {
   const env = new NodeEnvironment();
@@ -167,7 +167,7 @@ describe('ArgStruct functions', function() {
       const int = new Int32(1234);
       const object = new ArgStruct([ int ]);
       const pointers = [], mutabilities = [];
-      object[POINTER_VISITOR](function({ isMutable }) {
+      object[VISITOR](function({ isMutable }) {
         pointers.push(this);
         mutabilities.push(isMutable(this));
       }, { vivificate: true });

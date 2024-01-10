@@ -1,13 +1,24 @@
-import { StructureType, defineProperties, findAllObjects, getStructureFactory, getStructureName, useArgStruct } from './structure.js';
-import { decodeText } from './text.js';
 import { initializeErrorSets } from './error-set.js';
 import { throwAlignmentConflict } from './error.js';
-import { getMemoryCopier } from './memory.js';
-import { addStaticMembers } from './static.js';
-import { addMethods } from './method.js';
-import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CONST, ENVIRONMENT, MEMORY, MEMORY_COPIER, 
-  POINTER_SELF, POINTER_VISITOR, ATTRIBUTES, SIZE, SLOTS } from './symbol.js';
 import { MemberType, useBool, useObject } from './member.js';
+import { getMemoryCopier } from './memory.js';
+import { addMethods } from './method.js';
+import { addStaticMembers } from './static.js';
+import { StructureType, defineProperties, findAllObjects, getStructureFactory, getStructureName, useArgStruct } from './structure.js';
+import {
+  ALIGN,
+  ATTRIBUTES,
+  CONST,
+  COPIER,
+  ENVIRONMENT,
+  GETTER,
+  MEMORY,
+  POINTER,
+  SETTER,
+  SIZE, SLOTS,
+  VISITOR
+} from './symbol.js';
+import { decodeText } from './text.js';
 
 export class Environment {
   context;
@@ -484,7 +495,7 @@ export class Environment {
       if (writeBack) {
         const dest = Object.create(object.constructor.prototype);
         dest[MEMORY] = fixedDV;
-        dest[MEMORY_COPIER](object);
+        dest[COPIER](object);
       }
       object[MEMORY] = fixedDV;
     }
@@ -504,7 +515,7 @@ export class Environment {
     const relocDV = this.allocateMemory(dv.byteLength);
     const dest = Object.create(object.constructor.prototype);
     dest[MEMORY] = relocDV;
-    dest[MEMORY_COPIER](object);
+    dest[COPIER](object);
     object[MEMORY] = relocDV;
   }
 
@@ -582,7 +593,7 @@ export class Environment {
         return;
       }
       // bypass proxy
-      const pointer = this[POINTER_SELF];
+      const pointer = this[POINTER];
       if (pointerMap.get(pointer)) {
         return;
       }
@@ -605,11 +616,11 @@ export class Environment {
             bufferMap.set(dv.buffer, target);
           }
           // scan pointers in target
-          target[POINTER_VISITOR]?.(callback);
+          target[VISITOR]?.(callback);
         }
       }
     };
-    args[POINTER_VISITOR](callback);
+    args[VISITOR](callback);
     // find targets that overlap each other
     const clusters = this.findTargetClusters(potentialClusters);
     const clusterMap = new Map();
@@ -627,7 +638,7 @@ export class Environment {
         address = this.getShadowAddress(target, cluster);
       }
       // update the pointer
-      pointer[ADDRESS_SETTER](address, target.length);
+      pointer[SETTER](address, target.length);
     }
   }
 
@@ -708,7 +719,7 @@ export class Environment {
     }
     // placeholder object type
     const prototype = {
-      [MEMORY_COPIER]: getMemoryCopier(len)
+      [COPIER]: getMemoryCopier(len)
     };
     const source = Object.create(prototype);
     const shadow = Object.create(prototype);
@@ -778,7 +789,7 @@ export class Environment {
       return;
     }
     for (const [ shadow, object ] of shadowMap) {
-      shadow[MEMORY_COPIER](object);
+      shadow[COPIER](object);
     }
   }
 
@@ -788,7 +799,7 @@ export class Environment {
       return;
     }
     for (const [ shadow, object ] of shadowMap) {
-      object[MEMORY_COPIER](shadow);
+      object[COPIER](shadow);
     }
   }
 
@@ -807,7 +818,7 @@ export class Environment {
     const env = this;
     const pointerMap = new Map();
     const callback = function({ isActive, isMutable }) {
-      const pointer = this[POINTER_SELF];
+      const pointer = this[POINTER];
       if (pointerMap.get(pointer)) {
         return;
       } else {
@@ -820,7 +831,7 @@ export class Environment {
         const Target = pointer.constructor.child;
         if (!currentTarget || isMutable(this)) {
           // obtain address (and possibly length) from memory
-          const [ address, length ] = pointer[ADDRESS_GETTER]();
+          const [ address, length ] = pointer[GETTER]();
           // get view of memory that pointer points to
           const byteLength = length * Target[SIZE];
           const dv = env.findMemory(address, byteLength);
@@ -832,13 +843,13 @@ export class Environment {
         }
       }
       // acquire objects pointed to by pointers in target
-      currentTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
+      currentTarget?.[VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
       if (newTarget !== currentTarget) {
-        newTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
+        newTarget?.[VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
         pointer[SLOTS][0] = newTarget;
       }
     }
-    args[POINTER_VISITOR](callback, { vivificate: true });
+    args[VISITOR](callback, { vivificate: true });
   }
 
   /* COMPTIME-ONLY */

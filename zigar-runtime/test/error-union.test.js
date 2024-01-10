@@ -1,9 +1,9 @@
 import { expect } from 'chai';
 
+import { NodeEnvironment } from '../src/environment-node.js';
+import { initializeErrorSets } from '../src/error-set.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { initializeErrorSets } from '../src/error-set.js';
-import { NodeEnvironment } from '../src/environment-node.js';
 import { ENVIRONMENT, MEMORY, SLOTS } from '../src/symbol.js';
 
 describe('Error union functions', function() {
@@ -1148,7 +1148,6 @@ describe('Error union functions', function() {
       const { constructor: Hello } = structure;
       const object1 = new Hello(MyError.UnableToCreateObject);
       const json = object1.toJSON();
-      debugger;
       const object2 = new Hello(json);
       expect(() => object2.$).to.throw(MyError.UnableToCreateObject);
       expect(() => new Hello({ error: 'Something' })).to.throw(TypeError)

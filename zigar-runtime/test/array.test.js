@@ -1,15 +1,15 @@
 import { expect } from 'chai';
 
-import { MEMORY, POINTER_VISITOR } from '../src/symbol.js';
-import { MemberType, useAllMemberTypes, getDescriptor } from '../src/member.js';
-import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { NodeEnvironment } from '../src/environment-node.js';
-import { encodeBase64 } from '../src/text.js';
 import {
-  getArrayIterator,
-  getArrayEntriesIterator,
   getArrayEntries,
+  getArrayEntriesIterator,
+  getArrayIterator,
 } from '../src/array.js';
+import { NodeEnvironment } from '../src/environment-node.js';
+import { MemberType, getDescriptor, useAllMemberTypes } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
+import { MEMORY, VISITOR } from '../src/symbol.js';
+import { encodeBase64 } from '../src/text.js';
 
 describe('Array functions', function() {
   const env = new NodeEnvironment();
@@ -884,12 +884,12 @@ describe('Array functions', function() {
       const array = Int32PtrArray(dv);
       const pointers = [], errors = [];
       // make sure that children don't get vivificated unless the vivificate option is set
-      array[POINTER_VISITOR](function() {
+      array[VISITOR](function() {
         pointers.push(this);
       }, {});
       expect(pointers).to.have.lengthOf(0);
       // look for the pointers for real
-      array[POINTER_VISITOR](function() {
+      array[VISITOR](function() {
         try {
           expect(this['*']).to.be.null;
         } catch (err) {

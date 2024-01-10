@@ -1,8 +1,8 @@
 import { expect } from 'chai';
 
+import { NodeEnvironment } from '../src/environment-node.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { NodeEnvironment } from '../src/environment-node.js';
 
 describe('Vector functions', function() {
   const env = new NodeEnvironment();

@@ -1,13 +1,26 @@
-import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
+import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
+import { throwArrayLengthMismatch, throwInvalidArrayInitializer } from './error.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { getTypedArrayClass, getCompatibleTags } from './data-view.js';
-import { convertToJSON, getBase64Accessors, getDataViewAccessors, getStringAccessors,
-  getTypedArrayAccessors, getValueOf } from './special.js';
-import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
 import { always, copyPointer, getProxy } from './pointer.js';
-import { ALIGN, CHILD_VIVIFICATOR, COMPAT, GETTER, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR, 
-  PROXY, SELF, SETTER, SIZE, SLOTS, VALUE_NORMALIZER } from './symbol.js';
+import {
+  convertToJSON, getBase64Accessors, getDataViewAccessors, getStringAccessors,
+  getTypedArrayAccessors, getValueOf
+} from './special.js';
+import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
+import {
+  ALIGN,
+  ARRAY,
+  COMPAT,
+  COPIER,
+  GETTER, MEMORY,
+  NORMALIZER,
+  PARENT,
+  PROXY,
+  SETTER, SIZE, SLOTS,
+  VISITOR,
+  VIVIFICATOR
+} from './symbol.js';
 
 export function defineArray(structure, env) {
   const {
@@ -31,9 +44,9 @@ export function defineArray(structure, env) {
   const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      this[MEMORY_COPIER](arg);
+      this[COPIER](arg);
       if (hasPointer) {
-        this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
+        this[VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else {
       if (typeof(arg) === 'string' && hasStringProp) {
@@ -79,10 +92,10 @@ export function defineArray(structure, env) {
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.iterator]: { value: getArrayIterator },
-    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
-    [VALUE_NORMALIZER]: { value: normalizeArray },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
+    [NORMALIZER]: { value: normalizeArray },
   };
   const staticDescriptors = {
     child: { get: () => member.structure.constructor },
@@ -110,14 +123,14 @@ export function normalizeArray(map, forJSON) {
     array = [];
     map.set(this, array);
     for (const value of this) {      
-      array.push(value[VALUE_NORMALIZER]?.(map, forJSON) ?? value);
+      array.push(value[NORMALIZER]?.(map, forJSON) ?? value);
     }
   }
   return array;
 }
 
 export function getArrayIterator() {
-  const self = this[SELF] ?? this;
+  const self = this[ARRAY] ?? this;
   const length = this.length;
   let index = 0;
   return {
@@ -136,7 +149,7 @@ export function getArrayIterator() {
 }
 
 export function getArrayEntriesIterator() {
-  const self = this[SELF] ?? this;
+  const self = this[ARRAY] ?? this;
   const length = this.length;
   let index = 0;
   return {
@@ -193,9 +206,9 @@ export function getPointerVisitor(structure) {
       if (source) {
         childOptions.source = source?.[SLOTS][i];
       }
-      const child = this[SLOTS][i] ?? (vivificate ? this[CHILD_VIVIFICATOR](i) : null);
+      const child = this[SLOTS][i] ?? (vivificate ? this[VIVIFICATOR](i) : null);
       if (child) {
-        child[POINTER_VISITOR](cb, childOptions);
+        child[VISITOR](cb, childOptions);
       }
     }
   };
@@ -218,7 +231,7 @@ const proxyHandlers = {
             array[SETTER] = array.set.bind(array);
           }
           return array[SETTER];
-        case SELF:
+        case ARRAY:
           return array;
         default:
           return array[name];

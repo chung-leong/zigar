@@ -1,13 +1,13 @@
 import { expect } from 'chai';
 import { readFile } from 'fs/promises';
 
-import { useAllMemberTypes } from '../src/member.js';
-import { useAllStructureTypes } from '../src/structure.js';
 import {
   WebAssemblyEnvironment,
-} from '../src/environment-wasm.js'
-import { ALIGN, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SLOTS } from '../src/symbol.js';
+} from '../src/environment-wasm.js';
+import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
+import { useAllStructureTypes } from '../src/structure.js';
+import { ALIGN, COPIER, MEMORY, VISITOR } from '../src/symbol.js';
 
 describe('WebAssemblyEnvironment', function() {
   beforeEach(function() {
@@ -470,7 +470,7 @@ describe('WebAssemblyEnvironment', function() {
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       env.initPromise = Promise.resolve();
       const Type = function() {};
-      Type.prototype[MEMORY_COPIER] = getMemoryCopier(4);
+      Type.prototype[COPIER] = getMemoryCopier(4);
       const object = new Type();
       const dv = object[MEMORY] = new DataView(new ArrayBuffer(4));
       dv.setUint32(0, 1234, true);
@@ -541,7 +541,7 @@ describe('WebAssemblyEnvironment', function() {
         return new DataView(memory.buffer, 128, len);
       };
       const ArgStruct = function() {};
-      ArgStruct.prototype[MEMORY_COPIER] = getMemoryCopier(16);
+      ArgStruct.prototype[COPIER] = getMemoryCopier(16);
       const argStruct = new ArgStruct();
       argStruct[MEMORY] = env.allocateMemory(16, 1, false);
       const address = env.startCall({}, argStruct);
@@ -556,11 +556,11 @@ describe('WebAssemblyEnvironment', function() {
         return new DataView(memory.buffer, 128, len);
       };
       const ArgStruct = function() {};
-      ArgStruct.prototype[MEMORY_COPIER] = getMemoryCopier(16);
+      ArgStruct.prototype[COPIER] = getMemoryCopier(16);
       const argStruct = new ArgStruct();
       argStruct[MEMORY] = env.allocateMemory(16, 1, false);
       let visitorCalled = false;
-      argStruct[POINTER_VISITOR] = function() {
+      argStruct[VISITOR] = function() {
         visitorCalled = true;
       };
       const address = env.startCall({}, argStruct);
@@ -582,11 +582,11 @@ describe('WebAssemblyEnvironment', function() {
         allocCount--;
       }
       const ArgStruct = function() {};
-      ArgStruct.prototype[MEMORY_COPIER] = getMemoryCopier(16);
+      ArgStruct.prototype[COPIER] = getMemoryCopier(16);
       const argStruct = new ArgStruct();
       argStruct[MEMORY] = env.allocateMemory(16, 1, false);
       let visitorCalled = false;
-      argStruct[POINTER_VISITOR] = function() {
+      argStruct[VISITOR] = function() {
         visitorCalled = true;
       };
       const address = env.startCall({}, argStruct);

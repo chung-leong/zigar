@@ -1,16 +1,35 @@
-import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
+import {
+  canBeString, createArrayProxy,
+  getArrayEntries,
+  getArrayIterator,
+  getChildVivificator,
+  getPointerVisitor, normalizeArray
+} from './array.js';
+import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
+import {
+  throwArrayLengthMismatch,
+  throwInvalidArrayInitializer,
+  throwMisplacedSentinel,
+  throwMissingSentinel
+} from './error.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
-import { canBeString, createArrayProxy, getArrayIterator, getArrayEntries, getChildVivificator, 
-  getPointerVisitor, normalizeArray } from './array.js';
 import { copyPointer, getProxy } from './pointer.js';
-import { convertToJSON, getBase64Accessors, getDataViewAccessors, getStringAccessors, getTypedArrayAccessors,
-  getValueOf } from './special.js';
-import { throwInvalidArrayInitializer, throwArrayLengthMismatch, throwMisplacedSentinel,
-  throwMissingSentinel } from './error.js';
-import { ALIGN, CHILD_VIVIFICATOR, COMPAT, LENGTH, MEMORY, MEMORY_COPIER, POINTER_VISITOR, SIZE,
-  VALUE_NORMALIZER } from './symbol.js';
+import {
+  convertToJSON, getBase64Accessors, getDataViewAccessors, getStringAccessors, getTypedArrayAccessors,
+  getValueOf
+} from './special.js';
+import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
+import {
+  ALIGN,
+  COMPAT,
+  COPIER,
+  LENGTH, MEMORY,
+  NORMALIZER,
+  SIZE,
+  VISITOR,
+  VIVIFICATOR
+} from './symbol.js';
 
 export function defineSlice(structure, env) {
   const {
@@ -60,9 +79,9 @@ export function defineSlice(structure, env) {
       } else {
         shapeChecker.call(this, arg, arg.length);
       }
-      this[MEMORY_COPIER](arg);
+      this[COPIER](arg);
       if (hasPointer) {
-        this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
+        this[VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else if (typeof(arg) === 'string' && hasStringProp) {
       initializer.call(this, { string: arg }, fixed);
@@ -115,10 +134,10 @@ export function defineSlice(structure, env) {
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.iterator]: { value: getArrayIterator },
-    [MEMORY_COPIER]: { value: getMemoryCopier(elementSize, true) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
-    [VALUE_NORMALIZER]: { value: normalizeArray },
+    [COPIER]: { value: getMemoryCopier(elementSize, true) },
+    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },
+    [VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
+    [NORMALIZER]: { value: normalizeArray },
   };
   const staticDescriptors = {
     child: { get: () => elementStructure.constructor },

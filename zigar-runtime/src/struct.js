@@ -1,12 +1,10 @@
-import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
+import { throwInvalidInitializer } from './error.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { always, copyPointer } from './pointer.js';
 import { convertToJSON, getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
-import { throwInvalidInitializer, throwMissingInitializers,
-  throwNoProperty } from './error.js';
-import { ALIGN, CHILD_VIVIFICATOR, IS_REQUIRED, MEMORY, MEMORY_COPIER, PARENT, POINTER_VISITOR, SIZE, SLOTS, 
-  VALUE_NORMALIZER} from './symbol.js';
+import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
+import { ALIGN, COPIER, MEMORY, NORMALIZER, PARENT, SIZE, SLOTS, VISITOR, VIVIFICATOR } from './symbol.js';
 
 export function defineStructShape(structure, env) {
   const {
@@ -27,9 +25,9 @@ export function defineStructShape(structure, env) {
   const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      this[MEMORY_COPIER](arg);
+      this[COPIER](arg);
       if (hasPointer) {
-        this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
+        this[VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else if (arg && typeof(arg) === 'object') {
       propApplier.call(this, arg);
@@ -66,10 +64,10 @@ export function defineStructShape(structure, env) {
     delete: { value: getDestructor(env) },
     ...memberDescriptors,
     [Symbol.iterator]: { value: interatorCreator },
-    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, always) },
-    [VALUE_NORMALIZER]: { value: normalizeStruct },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },
+    [VISITOR]: hasPointer && { value: getPointerVisitor(structure, always) },
+    [NORMALIZER]: { value: normalizeStruct },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
@@ -84,7 +82,7 @@ export function normalizeStruct(map, forJSON) {
     object = {};
     map.set(this, object);
     for (const [ name, value ] of this) {      
-      object[name] = value[VALUE_NORMALIZER]?.(map, forJSON) ?? value;
+      object[name] = value[NORMALIZER]?.(map, forJSON) ?? value;
     }
   }
   return object;
@@ -141,9 +139,9 @@ export function getPointerVisitor(structure, visitorOptions = {}) {
         }
         childOptions.source = srcChild;
       }
-      const child = this[SLOTS][slot] ?? (vivificate ? this[CHILD_VIVIFICATOR](slot) : null);
+      const child = this[SLOTS][slot] ?? (vivificate ? this[VIVIFICATOR](slot) : null);
       if (child) {
-        child[POINTER_VISITOR](cb, childOptions);
+        child[VISITOR](cb, childOptions);
       }
     }
   };

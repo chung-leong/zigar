@@ -1,29 +1,28 @@
 import { expect } from 'chai';
 import MersenneTwister from 'mersenne-twister';
 
-import { StructureType } from '../src/structure.js';
-import { MemberType } from '../src/member.js';
-import { getIntRange } from '../src/primitive.js';
 import {
-  isBuffer,
-  isTypedArray,
-  getTypedArrayClass,
-  getTypeName,
+  checkDataView,
+  clearMethodCache,
   getDataView,
-  requireDataView,
   getDataViewBoolAccessor,
   getDataViewBoolAccessorEx,
+  getDataViewFloatAccessor,
+  getDataViewFloatAccessorEx,
   getDataViewIntAccessor,
   getDataViewIntAccessorEx,
   getDataViewUintAccessor,
   getDataViewUintAccessorEx,
-  getDataViewFloatAccessor,
-  getDataViewFloatAccessorEx,
-  clearMethodCache,
-  checkDataView,
-  checkDataViewSize,
+  getTypeName,
+  getTypedArrayClass,
+  isBuffer,
+  isTypedArray,
+  requireDataView
 } from '../src/data-view.js';
 import { Environment } from '../src/environment.js';
+import { MemberType } from '../src/member.js';
+import { getIntRange } from '../src/primitive.js';
+import { StructureType } from '../src/structure.js';
 import { MEMORY } from '../src/symbol.js';
 
 describe('Data view functions', function() {

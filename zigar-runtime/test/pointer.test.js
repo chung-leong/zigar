@@ -1,9 +1,9 @@
 import { expect } from 'chai';
 
+import { NodeEnvironment } from '../src/environment-node.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { ADDRESS_GETTER, ADDRESS_SETTER, ENVIRONMENT, MEMORY, POINTER_SELF } from '../src/symbol.js';
-import { NodeEnvironment } from '../src/environment-node.js';
+import { ENVIRONMENT, GETTER, MEMORY, POINTER, SETTER } from '../src/symbol.js';
 
 describe('Pointer functions', function() {
   const env = new NodeEnvironment();
@@ -166,6 +166,8 @@ describe('Pointer functions', function() {
       expect(pointer.cat).to.equal(123);
       expect(pointer.dog).to.equal(456);
       expect(pointer.cow).to.be.undefined;
+      expect('cat' in pointer).to.be.true;
+      expect('cow' in pointer).to.be.false;
       pointer.cat = 777;
       expect(target.cat).to.equal(777);
     })
@@ -1290,23 +1292,32 @@ describe('Pointer functions', function() {
       expect(constPointer[2]).to.equal(123);
     })
     it('should permit assignment and delete operations like regular objects', function() {
-      const intStructure = env.beginStructure({
-        type: StructureType.Primitive,
-        name: 'Int32',
-        byteSize: 4,
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 8,
+        hasPointer: false,
       });
-      env.attachMember(intStructure, {
+      env.attachMember(structStructure, {
         type: MemberType.Uint,
+        name: 'cat',
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      env.finalizeShape(intStructure);
-      env.finalizeStructure(intStructure);
-      const { constructor: Int32 } = intStructure;
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'dog',
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        name: '*Int32',
+        name: '*Hello',
         byteSize: 8,
         hasPointer: true,
       });
@@ -1316,21 +1327,21 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 8,
         slot: 0,
-        structure: intStructure,
+        structure: structStructure,
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
-      const { constructor: Int32Ptr } = structure;
-      const int32 = new Int32(1234);
-      const intPtr = new Int32Ptr(int32);
-      intPtr.hello = "Hello";
-      expect(intPtr.hello).to.equal("Hello");
-      expect(int32.hello).to.equal("Hello");
-      delete intPtr.hello;
-      expect(intPtr.hello).to.be.undefined;
-      expect(int32.hello).to.be.undefined;
-      expect(() => delete intPtr.$).to.not.throw();
-      expect(() => delete intPtr['*']).to.not.throw();
+      const { constructor: HelloPtr } = structure;
+      const hello = new Hello({ cat: 1, dog: 2 });
+      const helloPtr = new HelloPtr(hello);
+      helloPtr.world = "World";
+      expect(helloPtr.world).to.equal("World");
+      expect(hello.world).to.equal("World");
+      delete helloPtr.hello;
+      expect(helloPtr.hello).to.be.undefined;
+      expect(hello.hello).to.be.undefined;
+      expect(() => delete helloPtr.$).to.not.throw();
+      expect(() => delete helloPtr['*']).to.not.throw();
     })
     it('should permit assignment to a const pointer', function() {
       const intStructure = env.beginStructure({
@@ -1668,7 +1679,7 @@ describe('Pointer functions', function() {
       expect(Int32Ptr.child).to.equal(Int32);
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
-      const actualIntPointer = intPointer[POINTER_SELF];      
+      const actualIntPointer = intPointer[POINTER];      
       expect(actualIntPointer).to.be.instanceOf(Int32Ptr);
     }) 
     it('should detect property of pointer object', function() {
@@ -1744,7 +1755,7 @@ describe('Pointer functions', function() {
       const { constructor: Int32Ptr } = structure;
       const pointer = new Int32Ptr(new Int32(4));
       pointer[MEMORY].setBigUint64(0, 0x1000n, true);
-      const [ address, len ] = pointer[ADDRESS_GETTER]();
+      const [ address, len ] = pointer[GETTER]();
       expect(address).to.equal(0x1000n);
       expect(len).to.equal(1);
     })
@@ -1783,7 +1794,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structure);
       const { constructor: Int32Ptr } = structure;
       const pointer = new Int32Ptr(new Int32(4));
-      pointer[ADDRESS_SETTER](0x1000n, undefined);
+      pointer[SETTER](0x1000n, undefined);
       expect(pointer[MEMORY].getBigUint64(0, true)).to.equal(0x1000n);
     })
     it('should get address and length of slice pointer from memory', function() {
@@ -1836,7 +1847,7 @@ describe('Pointer functions', function() {
       const pointer = new Int32SlicePtr(ta);
       pointer[MEMORY].setBigUint64(0, 0x1000n, true);
       pointer[MEMORY].setBigUint64(8, 4n, true);
-      const [ address, len ] = pointer[ADDRESS_GETTER]();
+      const [ address, len ] = pointer[GETTER]();
       expect(address).to.equal(0x1000n);
       expect(len).to.equal(4);
     })
@@ -1889,7 +1900,7 @@ describe('Pointer functions', function() {
       const { constructor: Int32SlicePtr } = structure;
       const ta = new Int32Array([ 1, 2, 3, 4 ]);
       const pointer = new Int32SlicePtr(ta);      
-      pointer[ADDRESS_SETTER](0x1000n, 4);
+      pointer[SETTER](0x1000n, 4);
       expect(pointer[MEMORY].getBigUint64(0, true)).to.equal(0x1000n);
       expect(pointer[MEMORY].getBigUint64(8, true)).to.equal(4n);
     })
@@ -1955,11 +1966,11 @@ describe('Pointer functions', function() {
       env.findSentinel = function() {
         return 4;
       }
-      const [ address, len ] = pointer[ADDRESS_GETTER]();
+      const [ address, len ] = pointer[GETTER]();
       expect(address).to.equal(0x1000n);
       expect(len).to.equal(5);
       pointer[MEMORY].setBigUint64(0, 0n, true);
-      const [ address2, len2 ] = pointer[ADDRESS_GETTER]();
+      const [ address2, len2 ] = pointer[GETTER]();
       expect(address2).to.equal(0n);
       expect(len2).to.equal(0);
     })

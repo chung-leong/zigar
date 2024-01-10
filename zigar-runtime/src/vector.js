@@ -1,10 +1,10 @@
-import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
+import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
+import { throwArrayLengthMismatch, throwInvalidArrayInitializer } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { getTypedArrayClass, getCompatibleTags } from './data-view.js';
-import { throwInvalidArrayInitializer, throwArrayLengthMismatch } from './error.js';
-import { ALIGN, COMPAT, MEMORY_COPIER, SETTERS, SIZE, VALUE_NORMALIZER } from './symbol.js';
 import { convertToJSON, getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors, getValueOf } from './special.js';
+import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
+import { ALIGN, COMPAT, COPIER, NORMALIZER, SETTERS, SIZE } from './symbol.js';
 
 export function defineVector(structure, env) {
   const {
@@ -31,7 +31,7 @@ export function defineVector(structure, env) {
   const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      this[MEMORY_COPIER](arg);
+      this[COPIER](arg);
     } else if (arg?.[Symbol.iterator]) {
       let argLen = arg.length;
       if (typeof(argLen) !== 'number') {
@@ -67,8 +67,8 @@ export function defineVector(structure, env) {
     entries: { value: createVectorEntries },
     delete: { value: getDestructor(structure) },
     [Symbol.iterator]: { value: getVectorIterator },
-    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [VALUE_NORMALIZER]: { value: normalizeVector },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [NORMALIZER]: { value: normalizeVector },
   };
   const staticDescriptors = {
     child: { get: () => elementStructure.constructor },

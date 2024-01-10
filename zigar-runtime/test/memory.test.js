@@ -1,12 +1,12 @@
 import { expect } from 'chai';
 
 import {
-  getDestructor,
-  getCopyFunction,
-  getResetFunction,
   getBitAlignFunction,
-  restoreMemory,
+  getCopyFunction,
+  getDestructor,
   getMemoryResetter,
+  getResetFunction,
+  restoreMemory,
   showBits,
 } from '../src/memory.js';
 import { MEMORY, SLOTS } from '../src/symbol.js';

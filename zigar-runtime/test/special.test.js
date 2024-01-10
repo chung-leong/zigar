@@ -1,30 +1,30 @@
 import { expect } from 'chai';
 
-import {
-  StructureType,
-  usePrimitive,
-  useArray,
-  useSlice,
-  useStruct,
-} from '../src/structure.js';
+import { Environment } from '../src/environment.js';
 import {
   MemberType,
-  useIntEx,
-  useUintEx,
   useFloatEx,
+  useIntEx,
   useObject,
+  useUintEx,
 } from '../src/member.js';
-import { MEMORY, MEMORY_COPIER, VALUE_NORMALIZER } from '../src/symbol.js';
+import { getMemoryCopier } from '../src/memory.js';
 import {
-  getDataViewAccessors,
+  convertToJSON,
   getBase64Accessors,
+  getDataViewAccessors,
   getStringAccessors,
   getTypedArrayAccessors,
   getValueOf,
-  convertToJSON,
 } from '../src/special.js';
-import { Environment } from '../src/environment.js'
-import { getMemoryCopier } from '../src/memory.js';
+import {
+  StructureType,
+  useArray,
+  usePrimitive,
+  useSlice,
+  useStruct,
+} from '../src/structure.js';
+import { COPIER, MEMORY, NORMALIZER } from '../src/symbol.js';
 
 describe('Special property functions', function() {
   const env = new Environment();
@@ -50,7 +50,7 @@ describe('Special property functions', function() {
       const dv = new DataView(new ArrayBuffer(4));
       const object = {
         [MEMORY]: dv,
-        [MEMORY_COPIER]: getMemoryCopier(4),
+        [COPIER]: getMemoryCopier(4),
       };
       expect(get.call(object)).to.equal(dv);
       const dv2 = new DataView(new ArrayBuffer(4));
@@ -70,7 +70,7 @@ describe('Special property functions', function() {
       dv[MEMORY] = { memory, address: 0, len: 4 };
       const object = {
         [MEMORY]: dv,
-        [MEMORY_COPIER]: getMemoryCopier(4),
+        [COPIER]: getMemoryCopier(4),
       };
       memory.grow(1);
       expect(get.call(object)).to.have.property('byteLength', 4);
@@ -91,7 +91,7 @@ describe('Special property functions', function() {
       const dv = new DataView(new ArrayBuffer(4));
       const object = {
         [MEMORY]: dv,
-        [MEMORY_COPIER]: getMemoryCopier(4),
+        [COPIER]: getMemoryCopier(4),
       };
       const dv2 = new DataView(new ArrayBuffer(5));
       dv2.setInt32(0, 1234, true);
@@ -113,7 +113,7 @@ describe('Special property functions', function() {
       const object = {
         dataView: dv,
         [MEMORY]: dv,
-        [MEMORY_COPIER]: getMemoryCopier(4, false),
+        [COPIER]: getMemoryCopier(4, false),
       };
       const base64 = get.call(object);
       expect(base64).to.be.a('string');
@@ -121,7 +121,7 @@ describe('Special property functions', function() {
       const object2 = {
         dataView: dv2,
         [MEMORY]: dv2,
-        [MEMORY_COPIER]: getMemoryCopier(4, false),
+        [COPIER]: getMemoryCopier(4, false),
       };
       set.call(object2, base64);
       expect(object2.dataView.getInt32(0)).to.equal(1234);
@@ -151,7 +151,7 @@ describe('Special property functions', function() {
       const object = {
         dataView: dv,
         [MEMORY]: dv,
-        [MEMORY_COPIER]: getMemoryCopier(4, false),
+        [COPIER]: getMemoryCopier(4, false),
       };
       dv.setUint8(0, 'A'.charCodeAt(0));
       dv.setUint8(1, 'B'.charCodeAt(0));
@@ -186,7 +186,7 @@ describe('Special property functions', function() {
         dataView: dv,
         length: 4,
         [MEMORY]: dv,
-        [MEMORY_COPIER]: getMemoryCopier(4, true),        
+        [COPIER]: getMemoryCopier(4, true),        
       };
       dv.setUint16(0, 'A'.charCodeAt(0), true);
       dv.setUint16(2, 'B'.charCodeAt(0), true);
@@ -225,7 +225,7 @@ describe('Special property functions', function() {
       const object = {
         dataView: dv,
         [MEMORY]: dv,
-        [MEMORY_COPIER]: getMemoryCopier(4, false),
+        [COPIER]: getMemoryCopier(4, false),
       };
       dv.setUint8(0, 'A'.charCodeAt(0));
       dv.setUint8(1, 'B'.charCodeAt(0));
@@ -261,7 +261,7 @@ describe('Special property functions', function() {
       const object = {
         dataView: dv,
         [MEMORY]: dv,
-        [MEMORY_COPIER]: getMemoryCopier(4, false),
+        [COPIER]: getMemoryCopier(4, false),
       };
       expect(() => set.call(object, 1234)).to.throw(TypeError);
     })
@@ -280,7 +280,7 @@ describe('Special property functions', function() {
       const object = {
         dataView: dv,
         [MEMORY]: dv,
-        [MEMORY_COPIER]: getMemoryCopier(4, true),
+        [COPIER]: getMemoryCopier(4, true),
       };
       for (let i = 0; i < 4; i++) {
         dv.setInt32(i * 4, i * 100, true);
@@ -308,7 +308,7 @@ describe('Special property functions', function() {
     it('should invoke normalizer function', function() {
       let map, forJSON;
       const object = {
-        [VALUE_NORMALIZER](arg1, arg2) {
+        [NORMALIZER](arg1, arg2) {
           map = arg1;
           forJSON = arg2;
           return 1234;
@@ -324,7 +324,7 @@ describe('Special property functions', function() {
     it('should invoke normalizer function', function() {
       let map, forJSON;
       const object = {
-        [VALUE_NORMALIZER](arg1, arg2) {
+        [NORMALIZER](arg1, arg2) {
           map = arg1;
           forJSON = arg2;
           return 1234;

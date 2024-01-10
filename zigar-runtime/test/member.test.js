@@ -1,23 +1,23 @@
 import { expect } from 'chai';
 
-import { CHILD_VIVIFICATOR, MEMORY, SLOTS } from '../src/symbol.js';
-import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { clearMethodCache } from '../src/data-view.js';
 import { getCurrentErrorSets, initializeErrorSets } from '../src/error-set.js';
 import {
   MemberType,
+  getDescriptor,
+  isByteAligned,
+  isReadOnly,
   useAllMemberTypes,
   useBool,
+  useEnumerationItem,
+  useFloat,
   useInt,
   useIntEx,
-  useFloat,
   useUint,
   useUintEx,
-  useEnumerationItem,
-  isReadOnly,
-  isByteAligned,
-  getDescriptor,
 } from '../src/member.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
+import { MEMORY, SLOTS, VIVIFICATOR } from '../src/symbol.js';
 
 describe('Member functions', function() {
   beforeEach(function() {
@@ -558,7 +558,7 @@ describe('Member functions', function() {
         },
       };
       const object = {
-        [CHILD_VIVIFICATOR]: () => dummyObject,
+        [VIVIFICATOR]: () => dummyObject,
         [SLOTS]: {},
       };
       const { get, set } = getDescriptor(member, env);
@@ -590,7 +590,7 @@ describe('Member functions', function() {
         },
       };
       const object = {
-        [CHILD_VIVIFICATOR]: () => dummyObject,
+        [VIVIFICATOR]: () => dummyObject,
         [SLOTS]: {},
       };
       const { get, set } = getDescriptor(member, env);
@@ -628,7 +628,7 @@ describe('Member functions', function() {
         },
       };
       const object = {
-        [CHILD_VIVIFICATOR]: () => dummyObject,
+        [VIVIFICATOR]: () => dummyObject,
         [SLOTS]: {
           // pre-fill the slot here
           4: dummyObject,
@@ -722,7 +722,7 @@ describe('Member functions', function() {
         2: dummyObject3,
       };
       const object = {
-        [CHILD_VIVIFICATOR]: index => slots[index],
+        [VIVIFICATOR]: index => slots[index],
         [SLOTS]: {},
       };
       const { get, set } = getDescriptor(member, env);
@@ -767,7 +767,7 @@ describe('Member functions', function() {
         2: dummyObject3,
       };
       const object = {
-        [CHILD_VIVIFICATOR]: index => slots[index],
+        [VIVIFICATOR]: index => slots[index],
         [SLOTS]: {},
       };
       const { get, set } = getDescriptor(member, env);

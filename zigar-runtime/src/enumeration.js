@@ -1,10 +1,10 @@
-import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
-import { MemberType, getDescriptor } from './member.js';
-import { getDestructor, getMemoryCopier } from './memory.js';
 import { getDataView, getTypedArrayClass } from './data-view.js';
 import { throwInvalidInitializer } from './error.js';
-import { ALIGN, ENUM_ITEM, ENUM_ITEMS, ENUM_NAME, MEMORY_COPIER, SIZE, VALUE_NORMALIZER } from './symbol.js';
+import { MemberType, getDescriptor } from './member.js';
+import { getDestructor, getMemoryCopier } from './memory.js';
 import { convertToJSON, getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors, getValueOf } from './special.js';
+import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
+import { ALIGN, COPIER, ITEMS, NAME, NORMALIZER, SIZE, TAG } from './symbol.js';
 
 export function defineEnumerationShape(structure, env) {
   const {
@@ -32,10 +32,10 @@ export function defineEnumerationShape(structure, env) {
     if (typeof(arg)  === 'string') {
       return constructor[arg];
     } else if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
-      return constructor[ENUM_ITEMS][arg];
-    } else if (arg?.[ENUM_ITEM] instanceof constructor) {
+      return constructor[ITEMS][arg];
+    } else if (arg?.[TAG] instanceof constructor) {
       // a tagged union, return the active tag
-      return arg[ENUM_ITEM];
+      return arg[TAG];
     } else if (!getDataView(structure, arg, env)) {
       throwInvalidInitializer(structure, expected, arg);
     } else {
@@ -53,18 +53,18 @@ export function defineEnumerationShape(structure, env) {
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.toPrimitive]: { value: getIndex },
-    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [VALUE_NORMALIZER]: { value: normalizeEnumerationItem },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [NORMALIZER]: { value: normalizeEnumerationItem },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
-    [ENUM_ITEMS]: { value: {} },
+    [ITEMS]: { value: {} },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };
 
 export function normalizeEnumerationItem(map, forJSON) {
   const item = this.$;
-  return item[ENUM_NAME];
+  return item[NAME];
 }

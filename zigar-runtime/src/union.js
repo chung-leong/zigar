@@ -1,13 +1,24 @@
-import { StructureType, attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
+import {
+  throwInactiveUnionProperty,
+  throwInvalidInitializer, throwMissingUnionInitializer, throwMultipleUnionInitializers
+} from './error.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
+import { always, copyPointer, disablePointer, resetPointer } from './pointer.js';
 import { convertToJSON, getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
 import { getChildVivificator, getPointerVisitor, normalizeStruct } from './struct.js';
-import { throwInvalidInitializer, throwMissingUnionInitializer, throwMultipleUnionInitializers,
-  throwInactiveUnionProperty } from './error.js';
-import { always, copyPointer, disablePointer, resetPointer } from './pointer.js';
-import { ALIGN, CHILD_VIVIFICATOR, ENUM_ITEM, ENUM_NAME, MEMORY_COPIER, POINTER_VISITOR, SETTERS, 
-  SIZE, VALUE_NORMALIZER } from './symbol.js';
+import { StructureType, attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
+import {
+  ALIGN,
+  COPIER,
+  NAME,
+  NORMALIZER,
+  SETTERS,
+  SIZE,
+  TAG,
+  VISITOR,
+  VIVIFICATOR
+} from './symbol.js';
 
 export function defineUnionShape(structure, env) {
   const {
@@ -29,7 +40,7 @@ export function defineUnionShape(structure, env) {
   const getActiveField = (isTagged)
   ? function() {
       const item = getSelector.call(this);
-      return item[ENUM_NAME];
+      return item[NAME];
     }
   : function() {
       const index = getSelector.call(this);
@@ -60,7 +71,7 @@ export function defineUnionShape(structure, env) {
             throwInactiveUnionProperty(structure, name, currentName);
           }
         }
-        this[POINTER_VISITOR]?.(resetPointer);
+        this[VISITOR]?.(resetPointer);
         return getValue.call(this);
       }
     : getValue;
@@ -77,7 +88,7 @@ export function defineUnionShape(structure, env) {
     ? function(value) {
         setActiveField.call(this, name);
         setValue.call(this, value);
-        this[POINTER_VISITOR]?.(resetPointer);
+        this[VISITOR]?.(resetPointer);
       }
     : setValue;
     memberDescriptors[name] = { get, set, configurable: true, enumerable: true };
@@ -90,9 +101,9 @@ export function defineUnionShape(structure, env) {
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       /* WASM-ONLY-END */
-      this[MEMORY_COPIER](arg);
+      this[COPIER](arg);
       if (hasPointer) {
-        this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
+        this[VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else if (arg && typeof(arg) === 'object') {
       let found = 0;
@@ -118,7 +129,7 @@ export function defineUnionShape(structure, env) {
   const modifier = (hasInaccessiblePointer) 
   ? function() {
       // make pointer access throw
-      this[POINTER_VISITOR](disablePointer, { vivificate: true });
+      this[VISITOR](disablePointer, { vivificate: true });
     }
   : undefined;
   const constructor = structure.constructor = createConstructor(structure, { modifier, initializer }, env);
@@ -166,11 +177,11 @@ export function defineUnionShape(structure, env) {
     delete: { value: getDestructor(env) },
     ...memberDescriptors,
     [Symbol.iterator]: { value: interatorCreator },
-    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [ENUM_ITEM]: isTagged && { get: getSelector, configurable: true },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
-    [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor(structure, { isChildActive }) },
-    [VALUE_NORMALIZER]: { value: normalizeStruct },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [TAG]: isTagged && { get: getSelector, configurable: true },
+    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [VISITOR]: hasAnyPointer && { value: getPointerVisitor(structure, { isChildActive }) },
+    [NORMALIZER]: { value: normalizeStruct },
   };  
   const staticDescriptors = {
     [ALIGN]: { value: align },

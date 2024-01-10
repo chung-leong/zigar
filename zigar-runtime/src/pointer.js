@@ -1,14 +1,32 @@
-import { StructureType, attachDescriptors, createConstructor } from './structure.js';
-import { getDestructor, getMemoryCopier } from './memory.js';
-import { getDataView, isCompatible, isBuffer } from './data-view.js';
+import { getDataView, isBuffer, isCompatible } from './data-view.js';
+import {
+  throwConstantConstraint, throwFixedMemoryTargetRequired,
+  throwInaccessiblePointer, throwInvalidPointerTarget,
+  throwNoCastingToPointer,
+  throwNullPointer,
+  throwReadOnlyTarget, warnImplicitArrayCreation
+} from './error.js';
 import { MemberType, getDescriptor } from './member.js';
-import { throwNoCastingToPointer, throwInaccessiblePointer, throwInvalidPointerTarget,
-  throwConstantConstraint, throwFixedMemoryTargetRequired, throwNullPointer,
-  throwReadOnlyTarget, warnImplicitArrayCreation} from './error.js';
-import { ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CHILD_VIVIFICATOR, CONST, ENVIRONMENT, MEMORY, 
-  MEMORY_COPIER, PARENT, POINTER_SELF, POINTER_VISITOR, PROXY, SLOTS, SIZE, 
-  VALUE_NORMALIZER } from './symbol.js';
-import { convertToJSON, getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
+import { getDestructor, getMemoryCopier } from './memory.js';
+import { convertToJSON, getValueOf } from './special.js';
+import { StructureType, attachDescriptors, createConstructor } from './structure.js';
+import {
+  ALIGN,
+  CONST,
+  COPIER,
+  ENVIRONMENT,
+  GETTER,
+  MEMORY,
+  NORMALIZER,
+  PARENT,
+  POINTER,
+  PROXY,
+  SETTER,
+  SIZE,
+  SLOTS,
+  VISITOR,
+  VIVIFICATOR
+} from './symbol.js';
 
 export function definePointer(structure, env) {
   const {
@@ -138,17 +156,15 @@ export function definePointer(structure, env) {
   const instanceDescriptors = {
     '*': { get, set },
     '$': { get: getProxy, set: initializer },
-    dataView: getDataViewAccessors(structure),
-    base64: getBase64Accessors(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    [ADDRESS_GETTER]: { value: addressGetter },
-    [ADDRESS_SETTER]: { value: addressSetter },
-    [POINTER_VISITOR]: { value: visitPointer },
-    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
-    [CHILD_VIVIFICATOR]: { value: throwNullPointer },
-    [VALUE_NORMALIZER]: { value: normalizePointer },
+    [GETTER]: { value: addressGetter },
+    [SETTER]: { value: addressSetter },
+    [VISITOR]: { value: visitPointer },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [VIVIFICATOR]: { value: throwNullPointer },
+    [NORMALIZER]: { value: normalizePointer },
   };
   const staticDescriptors = {
     child: { get: () => targetStructure.constructor },
@@ -161,7 +177,7 @@ export function definePointer(structure, env) {
 
 function normalizePointer(map, forJSON) {
   const target = this['*'];
-  return target[VALUE_NORMALIZER]?.(map, forJSON) ?? target;
+  return target[NORMALIZER]?.(map, forJSON) ?? target;
 }
 
 export function getProxy() {
@@ -199,49 +215,38 @@ function isPointerOf(arg, Target) {
   return (arg?.constructor?.child === Target && arg['*']);
 }
 
-const isPointerKeys = {
-  '$': true,
-  '*': true,
-  constructor: true,
-  valueOf: true,
-  [CONST]: true,
-  [SLOTS]: true,
-  [MEMORY]: true,
-  [PROXY]: true,
-  [ADDRESS_GETTER]: true,
-  [ADDRESS_SETTER]: true,
-  [POINTER_VISITOR]: true,
-  [CHILD_VIVIFICATOR]: true,
-  [VALUE_NORMALIZER]: true,
-  [Symbol.toStringTag]: true,
-  [Symbol.toPrimitive]: true,
-};
-
 const proxyHandlers = {
   get(pointer, name) {
-    if (name === POINTER_SELF) {
+    if (name === POINTER) {
       return pointer;
-    } else if (isPointerKeys[name]) {
+    } else if (name in pointer) {
       return pointer[name];
     } else {
-      return pointer[SLOTS][0][name];
+      return pointer['*'][name];
     }
   },
   set(pointer, name, value) {
-    if (isPointerKeys[name]) {
+    if (name in pointer) {
       pointer[name] = value;
     } else {
-      pointer[SLOTS][0][name] = value;
+      pointer['*'][name] = value;
     }
     return true;
   },
   deleteProperty(pointer, name) {
-    if (isPointerKeys[name]) {
+    if (name in pointer) {
       delete pointer[name];
     } else {
-      delete pointer[SLOTS][0][name];
+      delete pointer['*'][name];
     }
     return true;
+  },
+  has(pointer, name) {
+    if (name in pointer) {
+      return true;
+    } else {
+      return name in pointer['*'];
+    }
   },
 };
 

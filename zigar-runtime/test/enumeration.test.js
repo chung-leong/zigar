@@ -1,9 +1,9 @@
 import { expect } from 'chai';
 
+import { NodeEnvironment } from '../src/environment-node.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { ENVIRONMENT, SLOTS } from '../src/symbol.js';
-import { NodeEnvironment } from '../src/environment-node.js';
 
 describe('Enumeration functions', function() {
   const env = new NodeEnvironment();

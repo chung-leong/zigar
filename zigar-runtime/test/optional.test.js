@@ -1,9 +1,9 @@
 import { expect } from 'chai';
 
+import { NodeEnvironment } from '../src/environment-node.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { MEMORY, POINTER_VISITOR, SLOTS } from '../src/symbol.js';
-import { NodeEnvironment } from '../src/environment-node.js';
+import { MEMORY, SLOTS, VISITOR } from '../src/symbol.js';
 
 describe('Optional functions', function() {
   const env = new NodeEnvironment();
@@ -521,7 +521,7 @@ describe('Optional functions', function() {
       expect(ptr[SLOTS][0]).to.not.be.null;
       object.$ = null;
       expect(ptr[SLOTS][0]).to.be.null;
-      object[POINTER_VISITOR](function({ isActive }) {
+      object[VISITOR](function({ isActive }) {
         expect(isActive(this)).to.be.false;
       });
     })

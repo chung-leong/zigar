@@ -1,8 +1,8 @@
 import { Environment } from './environment.js';
-import { decodeText } from './text.js';
 import { throwZigError } from './error.js';
 import { getCopyFunction, getMemoryCopier, restoreMemory } from './memory.js';
-import { ALIGN, MEMORY, MEMORY_COPIER, POINTER_VISITOR, ATTRIBUTES } from './symbol.js';
+import { ALIGN, ATTRIBUTES, COPIER, MEMORY, VISITOR } from './symbol.js';
+import { decodeText } from './text.js';
 
 export class WebAssemblyEnvironment extends Environment {
   imports = {
@@ -53,8 +53,8 @@ export class WebAssemblyEnvironment extends Environment {
     const dv = this.allocateMemory(len);
     const shadowDV = this.allocateShadowMemory(len, align);
     // create a shadow for the relocatable memory
-    const object = { constructor, [MEMORY]: dv, [MEMORY_COPIER]: copier };
-    const shadow = { constructor, [MEMORY]: shadowDV, [MEMORY_COPIER]: copier };
+    const object = { constructor, [MEMORY]: dv, [COPIER]: copier };
+    const shadow = { constructor, [MEMORY]: shadowDV, [COPIER]: copier };
     shadow[ATTRIBUTES] = { address: this.getViewAddress(shadowDV), len, align };
     this.addShadow(shadow, object);
     return shadowDV;
@@ -310,7 +310,7 @@ export class WebAssemblyEnvironment extends Environment {
     this.startContext();
     // call context, used by allocateShadowMemory and freeShadowMemory
     this.context.call = call;
-    if (args[POINTER_VISITOR]) {
+    if (args[VISITOR]) {
       this.updatePointerAddresses(args);
     }
     // return address of shadow for argumnet struct
@@ -321,7 +321,7 @@ export class WebAssemblyEnvironment extends Environment {
 
   endCall(call, args) {
     this.updateShadowTargets();
-    if (args[POINTER_VISITOR]) {
+    if (args[VISITOR]) {
       this.acquirePointerTargets(args);
     }
     this.releaseShadows();

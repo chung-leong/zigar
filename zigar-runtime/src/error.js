@@ -1,7 +1,7 @@
-import { MemberType } from './member.js';
-import { StructureType, getStructureName } from './structure.js';
 import { getTypeName } from './data-view.js';
+import { MemberType } from './member.js';
 import { getPrimitiveType } from './primitive.js';
+import { StructureType, getStructureName } from './structure.js';
 
 export function throwNoInitializer(structure) {
   const name = getStructureName(structure);

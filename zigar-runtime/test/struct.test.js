@@ -1,9 +1,9 @@
 import { expect } from 'chai';
 
+import { NodeEnvironment } from '../src/environment-node.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { ENVIRONMENT, MEMORY, SLOTS } from '../src/symbol.js';
-import { NodeEnvironment } from '../src/environment-node.js';
 import { encodeBase64 } from '../src/text.js';
 
 describe('Struct functions', function() {

@@ -1,20 +1,19 @@
 import { expect } from 'chai';
 
+import { Environment } from '../src/environment.js';
 import { MemberType } from '../src/member.js';
 import {
-  StructureType,
-  useOpaque,
-  getStructureName,
-  getStructureFactory,
-  getFeaturesUsed,
-  defineProperties,
-  attachDescriptors,
-  needSlots,
-  getSelf,
-  findAllObjects,
   ObjectCache,
+  StructureType,
+  defineProperties,
+  findAllObjects,
+  getFeaturesUsed,
+  getSelf,
+  getStructureFactory,
+  getStructureName,
+  needSlots,
+  useOpaque
 } from '../src/structure.js';
-import { Environment } from '../src/environment.js'
 import { MEMORY, SLOTS } from '../src/symbol.js';
 
 describe('Structure functions', function() {

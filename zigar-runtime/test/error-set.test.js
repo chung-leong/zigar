@@ -1,9 +1,9 @@
 import { expect } from 'chai';
 
+import { Environment } from '../src/environment.js';
+import { initializeErrorSets } from '../src/error-set.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { initializeErrorSets } from '../src/error-set.js';
-import { Environment } from '../src/environment.js'
 import { ENVIRONMENT, SLOTS } from '../src/symbol.js';
 
 describe('Error set functions', function() {

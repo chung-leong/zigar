@@ -1,10 +1,10 @@
 import { expect } from 'chai';
 
-import { 
-  decodeText,
-  encodeText,
-  encodeBase64,
+import {
   decodeBase64,
+  decodeText,
+  encodeBase64,
+  encodeText,
 } from '../src/text.js';
 
 describe('Text functions', function() {

@@ -1,11 +1,18 @@
-import { attachDescriptors, createConstructor } from './structure.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
-import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { copyPointer, resetPointer } from './pointer.js';
-import { ALIGN, CHILD_VIVIFICATOR, MEMORY_COPIER, POINTER_VISITOR, SIZE, SLOTS, VALUE_NORMALIZER, 
-  VALUE_RESETTER } from './symbol.js';
 import { convertToJSON, getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
+import { getChildVivificator, getPointerVisitor } from './struct.js';
+import { attachDescriptors, createConstructor } from './structure.js';
+import {
+  ALIGN,
+  COPIER,
+  NORMALIZER,
+  RESETTER,
+  SIZE,
+  VISITOR,
+  VIVIFICATOR
+} from './symbol.js';
 
 export function defineOptional(structure, env) {
   const {
@@ -21,18 +28,18 @@ export function defineOptional(structure, env) {
     if (present) {
       return getValue.call(this);
     } else {
-      this[POINTER_VISITOR]?.(resetPointer);
+      this[VISITOR]?.(resetPointer);
       return null;
     }
   };
   const isChildActive = getPresent;
   const initializer = function(arg) {
     if (arg instanceof constructor) {
-      this[MEMORY_COPIER](arg);
+      this[COPIER](arg);
       if (hasPointer) {
         // don't bother copying pointers when it's empty
         if (isChildActive.call(arg)) {
-          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
+          this[VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }      
     } else if (arg !== null) {
@@ -46,9 +53,9 @@ export function defineOptional(structure, env) {
       }
     } else {      
       setPresent.call(this, false);
-      this[VALUE_RESETTER]?.();
+      this[RESETTER]?.();
       // clear references so objects can be garbage-collected
-      this[POINTER_VISITOR]?.(resetPointer);
+      this[VISITOR]?.(resetPointer);
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
@@ -61,12 +68,12 @@ export function defineOptional(structure, env) {
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    [MEMORY_COPIER]: { value: getMemoryCopier(byteSize) },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
     // no need to reset the value when it's a pointer, since setPresent() would null out memory used by the pointer
-    [VALUE_RESETTER]: !hasPointer && { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
-    [CHILD_VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
-    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
-    [VALUE_NORMALIZER]: { value: normalizeOptional },
+    [RESETTER]: !hasPointer && { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
+    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
+    [NORMALIZER]: { value: normalizeOptional },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
@@ -77,5 +84,5 @@ export function defineOptional(structure, env) {
 
 export function normalizeOptional(map, forJSON) {
   const value = this.$;
-  return value?.[VALUE_NORMALIZER]?.(map, forJSON) ?? value;
+  return value?.[NORMALIZER]?.(map, forJSON) ?? value;
 }

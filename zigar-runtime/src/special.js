@@ -1,17 +1,17 @@
-import { restoreMemory } from './memory.js';
-import { decodeBase64, decodeText, encodeBase64, encodeText } from './text.js';
-import { throwTypeMismatch } from './error.js';
-import { MEMORY, VALUE_NORMALIZER } from './symbol.js';
 import { checkDataView, isTypedArray, setDataView } from './data-view.js';
+import { throwTypeMismatch } from './error.js';
+import { restoreMemory } from './memory.js';
+import { MEMORY, NORMALIZER } from './symbol.js';
+import { decodeBase64, decodeText, encodeBase64, encodeText } from './text.js';
 
 export function getValueOf() {
   const map = new Map();
-  return this[VALUE_NORMALIZER](map, false);
+  return this[NORMALIZER](map, false);
 }
 
 export function convertToJSON() {
   const map = new Map();
-  return this[VALUE_NORMALIZER](map, true);
+  return this[NORMALIZER](map, true);
 }
 
 export function getDataViewAccessors(structure, handlers = {}) {

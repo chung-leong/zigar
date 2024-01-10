@@ -1,27 +1,27 @@
-import { StructureType } from './structure.js';
 import {
   getDataViewBoolAccessor,
   getDataViewBoolAccessorEx,
+  getDataViewFloatAccessor,
+  getDataViewFloatAccessorEx,
   getDataViewIntAccessor,
   getDataViewIntAccessorEx,
   getDataViewUintAccessor,
   getDataViewUintAccessorEx,
-  getDataViewFloatAccessor,
-  getDataViewFloatAccessorEx,
 } from './data-view.js';
-import { getIntRange, getPrimitiveClass } from './primitive.js';
+import { getCurrentErrorSets } from './error-set.js';
 import {
-  throwOverflow,
-  throwNotNull,
-  throwEnumExpected,
-  throwNotInErrorSet,
   rethrowRangeError,
+  throwEnumExpected,
   throwErrorExpected,
+  throwNotInErrorSet,
+  throwNotNull,
   throwNotUndefined,
+  throwOverflow,
 } from './error.js';
 import { restoreMemory } from './memory.js';
-import { getCurrentErrorSets } from './error-set.js';
-import { MEMORY, CHILD_VIVIFICATOR, SLOTS } from './symbol.js';
+import { getIntRange, getPrimitiveClass } from './primitive.js';
+import { StructureType } from './structure.js';
+import { MEMORY, SLOTS, VIVIFICATOR } from './symbol.js';
 
 export const MemberType = {
   Void: 0,
@@ -359,17 +359,17 @@ function isValueExpected(structure) {
 }
 
 function getValue(slot) {
-  const object = this[SLOTS][slot] ?? this[CHILD_VIVIFICATOR](slot);
+  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
   return object.$;
 }
 
 function getObject(slot) {
-  const object = this[SLOTS][slot] ?? this[CHILD_VIVIFICATOR](slot);
+  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
   return object;
 }
 
 function setValue(slot, value) {
-  const object = this[SLOTS][slot] ?? this[CHILD_VIVIFICATOR](slot);
+  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
   object.$ = value;
 }
 
