@@ -390,7 +390,7 @@ export class Environment {
   }
 
   createCaller(method, useThis) {
-    let { name,  argStruct, thunkId } = method;
+    const { name, argStruct, thunkId } = method;
     const { constructor } = argStruct;
     const self = this;
     let f;
@@ -683,7 +683,7 @@ export class Environment {
     for (const target of targets) {
       const offset = target[MEMORY].byteOffset;
       const align = target.constructor[ALIGN];
-      if (align > maxAlign) {
+      if (maxAlign === undefined || align > maxAlign) {
         maxAlign = align;
         maxAlignOffset = offset;
       }

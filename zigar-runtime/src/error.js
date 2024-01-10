@@ -5,7 +5,7 @@ import { getPrimitiveType } from './primitive.js';
 
 export function throwNoInitializer(structure) {
   const name = getStructureName(structure);
-  throw new TypeError(`An initializer must be provided to the constructor of ${name}, even when it's undefined`);
+  throw new TypeError(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`);
 }
 
 export function throwBufferSizeMismatch(structure, dv, target = null) {

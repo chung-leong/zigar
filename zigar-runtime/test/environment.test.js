@@ -11,7 +11,7 @@ import {
   add,
   subtract,
 } from '../src/environment.js'
-import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CONST, MEMORY_COPIER, ATTRIBUTES } from '../src/symbol.js';
+import { MEMORY, SLOTS, ENVIRONMENT, POINTER_VISITOR, CONST, MEMORY_COPIER, ATTRIBUTES, ALIGN } from '../src/symbol.js';
 import { getMemoryCopier } from '../src/memory.js';
 
 describe('Environment', function() {
@@ -573,13 +573,356 @@ describe('Environment', function() {
   describe('finalizeStructure', function() {
     
   })
-  describe('createCaller', function() {    
+  describe('createCaller', function() {
+    it('should create a caller for a zig function', function() {
+      const env = new Environment();      
+      const method = {
+        name: 'hello', 
+        argStruct: { 
+          constructor: function(args) {
+            this[MEMORY] = new DataView(new ArrayBuffer(8));
+            this[MEMORY].setUint32(0, args[0], true);
+            this[MEMORY].setUint32(4, args[1], true);
+          } 
+        }, 
+        thunkId: 10
+      };      
+      const f = env.createCaller(method, false);
+      expect(f).to.be.a('function');
+      expect(f.name).to.equal('hello');
+      let thunkId, argStruct;
+      env.invokeThunk = function(...args) {
+        thunkId = args[0];
+        argStruct = args[1];
+      };
+      f(123, 456);
+      expect(thunkId).to.equal(10);
+      expect(argStruct[MEMORY].getUint32(0, true)).to.equal(123);
+      expect(argStruct[MEMORY].getUint32(4, true)).to.equal(456);
+    })
+    it('should create a caller for a zig method', function() {
+      const env = new Environment();      
+      const method = {
+        name: 'hello', 
+        argStruct: { 
+          constructor: function(args) {
+            this.self = args[0];
+            this[MEMORY] = new DataView(new ArrayBuffer(8));
+            this[MEMORY].setUint32(0, args[1], true);
+            this[MEMORY].setUint32(4, args[2], true);
+          } 
+        }, 
+        thunkId: 10
+      };      
+      const f = env.createCaller(method, true);
+      let thunkId, argStruct;
+      env.invokeThunk = function(...args) {
+        thunkId = args[0];
+        argStruct = args[1];
+      };
+      const object = { method: f };
+      object.method(123, 456);
+      expect(thunkId).to.equal(10);
+      expect(argStruct[MEMORY].getUint32(0, true)).to.equal(123);
+      expect(argStruct[MEMORY].getUint32(4, true)).to.equal(456);      
+      expect(argStruct.self).to.equal(object);
+    })
   })
-  describe('recreateStructures', function() {    
+  describe('recreateStructures', function() {
+    it('should recreate structures based on input definition', function() {
+      const env = new Environment();
+      const s1 = {
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+        align: 4,
+        hasPointer: false,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitOffset: 0,
+              bitSize: 32,
+              byteSize: 4,
+            }
+          ],
+          methods: [],
+          template: null,
+        },
+        static: {
+          members: [],
+          methods: [],
+          template: null,
+        },
+      };
+      const s2 = {
+        type: StructureType.ArgStruct,
+        name: 'hello',
+        byteSize: 0,
+        align: 0,
+        hasPointer: false,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Void,
+              bitOffset: 0,
+              bitSize: 0,
+              byteSize: 0,
+            }
+          ],
+          methods: [],
+          template: null,
+        },
+        static: {
+          members: [],
+          methods: [],
+          template: null,
+        },
+      };
+      const s3 = {
+        type: StructureType.Pointer,
+        name: '*i32',
+        byteSize: 8,
+        hasPointer: true,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitOffset: 0,
+              bitSize: 64,
+              byteSize: 8,
+              slot: 0,
+              structure: {},
+            },
+          ],
+          methods: [],
+          template: null,
+        },
+        static: {
+          members: [],
+          methods: [],
+          template: null,
+        },
+      };
+      const s4 = {
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 8,
+        align: 4,
+        hasPointer: false,
+        instance: {
+          members: [
+            {
+              name: 'dog',
+              type: MemberType.Int,
+              bitOffset: 0,
+              bitSize: 32,
+              byteSize: 4,
+              structure: s1,
+            },
+            {
+              name: 'cat',
+              type: MemberType.Int,
+              bitOffset: 32,
+              bitSize: 32,
+              byteSize: 4,
+              structure: s1,
+            },
+            {
+              name: 'ghost',
+              type: MemberType.Comptime,
+              slot: 2,
+              structure: s1,
+            },
+            {
+              name: 'type',
+              type: MemberType.Type,
+              slot: 3,
+            }
+          ],
+          methods: [],
+          template: {
+            memory: (() => {
+              const array = new Uint8Array(8);
+              const dv = new DataView(array.buffer);
+              dv.setInt32(0, 1234, true);
+              dv.setInt32(4, 5678, true);
+              return { array };
+            })(),
+            slots: (() => {
+              const array = new Uint8Array(4);
+              const dv = new DataView(array.buffer);
+              dv.setInt32(0, -8888, true);
+              return {
+                2: {
+                  memory: { array },
+                  structure: s1,
+                  reloc: 0x1000n,
+                },
+                3: {
+                  structure: s1,
+                }
+              };
+            })(),
+          },
+        },
+        static: {
+          members: [
+            {
+              type: MemberType.Static,
+              name: 'pointer',
+              slot: 0,
+              structure: s3,
+            },
+            {
+              type: MemberType.Static,
+              name: 'unsupported',
+              slot: 1,
+              structure: {},
+            },
+          ],
+          methods: [
+            {
+              name: 'hello',
+              thunkId: 34,
+              argStruct: s2,
+            }
+          ],
+          template: {
+            slots: {
+              0: {
+                memory: (() => {
+                  const array = new Uint8Array(8);
+                  return { array };   
+                })(),
+                slots: {
+                  0: {
+                    memory: (() => {
+                      const array = new Uint8Array(4);
+                      const dv = new DataView(array.buffer);
+                      dv.setInt32(0, 707, true);
+                      return { array };          
+                    })(),
+                    structure: s1,
+                    reloc: 0x2000n,
+                  },
+                  1: null
+                },
+                structure: s3,
+              }
+            }
+          },
+        },
+      };
+      env.recreateStructures([ s1, s2, s3, s4 ]);
+      const { constructor } = s4;
+      expect(constructor).to.be.a('function');
+      const object = new constructor({});
+      expect(object.dog).to.equal(1234);
+      expect(object.cat).to.equal(5678);
+      expect(object.ghost).to.equal(-8888);
+      let thunkId, argStruct;
+      env.invokeThunk = function(...args) {
+        thunkId = args[0];
+        argStruct = args[1];
+      };
+      expect(() => constructor.hello()).to.not.throw();
+      expect(thunkId).to.equal(34);
+      expect(argStruct[MEMORY].byteLength).to.equal(0);
+      expect(env.variables).to.have.lengthOf(2);
+    })
   })
   describe('linkVariables', function() {    
+    it('should link variables', function() {
+      const env = new Environment();
+      env.inFixedMemory = function() {
+        return false;
+      };
+      env.recreateAddress = function(address) {
+        return address + 0x1000;
+      };
+      env.obtainFixedView = function(address, len) {
+        const dv = new DataView(new ArrayBuffer(len));
+        dv.address = address;
+        return dv;
+      };
+      const Test = function(dv) {
+        this[MEMORY] = dv;
+      };
+      Test.prototype[MEMORY_COPIER] = getMemoryCopier(4);
+      const object = new Test(new DataView(new ArrayBuffer(4)));
+      const dv = object[MEMORY];
+      dv.setUint32(0, 1234, true);
+      env.variables.push({ object, reloc: 128 });
+      env.linkVariables(true);
+      expect(object[MEMORY]).to.not.equal(dv);
+      expect(object[MEMORY].getUint32(0, true)).to.equal(1234);
+    });
   })
   describe('linkObject', function() {    
+    it('should replace relocatable memory with fixed memory', function() {
+      const env = new Environment();
+      env.inFixedMemory = function() {
+        return false;
+      };
+      env.recreateAddress = function(address) {
+        return address + 0x1000;
+      };
+      env.obtainFixedView = function(address, len) {
+        const dv = new DataView(new ArrayBuffer(len));
+        dv.address = address;
+        return dv;
+      };
+      const Test = function(dv) {
+        this[MEMORY] = dv;
+      };
+      Test.prototype[MEMORY_COPIER] = getMemoryCopier(4);
+      const object = new Test(new DataView(new ArrayBuffer(4)));
+      const dv = object[MEMORY];
+      dv.setUint32(0, 1234, true);
+      env.linkObject(object, 0x1000, true);
+      expect(object[MEMORY]).to.not.equal(dv);
+      expect(object[MEMORY].getUint32(0, true)).to.equal(1234);
+    })
+    it('should omit copying when writeBack is false', function() {
+      const env = new Environment();
+      env.inFixedMemory = function() {
+        return false;
+      };
+      env.recreateAddress = function(address) {
+        return address + 0x1000;
+      };
+      env.obtainFixedView = function(address, len) {
+        const dv = new DataView(new ArrayBuffer(len));
+        dv.address = address;
+        return dv;
+      };
+      const Test = function(dv) {
+        this[MEMORY] = dv;
+      };
+      Test.prototype[MEMORY_COPIER] = getMemoryCopier(4);
+      const object = new Test(new DataView(new ArrayBuffer(4)));
+      const dv = object[MEMORY];
+      dv.setUint32(0, 1234, true);
+      env.linkObject(object, 0x1000, false);
+      expect(object[MEMORY]).to.not.equal(dv);
+      expect(object[MEMORY].getUint32(0, true)).to.not.equal(1234);
+    })
+    it('should ignore object already with fixed memory', function() {
+      const env = new Environment();
+      env.inFixedMemory = function() {
+        return true;
+      };
+      const Test = function(dv) {
+        this[MEMORY] = dv;
+      };
+      Test.prototype[MEMORY_COPIER] = getMemoryCopier(4);
+      const object = new Test(new DataView(new ArrayBuffer(4)));
+      const dv = object[MEMORY];
+      env.linkObject(object, 0x1000, true);
+      expect(object[MEMORY]).to.equal(dv);
+    })
   })
   describe('unlinkVariables', function() {    
     it('should pass variables to unlinkObject', function() {
@@ -592,12 +935,12 @@ describe('Environment', function() {
       env.inFixedMemory = (object) => {
         return object[MEMORY].buffer.align !== undefined;
       };
-      const Type = function() {};
-      Type.prototype[MEMORY_COPIER] = getMemoryCopier(16);
-      const object1 = new Type();
-      object1[MEMORY] = env.allocateMemory(16, 8, true);
-      const object2 = new Type();
-      object2[MEMORY] = env.allocateMemory(16, 8, true);
+      const Test = function(dv) {
+        this[MEMORY] = dv;
+      };
+      Test.prototype[MEMORY_COPIER] = getMemoryCopier(16);
+      const object1 = new Test(env.allocateMemory(16, 8, true));
+      const object2 = new Test(env.allocateMemory(16, 8, true));
       env.variables.push({ name: 'a', object: object1 });
       env.variables.push({ name: 'b', object: object2 });
       env.unlinkVariables();
@@ -616,10 +959,12 @@ describe('Environment', function() {
       env.inFixedMemory = (object) => {
         return object[MEMORY].buffer.align !== undefined;
       };
-      const Type = function() {};
-      Type.prototype[MEMORY_COPIER] = getMemoryCopier(16);
-      const object = new Type();
-      const dv = object[MEMORY] = env.allocateMemory(16, 8, true);
+      const Test = function(dv) {
+        this[MEMORY] = dv;
+      };
+      Test.prototype[MEMORY_COPIER] = getMemoryCopier(16);
+      const object = new Test(env.allocateMemory(16, 8, true));
+      const dv = object[MEMORY];
       expect(dv.buffer.align).to.equal(8);
       dv.setUint32(12, 1234, true);
       env.unlinkObject(object);
@@ -692,14 +1037,14 @@ describe('Environment', function() {
     it('should eventually output text not ending with newline', async function() {
       const env = new Environment();
       const lines = await capture(async () => {
-        const array1 = encoder.encode('Hello world');
+        const array1 = encoder.encode('Hi!\nHello world');
         env.writeToConsole(new DataView(array1.buffer));
         await delay(10);
         const array2 = encoder.encode('!');
         env.writeToConsole(new DataView(array2.buffer));
         await delay(300);
       });
-      expect(lines).to.eql([ 'Hello world!' ]);
+      expect(lines).to.eql([ 'Hi!', 'Hello world!' ]);
     })
   })
   describe('flushConsole', function() {
@@ -718,16 +1063,330 @@ describe('Environment', function() {
     })
   })
   describe('updatePointerAddresses', function() {    
+    it('should update pointer addresses', function() {
+      const env = new Environment();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+        align: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const structure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        name: 'ArgStruct',
+        byteSize: 32,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        name: '0',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.attachMember(structure, {
+        name: '1',
+        type: MemberType.Object,
+        bitOffset: 64,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 1,
+        structure: ptrStructure,
+      });
+      env.attachMember(structure, {
+        name: '2',
+        type: MemberType.Object,
+        bitOffset: 128,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 2,
+        structure: ptrStructure,
+      });
+      env.attachMember(structure, {
+        name: '3',
+        type: MemberType.Object,
+        bitOffset: 192,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 3,
+        structure: ptrStructure,
+      });
+      env.attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Void,
+        bitOffset: 256,
+        bitSize: 0,
+        byteSize: 0,
+        structure: {},
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      env.inFixedMemory = function() {
+        return false;
+      };
+      const { constructor: ArgStruct } = structure;    
+      const object1 = new Int32(123);
+      const object2 = new Int32(123);
+      const args = new ArgStruct([ object1, object2, object1, object1 ]);
+      env.getTargetAddress = function(target, cluster) {
+        // flag object1 as misaligned
+        if (cluster) {
+          return false;
+        } else {
+          return 0x1000n;
+        }
+      };
+      env.allocateShadowMemory = function(len, align) {
+        return new DataView(new ArrayBuffer(len));
+      };
+      env.getBufferAddress = function(buffer) {
+        return 0x2000n;
+      };
+      env.startContext();
+      env.updatePointerAddresses(args);
+      expect(args[0][MEMORY].getBigUint64(0, true)).to.equal(0x2004n);
+      expect(args[1][MEMORY].getBigUint64(0, true)).to.equal(0x1000n);
+      expect(args[2][MEMORY].getBigUint64(0, true)).to.equal(0x2004n);
+      expect(args[3][MEMORY].getBigUint64(0, true)).to.equal(0x2004n);
+    })
+    it('should be able to handle self-referencing structures', function() {
+      const env = new Environment();
+      const structure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 12,
+        hasPointer: true,
+      });
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Hello',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const optionalStructure = env.beginStructure({
+        type: StructureType.Optional,
+        name: '?*Hello',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(optionalStructure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.attachMember(optionalStructure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: 0,
+        bitSize: 1,
+        byteSize: 8,
+        structure: {},
+      });
+      env.finalizeShape(optionalStructure);
+      env.finalizeStructure(optionalStructure);
+      env.attachMember(structure, {
+        name: 'sibling',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: optionalStructure,
+      });
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      env.attachMember(structure, {
+        name: 'number',
+        type: MemberType.Int,
+        bitOffset: 64,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      env.inFixedMemory = function() {
+        return false;
+      };
+      const { constructor: Hello } = structure;    
+      const object1 = new Hello({ sibling: null });
+      const object2 = new Hello({ sibling: object1 });
+      const object3 = new Hello({ sibling: object2 });      
+      object1.sibling = object3;
+      expect(object3.sibling['*']).to.equal(object2);
+      expect(object3.sibling['*'].sibling['*']).to.equal(object1);
+      expect(object3.sibling['*'].sibling['*'].sibling['*']).to.equal(object3);
+      const map = new Map([
+        [ object1[MEMORY], 0x1000n ],
+        [ object2[MEMORY], 0x2000n ],
+        [ object3[MEMORY], 0x3000n ],
+      ]);
+      env.getTargetAddress = function(target, cluster) {
+        return map.get(target[MEMORY]);
+      };
+      env.startContext();
+      env.updatePointerAddresses(object3);
+      expect(object1[MEMORY].getBigUint64(0, true)).to.equal(0x3000n);  // obj1 -> obj3
+      expect(object2[MEMORY].getBigUint64(0, true)).to.equal(0x1000n);  // obj2 -> obj1
+      expect(object3[MEMORY].getBigUint64(0, true)).to.equal(0x2000n);  // obj3 -> obj2
+    })
+    it('should ignore inactive pointers', function() {
+      const env = new Environment();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Optional,
+        name: 'Hello',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        name: 'value',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.attachMember(structure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: 0,
+        bitSize: 1,
+        byteSize: 8,
+        structure: {},
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      env.inFixedMemory = function() {
+        return false;
+      };
+      env.getTargetAddress = function(target, cluster) {
+        return 0x1000n;
+      };
+      const { constructor: Hello } = structure;
+      // start now with an active pointer so it gets vivificated in order to ensure code coverage
+      const object = new Hello(new Int32(1234));
+      env.updatePointerAddresses(object);
+      expect(object[MEMORY].getBigUint64(0, true)).to.equal(0x1000n);
+      // now make the pointer inactive
+      object.$ = null;
+      env.updatePointerAddresses(object);
+      expect(object[MEMORY].getBigUint64(0, true)).to.equal(0n);
+    })    
   })
   describe('findTargetClusters', function() {    
+    it('should find overlapping objects', function() {
+      const env = new Environment();
+      const Test = function(dv) {
+        this[MEMORY] = dv;
+      };
+      const buffer1 = new ArrayBuffer(16);
+      const buffer2 = new ArrayBuffer(16);
+      const object1 = new Test(new DataView(buffer1, 0, 8));
+      const object2 = new Test(new DataView(buffer1, 4, 8));
+      const object3 = new Test(new DataView(buffer2, 0, 8));
+      const object4 = new Test(new DataView(buffer2, 8, 8));
+      const object5 = new Test(new DataView(buffer1, 0, 12));
+      const clusters = env.findTargetClusters([
+        [ object1, object2, object5 ],
+        [ object3, object4 ],
+      ]);
+      expect(clusters).to.have.lengthOf(1);
+      expect(clusters[0].targets).to.contain(object1).and.contain(object2);
+      expect(clusters[0].start).to.equal(0);
+      expect(clusters[0].end).to.equal(12);
+    })
   })
   describe('getShadowAddress', function() {
     it('should create a shadow of an object and return the its address', function() {
       const env = new Environment();
-      const Type = function() {};
-      Type.prototype[MEMORY_COPIER] = getMemoryCopier(8);
-      const object = new Type();
-      object[MEMORY] = new DataView(new ArrayBuffer(8));
+      const Test = function(dv) {
+        this[MEMORY] = dv;
+      };
+      Test.prototype[MEMORY_COPIER] = getMemoryCopier(8);
+      const object = new Test(new DataView(new ArrayBuffer(8)));
       env.allocateShadowMemory = function(len, align) {
         return new DataView(new ArrayBuffer(len));
       };
@@ -740,13 +1399,14 @@ describe('Environment', function() {
     })
     it('should return shadow addresses of objects in a cluster', function() {
       const env = new Environment();
-      const Type = function() {};
-      Type.prototype[MEMORY_COPIER] = getMemoryCopier(8);
-      const object1 = new Type();
-      const object2 = new Type();
+      const Test = function(dv) {
+        this[MEMORY] = dv;
+      };
+      Test.prototype[MEMORY_COPIER] = getMemoryCopier(8);
+      Test[ALIGN] = 4;
       const buffer = new ArrayBuffer(16);
-      object1[MEMORY] = new DataView(buffer, 0, 8);
-      object2[MEMORY] = new DataView(buffer, 4, 8);
+      const object1 = new Test(new DataView(buffer, 0, 8));
+      const object2 = new Test(new DataView(buffer, 4, 8));
       const cluster = {
         targets: [ object1, object2 ],
         start: 0,
@@ -762,17 +1422,18 @@ describe('Environment', function() {
       env.startContext();
       const address1 = env.getShadowAddress(object1, cluster);
       const address2 = env.getShadowAddress(object2, cluster);
-      expect(address1).to.equal(0x1000);
-      expect(address2).to.equal(0x1004);
+      expect(address1).to.equal(0x1000 + 4);
+      expect(address2).to.equal(0x1004 + 4);
     })
   })
   describe('createShadow', function() {
     it('should create a shadow of an object', function() {
       const env = new Environment();
-      const Type = function() {};
-      Type.prototype[MEMORY_COPIER] = getMemoryCopier(8);
-      const object = new Type();
-      object[MEMORY] = new DataView(new ArrayBuffer(8));
+      const Test = function(dv) {
+        this[MEMORY] = dv;
+      };
+      Test.prototype[MEMORY_COPIER] = getMemoryCopier(8);
+      const object = new Test(new DataView(new ArrayBuffer(8)));
       env.allocateShadowMemory = function(len, align) {
         return new DataView(new ArrayBuffer(len));
       };
@@ -781,11 +1442,66 @@ describe('Environment', function() {
       };
       env.startContext();
       const shadow = env.createShadow(object);
-      expect(shadow).to.be.instanceOf(Type);
+      expect(shadow).to.be.instanceOf(Test);
       expect(shadow[MEMORY].byteLength).to.equal(8);
     })
   })
   describe('createClusterShadow', function() {
+    it('should create a shadow for a cluster of objects', function() {
+      const env = new Environment();
+      env.allocateShadowMemory = function(len, align) {
+        return new DataView(new ArrayBuffer(len));
+      };
+      env.getBufferAddress = function() {
+        return 0x1000;
+      };
+      const Test = function(dv) {
+        this[MEMORY] = dv;
+      };
+      Test.prototype[MEMORY_COPIER] = getMemoryCopier(8);
+      Test[ALIGN] = 4;
+      const buffer = new ArrayBuffer(32);
+      const object1 = new Test(new DataView(buffer, 3, 8));
+      const object2 = new Test(new DataView(buffer, 7, 8));
+      const object3 = new Test(new DataView(buffer, 11, 8));
+      const cluster = {
+        targets: [ object1, object2, object3 ],
+        start: 3,
+        end: 19,
+      };
+      object1[MEMORY].setUint32(0, 1234, true);
+      env.startContext();
+      const shadow = env.createClusterShadow(cluster);
+      expect(shadow[MEMORY].byteLength).to.equal(16);
+      expect(shadow[MEMORY].buffer.byteLength).to.equal(20);
+      env.updateShadows();
+      expect(shadow[MEMORY].getUint32(0, true)).to.equal(1234);
+    })
+    it('should throw when objects have incompatible alignments', function() {
+      const env = new Environment();
+      env.allocateShadowMemory = function(len, align) {
+        return new DataView(new ArrayBuffer(len));
+      };
+      env.getBufferAddress = function() {
+        return 0x1000;
+      };
+      const Test = function(dv) {
+        this[MEMORY] = dv;
+      };
+      Test.prototype[MEMORY_COPIER] = getMemoryCopier(8);
+      Test[ALIGN] = 4;
+      const buffer = new ArrayBuffer(32);
+      const object1 = new Test(new DataView(buffer, 4, 8));
+      const object2 = new Test(new DataView(buffer, 7, 8));
+      const object3 = new Test(new DataView(buffer, 13, 8));
+      const cluster = {
+        targets: [ object1, object2, object3 ],
+        start: 4,
+        end: 21,
+      };
+      env.startContext();
+      expect(() => env.createClusterShadow(cluster)).to.throw(TypeError);
+    })
   })
   describe('addShadow', function() {    
     it('should add a shadow', function() {
@@ -1407,7 +2123,6 @@ describe('Environment', function() {
       expect(subtract(15n, 5n)).to.equal(10n);
     })
   })
-
 })
 
 async function delay(ms) {
