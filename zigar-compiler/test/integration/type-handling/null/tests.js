@@ -31,7 +31,8 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { struct_a, print, StructA } = await importTest('in-struct');
       expect(struct_a.valueOf()).to.eql({ empty1: null, empty2: null, hello: 1234 });
-      expect(StructA).to.be.undefined;
+      const b = new StructA({ hello: 234 });
+      expect(b.valueOf()).to.eql({ empty1: null, empty2: null, hello: 234 });
       const [ line ] = await capture(() => print());
       expect(line).to.equal('in-struct.StructA{ .empty1 = null, .empty2 = null, .hello = 1234 }');
     })
@@ -52,7 +53,13 @@ export function addTests(importModule, options) {
     })
     it('should not compile code with null tagged union', async function() {
       this.timeout(120000);
-      await expect(importTest('in-tagged-union')).to.eventually.be.rejected;
+      this.timeout(120000);
+      const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
+      expect(module.union_a.empty).to.equal(null);
+      expect(TagType(module.union_a)).to.equal(TagType.empty);
+      expect(module.union_a.number).to.be.null;
+      const b = new UnionA({ number: 777 });
+      expect(b.valueOf()).to.eql({ number: 777 });
     })
     it('should not compile code with null optional', async function() {
       this.timeout(120000);

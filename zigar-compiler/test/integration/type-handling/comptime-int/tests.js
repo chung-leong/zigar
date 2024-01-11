@@ -69,6 +69,7 @@ export function addTests(importModule, options) {
       expect(() => new UnionA({ number: 0 })).to.throw(TypeError)
         .with.property('message').that.contains('Comptime');
       const b = new UnionA({ state: true });
+      expect(b.valueOf()).to.eql({ state: true });
     })
     it('should handle comptime int in optional', async function() {
       this.timeout(120000);

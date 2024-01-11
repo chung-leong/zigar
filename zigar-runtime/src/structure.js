@@ -181,6 +181,9 @@ export function getFeaturesUsed(structures) {
           case MemberType.Void:
             features.useVoid = true;
             break;
+          case MemberType.Null:
+            features.useNull = true;
+            break;
           case MemberType.Type:
             features.useType = true;
             break;

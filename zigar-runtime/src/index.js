@@ -22,7 +22,7 @@ export {
   useEnumerationItemEx,
   useError, useFloat,
   useFloatEx, useInt,
-  useIntEx, useLiteral, useObject, useStatic, useType, useUint,
+  useIntEx, useLiteral, useNull, useObject, useStatic, useType, useUint,
   useUintEx, useVoid
 } from './member.js';
 export {

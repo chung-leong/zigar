@@ -52,7 +52,8 @@ export function addTests(importModule, options) {
       expect(module.union_a.empty).to.be.undefined;
       expect(TagType(module.union_a)).to.equal(TagType.empty);
       expect(module.union_a.number).to.be.null;
-      expect(UnionA).to.be.undefined;
+      const b = new UnionA({ number: 123 });
+      expect(b.valueOf()).to.eql({ number: 123 });
     })
     it('should not compile code with undefined optional', async function() {
       this.timeout(120000);

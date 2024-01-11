@@ -2378,6 +2378,10 @@ function useLiteral() {
   factories[MemberType.Literal] = getLiteralDescriptor;
 }
 
+function useNull() {
+  factories[MemberType.Null] = getNullDescriptor;
+}
+
 function isByteAligned({ bitOffset, bitSize, byteSize }) {
   return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
 }
@@ -2397,6 +2401,22 @@ function getVoidDescriptor(member, env) {
     ? function(value) {
         if (value !== undefined) {
           throwNotUndefined(member);
+        }
+      }
+    : function() {},
+  }
+}
+
+function getNullDescriptor(member, env) {
+  const { runtimeSafety } = env;
+  return {
+    get: function() {
+      return null;
+    },
+    set: (runtimeSafety)
+    ? function(value) {
+        if (value !== null) {
+          throwNotNull(member);
         }
       }
     : function() {},
@@ -2954,6 +2974,11 @@ function rethrowRangeError(member, index, err) {
   } else {
     throw err;
   }
+}
+
+function throwNotNull(member) {
+  const { name } = member;
+  throw new TypeError(`Property ${name} can only be null`);
 }
 
 function throwNotUndefined(member) {
@@ -5002,4 +5027,4 @@ function loadModule(source) {
 }
 /* RUNTIME-ONLY-END */
 
-export { loadModule, useArgStruct, useArray, useBareUnion, useBool, useBoolEx, useComptime, useEnumeration, useEnumerationItem, useEnumerationItemEx, useError, useErrorSet, useErrorUnion, useExternUnion, useFloat, useFloatEx, useInt, useIntEx, useLiteral, useObject, useOpaque, useOptional, usePointer, usePrimitive, useSlice, useStatic, useStruct, useTaggedUnion, useType, useUint, useUintEx, useVector, useVoid };
+export { loadModule, useArgStruct, useArray, useBareUnion, useBool, useBoolEx, useComptime, useEnumeration, useEnumerationItem, useEnumerationItemEx, useError, useErrorSet, useErrorUnion, useExternUnion, useFloat, useFloatEx, useInt, useIntEx, useLiteral, useNull, useObject, useOpaque, useOptional, usePointer, usePrimitive, useSlice, useStatic, useStruct, useTaggedUnion, useType, useUint, useUintEx, useVector, useVoid };

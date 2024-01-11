@@ -145,7 +145,7 @@ export function addTests(importModule, options) {
       const [ after2 ] = await capture(() => print());
       expect(after2).to.equal('error.NoMoreBeer');
     })
-    it('should handle error in error union', async function() {
+    it('should not compile code containing error in error union', async function() {
       this.timeout(120000);
       await expect(importTest('in-error-union')).to.eventually.be.rejected;
     })
