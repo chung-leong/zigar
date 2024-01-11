@@ -1094,9 +1094,6 @@ fn isComptimeOnly(comptime T: type) bool {
 }
 
 fn ComptimeFree(comptime T: type) type {
-    if (comptime !isComptimeOnly(T)) {
-        return T;
-    }
     return switch (@typeInfo(T)) {
         .ComptimeFloat,
         .ComptimeInt,
@@ -1292,6 +1289,21 @@ fn exportError(host: anytype, err: anyerror, structure: Value) !Value {
     return obj;
 }
 
+fn hasComptimeFields(comptime T: type) bool {
+    switch (@typeInfo(T)) {
+        .Struct => |st| {
+            inline for (st.fields) |field| {
+                const comptime_only = field.is_comptime or isComptimeOnly(field.type);
+                if (comptime_only and comptime isSupported(field.type)) {
+                    return true;
+                }
+            }
+        },
+        else => {},
+    }
+    return true;
+}
+
 fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
     const st = @typeInfo(T).Struct;
     // pre-allocate relocatable slots for fields that always need them
@@ -1303,33 +1315,20 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
             }
         }
     }
-    comptime var comptimeFieldCount = 0;
     inline for (st.fields, 0..) |field, index| {
-        if (!field.is_comptime) {
-            try host.attachMember(structure, .{
-                .name = getCString(field.name),
-                .member_type = getMemberType(field.type),
-                .is_required = field.default_value == null,
-                .bit_offset = @bitOffsetOf(T, field.name),
-                .bit_size = getStructureBitSize(field.type),
-                .byte_size = if (isPacked(T)) missing else getStructureSize(field.type),
-                .slot = getObjectSlot(T, index),
-                .structure = try getStructure(host, field.type),
-            }, false);
-        } else if (field.default_value) |opaque_ptr| {
-            if (comptime isSupported(field.type)) {
-                const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-                try host.attachMember(structure, .{
-                    .name = getCString(field.name),
-                    .member_type = .Comptime,
-                    .slot = getObjectSlot(T, index),
-                    .structure = try getStructure(host, @TypeOf(default_value_ptr.*)),
-                }, false);
-                comptimeFieldCount += 1;
-            }
-        }
+        const comptime_only = field.is_comptime or isComptimeOnly(field.type);
+        try host.attachMember(structure, .{
+            .name = getCString(field.name),
+            .member_type = if (field.is_comptime) .Comptime else getMemberType(field.type),
+            .is_required = field.default_value == null,
+            .bit_offset = if (comptime_only) missing else @bitOffsetOf(T, field.name),
+            .bit_size = if (comptime_only) missing else getStructureBitSize(field.type),
+            .byte_size = if (comptime_only or isPacked(T)) missing else getStructureSize(field.type),
+            .slot = getObjectSlot(T, index),
+            .structure = try getStructure(host, field.type),
+        }, false);
     }
-    if (!isArgumentStruct(T) and (@sizeOf(T) > 0 or comptimeFieldCount > 0)) {
+    if (comptime !isArgumentStruct(T) and (@sizeOf(T) > 0 or hasComptimeFields(T))) {
         var values: ComptimeFree(T) = undefined;
         // obtain byte array containing data of default values
         // can't use std.mem.zeroInit() here, since it'd fail with unions
@@ -1339,7 +1338,8 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
         }
         inline for (st.fields) |field| {
             if (field.default_value) |opaque_ptr| {
-                if (!field.is_comptime) {
+                const comptime_only = field.is_comptime or isComptimeOnly(field.type);
+                if (!comptime_only) {
                     if (@TypeOf(@field(values, field.name)) == field.type) {
                         // set default value
                         const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
@@ -1353,7 +1353,8 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
         const template = try host.createTemplate(dv);
         inline for (st.fields, 0..) |field, index| {
             if (field.default_value) |opaque_ptr| {
-                if (comptime (field.is_comptime or isComptimeOnly(field.type)) and isSupported(field.type)) {
+                const comptime_only = field.is_comptime or isComptimeOnly(field.type);
+                if (comptime_only and comptime isSupported(field.type)) {
                     // comptime members aren't stored in the struct's memory
                     // they're separate objects in the slots of the struct template
                     const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));

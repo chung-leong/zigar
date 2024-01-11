@@ -1610,7 +1610,7 @@ function defineUnionShape(structure, env) {
         return getValue.call(this);
       }
     : getValue;
-    const set = (exclusion) 
+    const set = (exclusion && setValue) 
     ? function(value) {
         const currentName = getActiveField.call(this);
         if (name !== currentName) {
@@ -1619,7 +1619,7 @@ function defineUnionShape(structure, env) {
         setValue.call(this, value);
       }
     : setValue;
-    const init = (exclusion)
+    const init = (exclusion && setValue)
     ? function(value) {
         setActiveField.call(this, name);
         setValue.call(this, value);
@@ -1726,7 +1726,9 @@ function defineUnionShape(structure, env) {
   // replace regular setters with ones that change the active field
   const setters = constructor.prototype[SETTERS];
   for (const [ name, init ] of Object.entries(memberInitializers)) {
-    setters[name] = init;
+    if (init) {
+      setters[name] = init;
+    }
   }
 }
 
@@ -2028,7 +2030,13 @@ function createConstructor(structure, handlers, env) {
   } = handlers;
   const hasSlots = needSlots(members);
   // comptime fields are stored in the instance template's slots
-  const comptimeFieldSlots = members.filter(m => m.type === MemberType.Comptime).map(m => m.slot);
+  let comptimeFieldSlots;
+  if (template?.[SLOTS]) {
+    const comptimeMembers = members.filter(m => isReadOnly(m.type));
+    if (comptimeMembers.length > 0) {
+      comptimeFieldSlots = comptimeMembers.map(m => m.slot);
+    } 
+  }
   const cache = new ObjectCache();
   const constructor = function(arg, options = {}) {
     const {
@@ -2074,7 +2082,7 @@ function createConstructor(structure, handlers, env) {
         self[MEMORY] = dv;
       }
     }
-    if (comptimeFieldSlots.length > 0 && template?.[SLOTS]) {
+    if (comptimeFieldSlots) {
       for (const slot of comptimeFieldSlots) {
         self[SLOTS][slot] = template[SLOTS][slot];
       }
@@ -2288,6 +2296,17 @@ const MemberType = {
   Literal: 11,
   Null: 12,
 };
+
+function isReadOnly(type) {
+  switch (type) {
+    case MemberType.Type:
+    case MemberType.Comptime:
+    case MemberType.Literal:
+      return true;
+    default:
+      return false;
+  }
+}
 
 const factories = Array(Object.values(MemberType).length);
 
@@ -2831,8 +2850,14 @@ function throwMissingInitializers(structure, missing) {
 }
 
 function throwNoProperty(structure, propName) {
-  const name = getStructureName(structure);
-  throw new TypeError(`${name} does not have a property with that name: ${propName}`);
+  const { instance: { members } } = structure;
+  const member = members.find(m => m.name === propName);
+  if (member) {
+    throw new TypeError(`Comptime value cannot be changed: ${propName}`);
+  } else {
+    const name = getStructureName(structure);
+    throw new TypeError(`${name} does not have a property with that name: ${propName}`);
+  }
 }
 
 function throwArgumentCountMismatch(structure, actual) {

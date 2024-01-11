@@ -35,7 +35,8 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ number1: 1.1, number2: 2.2 });
-      expect(StructA).to.be.undefined;
+      const b = new StructA({});
+      expect(b.valueOf()).to.eql({ number1: 0.1, number2: 0.2 });
       const [ line ] = await capture(() => print());
       expect(line).to.equal('in-struct.StructA{ .number1 = 1.1e+00, .number2 = 2.2e+00 }');
     })
@@ -58,9 +59,12 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
       expect(module.union_a.number).to.equal(1.23);
+      expect(b.valueOf()).to.eql({ state: true });
       expect(TagType(module.union_a)).to.equal(TagType.number);
       expect(module.union_a.state).to.be.null;
-      expect(UnionA).to.be.undefined;
+      expect(() => new UnionA({ number: 0 })).to.throw(TypeError)
+        .with.property('message').that.contains('Comptime');
+      const b = new UnionA({ state: true });
     })
     it('should handle comptime float in optional', async function() {
       this.timeout(120000);

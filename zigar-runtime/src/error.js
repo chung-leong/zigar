@@ -139,8 +139,14 @@ export function throwMissingInitializers(structure, missing) {
 }
 
 export function throwNoProperty(structure, propName) {
-  const name = getStructureName(structure);
-  throw new TypeError(`${name} does not have a property with that name: ${propName}`);
+  const { instance: { members } } = structure;
+  const member = members.find(m => m.name === propName);
+  if (member) {
+    throw new TypeError(`Comptime value cannot be changed: ${propName}`);
+  } else {
+    const name = getStructureName(structure);
+    throw new TypeError(`${name} does not have a property with that name: ${propName}`);
+  }
 }
 
 export function throwArgumentCountMismatch(structure, actual) {

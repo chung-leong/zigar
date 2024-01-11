@@ -38,7 +38,10 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ number1: 1, number2: 2 });
-      expect(StructA).to.be.undefined;
+      expect(() => new StructA({ number1: 1 })).to.throw(TypeError)
+        .with.property('message').that.contains('Comptime');        
+      const b = new StructA({});
+      expect(b.valueOf()).to.eql({ number1: 100, number2: 200 });
       const [ line ] = await capture(() => print());
       expect(line).to.equal('in-struct.StructA{ .number1 = 1, .number2 = 2 }');
     })
@@ -63,7 +66,9 @@ export function addTests(importModule, options) {
       expect(module.union_a.number).to.equal(123);
       expect(TagType(module.union_a)).to.equal(TagType.number);
       expect(module.union_a.state).to.be.null;
-      expect(UnionA).to.be.undefined;
+      expect(() => new UnionA({ number: 0 })).to.throw(TypeError)
+        .with.property('message').that.contains('Comptime');
+      const b = new UnionA({ state: true });
     })
     it('should handle comptime int in optional', async function() {
       this.timeout(120000);

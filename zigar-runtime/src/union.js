@@ -75,7 +75,7 @@ export function defineUnionShape(structure, env) {
         return getValue.call(this);
       }
     : getValue;
-    const set = (exclusion) 
+    const set = (exclusion && setValue) 
     ? function(value) {
         const currentName = getActiveField.call(this);
         if (name !== currentName) {
@@ -84,7 +84,7 @@ export function defineUnionShape(structure, env) {
         setValue.call(this, value);
       }
     : setValue;
-    const init = (exclusion)
+    const init = (exclusion && setValue)
     ? function(value) {
         setActiveField.call(this, name);
         setValue.call(this, value);
@@ -191,6 +191,8 @@ export function defineUnionShape(structure, env) {
   // replace regular setters with ones that change the active field
   const setters = constructor.prototype[SETTERS];
   for (const [ name, init ] of Object.entries(memberInitializers)) {
-    setters[name] = init;
+    if (init) {
+      setters[name] = init;
+    }
   }
 };

@@ -5,7 +5,7 @@ import { defineEnumerationShape } from './enumeration.js';
 import { defineErrorSet } from './error-set.js';
 import { defineErrorUnion } from './error-union.js';
 import { throwMissingInitializers, throwNoInitializer, throwNoProperty, throwReadOnly } from './error.js';
-import { MemberType, hasStandardFloatSize, hasStandardIntSize, isByteAligned } from './member.js';
+import { MemberType, hasStandardFloatSize, hasStandardIntSize, isByteAligned, isReadOnly } from './member.js';
 import { defineOptional } from './optional.js';
 import { copyPointer, definePointer } from './pointer.js';
 import { definePrimitive } from './primitive.js';
@@ -317,7 +317,13 @@ export function createConstructor(structure, handlers, env) {
   } = handlers;
   const hasSlots = needSlots(members);
   // comptime fields are stored in the instance template's slots
-  const comptimeFieldSlots = members.filter(m => m.type === MemberType.Comptime).map(m => m.slot);
+  let comptimeFieldSlots;
+  if (template?.[SLOTS]) {
+    const comptimeMembers = members.filter(m => isReadOnly(m.type));
+    if (comptimeMembers.length > 0) {
+      comptimeFieldSlots = comptimeMembers.map(m => m.slot);
+    } 
+  }
   const cache = new ObjectCache();
   const constructor = function(arg, options = {}) {
     const {
@@ -363,7 +369,7 @@ export function createConstructor(structure, handlers, env) {
         self[MEMORY] = dv;
       }
     }
-    if (comptimeFieldSlots.length > 0 && template?.[SLOTS]) {
+    if (comptimeFieldSlots) {
       for (const slot of comptimeFieldSlots) {
         self[SLOTS][slot] = template[SLOTS][slot];
       }
