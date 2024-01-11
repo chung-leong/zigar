@@ -1077,7 +1077,7 @@ function defineStructShape(structure, env) {
   for (const member of members) {
     const { get, set } = getDescriptor(member, env);
     memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
-    if (member.isRequired) {
+    if (member.isRequired && set) {
       set.required = true;
     }
   }
@@ -1142,7 +1142,7 @@ function normalizeStruct(map, forJSON) {
     object = {};
     map.set(this, object);
     for (const [ name, value ] of this) {      
-      object[name] = value[NORMALIZER]?.(map, forJSON) ?? value;
+      object[name] = value?.[NORMALIZER]?.(map, forJSON) ?? value;
     }
   }
   return object;
@@ -3033,7 +3033,7 @@ function addErrorLookup(getDataViewIntAccessor) {
         const { constructor } = structure;
         let object;
         if (value instanceof Error) {
-          if (acceptAny ? value.hasOwnProperty('index') : value instanceof constructor) {
+          if (acceptAny ? 'index' in value : value instanceof constructor) {
             object = value;
           } else {
             throwNotInErrorSet(structure);

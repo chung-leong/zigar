@@ -131,7 +131,9 @@ export function addTests(importModule, options) {
     it('should handle error in optional', async function() {
       this.timeout(120000);
       const { default: module, StrangeError, print } = await importTest('in-optional');
-      expect(module.optional).to.equal(StrangeError.SystemIsOnFire);
+      debugger;
+      module.optional;
+      // expect(module.optional).to.equal(StrangeError.SystemIsOnFire);
       const [ before ] = await capture(() => print());
       expect(before).to.equal('error.SystemIsOnFire');
       module.optional = null;

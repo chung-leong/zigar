@@ -1446,17 +1446,13 @@ fn addOptionalMembers(host: anytype, structure: Value, comptime T: type) !void {
         .slot = 0,
         .structure = try getStructure(host, op.child),
     }, false);
-    const present_offset = switch (@typeInfo(op.child)) {
-        // present overlaps value (i.e. null pointer means false)
-        .Pointer => 0,
-        else => @sizeOf(op.child) * 8,
-    };
-    const present_byte_size = switch (@typeInfo(op.child)) {
-        // use pointer itself as boolean (null => false), returning the size of a
-        // generic pointer here since op.child could be a slice (pointer + length)
-        .Pointer => @sizeOf(*anyopaque),
-        else => @sizeOf(bool),
-    };
+    // optional pointers and error use the value itself as the boolean (null|0 => false)
+    const has_present_flag = @sizeOf(T) > @sizeOf(op.child);
+    const present_offset = if (has_present_flag) @sizeOf(op.child) * 8 else 0;
+    // for slices, @sizeof(op.child) would includes the length too, whereas we only need to known
+    // whether the address is non-zero
+    const value_as_bool_size = @min(@sizeOf(op.child), @sizeOf(*anyopaque));
+    const present_byte_size = if (has_present_flag) @sizeOf(bool) else value_as_bool_size;
     try host.attachMember(structure, .{
         .name = "present",
         .member_type = .Bool,

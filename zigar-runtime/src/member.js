@@ -328,7 +328,7 @@ function addErrorLookup(getDataViewIntAccessor) {
         const { constructor } = structure;
         let object;
         if (value instanceof Error) {
-          if (acceptAny ? value.hasOwnProperty('index') : value instanceof constructor) {
+          if (acceptAny ? 'index' in value : value instanceof constructor) {
             object = value;
           } else {
             throwNotInErrorSet(structure);

@@ -16,7 +16,7 @@ export function addTests(importModule, options) {
       const { default: module, Pet, Donut, print } = await importTest('as-static-variables');      
       expect(Pet.Cat).to.be.instanceOf(Pet);      
       expect(Pet.Donut).to.not.be.instanceOf(Pet);
-      expect(Pet.Cat.valueOf()).to.equal(1);
+      expect(Pet.Cat.valueOf()).to.equal('Cat');
       expect(Number(Pet.Cat)).to.equal(1);
       expect(`${Pet.Dog} ${Pet.Cat} ${Pet.Monkey}`).to.equal('0 1 2');
       expect(Pet(1)).to.equal(Pet.Cat);
