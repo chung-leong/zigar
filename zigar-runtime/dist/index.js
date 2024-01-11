@@ -1239,6 +1239,7 @@ function defineErrorUnion(structure, env) {
       return getValue.call(this);
     }
   };
+  const isValueVoid = members[0].type === MemberType.Void;
   const isChildActive = function() {
     return !getError.call(this);
   };
@@ -1248,7 +1249,7 @@ function defineErrorUnion(structure, env) {
   };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const propApplier = createPropertyApplier(structure);
-  const initializer = function(arg) {
+  const initializer = function(arg, con) {
     if (arg instanceof constructor) {
       this[COPIER](arg);
       if (hasPointer) {
@@ -1259,7 +1260,7 @@ function defineErrorUnion(structure, env) {
     } else if (arg instanceof Error) {
       setError.call(this, arg);
       clearValue.call(this);
-    } else if (arg !== undefined) {
+    } else if (arg !== undefined || isValueVoid) {
       try {
         // call setValue() first, in case it throws
         setValue.call(this, arg);
@@ -1339,6 +1340,7 @@ function defineOptional(structure, env) {
       return null;
     }
   };
+  const isValueVoid = members[0].type === MemberType.Void;
   const isChildActive = getPresent;
   const initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -1358,7 +1360,7 @@ function defineOptional(structure, env) {
         // non-zero there so that we know the field is populated
         setPresent.call(this, true);
       }
-    } else {      
+    } else if (arg !== undefined || isValueVoid) {      
       setPresent.call(this, false);
       this[RESETTER]?.();
       // clear references so objects can be garbage-collected

@@ -31,6 +31,7 @@ export function defineErrorUnion(structure, env) {
       return getValue.call(this);
     }
   };
+  const isValueVoid = members[0].type === MemberType.Void;
   const isChildActive = function() {
     return !getError.call(this);
   };
@@ -40,7 +41,7 @@ export function defineErrorUnion(structure, env) {
   };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const propApplier = createPropertyApplier(structure);
-  const initializer = function(arg) {
+  const initializer = function(arg, con) {
     if (arg instanceof constructor) {
       this[COPIER](arg);
       if (hasPointer) {
@@ -51,7 +52,7 @@ export function defineErrorUnion(structure, env) {
     } else if (arg instanceof Error) {
       setError.call(this, arg);
       clearValue.call(this);
-    } else if (arg !== undefined) {
+    } else if (arg !== undefined || isValueVoid) {
       try {
         // call setValue() first, in case it throws
         setValue.call(this, arg);

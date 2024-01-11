@@ -35,11 +35,16 @@ bool create_external_buffer(napi_env env,
                             size_t len,
                             module_data* md,
                             napi_value* dest) {
-    reference_module(md);
-    buffer_count++;
-    /* create a reference to the module so that the shared library doesn't get unloaded
-       while the external buffer is still around pointing to it */
-    return napi_create_external_arraybuffer(env, bytes, len, finalize_external_buffer, md, dest) == napi_ok;
+    if (len > 0) {
+        reference_module(md);
+        buffer_count++;
+        /* create a reference to the module so that the shared library doesn't get unloaded
+        while the external buffer is still around pointing to it */
+        return napi_create_external_arraybuffer(env, bytes, len, finalize_external_buffer, md, dest) == napi_ok;
+    } else {
+        /* external array buffer cannot be zero-length--return a regular buffer instead */
+        return napi_create_arraybuffer(env, len, NULL, dest) == napi_ok;
+    }
 }
 
 bool load_javascript(napi_env env,
@@ -537,7 +542,8 @@ napi_value get_memory_offset(napi_env env,
     module_data* md = (module_data*) data;
     size_t base = md->base_address;
     if (address < base) {
-        return throw_error(env, "Invalid address");
+        /* this happens when we encounter a regular ArrayBuffer with byteLength = 0 */ 
+        address = base;
     }
     napi_value offset;
     if (napi_create_double(env, address - base, &offset) != napi_ok) {

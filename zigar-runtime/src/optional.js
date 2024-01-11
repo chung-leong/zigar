@@ -33,6 +33,7 @@ export function defineOptional(structure, env) {
       return null;
     }
   };
+  const isValueVoid = members[0].type === MemberType.Void;
   const isChildActive = getPresent;
   const initializer = function(arg) {
     if (arg instanceof constructor) {
@@ -52,7 +53,7 @@ export function defineOptional(structure, env) {
         // non-zero there so that we know the field is populated
         setPresent.call(this, true);
       }
-    } else {      
+    } else if (arg !== undefined || isValueVoid) {      
       setPresent.call(this, false);
       this[RESETTER]?.();
       // clear references so objects can be garbage-collected

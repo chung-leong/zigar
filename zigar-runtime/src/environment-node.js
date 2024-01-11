@@ -67,9 +67,6 @@ export class NodeEnvironment extends Environment {
   }
 
   obtainFixedView(address, len) {
-    if (len === 0) {
-      return this.obtainView(new ArrayBuffer(0));
-    }
     const buffer = this.obtainExternBuffer(address, len);
     this.addressMap.set(buffer, address);
     return this.obtainView(buffer, 0, len);
