@@ -62,6 +62,7 @@ enum {
     Static,
     Literal,
     Null,
+    Undefined,
 };
 
 typedef struct {

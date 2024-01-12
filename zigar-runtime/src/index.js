@@ -18,7 +18,8 @@ export function loadModule(source) {
 /* RUNTIME-ONLY */
 export {
   useBool, useBoolEx, useComptime, useEnumerationItem, useError, useFloat, useFloatEx, useInt,
-  useIntEx, useLiteral, useNull, useObject, useStatic, useType, useUint, useUintEx, useVoid
+  useIntEx, useLiteral, useNull, useObject, useStatic, useType, useUint, useUintEx, useUndefined,
+  useVoid
 } from './member.js';
 export {
   useArgStruct, useArray, useBareUnion, useEnumeration, useErrorSet, useErrorUnion,

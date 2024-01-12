@@ -175,6 +175,9 @@ function flagMemberUsage(member, features) {
     case MemberType.Null:
       features.useNull = true;
       break;
+    case MemberType.Undefined:
+      features.useUndefined = true;
+      break;
     case MemberType.Type:
       features.useType = true;
       break;
@@ -484,7 +487,7 @@ export function findAllObjects(structures, SLOTS) {
         if (child) {
           const desc = Object.getOwnPropertyDescriptor(child, '*');
           if (desc?.get === throwInaccessiblePointer) {
-            object[SLOTS][slot] = null;
+            object[SLOTS][slot] = undefined;
             continue;
           } 
           find(child);         

@@ -826,7 +826,7 @@ export class Environment {
       }
       const writable = !pointer.constructor.const;
       const currentTarget = pointer[SLOTS][0];
-      let newTarget = null;
+      let newTarget;
       if (isActive(this)) {
         const Target = pointer.constructor.child;
         if (!currentTarget || isMutable(this)) {
@@ -837,7 +837,6 @@ export class Environment {
           const dv = env.findMemory(address, byteLength);
           // create the target
           newTarget = Target.call(ENVIRONMENT, dv, { writable });
-
         } else {
           newTarget = currentTarget;
         }

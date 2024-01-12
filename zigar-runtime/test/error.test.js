@@ -31,7 +31,6 @@ import {
   throwNoInitializer,
   throwNoProperty,
   throwNotInErrorSet,
-  throwNotNull,
   throwNotOnByteBoundary,
   throwNotUndefined,
   throwNullPointer,
@@ -602,17 +601,6 @@ describe('Error functions', function() {
       };
       expect(() => rethrowRangeError(member, 5, new RangeError)).to.throw(RangeError);
       expect(() => rethrowRangeError(member, 5, new TypeError)).to.throw(TypeError);
-    })
-  })
-  describe('throwNotNull', function() {
-    it('should throw a type error', function() {
-      const member = {
-        name: 'hello',
-        type: MemberType.Int,
-        bitSize: 8,
-      };
-      expect(() => throwNotNull(member)).to.throw(TypeError)
-        .with.property('message').that.contains('hello');
     })
   })
   describe('throwNotUndefined', function() {

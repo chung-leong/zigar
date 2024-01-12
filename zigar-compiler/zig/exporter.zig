@@ -132,6 +132,7 @@ pub const MemberType = enum(u32) {
     Static,
     Literal,
     Null,
+    Undefined,
 };
 
 pub const Value = *opaque {};
@@ -395,7 +396,7 @@ fn getMemberType(comptime T: type) MemberType {
         .EnumLiteral => .Literal,
         .ComptimeInt, .ComptimeFloat => .Comptime,
         .Null => .Null,
-        else => .Void,
+        else => .Undefined,
     };
 }
 

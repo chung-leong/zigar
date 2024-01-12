@@ -807,7 +807,6 @@ describe('Environment', function() {
                     structure: s1,
                     reloc: 0x2000n,
                   },
-                  1: null
                 },
                 structure: s3,
               }
@@ -1634,7 +1633,7 @@ describe('Environment', function() {
     })
   })
   describe('acquirePointerTargets', function() {    
-    it('should set pointer slot to null when pointer is inactive', function() {
+    it('should set pointer slot to undefined when pointer is inactive', function() {
       const env = new Environment();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -1699,7 +1698,7 @@ describe('Environment', function() {
       expect(object.$['*']).to.equal(123);
       object[MEMORY].setBigUint64(0, 0n);
       env.acquirePointerTargets(object);
-      expect(object[SLOTS][0][SLOTS][0]).to.be.null;
+      expect(object[SLOTS][0][SLOTS][0]).to.be.undefined;
       expect(object.$).to.be.null;
     })    
     it('should ignore const pointers', function() {

@@ -14,9 +14,8 @@ import {
   throwEnumExpected,
   throwErrorExpected,
   throwNotInErrorSet,
-  throwNotNull,
   throwNotUndefined,
-  throwOverflow,
+  throwOverflow
 } from './error.js';
 import { restoreMemory } from './memory.js';
 import { getIntRange } from './primitive.js';
@@ -37,6 +36,7 @@ export const MemberType = {
   Static: 10,
   Literal: 11,
   Null: 12,
+  Undefined: 13,
 };
 
 export function isReadOnly(type) {
@@ -120,6 +120,10 @@ export function useNull() {
   factories[MemberType.Null] = getNullDescriptor;
 }
 
+export function useUndefined() {
+  factories[MemberType.Undefined] = getUndefinedDescriptor;
+}
+
 export function isByteAligned({ bitOffset, bitSize, byteSize }) {
   return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
 }
@@ -166,13 +170,14 @@ export function getNullDescriptor(member, env) {
     get: function() {
       return null;
     },
-    set: (runtimeSafety)
-    ? function(value) {
-        if (value !== null) {
-          throwNotNull(member);
-        }
-      }
-    : function() {},
+  }
+}
+
+export function getUndefinedDescriptor(member, env) {
+  return {
+    get: function() {
+      return undefined;
+    },
   }
 }
 
@@ -508,6 +513,7 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
 export function useAllMemberTypes() {
   useVoid();
   useNull();
+  useUndefined();
   useBoolEx();
   useIntEx();
   useUintEx();

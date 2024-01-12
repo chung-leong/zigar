@@ -83,11 +83,19 @@ describe('Member functions', function() {
       const object = { [MEMORY]: dv };
       const { get, set } = getDescriptor(member, env);
       expect(get.call(object)).to.be.null;
-      expect(() => set.call(object, null)).to.not.throw();
-      expect(() => set.call(object, undefined)).to.throw();
-      expect(() => set.call(object, 0)).to.throw();
-      const { set: setNoCheck } = getDescriptor(member, { ...env, runtimeSafety: false });
-      expect(() => setNoCheck.call(object, null)).to.not.throw();
+      expect(set).to.be.undefined;
+    })
+    it('should return undefined descriptor', function() {
+      const member = {
+        type: MemberType.Undefined,
+        bitSize: 0,
+        byteSize: 0,
+      };
+      const dv = new DataView(new ArrayBuffer(12));
+      const object = { [MEMORY]: dv };
+      const { get, set } = getDescriptor(member, env);
+      expect(get.call(object)).to.be.undefined;
+      expect(set).to.be.undefined;
     })
     it('should return error descriptor', function() {
       const MyError = function(index) {

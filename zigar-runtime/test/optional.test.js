@@ -518,9 +518,9 @@ describe('Optional functions', function() {
       const { constructor: Hello } = structure;
       const object = new Hello({});
       const ptr = object.$.cat;
-      expect(ptr[SLOTS][0]).to.not.be.null;
+      expect(ptr[SLOTS][0]).to.not.be.undefined;
       object.$ = null;
-      expect(ptr[SLOTS][0]).to.be.null;
+      expect(ptr[SLOTS][0]).to.be.undefined;
       object[VISITOR](function({ isActive }) {
         expect(isActive(this)).to.be.false;
       });
@@ -627,10 +627,10 @@ describe('Optional functions', function() {
       const { constructor: Hello } = structure;
       const object = new Hello({});
       const ptr = object.$.cat;
-      expect(ptr[SLOTS][0]).to.not.be.null;
+      expect(ptr[SLOTS][0]).to.not.be.undefined;
       object[MEMORY].setUint8(structStructure.byteSize, 0);
       expect(object.$).to.be.null;
-      expect(ptr[SLOTS][0]).to.be.null;
+      expect(ptr[SLOTS][0]).to.be.undefined;
     })
 
     it('should release pointers in array when it is set to null', function() {
@@ -709,11 +709,11 @@ describe('Optional functions', function() {
       const object = new Hello([ new Int32(1234), new Int32(4567), new Int32(7890), new Int32(12345) ]);
       const array = object.$;
       for (let i = 0; i < 4; i++) {
-        expect(array[SLOTS][i][SLOTS][0]).to.not.be.null;
+        expect(array[SLOTS][i][SLOTS][0]).to.not.be.undefined;
       }
       object.$ = null;
       for (let i = 0; i < 4; i++) {
-        expect(array[SLOTS][i][SLOTS][0]).to.be.null;
+        expect(array[SLOTS][i][SLOTS][0]).to.be.undefined;
       }
     })
     it('should be able to create read-only object', function() {

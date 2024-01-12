@@ -747,7 +747,7 @@ describe('Error union functions', function() {
       const object = new Hello(new Int32(777));
       const ptr = object.$;
       object.$ = MyError.UnableToCreateObject;
-      expect(ptr[SLOTS][0]).to.be.null;
+      expect(ptr[SLOTS][0]).to.be.undefined;
     })
     it('should throw an error when error number is unknown', function() {
       const errorStructure = env.beginStructure({

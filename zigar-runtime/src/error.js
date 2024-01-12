@@ -250,11 +250,6 @@ export function rethrowRangeError(member, index, err) {
   }
 }
 
-export function throwNotNull(member) {
-  const { name } = member;
-  throw new TypeError(`Property ${name} can only be null`);
-}
-
 export function throwNotUndefined(member) {
   const { name } = member;
   throw new RangeError(`Property ${name} can only be undefined`);

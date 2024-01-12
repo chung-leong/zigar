@@ -639,6 +639,24 @@ describe('Structure functions', function() {
       expect(features).to.contain('useStruct');
       expect(features).to.contain('useNull');
     })
+    it('should report the need for undefined support', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Undefined,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useUndefined');
+    })
     it('should report the need for comptime support', function() {
       const structures = [ 
         {

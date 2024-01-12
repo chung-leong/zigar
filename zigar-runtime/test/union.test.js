@@ -1051,7 +1051,7 @@ describe('Union functions', function() {
       const object = new Hello({ pointer: new Int32(1234) });
       const pointer = object.pointer;
       object.$ = { number: 4567 };
-      expect(pointer[SLOTS][0]).to.be.null;
+      expect(pointer[SLOTS][0]).to.be.undefined;
       object[VISITOR](function({ isActive }) {
         expect(isActive(this)).to.be.false;
       })
@@ -1158,7 +1158,7 @@ describe('Union functions', function() {
       object[MEMORY].setInt32(0, 1234, true);
       object[MEMORY].setInt16(8, 1, true);
       expect(object.number).to.equal(1234);
-      expect(pointer[SLOTS][0]).to.be.null;
+      expect(pointer[SLOTS][0]).to.be.undefined;
       object[VISITOR](function({ isActive }) {
         expect(isActive(this)).to.be.false;
       })
