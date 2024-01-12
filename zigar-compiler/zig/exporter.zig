@@ -1302,7 +1302,7 @@ fn hasComptimeFields(comptime T: type) bool {
         },
         else => {},
     }
-    return true;
+    return false;
 }
 
 fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
@@ -1317,19 +1317,21 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
         }
     }
     inline for (st.fields, 0..) |field, index| {
-        const comptime_only = field.is_comptime or isComptimeOnly(field.type);
-        try host.attachMember(structure, .{
-            .name = getCString(field.name),
-            .member_type = if (field.is_comptime) .Comptime else getMemberType(field.type),
-            .is_required = field.default_value == null,
-            .bit_offset = if (comptime_only) missing else @bitOffsetOf(T, field.name),
-            .bit_size = if (comptime_only) missing else getStructureBitSize(field.type),
-            .byte_size = if (comptime_only or isPacked(T)) missing else getStructureSize(field.type),
-            .slot = getObjectSlot(T, index),
-            .structure = try getStructure(host, field.type),
-        }, false);
+        if (comptime isSupported(field.type)) {
+            const comptime_only = field.is_comptime or isComptimeOnly(field.type);
+            try host.attachMember(structure, .{
+                .name = getCString(field.name),
+                .member_type = if (field.is_comptime) .Comptime else getMemberType(field.type),
+                .is_required = field.default_value == null,
+                .bit_offset = if (comptime_only) missing else @bitOffsetOf(T, field.name),
+                .bit_size = if (comptime_only) missing else getStructureBitSize(field.type),
+                .byte_size = if (comptime_only or isPacked(T)) missing else getStructureSize(field.type),
+                .slot = getObjectSlot(T, index),
+                .structure = try getStructure(host, field.type),
+            }, false);
+        }
     }
-    if (comptime !isArgumentStruct(T) and (@sizeOf(T) > 0 or hasComptimeFields(T))) {
+    if (!isArgumentStruct(T) and (@sizeOf(T) > 0 or hasComptimeFields(T))) {
         var values: ComptimeFree(T) = undefined;
         // obtain byte array containing data of default values
         // can't use std.mem.zeroInit() here, since it'd fail with unions
