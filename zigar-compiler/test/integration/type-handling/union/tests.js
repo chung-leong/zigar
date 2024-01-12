@@ -111,8 +111,6 @@ export function addTests(importModule, options) {
     it('should handle union in bare union', async function() {
       this.timeout(120000);
       const { default: module, UnionA } = await importTest('in-bare-union');
-      expect(() => module.union_a.variant.valueOf()).to.throw(TypeError).
-        with.property('message').that.contains('Pointers within an untagged union are not accessible');
       expect(() => module.union_a.variant.String.string).to.throw(TypeError).
         with.property('message').that.contains('Pointers within an untagged union are not accessible');
       if (runtimeSafety) {

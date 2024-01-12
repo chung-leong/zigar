@@ -1,6 +1,5 @@
 import { expect } from 'chai';
 import { capture, captureWarning } from '../capture.js';
-import { MEMORY } from '../../../../zigar-runtime/src/symbol.js';
 
 export function addTests(importModule, options) {
   const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(options.optimize);
@@ -191,18 +190,18 @@ export function addTests(importModule, options) {
       const pointer1 = optional.$;
       // change the optional thru Zig
       setOptionalNull(optional);
-      // the pointer object should have released the object it was pointer to
-      expect(pointer1[SLOTS][0]).to.be.null;
+      // the pointer object should have released the object it was pointed to
+      expect(pointer1[SLOTS][0]).to.be.undefined;
       const errorUnion = new ErrorOrString('Hello world');
       // save the pointer here for the same reason
       const pointer2 = errorUnion.$;
       // change the error union thru Zig
       setErrorUnion(errorUnion);
-      expect(pointer2[SLOTS][0]).to.be.null;
+      expect(pointer2[SLOTS][0]).to.be.undefined;
       const union = new StringOrNumber({ String: 'Hello world' });
       const pointer3 = union.String;
       setUnionNumber(union);
-      expect(pointer3[SLOTS][0]).to.be.null;
+      expect(pointer3[SLOTS][0]).to.be.undefined;
     })
     it('should clear pointer array after Zig functions made it invalid', async function() {
       this.timeout(120000);
@@ -214,8 +213,8 @@ export function addTests(importModule, options) {
       const pointers = optional.$;
       // change the optional thru Zig
       setOptionalNull(optional);
-      expect(pointers[0][SLOTS][0]).to.be.null;
-      expect(pointers[1][SLOTS][0]).to.be.null;
+      expect(pointers[0][SLOTS][0]).to.be.undefined;
+      expect(pointers[1][SLOTS][0]).to.be.undefined;
     })
     it('should correctly auto-cast compatible typed arrays and buffers', async function() {
       this.timeout(120000);
