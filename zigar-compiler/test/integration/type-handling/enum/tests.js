@@ -18,7 +18,7 @@ export function addTests(importModule, options) {
       expect(Pet.Donut).to.not.be.instanceOf(Pet);
       expect(Pet.Cat.valueOf()).to.equal('Cat');
       expect(Number(Pet.Cat)).to.equal(1);
-      expect(`${Pet.Dog} ${Pet.Cat} ${Pet.Monkey}`).to.equal('0 1 2');
+      expect(`${Pet.Dog} ${Pet.Cat} ${Pet.Monkey}`).to.equal('Dog Cat Monkey');
       expect(Pet(1)).to.equal(Pet.Cat);
       expect(Pet('Cat')).to.equal(Pet.Cat);
       expect(Donut(0)).to.equal(Donut.Plain);

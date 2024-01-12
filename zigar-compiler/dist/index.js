@@ -1566,6 +1566,13 @@ function defineEnumerationShape(structure, env) {
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const toPrimitive = function(hint) {
+    if (hint === 'string') {
+      return this[NAME];
+    } else {
+      return getIndex.call(this);
+    }
+  };
   const instanceDescriptors = {
     $: { get, set },
     dataView: getDataViewAccessors(structure),
@@ -1574,7 +1581,7 @@ function defineEnumerationShape(structure, env) {
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    [Symbol.toPrimitive]: { value: getIndex },
+    [Symbol.toPrimitive]: { value: toPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [NORMALIZER]: { value: normalizeEnumerationItem },
   };
@@ -1636,7 +1643,11 @@ function defineErrorUnion(structure, env) {
         setValue.call(this, arg);
         setError.call(this, 0, true);
       } catch (err) {
-        if (arg && typeof(arg) === 'object') {
+        if (arg instanceof Error) {
+          // we give setValue a chance to see if the error is actually an acceptable value
+          // now is time to throw an error
+          throwNotInErrorSet(structure);
+        } else if (arg && typeof(arg) === 'object') {
           try {
             if (propApplier.call(this, arg) === 0) {
               throw err;
@@ -1721,7 +1732,12 @@ function defineOptional(structure, env) {
           this[VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }      
-    } else if (arg !== null) {
+    } else if (arg === null) {
+      setPresent.call(this, false);
+      this[RESETTER]?.();
+      // clear references so objects can be garbage-collected
+      this[VISITOR]?.(resetPointer);
+    } else if (arg !== undefined || isValueVoid) {      
       // call setValue() first, in case it throws
       setValue.call(this, arg);
       if (hasPresentFlag || !env.inFixedMemory(this)) {
@@ -1730,11 +1746,6 @@ function defineOptional(structure, env) {
         // non-zero there so that we know the field is populated
         setPresent.call(this, true);
       }
-    } else if (arg !== undefined || isValueVoid) {      
-      setPresent.call(this, false);
-      this[RESETTER]?.();
-      // clear references so objects can be garbage-collected
-      this[VISITOR]?.(resetPointer);
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
@@ -3065,7 +3076,7 @@ function getErrorDescriptor(member, env) {
       }
     : function setError(index, value) {
         const item = findError(value, false);
-        setValue.call(this, index, Number(item ?? 0));
+        setValue.call(this, index, Number(item));
       },
   };
 }
@@ -4313,6 +4324,13 @@ function defineErrorSet(structure, env) {
     return constructor[MESSAGES][index];
   };
   const toStringTag = function() { return 'Error' };
+  const toPrimitive = function(hint) {
+    if (hint === 'string') {
+      return Error.prototype.toString.call(this, hint);
+    } else {
+      return getIndex.call(this);
+    }
+  };
   const instanceDescriptors = {
     $: { get, set },
     message: { get: getMessage },
@@ -4325,7 +4343,7 @@ function defineErrorSet(structure, env) {
     // ensure that libraries that rely on the string tag for type detection will
     // correctly identify the object as an error
     [Symbol.toStringTag]: { get: toStringTag },
-    [Symbol.toPrimitive]: { value: getIndex },
+    [Symbol.toPrimitive]: { value: toPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [NORMALIZER]: { value: normalizeError },
   };

@@ -1339,12 +1339,15 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
         }
         inline for (st.fields) |field| {
             if (field.default_value) |opaque_ptr| {
-                const comptime_only = field.is_comptime or isComptimeOnly(field.type);
-                if (!comptime_only) {
-                    if (@TypeOf(@field(values, field.name)) == field.type) {
-                        // set default value
-                        const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+                const FT = @TypeOf(@field(values, field.name));
+                if (@sizeOf(FT) != 0) {
+                    const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+                    if (FT == field.type) {
                         @field(values, field.name) = default_value_ptr.*;
+                    } else {
+                        // need cast here, as destination field is a different type with matching layout
+                        const dest_ptr: *field.type = @ptrCast(&@field(values, field.name));
+                        dest_ptr.* = default_value_ptr.*;
                     }
                 }
             }
