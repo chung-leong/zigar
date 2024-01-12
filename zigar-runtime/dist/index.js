@@ -787,11 +787,19 @@ function getChildVivificator$1(structure) {
     objectMembers[member.slot] = member;
   }
   return function vivificateChild(slot, writable = true) {
-    const { bitOffset, byteSize, structure: { constructor } } = objectMembers[slot];
+    const member = objectMembers[slot];
+    const { bitOffset, byteSize, structure: { constructor } } = member;
     const dv = this[MEMORY];
     const parentOffset = dv.byteOffset;
     const offset = parentOffset + (bitOffset >> 3);
-    const childDV = new DataView(dv.buffer, offset, byteSize);
+    let len = byteSize;
+    if (len === undefined) {
+      if (bitOffset & 7) {
+        throwNotOnByteBoundary(member);
+      }
+      len = member.bitSize >> 3;
+    }
+    const childDV = new DataView(dv.buffer, offset, len);
     const object = this[SLOTS][slot] = constructor.call(PARENT, childDV, { writable });
     return object;
   }
@@ -2995,6 +3003,12 @@ function throwNotNull(member) {
 function throwNotUndefined(member) {
   const { name } = member;
   throw new RangeError(`Property ${name} can only be undefined`);
+}
+
+function throwNotOnByteBoundary(member) {
+  const { name, structure } = member;
+  const sname = getStructureName(structure);
+  throw new TypeError(`Unable to create ${sname} as it is not situated on a byte boundary: ${name}`);
 }
 
 function throwReadOnly() {

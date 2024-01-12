@@ -260,6 +260,12 @@ export function throwNotUndefined(member) {
   throw new RangeError(`Property ${name} can only be undefined`);
 }
 
+export function throwNotOnByteBoundary(member) {
+  const { name, structure } = member;
+  const sname = getStructureName(structure);
+  throw new TypeError(`Unable to create ${sname} as it is not situated on a byte boundary: ${name}`);
+}
+
 export function throwReadOnly() {
   throw new TypeError(`Unable to modify read-only object`);
 }

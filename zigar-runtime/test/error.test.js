@@ -32,6 +32,7 @@ import {
   throwNoProperty,
   throwNotInErrorSet,
   throwNotNull,
+  throwNotOnByteBoundary,
   throwNotUndefined,
   throwNullPointer,
   throwOutOfBound,
@@ -622,6 +623,19 @@ describe('Error functions', function() {
         bitSize: 8,
       };
       expect(() => throwNotUndefined(member)).to.throw(RangeError)
+        .with.property('message').that.contains('hello');
+    })
+  })
+  describe('throwNotOnByteBoundary', function() {
+    it('should throw a type error', function() {
+      const member = {
+        name: 'hello',
+        type: MemberType.Object,
+        bitSize: 8,
+        bitOffset: 33,
+        structure: { name: 'Hello' }
+      };
+      expect(() => throwNotOnByteBoundary(member)).to.throw(TypeError)
         .with.property('message').that.contains('hello');
     })
   })

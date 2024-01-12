@@ -65,25 +65,8 @@ export function addTests(importModule, options) {
     })
     it('should handle vector in packed struct', async function() {
       this.timeout(120000);
-      const { default: module, StructA, print } = await importTest('in-packed-struct');
-      expect(module.struct_a.valueOf()).to.eql({ 
-        vector1: [ 10, 20, 30, 40 ], 
-        vector2: [ 11, 21, 31, 41 ], 
-        number: 200, 
-        vector3: [ 12, 22, 32, 42 ], 
-      });
-      const b = new StructA({});
-      expect(b.valueOf()).to.eql({ 
-        vector1: [ 1, 2, 3, 4 ], 
-        vector2: [ 2, 3, 4, 5], 
-        number: 100, 
-        vector3: [ 3, 4, 5, 6 ], 
-      });
-      const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-packed-struct.StructA{ .vector1 = { 10, 20, 30, 40 }, .vector2 = { 11, 21, 31, 41 }, .number = 200, .vector3 = { 12, 22, 32, 42 } }');
-      module.struct_a = b;
-      const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-packed-struct.StructA{ .vector1 = { 1, 2, 3, 4 }, .vector2 = { 2, 3, 4, 5 }, .number = 100, .vector3 = { 3, 4, 5, 6 } }');
+      const { default: module } = await importTest('in-packed-struct');
+      expect(() => module.struct_a.valueOf()).to.throw(TypeError);
     })
     it('should handle vector as comptime field', async function() {
       this.timeout(120000);
