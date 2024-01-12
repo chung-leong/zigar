@@ -4,7 +4,7 @@ import {
 } from './error.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { always, copyPointer, disablePointer, resetPointer } from './pointer.js';
+import { copyPointer, disablePointer, never, resetPointer } from './pointer.js';
 import { convertToJSON, getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
 import { getChildVivificator, getPointerVisitor, normalizeStruct } from './struct.js';
 import { StructureType, attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
@@ -165,7 +165,7 @@ export function defineUnionShape(structure, env) {
       const active = memberValueGetters[name].call(this);
       return child === active;
     }
-  : always;
+  : never;
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const instanceDescriptors = {

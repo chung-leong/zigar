@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { capture } from '../../capture.js';
 
 export function addTests(importModule, options) {
+  const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(options.optimize);
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
@@ -120,20 +121,20 @@ export function addTests(importModule, options) {
     it('should handle pointer in bare union', async function() {
       this.timeout(120000);
       const { default: module, UnionA } = await importTest('in-bare-union');
-      expect(module.union_a.text.string).to.equal('Hello');
+      expect(() => module.union_a.text.string).to.throw(TypeError)
+        .with.property('message').that.contains('untagged union');
       if (runtimeSafety) {
         expect(() => module.union_a.number).to.throw();
       }
-      const b = new UnionA({ text: module.alt_text });
+      expect(() => new UnionA({ text: module.alt_text })).to.throw(TypeError)
+        .with.property('message').that.contains('untagged union');
       const c = new UnionA({ number: 123 });
-      expect(b.text.string).to.equal('World');
       expect(c.number).to.equal(123);
       if (runtimeSafety) {
         expect(() => c.text).to.throw();
       }
-      module.union_a = b;
-      expect(module.union_a.text).to.equal('World');
       module.union_a = c;
+      expect(module.union_a.number).to.equal(123);
       if (runtimeSafety) {
         expect(() => module.union_a.text).to.throw();
       }

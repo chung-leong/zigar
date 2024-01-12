@@ -988,8 +988,11 @@ function definePointer(structure, env) {
 }
 
 function normalizePointer(map, forJSON) {
-  const target = this['*'];
-  return target[NORMALIZER]?.(map, forJSON) ?? target;
+  try {
+    const target = this['*'];
+    return target[NORMALIZER]?.(map, forJSON) ?? target;  
+  } catch (err) {
+  }
 }
 
 function getProxy() {
@@ -1007,10 +1010,10 @@ function resetPointer({ isActive }) {
 }
 
 function disablePointer() {
-  Object.defineProperty(this[SLOTS], 0, {
-    get: throwInaccessiblePointer,
-    set: throwInaccessiblePointer,
-    configurable: true
+  const disabled = { get: throwInaccessiblePointer, set: throwInaccessiblePointer };
+  defineProperties(this, {
+    '*': disabled,
+    '$': disabled,
   });
 }
 
@@ -1064,6 +1067,10 @@ const proxyHandlers$1 = {
 
 function always() {
   return true;
+}
+
+function never() {
+  return false;
 }
 
 function defineStructShape(structure, env) {
@@ -2089,7 +2096,7 @@ function defineUnionShape(structure, env) {
       const active = memberValueGetters[name].call(this);
       return child === active;
     }
-  : always;
+  : never;
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const instanceDescriptors = {
@@ -2688,8 +2695,16 @@ function findAllObjects(structures, SLOTS) {
     found.set(object, true);
     list.push(object);
     if (object[SLOTS]) {
-      for (const child of Object.values(object[SLOTS])) {
-        find(child);         
+      for (const [ slot, child ] of Object.entries(object[SLOTS])) {
+        // don't include null pointer created when pointers in bare union get disabled
+        if (child) {
+          const desc = Object.getOwnPropertyDescriptor(child, '*');
+          if (desc?.get === throwInaccessiblePointer) {
+            object[SLOTS][slot] = null;
+            continue;
+          } 
+          find(child);         
+        }
       }
     }
   };
@@ -5617,7 +5632,7 @@ function generateStructureDefinitions(structures, keys) {
           }
         }
       }
-      const entries = (slots) ? Object.entries(slots) : [];
+      const entries = (slots) ? Object.entries(slots).filter(a => a[1]) : [];
       if (entries.length > 0) {
         add(`slots: {`);
         const pairs = entries.map(([slot, child]) => `${slot}: ${objectNames.get(child)}`);

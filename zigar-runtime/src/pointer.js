@@ -1,31 +1,16 @@
 import { getDataView, isBuffer, isCompatible } from './data-view.js';
 import {
-  throwConstantConstraint, throwFixedMemoryTargetRequired,
-  throwInaccessiblePointer, throwInvalidPointerTarget,
-  throwNoCastingToPointer,
-  throwNullPointer,
-  throwReadOnlyTarget, warnImplicitArrayCreation
+  throwConstantConstraint, throwFixedMemoryTargetRequired, throwInaccessiblePointer,
+  throwInvalidPointerTarget, throwNoCastingToPointer, throwNullPointer, throwReadOnlyTarget,
+  warnImplicitArrayCreation
 } from './error.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { convertToJSON, getValueOf } from './special.js';
-import { StructureType, attachDescriptors, createConstructor } from './structure.js';
+import { StructureType, attachDescriptors, createConstructor, defineProperties } from './structure.js';
 import {
-  ALIGN,
-  CONST,
-  COPIER,
-  ENVIRONMENT,
-  GETTER,
-  MEMORY,
-  NORMALIZER,
-  PARENT,
-  POINTER,
-  PROXY,
-  SETTER,
-  SIZE,
-  SLOTS,
-  VISITOR,
-  VIVIFICATOR
+  ALIGN, CONST, COPIER, ENVIRONMENT, GETTER, MEMORY, NORMALIZER, PARENT, POINTER, PROXY, SETTER,
+  SIZE, SLOTS, VISITOR, VIVIFICATOR
 } from './symbol.js';
 
 export function definePointer(structure, env) {
@@ -176,8 +161,11 @@ export function definePointer(structure, env) {
 }
 
 function normalizePointer(map, forJSON) {
-  const target = this['*'];
-  return target[NORMALIZER]?.(map, forJSON) ?? target;
+  try {
+    const target = this['*'];
+    return target[NORMALIZER]?.(map, forJSON) ?? target;  
+  } catch (err) {
+  }
 }
 
 export function getProxy() {
@@ -195,10 +183,10 @@ export function resetPointer({ isActive }) {
 }
 
 export function disablePointer() {
-  Object.defineProperty(this[SLOTS], 0, {
-    get: throwInaccessiblePointer,
-    set: throwInaccessiblePointer,
-    configurable: true
+  const disabled = { get: throwInaccessiblePointer, set: throwInaccessiblePointer };
+  defineProperties(this, {
+    '*': disabled,
+    '$': disabled,
   });
 }
 
@@ -252,4 +240,8 @@ const proxyHandlers = {
 
 export function always() {
   return true;
+}
+
+export function never() {
+  return false;
 }

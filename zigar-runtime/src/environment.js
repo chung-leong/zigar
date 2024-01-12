@@ -6,17 +6,17 @@ import { addMethods } from './method.js';
 import { addStaticMembers } from './static.js';
 import { StructureType, defineProperties, findAllObjects, getStructureFactory, getStructureName, useArgStruct } from './structure.js';
 import {
-    ALIGN,
-    ATTRIBUTES,
-    CONST,
-    COPIER,
-    ENVIRONMENT,
-    GETTER,
-    MEMORY,
-    POINTER,
-    SETTER,
-    SIZE, SLOTS,
-    VISITOR
+  ALIGN,
+  ATTRIBUTES,
+  CONST,
+  COPIER,
+  ENVIRONMENT,
+  GETTER,
+  MEMORY,
+  POINTER,
+  SETTER,
+  SIZE, SLOTS,
+  VISITOR
 } from './symbol.js';
 import { decodeText } from './text.js';
 
@@ -422,7 +422,7 @@ export class Environment {
   recreateStructures(structures) {
     const insertObjects = (dest, placeholders) => {
       for (const [ slot, placeholder ] of Object.entries(placeholders)) {
-        dest[slot] = placeholder ? createObject(placeholder) : null;
+        dest[slot] = createObject(placeholder);
       }
       return dest;
     };

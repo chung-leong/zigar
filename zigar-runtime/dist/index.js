@@ -620,8 +620,11 @@ function definePointer(structure, env) {
 }
 
 function normalizePointer(map, forJSON) {
-  const target = this['*'];
-  return target[NORMALIZER]?.(map, forJSON) ?? target;
+  try {
+    const target = this['*'];
+    return target[NORMALIZER]?.(map, forJSON) ?? target;  
+  } catch (err) {
+  }
 }
 
 function getProxy() {
@@ -639,10 +642,10 @@ function resetPointer({ isActive }) {
 }
 
 function disablePointer() {
-  Object.defineProperty(this[SLOTS], 0, {
-    get: throwInaccessiblePointer,
-    set: throwInaccessiblePointer,
-    configurable: true
+  const disabled = { get: throwInaccessiblePointer, set: throwInaccessiblePointer };
+  defineProperties(this, {
+    '*': disabled,
+    '$': disabled,
   });
 }
 
@@ -696,6 +699,10 @@ const proxyHandlers$1 = {
 
 function always() {
   return true;
+}
+
+function never() {
+  return false;
 }
 
 function defineStructShape(structure, env) {
@@ -1721,7 +1728,7 @@ function defineUnionShape(structure, env) {
       const active = memberValueGetters[name].call(this);
       return child === active;
     }
-  : always;
+  : never;
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const instanceDescriptors = {
@@ -4229,7 +4236,7 @@ class Environment {
   recreateStructures(structures) {
     const insertObjects = (dest, placeholders) => {
       for (const [ slot, placeholder ] of Object.entries(placeholders)) {
-        dest[slot] = placeholder ? createObject(placeholder) : null;
+        dest[slot] = createObject(placeholder);
       }
       return dest;
     };

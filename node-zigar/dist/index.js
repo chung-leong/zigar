@@ -1,8 +1,9 @@
+import { writeFile } from 'fs/promises';
+import { createRequire } from 'module';
+import { exportStructures } from 'node-zigar-addon';
 import { cwd } from 'process';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { createRequire } from 'module';
 import { compile, generateCodeForNode } from 'zigar-compiler';
-import { exportStructures } from 'node-zigar-addon';
 
 const baseURL = pathToFileURL(`${cwd()}/`).href;
 const extensionsRegex = /\.zig$/;
@@ -43,6 +44,7 @@ async function loadZig(url) {
   // get the absolute path to node-zigar-addon so the "transpiled" code can find it
   const runtimeURL = pathToFileURL(require.resolve('node-zigar-addon'));
   const { code } = generateCodeForNode(definition, { runtimeURL, libPath });
+  await writeFile('output.js', code);
   return {
     format: 'module',
     shortCircuit: true,

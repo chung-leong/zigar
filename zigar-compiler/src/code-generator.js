@@ -201,7 +201,7 @@ function generateStructureDefinitions(structures, keys) {
           }
         }
       }
-      const entries = (slots) ? Object.entries(slots) : [];
+      const entries = (slots) ? Object.entries(slots).filter(a => a[1]) : [];
       if (entries.length > 0) {
         add(`slots: {`);
         const pairs = entries.map(([slot, child]) => `${slot}: ${objectNames.get(child)}`);
