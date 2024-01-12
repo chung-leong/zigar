@@ -1,4 +1,4 @@
-import { initializeErrorSets } from './error-set.js';
+import { createGlobalErrorSet } from './error-set.js';
 import { throwAlignmentConflict } from './error.js';
 import { MemberType, useBool, useObject } from './member.js';
 import { getMemoryCopier } from './memory.js';
@@ -6,17 +6,17 @@ import { addMethods } from './method.js';
 import { addStaticMembers } from './static.js';
 import { StructureType, defineProperties, findAllObjects, getStructureFactory, getStructureName, useArgStruct } from './structure.js';
 import {
-  ALIGN,
-  ATTRIBUTES,
-  CONST,
-  COPIER,
-  ENVIRONMENT,
-  GETTER,
-  MEMORY,
-  POINTER,
-  SETTER,
-  SIZE, SLOTS,
-  VISITOR
+    ALIGN,
+    ATTRIBUTES,
+    CONST,
+    COPIER,
+    ENVIRONMENT,
+    GETTER,
+    MEMORY,
+    POINTER,
+    SETTER,
+    SIZE, SLOTS,
+    VISITOR
 } from './symbol.js';
 import { decodeText } from './text.js';
 
@@ -323,7 +323,7 @@ export class Environment {
   }
 
   acquireStructures(options) {
-    initializeErrorSets();
+    createGlobalErrorSet();
     const thunkId = this.getFactoryThunk();
     const ArgStruct = this.defineFactoryArgStruct();
     const args = new ArgStruct([ options ]);
@@ -447,7 +447,7 @@ export class Environment {
         return placeholder.structure;
       }
     };
-    initializeErrorSets();
+    createGlobalErrorSet();
     const objectPlaceholders = new Map();
     for (const structure of structures) {
       // recreate the actual template using the provided placeholder

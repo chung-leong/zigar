@@ -47,6 +47,7 @@ describe('Enumeration functions', function() {
       env.finalizeStructure(structure);
       expect(Number(Hello.Dog)).to.equal(0);
       expect(Number(Hello.Cat)).to.equal(1);
+      expect(`${Hello.Dog}`).to.equal('Dog');
       expect(Hello.Dog.valueOf()).to.equal('Dog');
       expect(Hello.Dog === Hello.Dog).to.be.true;
       expect(Hello.Dog === Hello.Cat).to.be.false;

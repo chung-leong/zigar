@@ -1232,7 +1232,7 @@ function defineErrorUnion(structure, env) {
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getError, set: setError } = getDescriptor(members[1], env);
   const get = function() {
-    const error = getError.call(this);
+    const error = getError.call(this, true);
     if (error) {
       throw error;
     } else {
@@ -1240,8 +1240,10 @@ function defineErrorUnion(structure, env) {
     }
   };
   const isValueVoid = members[0].type === MemberType.Void;
+  const acceptAny = members[1].structure.name === 'anyerror';
+  const TargetError = (acceptAny) ? getGlobalErrorSet() : members[1].structure.constructor;
   const isChildActive = function() {
-    return !getError.call(this);
+    return !getError.call(this, true);
   };
   const clearValue = function() {
     this[RESETTER]();
@@ -1249,7 +1251,7 @@ function defineErrorUnion(structure, env) {
   };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const propApplier = createPropertyApplier(structure);
-  const initializer = function(arg, con) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[COPIER](arg);
       if (hasPointer) {
@@ -1257,14 +1259,14 @@ function defineErrorUnion(structure, env) {
           this[VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }
-    } else if (arg instanceof Error) {
+    } else if (arg instanceof TargetError) {
       setError.call(this, arg);
       clearValue.call(this);
     } else if (arg !== undefined || isValueVoid) {
       try {
         // call setValue() first, in case it throws
         setValue.call(this, arg);
-        setError.call(this, null);
+        setError.call(this, 0, true);
       } catch (err) {
         if (arg && typeof(arg) === 'object') {
           try {
@@ -2350,10 +2352,6 @@ function useEnumerationItem() {
   factories[MemberType.EnumerationItem] = getEnumerationItemDescriptor;
 }
 
-function useEnumerationItemEx() {
-  factories[MemberType.EnumerationItem] = getEnumerationItemDescriptorEx;
-}
-
 function useError() {
   factories[MemberType.Error] = getErrorDescriptor;
 }
@@ -2479,96 +2477,98 @@ function getFloatDescriptorEx(member, env) {
 }
 
 function getEnumerationItemDescriptor(member, env) {
-  const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessor);
-  return getDescriptorUsing(member, env, getDataViewAccessor) ;
-}
-
-function getEnumerationItemDescriptorEx(member, env) {
-  const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessorEx);
-  return getDescriptorUsing(member, env, getDataViewAccessor) ;
-}
-
-function addEnumerationLookup(getDataViewIntAccessor) {
-  return function(access, member) {
-    // no point in using non-standard int accessor to read enum values unless they aren't byte-aligned
-    const { structure } = member;
-    const [ intMember ] = structure.instance.members;
-    const accessor = getDataViewIntAccessor(access, intMember);
-    if (access === 'get') {
-      return function(offset, littleEndian) {
-        const { constructor } = structure;
-        const value = accessor.call(this, offset, littleEndian);
-        // the enumeration constructor returns the object for the int value
-        const object = constructor(value);
-        if (!object) {
-          throwEnumExpected(structure, value);
-        }
-        return object;
-      };
-    } else {
-      return function(offset, value, littleEndian) {
-        const { constructor } = structure;
-        let item;
-        if (value instanceof constructor) {
-          item = value;
-        } else {
-          item = constructor(value);
-        }
-        if (!item) {
-          throwEnumExpected(structure, value);
-        }
-        accessor.call(this, offset, item[Symbol.toPrimitive](), littleEndian);
-      };
+  const { structure } = member;
+  // enum can be int or uint--need the type from the structure
+  const { type: intType, structure: intStructure } = structure.instance.members[0];
+  const valueMember = {
+    ...member,
+    type: intType,
+    structure: intStructure,
+  };
+  const { get: getValue, set: setValue } = getDescriptor(valueMember, env);
+  const findEnum = function(value) {
+    const { constructor } = structure;
+    // the enumeration constructor returns the object for the int value
+    const item = (value instanceof constructor) ? value : constructor(value);
+    if (!item) {
+      throwEnumExpected(structure, value);
     }
+    return item
+  };
+  return {
+    get: (getValue.length === 0) 
+    ? function getEnum() {
+        const value = getValue.call(this);
+        return findEnum(value);
+      }
+    : function getEnumElement(index) {
+        const value = getValue.call(this, index);
+        return findEnum(value);
+      },
+    set: (setValue.length === 1) 
+    ? function setEnum(value) {
+        // call Symbol.toPrimitive directly as enum can be bigint or number
+        const item = findEnum(value);
+        setValue.call(this, item[Symbol.toPrimitive]());
+      }
+    : function setEnumElement(index, value) {
+        const item = findEnum(value);
+        setValue.call(this, index, item[Symbol.toPrimitive]());
+      },
   };
 }
 
 function getErrorDescriptor(member, env) {
-  const getDataViewAccessor = addErrorLookup(getDataViewIntAccessor);
-  return getDescriptorUsing(member, env, getDataViewAccessor) ;
-}
-
-function addErrorLookup(getDataViewIntAccessor) {
-  return function(access, member) {
-    // no point in using non-standard int accessor to read enum values unless they aren't byte-aligned
-    const { structure } = member;
-    const [ intMember ] = structure.instance.members;
-    const acceptAny = structure.name === 'anyerror';
-    const accessor = getDataViewIntAccessor(access, intMember);
-    const allErrors = getCurrentErrorSets();
-    if (access === 'get') {
-      return function(offset, littleEndian) {
-        const { constructor } = structure;
-        const index = accessor.call(this, offset, littleEndian);
-        if (index) {
-          const object = acceptAny ? allErrors[index] : constructor(index);
-          if (!object) {
-            throwErrorExpected(structure, index);
-          }
-          return object;
-        }
-      };
+  const { structure } = member;
+  const { name, instance: { members } } = structure;
+  const { type: intType, structure: intStructure } = members[0];
+  const valueMember = {
+    ...member,
+    type: intType,
+    structure: intStructure,
+  };
+  const { get: getValue, set: setValue } = getDescriptor(valueMember, env);  
+  const acceptAny = name === 'anyerror';
+  const globalErrorSet = getGlobalErrorSet();
+  const findError = function(value, allowZero = false) {
+    const { constructor } = structure;
+    // the enumeration constructor returns the object for the int value
+    let item;
+    if (value === 0 && allowZero) {
+      return;
+    } else if (value instanceof Error) {
+      if (value instanceof (acceptAny ? globalErrorSet : constructor)) {
+        item = value;
+      } else {
+        throwNotInErrorSet(structure);
+      }
     } else {
-      const Primitive = getPrimitiveClass(intMember);
-      const zero = Primitive(0);
-      return function(offset, value, littleEndian) {
-        const { constructor } = structure;
-        let object;
-        if (value instanceof Error) {
-          if (acceptAny ? 'index' in value : value instanceof constructor) {
-            object = value;
-          } else {
-            throwNotInErrorSet(structure);
-          }
-        } else if (value !== null) {
-          object = acceptAny ? allErrors[value] : constructor(value);
-          if (!object) {
-            throwErrorExpected(structure, value);
-          } 
-        }  
-        accessor.call(this, offset, object?.index ?? zero, littleEndian);
-      };
+      item = acceptAny ? globalErrorSet[value] : constructor(value);
+      if (!item) {
+        throwErrorExpected(structure, value);
+      } 
     }
+    return item
+  };
+  return {
+    get: (getValue.length === 0) 
+    ? function getError(allowZero) {
+        const value = getValue.call(this);
+        return findError(value, allowZero);
+      }
+    : function getErrorElement(index) {
+        const value = getValue.call(this, index);
+        return findError(value, false);
+      },
+    set: (setValue.length === 1) 
+    ? function setError(value, allowZero) {
+        const item = findError(value, allowZero);
+        setValue.call(this, Number(item ?? 0));
+      }
+    : function setError(index, value) {
+        const item = findError(value, false);
+        setValue.call(this, index, Number(item ?? 0));
+      },
   };
 }
 
@@ -3775,8 +3775,6 @@ function cacheMethod(access, member, cb) {
 
 const methodCache = {};
 
-let currentErrorSets;
-
 function defineErrorSet(structure, env) {
   const {
     byteSize,
@@ -3816,7 +3814,7 @@ function defineErrorSet(structure, env) {
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
-  Object.setPrototypeOf(constructor.prototype, Error.prototype);
+  Object.setPrototypeOf(constructor.prototype, globalErrorSet.prototype);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
   const getMessage = function() {
     const index = getIndex.call(this);
@@ -3825,7 +3823,6 @@ function defineErrorSet(structure, env) {
   const toStringTag = function() { return 'Error' };
   const instanceDescriptors = {
     $: { get, set },
-    index: { get: getIndex },
     message: { get: getMessage },
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
@@ -3836,6 +3833,7 @@ function defineErrorSet(structure, env) {
     // ensure that libraries that rely on the string tag for type detection will
     // correctly identify the object as an error
     [Symbol.toStringTag]: { get: toStringTag },
+    [Symbol.toPrimitive]: { value: getIndex },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [NORMALIZER]: { value: normalizeError },
   };
@@ -3857,12 +3855,15 @@ function normalizeError(map, forJSON) {
   }
 }
 
-function initializeErrorSets() {
-  currentErrorSets = {};
+let globalErrorSet;
+
+function createGlobalErrorSet() {
+  globalErrorSet = function() {};
+  Object.setPrototypeOf(globalErrorSet.prototype, Error.prototype);
 }
 
-function getCurrentErrorSets() {
-  return currentErrorSets;
+function getGlobalErrorSet() {
+  return globalErrorSet;
 }
 
 function addMethods(s, env) {
@@ -3931,12 +3932,12 @@ function addStaticMembers(structure, env) {
       }      
     }
   } else if (type === StructureType.ErrorSet) {
-    const allErrors = getCurrentErrorSets();
+    const allErrors = getGlobalErrorSet();
     const errors = constructor[ITEMS];
     const messages = constructor[MESSAGES];
     for (const { name, slot } of members) {
       let error = constructor[SLOTS][slot];
-      const { index } = error;
+      const index = Number(error);
       const previous = allErrors[index];
       if (previous) {
         if (!(previous instanceof constructor)) {
@@ -3944,15 +3945,15 @@ function addStaticMembers(structure, env) {
           // see if we should make that set a subclass or superclass of this one
           const otherSet = previous.constructor;
           const otherErrors = Object.values(otherSet[SLOTS]);
-          const errorIndices = Object.values(constructor[SLOTS]).map(e => e.index);
-          if (otherErrors.every(e => errorIndices.includes(e.index))) {
+          const errorIndices = Object.values(constructor[SLOTS]).map(e => Number(e));
+          if (otherErrors.every(e => errorIndices.includes(Number(e)))) {
             // this set contains the all errors of the other one, so it's a superclass
             Object.setPrototypeOf(otherSet.prototype, constructor.prototype);
           } else {
             // make this set a subclass of the other
             Object.setPrototypeOf(constructor.prototype, otherSet.prototype);
             for (const otherError of otherErrors) {
-              if (errorIndices.includes(otherError.index)) {
+              if (errorIndices.includes(Number(otherError))) {
                 // this set should be this error object's class
                 Object.setPrototypeOf(otherError, constructor.prototype);
               }
@@ -3963,7 +3964,7 @@ function addStaticMembers(structure, env) {
       } else {
         // set error message
         const message = decamelizeErrorName(name);
-        messages[error.index] = message;
+        messages[index] = message;
         // add to hash
         allErrors[index] = error;
         allErrors[message] = error;
@@ -4221,7 +4222,7 @@ class Environment {
         return placeholder.structure;
       }
     };
-    initializeErrorSets();
+    createGlobalErrorSet();
     const objectPlaceholders = new Map();
     for (const structure of structures) {
       // recreate the actual template using the provided placeholder
@@ -5027,4 +5028,4 @@ function loadModule(source) {
 }
 /* RUNTIME-ONLY-END */
 
-export { loadModule, useArgStruct, useArray, useBareUnion, useBool, useBoolEx, useComptime, useEnumeration, useEnumerationItem, useEnumerationItemEx, useError, useErrorSet, useErrorUnion, useExternUnion, useFloat, useFloatEx, useInt, useIntEx, useLiteral, useNull, useObject, useOpaque, useOptional, usePointer, usePrimitive, useSlice, useStatic, useStruct, useTaggedUnion, useType, useUint, useUintEx, useVector, useVoid };
+export { loadModule, useArgStruct, useArray, useBareUnion, useBool, useBoolEx, useComptime, useEnumeration, useEnumerationItem, useError, useErrorSet, useErrorUnion, useExternUnion, useFloat, useFloatEx, useInt, useIntEx, useLiteral, useNull, useObject, useOpaque, useOptional, usePointer, usePrimitive, useSlice, useStatic, useStruct, useTaggedUnion, useType, useUint, useUintEx, useVector, useVoid };

@@ -44,7 +44,12 @@ export function defineOptional(structure, env) {
           this[VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }      
-    } else if (arg !== null) {
+    } else if (arg === null) {
+      setPresent.call(this, false);
+      this[RESETTER]?.();
+      // clear references so objects can be garbage-collected
+      this[VISITOR]?.(resetPointer);
+    } else if (arg !== undefined || isValueVoid) {      
       // call setValue() first, in case it throws
       setValue.call(this, arg);
       if (hasPresentFlag || !env.inFixedMemory(this)) {
@@ -53,11 +58,6 @@ export function defineOptional(structure, env) {
         // non-zero there so that we know the field is populated
         setPresent.call(this, true);
       }
-    } else if (arg !== undefined || isValueVoid) {      
-      setPresent.call(this, false);
-      this[RESETTER]?.();
-      // clear references so objects can be garbage-collected
-      this[VISITOR]?.(resetPointer);
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);

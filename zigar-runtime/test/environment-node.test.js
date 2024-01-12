@@ -118,6 +118,9 @@ describe('NodeEnvironment', function() {
     })
     it('should return empty data view when len is 0', function() {
       const env = new NodeEnvironment();
+      env.obtainExternBuffer = function(address, len) {
+        return new ArrayBuffer(len);
+      };
       const dv1 = env.obtainFixedView(0x1000n, 0);
       const dv2 = env.obtainFixedView(0x2000n, 0);
       expect(dv1.byteLength).to.equal(0);

@@ -8,7 +8,7 @@ import {
   getDataViewUintAccessor,
   getDataViewUintAccessorEx,
 } from './data-view.js';
-import { getCurrentErrorSets } from './error-set.js';
+import { getGlobalErrorSet } from './error-set.js';
 import {
   rethrowRangeError,
   throwEnumExpected,
@@ -19,7 +19,7 @@ import {
   throwOverflow,
 } from './error.js';
 import { restoreMemory } from './memory.js';
-import { getIntRange, getPrimitiveClass } from './primitive.js';
+import { getIntRange } from './primitive.js';
 import { StructureType } from './structure.js';
 import { MEMORY, SLOTS, VIVIFICATOR } from './symbol.js';
 
@@ -90,10 +90,6 @@ export function useFloatEx() {
 
 export function useEnumerationItem() {
   factories[MemberType.EnumerationItem] = getEnumerationItemDescriptor;
-}
-
-export function useEnumerationItemEx() {
-  factories[MemberType.EnumerationItem] = getEnumerationItemDescriptorEx;
 }
 
 export function useError() {
@@ -241,107 +237,98 @@ export function getFloatDescriptorEx(member, env) {
 }
 
 export function getEnumerationItemDescriptor(member, env) {
-  const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessor);
-  return getDescriptorUsing(member, env, getDataViewAccessor) ;
-}
-
-export function getEnumerationItemDescriptorEx(member, env) {
-  const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessorEx);
-  return getDescriptorUsing(member, env, getDataViewAccessor) ;
-}
-
-function addEnumerationLookup(getDataViewIntAccessor) {
-  return function(access, member) {
-    // no point in using non-standard int accessor to read enum values unless they aren't byte-aligned
-    const { structure } = member;
-    const [ intMember ] = structure.instance.members;
-    const accessor = getDataViewIntAccessor(access, intMember);
-    /* DEV-TEST */
-    if (!accessor) {
-      return;
+  const { structure } = member;
+  // enum can be int or uint--need the type from the structure
+  const { type: intType, structure: intStructure } = structure.instance.members[0];
+  const valueMember = {
+    ...member,
+    type: intType,
+    structure: intStructure,
+  };
+  const { get: getValue, set: setValue } = getDescriptor(valueMember, env);
+  const findEnum = function(value) {
+    const { constructor } = structure;
+    // the enumeration constructor returns the object for the int value
+    const item = (value instanceof constructor) ? value : constructor(value);
+    if (!item) {
+      throwEnumExpected(structure, value);
     }
-    /* DEV-TEST-END */
-    if (access === 'get') {
-      return function(offset, littleEndian) {
-        const { constructor } = structure;
-        const value = accessor.call(this, offset, littleEndian);
-        // the enumeration constructor returns the object for the int value
-        const object = constructor(value);
-        if (!object) {
-          throwEnumExpected(structure, value)
-        }
-        return object;
-      };
-    } else {
-      return function(offset, value, littleEndian) {
-        const { constructor } = structure;
-        let item;
-        if (value instanceof constructor) {
-          item = value;
-        } else {
-          item = constructor(value);
-        }
-        if (!item) {
-          throwEnumExpected(structure, value);
-        }
-        accessor.call(this, offset, item[Symbol.toPrimitive](), littleEndian);
-      };
-    }
+    return item
+  };
+  return {
+    get: (getValue.length === 0) 
+    ? function getEnum() {
+        const value = getValue.call(this);
+        return findEnum(value);
+      }
+    : function getEnumElement(index) {
+        const value = getValue.call(this, index);
+        return findEnum(value);
+      },
+    set: (setValue.length === 1) 
+    ? function setEnum(value) {
+        // call Symbol.toPrimitive directly as enum can be bigint or number
+        const item = findEnum(value);
+        setValue.call(this, item[Symbol.toPrimitive]());
+      }
+    : function setEnumElement(index, value) {
+        const item = findEnum(value);
+        setValue.call(this, index, item[Symbol.toPrimitive]());
+      },
   };
 }
 
 export function getErrorDescriptor(member, env) {
-  const getDataViewAccessor = addErrorLookup(getDataViewIntAccessor);
-  return getDescriptorUsing(member, env, getDataViewAccessor) ;
-}
-
-function addErrorLookup(getDataViewIntAccessor) {
-  return function(access, member) {
-    // no point in using non-standard int accessor to read enum values unless they aren't byte-aligned
-    const { structure } = member;
-    const [ intMember ] = structure.instance.members;
-    const acceptAny = structure.name === 'anyerror';
-    const accessor = getDataViewIntAccessor(access, intMember);
-    const allErrors = getCurrentErrorSets();
-    /* DEV-TEST */
-    /* c8 ignore next 3 */
-    if (!accessor) {
+  const { structure } = member;
+  const { name, instance: { members } } = structure;
+  const { type: intType, structure: intStructure } = members[0];
+  const valueMember = {
+    ...member,
+    type: intType,
+    structure: intStructure,
+  };
+  const { get: getValue, set: setValue } = getDescriptor(valueMember, env);  
+  const acceptAny = name === 'anyerror';
+  const globalErrorSet = getGlobalErrorSet();
+  const findError = function(value, allowZero = false) {
+    const { constructor } = structure;
+    // the enumeration constructor returns the object for the int value
+    let item;
+    if (value === 0 && allowZero) {
       return;
-    }
-    /* DEV-TEST-END */
-    if (access === 'get') {
-      return function(offset, littleEndian) {
-        const { constructor } = structure;
-        const index = accessor.call(this, offset, littleEndian);
-        if (index) {
-          const object = acceptAny ? allErrors[index] : constructor(index);
-          if (!object) {
-            throwErrorExpected(structure, index);
-          }
-          return object;
-        }
-      };
+    } else if (value instanceof Error) {
+      if (value instanceof (acceptAny ? globalErrorSet : constructor)) {
+        item = value;
+      } else {
+        throwNotInErrorSet(structure);
+      }
     } else {
-      const Primitive = getPrimitiveClass(intMember);
-      const zero = Primitive(0);
-      return function(offset, value, littleEndian) {
-        const { constructor } = structure;
-        let object;
-        if (value instanceof Error) {
-          if (acceptAny ? 'index' in value : value instanceof constructor) {
-            object = value;
-          } else {
-            throwNotInErrorSet(structure);
-          }
-        } else if (value !== null) {
-          object = acceptAny ? allErrors[value] : constructor(value);
-          if (!object) {
-            throwErrorExpected(structure, value);
-          } 
-        }  
-        accessor.call(this, offset, object?.index ?? zero, littleEndian);
-      };
+      item = acceptAny ? globalErrorSet[value] : constructor(value);
+      if (!item) {
+        throwErrorExpected(structure, value);
+      } 
     }
+    return item
+  };
+  return {
+    get: (getValue.length === 0) 
+    ? function getError(allowZero) {
+        const value = getValue.call(this);
+        return findError(value, allowZero);
+      }
+    : function getErrorElement(index) {
+        const value = getValue.call(this, index);
+        return findError(value, false);
+      },
+    set: (setValue.length === 1) 
+    ? function setError(value, allowZero) {
+        const item = findError(value, allowZero);
+        setValue.call(this, Number(item ?? 0));
+      }
+    : function setError(index, value) {
+        const item = findError(value, false);
+        setValue.call(this, index, Number(item));
+      },
   };
 }
 
@@ -525,7 +512,7 @@ export function useAllMemberTypes() {
   useIntEx();
   useUintEx();
   useFloatEx();
-  useEnumerationItemEx();
+  useEnumerationItem();
   useError();
   useObject();
   useType();

@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
 import { Environment } from '../src/environment.js';
-import { initializeErrorSets } from '../src/error-set.js';
+import { createGlobalErrorSet } from '../src/error-set.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { ENVIRONMENT, SLOTS } from '../src/symbol.js';
@@ -12,7 +12,7 @@ describe('Error set functions', function() {
     beforeEach(function() {
       useAllMemberTypes();
       useAllStructureTypes();
-      initializeErrorSets();
+      createGlobalErrorSet();
     })
     it('should define an error set', function() {
       const structure = env.beginStructure({
@@ -54,8 +54,8 @@ describe('Error set functions', function() {
       expect(Hello.UnableToCreateObject.message).to.equal('Unable to create object');
       expect(`${Hello.UnableToCreateObject}`).to.equal(`Error: Unable to create object`);
       expect(Hello.UnableToRetrieveMemoryLocation.valueOf()).to.equal(Hello.UnableToRetrieveMemoryLocation);
-      expect(Hello.UnableToRetrieveMemoryLocation.index).to.equal(5);
-      expect(Hello.UnableToCreateObject.index).to.equal(8);
+      expect(Number(Hello.UnableToRetrieveMemoryLocation)).to.equal(5);
+      expect(Number(Hello.UnableToCreateObject)).to.equal(8);
       expect(Hello(5)).to.equal(Hello.UnableToRetrieveMemoryLocation);
       expect(Hello(8)).to.equal(Hello.UnableToCreateObject);
       try {

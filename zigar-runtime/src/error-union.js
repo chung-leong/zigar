@@ -1,3 +1,5 @@
+import { getGlobalErrorSet } from './error-set.js';
+import { throwNotInErrorSet } from './error.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
 import { copyPointer, resetPointer } from './pointer.js';
@@ -24,7 +26,7 @@ export function defineErrorUnion(structure, env) {
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getError, set: setError } = getDescriptor(members[1], env);
   const get = function() {
-    const error = getError.call(this);
+    const error = getError.call(this, true);
     if (error) {
       throw error;
     } else {
@@ -32,8 +34,10 @@ export function defineErrorUnion(structure, env) {
     }
   };
   const isValueVoid = members[0].type === MemberType.Void;
+  const acceptAny = members[1].structure.name === 'anyerror';
+  const TargetError = (acceptAny) ? getGlobalErrorSet() : members[1].structure.constructor;
   const isChildActive = function() {
-    return !getError.call(this);
+    return !getError.call(this, true);
   };
   const clearValue = function() {
     this[RESETTER]();
@@ -41,7 +45,7 @@ export function defineErrorUnion(structure, env) {
   };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const propApplier = createPropertyApplier(structure);
-  const initializer = function(arg, con) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[COPIER](arg);
       if (hasPointer) {
@@ -49,16 +53,20 @@ export function defineErrorUnion(structure, env) {
           this[VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }
-    } else if (arg instanceof Error) {
+    } else if (arg instanceof TargetError) {
       setError.call(this, arg);
       clearValue.call(this);
     } else if (arg !== undefined || isValueVoid) {
       try {
         // call setValue() first, in case it throws
         setValue.call(this, arg);
-        setError.call(this, null);
+        setError.call(this, 0, true);
       } catch (err) {
-        if (arg && typeof(arg) === 'object') {
+        if (arg instanceof Error) {
+          // we give setValue a chance to see if the error is actually an acceptable value
+          // now is time to throw an error
+          throwNotInErrorSet(structure);
+        } else if (arg && typeof(arg) === 'object') {
           try {
             if (propApplier.call(this, arg) === 0) {
               throw err;

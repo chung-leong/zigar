@@ -383,6 +383,11 @@ describe('Structure functions', function() {
                 type: MemberType.EnumerationItem,
                 bitSize: 32,
                 byteSize: 4,
+                structure: {
+                  instance: {
+                    members: [ { type: MemberType.Uint } ]
+                  }
+                }
               }
             ]
           },
@@ -393,7 +398,7 @@ describe('Structure functions', function() {
       expect(features).to.contain('useStruct');
       expect(features).to.contain('useEnumerationItem');
     })
-    it('should report the need for extended enum support when unaligned enum is used', function() {
+    it('should report the need for extended int support when unaligned enum is used', function() {
       const structures = [ 
         {
           type: StructureType.Struct,
@@ -403,6 +408,11 @@ describe('Structure functions', function() {
                 type: MemberType.EnumerationItem,
                 bitOffset: 2,
                 bitSize: 32,
+                structure: {
+                  instance: {
+                    members: [ { type: MemberType.Uint } ]
+                  }
+                }
               }
             ]
           },
@@ -411,9 +421,10 @@ describe('Structure functions', function() {
       ];
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useStruct');
-      expect(features).to.contain('useEnumerationItemEx');
+      expect(features).to.contain('useUintEx');
+      expect(features).to.contain('useEnumerationItem');
     })
-    it('should report the need for extended enum support when non-standard enum is used', function() {
+    it('should report the need for extended int support when non-standard enum is used', function() {
       const structures = [ 
         {
           type: StructureType.Struct,
@@ -423,6 +434,11 @@ describe('Structure functions', function() {
                 type: MemberType.EnumerationItem,
                 bitSize: 35,
                 byteSize: 8,
+                structure: {
+                  instance: {
+                    members: [ { type: MemberType.Uint } ]
+                  }
+                }
               }
             ]
           },
@@ -431,33 +447,8 @@ describe('Structure functions', function() {
       ];
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useStruct');
-      expect(features).to.contain('useEnumerationItemEx');
-    })
-    it('should omit useEnumerationItem when useEnumerationItemEx is present', function() {
-      const structures = [ 
-        {
-          type: StructureType.Struct,
-          instance: { 
-            members: [
-              {
-                type: MemberType.EnumerationItem,
-                bitSize: 35,
-                byteSize: 8,
-              },
-              {
-                type: MemberType.EnumerationItem,
-                bitSize: 32,
-                byteSize: 4,
-              }
-            ]
-          },
-          static: { members: [] },
-        }
-      ];
-      const features = getFeaturesUsed(structures);
-      expect(features).to.contain('useStruct');
-      expect(features).to.contain('useEnumerationItemEx');
-      expect(features).to.not.contain('useEnumerationItem');
+      expect(features).to.contain('useUintEx');
+      expect(features).to.contain('useEnumerationItem');
     })
     it('should report the need for enum support when enum structure is used', function() {
       const structures = [ 
@@ -469,6 +460,11 @@ describe('Structure functions', function() {
                 type: MemberType.Uint,
                 bitSize: 32,
                 byteSize: 4,
+                structure: {
+                  instance: {
+                    members: [ { type: MemberType.Uint } ]
+                  }
+                }
               },
             ]
           },
@@ -490,6 +486,11 @@ describe('Structure functions', function() {
                 type: MemberType.Uint,
                 bitSize: 35,
                 byteSize: 8,
+                structure: {
+                  instance: {
+                    members: [ { type: MemberType.Uint } ]
+                  }
+                }
               },
             ]
           },
@@ -498,11 +499,9 @@ describe('Structure functions', function() {
       ];
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useEnumeration');
-      expect(features).to.contain('useEnumerationItemEx');
+      expect(features).to.contain('useEnumerationItem');
       expect(features).to.contain('useUintEx');
-      expect(features).to.not.contain('useEnumerationItem');
     })
-
     it('should report the need for error support', function() {
       const structures = [ 
         {
@@ -621,6 +620,24 @@ describe('Structure functions', function() {
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useStruct');
       expect(features).to.contain('useVoid');
+    })
+    it('should report the need for null support', function() {
+      const structures = [ 
+        {
+          type: StructureType.Struct,
+          instance: { 
+            members: [
+              {
+                type: MemberType.Null,
+              }
+            ]
+          },
+          static: { members: [] },
+        }
+      ];
+      const features = getFeaturesUsed(structures);
+      expect(features).to.contain('useStruct');
+      expect(features).to.contain('useNull');
     })
     it('should report the need for comptime support', function() {
       const structures = [ 

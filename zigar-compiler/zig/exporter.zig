@@ -1196,6 +1196,7 @@ fn exportComptimeValue(host: anytype, comptime value: anytype) !Value {
         .ComptimeInt => exportPointerTarget(host, &@as(IntType(i8, value), value), true),
         .ComptimeFloat => exportPointerTarget(host, &@as(f64, value), true),
         .EnumLiteral => exportPointerTarget(host, @tagName(value), true),
+        .Type => getStructure(host, value),
         else => return exportPointerTarget(host, &value, true),
     };
 }

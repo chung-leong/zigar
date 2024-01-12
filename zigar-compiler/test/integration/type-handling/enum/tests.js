@@ -70,10 +70,12 @@ export function addTests(importModule, options) {
     it('should handle enum in packed struct', async function() {
       this.timeout(120000);
       const { default: module, Pet, StructA, print } = await importTest('in-packed-struct');
+      debugger;
+      module.struct_a.pet1;
       expect(module.struct_a.pet1).to.equal(Pet.Dog);
       expect(module.struct_a.pet2).to.equal(Pet.Cat);
       expect(module.struct_a.number).to.equal(200);
-      expect(module.struct_a.pet3).to.equal(Pet.Cat);
+      expect(module.struct_a.pet3).to.equal(Pet.Monkey);
       const b = new StructA({});
       expect(b.pet1).to.equal(Pet.Monkey);
       expect(b.pet2).to.equal(Pet.Dog);

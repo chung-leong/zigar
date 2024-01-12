@@ -1603,7 +1603,7 @@ function defineErrorUnion(structure, env) {
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getError, set: setError } = getDescriptor(members[1], env);
   const get = function() {
-    const error = getError.call(this);
+    const error = getError.call(this, true);
     if (error) {
       throw error;
     } else {
@@ -1611,8 +1611,10 @@ function defineErrorUnion(structure, env) {
     }
   };
   const isValueVoid = members[0].type === MemberType.Void;
+  const acceptAny = members[1].structure.name === 'anyerror';
+  const TargetError = (acceptAny) ? getGlobalErrorSet() : members[1].structure.constructor;
   const isChildActive = function() {
-    return !getError.call(this);
+    return !getError.call(this, true);
   };
   const clearValue = function() {
     this[RESETTER]();
@@ -1620,7 +1622,7 @@ function defineErrorUnion(structure, env) {
   };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const propApplier = createPropertyApplier(structure);
-  const initializer = function(arg, con) {
+  const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[COPIER](arg);
       if (hasPointer) {
@@ -1628,14 +1630,14 @@ function defineErrorUnion(structure, env) {
           this[VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }
-    } else if (arg instanceof Error) {
+    } else if (arg instanceof TargetError) {
       setError.call(this, arg);
       clearValue.call(this);
     } else if (arg !== undefined || isValueVoid) {
       try {
         // call setValue() first, in case it throws
         setValue.call(this, arg);
-        setError.call(this, null);
+        setError.call(this, 0, true);
       } catch (err) {
         if (arg && typeof(arg) === 'object') {
           try {
@@ -2318,106 +2320,104 @@ function getStructureFactory(type) {
   return f;
 }
 
+function flagMemberUsage(member, features) {
+  const { type } = member;
+  switch (type) {
+    case MemberType.Int:
+      if(isByteAligned(member) && hasStandardIntSize(member)) {
+        features.useInt = true;
+      } else {
+        features.useIntEx = true;
+      }
+      break;
+    case MemberType.Uint:
+      if(isByteAligned(member) && hasStandardIntSize(member)) {
+        features.useUint = true;
+      } else {
+        features.useUintEx = true;
+      }
+      break;
+    case MemberType.EnumerationItem: {
+      features.useEnumerationItem = true;
+      const { type, structure } = member.structure.instance.members[0]; 
+      flagMemberUsage({ ...member, type, structure }, features);
+    } break;
+    case MemberType.Error:
+      features.useError = true;
+      break;
+    case MemberType.Float:
+      if (isByteAligned(member) && hasStandardFloatSize(member)) {
+        features.useFloat = true;
+      } else {
+        features.useFloatEx = true;
+      }
+      break;
+    case MemberType.Bool:
+      if (isByteAligned(member)) {
+        features.useBool = true;
+      } else {
+        features.useBoolEx = true;
+      }
+      break;
+    case MemberType.Object:
+      features.useObject = true;
+      break;
+    case MemberType.Void:
+      features.useVoid = true;
+      break;
+    case MemberType.Null:
+      features.useNull = true;
+      break;
+    case MemberType.Type:
+      features.useType = true;
+      break;
+    case MemberType.Comptime:
+      features.useComptime = true;
+      break;
+    case MemberType.Static:
+      features.useStatic = true;
+      break;
+    case MemberType.Literal:
+      features.useLiteral = true;
+      break;
+  }
+}
+
+function flagStructureUsage(structure, features) {
+  const { type } = structure;
+  const [ name ] = Object.entries(StructureType).find(a => a[1] === type);
+  features[`use${name}`] = true;
+  for (const members of [ structure.instance.members, structure.static.members ]) {
+    for (const member of members) {
+      flagMemberUsage(member, features);
+    }
+  }
+  switch (type) {
+    case StructureType.Pointer:
+      // pointer structure has Object member, while needing support for Uint
+      features.useUint = true;
+      break;
+    case StructureType.Enumeration:
+      // enum structure has Int/Uint member, while needing support for EnumerationItem
+      features.useEnumerationItem = true;
+      break;
+    case StructureType.ErrorSet:
+      // error set structures have Uint member, while needing support for Error
+      features.useError = true;
+      break;
+  } 
+}
+
 function getFeaturesUsed(structures) {
   const features = {};
   for (const structure of structures) {
-    const { type } = structure;
-    const [ name ] = Object.entries(StructureType).find(a => a[1] === type);
-    features[`use${name}`] = true;
-    for (const members of [ structure.instance.members, structure.static.members ]) {
-      for (const member of members) {
-        const { type, bitSize } = member;
-        switch (type) {
-          case MemberType.Int:
-            if(isByteAligned(member) && hasStandardIntSize(member)) {
-              features.useInt = true;
-            } else {
-              features.useIntEx = true;
-            }
-            break;
-          case MemberType.Uint:
-            if(isByteAligned(member) && hasStandardIntSize(member)) {
-              features.useUint = true;
-            } else {
-              features.useUintEx = true;
-            }
-            break;
-          case MemberType.EnumerationItem:
-            if(isByteAligned(member) && hasStandardIntSize(member)) {
-              features.useEnumerationItem = true;
-            } else {
-              features.useEnumerationItemEx = true;
-            }
-            break;
-          case MemberType.Error:
-            features.useError = true;
-            break;
-          case MemberType.Float:
-            if (isByteAligned(member) && hasStandardFloatSize(member)) {
-              features.useFloat = true;
-            } else {
-              features.useFloatEx = true;
-            }
-            break;
-          case MemberType.Bool:
-            if (isByteAligned(member)) {
-              features.useBool = true;
-            } else {
-              features.useBoolEx = true;
-            }
-            break;
-          case MemberType.Object:
-            features.useObject = true;
-            break;
-          case MemberType.Void:
-            features.useVoid = true;
-            break;
-          case MemberType.Null:
-            features.useNull = true;
-            break;
-          case MemberType.Type:
-            features.useType = true;
-            break;
-          case MemberType.Comptime:
-            features.useComptime = true;
-            break;
-          case MemberType.Static:
-            features.useStatic = true;
-            break;
-          case MemberType.Literal:
-            features.useLiteral = true;
-            break;
-        }         
-      }
-    }
-    switch (type) {
-      case StructureType.Pointer:
-        // pointer structure have Object member, while needing support for Uint
-        features.useUint = true;
-        break;
-      case StructureType.Enumeration: {
-        // enumeration structures have Int/Uint member, while needing support for EnumerationItem
-        const [ member ] = structure.instance.members;
-        if(isByteAligned(member) && hasStandardIntSize(member)) {
-          features.useEnumerationItem = true;
-        } else {
-          features.useEnumerationItemEx = true;
-        }
-      } break;
-      case StructureType.ErrorSet:
-        // error set structures have Uint member, while needing support for Error
-        features.useError = true;
-        break;
-    } 
+    flagStructureUsage(structure, features);
   }
   if (features.useIntEx) {
     delete features.useInt;
   }
   if (features.useUintEx) {
     delete features.useUint;
-  }
-  if (features.useEnumerationItemEx) {
-    delete features.useEnumerationItem;
   }
   if (features.useFloatEx) {
     delete features.useFloat;
@@ -2855,8 +2855,8 @@ function useFloatEx() {
   factories[MemberType.Float] = getFloatDescriptorEx;
 }
 
-function useEnumerationItemEx() {
-  factories[MemberType.EnumerationItem] = getEnumerationItemDescriptorEx;
+function useEnumerationItem() {
+  factories[MemberType.EnumerationItem] = getEnumerationItemDescriptor;
 }
 
 function useError() {
@@ -2977,92 +2977,99 @@ function getFloatDescriptorEx(member, env) {
   return getDescriptorUsing(member, env, getDataViewFloatAccessorEx)
 }
 
-function getEnumerationItemDescriptorEx(member, env) {
-  const getDataViewAccessor = addEnumerationLookup(getDataViewIntAccessorEx);
-  return getDescriptorUsing(member, env, getDataViewAccessor) ;
-}
-
-function addEnumerationLookup(getDataViewIntAccessor) {
-  return function(access, member) {
-    // no point in using non-standard int accessor to read enum values unless they aren't byte-aligned
-    const { structure } = member;
-    const [ intMember ] = structure.instance.members;
-    const accessor = getDataViewIntAccessor(access, intMember);
-    if (access === 'get') {
-      return function(offset, littleEndian) {
-        const { constructor } = structure;
-        const value = accessor.call(this, offset, littleEndian);
-        // the enumeration constructor returns the object for the int value
-        const object = constructor(value);
-        if (!object) {
-          throwEnumExpected(structure, value);
-        }
-        return object;
-      };
-    } else {
-      return function(offset, value, littleEndian) {
-        const { constructor } = structure;
-        let item;
-        if (value instanceof constructor) {
-          item = value;
-        } else {
-          item = constructor(value);
-        }
-        if (!item) {
-          throwEnumExpected(structure, value);
-        }
-        accessor.call(this, offset, item[Symbol.toPrimitive](), littleEndian);
-      };
+function getEnumerationItemDescriptor(member, env) {
+  const { structure } = member;
+  // enum can be int or uint--need the type from the structure
+  const { type: intType, structure: intStructure } = structure.instance.members[0];
+  const valueMember = {
+    ...member,
+    type: intType,
+    structure: intStructure,
+  };
+  const { get: getValue, set: setValue } = getDescriptor(valueMember, env);
+  const findEnum = function(value) {
+    const { constructor } = structure;
+    // the enumeration constructor returns the object for the int value
+    const item = (value instanceof constructor) ? value : constructor(value);
+    if (!item) {
+      throwEnumExpected(structure, value);
     }
+    return item
+  };
+  return {
+    get: (getValue.length === 0) 
+    ? function getEnum() {
+        const value = getValue.call(this);
+        return findEnum(value);
+      }
+    : function getEnumElement(index) {
+        const value = getValue.call(this, index);
+        return findEnum(value);
+      },
+    set: (setValue.length === 1) 
+    ? function setEnum(value) {
+        // call Symbol.toPrimitive directly as enum can be bigint or number
+        const item = findEnum(value);
+        setValue.call(this, item[Symbol.toPrimitive]());
+      }
+    : function setEnumElement(index, value) {
+        const item = findEnum(value);
+        setValue.call(this, index, item[Symbol.toPrimitive]());
+      },
   };
 }
 
 function getErrorDescriptor(member, env) {
-  const getDataViewAccessor = addErrorLookup(getDataViewIntAccessor);
-  return getDescriptorUsing(member, env, getDataViewAccessor) ;
-}
-
-function addErrorLookup(getDataViewIntAccessor) {
-  return function(access, member) {
-    // no point in using non-standard int accessor to read enum values unless they aren't byte-aligned
-    const { structure } = member;
-    const [ intMember ] = structure.instance.members;
-    const acceptAny = structure.name === 'anyerror';
-    const accessor = getDataViewIntAccessor(access, intMember);
-    const allErrors = getCurrentErrorSets();
-    if (access === 'get') {
-      return function(offset, littleEndian) {
-        const { constructor } = structure;
-        const index = accessor.call(this, offset, littleEndian);
-        if (index) {
-          const object = acceptAny ? allErrors[index] : constructor(index);
-          if (!object) {
-            throwErrorExpected(structure, index);
-          }
-          return object;
-        }
-      };
+  const { structure } = member;
+  const { name, instance: { members } } = structure;
+  const { type: intType, structure: intStructure } = members[0];
+  const valueMember = {
+    ...member,
+    type: intType,
+    structure: intStructure,
+  };
+  const { get: getValue, set: setValue } = getDescriptor(valueMember, env);  
+  const acceptAny = name === 'anyerror';
+  const globalErrorSet = getGlobalErrorSet();
+  const findError = function(value, allowZero = false) {
+    const { constructor } = structure;
+    // the enumeration constructor returns the object for the int value
+    let item;
+    if (value === 0 && allowZero) {
+      return;
+    } else if (value instanceof Error) {
+      if (value instanceof (acceptAny ? globalErrorSet : constructor)) {
+        item = value;
+      } else {
+        throwNotInErrorSet(structure);
+      }
     } else {
-      const Primitive = getPrimitiveClass(intMember);
-      const zero = Primitive(0);
-      return function(offset, value, littleEndian) {
-        const { constructor } = structure;
-        let object;
-        if (value instanceof Error) {
-          if (acceptAny ? 'index' in value : value instanceof constructor) {
-            object = value;
-          } else {
-            throwNotInErrorSet(structure);
-          }
-        } else if (value !== null) {
-          object = acceptAny ? allErrors[value] : constructor(value);
-          if (!object) {
-            throwErrorExpected(structure, value);
-          } 
-        }  
-        accessor.call(this, offset, object?.index ?? zero, littleEndian);
-      };
+      item = acceptAny ? globalErrorSet[value] : constructor(value);
+      if (!item) {
+        throwErrorExpected(structure, value);
+      } 
     }
+    return item
+  };
+  return {
+    get: (getValue.length === 0) 
+    ? function getError(allowZero) {
+        const value = getValue.call(this);
+        return findError(value, allowZero);
+      }
+    : function getErrorElement(index) {
+        const value = getValue.call(this, index);
+        return findError(value, false);
+      },
+    set: (setValue.length === 1) 
+    ? function setError(value, allowZero) {
+        const item = findError(value, allowZero);
+        setValue.call(this, Number(item ?? 0));
+      }
+    : function setError(index, value) {
+        const item = findError(value, false);
+        setValue.call(this, index, Number(item ?? 0));
+      },
   };
 }
 
@@ -3240,7 +3247,7 @@ function useAllMemberTypes() {
   useIntEx();
   useUintEx();
   useFloatEx();
-  useEnumerationItemEx();
+  useEnumerationItem();
   useError();
   useObject();
   useType();
@@ -3608,16 +3615,6 @@ function getDataViewBoolAccessorEx(access, member) {
       };
     }
   });
-}
-
-function getDataViewBuiltInAccessor(access, member) {
-  return cacheMethod(access, member, (name) => {
-    return DataView.prototype[name];
-  });
-}
-
-function getDataViewIntAccessor(access, member) {
-  return getDataViewBuiltInAccessor(access, member);
 }
 
 function getDataViewIntAccessorEx(access, member) {
@@ -4273,8 +4270,6 @@ function cacheMethod(access, member, cb) {
 
 const methodCache = {};
 
-let currentErrorSets;
-
 function defineErrorSet(structure, env) {
   const {
     byteSize,
@@ -4314,7 +4309,7 @@ function defineErrorSet(structure, env) {
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
-  Object.setPrototypeOf(constructor.prototype, Error.prototype);
+  Object.setPrototypeOf(constructor.prototype, globalErrorSet.prototype);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
   const getMessage = function() {
     const index = getIndex.call(this);
@@ -4323,7 +4318,6 @@ function defineErrorSet(structure, env) {
   const toStringTag = function() { return 'Error' };
   const instanceDescriptors = {
     $: { get, set },
-    index: { get: getIndex },
     message: { get: getMessage },
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
@@ -4334,6 +4328,7 @@ function defineErrorSet(structure, env) {
     // ensure that libraries that rely on the string tag for type detection will
     // correctly identify the object as an error
     [Symbol.toStringTag]: { get: toStringTag },
+    [Symbol.toPrimitive]: { value: getIndex },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [NORMALIZER]: { value: normalizeError },
   };
@@ -4355,12 +4350,15 @@ function normalizeError(map, forJSON) {
   }
 }
 
-function initializeErrorSets() {
-  currentErrorSets = {};
+let globalErrorSet;
+
+function createGlobalErrorSet() {
+  globalErrorSet = function() {};
+  Object.setPrototypeOf(globalErrorSet.prototype, Error.prototype);
 }
 
-function getCurrentErrorSets() {
-  return currentErrorSets;
+function getGlobalErrorSet() {
+  return globalErrorSet;
 }
 
 function addMethods(s, env) {
@@ -4429,12 +4427,12 @@ function addStaticMembers(structure, env) {
       }      
     }
   } else if (type === StructureType.ErrorSet) {
-    const allErrors = getCurrentErrorSets();
+    const allErrors = getGlobalErrorSet();
     const errors = constructor[ITEMS];
     const messages = constructor[MESSAGES];
     for (const { name, slot } of members) {
       let error = constructor[SLOTS][slot];
-      const { index } = error;
+      const index = Number(error);
       const previous = allErrors[index];
       if (previous) {
         if (!(previous instanceof constructor)) {
@@ -4442,15 +4440,15 @@ function addStaticMembers(structure, env) {
           // see if we should make that set a subclass or superclass of this one
           const otherSet = previous.constructor;
           const otherErrors = Object.values(otherSet[SLOTS]);
-          const errorIndices = Object.values(constructor[SLOTS]).map(e => e.index);
-          if (otherErrors.every(e => errorIndices.includes(e.index))) {
+          const errorIndices = Object.values(constructor[SLOTS]).map(e => Number(e));
+          if (otherErrors.every(e => errorIndices.includes(Number(e)))) {
             // this set contains the all errors of the other one, so it's a superclass
             Object.setPrototypeOf(otherSet.prototype, constructor.prototype);
           } else {
             // make this set a subclass of the other
             Object.setPrototypeOf(constructor.prototype, otherSet.prototype);
             for (const otherError of otherErrors) {
-              if (errorIndices.includes(otherError.index)) {
+              if (errorIndices.includes(Number(otherError))) {
                 // this set should be this error object's class
                 Object.setPrototypeOf(otherError, constructor.prototype);
               }
@@ -4461,7 +4459,7 @@ function addStaticMembers(structure, env) {
       } else {
         // set error message
         const message = decamelizeErrorName(name);
-        messages[error.index] = message;
+        messages[index] = message;
         // add to hash
         allErrors[index] = error;
         allErrors[message] = error;
@@ -4774,7 +4772,7 @@ class Environment {
   }
 
   acquireStructures(options) {
-    initializeErrorSets();
+    createGlobalErrorSet();
     const thunkId = this.getFactoryThunk();
     const ArgStruct = this.defineFactoryArgStruct();
     const args = new ArgStruct([ options ]);

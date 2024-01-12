@@ -63,7 +63,7 @@ export function addTests(importModule, options) {
       expect(module.union_a.number).to.equal(1.23);
       expect(TagType(module.union_a)).to.equal(TagType.number);
       expect(module.union_a.state).to.be.null;
-      expect(() => new UnionA({ number: 0 })).to.throw(TypeError)
+      expect(() => new UnionA({ number: 0.1 })).to.throw(TypeError)
         .with.property('message').that.contains('Comptime');
       const b = new UnionA({ state: true });
       expect(b.valueOf()).to.eql({ state: true });

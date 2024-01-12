@@ -800,5 +800,71 @@ describe('Optional functions', function() {
       expect(() => pets.$ = { cat: 123 }).to.throw(TypeError)
         .with.property('message').that.contains('read-only');
     });
+    it('should do nothing when undefined is assigned to it', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Optional,
+        name: 'Hello',
+        byteSize: 18,
+      });
+      env.attachMember(structure, {
+        name: 'value',
+        type: MemberType.Float,
+        bitOffset: 0,
+        bitSize: 128,
+        byteSize: 16,
+        structure: {
+          type: StructureType.Primitive,
+        }
+      });
+      env.attachMember(structure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: 128,
+        bitSize: 1,
+        byteSize: 1,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const object = new Hello(3.14);
+      expect(object.$).to.equal(3.14);
+      object.$ = undefined;
+      expect(object.$).to.equal(3.14);
+    })
+    it('should work correctly when value is void', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Optional,
+        name: 'Hello',
+        byteSize: 1,
+      });
+      env.attachMember(structure, {
+        name: 'value',
+        type: MemberType.Void,
+        bitOffset: 0,
+        bitSize: 0,
+        byteSize: 0,
+        structure: {
+          type: StructureType.Primitive,
+        }
+      });
+      env.attachMember(structure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitOffset: 0,
+        bitSize: 1,
+        byteSize: 1,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const object = Hello(new ArrayBuffer(1));
+      expect(object.$).to.equal(null);
+      object.$ = undefined;
+      expect(object.$).to.equal(undefined);
+      expect(object.valueOf()).to.equal(undefined);
+      object.$ = null;
+      expect(object.$).to.equal(null);
+      expect(object.valueOf()).to.equal(null);
+    })
   })
 })

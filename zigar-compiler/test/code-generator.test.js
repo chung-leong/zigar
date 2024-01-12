@@ -3,13 +3,12 @@ import ChaiAsPromised from 'chai-as-promised';
 
 use(ChaiAsPromised);
 
-import {
-  generateCodeForWASM,
-  generateCodeForNode,
-} from '../src/code-generator.js';
-import { StructureType } from '../../zigar-runtime/src/structure.js';
 import { MemberType } from '../../zigar-runtime/src/member.js';
+import { StructureType } from '../../zigar-runtime/src/structure.js';
 import { MEMORY, SLOTS } from '../../zigar-runtime/src/symbol.js';
+import {
+  generateCodeForWASM
+} from '../src/code-generator.js';
 
 describe('Code generation', function() {
   describe('generateCodeForWASM', function() {
@@ -357,7 +356,7 @@ describe('Code generation', function() {
         },
       };
       const { code } = generateCodeForWASM([ enumSetStructure, structure ], {});
-      expect(code).to.contain('useEnumerationItemEx()');
+      expect(code).to.contain('useEnumerationItem()');
       expect(code).to.contain('enumItem');
       expect(code).to.contain('enum {}');
     })

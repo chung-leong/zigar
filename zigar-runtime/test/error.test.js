@@ -361,9 +361,24 @@ describe('Error functions', function() {
         name: 'Hello',
         type: StructureType.BareUnion,
         byteSize: 8,
+        instance: {
+          members: [ { name: 'cat' } ]
+        },
       };
       expect(() => throwNoProperty(structure, 'cow')).to.throw(TypeError)
         .with.property('message').that.contains('Hello');
+    })
+    it('should indicate field is comptime when member is present', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.BareUnion,
+        byteSize: 8,
+        instance: {
+          members: [ { name: 'cat' } ]
+        },
+      };
+      expect(() => throwNoProperty(structure, 'cat')).to.throw(TypeError)
+        .with.property('message').that.contains('Comptime');
     })
   })
   describe('throwArgumentCountMismatch', function() {

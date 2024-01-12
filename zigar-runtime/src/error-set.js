@@ -6,8 +6,6 @@ import { convertToJSON, getBase64Accessors, getDataViewAccessors, getTypedArrayA
 import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import { ALIGN, COPIER, ITEMS, MESSAGES, NORMALIZER, SIZE } from './symbol.js';
 
-let currentErrorSets;
-
 export function defineErrorSet(structure, env) {
   const {
     byteSize,
@@ -47,16 +45,22 @@ export function defineErrorSet(structure, env) {
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
-  Object.setPrototypeOf(constructor.prototype, Error.prototype);
+  Object.setPrototypeOf(constructor.prototype, globalErrorSet.prototype);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
   const getMessage = function() {
     const index = getIndex.call(this);
     return constructor[MESSAGES][index];
   };
   const toStringTag = function() { return 'Error' };
+  const toPrimitive = function(hint) {
+    if (hint === 'string') {
+      return Error.prototype.toString.call(this, hint);
+    } else {
+      return getIndex.call(this);
+    }
+  };
   const instanceDescriptors = {
     $: { get, set },
-    index: { get: getIndex },
     message: { get: getMessage },
     dataView: getDataViewAccessors(structure),
     base64: getBase64Accessors(structure),
@@ -67,6 +71,7 @@ export function defineErrorSet(structure, env) {
     // ensure that libraries that rely on the string tag for type detection will
     // correctly identify the object as an error
     [Symbol.toStringTag]: { get: toStringTag },
+    [Symbol.toPrimitive]: { value: toPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [NORMALIZER]: { value: normalizeError },
   };
@@ -89,10 +94,15 @@ export function normalizeError(map, forJSON) {
   }
 }
 
-export function initializeErrorSets() {
-  currentErrorSets = {};
+let globalErrorSet;
+
+export function createGlobalErrorSet() {
+  globalErrorSet = function() {};
+  Object.setPrototypeOf(globalErrorSet.prototype, Error.prototype);
 }
 
-export function getCurrentErrorSets() {
-  return currentErrorSets;
+export function getGlobalErrorSet() {
+  return globalErrorSet;
 }
+
+

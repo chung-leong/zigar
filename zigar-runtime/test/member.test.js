@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
 import { clearMethodCache } from '../src/data-view.js';
-import { getCurrentErrorSets, initializeErrorSets } from '../src/error-set.js';
+import { createGlobalErrorSet, getGlobalErrorSet } from '../src/error-set.js';
 import {
   MemberType,
   getDescriptor,
@@ -9,12 +9,11 @@ import {
   isReadOnly,
   useAllMemberTypes,
   useBool,
-  useEnumerationItem,
   useFloat,
   useInt,
   useIntEx,
   useUint,
-  useUintEx,
+  useUintEx
 } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { MEMORY, SLOTS, VIVIFICATOR } from '../src/symbol.js';
@@ -58,7 +57,7 @@ describe('Member functions', function() {
       littleEndian: true,
       runtimeSafety: true,
     };
-    it('should return void accessors', function() {
+    it('should return void descriptor', function() {
       const member = {
         type: MemberType.Void,
         bitSize: 0,
@@ -74,7 +73,7 @@ describe('Member functions', function() {
       const { set: setNoCheck } = getDescriptor(member, { ...env, runtimeSafety: false });
       expect(() => setNoCheck.call(object, undefined)).to.not.throw();
     })
-    it('should return null accessors', function() {
+    it('should return null descriptor', function() {
       const member = {
         type: MemberType.Null,
         bitSize: 0,
@@ -90,7 +89,7 @@ describe('Member functions', function() {
       const { set: setNoCheck } = getDescriptor(member, { ...env, runtimeSafety: false });
       expect(() => setNoCheck.call(object, null)).to.not.throw();
     })
-    it('should return error accessors', function() {
+    it('should return error descriptor', function() {
       const MyError = function(index) {
         if (this) {
           this.index = index;
@@ -100,6 +99,9 @@ describe('Member functions', function() {
             case 2: return error2;
           }
         }
+      };
+      MyError.prototype[Symbol.toPrimitive] = function() {
+        return this.index;
       };
       Object.setPrototypeOf(MyError.prototype, Error.prototype);
       const error1 = new MyError(1), error2 = new MyError(2);
@@ -136,7 +138,7 @@ describe('Member functions', function() {
       expect(() => set.call(object, new Error)).to.throw(TypeError);
       expect(() => set.call(object, 3)).to.throw(TypeError);
     })
-    it('should return accessors for anyerror', function() {
+    it('should return error element descriptor', function() {
       const MyError = function(index) {
         if (this) {
           this.index = index;
@@ -147,10 +149,64 @@ describe('Member functions', function() {
           }
         }
       };
+      MyError.prototype[Symbol.toPrimitive] = function() {
+        return this.index;
+      };
       Object.setPrototypeOf(MyError.prototype, Error.prototype);
       const error1 = new MyError(1), error2 = new MyError(2);
-      initializeErrorSets();
-      const allErrors = getCurrentErrorSets();
+      const member = {
+        type: MemberType.Error,
+        bitSize: 16,
+        byteSize: 2,
+        structure: {
+          name: 'MyError',
+          constructor: MyError,
+          instance: {
+            members: [
+              {
+                type: MemberType.Uint,
+                bitSize: 16,
+                byteSize: 2,
+                bitOffset: 0
+              }
+            ]
+          }
+        }
+      };
+      const dv = new DataView(new ArrayBuffer(12));
+      const object = { [MEMORY]: dv };
+      const { get, set } = getDescriptor(member, env);
+      dv.setUint16(0, 1, true);
+      dv.setUint16(2, 2, true);
+      dv.setUint16(4, 2, true);
+      dv.setUint16(6, 1, true);
+      expect(get.call(object, 3)).to.equal(error1);
+      set.call(object, 3, error2);
+      expect(dv.getUint16(6, true)).to.equal(2);
+      expect(get.call(object, 3)).to.equal(error2);
+      set.call(object, 2, 1);
+      expect(get.call(object, 2)).to.equal(error1);
+      expect(() => set.call(object, new Error)).to.throw(TypeError);
+      expect(() => set.call(object, 3)).to.throw(TypeError);
+    })
+    it('should return descriptor for anyerror', function() {
+      const MyError = function(index) {
+        if (this) {
+          this.index = index;
+        } else {
+          switch (index) {
+            case 1: return error1;
+            case 2: return error2;
+          }
+        }
+      };
+      MyError.prototype[Symbol.toPrimitive] = function() {
+        return this.index;
+      };
+      createGlobalErrorSet();
+      const allErrors = getGlobalErrorSet();
+      Object.setPrototypeOf(MyError.prototype, allErrors.prototype);
+      const error1 = new MyError(1), error2 = new MyError(2);
       allErrors[1] = error1;
       allErrors[2] = error2;
       const member = {
@@ -186,7 +242,7 @@ describe('Member functions', function() {
       expect(() => set.call(object, new Error)).to.throw(TypeError);
       expect(() => set.call(object, 3)).to.throw(TypeError);
     })
-    it('should return bool accessors', function() {
+    it('should return bool descriptor', function() {
       const object = {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
@@ -205,7 +261,7 @@ describe('Member functions', function() {
       set.call(object, false);
       expect(get.call(object)).to.equal(false);
     })
-    it('should return bitfield accessors', function() {
+    it('should return bitfield descriptor', function() {
       const dv = new DataView(new ArrayBuffer(8));
       dv.setUint32(4, 3, true);
       const object = { [MEMORY]: dv };
@@ -220,7 +276,7 @@ describe('Member functions', function() {
       expect(get.call(object)).to.equal(false);
       expect(dv.getUint32(4, true)).to.equal(1);
     })
-    it('should not return bitfield accessors when useBoolEx is not active', function() {
+    it('should not return bitfield descriptor when useBoolEx is not active', function() {
       clearMethodCache();
       useBool();
       const member = {
@@ -231,7 +287,7 @@ describe('Member functions', function() {
       const descriptor = getDescriptor(member, env);
       expect(descriptor).to.be.undefined;
     })
-    it('should return int accessors', function() {
+    it('should return int descriptor', function() {
       const object = {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
@@ -250,7 +306,7 @@ describe('Member functions', function() {
       set.call(object, 3456);
       expect(get.call(object)).to.equal(3456);
     })
-    it('should return uint accessors', function() {
+    it('should return uint descriptor', function() {
       const object = {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
@@ -269,7 +325,7 @@ describe('Member functions', function() {
       set.call(object, 3456);
       expect(get.call(object)).to.equal(3456);
     })
-    it('should return standard int accessors when only useIntEx is active', function() {
+    it('should return standard int descriptor when only useIntEx is active', function() {
       clearMethodCache();
       useIntEx();
       const object = {
@@ -290,7 +346,7 @@ describe('Member functions', function() {
       set.call(object, 3456);
       expect(get.call(object)).to.equal(3456);
     })
-    it('should return standard int accessors when only useUintEx is active', function() {
+    it('should return standard int descriptor when only useUintEx is active', function() {
       clearMethodCache();
       useUintEx();
       const object = {
@@ -311,7 +367,7 @@ describe('Member functions', function() {
       set.call(object, 3456);
       expect(get.call(object)).to.equal(3456);
     })
-    it('should return small int accessors', function() {
+    it('should return small int descriptor', function() {
       const dv = new DataView(new ArrayBuffer(8));
       dv.setInt32(4, 0x07, true);
       const object = { [MEMORY]: dv };
@@ -328,7 +384,7 @@ describe('Member functions', function() {
       const { set: setNoCheck } = getDescriptor(member, { ...env, runtimeSafety: false });
       expect(() => setNoCheck.call(object, 15)).to.not.throw();
     })
-    it('should return small uint accessors', function() {
+    it('should return small uint descriptor', function() {
       const dv = new DataView(new ArrayBuffer(8));
       dv.setInt32(4, 0x07, true);
       const object = { [MEMORY]: dv };
@@ -345,7 +401,7 @@ describe('Member functions', function() {
       const { set: setNoCheck } = getDescriptor(member, { env, runtimeSafety: false });
       expect(() => setNoCheck.call(object, 32)).to.not.throw();
     })
-    it('should not return small int accessors when useIntEx is not active', function() {
+    it('should not return small int descriptor when useIntEx is not active', function() {
       clearMethodCache();
       useInt();
       const member = {
@@ -356,7 +412,7 @@ describe('Member functions', function() {
       const descriptor = getDescriptor(member, env);
       expect(descriptor).to.be.undefined;
     })
-    it('should not return small uint accessors when useUintEx is not active', function() {
+    it('should not return small uint descriptor when useUintEx is not active', function() {
       clearMethodCache();
       useUint();
       const member = {
@@ -367,7 +423,7 @@ describe('Member functions', function() {
       const descriptor = getDescriptor(member, env);
       expect(descriptor).to.be.undefined;
     })
-    it('should return float accessors', function() {
+    it('should return float descriptor', function() {
       const object = {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
@@ -386,7 +442,7 @@ describe('Member functions', function() {
       set.call(object, 1234.5678);
       expect(get.call(object)).to.equal(1234.5678);
     })
-    it('should return small float accessors', function() {
+    it('should return small float descriptor', function() {
       const object = {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
@@ -404,7 +460,7 @@ describe('Member functions', function() {
       set.call(object, 3.5);
       expect(get.call(object)).to.equal(3.5);
     })
-    it('should not return small float accessors when useFloatEx is not active', function() {
+    it('should not return small float descriptor when useFloatEx is not active', function() {
       clearMethodCache();
       useFloat();
       const member = {
@@ -416,7 +472,7 @@ describe('Member functions', function() {
       const descriptor = getDescriptor(member, env);
       expect(descriptor).to.be.undefined;
     })
-    it('should return enum item accessors', function() {
+    it('should return enum item descriptor', function() {
       const DummyValue1 = {
         [Symbol.toPrimitive]() { return 1 }
       };
@@ -458,14 +514,64 @@ describe('Member functions', function() {
       const { get, set } = getDescriptor(member, { ...env, runtimeSafety: false });
       expect(get.call(object)).to.equal(DummyValue1);
       set.call(object, DummyEnum(2));
-      expect(dv.getUint32(4, true)).to.equal(2);
+      expect(dv.getUint8(4, true)).to.equal(2);
       expect(get.call(object)).to.equal(DummyValue2);
       expect(() => set.call(object, 1)).to.not.throw();
       expect(() => set.call(object, 5)).to.throw();
-      dv.setUint32(4, 3, true);
+      dv.setUint8(4, 3, true);
       expect(() => get.call(object)).to.throw();
     })
-    it('should return small enum item accessors', function() {
+    it('should return enum element descriptor', function() {
+      const DummyValue1 = {
+        [Symbol.toPrimitive]() { return 1 }
+      };
+      const DummyValue2 = {
+        [Symbol.toPrimitive]() { return 2 }
+      };
+      const DummyEnum = function(v) {
+        if (v === 1) {
+          return DummyValue1;
+        } else if (v === 2) {
+          return DummyValue2;
+        }
+      };
+      Object.setPrototypeOf(DummyValue1, DummyEnum.prototype);
+      Object.setPrototypeOf(DummyValue2, DummyEnum.prototype);
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setUint32(0, 1, true);
+      dv.setUint32(1, 2, true);
+      const object = { [MEMORY]: dv };
+      const member = {
+        type: MemberType.EnumerationItem,
+        bitSize: 8,
+        byteSize: 1,
+        structure: {
+          name: 'DummEnum',
+          type: StructureType.Enumeration,
+          constructor: DummyEnum,
+          instance: {
+            members: [ 
+              {
+                type: MemberType.Uint,
+                bitSize: 8,
+                byteSize: 1,
+              } 
+            ]
+          }
+        },
+      };
+      const { get, set } = getDescriptor(member, { ...env, runtimeSafety: false });
+      expect(get.call(object, 0)).to.equal(DummyValue1);
+      set.call(object, 0, DummyEnum(2));
+      expect(dv.getUint8(0, true)).to.equal(2);
+      expect(get.call(object, 0)).to.equal(DummyValue2);
+      expect(get.call(object, 1)).to.equal(DummyValue2);
+      expect(() => set.call(object, 1, 1)).to.not.throw();
+      expect(() => set.call(object, 0, 5)).to.throw();
+      dv.getUint8(4, 3, true);
+      expect(() => get.call(object, 4)).to.throw();
+    })
+    it('should return small enum item descriptor', function() {
       const DummyValue1 = {
         [Symbol.toPrimitive]() { return 1 }
       };
@@ -508,29 +614,7 @@ describe('Member functions', function() {
       expect(dv.getUint32(4, true)).to.equal(2);
       expect(get.call(object)).to.equal(DummyValue2);
     })
-    it('should not return small enum item accessors when useEnumerationItemEx is not active', function() {
-      clearMethodCache();
-      useEnumerationItem();
-      const member = {
-        type: MemberType.EnumerationItem,
-        bitSize: 4,
-        bitOffset: 32,
-        structure: {
-          instance: {
-            members: [ 
-              {
-                type: MemberType.Uint,
-                bitSize: 4,
-                bitOffset: 0,
-              } 
-            ]
-          }
-        },
-      };
-      const descriptor = getDescriptor(member, env);
-      expect(descriptor).to.be.undefined;
-    })
-    it('should return object accessors (Struct)', function() {
+    it('should return object descriptor (Struct)', function() {
       const DummyClass = function(arg) {
         this.value = arg
       };
@@ -567,7 +651,7 @@ describe('Member functions', function() {
       expect(get.call(object)).to.equal(dummyObject);
       expect(dummyObject.value).to.equal(456);
     })
-    it('should return object accessors (Optional)', function() {
+    it('should return object descriptor (Optional)', function() {
       const DummyClass = function(arg) {
         this.value = arg;
       } ;
@@ -599,7 +683,7 @@ describe('Member functions', function() {
       set.call(object, 456);
       expect(get.call(object)).to.equal(456);
     })
-    it('should return object accessors (ErrorUnion)', function() {
+    it('should return object descriptor (ErrorUnion)', function() {
       const DummyClass = function(arg) {
         this.value = arg;
       } ;
@@ -639,7 +723,7 @@ describe('Member functions', function() {
       set.call(object, new Error('Pants on fire'));
       expect(() => get.call(object)).to.throw();
     })
-    it('should return int array accessors', function() {
+    it('should return int array descriptor', function() {
       const member = {
         type: MemberType.Int,
         bitSize: 32,
@@ -664,7 +748,7 @@ describe('Member functions', function() {
       expect(dv.getInt32(4, true)).to.equal(5);
       expect(dv.getInt32(8, true)).to.equal(5);
     })
-    it('should return big int array accessors', function() {
+    it('should return big int array descriptor', function() {
       const member = {
         type: MemberType.Int,
         bitSize: 64,
@@ -689,7 +773,7 @@ describe('Member functions', function() {
       expect(dv.getBigInt64(8, true)).to.equal(5n);
       expect(dv.getBigInt64(16, true)).to.equal(5n);
     })
-    it('should return object array accessors (Struct)', function() {
+    it('should return object array descriptor (Struct)', function() {
       const DummyClass = function(arg) {
         this.value = arg
       } ;
@@ -739,7 +823,7 @@ describe('Member functions', function() {
       expect(dummyObject2.value).to.equal(4567);
       expect(dummyObject3.value).to.equal(7890);
     })
-    it('should return object array accessors (Optional)', function() {
+    it('should return object array descriptor (Optional)', function() {
       const DummyClass = function(arg) {
         this.value = arg;
       } ;
@@ -820,7 +904,7 @@ describe('Member functions', function() {
       expect(get.call(object, 1, false)).to.equal(-3);
       expect(get.call(object, 2, false)).to.equal(-2);
     })
-    it('should return accessors for accessing WASM memory', function() {
+    it('should return descriptor for accessing WASM memory', function() {
       const memory = new WebAssembly.Memory({ initial: 1 });
       const dv = new DataView(memory.buffer, 0, 8);
       dv[MEMORY] = { memory, address: 0, len: 8 };
@@ -844,7 +928,7 @@ describe('Member functions', function() {
       const dv3 = object[MEMORY];
       expect(dv3).to.not.equal(dv2);
     })
-    it('should return array accessors for accessing WASM memory', function() {
+    it('should return array descriptor for accessing WASM memory', function() {
       const memory = new WebAssembly.Memory({ initial: 1 });
       const dv = new DataView(memory.buffer, 0, 8);
       dv[MEMORY] = { memory, address: 0, len: 8 };
@@ -913,7 +997,7 @@ describe('Member functions', function() {
       expect(() => get.call(object, 4)).to.throw(RangeError);
       expect(() => get.call(object, 4)).to.throw(RangeError);
     })
-    it('should return accessors that work correctly with regular ArrayBuffer', function() {
+    it('should return descriptor that work correctly with regular ArrayBuffer', function() {
       const dv = new DataView(new ArrayBuffer(4));
       const object = {
         [MEMORY]: dv,
@@ -929,7 +1013,7 @@ describe('Member functions', function() {
       expect(get.call(object)).to.equal(123);
       expect(() => set.call(object, 123n)).to.throw(TypeError);
     })
-    it('should return type accessors', function() {
+    it('should return type descriptor', function() {
       const DummyClass = function(value) {};
       const member = {
         type: MemberType.Type,
@@ -944,7 +1028,7 @@ describe('Member functions', function() {
       expect(get.call(object)).to.equal(DummyClass);
       expect(set).to.be.undefined;
     })
-    it('should return literal accessors', function() {
+    it('should return literal descriptor', function() {
       const literal = { string: 'Hello' };
       const member = {
         type: MemberType.Literal,
@@ -959,7 +1043,7 @@ describe('Member functions', function() {
       expect(get.call(object)).to.equal('Hello');
       expect(set).to.be.undefined;
     })
-    it('should return comptime value accessors', function() {
+    it('should return comptime value descriptor', function() {
       const comptime = { $: 1234 };
       const member = {
         type: MemberType.Comptime,
@@ -975,7 +1059,7 @@ describe('Member functions', function() {
       expect(get.call(object)).to.equal(1234);
       expect(set).to.be.undefined;
     })
-    it('should return comptime object accessors', function() {
+    it('should return comptime object descriptor', function() {
       const comptime = { hello: 1234 };
       const member = {
         type: MemberType.Comptime,
@@ -991,7 +1075,7 @@ describe('Member functions', function() {
       expect(get.call(object)).to.equal(comptime);
       expect(set).to.be.undefined;
     })
-    it('should return static value accessors', function() {
+    it('should return static value descriptor', function() {
       const staticObj = { $: 1234 };
       const member = {
         type: MemberType.Static,
@@ -1008,7 +1092,7 @@ describe('Member functions', function() {
       set.call(object, 4567);
       expect(staticObj.$).to.equal(4567);
     })
-    it('should return static object accessors', function() {
+    it('should return static object descriptor', function() {
       const staticObj = { $: 1234 };
       const member = {
         type: MemberType.Static,

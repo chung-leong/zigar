@@ -44,6 +44,13 @@ export function defineEnumerationShape(structure, env) {
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const toPrimitive = function(hint) {
+    if (hint === 'string') {
+      return this[NAME];
+    } else {
+      return getIndex.call(this);
+    }
+  };
   const instanceDescriptors = {
     $: { get, set },
     dataView: getDataViewAccessors(structure),
@@ -52,7 +59,7 @@ export function defineEnumerationShape(structure, env) {
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    [Symbol.toPrimitive]: { value: getIndex },
+    [Symbol.toPrimitive]: { value: toPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [NORMALIZER]: { value: normalizeEnumerationItem },
   };
