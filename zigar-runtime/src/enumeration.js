@@ -2,7 +2,7 @@ import { getDataView, getTypedArrayClass } from './data-view.js';
 import { throwInvalidInitializer } from './error.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { convertToJSON, getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors, getValueOf } from './special.js';
+import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf } from './special.js';
 import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import { ALIGN, COPIER, ITEMS, NAME, NORMALIZER, SIZE, TAG } from './symbol.js';
 
@@ -53,9 +53,9 @@ export function defineEnumerationShape(structure, env) {
   };
   const instanceDescriptors = {
     $: { get, set },
-    dataView: getDataViewAccessors(structure),
-    base64: getBase64Accessors(structure),
-    typedArray: typedArray && getTypedArrayAccessors(structure),
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
+    typedArray: typedArray && getTypedArrayDescriptor(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },

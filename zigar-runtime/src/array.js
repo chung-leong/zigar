@@ -4,8 +4,8 @@ import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { always, copyPointer, getProxy } from './pointer.js';
 import {
-  convertToJSON, getBase64Accessors, getDataViewAccessors, getStringAccessors,
-  getTypedArrayAccessors, getValueOf
+  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getStringDescriptor,
+  getTypedArrayDescriptor, getValueOf
 } from './special.js';
 import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import {
@@ -81,10 +81,10 @@ export function defineArray(structure, env) {
   const instanceDescriptors = {
     $: { get: getProxy, set: initializer },
     length: { value: length },
-    dataView: getDataViewAccessors(structure),
-    base64: getBase64Accessors(structure),
-    string: hasStringProp && getStringAccessors(structure),
-    typedArray: typedArray && getTypedArrayAccessors(structure),
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
+    string: hasStringProp && getStringDescriptor(structure),
+    typedArray: typedArray && getTypedArrayDescriptor(structure),
     get: { value: get },
     set: { value: set },
     entries: { value: getArrayEntries },

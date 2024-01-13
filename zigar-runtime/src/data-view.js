@@ -299,7 +299,7 @@ export function getTypeName(member) {
   }
 }
 
-function getBigIntAccessors(bitSize) {
+function getBigIntDescriptor(bitSize) {
   const getWord = DataView.prototype.getBigUint64;
   const setWord = DataView.prototype.setBigUint64;
   const wordCount = Math.ceil(bitSize / 64);
@@ -363,7 +363,7 @@ function defineAlignedIntAccessor(access, member) {
     }
   } else {
     // larger than 64 bits
-    const { get, set } = getBigIntAccessors(bitSize);
+    const { get, set } = getBigIntDescriptor(bitSize);
     const signMask = 2n ** BigInt(bitSize - 1);
     const valueMask = signMask - 1n;
     if (access === 'get') {
@@ -401,7 +401,7 @@ function defineAlignedUintAccessor(access, member) {
     }
   } else {
     // larger than 64 bits
-    const { get, set } = getBigIntAccessors(bitSize);
+    const { get, set } = getBigIntDescriptor(bitSize);
     const valueMask = (2n ** BigInt(bitSize)) - 1n;
     if (access === 'get') {
       return function(offset, littleEndian) {

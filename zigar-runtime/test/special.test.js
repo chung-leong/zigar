@@ -11,10 +11,10 @@ import {
 import { getMemoryCopier } from '../src/memory.js';
 import {
   convertToJSON,
-  getBase64Accessors,
-  getDataViewAccessors,
-  getStringAccessors,
-  getTypedArrayAccessors,
+  getBase64Descriptor,
+  getDataViewDescriptor,
+  getStringDescriptor,
+  getTypedArrayDescriptor,
   getValueOf,
 } from '../src/special.js';
 import {
@@ -37,14 +37,14 @@ describe('Special property functions', function() {
     useFloatEx();
     useObject();
   })
-  describe('getDataViewAccessors', function() {
+  describe('getDataViewDescriptor', function() {
     it('should return getter and setter for data view', function() {
       const structure = {
         type: StructureType.Primitive,
         name: 'i32',
         byteSize: 4,
       };
-      const { get, set } = getDataViewAccessors(structure);
+      const { get, set } = getDataViewDescriptor(structure);
       expect(get).to.be.a('function');
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(4));
@@ -64,7 +64,7 @@ describe('Special property functions', function() {
         name: 'i32',
         byteSize: 4,
       };
-      const { get, set } = getDataViewAccessors(structure);
+      const { get, set } = getDataViewDescriptor(structure);
       const memory = new WebAssembly.Memory({ initial: 1 });
       const dv = new DataView(memory.buffer, 0, 4);
       dv[MEMORY] = { memory, address: 0, len: 4 };
@@ -87,7 +87,7 @@ describe('Special property functions', function() {
         name: 'i32',
         byteSize: 4,
       };
-      const { set } = getDataViewAccessors(structure);
+      const { set } = getDataViewDescriptor(structure);
       const dv = new DataView(new ArrayBuffer(4));
       const object = {
         [MEMORY]: dv,
@@ -99,13 +99,13 @@ describe('Special property functions', function() {
         .with.property('message').that.contains('i32');
     })
   })
-  describe('getBase64Accessors', function() {
+  describe('getBase64Descriptor', function() {
     it('should return getter and setter for base64 encoded binary', function() {
       const structure = { 
         name: 'int',
         byteSize: 4,
       };
-      const { get, set } = getBase64Accessors(structure);
+      const { get, set } = getBase64Descriptor(structure);
       expect(get).to.be.a('function');
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(4));
@@ -129,7 +129,7 @@ describe('Special property functions', function() {
         .with.property('message').that.contains('a string').and.contains('undefined');
     })
   })
-  describe('getStringAccessors', function() {
+  describe('getStringDescriptor', function() {
     it('should return getter and setter for UTF-8 string', function() {
       const structure = {
         name: '[4]u8',
@@ -144,7 +144,7 @@ describe('Special property functions', function() {
           ]
         }
       };
-      const { get, set } = getStringAccessors(structure);
+      const { get, set } = getStringDescriptor(structure);
       expect(get).to.be.a('function');
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(4));
@@ -178,7 +178,7 @@ describe('Special property functions', function() {
           ]
         }
       };
-      const { get, set } = getStringAccessors(structure);
+      const { get, set } = getStringDescriptor(structure);
       expect(get).to.be.a('function');
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(8));
@@ -218,7 +218,7 @@ describe('Special property functions', function() {
           validateData: () => {},
         },
       };
-      const { get, set } = getStringAccessors(structure);
+      const { get, set } = getStringDescriptor(structure);
       expect(get).to.be.a('function');
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(5));
@@ -254,7 +254,7 @@ describe('Special property functions', function() {
           ]
         }
       };
-      const { get, set } = getStringAccessors(structure);
+      const { get, set } = getStringDescriptor(structure);
       expect(get).to.be.a('function');
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(4));
@@ -266,14 +266,14 @@ describe('Special property functions', function() {
       expect(() => set.call(object, 1234)).to.throw(TypeError);
     })
   })
-  describe('getTypedArrayAccessors', function() {
+  describe('getTypedArrayDescriptor', function() {
     it('should return getter and setter for typed array', function() {
       const structure = { 
         name: '[4]i32',
         byteSize: 16,
         typedArray: Int32Array 
       };
-      const { get, set } = getTypedArrayAccessors(structure);
+      const { get, set } = getTypedArrayDescriptor(structure);
       expect(get).to.be.a('function');
       expect(set).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(16));
@@ -293,7 +293,7 @@ describe('Special property functions', function() {
     })
     it('should throw when setter receives a typed array of the wrong type', function() {
       const structure = { typedArray: Float64Array };
-      const { set } = getTypedArrayAccessors(structure);
+      const { set } = getTypedArrayDescriptor(structure);
       const dv = new DataView(new ArrayBuffer(8 * 4));
       const object = {
         dataView: dv
@@ -427,112 +427,5 @@ describe('Special property functions', function() {
       expect(JSON.stringify(object)).to.equal(JSON.stringify(data));
     })
   })
-  // describe('getSpecialKeys', function() {
-  //   it('should include string and typedArray when structure is an u8 array', function() {
-  //     const structure = env.beginStructure({
-  //       type: StructureType.Array,
-  //       name: '[4]u8',
-  //       byteSize: 4,
-  //     });
-  //     env.attachMember(structure, {
-  //       type: MemberType.Uint,
-  //       bitSize: 8,
-  //       byteSize: 1,
-  //       structure: { constructor: function() {}, typedArray: Uint8Array },
-  //     });
-  //     env.finalizeShape(structure);
-  //     env.finalizeStructure(structure);
-  //     const keys = getSpecialKeys(structure);
-  //     expect(keys).to.eql([ 'dataView', 'base64', 'string', 'typedArray' ]);
-  //   })
-  //   it('should include typedArray only when structure is an i8 array', function() {
-  //     const structure = env.beginStructure({
-  //       type: StructureType.Array,
-  //       name: '[4]i8',
-  //       byteSize: 4,
-  //     });
-  //     env.attachMember(structure, {
-  //       type: MemberType.Int,
-  //       bitSize: 8,
-  //       byteSize: 1,
-  //       structure: { constructor: function() {}, typedArray: Int8Array },
-  //     });
-  //     env.finalizeShape(structure);
-  //     env.finalizeStructure(structure);
-  //     const keys = getSpecialKeys(structure);
-  //     expect(keys).to.eql([ 'dataView', 'base64', 'typedArray' ]);
-  //   })
-  //   it('should include string and typedArray when structure is an u8 slice', function() {
-  //     const structure = env.beginStructure({
-  //       type: StructureType.Slice,
-  //       name: '[_]u8',
-  //       byteSize: 1,
-  //     });
-  //     env.attachMember(structure, {
-  //       type: MemberType.Uint,
-  //       bitSize: 8,
-  //       byteSize: 1,
-  //       structure: { constructor: function() {}, typedArray: Uint8Array },
-  //     });
-  //     env.finalizeShape(structure);
-  //     env.finalizeStructure(structure);
-  //     const keys = getSpecialKeys(structure);
-  //     expect(keys).to.eql([ 'dataView', 'base64', 'string', 'typedArray' ]);
-  //   })
-  //   it('should include string and typedArray when structure is an u16 slice', function() {
-  //     const structure = env.beginStructure({
-  //       type: StructureType.Slice,
-  //       name: '[_]u16',
-  //       byteSize: 2,
-  //     });
-  //     env.attachMember(structure, {
-  //       type: MemberType.Uint,
-  //       bitSize: 16,
-  //       byteSize: 2,
-  //       structure: { constructor: function() {}, typedArray: Uint16Array },
-  //     });
-  //     env.finalizeShape(structure);
-  //     env.finalizeStructure(structure);
-  //     const keys = getSpecialKeys(structure);
-  //     expect(keys).to.eql([ 'dataView', 'base64', 'string', 'typedArray' ]);
-  //   })
-  //   it('should not include string if structure is an u15 slice', function() {
-  //     const structure = env.beginStructure({
-  //       type: StructureType.Slice,
-  //       name: '[_]u15',
-  //       byteSize: 2,
-  //     });
-  //     env.attachMember(structure, {
-  //       type: MemberType.Uint,
-  //       bitSize: 15,
-  //       byteSize: 2,
-  //       structure: { constructor: function() {}, typedArray: Uint16Array },
-  //     });
-  //     env.finalizeShape(structure);
-  //     env.finalizeStructure(structure);
-  //     const keys = getSpecialKeys(structure);
-  //     expect(keys).to.eql([ 'dataView', 'base64', 'typedArray' ]);
-  //   })
-  // })
-  // describe('getDataViewFromUTF8', function() {
-  //   it('should return a data view with u8 data from a string', function() {
-  //     const dv = getDataViewFromUTF8('Hello', 1);
-  //     expect(dv).to.have.property('byteLength', 5);
-  //     expect(dv.getUint8(0)).to.equal('H'.charCodeAt(0));
-  //   })
-  //   it('should return a data view with u16 data from a string', function() {
-  //     const dv = getDataViewFromUTF8('Cześć', 2);
-  //     expect(dv).to.have.property('byteLength', 10);
-  //     expect(dv.getUint16(3 * 2, true)).to.equal('ś'.charCodeAt(0));
-  //   })
-  //   it('should throw when it does not get a string', function() {
-  //     expect(() => getDataViewFromUTF8(1)).to.throw(TypeError);
-  //   })
-  //   it('should add sentinel value', function() {
-  //     const dv = getDataViewFromUTF8('Hello', 1, 0);
-  //     expect(dv).to.have.property('byteLength', 6);
-  //     expect(dv.getUint8(5)).to.equal(0);
-  //   })
-  // })
 })
 

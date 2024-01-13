@@ -16,7 +16,7 @@ import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { copyPointer, getProxy } from './pointer.js';
 import {
-  convertToJSON, getBase64Accessors, getDataViewAccessors, getStringAccessors, getTypedArrayAccessors,
+  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getStringDescriptor, getTypedArrayDescriptor,
   getValueOf
 } from './special.js';
 import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
@@ -123,10 +123,10 @@ export function defineSlice(structure, env) {
   const instanceDescriptors = {
     $: { get: getProxy, set: initializer },
     length: { get: getLength },
-    dataView: getDataViewAccessors(structure, shapeHandlers),
-    base64: getBase64Accessors(structure, shapeHandlers),
-    string: hasStringProp && getStringAccessors(structure, shapeHandlers),
-    typedArray: typedArray && getTypedArrayAccessors(structure, shapeHandlers),
+    dataView: getDataViewDescriptor(structure, shapeHandlers),
+    base64: getBase64Descriptor(structure, shapeHandlers),
+    string: hasStringProp && getStringDescriptor(structure, shapeHandlers),
+    typedArray: typedArray && getTypedArrayDescriptor(structure, shapeHandlers),
     get: { value: get },
     set: { value: set },
     entries: { value: getArrayEntries },

@@ -5,7 +5,7 @@ import {
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { copyPointer, disablePointer, never, resetPointer } from './pointer.js';
-import { convertToJSON, getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
+import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf } from './special.js';
 import { getChildVivificator, getPointerVisitor, normalizeStruct } from './struct.js';
 import { StructureType, attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
 import {
@@ -170,8 +170,8 @@ export function defineUnionShape(structure, env) {
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const instanceDescriptors = {
     $: { get: getSelf, set: initializer, configurable: true },
-    dataView: getDataViewAccessors(structure),
-    base64: getBase64Accessors(structure),
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },

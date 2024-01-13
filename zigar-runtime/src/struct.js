@@ -2,7 +2,7 @@ import { throwInvalidInitializer, throwNotOnByteBoundary } from './error.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { always, copyPointer } from './pointer.js';
-import { convertToJSON, getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
+import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf } from './special.js';
 import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
 import { ALIGN, COPIER, MEMORY, NORMALIZER, PARENT, SIZE, SLOTS, VISITOR, VIVIFICATOR } from './symbol.js';
 
@@ -57,8 +57,8 @@ export function defineStructShape(structure, env) {
   };
   const instanceDescriptors = {
     $: { get: getSelf, set: initializer },
-    dataView: getDataViewAccessors(structure),
-    base64: getBase64Accessors(structure),
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },

@@ -1,7 +1,7 @@
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
 import { copyPointer, resetPointer } from './pointer.js';
-import { convertToJSON, getBase64Accessors, getDataViewAccessors, getValueOf } from './special.js';
+import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf } from './special.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { attachDescriptors, createConstructor } from './structure.js';
 import {
@@ -65,8 +65,8 @@ export function defineOptional(structure, env) {
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const instanceDescriptors = {
     $: { get, set: initializer },
-    dataView: getDataViewAccessors(structure),
-    base64: getBase64Accessors(structure),
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },

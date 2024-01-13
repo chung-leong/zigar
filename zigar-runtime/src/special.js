@@ -14,7 +14,7 @@ export function convertToJSON() {
   return this[NORMALIZER](map, true);
 }
 
-export function getDataViewAccessors(structure, handlers = {}) {
+export function getDataViewDescriptor(structure, handlers = {}) {
   return markAsSpecial({
     get() {
       /* WASM-ONLY */
@@ -29,7 +29,7 @@ export function getDataViewAccessors(structure, handlers = {}) {
   });
 }
 
-export function getBase64Accessors(structure, handlers = {}) {
+export function getBase64Descriptor(structure, handlers = {}) {
   return markAsSpecial({
     get() {
       return encodeBase64(this.dataView);
@@ -44,7 +44,7 @@ export function getBase64Accessors(structure, handlers = {}) {
   });
 }
 
-export function getStringAccessors(structure, handlers = {}) {
+export function getStringDescriptor(structure, handlers = {}) {
   const { sentinel, instance: { members }} = structure;
   const { byteSize: charSize } = members[0];
   return markAsSpecial({
@@ -71,7 +71,7 @@ export function getStringAccessors(structure, handlers = {}) {
   });
 }
 
-export function getTypedArrayAccessors(structure, handlers = {}) {
+export function getTypedArrayDescriptor(structure, handlers = {}) {
   const { typedArray } = structure;
   return markAsSpecial({
     get() {

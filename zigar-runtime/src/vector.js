@@ -2,7 +2,7 @@ import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
 import { throwArrayLengthMismatch, throwInvalidArrayInitializer } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { convertToJSON, getBase64Accessors, getDataViewAccessors, getTypedArrayAccessors, getValueOf } from './special.js';
+import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf } from './special.js';
 import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
 import { ALIGN, COMPAT, COPIER, NORMALIZER, SETTERS, SIZE } from './symbol.js';
 
@@ -59,9 +59,9 @@ export function defineVector(structure, env) {
     ...elementDescriptors,
     $: { get: getSelf, set: initializer },
     length: { value: length },
-    dataView: getDataViewAccessors(structure),
-    base64: getBase64Accessors(structure),
-    typedArray: typedArray && getTypedArrayAccessors(structure),
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
+    typedArray: typedArray && getTypedArrayDescriptor(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     entries: { value: createVectorEntries },

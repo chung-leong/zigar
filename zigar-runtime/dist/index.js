@@ -392,7 +392,7 @@ function convertToJSON() {
   return this[NORMALIZER](map, true);
 }
 
-function getDataViewAccessors(structure, handlers = {}) {
+function getDataViewDescriptor(structure, handlers = {}) {
   return markAsSpecial({
     get() {
       /* WASM-ONLY */
@@ -407,7 +407,7 @@ function getDataViewAccessors(structure, handlers = {}) {
   });
 }
 
-function getBase64Accessors(structure, handlers = {}) {
+function getBase64Descriptor(structure, handlers = {}) {
   return markAsSpecial({
     get() {
       return encodeBase64(this.dataView);
@@ -422,7 +422,7 @@ function getBase64Accessors(structure, handlers = {}) {
   });
 }
 
-function getStringAccessors(structure, handlers = {}) {
+function getStringDescriptor(structure, handlers = {}) {
   const { sentinel, instance: { members }} = structure;
   const { byteSize: charSize } = members[0];
   return markAsSpecial({
@@ -449,7 +449,7 @@ function getStringAccessors(structure, handlers = {}) {
   });
 }
 
-function getTypedArrayAccessors(structure, handlers = {}) {
+function getTypedArrayDescriptor(structure, handlers = {}) {
   const { typedArray } = structure;
   return markAsSpecial({
     get() {
@@ -756,8 +756,8 @@ function defineStructShape(structure, env) {
   };
   const instanceDescriptors = {
     $: { get: getSelf, set: initializer },
-    dataView: getDataViewAccessors(structure),
-    base64: getBase64Accessors(structure),
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
@@ -954,10 +954,10 @@ function defineArray(structure, env) {
   const instanceDescriptors = {
     $: { get: getProxy, set: initializer },
     length: { value: length },
-    dataView: getDataViewAccessors(structure),
-    base64: getBase64Accessors(structure),
-    string: hasStringProp && getStringAccessors(structure),
-    typedArray: typedArray && getTypedArrayAccessors(structure),
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
+    string: hasStringProp && getStringDescriptor(structure),
+    typedArray: typedArray && getTypedArrayDescriptor(structure),
     get: { value: get },
     set: { value: set },
     entries: { value: getArrayEntries },
@@ -1222,9 +1222,9 @@ function defineEnumerationShape(structure, env) {
   };
   const instanceDescriptors = {
     $: { get, set },
-    dataView: getDataViewAccessors(structure),
-    base64: getBase64Accessors(structure),
-    typedArray: typedArray && getTypedArrayAccessors(structure),
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
+    typedArray: typedArray && getTypedArrayDescriptor(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
@@ -1318,8 +1318,8 @@ function defineErrorUnion(structure, env) {
   const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
   const instanceDescriptors = {
     '$': { get, set: initializer },
-    dataView: getDataViewAccessors(structure),
-    base64: getBase64Accessors(structure),
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
@@ -1400,8 +1400,8 @@ function defineOptional(structure, env) {
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const instanceDescriptors = {
     $: { get, set: initializer },
-    dataView: getDataViewAccessors(structure),
-    base64: getBase64Accessors(structure),
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
@@ -1507,10 +1507,10 @@ function defineSlice(structure, env) {
   const instanceDescriptors = {
     $: { get: getProxy, set: initializer },
     length: { get: getLength },
-    dataView: getDataViewAccessors(structure, shapeHandlers),
-    base64: getBase64Accessors(structure, shapeHandlers),
-    string: hasStringProp && getStringAccessors(structure, shapeHandlers),
-    typedArray: typedArray && getTypedArrayAccessors(structure, shapeHandlers),
+    dataView: getDataViewDescriptor(structure, shapeHandlers),
+    base64: getBase64Descriptor(structure, shapeHandlers),
+    string: hasStringProp && getStringDescriptor(structure, shapeHandlers),
+    typedArray: typedArray && getTypedArrayDescriptor(structure, shapeHandlers),
     get: { value: get },
     set: { value: set },
     entries: { value: getArrayEntries },
@@ -1733,8 +1733,8 @@ function defineUnionShape(structure, env) {
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const instanceDescriptors = {
     $: { get: getSelf, set: initializer, configurable: true },
-    dataView: getDataViewAccessors(structure),
-    base64: getBase64Accessors(structure),
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
@@ -1804,9 +1804,9 @@ function defineVector(structure, env) {
     ...elementDescriptors,
     $: { get: getSelf, set: initializer },
     length: { value: length },
-    dataView: getDataViewAccessors(structure),
-    base64: getBase64Accessors(structure),
-    typedArray: typedArray && getTypedArrayAccessors(structure),
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
+    typedArray: typedArray && getTypedArrayDescriptor(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     entries: { value: createVectorEntries },
@@ -2256,9 +2256,9 @@ function definePrimitive(structure, env) {
   const typedArray = structure.typedArray = getTypedArrayClass(member);
   const instanceDescriptors = {
     $: { get, set },
-    dataView: getDataViewAccessors(structure),
-    base64: getBase64Accessors(structure),
-    typedArray: typedArray && getTypedArrayAccessors(structure),
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
+    typedArray: typedArray && getTypedArrayDescriptor(structure),
     valueOf: { value: get },
     toJSON: { value: get },
     delete: { value: getDestructor(env) },
@@ -3382,7 +3382,7 @@ function getTypeName(member) {
   }
 }
 
-function getBigIntAccessors(bitSize) {
+function getBigIntDescriptor(bitSize) {
   const getWord = DataView.prototype.getBigUint64;
   const setWord = DataView.prototype.setBigUint64;
   const wordCount = Math.ceil(bitSize / 64);
@@ -3446,7 +3446,7 @@ function defineAlignedIntAccessor(access, member) {
     }
   } else {
     // larger than 64 bits
-    const { get, set } = getBigIntAccessors(bitSize);
+    const { get, set } = getBigIntDescriptor(bitSize);
     const signMask = 2n ** BigInt(bitSize - 1);
     const valueMask = signMask - 1n;
     if (access === 'get') {
@@ -3484,7 +3484,7 @@ function defineAlignedUintAccessor(access, member) {
     }
   } else {
     // larger than 64 bits
-    const { get, set } = getBigIntAccessors(bitSize);
+    const { get, set } = getBigIntDescriptor(bitSize);
     const valueMask = (2n ** BigInt(bitSize)) - 1n;
     if (access === 'get') {
       return function(offset, littleEndian) {
@@ -3863,9 +3863,9 @@ function defineErrorSet(structure, env) {
   const instanceDescriptors = {
     $: { get, set },
     message: { get: getMessage },
-    dataView: getDataViewAccessors(structure),
-    base64: getBase64Accessors(structure),
-    typedArray: typedArray && getTypedArrayAccessors(structure),
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
+    typedArray: typedArray && getTypedArrayDescriptor(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
