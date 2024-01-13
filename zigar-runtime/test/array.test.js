@@ -8,7 +8,7 @@ import {
 import { NodeEnvironment } from '../src/environment-node.js';
 import { MemberType, getDescriptor, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { MEMORY, VISITOR } from '../src/symbol.js';
+import { MEMORY, POINTER_VISITOR } from '../src/symbol.js';
 import { encodeBase64 } from '../src/text.js';
 
 describe('Array functions', function() {
@@ -884,12 +884,12 @@ describe('Array functions', function() {
       const array = Int32PtrArray(dv);
       const pointers = [], errors = [];
       // make sure that children don't get vivificated unless the vivificate option is set
-      array[VISITOR](function() {
+      array[POINTER_VISITOR](function() {
         pointers.push(this);
       }, {});
       expect(pointers).to.have.lengthOf(0);
       // look for the pointers for real
-      array[VISITOR](function({ isMutable, isActive }) {
+      array[POINTER_VISITOR](function({ isMutable, isActive }) {
         try {
           expect(this['*']).to.be.null;
         } catch (err) {

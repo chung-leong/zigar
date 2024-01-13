@@ -9,16 +9,10 @@ import {
 } from './special.js';
 import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import {
-  ALIGN,
-  ARRAY,
-  COMPAT,
-  COPIER,
-  GETTER, MEMORY,
-  NORMALIZER,
-  PARENT,
+  ALIGN, ARRAY, COMPAT, COPIER, ELEMENT_GETTER, ELEMENT_SETTER, MEMORY, NORMALIZER, PARENT,
+  POINTER_VISITOR,
   PROXY,
-  SETTER, SIZE, SLOTS,
-  VISITOR,
+  SIZE, SLOTS,
   VIVIFICATOR
 } from './symbol.js';
 
@@ -46,7 +40,7 @@ export function defineArray(structure, env) {
     if (arg instanceof constructor) {
       this[COPIER](arg);
       if (hasPointer) {
-        this[VISITOR](copyPointer, { vivificate: true, source: arg });
+        this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else {
       if (typeof(arg) === 'string' && hasStringProp) {
@@ -94,7 +88,7 @@ export function defineArray(structure, env) {
     [Symbol.iterator]: { value: getArrayIterator },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
-    [VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
     [NORMALIZER]: { value: normalizeArray },
   };
   const staticDescriptors = {
@@ -208,7 +202,7 @@ export function getPointerVisitor(structure) {
       }
       const child = this[SLOTS][i] ?? (vivificate ? this[VIVIFICATOR](i) : null);
       if (child) {
-        child[VISITOR](cb, childOptions);
+        child[POINTER_VISITOR](cb, childOptions);
       }
     }
   };
@@ -222,15 +216,15 @@ const proxyHandlers = {
     } else {
       switch (name) {
         case 'get':
-          if (!array[GETTER]) {
-            array[GETTER] = array.get.bind(array);
+          if (!array[ELEMENT_GETTER]) {
+            array[ELEMENT_GETTER] = array.get.bind(array);
           }
-          return array[GETTER];
+          return array[ELEMENT_GETTER];
         case 'set':
-          if (!array[SETTER]) {
-            array[SETTER] = array.set.bind(array);
+          if (!array[ELEMENT_SETTER]) {
+            array[ELEMENT_SETTER] = array.set.bind(array);
           }
-          return array[SETTER];
+          return array[ELEMENT_SETTER];
         case ARRAY:
           return array;
         default:
@@ -245,10 +239,10 @@ const proxyHandlers = {
     } else {
       switch (name) {
         case 'get':
-          array[GETTER] = value;
+          array[ELEMENT_GETTER] = value;
           break;
         case 'set':
-          array[SETTER] = value;
+          array[ELEMENT_SETTER] = value;
           break;
         default:
           array[name] = value;
@@ -263,10 +257,10 @@ const proxyHandlers = {
     } else {
       switch (name) {
         case 'get':
-          delete array[GETTER];
+          delete array[ELEMENT_GETTER];
           break;
         case 'set':
-          delete array[SETTER];
+          delete array[ELEMENT_SETTER];
           break;
         default:
           delete array[name];

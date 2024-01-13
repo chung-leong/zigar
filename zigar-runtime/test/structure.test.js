@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 
 import { Environment } from '../src/environment.js';
+import { throwInaccessiblePointer } from '../src/error.js';
 import { MemberType } from '../src/member.js';
 import {
   ObjectCache,
@@ -14,7 +15,7 @@ import {
   needSlots,
   useOpaque
 } from '../src/structure.js';
-import { MEMORY, SLOTS } from '../src/symbol.js';
+import { GETTER, MEMORY, SLOTS } from '../src/symbol.js';
 
 describe('Structure functions', function() {
   const env = new Environment();
@@ -788,6 +789,35 @@ describe('Structure functions', function() {
       const list = findAllObjects(structures, SLOTS);
       expect(list).to.have.lengthOf(5);
       expect(list).to.contain(object1);
+      expect(list).to.contain(object2);
+      expect(list).to.contain(object3);
+      expect(list).to.contain(object4);
+      expect(list).to.contain(object5);
+    })
+    it('should exclude inaccessible object', function() {
+      const object1 = {
+        [GETTER]: throwInaccessiblePointer,
+      };
+      const object2 = {};
+      const object3 = {
+        [SLOTS]: { 4: object1, 5: object2 },
+      };
+      const object4 = {};
+      const object5 = {
+        [SLOTS]: { 4: object1, 5: object4 },
+      };
+      const structures = [
+        {
+          instance: { template: object3 },
+          static: {},
+        },
+        {
+          instance: {},
+          static: { template: object5 },
+        }
+      ];
+      const list = findAllObjects(structures, SLOTS);
+      expect(list).to.not.contain(object1);
       expect(list).to.contain(object2);
       expect(list).to.contain(object3);
       expect(list).to.contain(object4);

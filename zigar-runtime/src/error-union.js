@@ -7,12 +7,9 @@ import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf }
 import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import {
-  ALIGN,
-  COPIER,
-  NORMALIZER,
-  RESETTER,
-  SIZE,
-  VISITOR,
+  ALIGN, COPIER, NORMALIZER,
+  POINTER_VISITOR,
+  RESETTER, SIZE,
   VIVIFICATOR
 } from './symbol.js';
 
@@ -41,7 +38,7 @@ export function defineErrorUnion(structure, env) {
   };
   const clearValue = function() {
     this[RESETTER]();
-    this[VISITOR]?.(resetPointer);
+    this[POINTER_VISITOR]?.(resetPointer);
   };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const propApplier = createPropertyApplier(structure);
@@ -50,7 +47,7 @@ export function defineErrorUnion(structure, env) {
       this[COPIER](arg);
       if (hasPointer) {
         if (isChildActive.call(this)) {
-          this[VISITOR](copyPointer, { vivificate: true, source: arg });
+          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }
     } else if (arg instanceof TargetError) {
@@ -98,7 +95,7 @@ export function defineErrorUnion(structure, env) {
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
-    [VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     [NORMALIZER]: { value: normalizeErrorUnion },
   };
   const staticDescriptors = {

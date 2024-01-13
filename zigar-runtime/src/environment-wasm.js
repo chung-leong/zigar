@@ -1,7 +1,7 @@
 import { Environment } from './environment.js';
 import { throwZigError } from './error.js';
 import { getCopyFunction, getMemoryCopier, restoreMemory } from './memory.js';
-import { ALIGN, ATTRIBUTES, COPIER, MEMORY, VISITOR } from './symbol.js';
+import { ALIGN, ATTRIBUTES, COPIER, MEMORY, POINTER_VISITOR } from './symbol.js';
 import { decodeText } from './text.js';
 
 export class WebAssemblyEnvironment extends Environment {
@@ -310,7 +310,7 @@ export class WebAssemblyEnvironment extends Environment {
     this.startContext();
     // call context, used by allocateShadowMemory and freeShadowMemory
     this.context.call = call;
-    if (args[VISITOR]) {
+    if (args[POINTER_VISITOR]) {
       this.updatePointerAddresses(args);
     }
     // return address of shadow for argumnet struct
@@ -321,7 +321,7 @@ export class WebAssemblyEnvironment extends Environment {
 
   endCall(call, args) {
     this.updateShadowTargets();
-    if (args[VISITOR]) {
+    if (args[POINTER_VISITOR]) {
       this.acquirePointerTargets(args);
     }
     this.releaseShadows();

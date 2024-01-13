@@ -4,7 +4,7 @@ import { getDestructor, getMemoryCopier } from './memory.js';
 import { always, copyPointer } from './pointer.js';
 import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf } from './special.js';
 import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
-import { ALIGN, COPIER, MEMORY, NORMALIZER, PARENT, SIZE, SLOTS, VISITOR, VIVIFICATOR } from './symbol.js';
+import { ALIGN, COPIER, MEMORY, NORMALIZER, PARENT, POINTER_VISITOR, SIZE, SLOTS, VIVIFICATOR } from './symbol.js';
 
 export function defineStructShape(structure, env) {
   const {
@@ -27,7 +27,7 @@ export function defineStructShape(structure, env) {
     if (arg instanceof constructor) {
       this[COPIER](arg);
       if (hasPointer) {
-        this[VISITOR](copyPointer, { vivificate: true, source: arg });
+        this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else if (arg && typeof(arg) === 'object') {
       propApplier.call(this, arg);
@@ -66,7 +66,7 @@ export function defineStructShape(structure, env) {
     [Symbol.iterator]: { value: interatorCreator },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },
-    [VISITOR]: hasPointer && { value: getPointerVisitor(structure, always) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, always) },
     [NORMALIZER]: { value: normalizeStruct },
   };
   const staticDescriptors = {
@@ -81,7 +81,7 @@ export function normalizeStruct(map, forJSON) {
   if (!object) {
     object = {};
     map.set(this, object);
-    for (const [ name, value ] of this) {      
+    for (const [ name, value ] of this) {
       object[name] = value?.[NORMALIZER]?.(map, forJSON) ?? value;
     }
   }
@@ -149,7 +149,7 @@ export function getPointerVisitor(structure, visitorOptions = {}) {
       }
       const child = this[SLOTS][slot] ?? (vivificate ? this[VIVIFICATOR](slot) : null);
       if (child) {
-        child[VISITOR](cb, childOptions);
+        child[POINTER_VISITOR](cb, childOptions);
       }
     }
   };

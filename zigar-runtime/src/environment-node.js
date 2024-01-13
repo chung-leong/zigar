@@ -1,6 +1,6 @@
 import { Environment, add, getAlignedAddress, isMisaligned } from './environment.js';
 import { throwZigError } from './error.js';
-import { ALIGN, MEMORY, VISITOR } from './symbol.js';
+import { ALIGN, MEMORY, POINTER_VISITOR } from './symbol.js';
 
 export class NodeEnvironment extends Environment {
   // C code will patch in these functions:
@@ -136,7 +136,7 @@ export class NodeEnvironment extends Environment {
     let err;
     // create an object where information concerning pointers can be stored
     this.startContext();
-    if (args[VISITOR]) {
+    if (args[POINTER_VISITOR]) {
       // copy addresses of garbage-collectible objects into memory
       this.updatePointerAddresses(args);
       this.updateShadows();

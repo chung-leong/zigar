@@ -7,7 +7,7 @@ import {
 import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { ALIGN, COPIER, MEMORY, VISITOR } from '../src/symbol.js';
+import { ALIGN, COPIER, MEMORY, POINTER_VISITOR } from '../src/symbol.js';
 
 describe('WebAssemblyEnvironment', function() {
   beforeEach(function() {
@@ -560,7 +560,7 @@ describe('WebAssemblyEnvironment', function() {
       const argStruct = new ArgStruct();
       argStruct[MEMORY] = env.allocateMemory(16, 1, false);
       let visitorCalled = false;
-      argStruct[VISITOR] = function() {
+      argStruct[POINTER_VISITOR] = function() {
         visitorCalled = true;
       };
       const address = env.startCall({}, argStruct);
@@ -586,7 +586,7 @@ describe('WebAssemblyEnvironment', function() {
       const argStruct = new ArgStruct();
       argStruct[MEMORY] = env.allocateMemory(16, 1, false);
       let visitorCalled = false;
-      argStruct[VISITOR] = function() {
+      argStruct[POINTER_VISITOR] = function() {
         visitorCalled = true;
       };
       const address = env.startCall({}, argStruct);

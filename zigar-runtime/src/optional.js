@@ -8,9 +8,9 @@ import {
   ALIGN,
   COPIER,
   NORMALIZER,
+  POINTER_VISITOR,
   RESETTER,
   SIZE,
-  VISITOR,
   VIVIFICATOR
 } from './symbol.js';
 
@@ -29,7 +29,7 @@ export function defineOptional(structure, env) {
     if (present) {
       return getValue.call(this);
     } else {
-      this[VISITOR]?.(resetPointer);
+      this[POINTER_VISITOR]?.(resetPointer);
       return null;
     }
   };
@@ -41,14 +41,14 @@ export function defineOptional(structure, env) {
       if (hasPointer) {
         // don't bother copying pointers when it's empty
         if (isChildActive.call(arg)) {
-          this[VISITOR](copyPointer, { vivificate: true, source: arg });
+          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }      
     } else if (arg === null) {
       setPresent.call(this, false);
       this[RESETTER]?.();
       // clear references so objects can be garbage-collected
-      this[VISITOR]?.(resetPointer);
+      this[POINTER_VISITOR]?.(resetPointer);
     } else if (arg !== undefined || isValueVoid) {      
       // call setValue() first, in case it throws
       setValue.call(this, arg);
@@ -74,7 +74,7 @@ export function defineOptional(structure, env) {
     // no need to reset the value when it's a pointer, since setPresent() would null out memory used by the pointer
     [RESETTER]: !hasPointer && { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
-    [VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     [NORMALIZER]: { value: normalizeOptional },
   };
   const staticDescriptors = {

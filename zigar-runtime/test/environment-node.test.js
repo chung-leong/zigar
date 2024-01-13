@@ -5,7 +5,7 @@ import {
 } from '../src/environment-node.js';
 import { useAllMemberTypes } from '../src/member.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { ALIGN, MEMORY, SLOTS, VISITOR } from '../src/symbol.js';
+import { ALIGN, MEMORY, POINTER_VISITOR, SLOTS } from '../src/symbol.js';
 
 describe('NodeEnvironment', function() {
   beforeEach(function() {
@@ -302,7 +302,7 @@ describe('NodeEnvironment', function() {
       const argStruct = {
         [MEMORY]: new DataView(new ArrayBuffer(16)),
         [SLOTS]: { 0: {} },
-        [VISITOR]: () => {
+        [POINTER_VISITOR]: () => {
           if (thunkCalled) {
             visitorCalledAfter = true;
           } else {

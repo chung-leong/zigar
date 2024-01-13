@@ -1,9 +1,9 @@
-import { exec } from 'child_process';
 import { createHash } from 'crypto';
-import { chmod, lstat, mkdir, open, readFile, readdir, rename, rmdir, stat, unlink, utimes, writeFile } from 'fs/promises';
-import os, { tmpdir } from 'os';
-import { basename, join, parse, resolve } from 'path';
+import { exec } from 'child_process';
 import { fileURLToPath } from 'url';
+import { join, resolve, parse, basename } from 'path';
+import os, { tmpdir } from 'os';
+import { stat, lstat, readdir, writeFile, open, rename, readFile, chmod, utimes, unlink, mkdir, rmdir } from 'fs/promises';
 
 const cwd = process.cwd();
 
@@ -375,7 +375,12 @@ const ITEMS = Symbol('items');
 const MESSAGES = Symbol('messages');
 const GETTER = Symbol('getter');
 const SETTER = Symbol('setter');
-const SETTERS = Symbol('setters');
+const ELEMENT_GETTER = Symbol('elementGetter');
+const ELEMENT_SETTER = Symbol('elementSetter');
+const ADDRESS_GETTER = Symbol('addressGetter');
+const ADDRESS_SETTER = Symbol('addressSetter');
+const TARGET_GETTER = Symbol('targetGetter');
+const PROP_SETTERS = Symbol('propSetters');
 const ALL_KEYS = Symbol('allKeys');
 const LENGTH = Symbol('length');
 const PROXY = Symbol('proxy');
@@ -385,12 +390,12 @@ const ALIGN = Symbol('align');
 const ARRAY = Symbol('array');
 const POINTER = Symbol('pointer');
 const CONST = Symbol('const');
-const CONST_PROTO = Symbol('constProto');
+const CONST_PROTOTYPE = Symbol('constProto');
 const COPIER = Symbol('copier');
 const RESETTER = Symbol('resetter');
 const NORMALIZER = Symbol('normalizer');
 const VIVIFICATOR = Symbol('vivificator');
-const VISITOR = Symbol('visitor');
+const POINTER_VISITOR = Symbol('pointerVisitor');
 const ENVIRONMENT = Symbol('environment');
 const ATTRIBUTES = Symbol('attributes');
 
@@ -870,7 +875,7 @@ function definePointer(structure, env) {
     byteSize: addressSize,
     structure: { name: 'usize', byteSize: addressSize },
   }, env) : {};
-  const { get, set } = getDescriptor(member, env);
+  const { get: getTarget, set: setTarget } = getDescriptor(member, env);
   const alternateCaster = function(arg, options) {
     const Target = targetStructure.constructor;
     if (isPointerOf(arg, Target)) {
@@ -966,14 +971,15 @@ function definePointer(structure, env) {
     return [ address, 1 ];
   };
   const instanceDescriptors = {
-    '*': { get, set },
+    '*': { get: getTarget, set: setTarget },
     '$': { get: getProxy, set: initializer },
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    [GETTER]: { value: addressGetter },
-    [SETTER]: { value: addressSetter },
-    [VISITOR]: { value: visitPointer },
+    [TARGET_GETTER]: { value: getTarget },
+    [ADDRESS_GETTER]: { value: addressGetter },
+    [ADDRESS_SETTER]: { value: addressSetter },
+    [POINTER_VISITOR]: { value: visitPointer },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: { value: throwNullPointer },
     [NORMALIZER]: { value: normalizePointer },
@@ -1005,15 +1011,20 @@ function copyPointer({ source }) {
 
 function resetPointer({ isActive }) {
   if (this[SLOTS][0] && !isActive(this)) {
-    this[SLOTS][0] = null;
+    this[SLOTS][0] = undefined;
   }
 }
 
 function disablePointer() {
-  const disabled = { get: throwInaccessiblePointer, set: throwInaccessiblePointer };
-  defineProperties(this, {
-    '*': disabled,
-    '$': disabled,
+  const pointer = this[POINTER] ?? this;
+  const disabledProp = { get: throwInaccessiblePointer, set: throwInaccessiblePointer };
+  const disabledFunc = { value: throwInaccessiblePointer };
+  defineProperties(pointer, {
+    '*': disabledProp,
+    '$': disabledProp,
+    [GETTER]: disabledFunc,
+    [SETTER]: disabledFunc,
+    [TARGET_GETTER]: disabledFunc,
   });
 }
 
@@ -1037,14 +1048,16 @@ const proxyHandlers$1 = {
     } else if (name in pointer) {
       return pointer[name];
     } else {
-      return pointer['*'][name];
+      const target = pointer[TARGET_GETTER]();
+      return target[name];
     }
   },
   set(pointer, name, value) {
     if (name in pointer) {
       pointer[name] = value;
     } else {
-      pointer['*'][name] = value;
+      const target = pointer[TARGET_GETTER]();
+      target[name] = value;
     }
     return true;
   },
@@ -1052,7 +1065,8 @@ const proxyHandlers$1 = {
     if (name in pointer) {
       delete pointer[name];
     } else {
-      delete pointer['*'][name];
+      const target = pointer[TARGET_GETTER]();
+      delete target[name];
     }
     return true;
   },
@@ -1060,7 +1074,8 @@ const proxyHandlers$1 = {
     if (name in pointer) {
       return true;
     } else {
-      return name in pointer['*'];
+      const target = pointer[TARGET_GETTER]();
+      return name in target;
     }
   },
 };
@@ -1094,7 +1109,7 @@ function defineStructShape(structure, env) {
     if (arg instanceof constructor) {
       this[COPIER](arg);
       if (hasPointer) {
-        this[VISITOR](copyPointer, { vivificate: true, source: arg });
+        this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else if (arg && typeof(arg) === 'object') {
       propApplier.call(this, arg);
@@ -1133,7 +1148,7 @@ function defineStructShape(structure, env) {
     [Symbol.iterator]: { value: interatorCreator },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
-    [VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, always) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, always) },
     [NORMALIZER]: { value: normalizeStruct },
   };
   const staticDescriptors = {
@@ -1216,7 +1231,7 @@ function getPointerVisitor$1(structure, visitorOptions = {}) {
       }
       const child = this[SLOTS][slot] ?? (vivificate ? this[VIVIFICATOR](slot) : null);
       if (child) {
-        child[VISITOR](cb, childOptions);
+        child[POINTER_VISITOR](cb, childOptions);
       }
     }
   };
@@ -1263,7 +1278,7 @@ function defineArgStruct(structure, env) {
     ...memberDescriptors,
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
-    [VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, { isChildMutable }) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, { isChildMutable }) },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },
@@ -1287,7 +1302,7 @@ function defineArray(structure, env) {
     if (arg instanceof constructor) {
       this[COPIER](arg);
       if (hasPointer) {
-        this[VISITOR](copyPointer, { vivificate: true, source: arg });
+        this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else {
       if (typeof(arg) === 'string' && hasStringProp) {
@@ -1335,7 +1350,7 @@ function defineArray(structure, env) {
     [Symbol.iterator]: { value: getArrayIterator },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
-    [VISITOR]: hasPointer && { value: getPointerVisitor() },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor() },
     [NORMALIZER]: { value: normalizeArray },
   };
   const staticDescriptors = {
@@ -1449,7 +1464,7 @@ function getPointerVisitor(structure) {
       }
       const child = this[SLOTS][i] ?? (vivificate ? this[VIVIFICATOR](i) : null);
       if (child) {
-        child[VISITOR](cb, childOptions);
+        child[POINTER_VISITOR](cb, childOptions);
       }
     }
   };
@@ -1463,15 +1478,15 @@ const proxyHandlers = {
     } else {
       switch (name) {
         case 'get':
-          if (!array[GETTER]) {
-            array[GETTER] = array.get.bind(array);
+          if (!array[ELEMENT_GETTER]) {
+            array[ELEMENT_GETTER] = array.get.bind(array);
           }
-          return array[GETTER];
+          return array[ELEMENT_GETTER];
         case 'set':
-          if (!array[SETTER]) {
-            array[SETTER] = array.set.bind(array);
+          if (!array[ELEMENT_SETTER]) {
+            array[ELEMENT_SETTER] = array.set.bind(array);
           }
-          return array[SETTER];
+          return array[ELEMENT_SETTER];
         case ARRAY:
           return array;
         default:
@@ -1486,10 +1501,10 @@ const proxyHandlers = {
     } else {
       switch (name) {
         case 'get':
-          array[GETTER] = value;
+          array[ELEMENT_GETTER] = value;
           break;
         case 'set':
-          array[SETTER] = value;
+          array[ELEMENT_SETTER] = value;
           break;
         default:
           array[name] = value;
@@ -1504,10 +1519,10 @@ const proxyHandlers = {
     } else {
       switch (name) {
         case 'get':
-          delete array[GETTER];
+          delete array[ELEMENT_GETTER];
           break;
         case 'set':
-          delete array[SETTER];
+          delete array[ELEMENT_SETTER];
           break;
         default:
           delete array[name];
@@ -1637,7 +1652,7 @@ function defineErrorUnion(structure, env) {
   };
   const clearValue = function() {
     this[RESETTER]();
-    this[VISITOR]?.(resetPointer);
+    this[POINTER_VISITOR]?.(resetPointer);
   };
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const propApplier = createPropertyApplier(structure);
@@ -1646,7 +1661,7 @@ function defineErrorUnion(structure, env) {
       this[COPIER](arg);
       if (hasPointer) {
         if (isChildActive.call(this)) {
-          this[VISITOR](copyPointer, { vivificate: true, source: arg });
+          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }
     } else if (arg instanceof TargetError) {
@@ -1694,7 +1709,7 @@ function defineErrorUnion(structure, env) {
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
-    [VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, { isChildActive }) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, { isChildActive }) },
     [NORMALIZER]: { value: normalizeErrorUnion },
   };
   const staticDescriptors = {
@@ -1732,7 +1747,7 @@ function defineOptional(structure, env) {
     if (present) {
       return getValue.call(this);
     } else {
-      this[VISITOR]?.(resetPointer);
+      this[POINTER_VISITOR]?.(resetPointer);
       return null;
     }
   };
@@ -1744,14 +1759,14 @@ function defineOptional(structure, env) {
       if (hasPointer) {
         // don't bother copying pointers when it's empty
         if (isChildActive.call(arg)) {
-          this[VISITOR](copyPointer, { vivificate: true, source: arg });
+          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }      
     } else if (arg === null) {
       setPresent.call(this, false);
       this[RESETTER]?.();
       // clear references so objects can be garbage-collected
-      this[VISITOR]?.(resetPointer);
+      this[POINTER_VISITOR]?.(resetPointer);
     } else if (arg !== undefined || isValueVoid) {      
       // call setValue() first, in case it throws
       setValue.call(this, arg);
@@ -1777,7 +1792,7 @@ function defineOptional(structure, env) {
     // no need to reset the value when it's a pointer, since setPresent() would null out memory used by the pointer
     [RESETTER]: !hasPointer && { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
-    [VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, { isChildActive }) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, { isChildActive }) },
     [NORMALIZER]: { value: normalizeOptional },
   };
   const staticDescriptors = {
@@ -1833,7 +1848,7 @@ function defineSlice(structure, env) {
       }
       this[COPIER](arg);
       if (hasPointer) {
-        this[VISITOR](copyPointer, { vivificate: true, source: arg });
+        this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else if (typeof(arg) === 'string' && hasStringProp) {
       initializer.call(this, { string: arg }, fixed);
@@ -1888,7 +1903,7 @@ function defineSlice(structure, env) {
     [Symbol.iterator]: { value: getArrayIterator },
     [COPIER]: { value: getMemoryCopier(elementSize, true) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
-    [VISITOR]: hasPointer && { value: getPointerVisitor() },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor() },
     [NORMALIZER]: { value: normalizeArray },
   };
   const staticDescriptors = {
@@ -2002,7 +2017,7 @@ function defineUnionShape(structure, env) {
             throwInactiveUnionProperty(structure, name, currentName);
           }
         }
-        this[VISITOR]?.(resetPointer);
+        this[POINTER_VISITOR]?.(resetPointer);
         return getValue.call(this);
       }
     : getValue;
@@ -2019,7 +2034,7 @@ function defineUnionShape(structure, env) {
     ? function(value) {
         setActiveField.call(this, name);
         setValue.call(this, value);
-        this[VISITOR]?.(resetPointer);
+        this[POINTER_VISITOR]?.(resetPointer);
       }
     : setValue;
     memberDescriptors[name] = { get, set, configurable: true, enumerable: true };
@@ -2034,7 +2049,7 @@ function defineUnionShape(structure, env) {
       /* WASM-ONLY-END */
       this[COPIER](arg);
       if (hasPointer) {
-        this[VISITOR](copyPointer, { vivificate: true, source: arg });
+        this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else if (arg && typeof(arg) === 'object') {
       let found = 0;
@@ -2060,7 +2075,7 @@ function defineUnionShape(structure, env) {
   const modifier = (hasInaccessiblePointer) 
   ? function() {
       // make pointer access throw
-      this[VISITOR](disablePointer, { vivificate: true });
+      this[POINTER_VISITOR](disablePointer, { vivificate: true });
     }
   : undefined;
   const constructor = structure.constructor = createConstructor(structure, { modifier, initializer }, env);
@@ -2111,7 +2126,7 @@ function defineUnionShape(structure, env) {
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [TAG]: isTagged && { get: getSelector, configurable: true },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
-    [VISITOR]: hasAnyPointer && { value: getPointerVisitor$1(structure, { isChildActive }) },
+    [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor$1(structure, { isChildActive }) },
     [NORMALIZER]: { value: normalizeStruct },
   };  
   const staticDescriptors = {
@@ -2120,7 +2135,7 @@ function defineUnionShape(structure, env) {
   };
   attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
   // replace regular setters with ones that change the active field
-  const setters = constructor.prototype[SETTERS];
+  const setters = constructor.prototype[PROP_SETTERS];
   for (const [ name, init ] of Object.entries(memberInitializers)) {
     if (init) {
       setters[name] = init;
@@ -2156,7 +2171,7 @@ function defineVector(structure, env) {
       }
       let i = 0;
       for (const value of arg) {
-        this[SETTERS][i++].call(this, value);
+        this[PROP_SETTERS][i++].call(this, value);
       }
     } else if (arg && typeof(arg) === 'object') {
       if (propApplier.call(this, arg) === 0) {
@@ -2391,6 +2406,9 @@ function flagMemberUsage(member, features) {
     case MemberType.Null:
       features.useNull = true;
       break;
+    case MemberType.Undefined:
+      features.useUndefined = true;
+      break;
     case MemberType.Type:
       features.useType = true;
       break;
@@ -2481,13 +2499,13 @@ function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) 
   const prototypeRO = {};
   Object.setPrototypeOf(prototypeRO, constructor.prototype);
   const instanceDescriptorsRO = {};
-  const setters = {};
+  const propSetters = {};
   for (const [ name, descriptor ] of Object.entries(instanceDescriptors)) {
     if (descriptor?.set) {
       instanceDescriptorsRO[name] = { ...descriptor, set: throwReadOnly };
       // save the setters so we can initialize read-only objects
       if (name !== '$') {
-        setters[name] = descriptor.set;
+        propSetters[name] = descriptor.set;
       }
     } else if (name === 'set') {
       instanceDescriptorsRO[name] = { value: throwReadOnly, configurable: true, writable: true };
@@ -2500,19 +2518,23 @@ function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) 
       return vivificate.call(this, slot, false);
     }
   };
+  const { get, set } = instanceDescriptors.$;
   defineProperties(constructor.prototype, { 
     [CONST]: { value: false },
-    [ALL_KEYS]: { value: Object.keys(setters) },
-    [SETTERS]: { value: setters },
+    [ALL_KEYS]: { value: Object.keys(propSetters) },
+    [SETTER]: { value: set },
+    [GETTER]: { value: get },
+    [PROP_SETTERS]: { value: propSetters },
     ...instanceDescriptors,
   });
   defineProperties(constructor, {
-    [CONST_PROTO]: { value: prototypeRO },
+    [CONST_PROTOTYPE]: { value: prototypeRO },
     ...staticDescriptors,
   }); 
   defineProperties(prototypeRO, { 
     constructor: { value: constructor, configurable: true },
     [CONST]: { value: true },
+    [SETTER]: { value: throwReadOnly },
     [VIVIFICATOR]: vivificate && vivificateDescriptor,
     ...instanceDescriptorsRO,
   });
@@ -2524,6 +2546,7 @@ function createConstructor(structure, handlers, env) {
     byteSize,
     align,
     instance: { members, template },
+    hasPointer,
   } = structure;
   const {
     modifier,
@@ -2553,7 +2576,7 @@ function createConstructor(structure, handlers, env) {
       if (arguments.length === 0) {
         throwNoInitializer(structure);
       }
-      self = (writable) ? this : Object.create(constructor[CONST_PROTO]);
+      self = this;
       if (hasSlots) {
         self[SLOTS] = {};
       }
@@ -2567,23 +2590,29 @@ function createConstructor(structure, handlers, env) {
       }
     } else {
       if (alternateCaster) {
+        // casting from number, string, etc.
         self = alternateCaster.call(this, arg, options);
         if (self !== false) {
           return self;
         }
       }
+      // look for buffer
       dv = requireDataView(structure, arg, env);
       if (self = cache.find(dv, writable)) {
         return self;
       }
-      self = Object.create(writable ? constructor.prototype : constructor[CONST_PROTO]);
-      if (hasSlots) {
-        self[SLOTS] = {};
-      }
+      self = Object.create(writable ? constructor.prototype : constructor[CONST_PROTOTYPE]);
       if (shapeDefiner) {
         setDataView.call(self, dv, structure, false, { shapeDefiner });
       } else {
         self[MEMORY] = dv;
+      }
+      if (hasSlots) {
+        self[SLOTS] = {};
+        if (hasPointer && arg instanceof constructor) {
+          // copy pointer from other object
+          self[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
+        } 
       }
     }
     if (comptimeFieldSlots) {
@@ -2594,8 +2623,15 @@ function createConstructor(structure, handlers, env) {
     if (modifier) {
       modifier.call(self);
     }
-    if (creating && !shapeDefiner) {
-      initializer.call(self, arg);
+    if (creating) {
+      // initialize object unless it's been done already
+      if (!shapeDefiner) {
+        initializer.call(self, arg);
+      }
+      if (!writable) {
+        // create object with read-only prototype
+        self = Object.assign(Object.create(constructor[CONST_PROTOTYPE]), self);
+      } 
     }
     if (finalizer) {
       self = finalizer.call(self);
@@ -2609,11 +2645,11 @@ function createPropertyApplier(structure) {
   const { instance: { template } } = structure;  
   return function(arg) {
     const argKeys = Object.keys(arg);
-    const setters = this[SETTERS];
+    const propSetters = this[PROP_SETTERS];
     const allKeys = this[ALL_KEYS];
     // don't accept unknown props
     for (const key of argKeys) {
-      if (!(key in setters)) {
+      if (!(key in propSetters)) {
         throwNoProperty(structure, key);
       }
     }
@@ -2623,7 +2659,7 @@ function createPropertyApplier(structure) {
     let normalMissing = 0;
     let specialFound = 0;
     for (const key of allKeys) {
-      const set = setters[key];
+      const set = propSetters[key];
       if (set.special) {
         if (key in arg) {
           specialFound++;
@@ -2638,7 +2674,7 @@ function createPropertyApplier(structure) {
       }
     }
     if (normalMissing !== 0 && specialFound === 0) {
-      const missing = allKeys.filter(k => setters[k].required && !(k in arg));
+      const missing = allKeys.filter(k => propSetters[k].required && !(k in arg));
       throwMissingInitializers(structure, missing);
     }
     if (specialFound + normalFound > argKeys.length) {
@@ -2657,11 +2693,11 @@ function createPropertyApplier(structure) {
         if (template[MEMORY]) {
           this[COPIER](template);
         }
-        this[VISITOR]?.(copyPointer, { vivificate: true, source: template });
+        this[POINTER_VISITOR]?.(copyPointer, { vivificate: true, source: template });
       }
     }
     for (const key of argKeys) {
-      const set = setters[key];
+      const set = propSetters[key];
       set.call(this, arg[key]);
     }
     return argKeys.length;
@@ -2700,7 +2736,7 @@ function findAllObjects(structures, SLOTS) {
         if (child) {
           const desc = Object.getOwnPropertyDescriptor(child, '*');
           if (desc?.get === throwInaccessiblePointer) {
-            object[SLOTS][slot] = null;
+            object[SLOTS][slot] = undefined;
             continue;
           } 
           find(child);         
@@ -2847,6 +2883,7 @@ const MemberType = {
   Static: 10,
   Literal: 11,
   Null: 12,
+  Undefined: 13,
 };
 
 function isReadOnly(type) {
@@ -2918,6 +2955,10 @@ function useNull() {
   factories[MemberType.Null] = getNullDescriptor;
 }
 
+function useUndefined() {
+  factories[MemberType.Undefined] = getUndefinedDescriptor;
+}
+
 function isByteAligned({ bitOffset, bitSize, byteSize }) {
   return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
 }
@@ -2952,18 +2993,18 @@ function getVoidDescriptor(member, env) {
 }
 
 function getNullDescriptor(member, env) {
-  const { runtimeSafety } = env;
   return {
     get: function() {
       return null;
     },
-    set: (runtimeSafety)
-    ? function(value) {
-        if (value !== null) {
-          throwNotNull(member);
-        }
-      }
-    : function() {},
+  }
+}
+
+function getUndefinedDescriptor(member, env) {
+  return {
+    get: function() {
+      return undefined;
+    },
   }
 }
 
@@ -3119,7 +3160,7 @@ function isValueExpected(structure) {
 
 function getValue(slot) {
   const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
-  return object.$;
+  return object[GETTER]();
 }
 
 function getObject(slot) {
@@ -3129,7 +3170,7 @@ function getObject(slot) {
 
 function setValue(slot, value) {
   const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
-  object.$ = value;
+  object[SETTER](value);
 }
 
 function bindSlot(slot, { get, set }) {
@@ -3274,6 +3315,7 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
 function useAllMemberTypes() {
   useVoid();
   useNull();
+  useUndefined();
   useBoolEx();
   useIntEx();
   useUintEx();
@@ -3518,11 +3560,6 @@ function rethrowRangeError(member, index, err) {
   } else {
     throw err;
   }
-}
-
-function throwNotNull(member) {
-  const { name } = member;
-  throw new TypeError(`Property ${name} can only be null`);
 }
 
 function throwNotUndefined(member) {
@@ -5004,30 +5041,29 @@ class Environment {
       }
       const writable = !pointer.constructor.const;
       const currentTarget = pointer[SLOTS][0];
-      let newTarget = null;
+      let newTarget;
       if (isActive(this)) {
         const Target = pointer.constructor.child;
         if (!currentTarget || isMutable(this)) {
           // obtain address (and possibly length) from memory
-          const [ address, length ] = pointer[GETTER]();
+          const [ address, length ] = pointer[ADDRESS_GETTER]();
           // get view of memory that pointer points to
           const byteLength = length * Target[SIZE];
           const dv = env.findMemory(address, byteLength);
           // create the target
           newTarget = Target.call(ENVIRONMENT, dv, { writable });
-
         } else {
           newTarget = currentTarget;
         }
       }
       // acquire objects pointed to by pointers in target
-      currentTarget?.[VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
+      currentTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
       if (newTarget !== currentTarget) {
-        newTarget?.[VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
+        newTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
         pointer[SLOTS][0] = newTarget;
       }
     };
-    args[VISITOR](callback, { vivificate: true });
+    args[POINTER_VISITOR](callback, { vivificate: true });
   }
 
   /* COMPTIME-ONLY */
@@ -5380,7 +5416,7 @@ class WebAssemblyEnvironment extends Environment {
     this.startContext();
     // call context, used by allocateShadowMemory and freeShadowMemory
     this.context.call = call;
-    if (args[VISITOR]) {
+    if (args[POINTER_VISITOR]) {
       this.updatePointerAddresses(args);
     }
     // return address of shadow for argumnet struct
@@ -5391,7 +5427,7 @@ class WebAssemblyEnvironment extends Environment {
 
   endCall(call, args) {
     this.updateShadowTargets();
-    if (args[VISITOR]) {
+    if (args[POINTER_VISITOR]) {
       this.acquirePointerTargets(args);
     }
     this.releaseShadows();
@@ -5750,8 +5786,9 @@ function getExports(structures) {
         const value = constructor[member.name];
         exportables.push(member.name);
       } catch (err) {
+        console.log(err.message);
       }
-    }    
+    }
   }
   return [ 'default', '__zigar', ...exportables ];
 }

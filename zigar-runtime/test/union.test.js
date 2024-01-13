@@ -3,7 +3,7 @@ import { expect } from 'chai';
 import { NodeEnvironment } from '../src/environment-node.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { ENVIRONMENT, MEMORY, SLOTS, VISITOR } from '../src/symbol.js';
+import { ENVIRONMENT, MEMORY, POINTER_VISITOR, SLOTS } from '../src/symbol.js';
 import { encodeBase64 } from '../src/text.js';
 
 describe('Union functions', function() {
@@ -582,6 +582,17 @@ describe('Union functions', function() {
       // getter will throw
       expect(() => object.pointer['*']).to.throw(TypeError)
         .with.property('message').that.contains('not accessible');
+      const inaccessible = Symbol.for('inaccessible');
+      expect(object.valueOf()).to.eql({
+        pointer: inaccessible,
+        struct: { pointer: inaccessible },
+        array: [
+          inaccessible,
+          inaccessible,
+          inaccessible,
+          inaccessible
+        ]
+      });
     })
     it('should define a simple tagged union', function() {
       const enumStructure = env.beginStructure({
@@ -1052,7 +1063,7 @@ describe('Union functions', function() {
       const pointer = object.pointer;
       object.$ = { number: 4567 };
       expect(pointer[SLOTS][0]).to.be.undefined;
-      object[VISITOR](function({ isActive }) {
+      object[POINTER_VISITOR](function({ isActive }) {
         expect(isActive(this)).to.be.false;
       })
     })
@@ -1159,7 +1170,7 @@ describe('Union functions', function() {
       object[MEMORY].setInt16(8, 1, true);
       expect(object.number).to.equal(1234);
       expect(pointer[SLOTS][0]).to.be.undefined;
-      object[VISITOR](function({ isActive }) {
+      object[POINTER_VISITOR](function({ isActive }) {
         expect(isActive(this)).to.be.false;
       })
     })

@@ -9,8 +9,11 @@ import { getDestructor, getMemoryCopier } from './memory.js';
 import { convertToJSON, getValueOf } from './special.js';
 import { StructureType, attachDescriptors, createConstructor, defineProperties } from './structure.js';
 import {
-  ALIGN, CONST, COPIER, ENVIRONMENT, GETTER, MEMORY, NORMALIZER, PARENT, POINTER, PROXY, SETTER,
-  SIZE, SLOTS, VISITOR, VIVIFICATOR
+  ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CONST, COPIER, ENVIRONMENT, GETTER, MEMORY, NORMALIZER, PARENT,
+  POINTER,
+  POINTER_VISITOR,
+  PROXY, SETTER, SIZE, SLOTS, TARGET_GETTER,
+  VIVIFICATOR
 } from './symbol.js';
 
 export function definePointer(structure, env) {
@@ -43,15 +46,16 @@ export function definePointer(structure, env) {
     byteSize: addressSize,
     structure: { name: 'usize', byteSize: addressSize },
   }, env) : {};
-  const { get, set } = getDescriptor(member, env);
+  const { get: getTarget, set: setTarget } = getDescriptor(member, env);
   const alternateCaster = function(arg, options) {
     const Target = targetStructure.constructor;
-    if (isPointerOf(arg, Target)) {
+    if ((this === ENVIRONMENT || this === PARENT) || arg instanceof constructor) {
+      // casting from buffer to pointer is allowed only if request comes from the runtime
+      // casting from writable to read-only is also allowed
+      return false;
+    } else if (isPointerOf(arg, Target)) {
       // const/non-const casting
       return new constructor(Target(arg['*'], { writable: !isConst }), options);
-    } else if (this === ENVIRONMENT || this === PARENT) {
-      // allow the runtime environment to cast to pointer
-      return false;
     } else if (isTargetSlice) {
       // allow casting to slice through constructor of its pointer
       return new constructor(Target(arg), options);
@@ -139,14 +143,15 @@ export function definePointer(structure, env) {
     return [ address, 1 ];
   };
   const instanceDescriptors = {
-    '*': { get, set },
+    '*': { get: getTarget, set: setTarget },
     '$': { get: getProxy, set: initializer },
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    [GETTER]: { value: addressGetter },
-    [SETTER]: { value: addressSetter },
-    [VISITOR]: { value: visitPointer },
+    [TARGET_GETTER]: { value: getTarget },
+    [ADDRESS_GETTER]: { value: addressGetter },
+    [ADDRESS_SETTER]: { value: addressSetter },
+    [POINTER_VISITOR]: { value: visitPointer },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: { value: throwNullPointer },
     [NORMALIZER]: { value: normalizePointer },
@@ -165,6 +170,7 @@ function normalizePointer(map, forJSON) {
     const target = this['*'];
     return target[NORMALIZER]?.(map, forJSON) ?? target;  
   } catch (err) {
+    return Symbol.for('inaccessible');
   }
 }
 
@@ -183,10 +189,14 @@ export function resetPointer({ isActive }) {
 }
 
 export function disablePointer() {
-  const disabled = { get: throwInaccessiblePointer, set: throwInaccessiblePointer };
-  defineProperties(this, {
-    '*': disabled,
-    '$': disabled,
+  const disabledProp = { get: throwInaccessiblePointer, set: throwInaccessiblePointer };
+  const disabledFunc = { value: throwInaccessiblePointer };
+  defineProperties(this[POINTER], {
+    '*': disabledProp,
+    '$': disabledProp,
+    [GETTER]: disabledFunc,
+    [SETTER]: disabledFunc,
+    [TARGET_GETTER]: disabledFunc,
   });
 }
 
@@ -210,14 +220,16 @@ const proxyHandlers = {
     } else if (name in pointer) {
       return pointer[name];
     } else {
-      return pointer['*'][name];
+      const target = pointer[TARGET_GETTER]();
+      return target[name];
     }
   },
   set(pointer, name, value) {
     if (name in pointer) {
       pointer[name] = value;
     } else {
-      pointer['*'][name] = value;
+      const target = pointer[TARGET_GETTER]();
+      target[name] = value;
     }
     return true;
   },
@@ -225,7 +237,8 @@ const proxyHandlers = {
     if (name in pointer) {
       delete pointer[name];
     } else {
-      delete pointer['*'][name];
+      const target = pointer[TARGET_GETTER]();
+      delete target[name];
     }
     return true;
   },
@@ -233,7 +246,8 @@ const proxyHandlers = {
     if (name in pointer) {
       return true;
     } else {
-      return name in pointer['*'];
+      const target = pointer[TARGET_GETTER]();
+      return name in target;
     }
   },
 };

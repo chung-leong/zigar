@@ -4,7 +4,7 @@ import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf } from './special.js';
 import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
-import { ALIGN, COMPAT, COPIER, NORMALIZER, SETTERS, SIZE } from './symbol.js';
+import { ALIGN, COMPAT, COPIER, NORMALIZER, PROP_SETTERS, SIZE } from './symbol.js';
 
 export function defineVector(structure, env) {
   const {
@@ -43,7 +43,7 @@ export function defineVector(structure, env) {
       }
       let i = 0;
       for (const value of arg) {
-        this[SETTERS][i++].call(this, value);
+        this[PROP_SETTERS][i++].call(this, value);
       }
     } else if (arg && typeof(arg) === 'object') {
       if (propApplier.call(this, arg) === 0) {

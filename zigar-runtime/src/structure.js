@@ -13,11 +13,14 @@ import { defineSlice } from './slice.js';
 import { defineStructShape } from './struct.js';
 import {
   ALL_KEYS,
-  CONST, CONST_PROTO,
+  CONST, CONST_PROTOTYPE,
   COPIER,
+  GETTER,
   MEMORY,
-  SETTERS, SLOTS,
-  VISITOR,
+  POINTER_VISITOR,
+  PROP_SETTERS,
+  SETTER,
+  SLOTS,
   VIVIFICATOR
 } from './symbol.js';
 import { defineUnionShape } from './union.js';
@@ -268,13 +271,13 @@ export function attachDescriptors(constructor, instanceDescriptors, staticDescri
   const prototypeRO = {};
   Object.setPrototypeOf(prototypeRO, constructor.prototype);
   const instanceDescriptorsRO = {};
-  const setters = {};
+  const propSetters = {};
   for (const [ name, descriptor ] of Object.entries(instanceDescriptors)) {
     if (descriptor?.set) {
       instanceDescriptorsRO[name] = { ...descriptor, set: throwReadOnly };
       // save the setters so we can initialize read-only objects
       if (name !== '$') {
-        setters[name] = descriptor.set;
+        propSetters[name] = descriptor.set;
       }
     } else if (name === 'set') {
       instanceDescriptorsRO[name] = { value: throwReadOnly, configurable: true, writable: true };
@@ -287,19 +290,23 @@ export function attachDescriptors(constructor, instanceDescriptors, staticDescri
       return vivificate.call(this, slot, false);
     }
   };
+  const { get, set } = instanceDescriptors.$;
   defineProperties(constructor.prototype, { 
     [CONST]: { value: false },
-    [ALL_KEYS]: { value: Object.keys(setters) },
-    [SETTERS]: { value: setters },
+    [ALL_KEYS]: { value: Object.keys(propSetters) },
+    [SETTER]: { value: set },
+    [GETTER]: { value: get },
+    [PROP_SETTERS]: { value: propSetters },
     ...instanceDescriptors,
   });
   defineProperties(constructor, {
-    [CONST_PROTO]: { value: prototypeRO },
+    [CONST_PROTOTYPE]: { value: prototypeRO },
     ...staticDescriptors,
   }); 
   defineProperties(prototypeRO, { 
     constructor: { value: constructor, configurable: true },
     [CONST]: { value: true },
+    [SETTER]: { value: throwReadOnly },
     [VIVIFICATOR]: vivificate && vivificateDescriptor,
     ...instanceDescriptorsRO,
   });
@@ -311,6 +318,7 @@ export function createConstructor(structure, handlers, env) {
     byteSize,
     align,
     instance: { members, template },
+    hasPointer,
   } = structure;
   const {
     modifier,
@@ -340,7 +348,7 @@ export function createConstructor(structure, handlers, env) {
       if (arguments.length === 0) {
         throwNoInitializer(structure);
       }
-      self = (writable) ? this : Object.create(constructor[CONST_PROTO]);
+      self = this;
       if (hasSlots) {
         self[SLOTS] = {};
       }
@@ -354,23 +362,29 @@ export function createConstructor(structure, handlers, env) {
       }
     } else {
       if (alternateCaster) {
+        // casting from number, string, etc.
         self = alternateCaster.call(this, arg, options);
         if (self !== false) {
           return self;
         }
       }
+      // look for buffer
       dv = requireDataView(structure, arg, env);
       if (self = cache.find(dv, writable)) {
         return self;
       }
-      self = Object.create(writable ? constructor.prototype : constructor[CONST_PROTO]);
-      if (hasSlots) {
-        self[SLOTS] = {};
-      }
+      self = Object.create(writable ? constructor.prototype : constructor[CONST_PROTOTYPE]);
       if (shapeDefiner) {
         setDataView.call(self, dv, structure, false, { shapeDefiner });
       } else {
         self[MEMORY] = dv;
+      }
+      if (hasSlots) {
+        self[SLOTS] = {};
+        if (hasPointer && arg instanceof constructor) {
+          // copy pointer from other object
+          self[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
+        } 
       }
     }
     if (comptimeFieldSlots) {
@@ -381,8 +395,15 @@ export function createConstructor(structure, handlers, env) {
     if (modifier) {
       modifier.call(self);
     }
-    if (creating && !shapeDefiner) {
-      initializer.call(self, arg);
+    if (creating) {
+      // initialize object unless it's been done already
+      if (!shapeDefiner) {
+        initializer.call(self, arg);
+      }
+      if (!writable) {
+        // create object with read-only prototype
+        self = Object.assign(Object.create(constructor[CONST_PROTOTYPE]), self);
+      } 
     }
     if (finalizer) {
       self = finalizer.call(self);
@@ -396,11 +417,11 @@ export function createPropertyApplier(structure) {
   const { instance: { template } } = structure;  
   return function(arg) {
     const argKeys = Object.keys(arg);
-    const setters = this[SETTERS];
+    const propSetters = this[PROP_SETTERS];
     const allKeys = this[ALL_KEYS];
     // don't accept unknown props
     for (const key of argKeys) {
-      if (!(key in setters)) {
+      if (!(key in propSetters)) {
         throwNoProperty(structure, key);
       }
     }
@@ -410,7 +431,7 @@ export function createPropertyApplier(structure) {
     let normalMissing = 0;
     let specialFound = 0;
     for (const key of allKeys) {
-      const set = setters[key];
+      const set = propSetters[key];
       if (set.special) {
         if (key in arg) {
           specialFound++;
@@ -425,7 +446,7 @@ export function createPropertyApplier(structure) {
       }
     }
     if (normalMissing !== 0 && specialFound === 0) {
-      const missing = allKeys.filter(k => setters[k].required && !(k in arg));
+      const missing = allKeys.filter(k => propSetters[k].required && !(k in arg));
       throwMissingInitializers(structure, missing)
     }
     if (specialFound + normalFound > argKeys.length) {
@@ -444,11 +465,11 @@ export function createPropertyApplier(structure) {
         if (template[MEMORY]) {
           this[COPIER](template);
         }
-        this[VISITOR]?.(copyPointer, { vivificate: true, source: template });
+        this[POINTER_VISITOR]?.(copyPointer, { vivificate: true, source: template });
       }
     }
     for (const key of argKeys) {
-      const set = setters[key];
+      const set = propSetters[key];
       set.call(this, arg[key]);
     }
     return argKeys.length;
@@ -483,15 +504,12 @@ export function findAllObjects(structures, SLOTS) {
     list.push(object);
     if (object[SLOTS]) {
       for (const [ slot, child ] of Object.entries(object[SLOTS])) {
-        // don't include null pointer created when pointers in bare union get disabled
-        if (child) {
-          const desc = Object.getOwnPropertyDescriptor(child, '*');
-          if (desc?.get === throwInaccessiblePointer) {
-            object[SLOTS][slot] = undefined;
-            continue;
-          } 
-          find(child);         
-        }
+        // don't include disabled pointers in bare union
+        if (child?.[GETTER] === throwInaccessiblePointer) {
+          object[SLOTS][slot] = undefined;
+          continue;
+        } 
+        find(child);         
       }
     }
   };

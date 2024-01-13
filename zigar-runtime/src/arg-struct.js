@@ -3,7 +3,7 @@ import { MemberType, getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { defineProperties } from './structure.js';
-import { ALIGN, COPIER, MEMORY, SIZE, SLOTS, VISITOR, VIVIFICATOR } from './symbol.js';
+import { ALIGN, COPIER, MEMORY, POINTER_VISITOR, SIZE, SLOTS, VIVIFICATOR } from './symbol.js';
 
 export function defineArgStruct(structure, env) {
   const {
@@ -46,7 +46,7 @@ export function defineArgStruct(structure, env) {
     ...memberDescriptors,
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
-    [VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildMutable }) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildMutable }) },
   });
   defineProperties(constructor, {
     [ALIGN]: { value: align },

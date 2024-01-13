@@ -26,8 +26,8 @@ import {
   COPIER,
   LENGTH, MEMORY,
   NORMALIZER,
+  POINTER_VISITOR,
   SIZE,
-  VISITOR,
   VIVIFICATOR
 } from './symbol.js';
 
@@ -81,7 +81,7 @@ export function defineSlice(structure, env) {
       }
       this[COPIER](arg);
       if (hasPointer) {
-        this[VISITOR](copyPointer, { vivificate: true, source: arg });
+        this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else if (typeof(arg) === 'string' && hasStringProp) {
       initializer.call(this, { string: arg }, fixed);
@@ -136,7 +136,7 @@ export function defineSlice(structure, env) {
     [Symbol.iterator]: { value: getArrayIterator },
     [COPIER]: { value: getMemoryCopier(elementSize, true) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },
-    [VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
+    [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
     [NORMALIZER]: { value: normalizeArray },
   };
   const staticDescriptors = {

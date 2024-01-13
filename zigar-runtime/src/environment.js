@@ -6,17 +6,9 @@ import { addMethods } from './method.js';
 import { addStaticMembers } from './static.js';
 import { StructureType, defineProperties, findAllObjects, getStructureFactory, getStructureName, useArgStruct } from './structure.js';
 import {
-  ALIGN,
-  ATTRIBUTES,
-  CONST,
-  COPIER,
-  ENVIRONMENT,
-  GETTER,
-  MEMORY,
-  POINTER,
-  SETTER,
-  SIZE, SLOTS,
-  VISITOR
+  ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, ATTRIBUTES, CONST, COPIER, ENVIRONMENT, MEMORY, POINTER,
+  POINTER_VISITOR,
+  SIZE, SLOTS
 } from './symbol.js';
 import { decodeText } from './text.js';
 
@@ -616,11 +608,11 @@ export class Environment {
             bufferMap.set(dv.buffer, target);
           }
           // scan pointers in target
-          target[VISITOR]?.(callback);
+          target[POINTER_VISITOR]?.(callback);
         }
       }
     };
-    args[VISITOR](callback);
+    args[POINTER_VISITOR](callback);
     // find targets that overlap each other
     const clusters = this.findTargetClusters(potentialClusters);
     const clusterMap = new Map();
@@ -638,7 +630,7 @@ export class Environment {
         address = this.getShadowAddress(target, cluster);
       }
       // update the pointer
-      pointer[SETTER](address, target.length);
+      pointer[ADDRESS_SETTER](address, target.length);
     }
   }
 
@@ -831,7 +823,7 @@ export class Environment {
         const Target = pointer.constructor.child;
         if (!currentTarget || isMutable(this)) {
           // obtain address (and possibly length) from memory
-          const [ address, length ] = pointer[GETTER]();
+          const [ address, length ] = pointer[ADDRESS_GETTER]();
           // get view of memory that pointer points to
           const byteLength = length * Target[SIZE];
           const dv = env.findMemory(address, byteLength);
@@ -842,13 +834,13 @@ export class Environment {
         }
       }
       // acquire objects pointed to by pointers in target
-      currentTarget?.[VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
+      currentTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
       if (newTarget !== currentTarget) {
-        newTarget?.[VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
+        newTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
         pointer[SLOTS][0] = newTarget;
       }
     }
-    args[VISITOR](callback, { vivificate: true });
+    args[POINTER_VISITOR](callback, { vivificate: true });
   }
 
   /* COMPTIME-ONLY */

@@ -12,7 +12,7 @@ import {
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { ALIGN, ATTRIBUTES, CONST, COPIER, ENVIRONMENT, MEMORY, SLOTS, VISITOR } from '../src/symbol.js';
+import { ALIGN, ATTRIBUTES, CONST, COPIER, ENVIRONMENT, MEMORY, POINTER_VISITOR, SLOTS } from '../src/symbol.js';
 
 describe('Environment', function() {
   beforeEach(function() {
@@ -212,7 +212,7 @@ describe('Environment', function() {
       const structure = {
         constructor: function(dv) {
           return {
-            [VISITOR]: function(f) { visitor = f },
+            [POINTER_VISITOR]: function(f) { visitor = f },
           };
         },
         hasPointer: true,
@@ -1361,7 +1361,124 @@ describe('Environment', function() {
       object.$ = null;
       env.updatePointerAddresses(object);
       expect(object[MEMORY].getBigUint64(0, true)).to.equal(0n);
-    })    
+    })
+    it('should ignore pointers in a bare union', function() {
+      const env = new Environment();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'SomeStruct',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structStructure, {
+        name: 'pointer',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const arrayStructure = env.beginStructure({
+        type: StructureType.Array,
+        name: '[4]*Int32',
+        length: 4,
+        byteSize: 8 * 4,
+        hasPointer: true,
+      });
+      env.attachMember(arrayStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        byteSize: 8,
+        structure: ptrStructure,
+      });
+      env.finalizeShape(arrayStructure);
+      env.finalizeStructure(arrayStructure);
+      const structure = env.beginStructure({
+        type: StructureType.BareUnion,
+        name: 'Hello',
+        byteSize: 8 * 4,
+        hasPointer: false,
+      });
+      env.attachMember(structure, {
+        name: 'pointer',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.attachMember(structure, {
+        name: 'struct',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 1,
+        structure: structStructure,
+      });
+      env.attachMember(structure, {
+        name: 'array',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8 * 4,
+        slot: 2,
+        structure: arrayStructure,
+      });
+      env.attachMember(structure, {
+        name: 'number',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const object = new Hello(undefined);
+      let called = false;
+      env.getTargetAddress = function(target, cluster) {
+        called = true;
+        return 0x1000n;
+      };
+      env.updatePointerAddresses(object);
+      expect(called).to.be.false;
+    })
   })
   describe('findTargetClusters', function() {    
     it('should find overlapping objects', function() {

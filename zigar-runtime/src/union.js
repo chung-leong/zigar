@@ -13,10 +13,10 @@ import {
   COPIER,
   NAME,
   NORMALIZER,
-  SETTERS,
+  POINTER_VISITOR,
+  PROP_SETTERS,
   SIZE,
   TAG,
-  VISITOR,
   VIVIFICATOR
 } from './symbol.js';
 
@@ -71,7 +71,7 @@ export function defineUnionShape(structure, env) {
             throwInactiveUnionProperty(structure, name, currentName);
           }
         }
-        this[VISITOR]?.(resetPointer);
+        this[POINTER_VISITOR]?.(resetPointer);
         return getValue.call(this);
       }
     : getValue;
@@ -88,7 +88,7 @@ export function defineUnionShape(structure, env) {
     ? function(value) {
         setActiveField.call(this, name);
         setValue.call(this, value);
-        this[VISITOR]?.(resetPointer);
+        this[POINTER_VISITOR]?.(resetPointer);
       }
     : setValue;
     memberDescriptors[name] = { get, set, configurable: true, enumerable: true };
@@ -103,7 +103,7 @@ export function defineUnionShape(structure, env) {
       /* WASM-ONLY-END */
       this[COPIER](arg);
       if (hasPointer) {
-        this[VISITOR](copyPointer, { vivificate: true, source: arg });
+        this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
       }
     } else if (arg && typeof(arg) === 'object') {
       let found = 0;
@@ -129,7 +129,7 @@ export function defineUnionShape(structure, env) {
   const modifier = (hasInaccessiblePointer) 
   ? function() {
       // make pointer access throw
-      this[VISITOR](disablePointer, { vivificate: true });
+      this[POINTER_VISITOR](disablePointer, { vivificate: true });
     }
   : undefined;
   const constructor = structure.constructor = createConstructor(structure, { modifier, initializer }, env);
@@ -180,7 +180,7 @@ export function defineUnionShape(structure, env) {
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [TAG]: isTagged && { get: getSelector, configurable: true },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
-    [VISITOR]: hasAnyPointer && { value: getPointerVisitor(structure, { isChildActive }) },
+    [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     [NORMALIZER]: { value: normalizeStruct },
   };  
   const staticDescriptors = {
@@ -189,7 +189,7 @@ export function defineUnionShape(structure, env) {
   };
   attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
   // replace regular setters with ones that change the active field
-  const setters = constructor.prototype[SETTERS];
+  const setters = constructor.prototype[PROP_SETTERS];
   for (const [ name, init ] of Object.entries(memberInitializers)) {
     if (init) {
       setters[name] = init;

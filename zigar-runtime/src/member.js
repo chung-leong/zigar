@@ -1,26 +1,17 @@
 import {
-  getDataViewBoolAccessor,
-  getDataViewBoolAccessorEx,
-  getDataViewFloatAccessor,
-  getDataViewFloatAccessorEx,
-  getDataViewIntAccessor,
-  getDataViewIntAccessorEx,
-  getDataViewUintAccessor,
-  getDataViewUintAccessorEx,
+  getDataViewBoolAccessor, getDataViewBoolAccessorEx, getDataViewFloatAccessor,
+  getDataViewFloatAccessorEx, getDataViewIntAccessor, getDataViewIntAccessorEx,
+  getDataViewUintAccessor, getDataViewUintAccessorEx,
 } from './data-view.js';
 import { getGlobalErrorSet } from './error-set.js';
 import {
-  rethrowRangeError,
-  throwEnumExpected,
-  throwErrorExpected,
-  throwNotInErrorSet,
-  throwNotUndefined,
+  rethrowRangeError, throwEnumExpected, throwErrorExpected, throwNotInErrorSet, throwNotUndefined,
   throwOverflow
 } from './error.js';
 import { restoreMemory } from './memory.js';
 import { getIntRange } from './primitive.js';
 import { StructureType } from './structure.js';
-import { MEMORY, SLOTS, VIVIFICATOR } from './symbol.js';
+import { GETTER, MEMORY, SETTER, SLOTS, VIVIFICATOR } from './symbol.js';
 
 export const MemberType = {
   Void: 0,
@@ -352,7 +343,7 @@ function isValueExpected(structure) {
 
 function getValue(slot) {
   const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
-  return object.$;
+  return object[GETTER]();
 }
 
 function getObject(slot) {
@@ -362,7 +353,7 @@ function getObject(slot) {
 
 function setValue(slot, value) {
   const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
-  object.$ = value;
+  object[SETTER](value);
 }
 
 function bindSlot(slot, { get, set }) {

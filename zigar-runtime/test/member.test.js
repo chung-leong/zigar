@@ -16,7 +16,7 @@ import {
   useUintEx
 } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { MEMORY, SLOTS, VIVIFICATOR } from '../src/symbol.js';
+import { GETTER, MEMORY, SETTER, SLOTS, VIVIFICATOR } from '../src/symbol.js';
 
 describe('Member functions', function() {
   beforeEach(function() {
@@ -626,15 +626,17 @@ describe('Member functions', function() {
       const DummyClass = function(arg) {
         this.value = arg
       };
-      const initializer = function(arg) {
-        if (arg instanceof DummyClass) {
-          this.value = arg.value
-        } else {
-          this.value = arg;
-        }
-      };
-      Object.defineProperties(DummyClass.prototype, {
-        $: { set: initializer },
+      Object.assign(DummyClass.prototype, {
+        [GETTER]() {
+          return this;
+        },
+        [SETTER](arg) {
+          if (arg instanceof DummyClass) {
+            this.value = arg.value
+          } else {
+            this.value = arg;
+          }
+        },
       });
       const dummyObject = new DummyClass(123);
       const member = {
@@ -646,7 +648,6 @@ describe('Member functions', function() {
         structure: {
           type: StructureType.Struct,
           constructor: DummyClass,
-          initializer,
         },
       };
       const object = {
@@ -663,11 +664,9 @@ describe('Member functions', function() {
       const DummyClass = function(arg) {
         this.value = arg;
       } ;
-      Object.defineProperties(DummyClass.prototype, {
-        $: {
-          get() { return this.value },
-          set(value) { this.value = value },
-        }
+      Object.assign(DummyClass.prototype, {
+        [GETTER]() { return this.value },
+        [SETTER](value) { this.value = value },
       });
       const dummyObject = new DummyClass(123);
       const member = {
@@ -695,17 +694,17 @@ describe('Member functions', function() {
       const DummyClass = function(arg) {
         this.value = arg;
       } ;
-      Object.defineProperties(DummyClass.prototype, {
-        $: {
-          get() {
-            if (this.value instanceof Error) {
-              throw this.value;
-            } else {
-              return this.value;
-            }
-          },
-          set(value) { this.value = value },
-        }
+      Object.assign(DummyClass.prototype, {
+        [GETTER]() {
+          if (this.value instanceof Error) {
+            throw this.value;
+          } else {
+            return this.value;
+          }
+        },
+        [SETTER](value) { 
+          this.value = value 
+        },
       });
       const dummyObject = new DummyClass(123);
       const member = {
@@ -785,15 +784,15 @@ describe('Member functions', function() {
       const DummyClass = function(arg) {
         this.value = arg
       } ;
-      const initializer = function(arg) {
-        if (arg instanceof DummyClass) {
-          this.value = arg.value
-        } else {
-          this.value = arg;
-        }
-      };
-      Object.defineProperties(DummyClass.prototype, {
-        $: { set: initializer },
+      Object.assign(DummyClass.prototype, {
+        [GETTER]() { return this; },
+        [SETTER](arg) {
+          if (arg instanceof DummyClass) {
+            this.value = arg.value
+          } else {
+            this.value = arg;
+          } 
+        },
       });
       const dummyObject1 = new DummyClass(123);
       const dummyObject2 = new DummyClass(456);
@@ -805,7 +804,6 @@ describe('Member functions', function() {
         structure: {
           type: StructureType.Struct,
           constructor: DummyClass,
-          initializer,
         },
       };
       const slots = {
@@ -835,11 +833,9 @@ describe('Member functions', function() {
       const DummyClass = function(arg) {
         this.value = arg;
       } ;
-      Object.defineProperties(DummyClass.prototype, {
-        $: {
-          get() { return this.value },
-          set(value) { this.value = value },
-        },
+      Object.assign(DummyClass.prototype, {
+        [GETTER]() { return this.value },
+        [SETTER](value) { this.value = value },
       });
       const dummyObject1 = new DummyClass(123);
       const dummyObject2 = new DummyClass(456);
@@ -1052,7 +1048,9 @@ describe('Member functions', function() {
       expect(set).to.be.undefined;
     })
     it('should return comptime value descriptor', function() {
-      const comptime = { $: 1234 };
+      const comptime = { 
+        [GETTER]() { return 1234  },
+      };
       const member = {
         type: MemberType.Comptime,
         slot: 5,
@@ -1084,7 +1082,11 @@ describe('Member functions', function() {
       expect(set).to.be.undefined;
     })
     it('should return static value descriptor', function() {
-      const staticObj = { $: 1234 };
+      const staticObj = { 
+        value: 1234,
+        [GETTER]() { return this.value },
+        [SETTER](arg) { this.value = arg },
+      };
       const member = {
         type: MemberType.Static,
         slot: 5,
@@ -1098,10 +1100,13 @@ describe('Member functions', function() {
       const { get, set } = getDescriptor(member, env);
       expect(get.call(object)).to.equal(1234);
       set.call(object, 4567);
-      expect(staticObj.$).to.equal(4567);
+      expect(staticObj.value).to.equal(4567);
     })
     it('should return static object descriptor', function() {
-      const staticObj = { $: 1234 };
+      const staticObj = { 
+        [GETTER]() { return this },
+        [SETTER](arg) { Object.assign(this, arg) },
+      };
       const member = {
         type: MemberType.Static,
         slot: 5,
@@ -1114,8 +1119,8 @@ describe('Member functions', function() {
       };
       const { get, set } = getDescriptor(member, env);
       expect(get.call(object)).to.equal(staticObj);
-      set.call(object, 4567);
-      expect(staticObj.$).to.equal(4567);
+      set.call(object, { number: 4567 });
+      expect(staticObj.number).to.equal(4567);
     })
   })
 })
