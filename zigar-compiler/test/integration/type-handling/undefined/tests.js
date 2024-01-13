@@ -30,7 +30,10 @@ export function addTests(importModule, options) {
     it('should handle undefined in struct', async function() {
       this.timeout(120000);
       const { default: module, StructA } = await importTest('in-struct');
-      expect(module.struct_a.valueOf()).to.eql({ empty1: undefined, empty2: undefined });
+      expect(() => new StructA({ empty1: undefined })).to.throw(TypeError)
+        .with.property('message').that.contains('Comptime');
+      const b = new StructA({});
+      expect(b.valueOf()).to.eql({ empty1: undefined, empty2: undefined });
     })
     it('should not compile code with undefined in packed struct', async function() {
       this.timeout(120000);
@@ -53,6 +56,8 @@ export function addTests(importModule, options) {
       expect(module.union_a.empty).to.be.undefined;
       expect(TagType(module.union_a)).to.equal(TagType.empty);
       expect(module.union_a.number).to.be.null;
+      expect(() => new UnionA({ empty: undefined })).to.throw(TypeError)
+        .with.property('message').that.contains('Comptime');
       const b = new UnionA({ number: 123 });
       expect(b.valueOf()).to.eql({ number: 123 });
     })

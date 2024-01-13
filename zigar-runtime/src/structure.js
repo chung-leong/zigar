@@ -4,7 +4,7 @@ import { requireDataView, setDataView } from './data-view.js';
 import { defineEnumerationShape } from './enumeration.js';
 import { defineErrorSet } from './error-set.js';
 import { defineErrorUnion } from './error-union.js';
-import { throwInaccessiblePointer, throwMissingInitializers, throwNoInitializer, throwNoProperty, throwReadOnly } from './error.js';
+import { throwMissingInitializers, throwNoInitializer, throwNoProperty, throwReadOnly } from './error.js';
 import { MemberType, hasStandardFloatSize, hasStandardIntSize, isByteAligned, isReadOnly } from './member.js';
 import { defineOptional } from './optional.js';
 import { copyPointer, definePointer } from './pointer.js';
@@ -503,12 +503,7 @@ export function findAllObjects(structures, SLOTS) {
     found.set(object, true);
     list.push(object);
     if (object[SLOTS]) {
-      for (const [ slot, child ] of Object.entries(object[SLOTS])) {
-        // don't include disabled pointers in bare union
-        if (child?.[GETTER] === throwInaccessiblePointer) {
-          object[SLOTS][slot] = undefined;
-          continue;
-        } 
+      for (const child of Object.values(object[SLOTS])) {
         find(child);         
       }
     }

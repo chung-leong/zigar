@@ -881,12 +881,13 @@ function definePointer(structure, env) {
   const { get: getTarget, set: setTarget } = getDescriptor(member, env);
   const alternateCaster = function(arg, options) {
     const Target = targetStructure.constructor;
-    if (isPointerOf(arg, Target)) {
+    if ((this === ENVIRONMENT || this === PARENT) || arg instanceof constructor) {
+      // casting from buffer to pointer is allowed only if request comes from the runtime
+      // casting from writable to read-only is also allowed
+      return false;
+    } else if (isPointerOf(arg, Target)) {
       // const/non-const casting
       return new constructor(Target(arg['*'], { writable: !isConst }), options);
-    } else if (this === ENVIRONMENT || this === PARENT) {
-      // allow the runtime environment to cast to pointer
-      return false;
     } else if (isTargetSlice) {
       // allow casting to slice through constructor of its pointer
       return new constructor(Target(arg), options);
@@ -1001,6 +1002,7 @@ function normalizePointer(map, forJSON) {
     const target = this['*'];
     return target[NORMALIZER]?.(map, forJSON) ?? target;  
   } catch (err) {
+    return Symbol.for('inaccessible');
   }
 }
 
@@ -1019,10 +1021,9 @@ function resetPointer({ isActive }) {
 }
 
 function disablePointer() {
-  const pointer = this[POINTER] ?? this;
   const disabledProp = { get: throwInaccessiblePointer, set: throwInaccessiblePointer };
   const disabledFunc = { value: throwInaccessiblePointer };
-  defineProperties(pointer, {
+  defineProperties(this[POINTER], {
     '*': disabledProp,
     '$': disabledProp,
     [GETTER]: disabledFunc,
@@ -1166,7 +1167,7 @@ function normalizeStruct(map, forJSON) {
   if (!object) {
     object = {};
     map.set(this, object);
-    for (const [ name, value ] of this) {      
+    for (const [ name, value ] of this) {
       object[name] = value?.[NORMALIZER]?.(map, forJSON) ?? value;
     }
   }
@@ -2075,7 +2076,7 @@ function defineUnionShape(structure, env) {
   // members with pointers, we need to disable them
   const pointerMembers = members.filter(m => m.structure.hasPointer);
   const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
-  const modifier = (hasInaccessiblePointer) 
+  const modifier = (hasInaccessiblePointer && !env.comptime)
   ? function() {
       // make pointer access throw
       this[POINTER_VISITOR](disablePointer, { vivificate: true });
@@ -2734,16 +2735,8 @@ function findAllObjects(structures, SLOTS) {
     found.set(object, true);
     list.push(object);
     if (object[SLOTS]) {
-      for (const [ slot, child ] of Object.entries(object[SLOTS])) {
-        // don't include null pointer created when pointers in bare union get disabled
-        if (child) {
-          const desc = Object.getOwnPropertyDescriptor(child, '*');
-          if (desc?.get === throwInaccessiblePointer) {
-            object[SLOTS][slot] = undefined;
-            continue;
-          } 
-          find(child);         
-        }
+      for (const child of Object.values(object[SLOTS])) {
+        find(child);         
       }
     }
   };
@@ -4567,6 +4560,8 @@ class Environment {
   released = false;
   littleEndian = true;
   runtimeSafety = true;
+  comptime = false;
+  blockInaccessible = true;
   /* COMPTIME-ONLY */
   slots = {};
   structures = [];
@@ -4666,12 +4661,12 @@ class Environment {
     if (this.context) {
       const { memoryList, shadowMap } = this.context;
       const index = findMemoryIndex(memoryList, address);
-      const prev = memoryList[index - 1];
-      if (prev?.address === address && prev.len === len) {
-        return prev.targetDV ?? prev.dv;
-      } else if (prev?.address <= address && address < add(prev.address, prev.len)) {
-        const offset = Number(address - prev.address) + prev.dv.byteOffset;
-        const dv = prev.targetDV ?? prev.dv;
+      const entry = memoryList[index - 1];
+      if (entry?.address === address && entry.len === len) {
+        return entry.targetDV ?? entry.dv;
+      } else if (entry?.address <= address && address < add(entry.address, entry.len)) {
+        const offset = Number(address - entry.address);
+        const dv = entry.targetDV ?? entry.dv;
         return this.obtainView(dv.buffer, dv.byteOffset + offset, len);
       }
     }
@@ -4860,7 +4855,9 @@ class Environment {
     const thunkId = this.getFactoryThunk();
     const ArgStruct = this.defineFactoryArgStruct();
     const args = new ArgStruct([ options ]);
+    this.comptime = true;
     this.invokeThunk(thunkId, args);
+    this.comptime = false;
   }
 
   getRootModule() {
@@ -5789,7 +5786,6 @@ function getExports(structures) {
         const value = constructor[member.name];
         exportables.push(member.name);
       } catch (err) {
-        console.log(err.message);
       }
     }
   }

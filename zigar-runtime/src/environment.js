@@ -23,6 +23,7 @@ export class Environment {
   released = false;
   littleEndian = true;
   runtimeSafety = true;
+  comptime = false;
   /* COMPTIME-ONLY */
   slots = {};
   structures = [];
@@ -125,12 +126,12 @@ export class Environment {
     if (this.context) {
       const { memoryList, shadowMap } = this.context;
       const index = findMemoryIndex(memoryList, address);
-      const prev = memoryList[index - 1];
-      if (prev?.address === address && prev.len === len) {
-        return prev.targetDV ?? prev.dv;
-      } else if (prev?.address <= address && address < add(prev.address, prev.len)) {
-        const offset = Number(address - prev.address) + prev.dv.byteOffset;
-        const dv = prev.targetDV ?? prev.dv;
+      const entry = memoryList[index - 1];
+      if (entry?.address === address && entry.len === len) {
+        return entry.targetDV ?? entry.dv;
+      } else if (entry?.address <= address && address < add(entry.address, entry.len)) {
+        const offset = Number(address - entry.address);
+        const dv = entry.targetDV ?? entry.dv;
         return this.obtainView(dv.buffer, dv.byteOffset + offset, len);
       }
     }
@@ -319,7 +320,9 @@ export class Environment {
     const thunkId = this.getFactoryThunk();
     const ArgStruct = this.defineFactoryArgStruct();
     const args = new ArgStruct([ options ]);
+    this.comptime = true;
     this.invokeThunk(thunkId, args);
+    this.comptime = false;
   }
 
   getRootModule() {
@@ -490,6 +493,21 @@ export class Environment {
         dest[COPIER](object);
       }
       object[MEMORY] = fixedDV;
+      const linkChildren = (object) => {
+        if (object[SLOTS]) {
+          for (const child of Object.values(object[SLOTS])) {
+            if (child) {
+              const childDV = child[MEMORY];
+              if (childDV.buffer === dv.buffer) {
+                const offset = childDV.byteOffset - dv.byteOffset;
+                child[MEMORY] = this.obtainView(fixedDV.buffer, offset, childDV.byteLength);
+                linkChildren(child); 
+              }
+            }
+          }
+        }
+      };
+      linkChildren(object);
     }
   }
 

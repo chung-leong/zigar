@@ -395,6 +395,7 @@ fn getMemberType(comptime T: type) MemberType {
         .Type => .Type,
         .EnumLiteral => .Literal,
         .ComptimeInt, .ComptimeFloat => .Comptime,
+        .Void => .Void,
         .Null => .Null,
         else => .Undefined,
     };

@@ -126,7 +126,7 @@ export function defineUnionShape(structure, env) {
   // members with pointers, we need to disable them
   const pointerMembers = members.filter(m => m.structure.hasPointer);
   const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
-  const modifier = (hasInaccessiblePointer) 
+  const modifier = (hasInaccessiblePointer && !env.comptime)
   ? function() {
       // make pointer access throw
       this[POINTER_VISITOR](disablePointer, { vivificate: true });

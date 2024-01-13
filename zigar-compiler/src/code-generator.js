@@ -319,7 +319,6 @@ function getExports(structures) {
         const value = constructor[member.name];
         exportables.push(member.name);
       } catch (err) {
-        console.log(err.message);
       }
     }
   }

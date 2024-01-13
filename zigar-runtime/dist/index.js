@@ -510,12 +510,13 @@ function definePointer(structure, env) {
   const { get: getTarget, set: setTarget } = getDescriptor(member, env);
   const alternateCaster = function(arg, options) {
     const Target = targetStructure.constructor;
-    if (isPointerOf(arg, Target)) {
+    if ((this === ENVIRONMENT || this === PARENT) || arg instanceof constructor) {
+      // casting from buffer to pointer is allowed only if request comes from the runtime
+      // casting from writable to read-only is also allowed
+      return false;
+    } else if (isPointerOf(arg, Target)) {
       // const/non-const casting
       return new constructor(Target(arg['*'], { writable: !isConst }), options);
-    } else if (this === ENVIRONMENT || this === PARENT) {
-      // allow the runtime environment to cast to pointer
-      return false;
     } else if (isTargetSlice) {
       // allow casting to slice through constructor of its pointer
       return new constructor(Target(arg), options);
@@ -630,6 +631,7 @@ function normalizePointer(map, forJSON) {
     const target = this['*'];
     return target[NORMALIZER]?.(map, forJSON) ?? target;  
   } catch (err) {
+    return Symbol.for('inaccessible');
   }
 }
 
@@ -648,10 +650,9 @@ function resetPointer({ isActive }) {
 }
 
 function disablePointer() {
-  const pointer = this[POINTER] ?? this;
   const disabledProp = { get: throwInaccessiblePointer, set: throwInaccessiblePointer };
   const disabledFunc = { value: throwInaccessiblePointer };
-  defineProperties(pointer, {
+  defineProperties(this[POINTER], {
     '*': disabledProp,
     '$': disabledProp,
     [GETTER]: disabledFunc,
@@ -795,7 +796,7 @@ function normalizeStruct(map, forJSON) {
   if (!object) {
     object = {};
     map.set(this, object);
-    for (const [ name, value ] of this) {      
+    for (const [ name, value ] of this) {
       object[name] = value?.[NORMALIZER]?.(map, forJSON) ?? value;
     }
   }
@@ -1704,7 +1705,7 @@ function defineUnionShape(structure, env) {
   // members with pointers, we need to disable them
   const pointerMembers = members.filter(m => m.structure.hasPointer);
   const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
-  const modifier = (hasInaccessiblePointer) 
+  const modifier = (hasInaccessiblePointer && !env.comptime)
   ? function() {
       // make pointer access throw
       this[POINTER_VISITOR](disablePointer, { vivificate: true });
@@ -2021,15 +2022,13 @@ function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) 
   Object.setPrototypeOf(prototypeRO, constructor.prototype);
   const instanceDescriptorsRO = {};
   const propSetters = {};
-  let getter, setter;
   for (const [ name, descriptor ] of Object.entries(instanceDescriptors)) {
-    if (name === '$') {
-      getter = descriptor.get;
-      setter = descriptor.set;
-    } else if (descriptor?.set) {
+    if (descriptor?.set) {
       instanceDescriptorsRO[name] = { ...descriptor, set: throwReadOnly };
       // save the setters so we can initialize read-only objects
-      propSetters[name] = descriptor.set;
+      if (name !== '$') {
+        propSetters[name] = descriptor.set;
+      }
     } else if (name === 'set') {
       instanceDescriptorsRO[name] = { value: throwReadOnly, configurable: true, writable: true };
     }
@@ -2041,11 +2040,12 @@ function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) 
       return vivificate.call(this, slot, false);
     }
   };
+  const { get, set } = instanceDescriptors.$;
   defineProperties(constructor.prototype, { 
     [CONST]: { value: false },
     [ALL_KEYS]: { value: Object.keys(propSetters) },
-    [SETTER]: { value: setter },
-    [GETTER]: { value: getter },
+    [SETTER]: { value: set },
+    [GETTER]: { value: get },
     [PROP_SETTERS]: { value: propSetters },
     ...instanceDescriptors,
   });
@@ -2123,7 +2123,7 @@ function createConstructor(structure, handlers, env) {
       if (self = cache.find(dv, writable)) {
         return self;
       }
-      self = Object.create((writable) ? constructor.prototype : constructor[CONST_PROTOTYPE]);
+      self = Object.create(writable ? constructor.prototype : constructor[CONST_PROTOTYPE]);
       if (shapeDefiner) {
         setDataView.call(self, dv, structure, false, { shapeDefiner });
       } else {
@@ -2146,18 +2146,13 @@ function createConstructor(structure, handlers, env) {
       modifier.call(self);
     }
     if (creating) {
-      // initialize object unless it's done already
+      // initialize object unless it's been done already
       if (!shapeDefiner) {
         initializer.call(self, arg);
       }
       if (!writable) {
         // create object with read-only prototype
-        const selfRO = Object.create(constructor[CONST_PROTOTYPE]);
-        selfRO[MEMORY] = self[MEMORY];
-        if (hasSlots) {
-          selfRO[SLOTS] = self[SLOTS];        
-        }
-        self = selfRO;
+        self = Object.assign(Object.create(constructor[CONST_PROTOTYPE]), self);
       } 
     }
     if (finalizer) {
@@ -4066,6 +4061,8 @@ class Environment {
   released = false;
   littleEndian = true;
   runtimeSafety = true;
+  comptime = false;
+  blockInaccessible = true;
   /* RUNTIME-ONLY */
   variables = [];
   /* RUNTIME-ONLY-END */
@@ -4164,12 +4161,12 @@ class Environment {
     if (this.context) {
       const { memoryList, shadowMap } = this.context;
       const index = findMemoryIndex(memoryList, address);
-      const prev = memoryList[index - 1];
-      if (prev?.address === address && prev.len === len) {
-        return prev.targetDV ?? prev.dv;
-      } else if (prev?.address <= address && address < add(prev.address, prev.len)) {
-        const offset = Number(address - prev.address) + prev.dv.byteOffset;
-        const dv = prev.targetDV ?? prev.dv;
+      const entry = memoryList[index - 1];
+      if (entry?.address === address && entry.len === len) {
+        return entry.targetDV ?? entry.dv;
+      } else if (entry?.address <= address && address < add(entry.address, entry.len)) {
+        const offset = Number(address - entry.address);
+        const dv = entry.targetDV ?? entry.dv;
         return this.obtainView(dv.buffer, dv.byteOffset + offset, len);
       }
     }
@@ -4351,6 +4348,21 @@ class Environment {
         dest[COPIER](object);
       }
       object[MEMORY] = fixedDV;
+      const linkChildren = (object) => {
+        if (object[SLOTS]) {
+          for (const child of Object.values(object[SLOTS])) {
+            if (child) {
+              const childDV = child[MEMORY];
+              if (childDV.buffer === dv.buffer) {
+                const offset = childDV.byteOffset - dv.byteOffset;
+                child[MEMORY] = this.obtainView(fixedDV.buffer, offset, childDV.byteLength);
+                linkChildren(child); 
+              }
+            }
+          }
+        }
+      };
+      linkChildren(object);
     }
   }
 
