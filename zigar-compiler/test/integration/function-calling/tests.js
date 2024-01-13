@@ -2,7 +2,8 @@ import { expect } from 'chai';
 import { capture, captureWarning } from '../capture.js';
 
 export function addTests(importModule, options) {
-  const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(options.optimize);
+  const { optimize } = options;
+  const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(optimize);
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
@@ -245,7 +246,8 @@ export function addTests(importModule, options) {
       module.setI8(i8Array, 8);
       expect([ ...u8Array ]).to.eql([ 102, 102, 102, 102 ]);
       expect([ ...i8Array ]).to.eql([ 8, 8, 8, 8 ]);
-      expect(() => module.setI8(i8Array.buffer, 9)).to.throw(TypeError);
+      module.setI8(i8Array.buffer, 9);
+      expect([ ...i8Array ]).to.eql([ 9, 9, 9, 9 ]);
       if (runtimeSafety) {
           // should issue a warning
         const [ u16Warning ] = await captureWarning(() => {
@@ -253,7 +255,6 @@ export function addTests(importModule, options) {
         });
         expect(u16Warning).to.equal('Implicitly creating an Uint16Array from an Int8Array');
       }
-      expect([ ...i8Array ]).to.eql([ 8, 8, 8, 8 ]);
       module.setU16(u16Array, 127);
       expect([ ...u16Array ]).to.eql([ 127, 127, 127, 127 ]);
       expect(() => module.setU16(u16Array.buffer, 127)).to.throw(TypeError);
@@ -305,9 +306,9 @@ export function addTests(importModule, options) {
       module.setI8(i8Array, 8);
       expect([ ...u8Array ]).to.eql([ 102 ]);
       expect([ ...i8Array ]).to.eql([ 8 ]);
-      expect(() => module.setI8(i8Array.buffer, 9)).to.throw(TypeError);
+      module.setI8(i8Array.buffer, 9);
+      expect([ ...i8Array ]).to.eql([ 9 ]);
       expect(() => module.setU16(i8Array, 19)).to.throw(TypeError);
-      expect([ ...i8Array ]).to.eql([ 8 ]);
       module.setU16(u16Array, 127);
       expect([ ...u16Array ]).to.eql([ 127 ]);
       expect(() => module.setU16(u16Array.buffer, 127)).to.throw(TypeError);

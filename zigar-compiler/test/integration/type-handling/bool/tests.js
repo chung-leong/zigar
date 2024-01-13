@@ -2,7 +2,8 @@ import { expect } from 'chai';
 import { capture } from '../../capture.js';
 
 export function addTests(importModule, options) {
-  const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(options.optimize);
+  const { optimize } = options;
+  const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(optimize);
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);

@@ -2,9 +2,8 @@ import { expect } from 'chai';
 import 'mocha-skip-if';
 
 export function addTests(importModule, options) {
-  const {
-    runtimeSafety,
-  } = options;
+  const { target, optimize } = options;
+  const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(optimize);
   const importTest = async (name) => {
     const url = new URL(`./${name}.zig`, import.meta.url).href;
     return importModule(url);

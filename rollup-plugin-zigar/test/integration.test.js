@@ -14,6 +14,7 @@ for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]
     addTests(url => importModule(url, optimize), {
       littleEndian: true,
       addressSize: 32,
+      target: 'wasm32',
       optimize,
     });
   })

@@ -25,7 +25,7 @@ export function addTests(importModule, options) {
     })
     it('should produce SHA1 hash matching that from Node native function', async function() {
       this.timeout(120000);
-      const { sha1 } = await importTest('generate-sha1-hashs');
+      const { sha1 } = await importTest('generate-sha1-hash');
       const data = new Uint8Array(1024 * 1024);
       for (let i = 0; i < data.byteLength; i++) {
         data[i] = i & 0xFF;

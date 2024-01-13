@@ -8,6 +8,7 @@ for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]
     addTests(path => importModule(path, optimize), {
       littleEndian: endianness() === 'LE',
       addressSize: /64/.test(arch()) ? 64 : 32,
+      target: 'native',
       optimize,
     });
   })
