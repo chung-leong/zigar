@@ -17,10 +17,7 @@ for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]
 let currentModule;
 
 async function importModule(path, optimize) {
-  if (currentModule) {
-    await currentModule.__zigar?.abandon();
-    currentModule = null;
-  }
-  currentModule = import(`${path}?optimize=${optimize}`);
+  currentModule?.__zigar?.abandon();
+  currentModule = await import(`${path}?optimize=${optimize}`);
   return currentModule;
 }

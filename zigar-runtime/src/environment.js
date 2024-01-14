@@ -371,6 +371,22 @@ export class Environment {
         }
       }
     }
+  }  
+
+  useStructures() {
+    const module = this.getRootModule();
+    // add fixed memory object to list so they can be unlinked
+    const objects = findAllObjects(this.structures, SLOTS);    
+    for (const object of objects) {
+      if (object[MEMORY] && this.inFixedMemory(object)) {
+        this.variables.push({ object });
+      }
+    }
+    // clear comptime-only variables
+    this.slots = {};
+    this.structures = [];
+    module.__zigar = this.getControlObject();
+    return module;
   }
   /* COMPTIME-ONLY-END */
 

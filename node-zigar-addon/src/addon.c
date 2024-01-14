@@ -1,23 +1,35 @@
 #include "addon.h"
 
-int32_t module_count = 0;
-int32_t buffer_count = 0;
+int module_count = 0;
+int buffer_count = 0;
+int function_count = 0;
 
 void reference_module(module_data* md) {
     md->ref_count++;
+}
+
+module_data* new_module(napi_env env) {
+    module_data* md = (module_data*) calloc(1, sizeof(module_data));
+    md->ref_count = 1;
+    module_count++;
+    return md;
 }
 
 void release_module(napi_env env,
                     module_data* md) {
     md->ref_count--;
     if (md->ref_count == 0) {
-        napi_value js_env, released;
-        if (napi_get_reference_value(env, md->js_env, &js_env) == napi_ok
-         && napi_get_boolean(env, true, &released) == napi_ok) {
-            /* indicate to the environment that the shared lib has been released */
-            napi_set_named_property(env, js_env, "released", released);
+        if (env && md->js_env) {
+            napi_value js_env, released;
+            if (napi_get_reference_value(env, md->js_env, &js_env) == napi_ok
+            && napi_get_boolean(env, true, &released) == napi_ok) {
+                /* indicate to the environment that the shared lib has been released */
+                napi_set_named_property(env, js_env, "released", released);
+            }
         }
-        dlclose(md->so_handle);
+        if (md->so_handle) {
+            dlclose(md->so_handle);
+        }
         free(md);
         module_count--;
     }
@@ -575,6 +587,7 @@ void finalize_function(napi_env env,
                        void* finalize_data,
                        void* finalize_hint) {
     release_module(env, (module_data*) finalize_hint);
+    function_count--;
 }
 
 bool export_function(napi_env env,
@@ -584,11 +597,12 @@ bool export_function(napi_env env,
                      module_data* md) {
     napi_value function;
     bool success = napi_create_function(env, name, NAPI_AUTO_LENGTH, cb, md, &function) == napi_ok
-                && napi_add_finalizer(env, function, NULL, finalize_function, md, NULL) == napi_ok
+                && napi_add_finalizer(env, function, (void*) name, finalize_function, md, NULL) == napi_ok
                 && napi_set_named_property(env, js_env, name, function) == napi_ok;
     if (success) {
         /* maintain a reference on the module */
         reference_module(md);
+        function_count++;
         return true;
     }
     return false;
@@ -622,6 +636,9 @@ bool set_attributes(napi_env env,
 
 napi_value load_module(napi_env env,
                        napi_callback_info info) {
+    #define failure(msg) error_msg = msg; throw_error(env, msg); goto exit;
+    const char* error_msg = NULL;
+    module_data* md = new_module(env);
     void* data;
     size_t argc = 1;
     size_t path_len;
@@ -629,27 +646,35 @@ napi_value load_module(napi_env env,
     /* check arguments */
     if (napi_get_cb_info(env, info, &argc, args, NULL, &data) != napi_ok
      || napi_get_value_string_utf8(env, args[0], NULL, 0, &path_len) != napi_ok) {
-        return throw_error(env, "Invalid arguments");
+        failure("Invalid arguments");
     }
 
     /* load the shared library */
     char* path = malloc(path_len + 1);
     napi_get_value_string_utf8(env, args[0], path, path_len + 1, &path_len);
-    void* handle = dlopen(path, RTLD_NOW);
+    void* handle = md->so_handle = dlopen(path, RTLD_NOW);
     free(path);
     if (!handle) {
-        return throw_error(env, "Unable to load shared library");
+        failure("Unable to load shared library");
     }
 
     /* find the zig module */
     void* symbol = dlsym(handle, "zig_module");
     if (!symbol) {
-        return throw_error(env, "Unable to find the symbol \"zig_module\"");
+        failure("Unable to find the symbol \"zig_module\"");
     }
-    module* mod = (module*) symbol;
+    module* mod = md->mod = (module*) symbol;
     if (mod->version != 2) {
-        return throw_error(env, "Cached module is compiled for a different version of Zigar");
+        failure("Cached module is compiled for a different version of Zigar");
     }
+
+    /* set base address */
+    Dl_info dl_info;
+    if (!dladdr(symbol, &dl_info)) {
+        failure("Unable to obtain address of shared library");
+    }
+    md->base_address = (size_t) dl_info.dli_fbase;
+
 #ifdef WIN32
     /* we can't override write() the normal way on Windows
         need to intercept the call to kernel32.dll instead */
@@ -677,7 +702,7 @@ napi_value load_module(napi_env env,
     /* compile embedded JavaScript */
     napi_value js_module;
     if (!load_javascript(env, &js_module)) {
-        return throw_error(env, "Unable to compile embedded JavaScript");
+        failure("Unable to compile embedded JavaScript");
     }
 
     /* look for the Environment class */
@@ -685,33 +710,29 @@ napi_value load_module(napi_env env,
     napi_value env_constructor;
     if (napi_create_string_utf8(env, "Environment", NAPI_AUTO_LENGTH, &env_name) != napi_ok
      || napi_get_property(env, js_module, env_name, &env_constructor) != napi_ok) {
-        return throw_error(env, "Unable to find the class \"Environment\"");
+        failure("Unable to find the class \"Environment\"");
     }
 
     /* create the environment */
-    napi_value js_env;
+    napi_value js_env;   
     if (napi_new_instance(env, env_constructor, 0, NULL, &js_env) != napi_ok) {
-        return throw_error(env, "Unable to create runtime environment");
+        failure("Unable to create runtime environment");
     }
 
-    /* tie environment to module using an ref-counted object */
-    module_data* md = (module_data*) calloc(1, sizeof(module_data));
-    md->mod = mod;
-    md->so_handle = handle;
-    Dl_info dl_info;
-    if (!dladdr(symbol, &dl_info)) {
-        return throw_error(env, "Unable to obtain address of shared library");
-    }
-    md->base_address = (size_t) dl_info.dli_fbase;
+    /* create reference to JavaScript environment */
     if (napi_create_reference(env, js_env, 0, &md->js_env) != napi_ok) {
-        free(md);
-        return throw_error(env, "Unable to save runtime environment");
+        failure("Unable to save runtime environment");
     }
 
     /* add functions and attributes to environment */
     if (!export_functions(env, js_env, md) || !set_attributes(env, js_env, md)) {
-        return throw_error(env, "Unable to modify runtime environment");
+        failure("Unable to modify runtime environment");
     }
+exit:
+    if (error_msg) {
+        js_env = throw_error(env, error_msg);
+    }
+    release_module(env, md);
     return js_env;
 }
 
@@ -722,6 +743,8 @@ napi_value get_gc_statistics(napi_env env,
     bool success = napi_create_object(env, &stats) == napi_ok
                 && napi_create_int32(env, module_count, &modules) == napi_ok
                 && napi_set_named_property(env, stats, "modules", modules) == napi_ok
+                && napi_create_int32(env, function_count, &functions) == napi_ok
+                && napi_set_named_property(env, stats, "functions", functions) == napi_ok
                 && napi_create_int32(env, buffer_count, &buffers) == napi_ok
                 && napi_set_named_property(env, stats, "buffers", buffers) == napi_ok;
     if (!success) {
