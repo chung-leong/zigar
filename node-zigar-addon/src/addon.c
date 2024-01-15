@@ -153,7 +153,7 @@ result cast_view(call ctx,
                  bool writable,
                  napi_value* dest) {
     napi_env env = ctx->env;
-    napi_value args[2] = { structure, dv };
+    napi_value args[3] = { structure, dv };
     if (napi_get_boolean(env, writable, &args[2]) == napi_ok
      && call_js_function(ctx, "castView", 3, args, dest)) {
         return OK;
