@@ -1,370 +1,9 @@
-import { createHash } from 'crypto';
 import { exec } from 'child_process';
-import { fileURLToPath } from 'url';
-import { join, resolve, parse, basename } from 'path';
-import os, { tmpdir } from 'os';
+import { createHash } from 'crypto';
 import { stat, lstat, readdir, writeFile, open, rename, readFile, chmod, utimes, unlink, mkdir, rmdir } from 'fs/promises';
-
-const cwd = process.cwd();
-
-async function compile(path, options = {}) {
-  const {
-    optimize = 'Debug',
-    clean = false,
-    platform = os.platform(),
-    arch = os.arch(),
-    nativeCpu = false,
-    buildDir = tmpdir(),
-    cacheDir = join(cwd, 'zigar-cache'),
-    zigCmd = `zig build -Doptimize=${optimize}`,
-    staleTime = 60000,
-  } = options;
-  const fullPath = resolve(path);
-  const rootFile = parse(fullPath);
-  const suffix = isWASM(arch) ? 'wasm' : 'c';
-  const config = {
-    platform,
-    arch,
-    nativeCpu,
-    packageName: rootFile.name,
-    packagePath: fullPath,
-    packageRoot: rootFile.dir,
-    exporterPath: absolute(`../zig/exporter-${suffix}.zig`),
-    stubPath: absolute(`../zig/stub-${suffix}.zig`),
-    buildFilePath: absolute(`../zig/build.zig`),
-    useLibC: (platform === 'win32') ? true : false,
-  };
-  const dirHash = md5(rootFile.dir);
-  const soName = getLibraryName(rootFile.name, platform, arch);
-  const soDir = join(cacheDir, platform, arch, optimize, dirHash);
-  const soPath = join(soDir, soName);
-  const soMTime = (await findFile(soPath))?.mtime;
-  if (!buildDir || !cacheDir || !zigCmd) {
-    // can't build when no command or build directory is set to empty
-    if (soMTime) {
-      return soPath;
-    } else {
-      throw new Error(`Cannot find shared library and compilation is disabled: ${soPath}`);
-    }
-  }
-  if (!await findFile(fullPath)) {
-    throw new Error(`Source file not found: ${fullPath}`);
-  }
-  // scan the dir containing the file to see if recompilation is necessary
-  // also check if there's a custom build file and for C dependency
-  let changed = false;
-  await scanDirectory(rootFile.dir, /\.zig$/i, async (dir, name, { mtime }) => {
-    if (dir === rootFile.dir && name === 'build.zig') {
-      config.buildFilePath = join(dir, name);
-    }
-    if (!config.useLibC) {
-      const content = await loadFile(join(dir, name));
-      if (content.includes('@cImport')) {
-        config.useLibC = true;
-      }
-    }
-    if (!(soMTime > mtime)) {
-      changed = true;
-    }
-  });
-  if (!changed) {
-    const zigFolder = absolute('../zig');
-    // rebuild when source files have changed
-    await scanDirectory(zigFolder, /\.zig$/i, (dir, name, { mtime }) => {
-      if (!(soMTime > mtime)) {
-        changed = true;
-      }
-    });
-  }
-  if (!changed) {
-    return soPath;
-  }
-  // build in a unique temp dir
-  const soBuildDir = getBuildFolder(fullPath, platform, arch);
-  // only one process can compile a given file at a time
-  await acquireLock(soBuildDir, staleTime);
-  try {
-    // create config file
-    await createProject(config, soBuildDir);
-    // then run the compiler
-    await runCompiler(zigCmd, soBuildDir);
-    // move library to cache directory
-    const libPath = join(soBuildDir, 'zig-out', 'lib', soName);
-    await createDirectory(soDir);
-    await moveFile(libPath, soPath);
-    await touchFile(soPath);
-  } finally {
-    await releaseLock(soBuildDir);
-    if (clean) {
-      await deleteDirectory(soBuildDir);
-    }
-  }
-  return soPath;
-}
-
-function isWASM(arch) {
-  switch (arch) {
-    case 'wasm32':
-    case 'wasm64':
-      return true;
-    default:
-      return false;
-  }
-}
-
-function getLibraryName(name, platform, arch) {
-  switch (arch) {
-    case 'wasm32':
-    case 'wasm64':
-      return `${name}.wasm`;
-    default:
-      switch (platform) {
-        case 'darwin':
-          return `lib${name}.dylib`;
-        case 'win32':          return `${name}.dll`;
-        default:
-          return `lib${name}.so`;
-      }
-  }
-}
-
-function getBuildFolder(path, platform, arch) {
-  const buildDir = tmpdir();
-  const fullPath = resolve(path);
-  return join(buildDir, md5(fullPath), platform, arch)
-}
-
-async function runCompiler(zigCmd, soBuildDir) {
-  const options = {
-    cwd: soBuildDir,
-    windowsHide: true,
-  };
-  return new Promise((resolve, reject) => {
-    exec(zigCmd, options, (err, stdout, stderr) => {
-      if (err) {
-        const log = stderr;
-        if (log) {
-          const logPath = join(soBuildDir, 'log');
-          writeFile(logPath, log).catch(() => {});
-          err = new Error(`Zig compilation failed\n\n${log}`);
-        }
-        reject(err);
-      } else {
-        resolve();
-      }
-    });
-  });
-}
-
-async function findFile(path, follow = true) {
-  try {
-    return await (follow ? stat(path) : lstat(path));
-  } catch (err) {
-  }
-}
-
-async function scanDirectory(dir, re, cb) {
-  const ino = (await findFile(dir))?.ino;
-  /* c8 ignore next 3 */
-  if (!ino) {
-    return;
-  }
-  const scanned = [ ino ];
-  const scan = async (dir) => {
-    try {
-      const list = await readdir(dir);
-      for (const name of list) {
-        if (name.startsWith('.') || name === 'node_modules' || name === 'zig-cache') {
-          continue;
-        }
-        const path = join(dir, name);
-        const info = await findFile(path);
-        if (info?.isDirectory() && !scanned.includes(info.ino)) {
-          await scan(path);
-        } else if (info?.isFile() && re.test(name)) {
-          await cb(dir, name, info);
-        }
-      }
-      /* c8 ignore next 2 */
-    } catch (err) {
-    }
-  };
-  await scan(dir);
-}
-
-async function acquireLock(soBuildDir, staleTime) {
-  const pidPath = join(soBuildDir, 'pid');
-  while (true)   {
-    try {
-      await createDirectory(soBuildDir);
-      const handle = await open(pidPath, 'wx');
-      handle.write(`${process.pid}`);
-      handle.close();
-      return;
-    } catch (err) {
-      if (err.code === 'EEXIST') {
-        const last = (await findFile(pidPath))?.mtime;
-        const now = new Date();
-        const diff = now - last;
-        if (diff > staleTime) {
-          // lock file has been abandoned
-          await deleteFile(pidPath);
-          continue;
-        }
-      } else {
-        throw err;
-      }
-    }
-    await delay(50);
-  }
-}
-
-async function releaseLock(soBuildDir) {
-  const pidPath = join(soBuildDir, 'pid');
-  await deleteFile(pidPath);
-}
-
-async function createProject(config, dir) {
-  // translate from names used by Node to those used by Zig
-  const cpuArchs = {
-    arm: 'arm',
-    arm64: 'aarch64',
-    ia32: 'x86',
-    mips: 'mips',
-    mipsel: 'mipsel',
-    ppc: 'powerpc',
-    ppc64: 'powerpc64',
-    s390: undefined,
-    s390x: 's390x',
-    x64: 'x86_64',
-  };
-  const osTags = {
-    aix: 'aix',
-    darwin: 'macos',
-    freebsd: 'freebsd',
-    linux: 'linux',
-    openbsd: 'openbsd',
-    sunos: 'solaris',
-    win32: 'windows',
-  };
-  const cpuArch = cpuArchs[config.arch] ?? config.arch;
-  const cpuModel = (config.nativeCpu) ? 'native' : 'baseline';
-  const osTag = osTags[config.platform] ?? config.platform;
-  const target = `.{ .cpu_arch = .${cpuArch}, .cpu_model = .${cpuModel}, .os_tag = .${osTag} }`;
-  const lines = [];
-  lines.push(`const std = @import("std");\n`);
-  lines.push(`pub const target: std.zig.CrossTarget = ${target};`);
-  lines.push(`pub const package_name = ${JSON.stringify(config.packageName)};`);
-  lines.push(`pub const package_path = ${JSON.stringify(config.packagePath)};`);
-  lines.push(`pub const package_root = ${JSON.stringify(config.packageRoot)};`);
-  lines.push(`pub const exporter_path = ${JSON.stringify(config.exporterPath)};`);
-  lines.push(`pub const stub_path = ${JSON.stringify(config.stubPath)};`);
-  lines.push(`pub const use_libc = ${config.useLibC ? true : false};`);
-  lines.push(``);
-  const content = lines.join('\n');
-  const cfgFilePath = join(dir, 'build-cfg.zig');
-  await writeFile(cfgFilePath, content);
-  const buildFilePath = join(dir, 'build.zig');
-  await copyFile(config.buildFilePath, buildFilePath);
-}
-
-async function moveFile(srcPath, dstPath) {
-  try {
-    await rename(srcPath, dstPath);
-    /* c8 ignore next 8 -- hard to test */
-  } catch (err) {
-    if (err.code == 'EXDEV') {
-      await copyFile(srcPath, dstPath);
-      await deleteFile(srcPath);
-    } else {
-      throw err;
-    }
-  }
-}
-
-async function copyFile(srcPath, dstPath) {
-  const info = await stat(srcPath);
-  const data = await readFile(srcPath);
-  await writeFile(dstPath, data);
-  await chmod(dstPath, info.mode);
-}
-
-async function loadFile(path, def) {
-  try {
-    return await readFile(path, 'utf8');
-  } catch (err) {
-    return def;
-  }
-}
-
-async function touchFile(path) {
-  const now = new Date();
-  await utimes(path, now, now);
-}
-
-async function deleteFile(path) {
-  try {
-    await unlink(path);
-  } catch (err) {
-    if (err.code !== 'ENOENT') {
-      throw err;
-    }
-  }
-}
-
-async function createDirectory(path) {
-  const exists = await findDirectory(path);
-  if (!exists) {
-    const { root, dir } = parse(path);
-    await createDirectory(dir);
-    try {
-      await mkdir(path);
-    } catch (err) {
-      /* c8 ignore next 3 */
-      if (err.code != 'EEXIST') {
-        throw err;
-      }
-    }
-  }
-}
-
-async function findDirectory(path) {
-  return findFile(path);
-}
-
-async function deleteDirectory(dir) {
-  try {
-    const list = await readdir(dir);
-    for (const name of list) {
-      const path = join(dir, name);
-      const info = await findFile(path, false);
-      if (info?.isDirectory()) {
-        await deleteDirectory(path);
-      } else if (info) {
-        await deleteFile(path);
-      }
-    }
-    await rmdir(dir);
-  } catch (err) {
-    if (err.code !== 'ENOENT') {
-      throw err;
-    }
-  }
-}
-
-function md5(text) {
-  const hash = createHash('md5');
-  hash.update(text);
-  return hash.digest('hex');
-}
-
-async function delay(ms) {
-  await new Promise(r => setTimeout(r, ms));
-}
-
-function absolute(relpath) {
-  return fileURLToPath(new URL(relpath, import.meta.url));
-}
+import os, { tmpdir } from 'os';
+import { join, resolve, parse, basename } from 'path';
+import { fileURLToPath } from 'url';
 
 const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
@@ -1650,6 +1289,104 @@ function normalizeEnumerationItem(map, forJSON) {
   return item[NAME];
 }
 
+function defineErrorSet(structure, env) {
+  const {
+    byteSize,
+    align,
+    instance: { members: [ member ] },
+  } = structure;
+  const { get: getIndex } = getDescriptor(member, env);
+  // get the error descriptor instead of the int/uint descriptor
+  const { get, set } = getDescriptor({ ...member, type: MemberType.Error, structure }, env);
+  const expected = [ 'string', 'number' ];
+  const propApplier = createPropertyApplier(structure);
+  const initializer = function(arg) {
+    if (arg && typeof(arg) === 'object') {
+      try {
+        if (propApplier.call(this, arg) === 0) {
+          throwInvalidInitializer(structure, expected, arg);
+        } 
+      } catch (err) {
+        const { error } = arg;
+        if (typeof(error) === 'string') {
+          set.call(this, error);
+        } else {
+          throw err;
+        }
+      }
+    } else if (arg !== undefined) {
+      set.call(this, arg);
+    }
+  };
+  const alternateCaster = function(arg) {
+    if (typeof(arg) === 'number' || typeof(arg) === 'string') {
+      return constructor[ITEMS][arg];
+    } else if (!getDataView(structure, arg, env)) {
+      throwInvalidInitializer(structure, expected, arg);
+    } else {
+      return false;
+    }
+  };
+  const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
+  Object.setPrototypeOf(constructor.prototype, globalErrorSet.prototype);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const getMessage = function() {
+    const index = getIndex.call(this);
+    return constructor[MESSAGES][index];
+  };
+  const toStringTag = function() { return 'Error' };
+  const toPrimitive = function(hint) {
+    if (hint === 'string') {
+      return Error.prototype.toString.call(this, hint);
+    } else {
+      return getIndex.call(this);
+    }
+  };
+  const instanceDescriptors = {
+    $: { get, set },
+    message: { get: getMessage },
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
+    typedArray: typedArray && getTypedArrayDescriptor(structure),
+    valueOf: { value: getValueOf },
+    toJSON: { value: convertToJSON },
+    delete: { value: getDestructor(env) },
+    // ensure that libraries that rely on the string tag for type detection will
+    // correctly identify the object as an error
+    [Symbol.toStringTag]: { get: toStringTag },
+    [Symbol.toPrimitive]: { value: toPrimitive },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [NORMALIZER]: { value: normalizeError },
+  };
+  const staticDescriptors = {
+    [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
+    [ITEMS]: { value: {} },
+    [MESSAGES]: { value: {} },
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+function normalizeError(map, forJSON) {
+  const err = this.$;
+  if (forJSON) {
+    const { message } = err;
+    return { error: message };
+  } else {
+    return err;
+  }
+}
+
+let globalErrorSet;
+
+function createGlobalErrorSet() {
+  globalErrorSet = function() {};
+  Object.setPrototypeOf(globalErrorSet.prototype, Error.prototype);
+}
+
+function getGlobalErrorSet() {
+  return globalErrorSet;
+}
+
 function defineErrorUnion(structure, env) {
   const {
     byteSize,
@@ -2884,466 +2621,6 @@ function getPrimitiveType(member) {
   }
 }
 
-const MemberType = {
-  Void: 0,
-  Bool: 1,
-  Int: 2,
-  Uint: 3,
-  Float: 4,
-  EnumerationItem: 5,
-  Error: 6,
-  Object: 7,
-  Type: 8,
-  Comptime: 9,
-  Static: 10,
-  Literal: 11,
-  Null: 12,
-  Undefined: 13,
-};
-
-function isReadOnly(type) {
-  switch (type) {
-    case MemberType.Type:
-    case MemberType.Comptime:
-    case MemberType.Literal:
-      return true;
-    default:
-      return false;
-  }
-}
-
-const factories = Array(Object.values(MemberType).length);
-
-function useVoid() {
-  factories[MemberType.Void] = getVoidDescriptor;
-}
-
-function useBool() {
-  factories[MemberType.Bool] = getBoolDescriptor;
-}
-
-function useBoolEx() {
-  factories[MemberType.Bool] = getBoolDescriptorEx;
-}
-
-function useIntEx() {
-  factories[MemberType.Int] = getIntDescriptorEx;
-}
-
-function useUintEx() {
-  factories[MemberType.Uint] = getUintDescriptorEx;
-}
-
-function useFloatEx() {
-  factories[MemberType.Float] = getFloatDescriptorEx;
-}
-
-function useEnumerationItem() {
-  factories[MemberType.EnumerationItem] = getEnumerationItemDescriptor;
-}
-
-function useError() {
-  factories[MemberType.Error] = getErrorDescriptor;
-}
-
-function useObject() {
-  factories[MemberType.Object] = getObjectDescriptor;
-}
-
-function useType() {
-  factories[MemberType.Type] = getTypeDescriptor;
-}
-
-function useComptime() {
-  factories[MemberType.Comptime] = getComptimeDescriptor;
-}
-
-function useStatic() {
-  factories[MemberType.Static] = getStaticDescriptor;
-}
-
-function useLiteral() {
-  factories[MemberType.Literal] = getLiteralDescriptor;
-}
-
-function useNull() {
-  factories[MemberType.Null] = getNullDescriptor;
-}
-
-function useUndefined() {
-  factories[MemberType.Undefined] = getUndefinedDescriptor;
-}
-
-function isByteAligned({ bitOffset, bitSize, byteSize }) {
-  return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
-}
-
-function hasStandardIntSize({ bitSize }) {
-  return bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64;
-}
-
-function hasStandardFloatSize({ bitSize }) {
-  return bitSize === 32 || bitSize === 64;
-}
-
-function getDescriptor(member, env) {
-  const f = factories[member.type];
-  return f(member, env);
-}
-
-function getVoidDescriptor(member, env) {
-  const { runtimeSafety } = env;
-  return {
-    get: function() {
-      return undefined;
-    },
-    set: (runtimeSafety)
-    ? function(value) {
-        if (value !== undefined) {
-          throwNotUndefined(member);
-        }
-      }
-    : function() {},
-  }
-}
-
-function getNullDescriptor(member, env) {
-  return {
-    get: function() {
-      return null;
-    },
-  }
-}
-
-function getUndefinedDescriptor(member, env) {
-  return {
-    get: function() {
-      return undefined;
-    },
-  }
-}
-
-function getBoolDescriptor(member, env) {
-  return getDescriptorUsing(member, env, getDataViewBoolAccessor)
-}
-
-function getBoolDescriptorEx(member, env) {
-  return getDescriptorUsing(member, env, getDataViewBoolAccessorEx)
-}
-
-function getIntDescriptorEx(member, env) {
-  const getDataViewAccessor = addRuntimeCheck(env, getDataViewIntAccessorEx);
-  return getDescriptorUsing(member, env, getDataViewAccessor)
-}
-
-function getUintDescriptorEx(member, env) {
-  const getDataViewAccessor = addRuntimeCheck(env, getDataViewUintAccessorEx);
-  return getDescriptorUsing(member, env, getDataViewAccessor)
-}
-
-function addRuntimeCheck(env, getDataViewAccessor) {
-  return function (access, member) {
-    const {
-      runtimeSafety = true,
-    } = env;
-    const accessor = getDataViewAccessor(access, member);
-    if (runtimeSafety && access === 'set') {
-      const { min, max } = getIntRange(member);
-      return function(offset, value, littleEndian) {
-        if (value < min || value > max) {
-          throwOverflow(member, value);
-        }
-        accessor.call(this, offset, value, littleEndian);
-      };
-    }
-    return accessor;
-  };
-}
-
-function getFloatDescriptorEx(member, env) {
-  return getDescriptorUsing(member, env, getDataViewFloatAccessorEx)
-}
-
-function getEnumerationItemDescriptor(member, env) {
-  const { structure } = member;
-  // enum can be int or uint--need the type from the structure
-  const { type: intType, structure: intStructure } = structure.instance.members[0];
-  const valueMember = {
-    ...member,
-    type: intType,
-    structure: intStructure,
-  };
-  const { get: getValue, set: setValue } = getDescriptor(valueMember, env);
-  const findEnum = function(value) {
-    const { constructor } = structure;
-    // the enumeration constructor returns the object for the int value
-    const item = (value instanceof constructor) ? value : constructor(value);
-    if (!item) {
-      throwEnumExpected(structure, value);
-    }
-    return item
-  };
-  return {
-    get: (getValue.length === 0) 
-    ? function getEnum() {
-        const value = getValue.call(this);
-        return findEnum(value);
-      }
-    : function getEnumElement(index) {
-        const value = getValue.call(this, index);
-        return findEnum(value);
-      },
-    set: (setValue.length === 1) 
-    ? function setEnum(value) {
-        // call Symbol.toPrimitive directly as enum can be bigint or number
-        const item = findEnum(value);
-        setValue.call(this, item[Symbol.toPrimitive]());
-      }
-    : function setEnumElement(index, value) {
-        const item = findEnum(value);
-        setValue.call(this, index, item[Symbol.toPrimitive]());
-      },
-  };
-}
-
-function getErrorDescriptor(member, env) {
-  const { structure } = member;
-  const { name, instance: { members } } = structure;
-  const { type: intType, structure: intStructure } = members[0];
-  const valueMember = {
-    ...member,
-    type: intType,
-    structure: intStructure,
-  };
-  const { get: getValue, set: setValue } = getDescriptor(valueMember, env);  
-  const acceptAny = name === 'anyerror';
-  const globalErrorSet = getGlobalErrorSet();
-  const findError = function(value, allowZero = false) {
-    const { constructor } = structure;
-    // the enumeration constructor returns the object for the int value
-    let item;
-    if (value === 0 && allowZero) {
-      return;
-    } else if (value instanceof Error) {
-      if (value instanceof (acceptAny ? globalErrorSet : constructor)) {
-        item = value;
-      } else {
-        throwNotInErrorSet(structure);
-      }
-    } else {
-      item = acceptAny ? globalErrorSet[value] : constructor(value);
-      if (!item) {
-        throwErrorExpected(structure, value);
-      } 
-    }
-    return item
-  };
-  return {
-    get: (getValue.length === 0) 
-    ? function getError(allowZero) {
-        const value = getValue.call(this);
-        return findError(value, allowZero);
-      }
-    : function getErrorElement(index) {
-        const value = getValue.call(this, index);
-        return findError(value, false);
-      },
-    set: (setValue.length === 1) 
-    ? function setError(value, allowZero) {
-        const item = findError(value, allowZero);
-        setValue.call(this, Number(item ?? 0));
-      }
-    : function setError(index, value) {
-        const item = findError(value, false);
-        setValue.call(this, index, Number(item));
-      },
-  };
-}
-
-function isValueExpected(structure) {
-  switch (structure.type) {
-    case StructureType.Primitive:
-    case StructureType.ErrorUnion:
-    case StructureType.Optional:
-    case StructureType.Enumeration:
-    case StructureType.ErrorSet:
-      return true;
-    default:
-      return false;
-  }
-}
-
-function getValue(slot) {
-  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
-  return object[GETTER]();
-}
-
-function getObject(slot) {
-  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
-  return object;
-}
-
-function setValue(slot, value) {
-  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
-  object[SETTER](value);
-}
-
-function bindSlot(slot, { get, set }) {
-  if (slot !== undefined) {
-    return { 
-      get: function() {
-        return get.call(this, slot);
-      },
-      set: (set) 
-      ? function(arg) {
-          return set.call(this, slot, arg);
-        } 
-      : undefined,
-    };
-  } else {
-    // array accessors
-    return { get, set };
-  }
-}
-
-function getObjectDescriptor(member, env) {
-  const { structure, slot } = member;
-  return bindSlot(slot, {
-    get: isValueExpected(structure) ? getValue : getObject,
-    set: setValue,
-  });
-}
-
-function getType(slot) {
-  // unsupported types will have undefined structure
-  const structure = this[SLOTS][slot];
-  return structure?.constructor;
-}
-
-function getTypeDescriptor(member, env) {
-  const { slot } = member;
-  return bindSlot(slot, { get: getType });
-}
-
-function getComptimeDescriptor(member, env) {
-  const { slot, structure } = member;
-  return bindSlot(slot, {
-    get: isValueExpected(structure) ? getValue : getObject,
-  });
-}
-
-function getStaticDescriptor(member, env) {
-  const { slot, structure } = member;
-  return bindSlot(slot, {
-    get: isValueExpected(structure) ? getValue : getObject,
-    set: setValue,
-  });
-}
-
-function getLiteral(slot) {
-  const object = this[SLOTS][slot];
-  return object.string;
-}
-
-function getLiteralDescriptor(member, env) {
-  const { slot } = member;
-  return bindSlot(slot, { get: getLiteral });
-}
-
-function getDescriptorUsing(member, env, getDataViewAccessor) {
-  const {
-    littleEndian = true,
-  } = env;
-  const { bitOffset, byteSize } = member;
-  const getter = getDataViewAccessor('get', member);
-  const setter = getDataViewAccessor('set', member);
-  if (bitOffset !== undefined) {
-    const offset = bitOffset >> 3;
-    return {
-      get: function getValue() {
-        /* WASM-ONLY */
-        try {
-        /* WASM-ONLY-END*/
-          return getter.call(this[MEMORY], offset, littleEndian);
-        /* WASM-ONLY */
-        } catch (err) {
-          if (err instanceof TypeError && restoreMemory.call(this)) {
-            return getter.call(this[MEMORY], offset, littleEndian);
-          } else {
-            throw err;
-          }
-        }
-        /* WASM-ONLY-END*/
-      },
-      set: function setValue(value) {
-        /* WASM-ONLY */
-        try {
-        /* WASM-ONLY-END*/
-        return setter.call(this[MEMORY], offset, value, littleEndian);
-        /* WASM-ONLY */
-        } catch (err) {
-          if (err instanceof TypeError && restoreMemory.call(this)) {
-            return setter.call(this[MEMORY], offset, value, littleEndian);
-          } else {
-            throw err;
-          }
-        }
-        /* WASM-ONLY-END*/
-      }
-    }
-  } else {
-    return {
-      get: function getElement(index) {
-        try {
-          return getter.call(this[MEMORY], index * byteSize, littleEndian);
-        } catch (err) {
-          /* WASM-ONLY */
-          if (err instanceof TypeError && restoreMemory.call(this)) {
-            return getter.call(this[MEMORY], index * byteSize, littleEndian);
-          } else {
-          /* WASM-ONLY-END */
-            rethrowRangeError(member, index, err);
-          /* WASM-ONLY */
-          }
-          /* WASM-ONLY-END */
-        }
-      },
-      set: function setElement(index, value) {
-        /* WASM-ONLY */
-        try {
-        /* WASM-ONLY-END */
-          return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
-        /* WASM-ONLY */
-        } catch (err) {
-          if (err instanceof TypeError && restoreMemory.call(this)) {
-            return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
-          } else {
-            rethrowRangeError(member, index, err);
-          }
-        }
-        /* WASM-ONLY-END */
-      },
-    }
-  }
-}
-
-function useAllMemberTypes() {
-  useVoid();
-  useNull();
-  useUndefined();
-  useBoolEx();
-  useIntEx();
-  useUintEx();
-  useFloatEx();
-  useEnumerationItem();
-  useError();
-  useObject();
-  useType();
-  useComptime();
-  useStatic();
-  useLiteral();
-}
-
 function throwNoInitializer(structure) {
   const name = getStructureName(structure);
   throw new TypeError(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`);
@@ -4359,102 +3636,1200 @@ function cacheMethod(access, member, cb) {
 
 const methodCache = {};
 
-function defineErrorSet(structure, env) {
-  const {
-    byteSize,
-    align,
-    instance: { members: [ member ] },
-  } = structure;
-  const { get: getIndex } = getDescriptor(member, env);
-  // get the error descriptor instead of the int/uint descriptor
-  const { get, set } = getDescriptor({ ...member, type: MemberType.Error, structure }, env);
-  const expected = [ 'string', 'number' ];
-  const propApplier = createPropertyApplier(structure);
-  const initializer = function(arg) {
-    if (arg && typeof(arg) === 'object') {
-      try {
-        if (propApplier.call(this, arg) === 0) {
-          throwInvalidInitializer(structure, expected, arg);
-        } 
-      } catch (err) {
-        const { error } = arg;
-        if (typeof(error) === 'string') {
-          set.call(this, error);
-        } else {
-          throw err;
-        }
-      }
-    } else if (arg !== undefined) {
-      set.call(this, arg);
-    }
-  };
-  const alternateCaster = function(arg) {
-    if (typeof(arg) === 'number' || typeof(arg) === 'string') {
-      return constructor[ITEMS][arg];
-    } else if (!getDataView(structure, arg, env)) {
-      throwInvalidInitializer(structure, expected, arg);
-    } else {
+const MemberType = {
+  Void: 0,
+  Bool: 1,
+  Int: 2,
+  Uint: 3,
+  Float: 4,
+  EnumerationItem: 5,
+  Error: 6,
+  Object: 7,
+  Type: 8,
+  Comptime: 9,
+  Static: 10,
+  Literal: 11,
+  Null: 12,
+  Undefined: 13,
+};
+
+function isReadOnly(type) {
+  switch (type) {
+    case MemberType.Type:
+    case MemberType.Comptime:
+    case MemberType.Literal:
+      return true;
+    default:
       return false;
-    }
-  };
-  const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
-  Object.setPrototypeOf(constructor.prototype, globalErrorSet.prototype);
-  const typedArray = structure.typedArray = getTypedArrayClass(member);
-  const getMessage = function() {
-    const index = getIndex.call(this);
-    return constructor[MESSAGES][index];
-  };
-  const toStringTag = function() { return 'Error' };
-  const toPrimitive = function(hint) {
-    if (hint === 'string') {
-      return Error.prototype.toString.call(this, hint);
-    } else {
-      return getIndex.call(this);
-    }
-  };
-  const instanceDescriptors = {
-    $: { get, set },
-    message: { get: getMessage },
-    dataView: getDataViewDescriptor(structure),
-    base64: getBase64Descriptor(structure),
-    typedArray: typedArray && getTypedArrayDescriptor(structure),
-    valueOf: { value: getValueOf },
-    toJSON: { value: convertToJSON },
-    delete: { value: getDestructor(env) },
-    // ensure that libraries that rely on the string tag for type detection will
-    // correctly identify the object as an error
-    [Symbol.toStringTag]: { get: toStringTag },
-    [Symbol.toPrimitive]: { value: toPrimitive },
-    [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizeError },
-  };
-  const staticDescriptors = {
-    [ALIGN]: { value: align },
-    [SIZE]: { value: byteSize },
-    [ITEMS]: { value: {} },
-    [MESSAGES]: { value: {} },
-  };
-  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
-}
-function normalizeError(map, forJSON) {
-  const err = this.$;
-  if (forJSON) {
-    const { message } = err;
-    return { error: message };
-  } else {
-    return err;
   }
 }
 
-let globalErrorSet;
+const factories = Array(Object.values(MemberType).length);
 
-function createGlobalErrorSet() {
-  globalErrorSet = function() {};
-  Object.setPrototypeOf(globalErrorSet.prototype, Error.prototype);
+function useVoid() {
+  factories[MemberType.Void] = getVoidDescriptor;
 }
 
-function getGlobalErrorSet() {
-  return globalErrorSet;
+function useBool() {
+  factories[MemberType.Bool] = getBoolDescriptor;
+}
+
+function useBoolEx() {
+  factories[MemberType.Bool] = getBoolDescriptorEx;
+}
+
+function useIntEx() {
+  factories[MemberType.Int] = getIntDescriptorEx;
+}
+
+function useUintEx() {
+  factories[MemberType.Uint] = getUintDescriptorEx;
+}
+
+function useFloatEx() {
+  factories[MemberType.Float] = getFloatDescriptorEx;
+}
+
+function useEnumerationItem() {
+  factories[MemberType.EnumerationItem] = getEnumerationItemDescriptor;
+}
+
+function useError() {
+  factories[MemberType.Error] = getErrorDescriptor;
+}
+
+function useObject() {
+  factories[MemberType.Object] = getObjectDescriptor;
+}
+
+function useType() {
+  factories[MemberType.Type] = getTypeDescriptor;
+}
+
+function useComptime() {
+  factories[MemberType.Comptime] = getComptimeDescriptor;
+}
+
+function useStatic() {
+  factories[MemberType.Static] = getStaticDescriptor;
+}
+
+function useLiteral() {
+  factories[MemberType.Literal] = getLiteralDescriptor;
+}
+
+function useNull() {
+  factories[MemberType.Null] = getNullDescriptor;
+}
+
+function useUndefined() {
+  factories[MemberType.Undefined] = getUndefinedDescriptor;
+}
+
+function isByteAligned({ bitOffset, bitSize, byteSize }) {
+  return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
+}
+
+function hasStandardIntSize({ bitSize }) {
+  return bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64;
+}
+
+function hasStandardFloatSize({ bitSize }) {
+  return bitSize === 32 || bitSize === 64;
+}
+
+function getDescriptor(member, env) {
+  const f = factories[member.type];
+  return f(member, env);
+}
+
+function getVoidDescriptor(member, env) {
+  const { runtimeSafety } = env;
+  return {
+    get: function() {
+      return undefined;
+    },
+    set: (runtimeSafety)
+    ? function(value) {
+        if (value !== undefined) {
+          throwNotUndefined(member);
+        }
+      }
+    : function() {},
+  }
+}
+
+function getNullDescriptor(member, env) {
+  return {
+    get: function() {
+      return null;
+    },
+  }
+}
+
+function getUndefinedDescriptor(member, env) {
+  return {
+    get: function() {
+      return undefined;
+    },
+  }
+}
+
+function getBoolDescriptor(member, env) {
+  return getDescriptorUsing(member, env, getDataViewBoolAccessor)
+}
+
+function getBoolDescriptorEx(member, env) {
+  return getDescriptorUsing(member, env, getDataViewBoolAccessorEx)
+}
+
+function getIntDescriptorEx(member, env) {
+  const getDataViewAccessor = addRuntimeCheck(env, getDataViewIntAccessorEx);
+  return getDescriptorUsing(member, env, getDataViewAccessor)
+}
+
+function getUintDescriptorEx(member, env) {
+  const getDataViewAccessor = addRuntimeCheck(env, getDataViewUintAccessorEx);
+  return getDescriptorUsing(member, env, getDataViewAccessor)
+}
+
+function addRuntimeCheck(env, getDataViewAccessor) {
+  return function (access, member) {
+    const {
+      runtimeSafety = true,
+    } = env;
+    const accessor = getDataViewAccessor(access, member);
+    if (runtimeSafety && access === 'set') {
+      const { min, max } = getIntRange(member);
+      return function(offset, value, littleEndian) {
+        if (value < min || value > max) {
+          throwOverflow(member, value);
+        }
+        accessor.call(this, offset, value, littleEndian);
+      };
+    }
+    return accessor;
+  };
+}
+
+function getFloatDescriptorEx(member, env) {
+  return getDescriptorUsing(member, env, getDataViewFloatAccessorEx)
+}
+
+function getEnumerationItemDescriptor(member, env) {
+  const { structure } = member;
+  // enum can be int or uint--need the type from the structure
+  const { type: intType, structure: intStructure } = structure.instance.members[0];
+  const valueMember = {
+    ...member,
+    type: intType,
+    structure: intStructure,
+  };
+  const { get: getValue, set: setValue } = getDescriptor(valueMember, env);
+  const findEnum = function(value) {
+    const { constructor } = structure;
+    // the enumeration constructor returns the object for the int value
+    const item = (value instanceof constructor) ? value : constructor(value);
+    if (!item) {
+      throwEnumExpected(structure, value);
+    }
+    return item
+  };
+  return {
+    get: (getValue.length === 0) 
+    ? function getEnum() {
+        const value = getValue.call(this);
+        return findEnum(value);
+      }
+    : function getEnumElement(index) {
+        const value = getValue.call(this, index);
+        return findEnum(value);
+      },
+    set: (setValue.length === 1) 
+    ? function setEnum(value) {
+        // call Symbol.toPrimitive directly as enum can be bigint or number
+        const item = findEnum(value);
+        setValue.call(this, item[Symbol.toPrimitive]());
+      }
+    : function setEnumElement(index, value) {
+        const item = findEnum(value);
+        setValue.call(this, index, item[Symbol.toPrimitive]());
+      },
+  };
+}
+
+function getErrorDescriptor(member, env) {
+  const { structure } = member;
+  const { name, instance: { members } } = structure;
+  const { type: intType, structure: intStructure } = members[0];
+  const valueMember = {
+    ...member,
+    type: intType,
+    structure: intStructure,
+  };
+  const { get: getValue, set: setValue } = getDescriptor(valueMember, env);  
+  const acceptAny = name === 'anyerror';
+  const globalErrorSet = getGlobalErrorSet();
+  const findError = function(value, allowZero = false) {
+    const { constructor } = structure;
+    // the enumeration constructor returns the object for the int value
+    let item;
+    if (value === 0 && allowZero) {
+      return;
+    } else if (value instanceof Error) {
+      if (value instanceof (acceptAny ? globalErrorSet : constructor)) {
+        item = value;
+      } else {
+        throwNotInErrorSet(structure);
+      }
+    } else {
+      item = acceptAny ? globalErrorSet[value] : constructor(value);
+      if (!item) {
+        throwErrorExpected(structure, value);
+      } 
+    }
+    return item
+  };
+  return {
+    get: (getValue.length === 0) 
+    ? function getError(allowZero) {
+        const value = getValue.call(this);
+        return findError(value, allowZero);
+      }
+    : function getErrorElement(index) {
+        const value = getValue.call(this, index);
+        return findError(value, false);
+      },
+    set: (setValue.length === 1) 
+    ? function setError(value, allowZero) {
+        const item = findError(value, allowZero);
+        setValue.call(this, Number(item ?? 0));
+      }
+    : function setError(index, value) {
+        const item = findError(value, false);
+        setValue.call(this, index, Number(item));
+      },
+  };
+}
+
+function isValueExpected(structure) {
+  switch (structure.type) {
+    case StructureType.Primitive:
+    case StructureType.ErrorUnion:
+    case StructureType.Optional:
+    case StructureType.Enumeration:
+    case StructureType.ErrorSet:
+      return true;
+    default:
+      return false;
+  }
+}
+
+function getValue(slot) {
+  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
+  return object[GETTER]();
+}
+
+function getObject(slot) {
+  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
+  return object;
+}
+
+function setValue(slot, value) {
+  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
+  object[SETTER](value);
+}
+
+function bindSlot(slot, { get, set }) {
+  if (slot !== undefined) {
+    return { 
+      get: function() {
+        return get.call(this, slot);
+      },
+      set: (set) 
+      ? function(arg) {
+          return set.call(this, slot, arg);
+        } 
+      : undefined,
+    };
+  } else {
+    // array accessors
+    return { get, set };
+  }
+}
+
+function getObjectDescriptor(member, env) {
+  const { structure, slot } = member;
+  return bindSlot(slot, {
+    get: isValueExpected(structure) ? getValue : getObject,
+    set: setValue,
+  });
+}
+
+function getType(slot) {
+  // unsupported types will have undefined structure
+  const structure = this[SLOTS][slot];
+  return structure?.constructor;
+}
+
+function getTypeDescriptor(member, env) {
+  const { slot } = member;
+  return bindSlot(slot, { get: getType });
+}
+
+function getComptimeDescriptor(member, env) {
+  const { slot, structure } = member;
+  return bindSlot(slot, {
+    get: isValueExpected(structure) ? getValue : getObject,
+  });
+}
+
+function getStaticDescriptor(member, env) {
+  const { slot, structure } = member;
+  return bindSlot(slot, {
+    get: isValueExpected(structure) ? getValue : getObject,
+    set: setValue,
+  });
+}
+
+function getLiteral(slot) {
+  const object = this[SLOTS][slot];
+  return object.string;
+}
+
+function getLiteralDescriptor(member, env) {
+  const { slot } = member;
+  return bindSlot(slot, { get: getLiteral });
+}
+
+function getDescriptorUsing(member, env, getDataViewAccessor) {
+  const {
+    littleEndian = true,
+  } = env;
+  const { bitOffset, byteSize } = member;
+  const getter = getDataViewAccessor('get', member);
+  const setter = getDataViewAccessor('set', member);
+  if (bitOffset !== undefined) {
+    const offset = bitOffset >> 3;
+    return {
+      get: function getValue() {
+        /* WASM-ONLY */
+        try {
+        /* WASM-ONLY-END*/
+          return getter.call(this[MEMORY], offset, littleEndian);
+        /* WASM-ONLY */
+        } catch (err) {
+          if (err instanceof TypeError && restoreMemory.call(this)) {
+            return getter.call(this[MEMORY], offset, littleEndian);
+          } else {
+            throw err;
+          }
+        }
+        /* WASM-ONLY-END*/
+      },
+      set: function setValue(value) {
+        /* WASM-ONLY */
+        try {
+        /* WASM-ONLY-END*/
+        return setter.call(this[MEMORY], offset, value, littleEndian);
+        /* WASM-ONLY */
+        } catch (err) {
+          if (err instanceof TypeError && restoreMemory.call(this)) {
+            return setter.call(this[MEMORY], offset, value, littleEndian);
+          } else {
+            throw err;
+          }
+        }
+        /* WASM-ONLY-END*/
+      }
+    }
+  } else {
+    return {
+      get: function getElement(index) {
+        try {
+          return getter.call(this[MEMORY], index * byteSize, littleEndian);
+        } catch (err) {
+          /* WASM-ONLY */
+          if (err instanceof TypeError && restoreMemory.call(this)) {
+            return getter.call(this[MEMORY], index * byteSize, littleEndian);
+          } else {
+          /* WASM-ONLY-END */
+            rethrowRangeError(member, index, err);
+          /* WASM-ONLY */
+          }
+          /* WASM-ONLY-END */
+        }
+      },
+      set: function setElement(index, value) {
+        /* WASM-ONLY */
+        try {
+        /* WASM-ONLY-END */
+          return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
+        /* WASM-ONLY */
+        } catch (err) {
+          if (err instanceof TypeError && restoreMemory.call(this)) {
+            return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
+          } else {
+            rethrowRangeError(member, index, err);
+          }
+        }
+        /* WASM-ONLY-END */
+      },
+    }
+  }
+}
+
+function useAllMemberTypes() {
+  useVoid();
+  useNull();
+  useUndefined();
+  useBoolEx();
+  useIntEx();
+  useUintEx();
+  useFloatEx();
+  useEnumerationItem();
+  useError();
+  useObject();
+  useType();
+  useComptime();
+  useStatic();
+  useLiteral();
+}
+
+function generateCodeForWASM(definition, params) {
+  const { structures, keys } = definition;
+  const {
+    runtimeURL,
+    loadWASM,
+    topLevelAwait = true,
+    omitExports = false,
+  } = params;
+  const features = getFeaturesUsed(structures);
+  const exports = getExports(structures);
+  const lines = [];
+  const add = manageIndentation(lines);
+  add(`import {`);
+  for (const name of [ 'loadModule', ...features ]) {
+    add(`${name},`);
+  }
+  add(`} from ${JSON.stringify(runtimeURL)};`);
+  // reduce file size by only including code of features actually used
+  // dead-code remover will take out code not referenced here
+  add(`\n// activate features`);
+  for (const feature of features) {
+    add(`${feature}();`);
+  }
+  add(`\n// initiate loading and compilation of WASM bytecodes`);
+  add(`const source = ${loadWASM ?? null};`);
+  // write out the structures as object literals
+  lines.push(...generateStructureDefinitions(structures, keys));
+  lines.push(...generateLoadStatements('source', JSON.stringify(!topLevelAwait)));
+  lines.push(...generateExportStatements(exports, omitExports));
+  if (topLevelAwait && loadWASM) {
+    add(`await __zigar.init();`);
+  }
+  const code = lines.join('\n');
+  return { code, exports, structures };
+}
+
+function generateCodeForNode(definition, params) {
+  const { structures, keys } = definition;
+  const {
+    runtimeURL,
+    libPath,
+    topLevelAwait = true,
+    omitExports = false,
+  } = params;
+  const exports = getExports(structures);
+  const lines = [];
+  const add = manageIndentation(lines);
+  add(`import { loadModule } from ${JSON.stringify(runtimeURL)};`);
+  // all features are enabled by default for Node
+  lines.push(...generateStructureDefinitions(structures, keys));
+  lines.push(...generateLoadStatements(JSON.stringify(libPath), 'false'));
+  lines.push(...generateExportStatements(exports, omitExports));
+  if (topLevelAwait) {
+    add(`await __zigar.init();`);
+  }
+  const code = lines.join('\n');
+  return { code, exports, structures };
+}
+
+function generateLoadStatements(source, writeBack) {
+  const lines = [];
+  const add = manageIndentation(lines);
+  add(`// create runtime environment`);
+  add(`const env = loadModule(${source});`);
+  add(`const __zigar = env.getControlObject();`);
+  add(`env.recreateStructures(structures);`);
+  add(`env.linkVariables(${writeBack});`);
+  add(``);
+  return lines;
+}
+
+function generateExportStatements(exports, omitExports) {
+  const lines = [];
+  const add = manageIndentation(lines);
+  add(`const { constructor } = root;`);
+  if (!omitExports) {
+    add(`export { constructor as default, __zigar }`);
+    // the first two exports are default and __zigar
+    const exportables = exports.slice(2);
+    if (exportables.length > 0) {
+      const oneLine = exportables.join(', ');
+      if (oneLine.length < 70) {
+        add(`export const { ${oneLine} } = constructor;`);
+      } else {
+        add(`export const {`);
+        for (const name of exportables) {
+          add(`${name},`);
+        }
+        add(`} = constructor;`);
+      }
+    }
+  }
+  return lines;
+}
+
+function generateStructureDefinitions(structures, keys) {
+  const { MEMORY, SLOTS, CONST } = keys;
+  const lines = [];
+  const add = manageIndentation(lines);
+  const defaultStructure = {
+    constructor: null,
+    typedArray: null,
+    type: StructureType.Primitive,
+    name: undefined,
+    byteSize: 0,
+    align: 0,
+    isConst: false,
+    hasPointer: false,
+    instance: {
+      members: [],
+      methods: [],
+      template: null,
+    },
+    static: {
+      members: [],
+      methods: [],
+      template: null,
+    },
+  };
+  add(`\n// structure defaults`);
+  add(`const s = {`);
+  for (const [ name, value ] of Object.entries(defaultStructure)) {
+    add(`${name}: ${JSON.stringify(value)},`);
+  }
+  add(`};`);
+  const defaultMember = {
+    type: MemberType.Void,
+    isRequired: false,
+  };
+  add(`\n// member defaults`);
+  add(`const m = {`);
+  for (const [ name, value ] of Object.entries(defaultMember)) {
+    add(`${name}: ${JSON.stringify(value)},`);
+  }
+  add(`};`);
+  // create empty objects first, to allow objects to reference each other
+  add(``);
+  const structureNames = new Map();
+  const structureMap = new Map();
+  for (const [ index, structure ] of structures.entries()) {
+    const varname = `s${index}`;
+    structureNames.set(structure, varname);
+    structureMap.set(structure.constructor, structure);
+  }
+  for (const slice of chunk(structureNames.values(), 10)) {
+    add(`const ${slice.map(n => `${n} = {}`).join(', ')};`);
+  }
+  const objects = findAllObjects(structures, SLOTS);
+  const objectNames = new Map();
+  const views = [];
+  for (const [ index, object ] of objects.entries()) {
+    const varname = `o${index}`;
+    objectNames.set(object, varname);
+    if (object[MEMORY]) {
+      views.push(object[MEMORY]);
+    }
+  }
+  for (const slice of chunk(objectNames.values(), 10)) {
+    add(`const ${slice.map(n => `${n} = {}`).join(', ')};`);
+  }
+  // define buffers
+  const arrayBufferNames = new Map();
+  for (const [ index, dv ] of views.entries()) {
+    if (!arrayBufferNames.get(dv.buffer)) {
+      const varname = `a${index}`;
+      arrayBufferNames.set(dv.buffer, varname);
+      if (dv.buffer.byteLength > 0) {
+        const ta = new Uint8Array(dv.buffer);
+        add(`const ${varname} = new Uint8Array([ ${ta.join(', ')} ]);`);
+      } else {
+        add(`const ${varname} = new Uint8Array();`);
+      }
+    }
+  }
+  // add properties to objects
+  if (objects.length > 0) {
+    add('\n// define objects');
+    for (const object of objects) {
+      const varname = objectNames.get(object);
+      const structure = structureMap.get(object.constructor);
+      const { [MEMORY]: dv, [SLOTS]: slots } = object;
+      add(`Object.assign(${varname}, {`);
+      if (structure) {
+        add(`structure: ${structureNames.get(structure)},`);
+      }
+      if (dv) {
+        const buffer = arrayBufferNames.get(dv.buffer);
+        const pairs = [ `array: ${buffer}` ];
+        if (dv.byteLength < dv.buffer.byteLength) {
+          pairs.push(`offset: ${dv.byteOffset}`);
+          pairs.push(`length: ${dv.byteLength}`);
+        }
+        add(`memory: { ${pairs.join(', ')} },`);
+        if (dv.hasOwnProperty('reloc')) {
+          add(`reloc: ${dv.reloc},`);
+          if (object[CONST]) {
+            add(`const: true,`);
+          }
+        }
+      }
+      const entries = (slots) ? Object.entries(slots).filter(a => a[1]) : [];
+      if (entries.length > 0) {
+        add(`slots: {`);
+        const pairs = entries.map(([slot, child]) => `${slot}: ${objectNames.get(child)}`);
+        for (const slice of chunk(pairs, 10)) {
+          add(slice.join(', ') + ',');
+        }
+        add(`},`);
+      }
+      add(`});`);
+    }
+  }
+  const methods = [];
+  for (const structure of structures) {
+    // add static members; instance methods are also static methods, so
+    // we don't need to add them separately
+    methods.push(...structure.static.methods);
+  }
+  const methodNames = new Map();
+  if (methods.length > 0) {
+    add(`\n// define functions`);
+    for (const [ index, method ] of methods.entries()) {
+      const varname = `f${index}`;
+      methodNames.set(method, varname);
+      add(`const ${varname} = {`);
+      for (const [ name, value ] of Object.entries(method)) {
+        switch (name) {
+          case 'argStruct':
+            add(`${name}: ${structureNames.get(value)},`);
+            break;
+          default:
+            add(`${name}: ${JSON.stringify(value)},`);
+        }
+      }
+      add(`};`);
+    }
+  }
+  add('\n// define structures');
+  for (const structure of structures) {
+    const varname = structureNames.get(structure);
+    add(`Object.assign(${varname}, {`);
+    add(`...s,`);
+    for (const [ name, value ] of Object.entries(structure)) {
+      if (isDifferent(value, defaultStructure[name])) {
+        switch (name) {
+          case 'constructor':
+          case 'typedArray':
+          case 'sentinel':
+            break;
+          case 'instance':
+          case 'static': {
+            const { methods, members, template } = value;
+            add(`${name}: {`);
+            add(`members: [`);
+            for (const member of members) {
+              add(`{`);
+              add(`...m,`);
+              for (const [ name, value ] of Object.entries(member)) {
+                if (isDifferent(value, defaultMember[name])) {
+                  switch (name) {
+                    case 'structure':
+                      add(`${name}: ${structureNames.get(value)},`);
+                      break;
+                    default:
+                      add(`${name}: ${JSON.stringify(value)},`);
+                  }
+                }
+              }
+              add(`},`);
+            }
+            add(`],`);
+            add(`methods: [`);
+            for (const slice of chunk(methods, 10)) {
+              add(slice.map(m => methodNames.get(m)).join(', ') + ',');
+            }
+            add(`],`);
+            if (template) {
+              add(`template: ${objectNames.get(template)}`);
+            }
+            add(`},`);
+          } break;
+          default:
+            add(`${name}: ${JSON.stringify(value)},`);
+        }
+      }
+    }
+    add(`});`);
+  }
+  add(`const structures = [`);
+  for (const slice of chunk([ ...structureNames.values() ], 10)) {
+    add(slice.join(', ') + ',');
+  }
+  add(`];`);
+  const root = structures[structures.length - 1];
+  add(`const root = ${structureNames.get(root)};`);
+  add(``);
+  return lines;
+}
+
+function getExports(structures) {
+  const root = structures[structures.length - 1];
+  const exportables = [];
+  // export only members whose names are legal JS identifiers
+  const legal = /^[$\w]+$/;
+  for (const method of root.static.methods) {
+    if (legal.test(method.name)) {
+      exportables.push(method.name);
+    }
+  }
+  for (const member of root.static.members) {
+    // only read-only properties are exportable
+    if (isReadOnly(member.type) && legal.test(member.name)) {
+      // make sure that getter wouldn't throw (possible with error union)
+      const { constructor } = root;
+      try {
+        const value = constructor[member.name];
+        exportables.push(member.name);
+      } catch (err) {
+      }
+    }
+  }
+  return [ 'default', '__zigar', ...exportables ];
+}
+
+function manageIndentation(lines) {
+  let indent = 0;
+  return (s) => {
+    if (/^\s*[\]\}]/.test(s)) {
+      indent--;
+    }
+    const lastLine = lines[lines.length - 1];
+    if ((lastLine?.endsWith('[') && s.startsWith(']')) 
+     || (lastLine?.endsWith('{') && s.startsWith('}'))) {
+      lines[lines.length - 1] += s;
+    } else {
+      lines.push(' '.repeat(indent * 2) + s);
+    }
+    if (/[\[\{]\s*$/.test(s)) {
+      indent++;
+    }
+  };
+}
+
+function isDifferent(value, def) {
+  if (value === def) {
+    return false;
+  }
+  if (def == null) {
+    return value != null;
+  }
+  if (typeof(def) === 'object' && typeof(value) === 'object') {
+    const valueKeys = Object.keys(value);
+    const defKeys = Object.keys(def);
+    if (valueKeys.length !== defKeys.length) {
+      return true;
+    }
+    for (const key of defKeys) {
+      if (isDifferent(value[key], def[key])) {
+        return true;
+      }
+    }
+    return false;
+  }
+  return true;
+}
+
+function* chunk(arr, n) {
+  if (!Array.isArray(arr)) {
+    arr = [ ...arr ];
+  }
+  for (let i = 0; i < arr.length; i += n) {
+    yield arr.slice(i, i + n);
+  }
+}
+
+const cwd = process.cwd();
+
+async function compile(path, options = {}) {
+  const {
+    optimize = 'Debug',
+    clean = false,
+    platform = os.platform(),
+    arch = os.arch(),
+    nativeCpu = false,
+    buildDir = tmpdir(),
+    cacheDir = join(cwd, 'zigar-cache'),
+    zigCmd = `zig build -Doptimize=${optimize}`,
+    staleTime = 60000,
+  } = options;
+  const fullPath = resolve(path);
+  const rootFile = parse(fullPath);
+  const suffix = isWASM(arch) ? 'wasm' : 'c';
+  const config = {
+    platform,
+    arch,
+    nativeCpu,
+    packageName: rootFile.name,
+    packagePath: fullPath,
+    packageRoot: rootFile.dir,
+    exporterPath: absolute(`../zig/exporter-${suffix}.zig`),
+    stubPath: absolute(`../zig/stub-${suffix}.zig`),
+    buildFilePath: absolute(`../zig/build.zig`),
+    useLibC: (platform === 'win32') ? true : false,
+  };
+  const dirHash = md5(rootFile.dir);
+  const soName = getLibraryName(rootFile.name, platform, arch);
+  const soDir = join(cacheDir, platform, arch, optimize, dirHash);
+  const soPath = join(soDir, soName);
+  const soMTime = (await findFile(soPath))?.mtime;
+  if (!buildDir || !cacheDir || !zigCmd) {
+    // can't build when no command or build directory is set to empty
+    if (soMTime) {
+      return soPath;
+    } else {
+      throw new Error(`Cannot find shared library and compilation is disabled: ${soPath}`);
+    }
+  }
+  if (!await findFile(fullPath)) {
+    throw new Error(`Source file not found: ${fullPath}`);
+  }
+  // scan the dir containing the file to see if recompilation is necessary
+  // also check if there's a custom build file and for C dependency
+  let changed = false;
+  await scanDirectory(rootFile.dir, /\.zig$/i, async (dir, name, { mtime }) => {
+    if (dir === rootFile.dir && name === 'build.zig') {
+      config.buildFilePath = join(dir, name);
+    }
+    if (!config.useLibC) {
+      const content = await loadFile(join(dir, name));
+      if (content.includes('@cImport')) {
+        config.useLibC = true;
+      }
+    }
+    if (!(soMTime > mtime)) {
+      changed = true;
+    }
+  });
+  if (!changed) {
+    const zigFolder = absolute('../zig');
+    // rebuild when source files have changed
+    await scanDirectory(zigFolder, /\.zig$/i, (dir, name, { mtime }) => {
+      if (!(soMTime > mtime)) {
+        changed = true;
+      }
+    });
+  }
+  if (!changed) {
+    return soPath;
+  }
+  // build in a unique temp dir
+  const soBuildDir = getBuildFolder(fullPath, platform, arch);
+  // only one process can compile a given file at a time
+  await acquireLock(soBuildDir, staleTime);
+  try {
+    // create config file
+    await createProject(config, soBuildDir);
+    // then run the compiler
+    await runCompiler(zigCmd, soBuildDir);
+    // move library to cache directory
+    const libPath = join(soBuildDir, 'zig-out', 'lib', soName);
+    await createDirectory(soDir);
+    await moveFile(libPath, soPath);
+    await touchFile(soPath);
+  } finally {
+    await releaseLock(soBuildDir);
+    if (clean) {
+      await deleteDirectory(soBuildDir);
+    }
+  }
+  return soPath;
+}
+
+function isWASM(arch) {
+  switch (arch) {
+    case 'wasm32':
+    case 'wasm64':
+      return true;
+    default:
+      return false;
+  }
+}
+
+function getLibraryName(name, platform, arch) {
+  switch (arch) {
+    case 'wasm32':
+    case 'wasm64':
+      return `${name}.wasm`;
+    default:
+      switch (platform) {
+        case 'darwin':
+          return `lib${name}.dylib`;
+        case 'win32':          return `${name}.dll`;
+        default:
+          return `lib${name}.so`;
+      }
+  }
+}
+
+function getBuildFolder(path, platform, arch) {
+  const buildDir = tmpdir();
+  const fullPath = resolve(path);
+  return join(buildDir, md5(fullPath), platform, arch)
+}
+
+async function runCompiler(zigCmd, soBuildDir) {
+  const options = {
+    cwd: soBuildDir,
+    windowsHide: true,
+  };
+  return new Promise((resolve, reject) => {
+    exec(zigCmd, options, (err, stdout, stderr) => {
+      if (err) {
+        const log = stderr;
+        if (log) {
+          const logPath = join(soBuildDir, 'log');
+          writeFile(logPath, log).catch(() => {});
+          err = new Error(`Zig compilation failed\n\n${log}`);
+        }
+        reject(err);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+async function findFile(path, follow = true) {
+  try {
+    return await (follow ? stat(path) : lstat(path));
+  } catch (err) {
+  }
+}
+
+async function scanDirectory(dir, re, cb) {
+  const ino = (await findFile(dir))?.ino;
+  /* c8 ignore next 3 */
+  if (!ino) {
+    return;
+  }
+  const scanned = [ ino ];
+  const scan = async (dir) => {
+    try {
+      const list = await readdir(dir);
+      for (const name of list) {
+        if (name.startsWith('.') || name === 'node_modules' || name === 'zig-cache') {
+          continue;
+        }
+        const path = join(dir, name);
+        const info = await findFile(path);
+        if (info?.isDirectory() && !scanned.includes(info.ino)) {
+          await scan(path);
+        } else if (info?.isFile() && re.test(name)) {
+          await cb(dir, name, info);
+        }
+      }
+      /* c8 ignore next 2 */
+    } catch (err) {
+    }
+  };
+  await scan(dir);
+}
+
+async function acquireLock(soBuildDir, staleTime) {
+  const pidPath = join(soBuildDir, 'pid');
+  while (true)   {
+    try {
+      await createDirectory(soBuildDir);
+      const handle = await open(pidPath, 'wx');
+      handle.write(`${process.pid}`);
+      handle.close();
+      return;
+    } catch (err) {
+      if (err.code === 'EEXIST') {
+        const last = (await findFile(pidPath))?.mtime;
+        const now = new Date();
+        const diff = now - last;
+        if (diff > staleTime) {
+          // lock file has been abandoned
+          await deleteFile(pidPath);
+          continue;
+        }
+      } else {
+        throw err;
+      }
+    }
+    await delay(50);
+  }
+}
+
+async function releaseLock(soBuildDir) {
+  const pidPath = join(soBuildDir, 'pid');
+  await deleteFile(pidPath);
+}
+
+async function createProject(config, dir) {
+  // translate from names used by Node to those used by Zig
+  const cpuArchs = {
+    arm: 'arm',
+    arm64: 'aarch64',
+    ia32: 'x86',
+    mips: 'mips',
+    mipsel: 'mipsel',
+    ppc: 'powerpc',
+    ppc64: 'powerpc64',
+    s390: undefined,
+    s390x: 's390x',
+    x64: 'x86_64',
+  };
+  const osTags = {
+    aix: 'aix',
+    darwin: 'macos',
+    freebsd: 'freebsd',
+    linux: 'linux',
+    openbsd: 'openbsd',
+    sunos: 'solaris',
+    win32: 'windows',
+  };
+  const cpuArch = cpuArchs[config.arch] ?? config.arch;
+  const cpuModel = (config.nativeCpu) ? 'native' : 'baseline';
+  const osTag = osTags[config.platform] ?? config.platform;
+  const target = `.{ .cpu_arch = .${cpuArch}, .cpu_model = .${cpuModel}, .os_tag = .${osTag} }`;
+  const lines = [];
+  lines.push(`const std = @import("std");\n`);
+  lines.push(`pub const target: std.zig.CrossTarget = ${target};`);
+  lines.push(`pub const package_name = ${JSON.stringify(config.packageName)};`);
+  lines.push(`pub const package_path = ${JSON.stringify(config.packagePath)};`);
+  lines.push(`pub const package_root = ${JSON.stringify(config.packageRoot)};`);
+  lines.push(`pub const exporter_path = ${JSON.stringify(config.exporterPath)};`);
+  lines.push(`pub const stub_path = ${JSON.stringify(config.stubPath)};`);
+  lines.push(`pub const use_libc = ${config.useLibC ? true : false};`);
+  lines.push(``);
+  const content = lines.join('\n');
+  const cfgFilePath = join(dir, 'build-cfg.zig');
+  await writeFile(cfgFilePath, content);
+  const buildFilePath = join(dir, 'build.zig');
+  await copyFile(config.buildFilePath, buildFilePath);
+}
+
+async function moveFile(srcPath, dstPath) {
+  try {
+    await rename(srcPath, dstPath);
+    /* c8 ignore next 8 -- hard to test */
+  } catch (err) {
+    if (err.code == 'EXDEV') {
+      await copyFile(srcPath, dstPath);
+      await deleteFile(srcPath);
+    } else {
+      throw err;
+    }
+  }
+}
+
+async function copyFile(srcPath, dstPath) {
+  const info = await stat(srcPath);
+  const data = await readFile(srcPath);
+  await writeFile(dstPath, data);
+  await chmod(dstPath, info.mode);
+}
+
+async function loadFile(path, def) {
+  try {
+    return await readFile(path, 'utf8');
+  } catch (err) {
+    return def;
+  }
+}
+
+async function touchFile(path) {
+  const now = new Date();
+  await utimes(path, now, now);
+}
+
+async function deleteFile(path) {
+  try {
+    await unlink(path);
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      throw err;
+    }
+  }
+}
+
+async function createDirectory(path) {
+  const exists = await findDirectory(path);
+  if (!exists) {
+    const { root, dir } = parse(path);
+    await createDirectory(dir);
+    try {
+      await mkdir(path);
+    } catch (err) {
+      /* c8 ignore next 3 */
+      if (err.code != 'EEXIST') {
+        throw err;
+      }
+    }
+  }
+}
+
+async function findDirectory(path) {
+  return findFile(path);
+}
+
+async function deleteDirectory(dir) {
+  try {
+    const list = await readdir(dir);
+    for (const name of list) {
+      const path = join(dir, name);
+      const info = await findFile(path, false);
+      if (info?.isDirectory()) {
+        await deleteDirectory(path);
+      } else if (info) {
+        await deleteFile(path);
+      }
+    }
+    await rmdir(dir);
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      throw err;
+    }
+  }
+}
+
+function md5(text) {
+  const hash = createHash('md5');
+  hash.update(text);
+  return hash.digest('hex');
+}
+
+async function delay(ms) {
+  await new Promise(r => setTimeout(r, ms));
+}
+
+function absolute(relpath) {
+  return fileURLToPath(new URL(relpath, import.meta.url));
 }
 
 function addMethods(s, env) {
@@ -5502,381 +5877,6 @@ function loadModule(source) {
     env.loadModule(source);
   }
   return env;
-}
-
-function generateCodeForWASM(definition, params) {
-  const { structures, keys } = definition;
-  const {
-    runtimeURL,
-    loadWASM,
-    topLevelAwait = true,
-    omitExports = false,
-  } = params;
-  const features = getFeaturesUsed(structures);
-  const exports = getExports(structures);
-  const lines = [];
-  const add = manageIndentation(lines);
-  add(`import {`);
-  for (const name of [ 'loadModule', ...features ]) {
-    add(`${name},`);
-  }
-  add(`} from ${JSON.stringify(runtimeURL)};`);
-  // reduce file size by only including code of features actually used
-  // dead-code remover will take out code not referenced here
-  add(`\n// activate features`);
-  for (const feature of features) {
-    add(`${feature}();`);
-  }
-  add(`\n// initiate loading and compilation of WASM bytecodes`);
-  add(`const source = ${loadWASM ?? null};`);
-  // write out the structures as object literals
-  lines.push(...generateStructureDefinitions(structures, keys));
-  lines.push(...generateLoadStatements('source', JSON.stringify(!topLevelAwait)));
-  lines.push(...generateExportStatements(exports, omitExports));
-  if (topLevelAwait && loadWASM) {
-    add(`await __zigar.init();`);
-  }
-  const code = lines.join('\n');
-  return { code, exports, structures };
-}
-
-function generateCodeForNode(definition, params) {
-  const { structures, keys } = definition;
-  const {
-    runtimeURL,
-    libPath,
-    topLevelAwait = true,
-    omitExports = false,
-  } = params;
-  const exports = getExports(structures);
-  const lines = [];
-  const add = manageIndentation(lines);
-  add(`import { loadModule } from ${JSON.stringify(runtimeURL)};`);
-  // all features are enabled by default for Node
-  lines.push(...generateStructureDefinitions(structures, keys));
-  lines.push(...generateLoadStatements(JSON.stringify(libPath), 'false'));
-  lines.push(...generateExportStatements(exports, omitExports));
-  if (topLevelAwait) {
-    add(`await __zigar.init();`);
-  }
-  const code = lines.join('\n');
-  return { code, exports, structures };
-}
-
-function generateLoadStatements(source, writeBack) {
-  const lines = [];
-  const add = manageIndentation(lines);
-  add(`// create runtime environment`);
-  add(`const env = loadModule(${source});`);
-  add(`const __zigar = env.getControlObject();`);
-  add(`env.recreateStructures(structures);`);
-  add(`env.linkVariables(${writeBack});`);
-  add(``);
-  return lines;
-}
-
-function generateExportStatements(exports, omitExports) {
-  const lines = [];
-  const add = manageIndentation(lines);
-  add(`const { constructor } = root;`);
-  if (!omitExports) {
-    add(`export { constructor as default, __zigar }`);
-    // the first two exports are default and __zigar
-    const exportables = exports.slice(2);
-    if (exportables.length > 0) {
-      const oneLine = exportables.join(', ');
-      if (oneLine.length < 70) {
-        add(`export const { ${oneLine} } = constructor;`);
-      } else {
-        add(`export const {`);
-        for (const name of exportables) {
-          add(`${name},`);
-        }
-        add(`} = constructor;`);
-      }
-    }
-  }
-  return lines;
-}
-
-function generateStructureDefinitions(structures, keys) {
-  const { MEMORY, SLOTS, CONST } = keys;
-  const lines = [];
-  const add = manageIndentation(lines);
-  const defaultStructure = {
-    constructor: null,
-    typedArray: null,
-    type: StructureType.Primitive,
-    name: undefined,
-    byteSize: 0,
-    align: 0,
-    isConst: false,
-    hasPointer: false,
-    instance: {
-      members: [],
-      methods: [],
-      template: null,
-    },
-    static: {
-      members: [],
-      methods: [],
-      template: null,
-    },
-  };
-  add(`\n// structure defaults`);
-  add(`const s = {`);
-  for (const [ name, value ] of Object.entries(defaultStructure)) {
-    add(`${name}: ${JSON.stringify(value)},`);
-  }
-  add(`};`);
-  const defaultMember = {
-    type: MemberType.Void,
-    isRequired: false,
-  };
-  add(`\n// member defaults`);
-  add(`const m = {`);
-  for (const [ name, value ] of Object.entries(defaultMember)) {
-    add(`${name}: ${JSON.stringify(value)},`);
-  }
-  add(`};`);
-  // create empty objects first, to allow objects to reference each other
-  add(``);
-  const structureNames = new Map();
-  const structureMap = new Map();
-  for (const [ index, structure ] of structures.entries()) {
-    const varname = `s${index}`;
-    structureNames.set(structure, varname);
-    structureMap.set(structure.constructor, structure);
-  }
-  for (const slice of chunk(structureNames.values(), 10)) {
-    add(`const ${slice.map(n => `${n} = {}`).join(', ')};`);
-  }
-  const objects = findAllObjects(structures, SLOTS);
-  const objectNames = new Map();
-  const views = [];
-  for (const [ index, object ] of objects.entries()) {
-    const varname = `o${index}`;
-    objectNames.set(object, varname);
-    if (object[MEMORY]) {
-      views.push(object[MEMORY]);
-    }
-  }
-  for (const slice of chunk(objectNames.values(), 10)) {
-    add(`const ${slice.map(n => `${n} = {}`).join(', ')};`);
-  }
-  // define buffers
-  const arrayBufferNames = new Map();
-  for (const [ index, dv ] of views.entries()) {
-    if (!arrayBufferNames.get(dv.buffer)) {
-      const varname = `a${index}`;
-      arrayBufferNames.set(dv.buffer, varname);
-      if (dv.buffer.byteLength > 0) {
-        const ta = new Uint8Array(dv.buffer);
-        add(`const ${varname} = new Uint8Array([ ${ta.join(', ')} ]);`);
-      } else {
-        add(`const ${varname} = new Uint8Array();`);
-      }
-    }
-  }
-  // add properties to objects
-  if (objects.length > 0) {
-    add('\n// define objects');
-    for (const object of objects) {
-      const varname = objectNames.get(object);
-      const structure = structureMap.get(object.constructor);
-      const { [MEMORY]: dv, [SLOTS]: slots } = object;
-      add(`Object.assign(${varname}, {`);
-      if (structure) {
-        add(`structure: ${structureNames.get(structure)},`);
-      }
-      if (dv) {
-        const buffer = arrayBufferNames.get(dv.buffer);
-        const pairs = [ `array: ${buffer}` ];
-        if (dv.byteLength < dv.buffer.byteLength) {
-          pairs.push(`offset: ${dv.byteOffset}`);
-          pairs.push(`length: ${dv.byteLength}`);
-        }
-        add(`memory: { ${pairs.join(', ')} },`);
-        if (dv.hasOwnProperty('reloc')) {
-          add(`reloc: ${dv.reloc},`);
-          if (object[CONST]) {
-            add(`const: true,`);
-          }
-        }
-      }
-      const entries = (slots) ? Object.entries(slots).filter(a => a[1]) : [];
-      if (entries.length > 0) {
-        add(`slots: {`);
-        const pairs = entries.map(([slot, child]) => `${slot}: ${objectNames.get(child)}`);
-        for (const slice of chunk(pairs, 10)) {
-          add(slice.join(', ') + ',');
-        }
-        add(`},`);
-      }
-      add(`});`);
-    }
-  }
-  const methods = [];
-  for (const structure of structures) {
-    // add static members; instance methods are also static methods, so
-    // we don't need to add them separately
-    methods.push(...structure.static.methods);
-  }
-  const methodNames = new Map();
-  if (methods.length > 0) {
-    add(`\n// define functions`);
-    for (const [ index, method ] of methods.entries()) {
-      const varname = `f${index}`;
-      methodNames.set(method, varname);
-      add(`const ${varname} = {`);
-      for (const [ name, value ] of Object.entries(method)) {
-        switch (name) {
-          case 'argStruct':
-            add(`${name}: ${structureNames.get(value)},`);
-            break;
-          default:
-            add(`${name}: ${JSON.stringify(value)},`);
-        }
-      }
-      add(`};`);
-    }
-  }
-  add('\n// define structures');
-  for (const structure of structures) {
-    const varname = structureNames.get(structure);
-    add(`Object.assign(${varname}, {`);
-    add(`...s,`);
-    for (const [ name, value ] of Object.entries(structure)) {
-      if (isDifferent(value, defaultStructure[name])) {
-        switch (name) {
-          case 'constructor':
-          case 'typedArray':
-          case 'sentinel':
-            break;
-          case 'instance':
-          case 'static': {
-            const { methods, members, template } = value;
-            add(`${name}: {`);
-            add(`members: [`);
-            for (const member of members) {
-              add(`{`);
-              add(`...m,`);
-              for (const [ name, value ] of Object.entries(member)) {
-                if (isDifferent(value, defaultMember[name])) {
-                  switch (name) {
-                    case 'structure':
-                      add(`${name}: ${structureNames.get(value)},`);
-                      break;
-                    default:
-                      add(`${name}: ${JSON.stringify(value)},`);
-                  }
-                }
-              }
-              add(`},`);
-            }
-            add(`],`);
-            add(`methods: [`);
-            for (const slice of chunk(methods, 10)) {
-              add(slice.map(m => methodNames.get(m)).join(', ') + ',');
-            }
-            add(`],`);
-            if (template) {
-              add(`template: ${objectNames.get(template)}`);
-            }
-            add(`},`);
-          } break;
-          default:
-            add(`${name}: ${JSON.stringify(value)},`);
-        }
-      }
-    }
-    add(`});`);
-  }
-  add(`const structures = [`);
-  for (const slice of chunk([ ...structureNames.values() ], 10)) {
-    add(slice.join(', ') + ',');
-  }
-  add(`];`);
-  const root = structures[structures.length - 1];
-  add(`const root = ${structureNames.get(root)};`);
-  add(``);
-  return lines;
-}
-
-function getExports(structures) {
-  const root = structures[structures.length - 1];
-  const exportables = [];
-  // export only members whose names are legal JS identifiers
-  const legal = /^[$\w]+$/;
-  for (const method of root.static.methods) {
-    if (legal.test(method.name)) {
-      exportables.push(method.name);
-    }
-  }
-  for (const member of root.static.members) {
-    // only read-only properties are exportable
-    if (isReadOnly(member.type) && legal.test(member.name)) {
-      // make sure that getter wouldn't throw (possible with error union)
-      const { constructor } = root;
-      try {
-        const value = constructor[member.name];
-        exportables.push(member.name);
-      } catch (err) {
-      }
-    }
-  }
-  return [ 'default', '__zigar', ...exportables ];
-}
-
-function manageIndentation(lines) {
-  let indent = 0;
-  return (s) => {
-    if (/^\s*[\]\}]/.test(s)) {
-      indent--;
-    }
-    const lastLine = lines[lines.length - 1];
-    if ((lastLine?.endsWith('[') && s.startsWith(']')) 
-     || (lastLine?.endsWith('{') && s.startsWith('}'))) {
-      lines[lines.length - 1] += s;
-    } else {
-      lines.push(' '.repeat(indent * 2) + s);
-    }
-    if (/[\[\{]\s*$/.test(s)) {
-      indent++;
-    }
-  };
-}
-
-function isDifferent(value, def) {
-  if (value === def) {
-    return false;
-  }
-  if (def == null) {
-    return value != null;
-  }
-  if (typeof(def) === 'object' && typeof(value) === 'object') {
-    const valueKeys = Object.keys(value);
-    const defKeys = Object.keys(def);
-    if (valueKeys.length !== defKeys.length) {
-      return true;
-    }
-    for (const key of defKeys) {
-      if (isDifferent(value[key], def[key])) {
-        return true;
-      }
-    }
-    return false;
-  }
-  return true;
-}
-
-function* chunk(arr, n) {
-  if (!Array.isArray(arr)) {
-    arr = [ ...arr ];
-  }
-  for (let i = 0; i < arr.length; i += n) {
-    yield arr.slice(i, i + n);
-  }
 }
 
 const MagicNumber = 0x6d736100;

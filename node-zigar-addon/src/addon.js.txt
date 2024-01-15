@@ -4514,7 +4514,7 @@
 "      for (const { object, reloc } of this.variables) {\n"
 "        this.linkObject(object, reloc, writeBack);\n"
 "        const getter = object[TARGET_GETTER];\n"
-"        if (getter && getter !== throwInaccessiblePointer) {\n"
+"        if (getter && object[SLOTS][0]) {\n"
 "          pointers.push(object);\n"
 "        }\n"
 "      }\n"

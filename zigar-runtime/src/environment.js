@@ -1,5 +1,5 @@
 import { createGlobalErrorSet } from './error-set.js';
-import { throwAlignmentConflict, throwInaccessiblePointer } from './error.js';
+import { throwAlignmentConflict } from './error.js';
 import { MemberType, useBool, useObject } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { addMethods } from './method.js';
@@ -493,7 +493,7 @@ export class Environment {
     for (const { object, reloc } of this.variables) {
       this.linkObject(object, reloc, writeBack);
       const getter = object[TARGET_GETTER];
-      if (getter && getter !== throwInaccessiblePointer) {
+      if (getter && object[SLOTS][0]) {
         pointers.push(object);
       }
     }

@@ -1,8 +1,8 @@
 import { readFile } from 'fs/promises';
 import { basename } from 'path';
-import { compile } from './compiler.js';
 import { loadModule } from '../../zigar-runtime/src/index.js';
 import { generateCodeForWASM } from './code-generator.js';
+import { compile } from './compiler.js';
 import { stripUnused } from './wasm-stripper.js';
 
 export async function transpile(path, options = {}) {

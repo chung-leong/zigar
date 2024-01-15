@@ -1,9 +1,11 @@
-import { createHash } from 'crypto';
 import { exec } from 'child_process';
-import { fileURLToPath } from 'url';
-import { parse, join, resolve } from 'path';
+import { createHash } from 'crypto';
+import {
+  chmod, lstat, mkdir, open, readFile, readdir, rename, rmdir, stat, unlink, utimes, writeFile
+} from 'fs/promises';
 import os, { tmpdir } from 'os';
-import { stat, lstat, readdir, mkdir, rmdir, unlink, rename, chmod, utimes, readFile, writeFile, open } from 'fs/promises';
+import { join, parse, resolve } from 'path';
+import { fileURLToPath } from 'url';
 
 const cwd = process.cwd();
 
