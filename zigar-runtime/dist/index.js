@@ -4095,13 +4095,13 @@ class Environment {
   getBufferAddress(buffer: ArrayBuffer): bigint|number {
     // return a buffer's address
   }
-  allocateRelocMemory(len: number, align: number): DataView {
+  allocateHostMemory(len: number, align: number): DataView {
     // allocate memory and remember its address
   }
   allocateShadowMemory(len: number, align: number): DataView {
     // allocate memory for shadowing objects
   }
-  freeRelocMemory(address: bigint|number, len: number, align: number): void {
+  freeHostMemory(address: bigint|number, len: number, align: number): void {
     // free previously allocated memory
   }
   freeShadowMemory(address: bigint|number, len: number, align: number): void {
@@ -4156,8 +4156,21 @@ class Environment {
     if (fixed) {
       return this.allocateFixedMemory(len, align);
     } else {
-      return this.obtainView(new ArrayBuffer(len), 0, len);
+      return this.allocateRelocMemory(len, align);
     }
+  }
+
+  allocateRelocMemory(len, align) {
+    // allocate extra memory for alignment purpose when align is larger than the default
+    const extra = (align > 16) ? align : 0;
+    const buffer = new ArrayBuffer(len + extra);
+    let offset = 0;
+    if (extra) {
+      const address = this.getBufferAddress(buffer);
+      const aligned = getAlignedAddress(address, align);
+      offset = aligned - address;
+    }
+    return this.obtainView(buffer, Number(offset), len);
   }
 
   registerMemory(dv, targetDV = null) {
@@ -4229,12 +4242,14 @@ class Environment {
 
   captureView(address, len, copy) {
     if (copy) {
-      const dv = this.allocateMemory(len);
+      // copy content into reloctable memory
+      const dv = this.allocateRelocMemory(len, 0);
       if (len > 0) {
         this.copyBytes(dv, address, len);
       }
       return dv;
     } else {
+      // link into fixed memory
       return this.obtainFixedView(address, len);
     }
   }
@@ -4354,7 +4369,7 @@ class Environment {
     for (const { object, reloc } of this.variables) {
       this.linkObject(object, reloc, writeBack);
       const getter = object[TARGET_GETTER];
-      if (getter && getter !== throwInaccessiblePointer) {
+      if (getter && object[SLOTS][0]) {
         pointers.push(object);
       }
     }
@@ -4823,8 +4838,8 @@ class WebAssemblyEnvironment extends Environment {
     isRuntimeSafetyActive: { argType: '', returnType: 'b' },
   };
   exports = {
-    allocateRelocMemory: { argType: 'ii', returnType: 'v' },
-    freeRelocMemory: { argType: 'iii' },
+    allocateHostMemory: { argType: 'ii', returnType: 'v' },
+    freeHostMemory: { argType: 'iii' },
     captureString: { argType: 'ii', returnType: 'v' },
     captureView: { argType: 'iib', returnType: 'v' },
     castView: { argType: 'vvb', returnType: 'v' },
@@ -4854,11 +4869,11 @@ class WebAssemblyEnvironment extends Environment {
   // WASM is always little endian
   littleEndian = true;
 
-  allocateRelocMemory(len, align) {
-    // allocate memory in both JS and WASM space
+  allocateHostMemory(len, align) {
+    // allocate memory in both JavaScript and WASM space
     const constructor = { [ALIGN]: align };
     const copier = getMemoryCopier(len);
-    const dv = this.allocateMemory(len);
+    const dv = this.allocateRelocMemory(len, align);
     const shadowDV = this.allocateShadowMemory(len, align);
     // create a shadow for the relocatable memory
     const object = { constructor, [MEMORY]: dv, [COPIER]: copier };
@@ -4868,7 +4883,7 @@ class WebAssemblyEnvironment extends Environment {
     return shadowDV;
   }
 
-  freeRelocMemory(address, len, align) {
+  freeHostMemory(address, len, align) {
     const dv = this.findMemory(address, len);
     this.removeShadow(dv);
     this.unregisterMemory(address);

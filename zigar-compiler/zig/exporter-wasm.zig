@@ -22,8 +22,8 @@ const CallContext = struct {
     allocator: std.mem.Allocator,
 };
 
-extern fn _allocateRelocMemory(len: usize, alignment: u16) ?Value;
-extern fn _freeRelocMemory(bytes: [*]u8, len: usize, alignment: u16) void;
+extern fn _allocateHostMemory(len: usize, alignment: u16) ?Value;
+extern fn _freeHostMemory(bytes: [*]u8, len: usize, alignment: u16) void;
 extern fn _captureString(bytes: ?[*]const u8, len: usize) ?Value;
 extern fn _captureView(bytes: ?[*]u8, len: usize, copy: bool) ?Value;
 extern fn _castView(structure: Value, dv: Value, writable: bool) ?Value;
@@ -148,7 +148,7 @@ pub const Host = struct {
     }
 
     pub fn allocateMemory(_: Host, size: usize, alignment: u16) !Memory {
-        if (_allocateRelocMemory(size, alignment)) |dv| {
+        if (_allocateHostMemory(size, alignment)) |dv| {
             const address = _getViewAddress(dv);
             return .{
                 .bytes = @ptrFromInt(address),
@@ -161,7 +161,7 @@ pub const Host = struct {
 
     pub fn freeMemory(_: Host, memory: Memory) !void {
         if (memory.bytes) |bytes| {
-            _freeRelocMemory(bytes, memory.len, memory.attributes.alignment);
+            _freeHostMemory(bytes, memory.len, memory.attributes.alignment);
         }
     }
 

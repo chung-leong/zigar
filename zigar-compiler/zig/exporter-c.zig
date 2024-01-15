@@ -45,14 +45,14 @@ pub const Host = struct {
 
     pub fn allocateMemory(self: Host, size: usize, alignment: u16) !Memory {
         var memory: Memory = undefined;
-        if (imports.allocate_relocatable_memory(self.context, size, alignment, &memory) != .OK) {
+        if (imports.allocate_host_memory(self.context, size, alignment, &memory) != .OK) {
             return Error.UnableToAllocateMemory;
         }
         return memory;
     }
 
     pub fn freeMemory(self: Host, memory: Memory) !void {
-        if (imports.free_relocatable_memory(self.context, &memory) != .OK) {
+        if (imports.free_host_memory(self.context, &memory) != .OK) {
             return Error.UnableToFreeMemory;
         }
     }
@@ -245,8 +245,8 @@ pub fn runThunk(call: Call, thunk_address: usize, args: *anyopaque, dest: *?Valu
 
 // pointer table that's filled on the C side
 const Imports = extern struct {
-    allocate_relocatable_memory: *const fn (Call, usize, u16, *Memory) callconv(.C) Result,
-    free_relocatable_memory: *const fn (Call, *const Memory) callconv(.C) Result,
+    allocate_host_memory: *const fn (Call, usize, u16, *Memory) callconv(.C) Result,
+    free_host_memory: *const fn (Call, *const Memory) callconv(.C) Result,
     capture_string: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
     capture_view: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
     cast_view: *const fn (Call, Value, Value, bool, *Value) callconv(.C) Result,

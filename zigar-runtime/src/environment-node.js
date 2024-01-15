@@ -1,4 +1,4 @@
-import { Environment, add, getAlignedAddress, isMisaligned } from './environment.js';
+import { Environment, add, isMisaligned } from './environment.js';
 import { throwZigError } from './error.js';
 import { ALIGN, MEMORY, POINTER_VISITOR } from './symbol.js';
 
@@ -30,18 +30,20 @@ export class NodeEnvironment extends Environment {
     return address;
   }
 
-  allocateRelocMemory(len, align) {
-    const dv = this.createAlignedBuffer(len, align);
+  allocateHostMemory(len, align) {
+    const dv = this.allocateRelocMemory(len, align);
     this.registerMemory(dv);
     return dv;
   }
 
-  freeRelocMemory(address, len, align) {
-    this.unregisterMemory(address);
+  freeHostMemory(address, len, align) {
+    // no freeing actually occurs--memory will await garbage collection
+    this.unregisterMemory(address);   
   }
 
   allocateShadowMemory(len, align) {
-    return this.createAlignedBuffer(len, align);
+    // Node can read into JavaScript memory space so we can keep shadows there
+    return this.allocateRelocMemory(len, align);
   }
 
   freeShadowMemory(address, len, align) {
@@ -118,19 +120,6 @@ export class NodeEnvironment extends Environment {
       this.registerMemory(dv);
       return address;
     }
-  }
-
-  createAlignedBuffer(len, align) {
-    // allocate extra memory for alignment purpose when align is larger than the default
-    const extra = (align > 16) ? align : 0;
-    const buffer = new ArrayBuffer(len + extra);
-    let offset = 0;
-    if (extra) {
-      const address = this.getBufferAddress(buffer);
-      const aligned = getAlignedAddress(address, align);
-      offset = aligned - address;
-    }
-    return this.obtainView(buffer, Number(offset), len);
   }
 
   invokeThunk(thunkId, args) {

@@ -86,17 +86,17 @@ bool call_js_function(call ctx,
         && napi_call_function(env, ctx->js_env, fn, argc, argv, dest) == napi_ok;
 }
 
-result allocate_relocatable_memory(call ctx,
-                                   size_t len,
-                                   uint16_t align,
-                                   memory* dest) {
+result allocate_host_memory(call ctx,
+                            size_t len,
+                            uint16_t align,
+                            memory* dest) {
     napi_env env = ctx->env;
     napi_value args[2];
     napi_value result;
     void* data;
     if (napi_create_uint32(env, len, &args[0]) == napi_ok
      && napi_create_uint32(env, align, &args[1]) == napi_ok
-     && call_js_function(ctx, "allocateRelocMemory", 2, args, &result)
+     && call_js_function(ctx, "allocateHostMemory", 2, args, &result)
      && napi_get_dataview_info(env, result, NULL, &data, NULL, NULL) == napi_ok) {
         dest->bytes = (uint8_t*) data;
         dest->len = len;
@@ -108,15 +108,15 @@ result allocate_relocatable_memory(call ctx,
     return Failure;
 }
 
-result free_relocatable_memory(call ctx,
-                               const memory* mem) {
+result free_host_memory(call ctx,
+                        const memory* mem) {
     napi_env env = ctx->env;
     napi_value args[3];
     napi_value result;
     if (napi_create_bigint_uint64(env, (uintptr_t) mem->bytes, &args[0]) == napi_ok
      && napi_create_uint32(env, mem->len, &args[1]) == napi_ok
      && napi_create_uint32(env, mem->attributes.align, &args[2]) == napi_ok
-     && call_js_function(ctx, "freeRelocMemory", 3, args, &result)) {
+     && call_js_function(ctx, "freeHostMemory", 3, args, &result)) {
         return OK;
     }
     return Failure;
@@ -683,8 +683,8 @@ napi_value load_module(napi_env env,
 
     /* attach exports to module */
     export_table* exports = mod->exports;
-    exports->allocate_relocatable_memory = allocate_relocatable_memory;
-    exports->free_relocatable_memory = free_relocatable_memory;
+    exports->allocate_host_memory = allocate_host_memory;
+    exports->free_host_memory = free_host_memory;
     exports->capture_string = capture_string;
     exports->capture_view = capture_view;
     exports->cast_view = cast_view;

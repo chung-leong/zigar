@@ -38,13 +38,13 @@ export class Environment {
   getBufferAddress(buffer: ArrayBuffer): bigint|number {
     // return a buffer's address
   }
-  allocateRelocMemory(len: number, align: number): DataView {
+  allocateHostMemory(len: number, align: number): DataView {
     // allocate memory and remember its address
   }
   allocateShadowMemory(len: number, align: number): DataView {
     // allocate memory for shadowing objects
   }
-  freeRelocMemory(address: bigint|number, len: number, align: number): void {
+  freeHostMemory(address: bigint|number, len: number, align: number): void {
     // free previously allocated memory
   }
   freeShadowMemory(address: bigint|number, len: number, align: number): void {
@@ -99,8 +99,21 @@ export class Environment {
     if (fixed) {
       return this.allocateFixedMemory(len, align);
     } else {
-      return this.obtainView(new ArrayBuffer(len), 0, len);
+      return this.allocateRelocMemory(len, align);
     }
+  }
+
+  allocateRelocMemory(len, align) {
+    // allocate extra memory for alignment purpose when align is larger than the default
+    const extra = (align > 16) ? align : 0;
+    const buffer = new ArrayBuffer(len + extra);
+    let offset = 0;
+    if (extra) {
+      const address = this.getBufferAddress(buffer);
+      const aligned = getAlignedAddress(address, align);
+      offset = aligned - address;
+    }
+    return this.obtainView(buffer, Number(offset), len);
   }
 
   registerMemory(dv, targetDV = null) {
@@ -172,12 +185,14 @@ export class Environment {
 
   captureView(address, len, copy) {
     if (copy) {
-      const dv = this.allocateMemory(len);
+      // copy content into reloctable memory
+      const dv = this.allocateRelocMemory(len, 0);
       if (len > 0) {
         this.copyBytes(dv, address, len);
       }
       return dv;
     } else {
+      // link into fixed memory
       return this.obtainFixedView(address, len);
     }
   }

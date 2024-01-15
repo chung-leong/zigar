@@ -114,8 +114,8 @@ typedef struct {
 } method;
 
 typedef struct {
-    result (__cdecl *allocate_relocatable_memory)(call, size_t, uint16_t, memory*);
-    result (__cdecl *free_relocatable_memory)(call, const memory*);
+    result (__cdecl *allocate_host_memory)(call, size_t, uint16_t, memory*);
+    result (__cdecl *free_host_memory)(call, const memory*);
     result (__cdecl *capture_string)(call, const memory*, napi_value*);
     result (__cdecl *capture_view)(call, const memory*, napi_value*);
     result (__cdecl *cast_view)(call, napi_value, napi_value, bool, napi_value*);
