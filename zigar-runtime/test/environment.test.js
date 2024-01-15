@@ -12,7 +12,10 @@ import {
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { ALIGN, ATTRIBUTES, CONST, COPIER, ENVIRONMENT, MEMORY, POINTER_VISITOR, SLOTS } from '../src/symbol.js';
+import {
+  ALIGN, ATTRIBUTES, CONST, COPIER, ENVIRONMENT, FIXED_LOCATION, MEMORY, POINTER_VISITOR, SLOTS,
+  TARGET_GETTER
+} from '../src/symbol.js';
 
 describe('Environment', function() {
   beforeEach(function() {
@@ -544,6 +547,47 @@ describe('Environment', function() {
       expect(object[MEMORY].byteOffset).to.equal(16);
     })
   })
+  describe('useStructures', function() {
+    it('should remove comptime structures and return constructor of root module', function() {
+      const env = new Environment();
+      env.inFixedMemory = (object) => true;
+      const addressMap = new Map();
+      env.getViewAddress = (dv) => addressMap.get(dv);
+      env.getMemoryOffset = (address) => Number(address);
+      env.copyBytes = (dv, address, len) => {};
+      const templ1 = {
+        [MEMORY]: new DataView(new ArrayBuffer(8))
+      };
+      const object = {
+        [MEMORY]: new DataView(new ArrayBuffer(8))
+      };
+      const templ2 = {
+        [MEMORY]: new DataView(new ArrayBuffer(32)),
+        [SLOTS]: {
+          0: object,
+        },
+      };
+      const constructor = function() {};
+      env.structures = [
+        {
+          instance: { template: templ1 },
+          static: {}
+        },
+        {
+          instance: {},
+          static: { template: templ2 },
+          constructor,
+        },
+      ];
+      addressMap.set(templ1[MEMORY], 1002n);
+      addressMap.set(templ2[MEMORY], 1000n);
+      addressMap.set(object[MEMORY], 1016n);
+      const module = env.useStructures();
+      expect(module).to.equal(constructor);
+      expect(env.structures).to.eql([]);
+      expect(env.slots).to.eql({});
+    })
+  })
   describe('finalizeShape', function() {
     it('should generate constructor for a struct', function() {
       const env = new Environment();
@@ -858,6 +902,37 @@ describe('Environment', function() {
       expect(object[MEMORY]).to.not.equal(dv);
       expect(object[MEMORY].getUint32(0, true)).to.equal(1234);
     });
+    it('should add target location to pointer', function() {
+      const env = new Environment();
+      env.inFixedMemory = function() {
+        return false;
+      };
+      env.recreateAddress = function(address) {
+        return address + 0x1000;
+      };
+      env.obtainFixedView = function(address, len) {
+        const dv = new DataView(new ArrayBuffer(len));
+        dv.address = address;
+        return dv;
+      };
+      env.getBufferAddress = function(buffer) {
+        return 0x4000;
+      };
+      const Test = function(dv) {
+        this[MEMORY] = dv;
+      };
+      Test.prototype[COPIER] = getMemoryCopier(4);
+      Test.prototype[TARGET_GETTER] = function() { 
+        return {
+          [MEMORY]: new DataView(new ArrayBuffer(32)),
+          length: 4,
+        };
+      };
+      const object = new Test(new DataView(new ArrayBuffer(4)));
+      env.variables.push({ object, reloc: 128 });
+      env.linkVariables(false);
+      expect(object[FIXED_LOCATION]).to.eql({ address: 0x4000, length: 4 });
+    });
   })
   describe('linkObject', function() {    
     it('should replace relocatable memory with fixed memory', function() {
@@ -921,6 +996,34 @@ describe('Environment', function() {
       const dv = object[MEMORY];
       env.linkObject(object, 0x1000, true);
       expect(object[MEMORY]).to.equal(dv);
+    })
+    it('should link child objects', function() {
+      const env = new Environment();
+      env.inFixedMemory = function() {
+        return false;
+      };
+      env.recreateAddress = function(address) {
+        return address + 0x1000;
+      };
+      env.obtainFixedView = function(address, len) {
+        const dv = new DataView(new ArrayBuffer(len));
+        dv.address = address;
+        return dv;
+      };
+      const Test = function(dv) {
+        this[MEMORY] = dv;
+        this[SLOTS] = {
+          0: {
+            [MEMORY]: new DataView(dv.buffer, 0, 8),
+          }
+        }
+      };
+      Test.prototype[COPIER] = getMemoryCopier(4);
+      const object = new Test(new DataView(new ArrayBuffer(32)));
+      const dv = object[MEMORY];
+      env.linkObject(object, 0x1000, true);
+      expect(object[MEMORY]).to.not.equal(dv);
+      expect(object[SLOTS][0][MEMORY].buffer).to.equal(object[MEMORY].buffer);
     })
   })
   describe('unlinkVariables', function() {    

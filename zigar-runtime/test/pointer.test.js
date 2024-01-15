@@ -3,7 +3,7 @@ import { expect } from 'chai';
 import { NodeEnvironment } from '../src/environment-node.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
-import { ADDRESS_GETTER, ADDRESS_SETTER, ENVIRONMENT, MEMORY, POINTER } from '../src/symbol.js';
+import { ENVIRONMENT, LOCATION_GETTER, LOCATION_SETTER, MEMORY, POINTER } from '../src/symbol.js';
 
 describe('Pointer functions', function() {
   const env = new NodeEnvironment();
@@ -156,6 +156,43 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structure);
       const { constructor: Int32Ptr } = structure;
       expect(() => new Int32Ptr).to.throw(TypeError);
+    })
+    it('should throw when a null pointer is dereferenced', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
+      expect(Int32Ptr.child).to.equal(Int32);
+      const intPointer = new Int32Ptr(undefined);
+      expect(() => intPointer['*']).to.throw('Null pointer');
+      expect(() => intPointer['*'] = 123).to.throw('Null pointer');
     })
     it('should define a pointer for pointing to a structure', function() {
       const structStructure = env.beginStructure({
@@ -1794,9 +1831,9 @@ describe('Pointer functions', function() {
       const { constructor: Int32Ptr } = structure;
       const pointer = new Int32Ptr(new Int32(4));
       pointer[MEMORY].setBigUint64(0, 0x1000n, true);
-      const [ address, len ] = pointer[ADDRESS_GETTER]();
+      const { address, length } = pointer[LOCATION_GETTER]();
       expect(address).to.equal(0x1000n);
-      expect(len).to.equal(1);
+      expect(length).to.equal(1);
     })
     it('should write address of pointer into memory', function() {
       const env = new NodeEnvironment();
@@ -1833,7 +1870,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structure);
       const { constructor: Int32Ptr } = structure;
       const pointer = new Int32Ptr(new Int32(4));
-      pointer[ADDRESS_SETTER](0x1000n, undefined);
+      pointer[LOCATION_SETTER]({ address: 0x1000n, length: undefined });
       expect(pointer[MEMORY].getBigUint64(0, true)).to.equal(0x1000n);
     })
     it('should get address and length of slice pointer from memory', function() {
@@ -1886,9 +1923,9 @@ describe('Pointer functions', function() {
       const pointer = new Int32SlicePtr(ta);
       pointer[MEMORY].setBigUint64(0, 0x1000n, true);
       pointer[MEMORY].setBigUint64(8, 4n, true);
-      const [ address, len ] = pointer[ADDRESS_GETTER]();
+      const { address, length } = pointer[LOCATION_GETTER]();
       expect(address).to.equal(0x1000n);
-      expect(len).to.equal(4);
+      expect(length).to.equal(4);
     })
     it('should write address and length of slice pointer into memory', function() {
       const env = new NodeEnvironment();
@@ -1939,7 +1976,7 @@ describe('Pointer functions', function() {
       const { constructor: Int32SlicePtr } = structure;
       const ta = new Int32Array([ 1, 2, 3, 4 ]);
       const pointer = new Int32SlicePtr(ta);      
-      pointer[ADDRESS_SETTER](0x1000n, 4);
+      pointer[LOCATION_SETTER]({ address: 0x1000n, length: 4 });
       expect(pointer[MEMORY].getBigUint64(0, true)).to.equal(0x1000n);
       expect(pointer[MEMORY].getBigUint64(8, true)).to.equal(4n);
     })
@@ -1985,7 +2022,7 @@ describe('Pointer functions', function() {
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         name: '[]Int32',
-        byteSize: 8,
+        byteSize: 16,
         hasPointer: true,
       });
       env.attachMember(structure, {
@@ -2005,13 +2042,88 @@ describe('Pointer functions', function() {
       env.findSentinel = function() {
         return 4;
       }
-      const [ address, len ] = pointer[ADDRESS_GETTER]();
+      const { address, length } = pointer[LOCATION_GETTER]();
       expect(address).to.equal(0x1000n);
-      expect(len).to.equal(5);
+      expect(length).to.equal(5);
       pointer[MEMORY].setBigUint64(0, 0n, true);
-      const [ address2, len2 ] = pointer[ADDRESS_GETTER]();
+      const { address: address2, length: length2 } = pointer[LOCATION_GETTER]();
       expect(address2).to.equal(0n);
-      expect(len2).to.equal(0);
+      expect(length2).to.equal(0);
+    })
+    it('should update target of fixed-memory pointer on dereferencing', function() {
+      const env = new NodeEnvironment();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+        hasPointer: false,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]Int32',
+        byteSize: 4,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '[]Int32',
+        byteSize: 16,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32SlicePtr } = structure;
+      const addressMap = new Map();
+      let nextAddress = 0x1000n;
+      env.allocateExternMemory = function(len, align) {
+        const buffer = new ArrayBuffer(len);
+        const address = nextAddress;
+        nextAddress += 0x1000n;
+        addressMap.set(buffer, address);
+        return buffer;
+      };
+      env.extractBufferAddress = function(buffer) {
+        return addressMap.get(buffer);
+      };
+      env.obtainExternBuffer = function(address, len) {
+        const buffer = new ArrayBuffer(len);
+        addressMap.set(buffer, address);
+        const dv = new DataView(buffer);
+        for (let i = 0; i < dv.byteLength; i += 4) {
+          dv.setInt32(i, 8, true);
+        }
+        return buffer;
+      }
+      const pointer = new Int32SlicePtr([ 1, 2, 3, 4 ], { fixed: true });
+      expect([ ...pointer ]).to.eql([ 1, 2, 3, 4 ]);
+      const loc = pointer[LOCATION_GETTER]();
+      pointer[LOCATION_SETTER]({ ...loc, address: 0x30000n });
+      expect([ ...pointer ]).to.eql([ 8, 8, 8, 8 ]);
+      pointer[LOCATION_SETTER]({ ...loc, length: 5 });
+      expect([ ...pointer ]).to.eql([ 8, 8, 8, 8, 8 ]);
     })
   })
 })

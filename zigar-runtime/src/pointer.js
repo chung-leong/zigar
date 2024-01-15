@@ -4,15 +4,13 @@ import {
   throwInvalidPointerTarget, throwNoCastingToPointer, throwNullPointer, throwReadOnlyTarget,
   warnImplicitArrayCreation
 } from './error.js';
-import { MemberType, getDescriptor } from './member.js';
+import { MemberType, getDescriptor, isValueExpected } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { convertToJSON, getValueOf } from './special.js';
 import { StructureType, attachDescriptors, createConstructor, defineProperties } from './structure.js';
 import {
-  ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, CONST, COPIER, ENVIRONMENT, GETTER, MEMORY, NORMALIZER, PARENT,
-  POINTER,
-  POINTER_VISITOR,
-  PROXY, SETTER, SIZE, SLOTS, TARGET_GETTER,
+  ALIGN, CONST, COPIER, ENVIRONMENT, FIXED_LOCATION, GETTER, LOCATION_GETTER, LOCATION_SETTER,
+  MEMORY, NORMALIZER, PARENT, POINTER, POINTER_VISITOR, PROXY, SETTER, SIZE, SLOTS, TARGET_GETTER,
   VIVIFICATOR
 } from './symbol.js';
 
@@ -46,7 +44,34 @@ export function definePointer(structure, env) {
     byteSize: addressSize,
     structure: { name: 'usize', byteSize: addressSize },
   }, env) : {};
-  const { get: getTarget, set: setTarget } = getDescriptor(member, env);
+  const updateTarget = function() {
+    const prevLocation = this[FIXED_LOCATION];
+    if (prevLocation) {
+      const location = this[LOCATION_GETTER]();
+      if (location.address !== prevLocation.address || location.length !== prevLocation.length) {
+        const { constructor: Target } = targetStructure;
+        const dv = env.findMemory(location.address, location.length * Target[SIZE]);
+        const target = Target.call(ENVIRONMENT, dv, { writable: !isConst });
+        this[SLOTS][0] = target;
+        this[FIXED_LOCATION] = location;
+      }
+    }    
+  };
+  const getTargetObject = function() {
+    updateTarget.call(this);
+    return this[SLOTS][0] ?? throwNullPointer();
+  };
+  const getTarget = isValueExpected(targetStructure)
+  ? function() {
+      const target = getTargetObject.call(this);
+      return target[GETTER]();
+    }
+  : getTargetObject;
+  const setTarget = function(value) {
+    updateTarget.call(this);
+    const object = this[SLOTS][0] ?? throwNullPointer();
+    return object[SETTER](value);
+  };
   const alternateCaster = function(arg, options) {
     const Target = targetStructure.constructor;
     if ((this === ENVIRONMENT || this === PARENT) || arg instanceof constructor) {
@@ -79,6 +104,7 @@ export function definePointer(structure, env) {
       }
       arg = arg[SLOTS][0];
     }
+    const fixed = env.inFixedMemory(this);
     if (arg instanceof Target) {
       if (isConst && !arg[CONST]) {
         // create read-only version
@@ -92,7 +118,7 @@ export function definePointer(structure, env) {
       arg = Target(dv, { writable: !isConst });
     } else if (isTargetSlice) {
       // autovivificate target object
-      const autoObj = new Target(arg, { writable: !isConst });
+      const autoObj = new Target(arg, { writable: !isConst, fixed });
       if (runtimeSafety) {
         // creation of a new slice using a typed array is probably
         // not what the user wants; it's more likely that the intention
@@ -102,17 +128,18 @@ export function definePointer(structure, env) {
         }
       }
       arg = autoObj;
-    } else {
+    } else if (arg !== undefined) {
       throwInvalidPointerTarget(structure, arg);
     }
-    if (env.inFixedMemory(this)) {
+    if (fixed) {
       // the pointer sits in fixed memory--apply the change immediately
       if (env.inFixedMemory(arg)) {
-        const address = env.getViewAddress(arg[MEMORY]);
-        setAddress.call(this, address);
-        if (setLength) {
-          setLength.call(this, arg.length);
-        }
+        const loc = {
+          address: env.getViewAddress(arg[MEMORY]),
+          length: (hasLength) ? arg.length : 1
+        };
+        addressSetter.call(this, loc);
+        this[FIXED_LOCATION] = loc;
       } else {
         throwFixedMemoryTargetRequired(structure, arg);
       }
@@ -120,27 +147,18 @@ export function definePointer(structure, env) {
     this[SLOTS][0] = arg;
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster, finalizer }, env);
-  const addressSetter = (hasLength) 
-  ? function(address, length) {
-      setAddress.call(this, address);
-      setLength.call(this, length);
-    }
-  : setAddress;
-  const addressGetter = (hasLength)
-  ? function() {
+  const addressSetter = function({ address, length }) {
+    setAddress.call(this, address);
+    setLength?.call(this, length);
+  };
+  const addressGetter = function() {
     const address = getAddress.call(this);
-    const length = getLength.call(this);
-    return [ address, length ];
-  } 
-  : (sentinel)
-  ? function() {
-    const address = getAddress.call(this);
-    const length = (address) ? env.findSentinel(address, sentinel.bytes) + 1 : 0;
-    return [ address, length ];
-  }
-  : function() {
-    const address = getAddress.call(this);
-    return [ address, 1 ];
+    const length = (getLength) 
+    ? getLength.call(this)
+    : (sentinel)
+      ? (address) ? env.findSentinel(address, sentinel.bytes) + 1 : 0
+      : 1;
+    return { address, length };
   };
   const instanceDescriptors = {
     '*': { get: getTarget, set: setTarget },
@@ -148,13 +166,14 @@ export function definePointer(structure, env) {
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    [TARGET_GETTER]: { value: getTarget },
-    [ADDRESS_GETTER]: { value: addressGetter },
-    [ADDRESS_SETTER]: { value: addressSetter },
+    [TARGET_GETTER]: { value: getTargetObject },
+    [LOCATION_GETTER]: { value: addressGetter },
+    [LOCATION_SETTER]: { value: addressSetter },
     [POINTER_VISITOR]: { value: visitPointer },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: { value: throwNullPointer },
     [NORMALIZER]: { value: normalizePointer },
+    [FIXED_LOCATION]: { value: undefined, writable: true },
   };
   const staticDescriptors = {
     child: { get: () => targetStructure.constructor },

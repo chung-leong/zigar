@@ -9,9 +9,10 @@ const GETTER = Symbol('getter');
 const SETTER = Symbol('setter');
 const ELEMENT_GETTER = Symbol('elementGetter');
 const ELEMENT_SETTER = Symbol('elementSetter');
-const ADDRESS_GETTER = Symbol('addressGetter');
-const ADDRESS_SETTER = Symbol('addressSetter');
+const LOCATION_GETTER = Symbol('addressGetter');
+const LOCATION_SETTER = Symbol('addressSetter');
 const TARGET_GETTER = Symbol('targetGetter');
+const FIXED_LOCATION = Symbol('fixedLocation');
 const PROP_SETTERS = Symbol('propSetters');
 const ALL_KEYS = Symbol('allKeys');
 const LENGTH = Symbol('length');
@@ -507,7 +508,34 @@ function definePointer(structure, env) {
     byteSize: addressSize,
     structure: { name: 'usize', byteSize: addressSize },
   }, env) : {};
-  const { get: getTarget, set: setTarget } = getDescriptor(member, env);
+  const updateTarget = function() {
+    const prevLocation = this[FIXED_LOCATION];
+    if (prevLocation) {
+      const location = this[LOCATION_GETTER]();
+      if (location.address !== prevLocation.address || location.length !== prevLocation.length) {
+        const { constructor: Target } = targetStructure;
+        const dv = env.findMemory(location.address, location.length * Target[SIZE]);
+        const target = Target.call(ENVIRONMENT, dv, { writable: !isConst });
+        this[SLOTS][0] = target;
+        this[FIXED_LOCATION] = location;
+      }
+    }    
+  };
+  const getTargetObject = function() {
+    updateTarget.call(this);
+    return this[SLOTS][0] ?? throwNullPointer();
+  };
+  const getTarget = isValueExpected(targetStructure)
+  ? function() {
+      const target = getTargetObject.call(this);
+      return target[GETTER]();
+    }
+  : getTargetObject;
+  const setTarget = function(value) {
+    updateTarget.call(this);
+    const object = this[SLOTS][0] ?? throwNullPointer();
+    return object[SETTER](value);
+  };
   const alternateCaster = function(arg, options) {
     const Target = targetStructure.constructor;
     if ((this === ENVIRONMENT || this === PARENT) || arg instanceof constructor) {
@@ -540,6 +568,7 @@ function definePointer(structure, env) {
       }
       arg = arg[SLOTS][0];
     }
+    const fixed = env.inFixedMemory(this);
     if (arg instanceof Target) {
       if (isConst && !arg[CONST]) {
         // create read-only version
@@ -553,7 +582,7 @@ function definePointer(structure, env) {
       arg = Target(dv, { writable: !isConst });
     } else if (isTargetSlice) {
       // autovivificate target object
-      const autoObj = new Target(arg, { writable: !isConst });
+      const autoObj = new Target(arg, { writable: !isConst, fixed });
       if (runtimeSafety) {
         // creation of a new slice using a typed array is probably
         // not what the user wants; it's more likely that the intention
@@ -563,17 +592,18 @@ function definePointer(structure, env) {
         }
       }
       arg = autoObj;
-    } else {
+    } else if (arg !== undefined) {
       throwInvalidPointerTarget(structure, arg);
     }
-    if (env.inFixedMemory(this)) {
+    if (fixed) {
       // the pointer sits in fixed memory--apply the change immediately
       if (env.inFixedMemory(arg)) {
-        const address = env.getViewAddress(arg[MEMORY]);
-        setAddress.call(this, address);
-        if (setLength) {
-          setLength.call(this, arg.length);
-        }
+        const loc = {
+          address: env.getViewAddress(arg[MEMORY]),
+          length: (hasLength) ? arg.length : 1
+        };
+        addressSetter.call(this, loc);
+        this[FIXED_LOCATION] = loc;
       } else {
         throwFixedMemoryTargetRequired();
       }
@@ -581,27 +611,18 @@ function definePointer(structure, env) {
     this[SLOTS][0] = arg;
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster, finalizer }, env);
-  const addressSetter = (hasLength) 
-  ? function(address, length) {
-      setAddress.call(this, address);
-      setLength.call(this, length);
-    }
-  : setAddress;
-  const addressGetter = (hasLength)
-  ? function() {
+  const addressSetter = function({ address, length }) {
+    setAddress.call(this, address);
+    setLength?.call(this, length);
+  };
+  const addressGetter = function() {
     const address = getAddress.call(this);
-    const length = getLength.call(this);
-    return [ address, length ];
-  } 
-  : (sentinel)
-  ? function() {
-    const address = getAddress.call(this);
-    const length = (address) ? env.findSentinel(address, sentinel.bytes) + 1 : 0;
-    return [ address, length ];
-  }
-  : function() {
-    const address = getAddress.call(this);
-    return [ address, 1 ];
+    const length = (getLength) 
+    ? getLength.call(this)
+    : (sentinel)
+      ? (address) ? env.findSentinel(address, sentinel.bytes) + 1 : 0
+      : 1;
+    return { address, length };
   };
   const instanceDescriptors = {
     '*': { get: getTarget, set: setTarget },
@@ -609,13 +630,14 @@ function definePointer(structure, env) {
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    [TARGET_GETTER]: { value: getTarget },
-    [ADDRESS_GETTER]: { value: addressGetter },
-    [ADDRESS_SETTER]: { value: addressSetter },
+    [TARGET_GETTER]: { value: getTargetObject },
+    [LOCATION_GETTER]: { value: addressGetter },
+    [LOCATION_SETTER]: { value: addressSetter },
     [POINTER_VISITOR]: { value: visitPointer },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: { value: throwNullPointer },
     [NORMALIZER]: { value: normalizePointer },
+    [FIXED_LOCATION]: { value: undefined, writable: true },
   };
   const staticDescriptors = {
     child: { get: () => targetStructure.constructor },
@@ -4062,7 +4084,6 @@ class Environment {
   littleEndian = true;
   runtimeSafety = true;
   comptime = false;
-  blockInaccessible = true;
   /* RUNTIME-ONLY */
   variables = [];
   /* RUNTIME-ONLY-END */
@@ -4329,8 +4350,20 @@ class Environment {
   }
 
   linkVariables(writeBack) {
+    const pointers = [];
     for (const { object, reloc } of this.variables) {
       this.linkObject(object, reloc, writeBack);
+      const getter = object[TARGET_GETTER];
+      if (getter && getter !== throwInaccessiblePointer) {
+        pointers.push(object);
+      }
+    }
+    // save locations of pointer targets
+    for (const pointer of pointers) {
+      const target = pointer[TARGET_GETTER]();
+      const address = this.getViewAddress(target[MEMORY]);
+      const { length = 1 } = target;
+      pointer[FIXED_LOCATION] = { address, length };
     }
   }
 
@@ -4497,13 +4530,14 @@ class Environment {
     // process the pointers
     for (const [ pointer, target ] of pointerMap) {
       const cluster = clusterMap.get(target);
+      const { length = 1 } = target;
       let address = this.getTargetAddress(target, cluster);
       if (address === false) {
         // need to shadow the object
         address = this.getShadowAddress(target, cluster);
       }
       // update the pointer
-      pointer[ADDRESS_SETTER](address, target.length);
+      pointer[LOCATION_SETTER]({ address, length });
     }
   }
 
@@ -4691,15 +4725,14 @@ class Environment {
       }
       const writable = !pointer.constructor.const;
       const currentTarget = pointer[SLOTS][0];
-      let newTarget;
+      let newTarget, location;
       if (isActive(this)) {
         const Target = pointer.constructor.child;
         if (!currentTarget || isMutable(this)) {
-          // obtain address (and possibly length) from memory
-          const [ address, length ] = pointer[ADDRESS_GETTER]();
+          // obtain address and length from memory
+          location = pointer[LOCATION_GETTER]();
           // get view of memory that pointer points to
-          const byteLength = length * Target[SIZE];
-          const dv = env.findMemory(address, byteLength);
+          const dv = env.findMemory(location.address, location.length * Target[SIZE]);
           // create the target
           newTarget = Target.call(ENVIRONMENT, dv, { writable });
         } else {
@@ -4711,6 +4744,9 @@ class Environment {
       if (newTarget !== currentTarget) {
         newTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
         pointer[SLOTS][0] = newTarget;
+        if (env.inFixedMemory(pointer)) {
+          pointer[FIXED_LOCATION] = location;
+        }
       }
     };
     args[POINTER_VISITOR](callback, { vivificate: true });

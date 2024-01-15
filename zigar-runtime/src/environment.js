@@ -1,14 +1,13 @@
 import { createGlobalErrorSet } from './error-set.js';
-import { throwAlignmentConflict } from './error.js';
+import { throwAlignmentConflict, throwInaccessiblePointer } from './error.js';
 import { MemberType, useBool, useObject } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { addMethods } from './method.js';
 import { addStaticMembers } from './static.js';
 import { StructureType, defineProperties, findAllObjects, getStructureFactory, getStructureName, useArgStruct } from './structure.js';
 import {
-  ADDRESS_GETTER, ADDRESS_SETTER, ALIGN, ATTRIBUTES, CONST, COPIER, ENVIRONMENT, MEMORY, POINTER,
-  POINTER_VISITOR,
-  SIZE, SLOTS
+  ALIGN, ATTRIBUTES, CONST, COPIER, ENVIRONMENT, FIXED_LOCATION, LOCATION_GETTER, LOCATION_SETTER,
+  MEMORY, POINTER, POINTER_VISITOR, SIZE, SLOTS, TARGET_GETTER
 } from './symbol.js';
 import { decodeText } from './text.js';
 
@@ -490,8 +489,20 @@ export class Environment {
   }
 
   linkVariables(writeBack) {
+    const pointers = [];
     for (const { object, reloc } of this.variables) {
       this.linkObject(object, reloc, writeBack);
+      const getter = object[TARGET_GETTER];
+      if (getter && getter !== throwInaccessiblePointer) {
+        pointers.push(object);
+      }
+    }
+    // save locations of pointer targets
+    for (const pointer of pointers) {
+      const target = pointer[TARGET_GETTER]();
+      const address = this.getViewAddress(target[MEMORY]);
+      const { length = 1 } = target;
+      pointer[FIXED_LOCATION] = { address, length };
     }
   }
 
@@ -658,13 +669,14 @@ export class Environment {
     // process the pointers
     for (const [ pointer, target ] of pointerMap) {
       const cluster = clusterMap.get(target);
+      const { length = 1 } = target;
       let address = this.getTargetAddress(target, cluster);
       if (address === false) {
         // need to shadow the object
         address = this.getShadowAddress(target, cluster);
       }
       // update the pointer
-      pointer[ADDRESS_SETTER](address, target.length);
+      pointer[LOCATION_SETTER]({ address, length });
     }
   }
 
@@ -852,15 +864,14 @@ export class Environment {
       }
       const writable = !pointer.constructor.const;
       const currentTarget = pointer[SLOTS][0];
-      let newTarget;
+      let newTarget, location;
       if (isActive(this)) {
         const Target = pointer.constructor.child;
         if (!currentTarget || isMutable(this)) {
-          // obtain address (and possibly length) from memory
-          const [ address, length ] = pointer[ADDRESS_GETTER]();
+          // obtain address and length from memory
+          location = pointer[LOCATION_GETTER]();
           // get view of memory that pointer points to
-          const byteLength = length * Target[SIZE];
-          const dv = env.findMemory(address, byteLength);
+          const dv = env.findMemory(location.address, location.length * Target[SIZE]);
           // create the target
           newTarget = Target.call(ENVIRONMENT, dv, { writable });
         } else {
@@ -872,6 +883,9 @@ export class Environment {
       if (newTarget !== currentTarget) {
         newTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
         pointer[SLOTS][0] = newTarget;
+        if (env.inFixedMemory(pointer)) {
+          pointer[FIXED_LOCATION] = location;
+        }
       }
     }
     args[POINTER_VISITOR](callback, { vivificate: true });

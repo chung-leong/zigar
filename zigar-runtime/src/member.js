@@ -328,7 +328,7 @@ export function getErrorDescriptor(member, env) {
   };
 }
 
-function isValueExpected(structure) {
+export function isValueExpected(structure) {
   switch (structure.type) {
     case StructureType.Primitive:
     case StructureType.ErrorUnion:

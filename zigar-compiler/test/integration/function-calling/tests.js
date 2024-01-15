@@ -376,5 +376,20 @@ export function addTests(importModule, options) {
       b.add(4);
       expect(b.number).to.equal(460);     
     });
+    it('should change pointer target', async function() {
+      this.timeout(120000);
+      const { default: module, change, print } = await importTest('change-pointer-target');
+      expect(module.number_ptr['*']).to.equal(123);
+      const [ line1 ] = await capture(() => print());
+      expect(line1).to.equal('odd = 123, even = 456');
+      module.number_ptr['*'] = 777;
+      const [ line2 ] = await capture(() => print());
+      expect(line2).to.equal('odd = 777, even = 456');
+      change(true);
+      expect(module.number_ptr['*']).to.equal(456);
+      module.number_ptr['*'] = 888;
+      const [ line3 ] = await capture(() => print());
+      expect(line3).to.equal('odd = 777, even = 888');
+    });
   })
 }
