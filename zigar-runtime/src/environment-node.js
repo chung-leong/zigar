@@ -17,10 +17,11 @@ export class NodeEnvironment extends Environment {
     getMemoryOffset: null,
     recreateAddress: null,
   };
-  // use a weak map to store the addresses of shared buffer, so that Zig code can free the 
+  // use a weak map to store the addresses of shared buffer so that Zig code can free the 
   // underlying memory without causing a crash; basically, we don't want to ask V8 to return
   // the buffer's backing store if there's a chance that the memory is no longer there
   addressMap = new WeakMap();
+  defaultAlignment = [ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? 16 : 8;
 
   getBufferAddress(buffer) {
     let address = this.addressMap.get(buffer);

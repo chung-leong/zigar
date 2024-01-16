@@ -31,6 +31,7 @@ export class Environment {
   variables = [];
   /* RUNTIME-ONLY-END */
   imports;
+  defaultAlignment;
 
   /*
   Functions to be defined in subclass:
@@ -105,7 +106,8 @@ export class Environment {
 
   allocateRelocMemory(len, align) {
     // allocate extra memory for alignment purpose when align is larger than the default
-    const extra = (align > 16) ? align : 0;
+    // if defaultAlignment === undefind, then no alignment adjustment is done
+    const extra = (align > this.defaultAlignment) ? align : 0;
     const buffer = new ArrayBuffer(len + extra);
     let offset = 0;
     if (extra) {
