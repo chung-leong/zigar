@@ -7,7 +7,7 @@ import { decodeText } from './text.js';
 export class WebAssemblyEnvironment extends Environment {
   imports = {
     getFactoryThunk: { argType: '', returnType: 'i' },
-    allocateExternMemory: { argType: 'ii', returnType: 'v' },
+    allocateExternMemory: { argType: 'ii', returnType: 'i' },
     freeExternMemory: { argType: 'iii' },
     allocateShadowMemory: { argType: 'cii', returnType: 'v' },
     freeShadowMemory: { argType: 'ciii' },

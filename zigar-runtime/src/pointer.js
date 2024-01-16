@@ -5,7 +5,7 @@ import {
   warnImplicitArrayCreation
 } from './error.js';
 import { MemberType, getDescriptor, isValueExpected } from './member.js';
-import { getDestructor, getMemoryCopier } from './memory.js';
+import { getDestructor, getMemoryCopier, restoreMemory } from './memory.js';
 import { convertToJSON, getValueOf } from './special.js';
 import { StructureType, attachDescriptors, createConstructor, defineProperties } from './structure.js';
 import {
@@ -106,11 +106,14 @@ export function definePointer(structure, env) {
     }
     const fixed = env.inFixedMemory(this);
     if (arg instanceof Target) {
+      /* wasm-only */
+      restoreMemory.call(arg);
+      /* wasm-only-end */
       if (isConst && !arg[CONST]) {
         // create read-only version
         arg = Target(arg, { writable: false });
       } else if (!isConst && arg[CONST]) {
-        throwReadOnlyTarget(structure);
+        throwReadOnlyTarget(structure);       
       }
     } else if (isCompatible(arg, Target)) {
       // autocast to target type
