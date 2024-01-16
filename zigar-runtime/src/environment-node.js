@@ -1,10 +1,11 @@
-import { Environment, add, isMisaligned } from './environment.js';
+import { Environment, add, getAlignedAddress, isMisaligned } from './environment.js';
 import { throwZigError } from './error.js';
 import { ALIGN, MEMORY, POINTER_VISITOR } from './symbol.js';
 
 export class NodeEnvironment extends Environment {
   // C code will patch in these functions:
   imports = {
+    loadModule: null,
     extractBufferAddress: null,
     allocateExternMemory: null,
     freeExternMemory: null,
@@ -21,7 +22,21 @@ export class NodeEnvironment extends Environment {
   // underlying memory without causing a crash; basically, we don't want to ask V8 to return
   // the buffer's backing store if there's a chance that the memory is no longer there
   addressMap = new WeakMap();
+  /* c8 ignore next */
   defaultAlignment = [ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? 16 : 8;
+
+  allocateRelocMemory(len, align) {
+    // allocate extra memory for alignment purpose when align is larger than the default
+    const extra = (align > this.defaultAlignment) ? align : 0;
+    const buffer = new ArrayBuffer(len + extra);
+    let offset = 0;
+    if (extra) {
+      const address = this.getBufferAddress(buffer);
+      const aligned = getAlignedAddress(address, align);
+      offset = aligned - address;
+    }
+    return this.obtainView(buffer, Number(offset), len);
+  }
 
   getBufferAddress(buffer) {
     let address = this.addressMap.get(buffer);

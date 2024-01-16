@@ -1,7 +1,7 @@
 import { readFile } from 'fs/promises';
 import { basename } from 'path';
-import { loadModule } from '../../zigar-runtime/src/index.js';
-import { generateCodeForWASM } from './code-generator.js';
+import { createEnvironment } from '../../zigar-runtime/src/index.js';
+import { generateCode } from './code-generator.js';
 import { compile } from './compiler.js';
 import { stripUnused } from './wasm-stripper.js';
 
@@ -28,28 +28,28 @@ export async function transpile(path, options = {}) {
     platform: 'freestanding'
   });
   const content = await readFile(wasmPath);
-  const env = loadModule(content);
+  const env = createEnvironment();
+  env.loadModule(content);
   await env.initPromise;
   env.acquireStructures({ omitFunctions });
   const definition = env.exportStructures();
-  // all methods are static, so there's no need to check the instance methods
-  const hasMethods = !!definition.structures.find(s => s.static.methods.length > 0);
   const runtimeURL = moduleResolver('zigar-runtime');
-  let loadWASM;
-  if (hasMethods) {
+  let binarySource;
+  if (env.hasMethods()) {
     let dv = new DataView(content.buffer);
     if (stripWASM) {
       dv = stripUnused(dv, { keepNames });
     }
     if (embedWASM) {
-      loadWASM = embed(path, dv);
+      binarySource = embed(path, dv);
     } else {
-      loadWASM = await wasmLoader(path, dv);
+      binarySource = await wasmLoader(path, dv);
     }
   }
-  return generateCodeForWASM(definition, {
+  return generateCode(definition, {
+    declareFeatures: true,
     runtimeURL,
-    loadWASM,
+    binarySource,
     topLevelAwait,
     omitExports,
   });

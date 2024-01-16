@@ -3613,7 +3613,7 @@ function defineUnalignedUintAccessor(access, member) {
 }
 
 function defineAlignedFloatAccessor(access, member) {
-  const { bitSize } = member;
+  const { bitSize, byteSize } = member;
   if (bitSize === 16) {
     const buf = new DataView(new ArrayBuffer(4));
     const set = DataView.prototype.setUint16;
@@ -3660,18 +3660,19 @@ function defineAlignedFloatAccessor(access, member) {
     }
   } else if (bitSize === 80) {
     const buf = new DataView(new ArrayBuffer(8));
-    const setWord = DataView.prototype.setBigUint64;
-    const getWord = DataView.prototype.getBigUint64;
     const get = function(offset, littleEndian) {
-      const w1 = getWord.call(this, offset, littleEndian);
-      const w2 = getWord.call(this, offset + 8, littleEndian);
-      return (littleEndian) ? w1 | w2 << 64n : w1 << 64n | w2;
+      const w1 = BigInt(this.getUint32(offset + (littleEndian ? 0 : byteSize - 4), littleEndian));
+      const w2 = BigInt(this.getUint32(offset + (littleEndian ? 4 : byteSize - 8), littleEndian));
+      const w3 = BigInt(this.getUint32(offset + (littleEndian ? 8 : byteSize - 12), littleEndian));
+      return w1 | w2 << 32n | w3 << 64n;
     };
     const set = function(offset, value, littleEndian) {
-      const w1 = value & 0xFFFFFFFFFFFFFFFFn;
-      const w2 = value >> 64n;
-      setWord.call(this, offset + (littleEndian ? 0 : 8), w1, littleEndian);
-      setWord.call(this, offset + (littleEndian ? 8 : 0), w2, littleEndian);
+      const w1 = value & 0xFFFFFFFFn;
+      const w2 = (value >> 32n) & 0xFFFFFFFFn;
+      const w3 = (value >> 64n) & 0xFFFFFFFFn;
+      this.setUint32(offset + (littleEndian ? 0 : byteSize - 4), Number(w1), littleEndian);
+      this.setUint32(offset + (littleEndian ? 4 : byteSize - 8), Number(w2), littleEndian);
+      this.setUint32(offset + (littleEndian ? 8 : byteSize - 12), Number(w3), littleEndian);
     };
     if (access === 'get') {
       return function(offset, littleEndian) {
@@ -3717,18 +3718,22 @@ function defineAlignedFloatAccessor(access, member) {
     }
   } else if (bitSize === 128) {
     const buf = new DataView(new ArrayBuffer(8));
-    const getWord = DataView.prototype.getBigUint64;
-    const setWord = DataView.prototype.setBigUint64;
     const get = function(offset, littleEndian) {
-      const w1 = getWord.call(this, offset, littleEndian);
-      const w2 = getWord.call(this, offset + 8, littleEndian);
-      return (littleEndian) ? w1 | w2 << 64n : w1 << 64n | w2;
+      const w1 = BigInt(this.getUint32(offset + (littleEndian ? 0 : byteSize - 4), littleEndian));
+      const w2 = BigInt(this.getUint32(offset + (littleEndian ? 4 : byteSize - 8), littleEndian));
+      const w3 = BigInt(this.getUint32(offset + (littleEndian ? 8 : byteSize - 12), littleEndian));
+      const w4 = BigInt(this.getUint32(offset + (littleEndian ? 12 : byteSize - 16), littleEndian));
+      return w1 | w2 << 32n | w3 << 64n | w4 << 96n;
     };
     const set = function(offset, value, littleEndian) {
-      const w1 = value & 0xFFFFFFFFFFFFFFFFn;
-      const w2 = value >> 64n;
-      setWord.call(this, offset + (littleEndian ? 0 : 8), w1, littleEndian);
-      setWord.call(this, offset + (littleEndian ? 8 : 0), w2, littleEndian);
+      const w1 = value & 0xFFFFFFFFn;
+      const w2 = (value >> 32n) & 0xFFFFFFFFn;
+      const w3 = (value >> 64n) & 0xFFFFFFFFn;
+      const w4 = (value >> 96n) & 0xFFFFFFFFn;
+      this.setUint32(offset + (littleEndian ? 0 : byteSize - 4), Number(w1), littleEndian);
+      this.setUint32(offset + (littleEndian ? 4 : byteSize - 8), Number(w2), littleEndian);
+      this.setUint32(offset + (littleEndian ? 8 : byteSize - 12), Number(w3), littleEndian);
+      this.setUint32(offset + (littleEndian ? 12 : byteSize - 16), Number(w4), littleEndian);
     };
     if (access === 'get') {
       return function(offset, littleEndian) {
@@ -4164,16 +4169,7 @@ class Environment {
   }
 
   allocateRelocMemory(len, align) {
-    // allocate extra memory for alignment purpose when align is larger than the default
-    const extra = (align > 16) ? align : 0;
-    const buffer = new ArrayBuffer(len + extra);
-    let offset = 0;
-    if (extra) {
-      const address = this.getBufferAddress(buffer);
-      const aligned = getAlignedAddress(address, align);
-      offset = aligned - address;
-    }
-    return this.obtainView(buffer, Number(offset), len);
+    return this.obtainView(new ArrayBuffer(len), 0, len);
   }
 
   registerMemory(dv, targetDV = null) {
@@ -5162,13 +5158,9 @@ class WebAssemblyEnvironment extends Environment {
   /* RUNTIME-ONLY */
 }
 
-function loadModule(source) {
-  const env = new WebAssemblyEnvironment();
-  if (source) {
-    env.loadModule(source);
-  }
-  return env;
+function createEnvironment(source) {
+  return new WebAssemblyEnvironment();
 }
 /* RUNTIME-ONLY-END */
 
-export { loadModule, useArgStruct, useArray, useBareUnion, useBool, useBoolEx, useComptime, useEnumeration, useEnumerationItem, useError, useErrorSet, useErrorUnion, useExternUnion, useFloat, useFloatEx, useInt, useIntEx, useLiteral, useNull, useObject, useOpaque, useOptional, usePointer, usePrimitive, useSlice, useStatic, useStruct, useTaggedUnion, useType, useUint, useUintEx, useUndefined, useVector, useVoid };
+export { createEnvironment, useArgStruct, useArray, useBareUnion, useBool, useBoolEx, useComptime, useEnumeration, useEnumerationItem, useError, useErrorSet, useErrorUnion, useExternUnion, useFloat, useFloatEx, useInt, useIntEx, useLiteral, useNull, useObject, useOpaque, useOptional, usePointer, usePrimitive, useSlice, useStatic, useStruct, useTaggedUnion, useType, useUint, useUintEx, useUndefined, useVector, useVoid };

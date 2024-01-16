@@ -14,7 +14,7 @@ describe('WebAssemblyEnvironment', function() {
     useAllMemberTypes();
     useAllStructureTypes();
   })
-  describe('allocateRelocMemory', function() {
+  describe('allocateHostMemory', function() {
     it('should allocate the relocatable and shadow memory, returning the latter', function() {
       const env = new WebAssemblyEnvironment();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
@@ -22,12 +22,12 @@ describe('WebAssemblyEnvironment', function() {
         return new DataView(memory.buffer, 128, len);
       };
       env.startContext();
-      const dv = env.allocateRelocMemory(64, 32);
+      const dv = env.allocateHostMemory(64, 32);
       expect(dv.byteLength).to.equal(64);
       expect(dv.buffer).to.equal(memory.buffer);
     })
   })
-  describe('freeRelocMemory', function() {
+  describe('freeHostMemory', function() {
     it('should free shadow memory', function() {
       const env = new WebAssemblyEnvironment();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
@@ -41,8 +41,8 @@ describe('WebAssemblyEnvironment', function() {
         align = args[2];
       };
       env.startContext();
-      const dv = env.allocateRelocMemory(64, 32);
-      env.freeRelocMemory(128, 64, 32);
+      const dv = env.allocateHostMemory(64, 32);
+      env.freeHostMemory(128, 64, 32);
       expect(address).to.equal(128);
       expect(len).to.equal(64);
       expect(align).to.equal(32);
@@ -398,7 +398,7 @@ describe('WebAssemblyEnvironment', function() {
     it('should export functions of the class needed by Zig code', function() {
       const env = new WebAssemblyEnvironment();
       const exports = env.exportFunctions();
-      expect(exports._allocateRelocMemory).to.be.a('function');
+      expect(exports._allocateHostMemory).to.be.a('function');
       expect(exports._beginStructure).to.be.a('function');
     })
   })

@@ -1,20 +1,21 @@
 import { MemberType, isReadOnly } from '../../zigar-runtime/src/member.js';
 import { StructureType, findAllObjects, getFeaturesUsed } from '../../zigar-runtime/src/structure.js';
 
-export function generateCodeForWASM(definition, params) {
+export function generateCode(definition, params) {
   const { structures, keys } = definition;
   const {
     runtimeURL,
-    loadWASM,
+    binarySource = null,
     topLevelAwait = true,
     omitExports = false,
+    declareFeatures = false,
   } = params;
-  const features = getFeaturesUsed(structures);
+  const features = (declareFeatures) ? getFeaturesUsed(structures) : [];
   const exports = getExports(structures);
   const lines = [];
   const add = manageIndentation(lines);
   add(`import {`);
-  for (const name of [ 'loadModule', ...features ]) {
+  for (const name of [ 'createEnvironment', ...features ]) {
     add(`${name},`);
   }
   add(`} from ${JSON.stringify(runtimeURL)};`);
@@ -24,81 +25,43 @@ export function generateCodeForWASM(definition, params) {
   for (const feature of features) {
     add(`${feature}();`);
   }
-  add(`\n// initiate loading and compilation of WASM bytecodes`);
-  add(`const source = ${loadWASM ?? null};`);
-  // write out the structures as object literals
-  lines.push(...generateStructureDefinitions(structures, keys));
-  lines.push(...generateLoadStatements('source', JSON.stringify(!topLevelAwait)));
-  lines.push(...generateExportStatements(exports, omitExports));
-  if (topLevelAwait && loadWASM) {
-    add(`await __zigar.init();`);
-  }
-  const code = lines.join('\n');
-  return { code, exports, structures };
-}
-
-export function generateCodeForNode(definition, params) {
-  const { structures, keys } = definition;
-  const {
-    runtimeURL,
-    libPath,
-    topLevelAwait = true,
-    omitExports = false,
-  } = params;
-  const exports = getExports(structures);
-  const lines = [];
-  const add = manageIndentation(lines);
-  add(`import { loadModule } from ${JSON.stringify(runtimeURL)};`);
-  // all features are enabled by default for Node
-  lines.push(...generateStructureDefinitions(structures, keys));
-  lines.push(...generateLoadStatements(JSON.stringify(libPath), 'false'));
-  lines.push(...generateExportStatements(exports, omitExports));
-  if (topLevelAwait) {
-    add(`await __zigar.init();`);
-  }
-  const code = lines.join('\n');
-  return { code, exports, structures };
-}
-
-function generateLoadStatements(source, writeBack) {
-  const lines = [];
-  const add = manageIndentation(lines);
-  add(`// create runtime environment`);
-  add(`const env = loadModule(${source});`);
+  // write out the structures as object literals 
+  addStructureDefinitions(lines, structures, keys);
+  add(`\n// create runtime environment`);
+  add(`const env = createEnvironment();`);
   add(`const __zigar = env.getControlObject();`);
+  add(`\n// recreate structures`);
   add(`env.recreateStructures(structures);`);
-  add(`env.linkVariables(${writeBack});`);
-  add(``);
-  return lines;
-}
-
-function generateExportStatements(exports, omitExports) {
-  const lines = [];
-  const add = manageIndentation(lines);
+  if (binarySource) {
+    add(`\n// initiate loading and compilation of WASM bytecodes`);
+    add(`const source = ${binarySource};`);
+    add(`env.loadModule(source)`);
+    // if top level await is used, we don't need to write changes into fixed memory buffers
+    add(`env.linkVariables(${!topLevelAwait});`);
+  }
+  add(`\n// export root namespace and its methods and constants`);
   add(`const { constructor } = root;`);
   if (!omitExports) {
     add(`export { constructor as default, __zigar }`);
     // the first two exports are default and __zigar
     const exportables = exports.slice(2);
     if (exportables.length > 0) {
-      const oneLine = exportables.join(', ');
-      if (oneLine.length < 70) {
-        add(`export const { ${oneLine} } = constructor;`);
-      } else {
-        add(`export const {`)
-        for (const name of exportables) {
-          add(`${name},`);
-        }
-        add(`} = constructor;`);
+      add(`export const {`)
+      for (const name of exportables) {
+        add(`${name},`);
       }
+      add(`} = constructor;`);
     }
   }
-  return lines;
+  if (topLevelAwait && binarySource) {
+    add(`await __zigar.init();`);
+  }
+  const code = lines.join('\n');
+  return { code, exports, structures };
 }
 
-function generateStructureDefinitions(structures, keys) {
+function addStructureDefinitions(lines, structures, keys) {
   const { MEMORY, SLOTS, CONST } = keys;
-  const lines = [];
   const add = manageIndentation(lines);
   const defaultStructure = {
     constructor: null,
@@ -296,7 +259,6 @@ function generateStructureDefinitions(structures, keys) {
   add(`];`)
   const root = structures[structures.length - 1];
   add(`const root = ${structureNames.get(root)};`);
-  add(``);
   return lines;
 }
 

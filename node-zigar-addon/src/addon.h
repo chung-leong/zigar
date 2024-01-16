@@ -1,6 +1,6 @@
 #ifndef _ADDON_H_
 #define _ADDON_H_
-#include <js_native_api.h>
+#include <node_api.h>
 #ifdef __GNUC__
     #define __USE_GNU
     #ifdef __i386__
@@ -169,5 +169,9 @@ typedef struct call_context {
     napi_value js_env;
     module_data *mod_data;
 } call_context;
+
+typedef struct {
+    napi_ref env_constructor;
+} addon_data;
 
 #endif

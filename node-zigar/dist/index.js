@@ -1,8 +1,8 @@
 import { createRequire } from 'module';
-import { exportStructures } from 'node-zigar-addon';
+import { createEnvironment } from 'node-zigar-addon';
 import { cwd } from 'process';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { compile, generateCodeForNode } from 'zigar-compiler';
+import { compile, generateCode } from 'zigar-compiler';
 
 const baseURL = pathToFileURL(`${cwd()}/`).href;
 const extensionsRegex = /\.zig$/;
@@ -38,11 +38,15 @@ async function loadZig(url) {
     ...compileOptions
   } = options;
   const libPath = await compile(zigPath, compileOptions);
-  const definition = await exportStructures(libPath, { omitFunctions });
+  const env = createEnvironment();
+  env.loadModule(libPath);
+  env.acquireStructures({ omitFunctions });
+  const definition = env.exportStructures();
   const require = createRequire(import.meta.url);
-  // get the absolute path to node-zigar-addon so the "transpiled" code can find it
+  // get the absolute path to node-zigar-addon so the transpiled code can find it
   const runtimeURL = pathToFileURL(require.resolve('node-zigar-addon'));
-  const { code } = generateCodeForNode(definition, { runtimeURL, libPath });
+  const binarySource = env.hasMethods() ? JSON.stringify(libPath) : undefined;
+  const { code } = generateCode(definition, { runtimeURL, binarySource });
   return {
     format: 'module',
     shortCircuit: true,

@@ -2,18 +2,16 @@ import { expect } from 'chai';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { compile } from '../../../zigar-compiler/src/compiler.js';
-import { exportStructures, getGCStatistics, importModule, loadModule } from '../../dist/index.js';
+import { createEnvironment, getGCStatistics, importModule } from '../../dist/index.js';
 
 const require = createRequire(import.meta.url);
 
 describe('Garbage collection', function() {
   // NOTE: if one test fails, then all subsequent tests will fail as well
-  describe('loadModule', function() {
+  describe('createEnvironment', function() {
     it('should release module when environment is released', async function() {
       this.timeout(60000);
-      const zigPath = fileURLToPath(new URL('../zig-samples/integers.zig', import.meta.url));
-      const pathLib = await compile(zigPath);
-      let env = await loadModule(pathLib);
+      let env = createEnvironment();
       const stats1 = getGCStatistics();
       expect(stats1.modules).to.equal(1);
       expect(stats1.functions).to.be.at.least(1);
@@ -27,31 +25,12 @@ describe('Garbage collection', function() {
     })
     it('should release module when abandon is called', async function() {
       this.timeout(60000);
-      const zigPath = fileURLToPath(new URL('../zig-samples/integers.zig', import.meta.url));
-      const pathLib = await compile(zigPath);
-      let env = await loadModule(pathLib);
+      let env = await createEnvironment();
       const stats1 = getGCStatistics();
       expect(stats1.modules).to.equal(1);
       expect(stats1.functions).to.be.at.least(1);
       expect(stats1.buffers).to.equal(0);
       env.abandon();
-      await collectGarbage();
-      const stats2 = getGCStatistics();
-      expect(stats2.modules).to.equal(0);
-      expect(stats2.functions).to.equal(0);
-      expect(stats2.buffers).to.equal(0);
-    })
-  })
-  describe('exportStructures', function() {
-    it('should release module after export is completed', async function() {
-      this.timeout(60000);
-      const zigPath = fileURLToPath(new URL('../zig-samples/integers.zig', import.meta.url));
-      const pathLib = await compile(zigPath);
-      const def = await exportStructures(pathLib);
-      const stats1 = getGCStatistics();
-      expect(stats1.modules).to.equal(1);
-      expect(stats1.functions).to.be.at.least(1);
-      expect(stats1.buffers).to.be.at.least(1);
       await collectGarbage();
       const stats2 = getGCStatistics();
       expect(stats2.modules).to.equal(0);

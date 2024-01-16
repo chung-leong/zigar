@@ -1,4 +1,5 @@
 #include "addon.h"
+#include <stdio.h>
 
 int module_count = 0;
 int buffer_count = 0;
@@ -10,7 +11,7 @@ void reference_module(module_data* md) {
 
 module_data* new_module(napi_env env) {
     module_data* md = (module_data*) calloc(1, sizeof(module_data));
-    md->ref_count = 1;
+    md->ref_count = 0;
     module_count++;
     return md;
 }
@@ -19,13 +20,11 @@ void release_module(napi_env env,
                     module_data* md) {
     md->ref_count--;
     if (md->ref_count == 0) {
-        if (env && md->js_env) {
-            napi_value js_env, released;
-            if (napi_get_reference_value(env, md->js_env, &js_env) == napi_ok
-            && napi_get_boolean(env, true, &released) == napi_ok) {
-                /* indicate to the environment that the shared lib has been released */
-                napi_set_named_property(env, js_env, "released", released);
-            }
+        napi_value js_env, released;
+        if (napi_get_reference_value(env, md->js_env, &js_env) == napi_ok
+         && napi_get_boolean(env, true, &released) == napi_ok) {
+            /* indicate to the environment that the shared lib has been released */
+            napi_set_named_property(env, js_env, "released", released);
         }
         if (md->so_handle) {
             dlclose(md->so_handle);
@@ -57,22 +56,6 @@ bool create_external_buffer(napi_env env,
         /* external array buffer cannot be zero-length--return a regular buffer instead */
         return napi_create_arraybuffer(env, len, NULL, dest) == napi_ok;
     }
-}
-
-bool load_javascript(napi_env env,
-                     napi_value *dest) {
-    /* compile the code */
-    static const char* addon_js_txt = (
-        #include "addon.js.txt"
-    );
-    /* getting the length of the string this way due to VC throwing "compiler is out of heap space" error
-       when addon_js_txt is a char array instead of a pointer */
-    static size_t addon_js_txt_len = sizeof(
-        #include "addon.js.txt"
-    ) - 1;
-    napi_value string;
-    return napi_create_string_utf8(env, addon_js_txt, addon_js_txt_len, &string) == napi_ok
-        && napi_run_script(env, string, dest) == napi_ok;
 }
 
 bool call_js_function(call ctx,
@@ -374,18 +357,17 @@ napi_value extract_buffer_address(napi_env env,
 
 napi_value allocate_external_memory(napi_env env,
                                     napi_callback_info info) {
+    module_data* md;
     size_t argc = 2;
     napi_value args[2];
-    void* data;
     double len;
     uint32_t align;
-    if (napi_get_cb_info(env, info, &argc, args, NULL, &data) != napi_ok
+    if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
      || napi_get_value_double(env, args[0], &len) != napi_ok) {
         return throw_error(env, "Length must be number");
     } else if (napi_get_value_uint32(env, args[1], &align) != napi_ok) {
         return throw_error(env, "Align must be number");
     }
-    module_data* md = (module_data*) data;
     memory mem;
     if (md->mod->imports->allocate_extern_memory(len, align, &mem) != OK) {
         return throw_error(env, "Unable to allocate fixed memory");
@@ -399,15 +381,14 @@ napi_value allocate_external_memory(napi_env env,
 
 napi_value free_external_memory(napi_env env,
                                 napi_callback_info info) {
-    return NULL;
+    module_data* md;
     size_t argc = 3;
     napi_value args[3];
-    void* data;
     uint64_t address;
     bool lossless;
     double len;
     uint32_t align;
-    if (napi_get_cb_info(env, info, &argc, args, NULL, &data) != napi_ok
+    if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
      || napi_get_value_bigint_uint64(env, args[0], &address, &lossless) != napi_ok) {
         return throw_error(env, "Address must be bigint");
     } else if (napi_get_value_double(env, args[1], &len) != napi_ok) {
@@ -415,26 +396,25 @@ napi_value free_external_memory(napi_env env,
     } else if (napi_get_value_uint32(env, args[2], &align) != napi_ok) {
         return throw_error(env, "Align must be number");
     }
-    module_data* md = (module_data*) data;
     memory mem = { (void*) address, len, { align, false, false } };
     md->mod->imports->free_extern_memory(&mem);
+    return NULL;
 }
 
 napi_value obtain_external_buffer(napi_env env,
                                   napi_callback_info info) {
+    module_data* md;
     size_t argc = 2;
     napi_value args[2];
-    void* data;
     uint64_t address;
     bool lossless;
     double len;
-    if (napi_get_cb_info(env, info, &argc, args, NULL, &data) != napi_ok
+    if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
      || napi_get_value_bigint_uint64(env, args[0], &address, &lossless) != napi_ok) {
         return throw_error(env, "Address must be bigint");
     } else if (napi_get_value_double(env, args[1], &len) != napi_ok) {
         return throw_error(env, "Length must be number");
     }
-    module_data* md = (module_data*) data;
     napi_value buffer;
     if (!create_external_buffer(env, (uint8_t*) address, len, md, &buffer)) {
         return throw_last_error(env);
@@ -499,11 +479,10 @@ napi_value find_sentinel(napi_env env,
 
 napi_value get_factory_thunk(napi_env env,
                              napi_callback_info info) {
-    void* data;
-    if (napi_get_cb_info(env, info, NULL, NULL, NULL, &data) != napi_ok) {
+    module_data* md;
+    if (napi_get_cb_info(env, info, NULL, NULL, NULL, (void*) &md) != napi_ok) {
         return throw_last_error(env);
     }
-    module_data* md = (module_data*) data;
     size_t thunk_address;
     if (md->mod->imports->get_factory_thunk(&thunk_address) != OK) {
         return throw_error(env, "Unable to define structures");
@@ -518,19 +497,18 @@ napi_value get_factory_thunk(napi_env env,
 
 napi_value run_thunk(napi_env env,
                      napi_callback_info info) {
+    module_data* md;
     size_t argc = 2;
     napi_value args[2];
     napi_value js_env;
-    void* data;
     double thunk_id;
     void* args_ptr;
-    if (napi_get_cb_info(env, info, &argc, args, &js_env, &data) != napi_ok
+    if (napi_get_cb_info(env, info, &argc, args, &js_env, (void*) &md) != napi_ok
      || napi_get_value_double(env, args[0], &thunk_id) != napi_ok) {
         return throw_error(env, "Thunk id must be a number");
     } else if (napi_get_dataview_info(env, args[1], NULL, &args_ptr, NULL, NULL) != napi_ok) {
         return throw_error(env, "Arguments must be a DataView");
     }
-    module_data* md = (module_data*) data;
     call_context ctx = { env, js_env, md };
     size_t thunk_address = md->base_address + thunk_id;
     napi_value result;
@@ -542,16 +520,15 @@ napi_value run_thunk(napi_env env,
 
 napi_value get_memory_offset(napi_env env,
                              napi_callback_info info) {
+    module_data* md;
     size_t argc = 1;
     napi_value args[1];
-    void* data;
     uint64_t address;
     bool lossless;
-    if (napi_get_cb_info(env, info, &argc, &args[0], NULL, &data) != napi_ok
+    if (napi_get_cb_info(env, info, &argc, &args[0], NULL, (void*) &md) != napi_ok
      || napi_get_value_bigint_uint64(env, args[0], &address, &lossless) != napi_ok) {
         return throw_error(env, "Address must be bigint");
     }
-    module_data* md = (module_data*) data;
     size_t base = md->base_address;
     if (address < base) {
         /* this happens when we encounter a regular ArrayBuffer with byteLength = 0 */ 
@@ -566,15 +543,14 @@ napi_value get_memory_offset(napi_env env,
 
 napi_value recreate_address(napi_env env,
                             napi_callback_info info) {
+    module_data* md;
     size_t argc = 1;
     napi_value args[1];
-    void* data;
     double reloc;
-    if (napi_get_cb_info(env, info, &argc, &args[0], NULL, &data) != napi_ok
+    if (napi_get_cb_info(env, info, &argc, &args[0], NULL, (void*) &md) != napi_ok
      || napi_get_value_double(env, args[0], &reloc) != napi_ok) {
         return throw_error(env, "Offset must be a number");
     }
-    module_data* md = (module_data*) data;
     size_t base = md->base_address;
     napi_value address;
     if (napi_create_bigint_uint64(env, base + reloc, &address) != napi_ok) {
@@ -608,10 +584,11 @@ bool export_function(napi_env env,
     return false;
 }
 
-bool export_functions(napi_env env,
-                      napi_value js_env,
-                      module_data* md) {
-    return export_function(env, js_env, "extractBufferAddress", extract_buffer_address, md)
+bool export_module_functions(napi_env env,
+                             module_data* md) {
+    napi_value js_env;
+    return napi_get_reference_value(env, md->js_env, &js_env) == napi_ok
+        && export_function(env, js_env, "extractBufferAddress", extract_buffer_address, md)
         && export_function(env, js_env, "allocateExternMemory", allocate_external_memory, md)
         && export_function(env, js_env, "freeExternMemory", free_external_memory, md)
         && export_function(env, js_env, "obtainExternBuffer", obtain_external_buffer, md)
@@ -623,12 +600,13 @@ bool export_functions(napi_env env,
         && export_function(env, js_env, "recreateAddress", recreate_address, md);
 }
 
-bool set_attributes(napi_env env,
-                    napi_value js_env,
-                    module_data* md) {
+bool set_module_attributes(napi_env env,
+                           module_data* md) {
     module_attributes attributes = md->mod->attributes;
     napi_value little_endian, runtime_safety;
-    return napi_get_boolean(env, attributes.little_endian, &little_endian) == napi_ok
+    napi_value js_env;
+    return napi_get_reference_value(env, md->js_env, &js_env) == napi_ok
+        && napi_get_boolean(env, attributes.little_endian, &little_endian) == napi_ok
         && napi_set_named_property(env, js_env, "littleEndian", little_endian) == napi_ok
         && napi_get_boolean(env, attributes.runtime_safety, &runtime_safety) == napi_ok
         && napi_set_named_property(env, js_env, "runtimeSafety", runtime_safety) == napi_ok;
@@ -636,17 +614,14 @@ bool set_attributes(napi_env env,
 
 napi_value load_module(napi_env env,
                        napi_callback_info info) {
-    #define failure(msg) error_msg = msg; throw_error(env, msg); goto exit;
-    const char* error_msg = NULL;
-    module_data* md = new_module(env);
-    void* data;
+    module_data* md;
     size_t argc = 1;
     size_t path_len;
     napi_value args[1];
     /* check arguments */
-    if (napi_get_cb_info(env, info, &argc, args, NULL, &data) != napi_ok
+    if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
      || napi_get_value_string_utf8(env, args[0], NULL, 0, &path_len) != napi_ok) {
-        failure("Invalid arguments");
+        return throw_error(env, "Invalid arguments");
     }
 
     /* load the shared library */
@@ -655,23 +630,23 @@ napi_value load_module(napi_env env,
     void* handle = md->so_handle = dlopen(path, RTLD_NOW);
     free(path);
     if (!handle) {
-        failure("Unable to load shared library");
+        return throw_error(env, "Unable to load shared library");
     }
 
     /* find the zig module */
     void* symbol = dlsym(handle, "zig_module");
     if (!symbol) {
-        failure("Unable to find the symbol \"zig_module\"");
+        return throw_error(env, "Unable to find the symbol \"zig_module\"");
     }
     module* mod = md->mod = (module*) symbol;
     if (mod->version != 2) {
-        failure("Cached module is compiled for a different version of Zigar");
+        return throw_error(env, "Cached module is compiled for a different version of Zigar");
     }
 
     /* set base address */
     Dl_info dl_info;
     if (!dladdr(symbol, &dl_info)) {
-        failure("Unable to obtain address of shared library");
+        return throw_error(env, "Unable to obtain address of shared library");
     }
     md->base_address = (size_t) dl_info.dli_fbase;
 
@@ -699,40 +674,65 @@ napi_value load_module(napi_env env,
     exports->create_template = create_template;
     exports->write_to_console = write_to_console;
 
-    /* compile embedded JavaScript */
-    napi_value js_module;
-    if (!load_javascript(env, &js_module)) {
-        failure("Unable to compile embedded JavaScript");
-    }
-
-    /* look for the Environment class */
-    napi_value env_name;
-    napi_value env_constructor;
-    if (napi_create_string_utf8(env, "Environment", NAPI_AUTO_LENGTH, &env_name) != napi_ok
-     || napi_get_property(env, js_module, env_name, &env_constructor) != napi_ok) {
-        failure("Unable to find the class \"Environment\"");
-    }
-
-    /* create the environment */
-    napi_value js_env;   
-    if (napi_new_instance(env, env_constructor, 0, NULL, &js_env) != napi_ok) {
-        failure("Unable to create runtime environment");
-    }
-
-    /* create reference to JavaScript environment */
-    if (napi_create_reference(env, js_env, 0, &md->js_env) != napi_ok) {
-        failure("Unable to save runtime environment");
-    }
-
     /* add functions and attributes to environment */
-    if (!export_functions(env, js_env, md) || !set_attributes(env, js_env, md)) {
-        failure("Unable to modify runtime environment");
+    if (!export_module_functions(env, md) || !set_module_attributes(env, md)) {
+        return throw_error(env, "Unable to modify runtime environment");
     }
-exit:
-    if (error_msg) {
-        js_env = throw_error(env, error_msg);
+    return NULL;
+}
+
+bool compile_javascript(napi_env env,
+                        napi_value *dest) {
+    /* compile the code */
+    static const char* addon_js_txt = (
+        #include "addon.js.txt"
+    );
+    /* getting the length of the string this way due to VC throwing "compiler is out of heap space" error
+       when addon_js_txt is a char array instead of a pointer */
+    static size_t addon_js_txt_len = sizeof(
+        #include "addon.js.txt"
+    ) - 1;
+    napi_value string;
+    return napi_create_string_utf8(env, addon_js_txt, addon_js_txt_len, &string) == napi_ok
+        && napi_run_script(env, string, dest) == napi_ok;
+}
+
+
+napi_value create_environment(napi_env env,
+                              napi_callback_info info) {
+    /* look for cached copy of environment constructor */
+    addon_data* ad;                                
+    napi_value env_constructor;
+    if (napi_get_cb_info(env, info, NULL, NULL, NULL, (void*) &ad) != napi_ok
+     || !ad->env_constructor
+     || napi_get_reference_value(env, ad->env_constructor, &env_constructor) != napi_ok
+     || !env_constructor) {
+        /* compile embedded JavaScript */
+        napi_value js_module;
+        if (!compile_javascript(env, &js_module)) {
+            return throw_error(env, "Unable to compile embedded JavaScript");
+        }
+        /* look for the Environment class */
+        napi_value env_name;
+        if (napi_create_string_utf8(env, "Environment", NAPI_AUTO_LENGTH, &env_name) != napi_ok
+        || napi_get_property(env, js_module, env_name, &env_constructor) != napi_ok) {
+            return throw_error(env, "Unable to find the class \"Environment\"");
+        }
+        /* save in weak reference */
+        if (napi_create_reference(env, env_constructor, 0, &ad->env_constructor) != napi_ok) {
+            ad->env_constructor = NULL;
+        }
     }
-    release_module(env, md);
+    /* create the environment and add loadModule--the function keeps a reference to 
+       the module data, allowing its freeing when js_env gets gc'ed */
+    napi_value js_env;   
+    module_data* md = new_module(env);
+    if (napi_new_instance(env, env_constructor, 0, NULL, &js_env) != napi_ok
+     || napi_create_reference(env, js_env, 0, &md->js_env) != napi_ok
+     || !export_function(env, js_env, "loadModule", load_module, md)) {
+        free(md);
+        return throw_error(env, "Unable to create runtime environment");
+    }
     return js_env;
 }
 
@@ -763,12 +763,18 @@ bool add_function(napi_env env,
         && napi_set_named_property(env, target, name, function) == napi_ok;
 }
 
+void release_addon_data(void* data) {
+    free(data);
+}
+
 napi_value create_addon(napi_env env) {
+    addon_data* ad = (addon_data*) calloc(1, sizeof(addon_data));
     napi_value exports;
-    bool success = napi_create_object(env, &exports) == napi_ok
-                && add_function(env, exports, "loadModule", load_module, NULL)
-                && add_function(env, exports, "getGCStatistics", get_gc_statistics, NULL);
-    if (!success) {
+    if (napi_create_object(env, &exports) != napi_ok
+     || !add_function(env, exports, "createEnvironment", create_environment, ad)
+     || !add_function(env, exports, "getGCStatistics", get_gc_statistics, ad)
+     || napi_add_env_cleanup_hook(env, release_addon_data, ad) != napi_ok) {
+        free(ad);
         return throw_last_error(env);
     }
     return exports;

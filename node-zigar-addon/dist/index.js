@@ -3,26 +3,19 @@ import { fileURLToPath } from 'url';
 
 let gcStatisticsRetriever;
 
-export function loadModule(libPath) {
+export function createEnvironment() {
   const require = createRequire(import.meta.url);
   const extPath = fileURLToPath(new URL('../build/Release/node-zigar-addon', import.meta.url));
-  const { loadModule, getGCStatistics } = require(extPath);
+  const { createEnvironment, getGCStatistics } = require(extPath);
   gcStatisticsRetriever = getGCStatistics;
-  return loadModule(libPath);
+  return createEnvironment();
 }
 
-export async function importModule(libPath, options = {}) {
-  const env = await loadModule(libPath);
+export function importModule(libPath, options = {}) {
+  const env = createEnvironment();
+  env.loadModule(libPath);
   env.acquireStructures(options);
   return env.useStructures();
-}
-
-export async function exportStructures(libPath, options = {}) {
-  const env = await loadModule(libPath);
-  env.acquireStructures(options);
-  const definition = env.exportStructures();
-  env.abandon();
-  return definition;
 }
 
 export function getGCStatistics() {

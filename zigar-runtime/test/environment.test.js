@@ -484,6 +484,30 @@ describe('Environment', function() {
       expect(constructor).to.equal(s2.constructor);
     })
   })
+  describe('hasMethods', function() {
+    it('should return true when some structures have methods', function() {
+      const env = new Environment();
+      const s1 = {
+        instance: { members: [], methods: [] },
+        static: { members: [], methods: [] },
+        constructor: function() {},
+      };
+      env.endStructure(s1);
+      const s2 = {
+        instance: { members: [], methods: [] },
+        static: { members: [], methods: [
+          {
+            name: 'hello',
+            argStruct: {},
+          }
+        ] },
+        constructor: function() {},
+      };
+      env.endStructure(s2);
+      const presence = env.hasMethods();
+      expect(presence).to.be.true;
+    })
+  })
   describe('exportStructures', function() {    
     it('should return list of structures and keys for accessing them', function() {
       const env = new Environment();
@@ -920,7 +944,12 @@ describe('Environment', function() {
       };
       const Test = function(dv) {
         this[MEMORY] = dv;
-      };
+        this[SLOTS] = { 
+          0: { 
+            [MEMORY]: new DataView(new ArrayBuffer(32)),
+          } 
+        };
+    };
       Test.prototype[COPIER] = getMemoryCopier(4);
       Test.prototype[TARGET_GETTER] = function() { 
         return {

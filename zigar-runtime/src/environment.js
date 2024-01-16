@@ -31,7 +31,6 @@ export class Environment {
   variables = [];
   /* RUNTIME-ONLY-END */
   imports;
-  defaultAlignment;
 
   /*
   Functions to be defined in subclass:
@@ -105,17 +104,7 @@ export class Environment {
   }
 
   allocateRelocMemory(len, align) {
-    // allocate extra memory for alignment purpose when align is larger than the default
-    // if defaultAlignment === undefind, then no alignment adjustment is done
-    const extra = (align > this.defaultAlignment) ? align : 0;
-    const buffer = new ArrayBuffer(len + extra);
-    let offset = 0;
-    if (extra) {
-      const address = this.getBufferAddress(buffer);
-      const aligned = getAlignedAddress(address, align);
-      offset = aligned - address;
-    }
-    return this.obtainView(buffer, Number(offset), len);
+    return this.obtainView(new ArrayBuffer(len), 0, len);
   }
 
   registerMemory(dv, targetDV = null) {
@@ -344,6 +333,11 @@ export class Environment {
   getRootModule() {
     const root = this.structures[this.structures.length - 1];
     return root.constructor;
+  }
+
+  hasMethods() {
+    // all methods are static, so there's no need to check instance methods
+    return !!this.structures.find(s => s.static.methods.length > 0);
   }
 
   exportStructures() {

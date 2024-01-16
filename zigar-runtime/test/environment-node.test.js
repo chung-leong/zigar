@@ -29,12 +29,12 @@ describe('NodeEnvironment', function() {
       expect(address).to.equal(0x1000n);
     })
   })
-  describe('allocateRelocMemory', function() {
+  describe('allocateHostMemory', function() {
     it('should create a buffer that can be discovered later', function() {
     const env = new NodeEnvironment();
     env.getBufferAddress = () => 0x10000n;
     env.startContext();
-    const dv1 = env.allocateRelocMemory(32, 8);
+    const dv1 = env.allocateHostMemory(32, 8);
     expect(dv1).to.be.instanceOf(DataView);
     expect(dv1.byteLength).to.equal(32);
     const dv2 = env.findMemory(0x10000n, 32);
@@ -42,18 +42,18 @@ describe('NodeEnvironment', function() {
     expect(dv2.byteLength).to.equal(32);
     })
   })
-  describe('freeRelocMemory', function() {
+  describe('freeHostMemory', function() {
     it('should remove buffer at indicated address', function() {
       const env = new NodeEnvironment();
       env.obtainFixedView = () => null;
       env.getBufferAddress = () => 0x10010;
       env.startContext();
-      const dv = env.allocateRelocMemory(32, 32);
+      const dv = env.allocateHostMemory(32, 32);
       expect(dv).to.be.instanceOf(DataView);
       expect(dv.byteLength).to.equal(32);
       expect(dv.byteOffset).to.equal(16);
       const address = env.getViewAddress(dv);
-      env.freeRelocMemory(address, 32, 32);
+      env.freeHostMemory(address, 32, 32);
       const bad = env.findMemory(address, 32);
       expect(bad).to.be.null;
     })
@@ -250,13 +250,13 @@ describe('NodeEnvironment', function() {
       expect(address2).to.be.false;
     })
   })
-  describe('createAlignedBuffer', function() {
+  describe('allocateRelocMemory', function() {
     it('should allocate extra bytes to account for alignment', function() {
       const env = new NodeEnvironment();
       env.extractBufferAddress = function(buffer) {
         return 0x1000n;
       };
-      const dv = env.createAlignedBuffer(64, 32);
+      const dv = env.allocateRelocMemory(64, 32);
       expect(dv.byteLength).to.equal(64);
       expect(dv.buffer.byteLength).to.equal(96);
     })

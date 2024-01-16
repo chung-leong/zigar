@@ -3386,7 +3386,7 @@ function defineUnalignedUintAccessor(access, member) {
 }
 
 function defineAlignedFloatAccessor(access, member) {
-  const { bitSize } = member;
+  const { bitSize, byteSize } = member;
   if (bitSize === 16) {
     const buf = new DataView(new ArrayBuffer(4));
     const set = DataView.prototype.setUint16;
@@ -3433,18 +3433,19 @@ function defineAlignedFloatAccessor(access, member) {
     }
   } else if (bitSize === 80) {
     const buf = new DataView(new ArrayBuffer(8));
-    const setWord = DataView.prototype.setBigUint64;
-    const getWord = DataView.prototype.getBigUint64;
     const get = function(offset, littleEndian) {
-      const w1 = getWord.call(this, offset, littleEndian);
-      const w2 = getWord.call(this, offset + 8, littleEndian);
-      return (littleEndian) ? w1 | w2 << 64n : w1 << 64n | w2;
+      const w1 = BigInt(this.getUint32(offset + (littleEndian ? 0 : byteSize - 4), littleEndian));
+      const w2 = BigInt(this.getUint32(offset + (littleEndian ? 4 : byteSize - 8), littleEndian));
+      const w3 = BigInt(this.getUint32(offset + (littleEndian ? 8 : byteSize - 12), littleEndian));
+      return w1 | w2 << 32n | w3 << 64n;
     };
     const set = function(offset, value, littleEndian) {
-      const w1 = value & 0xFFFFFFFFFFFFFFFFn;
-      const w2 = value >> 64n;
-      setWord.call(this, offset + (littleEndian ? 0 : 8), w1, littleEndian);
-      setWord.call(this, offset + (littleEndian ? 8 : 0), w2, littleEndian);
+      const w1 = value & 0xFFFFFFFFn;
+      const w2 = (value >> 32n) & 0xFFFFFFFFn;
+      const w3 = (value >> 64n) & 0xFFFFFFFFn;
+      this.setUint32(offset + (littleEndian ? 0 : byteSize - 4), Number(w1), littleEndian);
+      this.setUint32(offset + (littleEndian ? 4 : byteSize - 8), Number(w2), littleEndian);
+      this.setUint32(offset + (littleEndian ? 8 : byteSize - 12), Number(w3), littleEndian);
     };
     if (access === 'get') {
       return function(offset, littleEndian) {
@@ -3490,18 +3491,22 @@ function defineAlignedFloatAccessor(access, member) {
     }
   } else if (bitSize === 128) {
     const buf = new DataView(new ArrayBuffer(8));
-    const getWord = DataView.prototype.getBigUint64;
-    const setWord = DataView.prototype.setBigUint64;
     const get = function(offset, littleEndian) {
-      const w1 = getWord.call(this, offset, littleEndian);
-      const w2 = getWord.call(this, offset + 8, littleEndian);
-      return (littleEndian) ? w1 | w2 << 64n : w1 << 64n | w2;
+      const w1 = BigInt(this.getUint32(offset + (littleEndian ? 0 : byteSize - 4), littleEndian));
+      const w2 = BigInt(this.getUint32(offset + (littleEndian ? 4 : byteSize - 8), littleEndian));
+      const w3 = BigInt(this.getUint32(offset + (littleEndian ? 8 : byteSize - 12), littleEndian));
+      const w4 = BigInt(this.getUint32(offset + (littleEndian ? 12 : byteSize - 16), littleEndian));
+      return w1 | w2 << 32n | w3 << 64n | w4 << 96n;
     };
     const set = function(offset, value, littleEndian) {
-      const w1 = value & 0xFFFFFFFFFFFFFFFFn;
-      const w2 = value >> 64n;
-      setWord.call(this, offset + (littleEndian ? 0 : 8), w1, littleEndian);
-      setWord.call(this, offset + (littleEndian ? 8 : 0), w2, littleEndian);
+      const w1 = value & 0xFFFFFFFFn;
+      const w2 = (value >> 32n) & 0xFFFFFFFFn;
+      const w3 = (value >> 64n) & 0xFFFFFFFFn;
+      const w4 = (value >> 96n) & 0xFFFFFFFFn;
+      this.setUint32(offset + (littleEndian ? 0 : byteSize - 4), Number(w1), littleEndian);
+      this.setUint32(offset + (littleEndian ? 4 : byteSize - 8), Number(w2), littleEndian);
+      this.setUint32(offset + (littleEndian ? 8 : byteSize - 12), Number(w3), littleEndian);
+      this.setUint32(offset + (littleEndian ? 12 : byteSize - 16), Number(w4), littleEndian);
     };
     if (access === 'get') {
       return function(offset, littleEndian) {
@@ -4099,20 +4104,21 @@ function useAllMemberTypes() {
   useLiteral();
 }
 
-function generateCodeForWASM(definition, params) {
+function generateCode(definition, params) {
   const { structures, keys } = definition;
   const {
     runtimeURL,
-    loadWASM,
+    binarySource = null,
     topLevelAwait = true,
     omitExports = false,
+    declareFeatures = false,
   } = params;
-  const features = getFeaturesUsed(structures);
+  const features = (declareFeatures) ? getFeaturesUsed(structures) : [];
   const exports = getExports(structures);
   const lines = [];
   const add = manageIndentation(lines);
   add(`import {`);
-  for (const name of [ 'loadModule', ...features ]) {
+  for (const name of [ 'createEnvironment', ...features ]) {
     add(`${name},`);
   }
   add(`} from ${JSON.stringify(runtimeURL)};`);
@@ -4122,81 +4128,43 @@ function generateCodeForWASM(definition, params) {
   for (const feature of features) {
     add(`${feature}();`);
   }
-  add(`\n// initiate loading and compilation of WASM bytecodes`);
-  add(`const source = ${loadWASM ?? null};`);
-  // write out the structures as object literals
-  lines.push(...generateStructureDefinitions(structures, keys));
-  lines.push(...generateLoadStatements('source', JSON.stringify(!topLevelAwait)));
-  lines.push(...generateExportStatements(exports, omitExports));
-  if (topLevelAwait && loadWASM) {
-    add(`await __zigar.init();`);
-  }
-  const code = lines.join('\n');
-  return { code, exports, structures };
-}
-
-function generateCodeForNode(definition, params) {
-  const { structures, keys } = definition;
-  const {
-    runtimeURL,
-    libPath,
-    topLevelAwait = true,
-    omitExports = false,
-  } = params;
-  const exports = getExports(structures);
-  const lines = [];
-  const add = manageIndentation(lines);
-  add(`import { loadModule } from ${JSON.stringify(runtimeURL)};`);
-  // all features are enabled by default for Node
-  lines.push(...generateStructureDefinitions(structures, keys));
-  lines.push(...generateLoadStatements(JSON.stringify(libPath), 'false'));
-  lines.push(...generateExportStatements(exports, omitExports));
-  if (topLevelAwait) {
-    add(`await __zigar.init();`);
-  }
-  const code = lines.join('\n');
-  return { code, exports, structures };
-}
-
-function generateLoadStatements(source, writeBack) {
-  const lines = [];
-  const add = manageIndentation(lines);
-  add(`// create runtime environment`);
-  add(`const env = loadModule(${source});`);
+  // write out the structures as object literals 
+  addStructureDefinitions(lines, structures, keys);
+  add(`\n// create runtime environment`);
+  add(`const env = createEnvironment();`);
   add(`const __zigar = env.getControlObject();`);
+  add(`\n// recreate structures`);
   add(`env.recreateStructures(structures);`);
-  add(`env.linkVariables(${writeBack});`);
-  add(``);
-  return lines;
-}
-
-function generateExportStatements(exports, omitExports) {
-  const lines = [];
-  const add = manageIndentation(lines);
+  if (binarySource) {
+    add(`\n// initiate loading and compilation of WASM bytecodes`);
+    add(`const source = ${binarySource};`);
+    add(`env.loadModule(source)`);
+    // if top level await is used, we don't need to write changes into fixed memory buffers
+    add(`env.linkVariables(${!topLevelAwait});`);
+  }
+  add(`\n// export root namespace and its methods and constants`);
   add(`const { constructor } = root;`);
   if (!omitExports) {
     add(`export { constructor as default, __zigar }`);
     // the first two exports are default and __zigar
     const exportables = exports.slice(2);
     if (exportables.length > 0) {
-      const oneLine = exportables.join(', ');
-      if (oneLine.length < 70) {
-        add(`export const { ${oneLine} } = constructor;`);
-      } else {
-        add(`export const {`);
-        for (const name of exportables) {
-          add(`${name},`);
-        }
-        add(`} = constructor;`);
+      add(`export const {`);
+      for (const name of exportables) {
+        add(`${name},`);
       }
+      add(`} = constructor;`);
     }
   }
-  return lines;
+  if (topLevelAwait && binarySource) {
+    add(`await __zigar.init();`);
+  }
+  const code = lines.join('\n');
+  return { code, exports, structures };
 }
 
-function generateStructureDefinitions(structures, keys) {
+function addStructureDefinitions(lines, structures, keys) {
   const { MEMORY, SLOTS, CONST } = keys;
-  const lines = [];
   const add = manageIndentation(lines);
   const defaultStructure = {
     constructor: null,
@@ -4394,7 +4362,6 @@ function generateStructureDefinitions(structures, keys) {
   add(`];`);
   const root = structures[structures.length - 1];
   add(`const root = ${structureNames.get(root)};`);
-  add(``);
   return lines;
 }
 
@@ -5036,16 +5003,7 @@ class Environment {
   }
 
   allocateRelocMemory(len, align) {
-    // allocate extra memory for alignment purpose when align is larger than the default
-    const extra = (align > 16) ? align : 0;
-    const buffer = new ArrayBuffer(len + extra);
-    let offset = 0;
-    if (extra) {
-      const address = this.getBufferAddress(buffer);
-      const aligned = getAlignedAddress(address, align);
-      offset = aligned - address;
-    }
-    return this.obtainView(buffer, Number(offset), len);
+    return this.obtainView(new ArrayBuffer(len), 0, len);
   }
 
   registerMemory(dv, targetDV = null) {
@@ -5274,6 +5232,11 @@ class Environment {
   getRootModule() {
     const root = this.structures[this.structures.length - 1];
     return root.constructor;
+  }
+
+  hasMethods() {
+    // all methods are static, so there's no need to check instance methods
+    return !!this.structures.find(s => s.static.methods.length > 0);
   }
 
   exportStructures() {
@@ -5538,17 +5501,6 @@ function findSortedIndex(array, value, cb) {
 
 function findMemoryIndex(array, address) {
   return findSortedIndex(array, address, m => m.address);
-}
-
-function getAlignedAddress(address, align) {
-  let mask;
-  if (typeof(address) === 'bigint') {
-    align = BigInt(align);
-    mask = ~(align - 1n);
-  } else {
-    mask = ~(align - 1);
-  }
-  return (address & mask) + align;
 }
 
 function add(address, len) {
@@ -5900,12 +5852,8 @@ useAllMemberTypes();
 useAllStructureTypes();
 /* COMPTIME-ONLY-END */
 
-function loadModule(source) {
-  const env = new WebAssemblyEnvironment();
-  if (source) {
-    env.loadModule(source);
-  }
-  return env;
+function createEnvironment(source) {
+  return new WebAssemblyEnvironment();
 }
 
 const MagicNumber = 0x6d736100;
@@ -7199,28 +7147,28 @@ async function transpile(path, options = {}) {
     platform: 'freestanding'
   });
   const content = await readFile(wasmPath);
-  const env = loadModule(content);
+  const env = createEnvironment();
+  env.loadModule(content);
   await env.initPromise;
   env.acquireStructures({ omitFunctions });
   const definition = env.exportStructures();
-  // all methods are static, so there's no need to check the instance methods
-  const hasMethods = !!definition.structures.find(s => s.static.methods.length > 0);
   const runtimeURL = moduleResolver('zigar-runtime');
-  let loadWASM;
-  if (hasMethods) {
+  let binarySource;
+  if (env.hasMethods()) {
     let dv = new DataView(content.buffer);
     if (stripWASM) {
       dv = stripUnused(dv, { keepNames });
     }
     if (embedWASM) {
-      loadWASM = embed(path, dv);
+      binarySource = embed(path, dv);
     } else {
-      loadWASM = await wasmLoader(path, dv);
+      binarySource = await wasmLoader(path, dv);
     }
   }
-  return generateCodeForWASM(definition, {
+  return generateCode(definition, {
+    declareFeatures: true,
     runtimeURL,
-    loadWASM,
+    binarySource,
     topLevelAwait,
     omitExports,
   });
@@ -7239,4 +7187,4 @@ function embed(path, dv) {
 })()`;
 }
 
-export { compile, generateCodeForNode, transpile };
+export { compile, generateCode, transpile };
