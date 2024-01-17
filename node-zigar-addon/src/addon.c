@@ -96,7 +96,7 @@ result free_host_memory(call ctx,
     napi_env env = ctx->env;
     napi_value args[3];
     napi_value result;
-    if (napi_create_bigint_uint64(env, (uintptr_t) mem->bytes, &args[0]) == napi_ok
+    if (napi_create_uintptr(env, (uintptr_t) mem->bytes, &args[0]) == napi_ok
      && napi_create_uint32(env, mem->len, &args[1]) == napi_ok
      && napi_create_uint32(env, mem->attributes.align, &args[2]) == napi_ok
      && call_js_function(ctx, "freeHostMemory", 3, args, &result)) {
@@ -121,7 +121,7 @@ result capture_view(call ctx,
     napi_env env = ctx->env;
     napi_value args[3];
     napi_value result;
-    if (napi_create_bigint_uint64(env, (uintptr_t) mem->bytes, &args[0]) == napi_ok
+    if (napi_create_uintptr(env, (uintptr_t) mem->bytes, &args[0]) == napi_ok
      && napi_create_uint32(env, mem->len, &args[1]) == napi_ok
      && napi_get_boolean(env, mem->attributes.is_comptime, &args[2]) == napi_ok
      && call_js_function(ctx, "captureView", 3, args, dest)) {
@@ -349,7 +349,7 @@ napi_value extract_buffer_address(napi_env env,
         return throw_error(env, "Argument must be ArrayBuffer");
     }
     napi_value address;
-    if (napi_create_bigint_uint64(env, (uintptr_t) bytes, &address) != napi_ok) {
+    if (napi_create_uintptr(env, (uintptr_t) bytes, &address) != napi_ok) {
         return throw_last_error(env);
     }
     return address;
@@ -384,13 +384,13 @@ napi_value free_external_memory(napi_env env,
     module_data* md;
     size_t argc = 3;
     napi_value args[3];
-    uint64_t address;
+    uintptr_t address;
     bool lossless;
     double len;
     uint32_t align;
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
-     || napi_get_value_bigint_uint64(env, args[0], &address, &lossless) != napi_ok) {
-        return throw_error(env, "Address must be bigint");
+     || napi_get_value_uintptr(env, args[0], &address, &lossless) != napi_ok) {
+        return throw_error(env, "Address must be " UINTPTR_JS_TYPE);
     } else if (napi_get_value_double(env, args[1], &len) != napi_ok) {
         return throw_error(env, "Length must be number");
     } else if (napi_get_value_uint32(env, args[2], &align) != napi_ok) {
@@ -406,12 +406,12 @@ napi_value obtain_external_buffer(napi_env env,
     module_data* md;
     size_t argc = 2;
     napi_value args[2];
-    uint64_t address;
+    uintptr_t address;
     bool lossless;
     double len;
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
-     || napi_get_value_bigint_uint64(env, args[0], &address, &lossless) != napi_ok) {
-        return throw_error(env, "Address must be bigint");
+     || napi_get_value_uintptr(env, args[0], &address, &lossless) != napi_ok) {
+        return throw_error(env, "Address must be " UINTPTR_JS_TYPE);
     } else if (napi_get_value_double(env, args[1], &len) != napi_ok) {
         return throw_error(env, "Length must be number");
     }
@@ -434,8 +434,8 @@ napi_value copy_bytes(napi_env env,
     if (napi_get_cb_info(env, info, &argc, args, NULL, NULL) != napi_ok
      || napi_get_dataview_info(env, args[0], &dest_len, &dest, NULL, NULL) != napi_ok) {
         return throw_error(env, "Destination must be DataView");
-    } else if (napi_get_value_bigint_uint64(env, args[1], &address, &lossless) != napi_ok) {
-        return throw_error(env, "Address must be bigint");
+    } else if (napi_get_value_uintptr(env, args[1], &address, &lossless) != napi_ok) {
+        return throw_error(env, "Address must be " UINTPTR_JS_TYPE);
     } else if (napi_get_value_double(env, args[2], &len) != napi_ok) {
         return throw_error(env, "Length must be number");
     } else if (dest_len != len) {
@@ -456,8 +456,8 @@ napi_value find_sentinel(napi_env env,
     bool lossless;
     double len;
     if (napi_get_cb_info(env, info, &argc, args, NULL, NULL) != napi_ok
-     || napi_get_value_bigint_uint64(env, args[0], &address, &lossless) != napi_ok) {
-        return throw_error(env, "Address must be bigint");
+     || napi_get_value_uintptr(env, args[0], &address, &lossless) != napi_ok) {
+        return throw_error(env, "Address must be " UINTPTR_JS_TYPE);
     } else if (napi_get_dataview_info(env, args[1], &sentinel_len, &sentinel_data, NULL, NULL) != napi_ok) {
         return throw_error(env, "Sentinel value must be DataView");
     }
@@ -526,8 +526,8 @@ napi_value get_memory_offset(napi_env env,
     uint64_t address;
     bool lossless;
     if (napi_get_cb_info(env, info, &argc, &args[0], NULL, (void*) &md) != napi_ok
-     || napi_get_value_bigint_uint64(env, args[0], &address, &lossless) != napi_ok) {
-        return throw_error(env, "Address must be bigint");
+     || napi_get_value_uintptr(env, args[0], &address, &lossless) != napi_ok) {
+        return throw_error(env, "Address must be " UINTPTR_JS_TYPE);
     }
     size_t base = md->base_address;
     if (address < base) {
@@ -551,9 +551,9 @@ napi_value recreate_address(napi_env env,
      || napi_get_value_double(env, args[0], &reloc) != napi_ok) {
         return throw_error(env, "Offset must be a number");
     }
-    size_t base = md->base_address;
+    uintptr_t base = md->base_address;
     napi_value address;
-    if (napi_create_bigint_uint64(env, base + reloc, &address) != napi_ok) {
+    if (napi_create_uintptr(env, base + reloc, &address) != napi_ok) {
         return throw_last_error(env);
     }
     return address;
@@ -648,7 +648,7 @@ napi_value load_module(napi_env env,
     if (!dladdr(symbol, &dl_info)) {
         return throw_error(env, "Unable to obtain address of shared library");
     }
-    md->base_address = (size_t) dl_info.dli_fbase;
+    md->base_address = (uintptr_t) dl_info.dli_fbase;
 
 #ifdef WIN32
     /* we can't override write() the normal way on Windows

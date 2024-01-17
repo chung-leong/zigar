@@ -9,6 +9,15 @@
         #define __cdecl
     #endif
 #endif
+#if UINTPTR_MAX == UINT64_MAX 
+    #define napi_create_uintptr         napi_create_bigint_uint64
+    #define napi_get_value_uintptr      napi_get_value_bigint_uint64
+    #define UINTPTR_JS_TYPE             "bigint"
+#else
+    #define napi_create_uintptr         napi_create_uint32
+    #define napi_get_value_uintptr      napi_get_value_uint32
+    #define UINTPTR_JS_TYPE             "number"
+#endif
 #ifdef WIN32
     #include "win32-shim.h"
 #else
@@ -160,7 +169,7 @@ typedef struct {
     int ref_count;
     module *mod;
     void* so_handle;
-    size_t base_address;
+    uintptr_t base_address;
     napi_ref js_env;
 } module_data;
 
