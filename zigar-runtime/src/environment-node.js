@@ -27,7 +27,7 @@ export class NodeEnvironment extends Environment {
 
   allocateRelocMemory(len, align) {
     // allocate extra memory for alignment purpose when align is larger than the default
-    const extra = (align > this.defaultAlignment) ? align : 0;
+    const extra = (align > this.defaultAlignment && this.extractBufferAddress) ? align : 0;    
     const buffer = new ArrayBuffer(len + extra);
     let offset = 0;
     if (extra) {

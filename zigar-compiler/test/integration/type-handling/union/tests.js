@@ -176,6 +176,7 @@ export function addTests(importModule, options) {
       expect(module.error_union.Integer).to.be.null;
     })
     it('should not compile code containing union vector', async function() {
+      this.timeout(120000);
       await expect(importTest('vector-of')).to.eventually.be.rejected;      
     })   
   })

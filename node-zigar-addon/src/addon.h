@@ -9,15 +9,6 @@
         #define __cdecl
     #endif
 #endif
-#if UINTPTR_MAX == UINT64_MAX 
-    #define napi_create_uintptr         napi_create_bigint_uint64
-    #define napi_get_value_uintptr      napi_get_value_bigint_uint64
-    #define UINTPTR_JS_TYPE             "bigint"
-#else
-    #define napi_create_uintptr         napi_create_uint32
-    #define napi_get_value_uintptr      napi_get_value_uint32
-    #define UINTPTR_JS_TYPE             "number"
-#endif
 #ifdef WIN32
     #include "win32-shim.h"
 #else
@@ -27,6 +18,35 @@
 #include <string.h>
 
 #define MISSING   SIZE_MAX
+
+#if UINTPTR_MAX == UINT64_MAX 
+    #define UINTPTR_JS_TYPE             "bigint"
+#else
+    #define UINTPTR_JS_TYPE             "number"
+#endif
+
+#include <stdio.h>
+
+inline napi_status napi_create_uintptr(napi_env env,
+                                       uintptr_t value,
+                                       napi_value* result) {
+#if UINTPTR_MAX == UINT64_MAX 
+    return napi_create_bigint_uint64(env, value, result);
+#else
+    return napi_create_uint32(env, value, result);
+#endif
+}
+
+inline napi_status napi_get_value_uintptr(napi_env env,
+                                          napi_value value,
+                                          uintptr_t* result) {
+#if UINTPTR_MAX == UINT64_MAX 
+    bool lossless = false;
+    return napi_get_value_bigint_uint64(env, value, (uint64_t*) result, NULL);
+#else
+    return napi_get_value_uint32(env, value, (uint32_t*) result);
+#endif
+}
 
 napi_value create_addon(napi_env env);
 

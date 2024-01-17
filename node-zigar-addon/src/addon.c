@@ -385,12 +385,11 @@ napi_value free_external_memory(napi_env env,
     size_t argc = 3;
     napi_value args[3];
     uintptr_t address;
-    bool lossless;
     double len;
     uint32_t align;
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
-     || napi_get_value_uintptr(env, args[0], &address, &lossless) != napi_ok) {
-        return throw_error(env, "Address must be " UINTPTR_JS_TYPE);
+     || napi_get_value_uintptr(env, args[0], &address) != napi_ok) {
+        return throw_error(env, "Address must be "UINTPTR_JS_TYPE);
     } else if (napi_get_value_double(env, args[1], &len) != napi_ok) {
         return throw_error(env, "Length must be number");
     } else if (napi_get_value_uint32(env, args[2], &align) != napi_ok) {
@@ -407,11 +406,10 @@ napi_value obtain_external_buffer(napi_env env,
     size_t argc = 2;
     napi_value args[2];
     uintptr_t address;
-    bool lossless;
     double len;
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
-     || napi_get_value_uintptr(env, args[0], &address, &lossless) != napi_ok) {
-        return throw_error(env, "Address must be " UINTPTR_JS_TYPE);
+     || napi_get_value_uintptr(env, args[0], &address) != napi_ok) {
+        return throw_error(env, "Address must be "UINTPTR_JS_TYPE);
     } else if (napi_get_value_double(env, args[1], &len) != napi_ok) {
         return throw_error(env, "Length must be number");
     }
@@ -428,14 +426,13 @@ napi_value copy_bytes(napi_env env,
     napi_value args[3];
     void* dest;
     size_t dest_len;
-    uint64_t address;
-    bool lossless;
+    uintptr_t address;
     double len;
     if (napi_get_cb_info(env, info, &argc, args, NULL, NULL) != napi_ok
      || napi_get_dataview_info(env, args[0], &dest_len, &dest, NULL, NULL) != napi_ok) {
         return throw_error(env, "Destination must be DataView");
-    } else if (napi_get_value_uintptr(env, args[1], &address, &lossless) != napi_ok) {
-        return throw_error(env, "Address must be " UINTPTR_JS_TYPE);
+    } else if (napi_get_value_uintptr(env, args[1], &address) != napi_ok) {
+        return throw_error(env, "Address must be "UINTPTR_JS_TYPE);
     } else if (napi_get_value_double(env, args[2], &len) != napi_ok) {
         return throw_error(env, "Length must be number");
     } else if (dest_len != len) {
@@ -452,12 +449,11 @@ napi_value find_sentinel(napi_env env,
     napi_value args[2];
     void* sentinel_data;
     size_t sentinel_len;
-    uint64_t address;
-    bool lossless;
+    uintptr_t address;
     double len;
     if (napi_get_cb_info(env, info, &argc, args, NULL, NULL) != napi_ok
-     || napi_get_value_uintptr(env, args[0], &address, &lossless) != napi_ok) {
-        return throw_error(env, "Address must be " UINTPTR_JS_TYPE);
+     || napi_get_value_uintptr(env, args[0], &address) != napi_ok) {
+        return throw_error(env, "Address must be "UINTPTR_JS_TYPE);
     } else if (napi_get_dataview_info(env, args[1], &sentinel_len, &sentinel_data, NULL, NULL) != napi_ok) {
         return throw_error(env, "Sentinel value must be DataView");
     }
@@ -523,11 +519,10 @@ napi_value get_memory_offset(napi_env env,
     module_data* md;
     size_t argc = 1;
     napi_value args[1];
-    uint64_t address;
-    bool lossless;
+    uintptr_t address;
     if (napi_get_cb_info(env, info, &argc, &args[0], NULL, (void*) &md) != napi_ok
-     || napi_get_value_uintptr(env, args[0], &address, &lossless) != napi_ok) {
-        return throw_error(env, "Address must be " UINTPTR_JS_TYPE);
+     || napi_get_value_uintptr(env, args[0], &address) != napi_ok) {
+        return throw_error(env, "Address must be "UINTPTR_JS_TYPE);
     }
     size_t base = md->base_address;
     if (address < base) {

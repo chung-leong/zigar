@@ -5050,7 +5050,7 @@
 "\n"
 "    allocateRelocMemory(len, align) {\n"
 "      // allocate extra memory for alignment purpose when align is larger than the default\n"
-"      const extra = (align > this.defaultAlignment) ? align : 0;\n"
+"      const extra = (align > this.defaultAlignment && this.extractBufferAddress) ? align : 0;    \n"
 "      const buffer = new ArrayBuffer(len + extra);\n"
 "      let offset = 0;\n"
 "      if (extra) {\n"
