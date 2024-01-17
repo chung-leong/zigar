@@ -41,8 +41,8 @@ inline napi_status napi_get_value_uintptr(napi_env env,
                                           napi_value value,
                                           uintptr_t* result) {
 #if UINTPTR_MAX == UINT64_MAX 
-    bool lossless = false;
-    return napi_get_value_bigint_uint64(env, value, (uint64_t*) result, NULL);
+    bool lossless;
+    return napi_get_value_bigint_uint64(env, value, (uint64_t*) result, &lossless);
 #else
     return napi_get_value_uint32(env, value, (uint32_t*) result);
 #endif
