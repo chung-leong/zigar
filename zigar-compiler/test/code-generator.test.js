@@ -5,13 +5,14 @@ use(ChaiAsPromised);
 
 import { MemberType } from '../../zigar-runtime/src/member.js';
 import { StructureType } from '../../zigar-runtime/src/structure.js';
-import { MEMORY, SLOTS } from '../../zigar-runtime/src/symbol.js';
-import {
-  generateCodeForWASM
-} from '../src/code-generator.js';
+import { CONST, MEMORY, SLOTS } from '../../zigar-runtime/src/symbol.js';
+import { generateCode } from '../src/code-generator.js';
 
 describe('Code generation', function() {
-  describe('generateCodeForWASM', function() {
+  describe('generateCode', function() {
+    const options = {
+      declareFeatures: true,
+    };
     it('should generate code for defining a standard int type', function() {
       const structure = {
         constructor: null,
@@ -38,10 +39,11 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const { code } = generateCodeForWASM([ structure ], {});
+      const def = { structures: [ structure ], keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, options);
       expect(code).to.contain('useInt()');
       expect(code).to.contain('i32');
-      expect(code).to.contain('const source = null');
+      expect(code).to.not.contain('const source =');
     })
     it('should generate code for defining a non-standard int type', function() {
       const structure = {
@@ -69,9 +71,10 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const { code } = generateCodeForWASM([ structure ], {});
-      expect(code).to.contain('useIntEx()');
-      expect(code).to.not.contain('useInt()');
+      const def = { structures: [ structure ], keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, options);
+      expect(code).to.contain('useExtendedInt()');
+      expect(code).to.contain('useInt()');
       expect(code).to.contain('i31');
     })
     it('should generate code for defining a standard uint type', function() {
@@ -100,7 +103,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const { code } = generateCodeForWASM([ structure ], {});
+      const def = { structures: [ structure ], keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, options);
       expect(code).to.contain('useUint()');
       expect(code).to.contain('u32');
     })
@@ -130,9 +134,10 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const { code } = generateCodeForWASM([ structure ], {});
-      expect(code).to.contain('useUintEx()');
-      expect(code).to.not.contain('useUint()');
+      const def = { structures: [ structure ], keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, options);
+      expect(code).to.contain('useExtendedUint()');
+      expect(code).to.contain('useUint()');
       expect(code).to.contain('u31');
     })
     it('should generate code for defining a standard float type', function() {
@@ -161,7 +166,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const { code } = generateCodeForWASM([ structure ], {});
+      const def = { structures: [ structure ], keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, options);
       expect(code).to.contain('useFloat()');
       expect(code).to.contain('f32');
     })
@@ -191,9 +197,10 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const { code } = generateCodeForWASM([ structure ], {});
-      expect(code).to.contain('useFloatEx()');
-      expect(code).to.not.contain('useFloat()');
+      const def = { structures: [ structure ], keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, options);
+      expect(code).to.contain('useExtendedFloat()');
+      expect(code).to.contain('useFloat()');
       expect(code).to.contain('f80');
     })
     it('should generate code for defining a standard boolean type', function() {
@@ -222,7 +229,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const { code } = generateCodeForWASM([ structure ], {});
+      const def = { structures: [ structure ], keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, options);
       expect(code).to.contain('useBool()');
       expect(code).to.contain('bool');
     })
@@ -258,9 +266,10 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const { code } = generateCodeForWASM([ structure ], {});
-      expect(code).to.contain('useBoolEx()');
-      expect(code).to.not.contain('useBool()');
+      const def = { structures: [ structure ], keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, options);
+      expect(code).to.contain('useBool()');
+      expect(code).to.contain('useExtendedBool()');
       expect(code).to.contain('flags');
     })
     it('should generate code for defining a standard enum type', function() {
@@ -271,7 +280,15 @@ describe('Code generation', function() {
         byteSize: 2,
         hasPointer: false,
         instance: {
-          members: [],
+          members: [ 
+            {
+              type: MemberType.Int,
+              bitOffset: 0,
+              bitSize: 16,
+              byteSize: 2,
+              structure: {},
+            }
+          ],
           methods: [],
           template: null,
         },
@@ -307,7 +324,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const { code } = generateCodeForWASM([ enumSetStructure, structure ], {});
+      const def = { structures: [ enumSetStructure, structure ], keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, options);
       expect(code).to.contain('useEnumerationItem()');
       expect(code).to.contain('enumItem');
       expect(code).to.contain('enum {}');
@@ -320,7 +338,15 @@ describe('Code generation', function() {
         byteSize: 2,
         hasPointer: false,
         instance: {
-          members: [],
+          members: [
+            {
+              type: MemberType.Int,
+              bitOffset: 0,
+              bitSize: 16,
+              byteSize: 2,
+              structure: {},
+            }
+          ],
           methods: [],
           template: null,
         },
@@ -355,7 +381,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const { code } = generateCodeForWASM([ enumSetStructure, structure ], {});
+      const def = { structures: [ enumSetStructure, structure ], keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, options);
       expect(code).to.contain('useEnumerationItem()');
       expect(code).to.contain('enumItem');
       expect(code).to.contain('enum {}');
@@ -402,7 +429,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const { code } = generateCodeForWASM([ enumSetStructure, structure ], {});
+      const def = { structures: [ enumSetStructure, structure ], keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, options);
       expect(code).to.contain('useType()');
       expect(code).to.contain('package');
       expect(code).to.contain('Enum');
@@ -435,7 +463,7 @@ describe('Code generation', function() {
         },
       };
       const structure = {
-        constructor: null,
+        constructor: function() {},
         type: StructureType.Struct,
         name: "package",
         byteSize: 0,
@@ -458,7 +486,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const { code } = generateCodeForWASM([ ptrStructure, structure ], {});
+      const def = { structures: [ ptrStructure, structure ], keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, options);
       expect(code).to.contain('package');
       expect(code).to.contain('useStruct()');
       expect(code).to.contain('usePointer()');
@@ -515,7 +544,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const { code } = generateCodeForWASM([ argStructure, structure ], { loadWASM: `loadWASM()`, topLevelAwait: true });
+      const def = { structures: [ argStructure, structure ], keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, { binarySource: `loadWASM()`, topLevelAwait: true, ...options });
       expect(code).to.contain('package');
       expect(code).to.contain('useStruct()');
       const m = /export const \{([\s\S]*)\} = constructor/.exec(code);
@@ -523,7 +553,7 @@ describe('Code generation', function() {
       expect(m[1]).to.contain('hello');
       expect(code).to.contain('await __zigar.init()');
       expect(code).to.contain('env.linkVariables(false)');
-      const { code: codeAlt } = generateCodeForWASM([ argStructure, structure ], { loadWASM: `loadWASM()`, topLevelAwait: false });
+      const { code: codeAlt } = generateCode(def, { binarySource: `loadWASM()`, topLevelAwait: false });
       expect(codeAlt).to.not.contain('await __zigar.init()');
       expect(codeAlt).to.contain('env.linkVariables(true)');
     })
@@ -583,7 +613,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const { code } = generateCodeForWASM([ structStructure, structure ], { loadWASM: `loadWASM()`, topLevelAwait: true });
+      const def = { structures: [ structStructure, structure ], keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, options);
       expect(code).to.contain('package');
       expect(code).to.contain('useStruct()');
       expect(code).to.contain('Hello');
@@ -639,8 +670,10 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const { code, exports } = generateCodeForWASM([ structure ], { omitExports: true });
+      const def = { structures: [ structStructure, structure ], keys: { MEMORY, SLOTS, CONST }};
+      const { code, exports } = generateCode(def, { omitExports: true, ...options });
       expect(code).to.not.contain('export {');
+      expect(exports).to.contain('__zigar');
     })
     it('should break initializer into multiple lines when the number of structures is large', function() {
       const structures = [];
@@ -670,10 +703,9 @@ describe('Code generation', function() {
             template: null,
           },
         });
-       }
-      const { code } = generateCodeForWASM(structures, {});
-      expect(code).to.contain('i32');
-      expect(code).to.contain('i64');
+      }
+      const def = { structures, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, options);
     })
   })
 })

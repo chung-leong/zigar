@@ -1,3 +1,4 @@
+import { useAllExtendedTypes } from './data-view.js';
 import { WebAssemblyEnvironment } from './environment-wasm.js';
 /* COMPTIME-ONLY */
 import { useAllMemberTypes } from './member.js';
@@ -5,6 +6,7 @@ import { useAllStructureTypes } from './structure.js';
 
 useAllMemberTypes();
 useAllStructureTypes();
+useAllExtendedTypes();
 /* COMPTIME-ONLY-END */
 
 export function createEnvironment(source) {
@@ -13,9 +15,11 @@ export function createEnvironment(source) {
 
 /* RUNTIME-ONLY */
 export {
-  useBool, useBoolEx, useComptime, useEnumerationItem, useError, useFloat, useFloatEx, useInt,
-  useIntEx, useLiteral, useNull, useObject, useStatic, useType, useUint, useUintEx, useUndefined,
-  useVoid
+  useExtendedBool, useExtendedFloat, useExtendedInt, useExtendedUint
+} from './data-view.js';
+export {
+  useBool, useComptime, useEnumerationItem, useError, useFloat, useInt, useLiteral, useNull,
+  useObject, useStatic, useType, useUint, useUndefined, useVoid
 } from './member.js';
 export {
   useArgStruct, useArray, useBareUnion, useEnumeration, useErrorSet, useErrorUnion,

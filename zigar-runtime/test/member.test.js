@@ -1,19 +1,9 @@
 import { expect } from 'chai';
 
-import { clearMethodCache } from '../src/data-view.js';
+import { useAllExtendedTypes } from '../src/data-view.js';
 import { createGlobalErrorSet, getGlobalErrorSet } from '../src/error-set.js';
 import {
-  MemberType,
-  getDescriptor,
-  isByteAligned,
-  isReadOnly,
-  useAllMemberTypes,
-  useBool,
-  useFloat,
-  useInt,
-  useIntEx,
-  useUint,
-  useUintEx
+  MemberType, getDescriptor, isByteAligned, isReadOnly, useAllMemberTypes,
 } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { GETTER, MEMORY, SETTER, SLOTS, VIVIFICATOR } from '../src/symbol.js';
@@ -22,6 +12,7 @@ describe('Member functions', function() {
   beforeEach(function() {
     useAllMemberTypes();
     useAllStructureTypes()
+    useAllExtendedTypes();
   })
   describe('isReadOnly', function() {
     it('should return true for certain types', function() {
@@ -284,17 +275,6 @@ describe('Member functions', function() {
       expect(get.call(object)).to.equal(false);
       expect(dv.getUint32(4, true)).to.equal(1);
     })
-    it('should not return bitfield descriptor when useBoolEx is not active', function() {
-      clearMethodCache();
-      useBool();
-      const member = {
-        type: MemberType.Bool,
-        bitSize: 1,
-        bitOffset: 33,
-      };
-      const descriptor = getDescriptor(member, env);
-      expect(descriptor).to.be.undefined;
-    })
     it('should return int descriptor', function() {
       const object = {
         [MEMORY]: (() => {
@@ -315,48 +295,6 @@ describe('Member functions', function() {
       expect(get.call(object)).to.equal(3456);
     })
     it('should return uint descriptor', function() {
-      const object = {
-        [MEMORY]: (() => {
-          const dv = new DataView(new ArrayBuffer(8));
-          dv.setUint32(4, 1234, true);
-          return dv;
-        })(),
-      };
-      const member = {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-      };
-      const { get, set } = getDescriptor(member, env);
-      expect(get.call(object)).to.equal(1234);
-      set.call(object, 3456);
-      expect(get.call(object)).to.equal(3456);
-    })
-    it('should return standard int descriptor when only useIntEx is active', function() {
-      clearMethodCache();
-      useIntEx();
-      const object = {
-        [MEMORY]: (() => {
-          const dv = new DataView(new ArrayBuffer(8));
-          dv.setUint32(4, 1234, true);
-          return dv;
-        })(),
-      };
-      const member = {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-      };
-      const { get, set } = getDescriptor(member, env);
-      expect(get.call(object)).to.equal(1234);
-      set.call(object, 3456);
-      expect(get.call(object)).to.equal(3456);
-    })
-    it('should return standard int descriptor when only useUintEx is active', function() {
-      clearMethodCache();
-      useUintEx();
       const object = {
         [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(8));
@@ -409,28 +347,6 @@ describe('Member functions', function() {
       const { set: setNoCheck } = getDescriptor(member, { env, runtimeSafety: false });
       expect(() => setNoCheck.call(object, 32)).to.not.throw();
     })
-    it('should not return small int descriptor when useIntEx is not active', function() {
-      clearMethodCache();
-      useInt();
-      const member = {
-        type: MemberType.Int,
-        bitSize: 4,
-        bitOffset: 33,
-      };
-      const descriptor = getDescriptor(member, env);
-      expect(descriptor).to.be.undefined;
-    })
-    it('should not return small uint descriptor when useUintEx is not active', function() {
-      clearMethodCache();
-      useUint();
-      const member = {
-        type: MemberType.Uint,
-        bitSize: 4,
-        bitOffset: 33,
-      };
-      const descriptor = getDescriptor(member, env);
-      expect(descriptor).to.be.undefined;
-    })
     it('should return float descriptor', function() {
       const object = {
         [MEMORY]: (() => {
@@ -467,18 +383,6 @@ describe('Member functions', function() {
       expect(get.call(object)).to.equal(0);
       set.call(object, 3.5);
       expect(get.call(object)).to.equal(3.5);
-    })
-    it('should not return small float descriptor when useFloatEx is not active', function() {
-      clearMethodCache();
-      useFloat();
-      const member = {
-        type: MemberType.Float,
-        bitSize: 16,
-        bitOffset: 4,
-        byteSize: 8,
-      };
-      const descriptor = getDescriptor(member, env);
-      expect(descriptor).to.be.undefined;
     })
     it('should return enum item descriptor', function() {
       const DummyValue1 = {

@@ -1,41 +1,22 @@
 import { expect } from 'chai';
 
+import { useAllExtendedTypes } from '../src/data-view.js';
 import { Environment } from '../src/environment.js';
-import {
-  MemberType,
-  useFloatEx,
-  useIntEx,
-  useObject,
-  useUintEx,
-} from '../src/member.js';
+import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
 import {
-  convertToJSON,
-  getBase64Descriptor,
-  getDataViewDescriptor,
-  getStringDescriptor,
-  getTypedArrayDescriptor,
-  getValueOf,
+  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getStringDescriptor,
+  getTypedArrayDescriptor, getValueOf,
 } from '../src/special.js';
-import {
-  StructureType,
-  useArray,
-  usePrimitive,
-  useSlice,
-  useStruct,
-} from '../src/structure.js';
+import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { COPIER, MEMORY, NORMALIZER } from '../src/symbol.js';
 
 describe('Special property functions', function() {
   const env = new Environment();
   beforeEach(() => {
-    useArray();
-    useSlice();
-    useStruct();
-    useIntEx();
-    useUintEx();
-    useFloatEx();
-    useObject();
+    useAllStructureTypes();
+    useAllMemberTypes();
+    useAllExtendedTypes();
   })
   describe('getDataViewDescriptor', function() {
     it('should return getter and setter for data view', function() {
@@ -336,12 +317,6 @@ describe('Special property functions', function() {
       expect(forJSON).to.be.true;
     })
     it('should enable correct output from JSON.stringify()', function() {
-      usePrimitive();
-      useStruct();
-      useArray();
-      useIntEx();
-      useFloatEx();
-      useObject();
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',

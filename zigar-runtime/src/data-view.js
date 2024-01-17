@@ -4,110 +4,113 @@ import { getBitAlignFunction } from './memory.js';
 import { StructureType } from './structure.js';
 import { COMPAT, COPIER, MEMORY } from './symbol.js';
 
-export function getDataViewBoolAccessor(access, member) {
-  return cacheMethod(access, member, () => {
-    const { byteSize } = member;
-    if (byteSize === undefined) {
-      return undefined;
-    }
-    const typeName = getTypeName({ type: MemberType.Int, bitSize: byteSize * 8 });
-    const f = DataView.prototype[typeName];
-    if (access === 'get') {
-      const get = DataView.prototype[`get${typeName}`];
-      return function(offset, littleEndian) {
-        return !!get.call(this, offset, littleEndian);
-      };
-    } else {
-      const set = DataView.prototype[`set${typeName}`];
-      const T = (byteSize > 4) ? 1n : 1;
-      const F = (byteSize > 4) ? 0n : 0;
-      return function(offset, value, littleEndian) {
-        set.call(this, offset, value ? T : F, littleEndian);
-      };
-    }
-  });
-}
-
-export function getDataViewBoolAccessorEx(access, member) {
+export function getBoolAccessor(access, member) {
   return cacheMethod(access, member, () => {
     if (isByteAligned(member)) {
-      return getDataViewBoolAccessor(access, member);
-    }
-    const { bitOffset } = member;
-    const bitPos = bitOffset & 0x07;
-    const mask = 1 << bitPos;
-    const get = DataView.prototype.getInt8;
-    if (access === 'get') {
-      return function(offset) {
-        const n = get.call(this, offset);
-        return !!(n & mask);
-      };
+      const { byteSize } = member;
+      const typeName = getTypeName({ type: MemberType.Int, bitSize: byteSize * 8 });
+      const f = DataView.prototype[typeName];
+      if (access === 'get') {
+        const get = DataView.prototype[`get${typeName}`];
+        return function(offset, littleEndian) {
+          return !!get.call(this, offset, littleEndian);
+        };
+      } else {
+        const set = DataView.prototype[`set${typeName}`];
+        const T = (byteSize > 4) ? 1n : 1;
+        const F = (byteSize > 4) ? 0n : 0;
+        return function(offset, value, littleEndian) {
+          set.call(this, offset, value ? T : F, littleEndian);
+        };
+      }
     } else {
-      const set = DataView.prototype.setInt8;
-      return function(offset, value) {
-        const n = get.call(this, offset);
-        const b = (value) ? n | mask : n & ~mask;
-        set.call(this, offset, b);
-      };
+      return getExtendedTypeAccessor(access, member);
     }
   });
 }
 
-function getDataViewBuiltInAccessor(access, member) {
-  return cacheMethod(access, member, (name) => {
-    return DataView.prototype[name];
-  });
-}
-
-export function getDataViewIntAccessor(access, member) {
-  return getDataViewBuiltInAccessor(access, member);
-}
-
-export function getDataViewIntAccessorEx(access, member) {
+export function getNumericAccessor(access, member) {
   return cacheMethod(access, member, (name) => {
     if (DataView.prototype[name]) {
       return DataView.prototype[name];
-    }
-    if (isByteAligned(member)) {
-      return defineAlignedIntAccessor(access, member)
     } else {
-      return defineUnalignedIntAccessor(access, member);
+      return getExtendedTypeAccessor(access, member);
     }
   });
 }
 
-export function getDataViewUintAccessor(access, member) {
-  return getDataViewBuiltInAccessor(access, member);
+const factories = {};
+
+export function useExtendedBool() {
+  factories[MemberType.Bool] = getExtendedBoolAccessor;
 }
 
-export function getDataViewUintAccessorEx(access, member) {
-  return cacheMethod(access, member, (name) => {
-    if (DataView.prototype[name]) {
-      return DataView.prototype[name];
-    }
-    if (isByteAligned(member)) {
-      return defineAlignedUintAccessor(access, member)
-    } else {
-      return defineUnalignedUintAccessor(access, member);
-    }
-  });
+export function useExtendedInt() {
+  factories[MemberType.Int] = getExtendedIntAccessor;
 }
 
-export function getDataViewFloatAccessor(access, member) {
-  return getDataViewBuiltInAccessor(access, member);
+export function useExtendedUint() {
+  factories[MemberType.Uint] = getExtendedUintAccessor;
 }
 
-export function getDataViewFloatAccessorEx(access, member) {
-  return cacheMethod(access, member, (name) => {
-    if (DataView.prototype[name]) {
-      return DataView.prototype[name];
-    }
-    if (isByteAligned(member)) {
-      return defineAlignedFloatAccessor(access, member)
-    } else {
-      return defineUnalignedFloatAccessor(access, member);
-    }
-  });
+export function useExtendedFloat() {
+  factories[MemberType.Float] = getExtendedFloatAccessor;
+}
+
+function getExtendedTypeAccessor(access, member) {
+  const f = factories[member.type];
+  /* DEV-TEST */
+  /* c8 ignore next 4 */
+  if (typeof(f) !== 'function') {
+    const [ name ] = Object.entries(MemberType).find(a => a[1] === member.type);
+    throw new Error(`No factory for ${name} (extended): ${member.name}`);
+  }
+  /* DEV-TEST-END */
+  return f(access, member);
+}
+
+export function getExtendedBoolAccessor(access, member) {
+  const { bitOffset } = member;
+  const bitPos = bitOffset & 0x07;
+  const mask = 1 << bitPos;
+  const get = DataView.prototype.getInt8;
+  if (access === 'get') {
+    return function(offset) {
+      const n = get.call(this, offset);
+      return !!(n & mask);
+    };
+  } else {
+    const set = DataView.prototype.setInt8;
+    return function(offset, value) {
+      const n = get.call(this, offset);
+      const b = (value) ? n | mask : n & ~mask;
+      set.call(this, offset, b);
+    };
+  }
+}
+
+export function getExtendedIntAccessor(access, member) {
+  if (isByteAligned(member)) {
+    return getAlignedIntAccessor(access, member)
+  } else {
+    return getUnalignedIntAccessor(access, member);
+  }
+}
+
+export function getExtendedUintAccessor(access, member) {
+  if (isByteAligned(member)) {
+    return getAlignedUintAccessor(access, member)
+  } else {
+    return getUnalignedUintAccessor(access, member);
+  }
+}
+
+export function getExtendedFloatAccessor(access, member) {
+  if (isByteAligned(member)) {
+    return getAlignedFloatAccessor(access, member)
+  } else {
+    return getUnalignedFloatAccessor(access, member);
+  }
 }
 
 export function getDataView(structure, arg, env) {
@@ -282,9 +285,9 @@ export function isBuffer(arg, typedArray) {
 export function getTypeName(member) {
   const { type, bitSize, byteSize, structure } = member;
   if (structure?.name === 'usize') {
-    return 'USize';
+    return `USize${bitSize}`;
   } else if (structure?.name === 'isize') {
-    return 'ISize';
+    return `ISize${bitSize}`;
   } else if (type === MemberType.Int) {
     return `${bitSize <= 32 ? '' : 'Big' }Int${bitSize}`;
   } else if (type === MemberType.Uint) {
@@ -341,7 +344,7 @@ function getBigIntDescriptor(bitSize) {
   };
 }
 
-function defineAlignedIntAccessor(access, member) {
+function getAlignedIntAccessor(access, member) {
   const { bitSize, byteSize } = member;
   if (bitSize < 64) {
     // actual number of bits needed when stored aligned
@@ -380,7 +383,7 @@ function defineAlignedIntAccessor(access, member) {
   }
 }
 
-function defineAlignedUintAccessor(access, member) {
+function getAlignedUintAccessor(access, member) {
   const { bitSize, byteSize } = member;
   if (bitSize < 64) {
     // actual number of bits needed when stored aligned
@@ -417,7 +420,7 @@ function defineAlignedUintAccessor(access, member) {
   }
 }
 
-function defineUnalignedIntAccessor(access, member) {
+function getUnalignedIntAccessor(access, member) {
   const { bitSize, bitOffset } = member;
   const bitPos = bitOffset & 0x07;
   if (bitPos + bitSize <= 8) {
@@ -442,10 +445,10 @@ function defineUnalignedIntAccessor(access, member) {
       };
     }
   }
-  return defineUnalignedAccessorUsing(access, member, getDataViewIntAccessorEx);
+  return getUnalignedNumericAccessor(access, member);
 }
 
-function defineUnalignedUintAccessor(access, member) {
+function getUnalignedUintAccessor(access, member) {
   const { bitSize, bitOffset } = member;
   const bitPos = bitOffset & 0x07;
   if (bitPos + bitSize <= 8) {
@@ -467,10 +470,10 @@ function defineUnalignedUintAccessor(access, member) {
       };
     }
   }
-  return defineUnalignedAccessorUsing(access, member, getDataViewUintAccessorEx);
+  return getUnalignedNumericAccessor(access, member);
 }
 
-function defineAlignedFloatAccessor(access, member) {
+function getAlignedFloatAccessor(access, member) {
   const { bitSize, byteSize } = member;
   if (bitSize === 16) {
     const buf = new DataView(new ArrayBuffer(4));
@@ -637,11 +640,11 @@ function defineAlignedFloatAccessor(access, member) {
   }
 }
 
-function defineUnalignedFloatAccessor(access, member) {
-  return defineUnalignedAccessorUsing(access, member, getDataViewFloatAccessorEx);
+function getUnalignedFloatAccessor(access, member) {
+  return getUnalignedNumericAccessor(access, member);
 }
 
-function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
+function getUnalignedNumericAccessor(access, member) {
   // pathological usage scenario--handle it anyway by copying the bitSize into a
   // temporary buffer, bit-aligning the data
   const { bitSize, bitOffset } = member;
@@ -649,14 +652,14 @@ function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
   const byteSize = [ 1, 2, 4, 8 ].find(b => b * 8 >= bitSize) ?? Math.ceil(bitSize / 64) * 64;
   const buf = new DataView(new ArrayBuffer(byteSize));
   if (access === 'get') {
-    const getAligned = getDataViewAccessor('get', { ...member, byteSize });
+    const getAligned = getNumericAccessor('get', { ...member, byteSize });
     const copyBits = getBitAlignFunction(bitPos, bitSize, true);
     return function(offset, littleEndian) {
       copyBits(buf, this, offset);
       return getAligned.call(buf, 0, littleEndian);
     };
   } else {
-    const setAligned = getDataViewAccessor('set', { ...member, byteSize });
+    const setAligned = getNumericAccessor('set', { ...member, byteSize });
     const applyBits = getBitAlignFunction(bitPos, bitSize, false);
     return function(offset, value, littleEndian) {
       setAligned.call(buf, 0, value, littleEndian);
@@ -664,6 +667,8 @@ function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
     };
   }
 }
+
+const methodCache = {};
 
 function cacheMethod(access, member, cb) {
   const { type, bitOffset, bitSize } = member;
@@ -674,47 +679,46 @@ function cacheMethod(access, member, cb) {
   let fn = methodCache[name];
   if (!fn) {
     // usize and isize can return/accept number or bigint
-    if ((type === MemberType.Int && typeName === 'ISize')
-     || (type === MemberType.Uint && typeName === 'USize')) {
-      if (bitSize === 64) {
-        const realTypeName = (type === MemberType.Int) ? 'BigInt64' : 'BigUint64';
-        const realName = `${access}${realTypeName}`;
-        if (access === 'get') {
-          const get = cb(realName);
-          const min = BigInt(Number.MIN_SAFE_INTEGER);
-          const max = BigInt(Number.MAX_SAFE_INTEGER);
-          fn = function(offset, littleEndian) {
-            const value = get.call(this, offset, littleEndian);
-            if (min <= value && value <= max) {
-              return Number(value);
-            } else {
-              return value;
-            }
-          };
-        } else {
-          const set = cb(realName);
-          fn = function(offset, value, littleEndian) {
-            // automatically convert number to bigint
-            if (typeof(value) === 'number') {
-              value = BigInt(value);
-            }
-            set.call(this, offset, value, littleEndian);
-          };
-        }
-      } else if (bitSize === 32) {
-        const realTypeName = (type === MemberType.Int) ? 'Int32' : 'Uint32';
-        const realName = `${access}${realTypeName}`;
-        if (access === 'get') {
-          fn = cb(realName);
-        } else {
-          const set = cb(realName);
-          fn = function(offset, value, littleEndian) {
-            if (typeof(value) === 'bigint') {
-              value = Number(value);
-            }
-            set.call(this, offset, value, littleEndian);
-          };
-        }
+    if ((type === MemberType.Int && typeName === 'ISize64')
+     || (type === MemberType.Uint && typeName === 'USize64')) {
+      const realTypeName = (type === MemberType.Int) ? 'BigInt64' : 'BigUint64';
+      const realName = `${access}${realTypeName}`;
+      if (access === 'get') {
+        const get = cb(realName);
+        const min = BigInt(Number.MIN_SAFE_INTEGER);
+        const max = BigInt(Number.MAX_SAFE_INTEGER);
+        fn = function(offset, littleEndian) {
+          const value = get.call(this, offset, littleEndian);
+          if (min <= value && value <= max) {
+            return Number(value);
+          } else {
+            return value;
+          }
+        };
+      } else {
+        const set = cb(realName);
+        fn = function(offset, value, littleEndian) {
+          // automatically convert number to bigint
+          if (typeof(value) === 'number') {
+            value = BigInt(value);
+          }
+          set.call(this, offset, value, littleEndian);
+        };
+      }
+     } else if ((type === MemberType.Int && typeName === 'ISize32')
+             || (type === MemberType.Uint && typeName === 'USize32')) {
+      const realTypeName = (type === MemberType.Int) ? 'Int32' : 'Uint32';
+      const realName = `${access}${realTypeName}`;
+      if (access === 'get') {
+        fn = cb(realName);
+      } else {
+        const set = cb(realName);
+        fn = function(offset, value, littleEndian) {
+          if (typeof(value) === 'bigint') {
+            value = Number(value);
+          }
+          set.call(this, offset, value, littleEndian);
+        };
       }
     } else {
       fn = cb(name);
@@ -727,10 +731,9 @@ function cacheMethod(access, member, cb) {
   return fn;
 }
 
-export function clearMethodCache() {
-  for (const key of Object.keys(methodCache)) {
-    delete methodCache[key];
-  }
+export function useAllExtendedTypes() {
+  useExtendedBool();
+  useExtendedInt();
+  useExtendedUint();
+  useExtendedFloat();
 }
-
-const methodCache = {};

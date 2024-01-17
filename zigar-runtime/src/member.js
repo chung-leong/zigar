@@ -1,8 +1,4 @@
-import {
-  getDataViewBoolAccessor, getDataViewBoolAccessorEx, getDataViewFloatAccessor,
-  getDataViewFloatAccessorEx, getDataViewIntAccessor, getDataViewIntAccessorEx,
-  getDataViewUintAccessor, getDataViewUintAccessorEx,
-} from './data-view.js';
+import { getBoolAccessor, getNumericAccessor } from './data-view.js';
 import { getGlobalErrorSet } from './error-set.js';
 import {
   rethrowRangeError, throwEnumExpected, throwErrorExpected, throwNotInErrorSet, throwNotUndefined,
@@ -41,7 +37,7 @@ export function isReadOnly(type) {
   }
 }
 
-const factories = Array(Object.values(MemberType).length);
+const factories = {};
 
 export function useVoid() {
   factories[MemberType.Void] = getVoidDescriptor;
@@ -51,32 +47,16 @@ export function useBool() {
   factories[MemberType.Bool] = getBoolDescriptor;
 }
 
-export function useBoolEx() {
-  factories[MemberType.Bool] = getBoolDescriptorEx;
-}
-
 export function useInt() {
   factories[MemberType.Int] = getIntDescriptor;
-}
-
-export function useIntEx() {
-  factories[MemberType.Int] = getIntDescriptorEx;
 }
 
 export function useUint() {
   factories[MemberType.Uint] = getUintDescriptor;
 }
 
-export function useUintEx() {
-  factories[MemberType.Uint] = getUintDescriptorEx;
-}
-
 export function useFloat() {
   factories[MemberType.Float] = getFloatDescriptor;
-}
-
-export function useFloatEx() {
-  factories[MemberType.Float] = getFloatDescriptorEx;
 }
 
 export function useEnumerationItem() {
@@ -173,30 +153,16 @@ export function getUndefinedDescriptor(member, env) {
 }
 
 export function getBoolDescriptor(member, env) {
-  return getDescriptorUsing(member, env, getDataViewBoolAccessor)
-}
-
-export function getBoolDescriptorEx(member, env) {
-  return getDescriptorUsing(member, env, getDataViewBoolAccessorEx)
+  return getDescriptorUsing(member, env, getBoolAccessor)
 }
 
 export function getIntDescriptor(member, env) {
-  const getDataViewAccessor = addRuntimeCheck(env, getDataViewIntAccessor);
-  return getDescriptorUsing(member, env, getDataViewAccessor)
-}
-
-export function getIntDescriptorEx(member, env) {
-  const getDataViewAccessor = addRuntimeCheck(env, getDataViewIntAccessorEx);
+  const getDataViewAccessor = addRuntimeCheck(env, getNumericAccessor);
   return getDescriptorUsing(member, env, getDataViewAccessor)
 }
 
 export function getUintDescriptor(member, env) {
-  const getDataViewAccessor = addRuntimeCheck(env, getDataViewUintAccessor);
-  return getDescriptorUsing(member, env, getDataViewAccessor)
-}
-
-export function getUintDescriptorEx(member, env) {
-  const getDataViewAccessor = addRuntimeCheck(env, getDataViewUintAccessorEx);
+  const getDataViewAccessor = addRuntimeCheck(env, getNumericAccessor);
   return getDescriptorUsing(member, env, getDataViewAccessor)
 }
 
@@ -206,11 +172,6 @@ function addRuntimeCheck(env, getDataViewAccessor) {
       runtimeSafety = true,
     } = env;
     const accessor = getDataViewAccessor(access, member);
-    /* DEV-TEST */
-    if (!accessor) {
-      return;
-    }
-    /* DEV-TEST-END */
     if (runtimeSafety && access === 'set') {
       const { min, max } = getIntRange(member);
       return function(offset, value, littleEndian) {
@@ -225,11 +186,7 @@ function addRuntimeCheck(env, getDataViewAccessor) {
 }
 
 export function getFloatDescriptor(member, env) {
-  return getDescriptorUsing(member, env, getDataViewFloatAccessor)
-}
-
-export function getFloatDescriptorEx(member, env) {
-  return getDescriptorUsing(member, env, getDataViewFloatAccessorEx)
+  return getDescriptorUsing(member, env, getNumericAccessor)
 }
 
 export function getEnumerationItemDescriptor(member, env) {
@@ -505,10 +462,10 @@ export function useAllMemberTypes() {
   useVoid();
   useNull();
   useUndefined();
-  useBoolEx();
-  useIntEx();
-  useUintEx();
-  useFloatEx();
+  useBool();
+  useInt();
+  useUint();
+  useFloat();
   useEnumerationItem();
   useError();
   useObject();

@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 
+import { useAllExtendedTypes } from '../src/data-view.js';
 import { NodeEnvironment } from '../src/environment-node.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
@@ -10,6 +11,7 @@ describe('Vector functions', function() {
     beforeEach(function() {
       useAllMemberTypes();
       useAllStructureTypes();
+      useAllExtendedTypes();
     })
     it('should define structure for holding an int vector', function() {
       const structure = env.beginStructure({

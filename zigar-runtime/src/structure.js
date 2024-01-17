@@ -133,18 +133,28 @@ export function getStructureFactory(type) {
 function flagMemberUsage(member, features) {
   const { type } = member;
   switch (type) {
+    case MemberType.Bool:
+      features.useBool = true;
+      if (!isByteAligned(member)) {
+        features.useExtendedBool = true;
+      }
+      break;
     case MemberType.Int:
-      if(isByteAligned(member) && hasStandardIntSize(member)) {
-        features.useInt = true;
-      } else {
-        features.useIntEx = true;
+      features.useInt = true;
+      if(!isByteAligned(member) || !hasStandardIntSize(member)) {
+        features.useExtendedInt = true;
       }
       break;
     case MemberType.Uint:
-      if(isByteAligned(member) && hasStandardIntSize(member)) {
-        features.useUint = true;
-      } else {
-        features.useUintEx = true;
+      features.useUint = true;
+      if(!isByteAligned(member) || !hasStandardIntSize(member)) {
+        features.useExtendedUint = true;
+      }
+      break;
+    case MemberType.Float:
+      features.useFloat = true;
+      if (!isByteAligned(member) || !hasStandardFloatSize(member)) {
+        features.useExtendedFloat = true;
       }
       break;
     case MemberType.EnumerationItem: {
@@ -154,20 +164,6 @@ function flagMemberUsage(member, features) {
     } break;
     case MemberType.Error:
       features.useError = true;
-      break;
-    case MemberType.Float:
-      if (isByteAligned(member) && hasStandardFloatSize(member)) {
-        features.useFloat = true;
-      } else {
-        features.useFloatEx = true;
-      }
-      break;
-    case MemberType.Bool:
-      if (isByteAligned(member)) {
-        features.useBool = true;
-      } else {
-        features.useBoolEx = true;
-      }
       break;
     case MemberType.Object:
       features.useObject = true;
@@ -225,18 +221,6 @@ export function getFeaturesUsed(structures) {
   const features = {};
   for (const structure of structures) {
     flagStructureUsage(structure, features);
-  }
-  if (features.useIntEx) {
-    delete features.useInt;
-  }
-  if (features.useUintEx) {
-    delete features.useUint;
-  }
-  if (features.useFloatEx) {
-    delete features.useFloat;
-  }
-  if (features.useBoolEx) {
-    delete features.useBool;
   }
   return Object.keys(features);
 }

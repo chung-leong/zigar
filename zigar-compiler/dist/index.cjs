@@ -2046,66 +2046,66 @@ const StructureType = {
   Function: 15,
 };
 
-const factories$1 = Array(Object.values(StructureType).length);
+const factories$2 = Array(Object.values(StructureType).length);
 
 function usePrimitive() {
-  factories$1[StructureType.Primitive] = definePrimitive;
+  factories$2[StructureType.Primitive] = definePrimitive;
 }
 
 function useArray() {
-  factories$1[StructureType.Array] = defineArray;
+  factories$2[StructureType.Array] = defineArray;
 }
 
 function useStruct() {
-  factories$1[StructureType.Struct] = defineStructShape;
+  factories$2[StructureType.Struct] = defineStructShape;
 }
 
 function useExternUnion() {
-  factories$1[StructureType.ExternUnion] = defineUnionShape;
+  factories$2[StructureType.ExternUnion] = defineUnionShape;
 }
 
 function useBareUnion() {
-  factories$1[StructureType.BareUnion] = defineUnionShape;
+  factories$2[StructureType.BareUnion] = defineUnionShape;
 }
 
 function useTaggedUnion() {
-  factories$1[StructureType.TaggedUnion] = defineUnionShape;
+  factories$2[StructureType.TaggedUnion] = defineUnionShape;
 }
 
 function useErrorUnion() {
-  factories$1[StructureType.ErrorUnion] = defineErrorUnion;
+  factories$2[StructureType.ErrorUnion] = defineErrorUnion;
 }
 
 function useErrorSet() {
-  factories$1[StructureType.ErrorSet] = defineErrorSet;
+  factories$2[StructureType.ErrorSet] = defineErrorSet;
 }
 
 function useEnumeration() {
-  factories$1[StructureType.Enumeration] = defineEnumerationShape;
+  factories$2[StructureType.Enumeration] = defineEnumerationShape;
 }
 
 function useOptional() {
-  factories$1[StructureType.Optional] = defineOptional;
+  factories$2[StructureType.Optional] = defineOptional;
 }
 
 function usePointer() {
-  factories$1[StructureType.Pointer] = definePointer;
+  factories$2[StructureType.Pointer] = definePointer;
 }
 
 function useSlice() {
-  factories$1[StructureType.Slice] = defineSlice;
+  factories$2[StructureType.Slice] = defineSlice;
 }
 
 function useVector() {
-  factories$1[StructureType.Vector] = defineVector;
+  factories$2[StructureType.Vector] = defineVector;
 }
 
 function useOpaque() {
-  factories$1[StructureType.Opaque] = defineStructShape;
+  factories$2[StructureType.Opaque] = defineStructShape;
 }
 
 function useArgStruct() {
-  factories$1[StructureType.ArgStruct] = defineArgStruct;
+  factories$2[StructureType.ArgStruct] = defineArgStruct;
 }
 
 function getStructureName(structure, full = false) {
@@ -2120,25 +2120,35 @@ function getStructureName(structure, full = false) {
 }
 
 function getStructureFactory(type) {
-  const f = factories$1[type];
+  const f = factories$2[type];
   return f;
 }
 
 function flagMemberUsage(member, features) {
   const { type } = member;
   switch (type) {
+    case MemberType.Bool:
+      features.useBool = true;
+      if (!isByteAligned(member)) {
+        features.useExtendedBool = true;
+      }
+      break;
     case MemberType.Int:
-      if(isByteAligned(member) && hasStandardIntSize(member)) {
-        features.useInt = true;
-      } else {
-        features.useIntEx = true;
+      features.useInt = true;
+      if(!isByteAligned(member) || !hasStandardIntSize(member)) {
+        features.useExtendedInt = true;
       }
       break;
     case MemberType.Uint:
-      if(isByteAligned(member) && hasStandardIntSize(member)) {
-        features.useUint = true;
-      } else {
-        features.useUintEx = true;
+      features.useUint = true;
+      if(!isByteAligned(member) || !hasStandardIntSize(member)) {
+        features.useExtendedUint = true;
+      }
+      break;
+    case MemberType.Float:
+      features.useFloat = true;
+      if (!isByteAligned(member) || !hasStandardFloatSize(member)) {
+        features.useExtendedFloat = true;
       }
       break;
     case MemberType.EnumerationItem: {
@@ -2148,20 +2158,6 @@ function flagMemberUsage(member, features) {
     } break;
     case MemberType.Error:
       features.useError = true;
-      break;
-    case MemberType.Float:
-      if (isByteAligned(member) && hasStandardFloatSize(member)) {
-        features.useFloat = true;
-      } else {
-        features.useFloatEx = true;
-      }
-      break;
-    case MemberType.Bool:
-      if (isByteAligned(member)) {
-        features.useBool = true;
-      } else {
-        features.useBoolEx = true;
-      }
       break;
     case MemberType.Object:
       features.useObject = true;
@@ -2219,18 +2215,6 @@ function getFeaturesUsed(structures) {
   const features = {};
   for (const structure of structures) {
     flagStructureUsage(structure, features);
-  }
-  if (features.useIntEx) {
-    delete features.useInt;
-  }
-  if (features.useUintEx) {
-    delete features.useUint;
-  }
-  if (features.useFloatEx) {
-    delete features.useFloat;
-  }
-  if (features.useBoolEx) {
-    delete features.useBool;
   }
   return Object.keys(features);
 }
@@ -2941,91 +2925,105 @@ function formatList(list, conj = 'or') {
   }
 }
 
-function getDataViewBoolAccessor(access, member) {
-  return cacheMethod(access, member, () => {
-    const { byteSize } = member;
-    if (byteSize === undefined) {
-      return undefined;
-    }
-    const typeName = getTypeName({ type: MemberType.Int, bitSize: byteSize * 8 });
-    if (access === 'get') {
-      const get = DataView.prototype[`get${typeName}`];
-      return function(offset, littleEndian) {
-        return !!get.call(this, offset, littleEndian);
-      };
-    } else {
-      const set = DataView.prototype[`set${typeName}`];
-      const T = (byteSize > 4) ? 1n : 1;
-      const F = (byteSize > 4) ? 0n : 0;
-      return function(offset, value, littleEndian) {
-        set.call(this, offset, value ? T : F, littleEndian);
-      };
-    }
-  });
-}
-
-function getDataViewBoolAccessorEx(access, member) {
+function getBoolAccessor(access, member) {
   return cacheMethod(access, member, () => {
     if (isByteAligned(member)) {
-      return getDataViewBoolAccessor(access, member);
-    }
-    const { bitOffset } = member;
-    const bitPos = bitOffset & 0x07;
-    const mask = 1 << bitPos;
-    const get = DataView.prototype.getInt8;
-    if (access === 'get') {
-      return function(offset) {
-        const n = get.call(this, offset);
-        return !!(n & mask);
-      };
+      const { byteSize } = member;
+      const typeName = getTypeName({ type: MemberType.Int, bitSize: byteSize * 8 });
+      if (access === 'get') {
+        const get = DataView.prototype[`get${typeName}`];
+        return function(offset, littleEndian) {
+          return !!get.call(this, offset, littleEndian);
+        };
+      } else {
+        const set = DataView.prototype[`set${typeName}`];
+        const T = (byteSize > 4) ? 1n : 1;
+        const F = (byteSize > 4) ? 0n : 0;
+        return function(offset, value, littleEndian) {
+          set.call(this, offset, value ? T : F, littleEndian);
+        };
+      }
     } else {
-      const set = DataView.prototype.setInt8;
-      return function(offset, value) {
-        const n = get.call(this, offset);
-        const b = (value) ? n | mask : n & ~mask;
-        set.call(this, offset, b);
-      };
+      return getExtendedTypeAccessor(access, member);
     }
   });
 }
 
-function getDataViewIntAccessorEx(access, member) {
+function getNumericAccessor(access, member) {
   return cacheMethod(access, member, (name) => {
     if (DataView.prototype[name]) {
       return DataView.prototype[name];
-    }
-    if (isByteAligned(member)) {
-      return defineAlignedIntAccessor(access, member)
     } else {
-      return defineUnalignedIntAccessor(access, member);
+      return getExtendedTypeAccessor(access, member);
     }
   });
 }
 
-function getDataViewUintAccessorEx(access, member) {
-  return cacheMethod(access, member, (name) => {
-    if (DataView.prototype[name]) {
-      return DataView.prototype[name];
-    }
-    if (isByteAligned(member)) {
-      return defineAlignedUintAccessor(access, member)
-    } else {
-      return defineUnalignedUintAccessor(access, member);
-    }
-  });
+const factories$1 = {};
+
+function useExtendedBool() {
+  factories$1[MemberType.Bool] = getExtendedBoolAccessor;
 }
 
-function getDataViewFloatAccessorEx(access, member) {
-  return cacheMethod(access, member, (name) => {
-    if (DataView.prototype[name]) {
-      return DataView.prototype[name];
-    }
-    if (isByteAligned(member)) {
-      return defineAlignedFloatAccessor(access, member)
-    } else {
-      return defineUnalignedFloatAccessor(access, member);
-    }
-  });
+function useExtendedInt() {
+  factories$1[MemberType.Int] = getExtendedIntAccessor;
+}
+
+function useExtendedUint() {
+  factories$1[MemberType.Uint] = getExtendedUintAccessor;
+}
+
+function useExtendedFloat() {
+  factories$1[MemberType.Float] = getExtendedFloatAccessor;
+}
+
+function getExtendedTypeAccessor(access, member) {
+  const f = factories$1[member.type];
+  return f(access, member);
+}
+
+function getExtendedBoolAccessor(access, member) {
+  const { bitOffset } = member;
+  const bitPos = bitOffset & 0x07;
+  const mask = 1 << bitPos;
+  const get = DataView.prototype.getInt8;
+  if (access === 'get') {
+    return function(offset) {
+      const n = get.call(this, offset);
+      return !!(n & mask);
+    };
+  } else {
+    const set = DataView.prototype.setInt8;
+    return function(offset, value) {
+      const n = get.call(this, offset);
+      const b = (value) ? n | mask : n & ~mask;
+      set.call(this, offset, b);
+    };
+  }
+}
+
+function getExtendedIntAccessor(access, member) {
+  if (isByteAligned(member)) {
+    return getAlignedIntAccessor(access, member)
+  } else {
+    return getUnalignedIntAccessor(access, member);
+  }
+}
+
+function getExtendedUintAccessor(access, member) {
+  if (isByteAligned(member)) {
+    return getAlignedUintAccessor(access, member)
+  } else {
+    return getUnalignedUintAccessor(access, member);
+  }
+}
+
+function getExtendedFloatAccessor(access, member) {
+  if (isByteAligned(member)) {
+    return getAlignedFloatAccessor(access, member)
+  } else {
+    return getUnalignedFloatAccessor(access, member);
+  }
 }
 
 function getDataView(structure, arg, env) {
@@ -3200,9 +3198,9 @@ function isBuffer(arg, typedArray) {
 function getTypeName(member) {
   const { type, bitSize, byteSize, structure } = member;
   if (structure?.name === 'usize') {
-    return 'USize';
+    return `USize${bitSize}`;
   } else if (structure?.name === 'isize') {
-    return 'ISize';
+    return `ISize${bitSize}`;
   } else if (type === MemberType.Int) {
     return `${bitSize <= 32 ? '' : 'Big' }Int${bitSize}`;
   } else if (type === MemberType.Uint) {
@@ -3259,7 +3257,7 @@ function getBigIntDescriptor(bitSize) {
   };
 }
 
-function defineAlignedIntAccessor(access, member) {
+function getAlignedIntAccessor(access, member) {
   const { bitSize, byteSize } = member;
   if (bitSize < 64) {
     // actual number of bits needed when stored aligned
@@ -3298,7 +3296,7 @@ function defineAlignedIntAccessor(access, member) {
   }
 }
 
-function defineAlignedUintAccessor(access, member) {
+function getAlignedUintAccessor(access, member) {
   const { bitSize, byteSize } = member;
   if (bitSize < 64) {
     // actual number of bits needed when stored aligned
@@ -3335,7 +3333,7 @@ function defineAlignedUintAccessor(access, member) {
   }
 }
 
-function defineUnalignedIntAccessor(access, member) {
+function getUnalignedIntAccessor(access, member) {
   const { bitSize, bitOffset } = member;
   const bitPos = bitOffset & 0x07;
   if (bitPos + bitSize <= 8) {
@@ -3360,10 +3358,10 @@ function defineUnalignedIntAccessor(access, member) {
       };
     }
   }
-  return defineUnalignedAccessorUsing(access, member, getDataViewIntAccessorEx);
+  return getUnalignedNumericAccessor(access, member);
 }
 
-function defineUnalignedUintAccessor(access, member) {
+function getUnalignedUintAccessor(access, member) {
   const { bitSize, bitOffset } = member;
   const bitPos = bitOffset & 0x07;
   if (bitPos + bitSize <= 8) {
@@ -3385,10 +3383,10 @@ function defineUnalignedUintAccessor(access, member) {
       };
     }
   }
-  return defineUnalignedAccessorUsing(access, member, getDataViewUintAccessorEx);
+  return getUnalignedNumericAccessor(access, member);
 }
 
-function defineAlignedFloatAccessor(access, member) {
+function getAlignedFloatAccessor(access, member) {
   const { bitSize, byteSize } = member;
   if (bitSize === 16) {
     const buf = new DataView(new ArrayBuffer(4));
@@ -3555,11 +3553,11 @@ function defineAlignedFloatAccessor(access, member) {
   }
 }
 
-function defineUnalignedFloatAccessor(access, member) {
-  return defineUnalignedAccessorUsing(access, member, getDataViewFloatAccessorEx);
+function getUnalignedFloatAccessor(access, member) {
+  return getUnalignedNumericAccessor(access, member);
 }
 
-function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
+function getUnalignedNumericAccessor(access, member) {
   // pathological usage scenario--handle it anyway by copying the bitSize into a
   // temporary buffer, bit-aligning the data
   const { bitSize, bitOffset } = member;
@@ -3567,14 +3565,14 @@ function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
   const byteSize = [ 1, 2, 4, 8 ].find(b => b * 8 >= bitSize) ?? Math.ceil(bitSize / 64) * 64;
   const buf = new DataView(new ArrayBuffer(byteSize));
   if (access === 'get') {
-    const getAligned = getDataViewAccessor('get', { ...member, byteSize });
+    const getAligned = getNumericAccessor('get', { ...member, byteSize });
     const copyBits = getBitAlignFunction(bitPos, bitSize, true);
     return function(offset, littleEndian) {
       copyBits(buf, this, offset);
       return getAligned.call(buf, 0, littleEndian);
     };
   } else {
-    const setAligned = getDataViewAccessor('set', { ...member, byteSize });
+    const setAligned = getNumericAccessor('set', { ...member, byteSize });
     const applyBits = getBitAlignFunction(bitPos, bitSize, false);
     return function(offset, value, littleEndian) {
       setAligned.call(buf, 0, value, littleEndian);
@@ -3582,6 +3580,8 @@ function defineUnalignedAccessorUsing(access, member, getDataViewAccessor) {
     };
   }
 }
+
+const methodCache = {};
 
 function cacheMethod(access, member, cb) {
   const { type, bitOffset, bitSize } = member;
@@ -3592,47 +3592,46 @@ function cacheMethod(access, member, cb) {
   let fn = methodCache[name];
   if (!fn) {
     // usize and isize can return/accept number or bigint
-    if ((type === MemberType.Int && typeName === 'ISize')
-     || (type === MemberType.Uint && typeName === 'USize')) {
-      if (bitSize === 64) {
-        const realTypeName = (type === MemberType.Int) ? 'BigInt64' : 'BigUint64';
-        const realName = `${access}${realTypeName}`;
-        if (access === 'get') {
-          const get = cb(realName);
-          const min = BigInt(Number.MIN_SAFE_INTEGER);
-          const max = BigInt(Number.MAX_SAFE_INTEGER);
-          fn = function(offset, littleEndian) {
-            const value = get.call(this, offset, littleEndian);
-            if (min <= value && value <= max) {
-              return Number(value);
-            } else {
-              return value;
-            }
-          };
-        } else {
-          const set = cb(realName);
-          fn = function(offset, value, littleEndian) {
-            // automatically convert number to bigint
-            if (typeof(value) === 'number') {
-              value = BigInt(value);
-            }
-            set.call(this, offset, value, littleEndian);
-          };
-        }
-      } else if (bitSize === 32) {
-        const realTypeName = (type === MemberType.Int) ? 'Int32' : 'Uint32';
-        const realName = `${access}${realTypeName}`;
-        if (access === 'get') {
-          fn = cb(realName);
-        } else {
-          const set = cb(realName);
-          fn = function(offset, value, littleEndian) {
-            if (typeof(value) === 'bigint') {
-              value = Number(value);
-            }
-            set.call(this, offset, value, littleEndian);
-          };
-        }
+    if ((type === MemberType.Int && typeName === 'ISize64')
+     || (type === MemberType.Uint && typeName === 'USize64')) {
+      const realTypeName = (type === MemberType.Int) ? 'BigInt64' : 'BigUint64';
+      const realName = `${access}${realTypeName}`;
+      if (access === 'get') {
+        const get = cb(realName);
+        const min = BigInt(Number.MIN_SAFE_INTEGER);
+        const max = BigInt(Number.MAX_SAFE_INTEGER);
+        fn = function(offset, littleEndian) {
+          const value = get.call(this, offset, littleEndian);
+          if (min <= value && value <= max) {
+            return Number(value);
+          } else {
+            return value;
+          }
+        };
+      } else {
+        const set = cb(realName);
+        fn = function(offset, value, littleEndian) {
+          // automatically convert number to bigint
+          if (typeof(value) === 'number') {
+            value = BigInt(value);
+          }
+          set.call(this, offset, value, littleEndian);
+        };
+      }
+     } else if ((type === MemberType.Int && typeName === 'ISize32')
+             || (type === MemberType.Uint && typeName === 'USize32')) {
+      const realTypeName = (type === MemberType.Int) ? 'Int32' : 'Uint32';
+      const realName = `${access}${realTypeName}`;
+      if (access === 'get') {
+        fn = cb(realName);
+      } else {
+        const set = cb(realName);
+        fn = function(offset, value, littleEndian) {
+          if (typeof(value) === 'bigint') {
+            value = Number(value);
+          }
+          set.call(this, offset, value, littleEndian);
+        };
       }
     } else {
       fn = cb(name);
@@ -3645,7 +3644,12 @@ function cacheMethod(access, member, cb) {
   return fn;
 }
 
-const methodCache = {};
+function useAllExtendedTypes() {
+  useExtendedBool();
+  useExtendedInt();
+  useExtendedUint();
+  useExtendedFloat();
+}
 
 const MemberType = {
   Void: 0,
@@ -3675,7 +3679,7 @@ function isReadOnly(type) {
   }
 }
 
-const factories = Array(Object.values(MemberType).length);
+const factories = {};
 
 function useVoid() {
   factories[MemberType.Void] = getVoidDescriptor;
@@ -3685,20 +3689,16 @@ function useBool() {
   factories[MemberType.Bool] = getBoolDescriptor;
 }
 
-function useBoolEx() {
-  factories[MemberType.Bool] = getBoolDescriptorEx;
+function useInt() {
+  factories[MemberType.Int] = getIntDescriptor;
 }
 
-function useIntEx() {
-  factories[MemberType.Int] = getIntDescriptorEx;
+function useUint() {
+  factories[MemberType.Uint] = getUintDescriptor;
 }
 
-function useUintEx() {
-  factories[MemberType.Uint] = getUintDescriptorEx;
-}
-
-function useFloatEx() {
-  factories[MemberType.Float] = getFloatDescriptorEx;
+function useFloat() {
+  factories[MemberType.Float] = getFloatDescriptor;
 }
 
 function useEnumerationItem() {
@@ -3787,20 +3787,16 @@ function getUndefinedDescriptor(member, env) {
 }
 
 function getBoolDescriptor(member, env) {
-  return getDescriptorUsing(member, env, getDataViewBoolAccessor)
+  return getDescriptorUsing(member, env, getBoolAccessor)
 }
 
-function getBoolDescriptorEx(member, env) {
-  return getDescriptorUsing(member, env, getDataViewBoolAccessorEx)
-}
-
-function getIntDescriptorEx(member, env) {
-  const getDataViewAccessor = addRuntimeCheck(env, getDataViewIntAccessorEx);
+function getIntDescriptor(member, env) {
+  const getDataViewAccessor = addRuntimeCheck(env, getNumericAccessor);
   return getDescriptorUsing(member, env, getDataViewAccessor)
 }
 
-function getUintDescriptorEx(member, env) {
-  const getDataViewAccessor = addRuntimeCheck(env, getDataViewUintAccessorEx);
+function getUintDescriptor(member, env) {
+  const getDataViewAccessor = addRuntimeCheck(env, getNumericAccessor);
   return getDescriptorUsing(member, env, getDataViewAccessor)
 }
 
@@ -3823,8 +3819,8 @@ function addRuntimeCheck(env, getDataViewAccessor) {
   };
 }
 
-function getFloatDescriptorEx(member, env) {
-  return getDescriptorUsing(member, env, getDataViewFloatAccessorEx)
+function getFloatDescriptor(member, env) {
+  return getDescriptorUsing(member, env, getNumericAccessor)
 }
 
 function getEnumerationItemDescriptor(member, env) {
@@ -4094,10 +4090,10 @@ function useAllMemberTypes() {
   useVoid();
   useNull();
   useUndefined();
-  useBoolEx();
-  useIntEx();
-  useUintEx();
-  useFloatEx();
+  useBool();
+  useInt();
+  useUint();
+  useFloat();
   useEnumerationItem();
   useError();
   useObject();
@@ -5853,6 +5849,7 @@ class WebAssemblyEnvironment extends Environment {
 
 useAllMemberTypes();
 useAllStructureTypes();
+useAllExtendedTypes();
 /* COMPTIME-ONLY-END */
 
 function createEnvironment(source) {

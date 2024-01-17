@@ -264,6 +264,7 @@ function addStructureDefinitions(lines, structures, keys) {
 
 function getExports(structures) {
   const root = structures[structures.length - 1];
+  const { constructor } = root;
   const exportables = [];
   // export only members whose names are legal JS identifiers
   const legal = /^[$\w]+$/;
@@ -275,10 +276,9 @@ function getExports(structures) {
   for (const member of root.static.members) {
     // only read-only properties are exportable
     if (isReadOnly(member.type) && legal.test(member.name)) {
-      // make sure that getter wouldn't throw (possible with error union)
-      const { constructor } = root;
       try {
-        const value = constructor[member.name];
+        // make sure that getter wouldn't throw (possible with error union)
+        constructor[member.name];
         exportables.push(member.name);
       } catch (err) {
       }

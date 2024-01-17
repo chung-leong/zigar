@@ -87,7 +87,8 @@ describe('Structure functions', function() {
       ];
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useStruct');
-      expect(features).to.contain('useIntEx');
+      expect(features).to.contain('useInt');
+      expect(features).to.contain('useExtendedInt');
     })
     it('should report the need for extended int support when non-standard int is used', function() {
       const structures = [ 
@@ -107,33 +108,8 @@ describe('Structure functions', function() {
       ];
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useStruct');
-      expect(features).to.contain('useIntEx');
-    })
-    it('should omit useInt when useIntEx is present', function() {
-      const structures = [ 
-        {
-          type: StructureType.Struct,
-          instance: { 
-            members: [
-              {
-                type: MemberType.Int,
-                bitSize: 35,
-                byteSize: 8,
-              },
-              {
-                type: MemberType.Int,
-                bitSize: 32,
-                byteSize: 4,
-              }
-            ]
-          },
-          static: { members: [] },
-        }
-      ];
-      const features = getFeaturesUsed(structures);
-      expect(features).to.contain('useStruct');
-      expect(features).to.contain('useIntEx');
-      expect(features).to.not.contain('useInt');
+      expect(features).to.contain('useInt');
+      expect(features).to.contain('useExtendedInt');
     })
     it('should report the need for standard uint support', function() {
       const structures = [ 
@@ -173,7 +149,8 @@ describe('Structure functions', function() {
       ];
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useStruct');
-      expect(features).to.contain('useUintEx');
+      expect(features).to.contain('useUint');
+      expect(features).to.contain('useExtendedUint');
     })
     it('should report the need for extended int support when non-standard uint is used', function() {
       const structures = [ 
@@ -193,33 +170,8 @@ describe('Structure functions', function() {
       ];
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useStruct');
-      expect(features).to.contain('useUintEx');
-    })
-    it('should omit useUint when useUintEx is present', function() {
-      const structures = [ 
-        {
-          type: StructureType.Struct,
-          instance: { 
-            members: [
-              {
-                type: MemberType.Uint,
-                bitSize: 35,
-                byteSize: 8,
-              },
-              {
-                type: MemberType.Uint,
-                bitSize: 32,
-                byteSize: 4,
-              }
-            ]
-          },
-          static: { members: [] },
-        }
-      ];
-      const features = getFeaturesUsed(structures);
-      expect(features).to.contain('useStruct');
-      expect(features).to.contain('useUintEx');
-      expect(features).to.not.contain('useUint');
+      expect(features).to.contain('useUint');
+      expect(features).to.contain('useExtendedUint');
     })
     it('should report the need for standard float support', function() {
       const structures = [ 
@@ -259,7 +211,8 @@ describe('Structure functions', function() {
       ];
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useStruct');
-      expect(features).to.contain('useFloatEx');
+      expect(features).to.contain('useFloat');
+      expect(features).to.contain('useExtendedFloat');
     })
     it('should report the need for extended float support when non-standard float is used', function() {
       const structures = [ 
@@ -279,33 +232,8 @@ describe('Structure functions', function() {
       ];
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useStruct');
-      expect(features).to.contain('useFloatEx');
-    })
-    it('should omit useFloat when useFloatEx is present', function() {
-      const structures = [ 
-        {
-          type: StructureType.Struct,
-          instance: { 
-            members: [
-              {
-                type: MemberType.Float,
-                bitSize: 80,
-                byteSize: 8,
-              },
-              {
-                type: MemberType.Float,
-                bitSize: 32,
-                byteSize: 4,
-              }
-            ]
-          },
-          static: { members: [] },
-        }
-      ];
-      const features = getFeaturesUsed(structures);
-      expect(features).to.contain('useStruct');
-      expect(features).to.contain('useFloatEx');
-      expect(features).to.not.contain('useFloat');
+      expect(features).to.contain('useFloat');
+      expect(features).to.contain('useExtendedFloat');
     })
     it('should report the need for standard bool support', function() {
       const structures = [ 
@@ -345,33 +273,7 @@ describe('Structure functions', function() {
       ];
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useStruct');
-      expect(features).to.contain('useBoolEx');
-    })
-    it('should omit useBool when useBoolEx is present', function() {
-      const structures = [ 
-        {
-          type: StructureType.Struct,
-          instance: { 
-            members: [
-              {
-                type: MemberType.Bool,
-                bitSize: 1,
-                byteSize: 1,
-              },
-              {
-                type: MemberType.Bool,
-                bitOffset: 1,
-                bitSize: 1,
-              }
-            ]
-          },
-          static: { members: [] },
-        }
-      ];
-      const features = getFeaturesUsed(structures);
-      expect(features).to.contain('useStruct');
-      expect(features).to.contain('useBoolEx');
-      expect(features).to.not.contain('useBool');
+      expect(features).to.contain('useExtendedBool');
     })
     it('should report the need for standard enum support', function() {
       const structures = [ 
@@ -421,7 +323,8 @@ describe('Structure functions', function() {
       ];
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useStruct');
-      expect(features).to.contain('useUintEx');
+      expect(features).to.contain('useUint');
+      expect(features).to.contain('useExtendedUint');
       expect(features).to.contain('useEnumerationItem');
     })
     it('should report the need for extended int support when non-standard enum is used', function() {
@@ -447,7 +350,8 @@ describe('Structure functions', function() {
       ];
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useStruct');
-      expect(features).to.contain('useUintEx');
+      expect(features).to.contain('useUint');
+      expect(features).to.contain('useExtendedUint');
       expect(features).to.contain('useEnumerationItem');
     })
     it('should report the need for enum support when enum structure is used', function() {
@@ -500,7 +404,8 @@ describe('Structure functions', function() {
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useEnumeration');
       expect(features).to.contain('useEnumerationItem');
-      expect(features).to.contain('useUintEx');
+      expect(features).to.contain('useUint');
+      expect(features).to.contain('useExtendedUint');
     })
     it('should report the need for error support', function() {
       const structures = [ 

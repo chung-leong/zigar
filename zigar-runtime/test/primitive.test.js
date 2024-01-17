@@ -1,12 +1,9 @@
 import { expect } from 'chai';
 
+import { useAllExtendedTypes } from '../src/data-view.js';
 import { NodeEnvironment } from '../src/environment-node.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
-import {
-  getIntRange,
-  getPrimitiveClass,
-  isExtendedType,
-} from '../src/primitive.js';
+import { getIntRange, getPrimitiveClass, isExtendedType } from '../src/primitive.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { SLOTS } from '../src/symbol.js';
 import { encodeBase64 } from '../src/text.js';
@@ -17,6 +14,7 @@ describe('Primitive functions', function() {
     beforeEach(function() {
       useAllMemberTypes();
       useAllStructureTypes();
+      useAllExtendedTypes();
     })
     it('should define a structure for holding a integer', function() {
       const structure = env.beginStructure({
