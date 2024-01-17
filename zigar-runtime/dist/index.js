@@ -1465,6 +1465,85 @@ function normalizeOptional(map, forJSON) {
   return value?.[NORMALIZER]?.(map, forJSON) ?? value;
 }
 
+function definePrimitive(structure, env) {
+  const {
+    byteSize,
+    align,
+    instance: { members: [ member ] },
+  } = structure;
+  const { get, set } = getDescriptor(member, env);
+  const propApplier = createPropertyApplier(structure);
+  const initializer = function(arg) {
+    if (arg instanceof constructor) {
+      this[COPIER](arg);
+    } else {
+      if (arg && typeof(arg) === 'object') {
+        if (propApplier.call(this, arg) === 0) {
+          const type = getPrimitiveType(member);
+          throwInvalidInitializer(structure, type, arg);
+        }
+      } else if (arg !== undefined) {
+        set.call(this, arg);
+      }
+    }
+  };
+  const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const instanceDescriptors = {
+    $: { get, set },
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
+    typedArray: typedArray && getTypedArrayDescriptor(structure),
+    valueOf: { value: get },
+    toJSON: { value: get },
+    delete: { value: getDestructor(env) },
+    [Symbol.toPrimitive]: { value: get },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+  };
+  const staticDescriptors = {
+    [COMPAT]: { value: getCompatibleTags(structure) },
+    [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+function getIntRange(member) {
+  const { type, bitSize } = member;
+  const signed = (type === MemberType.Int);
+  let magBits = (signed) ? bitSize - 1 : bitSize;
+  if (bitSize <= 32) {
+    const max = 2 ** magBits - 1;
+    const min = (signed) ? -(2 ** magBits) : 0;
+    return { min, max };
+  } else {
+    magBits = BigInt(magBits);
+    const max = 2n ** magBits - 1n;
+    const min = (signed) ? -(2n ** magBits) : 0n;
+    return { min, max };
+  }
+}
+
+function getPrimitiveClass({ type, bitSize }) {
+  if (type === MemberType.Int || type === MemberType.Uint) {
+    if (bitSize <= 32) {
+      return Number;
+    } else {
+      return BigInt;
+    }
+  } else if (type === MemberType.Float) {
+    return Number;
+  } else if (type === MemberType.Bool) {
+    return Boolean;
+  }
+}
+
+function getPrimitiveType(member) {
+  const Primitive = getPrimitiveClass(member);
+  if (Primitive) {
+    return typeof(Primitive(0));
+  }
+}
+
 function defineSlice(structure, env) {
   const {
     align,
@@ -2289,83 +2368,102 @@ class ObjectCache {
   }
 }
 
-function definePrimitive(structure, env) {
+function defineErrorSet(structure, env) {
   const {
     byteSize,
     align,
     instance: { members: [ member ] },
   } = structure;
-  const { get, set } = getDescriptor(member, env);
+  const { get: getIndex } = getDescriptor(member, env);
+  // get the error descriptor instead of the int/uint descriptor
+  const { get, set } = getDescriptor({ ...member, type: MemberType.Error, structure }, env);
+  const expected = [ 'string', 'number' ];
   const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
-    if (arg instanceof constructor) {
-      this[COPIER](arg);
-    } else {
-      if (arg && typeof(arg) === 'object') {
+    if (arg && typeof(arg) === 'object') {
+      try {
         if (propApplier.call(this, arg) === 0) {
-          const type = getPrimitiveType(member);
-          throwInvalidInitializer(structure, type, arg);
+          throwInvalidInitializer(structure, expected, arg);
+        } 
+      } catch (err) {
+        const { error } = arg;
+        if (typeof(error) === 'string') {
+          set.call(this, error);
+        } else {
+          throw err;
         }
-      } else if (arg !== undefined) {
-        set.call(this, arg);
       }
+    } else if (arg !== undefined) {
+      set.call(this, arg);
     }
   };
-  const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
+  const alternateCaster = function(arg) {
+    if (typeof(arg) === 'number' || typeof(arg) === 'string') {
+      return constructor[ITEMS][arg];
+    } else if (!getDataView(structure, arg, env)) {
+      throwInvalidInitializer(structure, expected, arg);
+    } else {
+      return false;
+    }
+  };
+  const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
+  Object.setPrototypeOf(constructor.prototype, globalErrorSet.prototype);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const getMessage = function() {
+    const index = getIndex.call(this);
+    return constructor[MESSAGES][index];
+  };
+  const toStringTag = function() { return 'Error' };
+  const toPrimitive = function(hint) {
+    if (hint === 'string') {
+      return Error.prototype.toString.call(this, hint);
+    } else {
+      return getIndex.call(this);
+    }
+  };
   const instanceDescriptors = {
     $: { get, set },
+    message: { get: getMessage },
     dataView: getDataViewDescriptor(structure),
     base64: getBase64Descriptor(structure),
     typedArray: typedArray && getTypedArrayDescriptor(structure),
-    valueOf: { value: get },
-    toJSON: { value: get },
+    valueOf: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    [Symbol.toPrimitive]: { value: get },
+    // ensure that libraries that rely on the string tag for type detection will
+    // correctly identify the object as an error
+    [Symbol.toStringTag]: { get: toStringTag },
+    [Symbol.toPrimitive]: { value: toPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
+    [NORMALIZER]: { value: normalizeError },
   };
   const staticDescriptors = {
-    [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [ITEMS]: { value: {} },
+    [MESSAGES]: { value: {} },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
-function getIntRange(member) {
-  const { type, bitSize } = member;
-  const signed = (type === MemberType.Int);
-  let magBits = (signed) ? bitSize - 1 : bitSize;
-  if (bitSize <= 32) {
-    const max = 2 ** magBits - 1;
-    const min = (signed) ? -(2 ** magBits) : 0;
-    return { min, max };
+function normalizeError(map, forJSON) {
+  const err = this.$;
+  if (forJSON) {
+    const { message } = err;
+    return { error: message };
   } else {
-    magBits = BigInt(magBits);
-    const max = 2n ** magBits - 1n;
-    const min = (signed) ? -(2n ** magBits) : 0n;
-    return { min, max };
+    return err;
   }
 }
 
-function getPrimitiveClass({ type, bitSize }) {
-  if (type === MemberType.Int || type === MemberType.Uint) {
-    if (bitSize <= 32) {
-      return Number;
-    } else {
-      return BigInt;
-    }
-  } else if (type === MemberType.Float) {
-    return Number;
-  } else if (type === MemberType.Bool) {
-    return Boolean;
-  }
+let globalErrorSet;
+
+function createGlobalErrorSet() {
+  globalErrorSet = function() {};
+  Object.setPrototypeOf(globalErrorSet.prototype, Error.prototype);
 }
 
-function getPrimitiveType(member) {
-  const Primitive = getPrimitiveClass(member);
-  if (Primitive) {
-    return typeof(Primitive(0));
-  }
+function getGlobalErrorSet() {
+  return globalErrorSet;
 }
 
 const MemberType = {
@@ -3832,104 +3930,6 @@ function cacheMethod(access, member, cb) {
   return fn;
 }
 
-function defineErrorSet(structure, env) {
-  const {
-    byteSize,
-    align,
-    instance: { members: [ member ] },
-  } = structure;
-  const { get: getIndex } = getDescriptor(member, env);
-  // get the error descriptor instead of the int/uint descriptor
-  const { get, set } = getDescriptor({ ...member, type: MemberType.Error, structure }, env);
-  const expected = [ 'string', 'number' ];
-  const propApplier = createPropertyApplier(structure);
-  const initializer = function(arg) {
-    if (arg && typeof(arg) === 'object') {
-      try {
-        if (propApplier.call(this, arg) === 0) {
-          throwInvalidInitializer(structure, expected, arg);
-        } 
-      } catch (err) {
-        const { error } = arg;
-        if (typeof(error) === 'string') {
-          set.call(this, error);
-        } else {
-          throw err;
-        }
-      }
-    } else if (arg !== undefined) {
-      set.call(this, arg);
-    }
-  };
-  const alternateCaster = function(arg) {
-    if (typeof(arg) === 'number' || typeof(arg) === 'string') {
-      return constructor[ITEMS][arg];
-    } else if (!getDataView(structure, arg, env)) {
-      throwInvalidInitializer(structure, expected, arg);
-    } else {
-      return false;
-    }
-  };
-  const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
-  Object.setPrototypeOf(constructor.prototype, globalErrorSet.prototype);
-  const typedArray = structure.typedArray = getTypedArrayClass(member);
-  const getMessage = function() {
-    const index = getIndex.call(this);
-    return constructor[MESSAGES][index];
-  };
-  const toStringTag = function() { return 'Error' };
-  const toPrimitive = function(hint) {
-    if (hint === 'string') {
-      return Error.prototype.toString.call(this, hint);
-    } else {
-      return getIndex.call(this);
-    }
-  };
-  const instanceDescriptors = {
-    $: { get, set },
-    message: { get: getMessage },
-    dataView: getDataViewDescriptor(structure),
-    base64: getBase64Descriptor(structure),
-    typedArray: typedArray && getTypedArrayDescriptor(structure),
-    valueOf: { value: getValueOf },
-    toJSON: { value: convertToJSON },
-    delete: { value: getDestructor(env) },
-    // ensure that libraries that rely on the string tag for type detection will
-    // correctly identify the object as an error
-    [Symbol.toStringTag]: { get: toStringTag },
-    [Symbol.toPrimitive]: { value: toPrimitive },
-    [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizeError },
-  };
-  const staticDescriptors = {
-    [ALIGN]: { value: align },
-    [SIZE]: { value: byteSize },
-    [ITEMS]: { value: {} },
-    [MESSAGES]: { value: {} },
-  };
-  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
-}
-function normalizeError(map, forJSON) {
-  const err = this.$;
-  if (forJSON) {
-    const { message } = err;
-    return { error: message };
-  } else {
-    return err;
-  }
-}
-
-let globalErrorSet;
-
-function createGlobalErrorSet() {
-  globalErrorSet = function() {};
-  Object.setPrototypeOf(globalErrorSet.prototype, Error.prototype);
-}
-
-function getGlobalErrorSet() {
-  return globalErrorSet;
-}
-
 function addMethods(s, env) {
   const add = (target, { methods }, pushThis) => {
     const descriptors = {};
@@ -4265,7 +4265,8 @@ class Environment {
   }
 
   /* RUNTIME-ONLY */
-  recreateStructures(structures) {
+  recreateStructures(structures, options) {
+    Object.assign(this, options);
     const insertObjects = (dest, placeholders) => {
       for (const [ slot, placeholder ] of Object.entries(placeholders)) {
         dest[slot] = createObject(placeholder);

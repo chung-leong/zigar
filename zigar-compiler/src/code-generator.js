@@ -2,7 +2,7 @@ import { MemberType, isReadOnly } from '../../zigar-runtime/src/member.js';
 import { StructureType, findAllObjects, getFeaturesUsed } from '../../zigar-runtime/src/structure.js';
 
 export function generateCode(definition, params) {
-  const { structures, keys } = definition;
+  const { structures, options, keys } = definition;
   const {
     runtimeURL,
     binarySource = null,
@@ -26,12 +26,12 @@ export function generateCode(definition, params) {
     add(`${feature}();`);
   }
   // write out the structures as object literals 
-  addStructureDefinitions(lines, structures, keys);
+  addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
   add(`const env = createEnvironment();`);
   add(`const __zigar = env.getControlObject();`);
   add(`\n// recreate structures`);
-  add(`env.recreateStructures(structures);`);
+  add(`env.recreateStructures(structures, options);`);
   if (binarySource) {
     add(`\n// initiate loading and compilation of WASM bytecodes`);
     add(`const source = ${binarySource};`);
@@ -60,7 +60,8 @@ export function generateCode(definition, params) {
   return { code, exports, structures };
 }
 
-function addStructureDefinitions(lines, structures, keys) {
+function addStructureDefinitions(lines, definition) {
+  const { structures, options, keys } = definition;
   const { MEMORY, SLOTS, CONST } = keys;
   const add = manageIndentation(lines);
   const defaultStructure = {
@@ -86,7 +87,18 @@ function addStructureDefinitions(lines, structures, keys) {
   add(`\n// structure defaults`);
   add(`const s = {`);
   for (const [ name, value ] of Object.entries(defaultStructure)) {
-    add(`${name}: ${JSON.stringify(value)},`);
+    switch (name) {
+      case 'instance':
+      case 'static':
+        add(`${name}: {`);
+        for (const [ name2, value2 ] of Object.entries(value)) {
+          add(`${name2}: ${JSON.stringify(value2)},`);
+        }
+        add(`},`)
+        break;
+      default:
+        add(`${name}: ${JSON.stringify(value)},`);
+    }
   }
   add(`};`);
   const defaultMember = {
@@ -259,6 +271,11 @@ function addStructureDefinitions(lines, structures, keys) {
   add(`];`)
   const root = structures[structures.length - 1];
   add(`const root = ${structureNames.get(root)};`);
+  add(`const options = {`)
+  for (const [ name, value ] of Object.entries(options)) {
+    add(`${name}: ${value},`);
+  }
+  add(`};`)
   return lines;
 }
 

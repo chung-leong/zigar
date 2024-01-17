@@ -342,8 +342,12 @@ export class Environment {
 
   exportStructures() {
     this.prepareObjectsForExport();
-    const { structures } = this;
-    return { structures, keys: { MEMORY, SLOTS, CONST } };
+    const { structures, runtimeSafety, littleEndian } = this;
+    return { 
+      structures, 
+      options: { runtimeSafety, littleEndian }, 
+      keys: { MEMORY, SLOTS, CONST } 
+    };
   }
 
   prepareObjectsForExport() {
@@ -440,7 +444,8 @@ export class Environment {
   }
 
   /* RUNTIME-ONLY */
-  recreateStructures(structures) {
+  recreateStructures(structures, options) {
+    Object.assign(this, options);
     const insertObjects = (dest, placeholders) => {
       for (const [ slot, placeholder ] of Object.entries(placeholders)) {
         dest[slot] = createObject(placeholder);

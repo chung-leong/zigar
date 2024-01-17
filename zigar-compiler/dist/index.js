@@ -4101,7 +4101,7 @@ function useAllMemberTypes() {
 }
 
 function generateCode(definition, params) {
-  const { structures, keys } = definition;
+  const { structures, options, keys } = definition;
   const {
     runtimeURL,
     binarySource = null,
@@ -4125,12 +4125,12 @@ function generateCode(definition, params) {
     add(`${feature}();`);
   }
   // write out the structures as object literals 
-  addStructureDefinitions(lines, structures, keys);
+  addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
   add(`const env = createEnvironment();`);
   add(`const __zigar = env.getControlObject();`);
   add(`\n// recreate structures`);
-  add(`env.recreateStructures(structures);`);
+  add(`env.recreateStructures(structures, options);`);
   if (binarySource) {
     add(`\n// initiate loading and compilation of WASM bytecodes`);
     add(`const source = ${binarySource};`);
@@ -4159,7 +4159,8 @@ function generateCode(definition, params) {
   return { code, exports, structures };
 }
 
-function addStructureDefinitions(lines, structures, keys) {
+function addStructureDefinitions(lines, definition) {
+  const { structures, options, keys } = definition;
   const { MEMORY, SLOTS, CONST } = keys;
   const add = manageIndentation(lines);
   const defaultStructure = {
@@ -4185,7 +4186,18 @@ function addStructureDefinitions(lines, structures, keys) {
   add(`\n// structure defaults`);
   add(`const s = {`);
   for (const [ name, value ] of Object.entries(defaultStructure)) {
-    add(`${name}: ${JSON.stringify(value)},`);
+    switch (name) {
+      case 'instance':
+      case 'static':
+        add(`${name}: {`);
+        for (const [ name2, value2 ] of Object.entries(value)) {
+          add(`${name2}: ${JSON.stringify(value2)},`);
+        }
+        add(`},`);
+        break;
+      default:
+        add(`${name}: ${JSON.stringify(value)},`);
+    }
   }
   add(`};`);
   const defaultMember = {
@@ -4358,11 +4370,17 @@ function addStructureDefinitions(lines, structures, keys) {
   add(`];`);
   const root = structures[structures.length - 1];
   add(`const root = ${structureNames.get(root)};`);
+  add(`const options = {`);
+  for (const [ name, value ] of Object.entries(options)) {
+    add(`${name}: ${value},`);
+  }
+  add(`};`);
   return lines;
 }
 
 function getExports(structures) {
   const root = structures[structures.length - 1];
+  const { constructor } = root;
   const exportables = [];
   // export only members whose names are legal JS identifiers
   const legal = /^[$\w]+$/;
@@ -4374,10 +4392,9 @@ function getExports(structures) {
   for (const member of root.static.members) {
     // only read-only properties are exportable
     if (isReadOnly(member.type) && legal.test(member.name)) {
-      // make sure that getter wouldn't throw (possible with error union)
-      const { constructor } = root;
       try {
-        const value = constructor[member.name];
+        // make sure that getter wouldn't throw (possible with error union)
+        constructor[member.name];
         exportables.push(member.name);
       } catch (err) {
       }
@@ -5237,8 +5254,12 @@ class Environment {
 
   exportStructures() {
     this.prepareObjectsForExport();
-    const { structures } = this;
-    return { structures, keys: { MEMORY, SLOTS, CONST } };
+    const { structures, runtimeSafety, littleEndian } = this;
+    return { 
+      structures, 
+      options: { runtimeSafety, littleEndian }, 
+      keys: { MEMORY, SLOTS, CONST } 
+    };
   }
 
   prepareObjectsForExport() {
