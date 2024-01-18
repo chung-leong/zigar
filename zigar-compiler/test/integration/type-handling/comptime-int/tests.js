@@ -18,6 +18,7 @@ export function addTests(importModule, options) {
       expect(small).to.equal(127);
       expect(negative).to.equal(-167);
       expect(larger).to.equal(0x1234_5678);
+      expect(JSON.stringify(negative)).to.equal('-167');
     })
     it('should ignore a function accepting comptime int as arguments', async function() {
       this.timeout(120000);

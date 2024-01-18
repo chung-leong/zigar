@@ -20,6 +20,8 @@ export function addTests(importModule, options) {
       expect([ ...module.v2 ]).to.eql([ 4, 5, 6 ]);
       const lines = await capture(() => module.print());
       expect(lines).to.eql([ '{ 4, 5, 6 }' ]);
+      expect(module.v1.valueOf()).to.eql([ 1, 2, 3, 4 ]);
+      expect(JSON.stringify(module.v1)).to.equal('[1,2,3,4]');
     })
     it('should print vector arguments', async function() {
       this.timeout(120000);

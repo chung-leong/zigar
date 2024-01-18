@@ -46,7 +46,7 @@ describe('NodeEnvironment', function() {
     it('should remove buffer at indicated address', function() {
       const env = new NodeEnvironment();
       env.obtainFixedView = () => null;
-      env.getBufferAddress = () => 0x10010;
+      env.extractBufferAddress = () => 0x10010;
       env.startContext();
       const dv = env.allocateHostMemory(32, 32);
       expect(dv).to.be.instanceOf(DataView);

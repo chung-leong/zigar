@@ -23,6 +23,8 @@ export function addTests(importModule, options) {
       expect(f).to.be.a('function');
       const lines = await capture(() => f())
       expect(lines[0]).to.equal('Hello world');
+      expect(hello.valueOf()).to.equal(hello);
+      expect(JSON.stringify(hello)).to.equal(undefined);
     })
     it('should ignore function accepting function as arguments', async function() {
       this.timeout(120000);

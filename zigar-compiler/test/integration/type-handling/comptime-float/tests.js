@@ -16,6 +16,7 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { pi } = await importTest('as-static-variables');
       expect(pi.toFixed(4)).to.equal('3.1416');
+      expect(JSON.stringify(pi)).to.equal('3.141592653589793');
     })
     it('should ignore a function accepting comptime float as arguments', async function() {
       this.timeout(120000);

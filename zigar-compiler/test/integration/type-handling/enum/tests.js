@@ -34,6 +34,8 @@ export function addTests(importModule, options) {
       expect(module.pet).to.be.equal(Pet.Dog);
       const [ after ] = await capture(() => print());
       expect(after).to.equal('as-static-variables.Pet.Dog');
+      expect(module.pet.valueOf()).to.equal('Dog');
+      expect(JSON.stringify(module.pet)).to.equal('"Dog"');
     })
     it('should print enum arguments', async function() {
       this.timeout(120000);

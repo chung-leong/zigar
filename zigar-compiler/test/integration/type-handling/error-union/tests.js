@@ -41,6 +41,8 @@ export function addTests(importModule, options) {
       // check void setter
       module.void_error = undefined;
       expect(module.void_error).to.be.undefined;
+      expect(() => JSON.stringify(module.negative_outcome)).to.throw();
+      expect(JSON.stringify(module.positive_outcome)).to.equal('456');
     })
     it('should print error union arguments', async function() {
       this.timeout(120000);

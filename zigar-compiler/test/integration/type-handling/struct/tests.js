@@ -26,6 +26,7 @@ export function addTests(importModule, options) {
       expect(() => comptime_struct.input.src.channels = 5).to.throw(Error);
       expect(() => comptime_struct.input.src = { channels: 5 }).to.throw(Error);
       expect(() => comptime_struct.input = { src: { channels: 5 } }).to.throw(Error);
+      expect(JSON.stringify(module.variable)).to.equal('{"number1":888,"number2":999}');
     })
     it('should print struct arguments', async function() {
       this.timeout(120000);

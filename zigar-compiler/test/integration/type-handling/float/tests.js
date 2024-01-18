@@ -25,6 +25,7 @@ export function addTests(importModule, options) {
       const [ after ] = await capture(() => print());
       expect(after).to.equal('1.234');
       expect(() => module.float32_const = 0).to.throw();
+      expect(JSON.stringify(module.float64)).to.equal('1.234');
     })
     it('should print float arguments', async function() {
       this.timeout(120000);

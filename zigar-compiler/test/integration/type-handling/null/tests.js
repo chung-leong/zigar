@@ -11,6 +11,7 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { default: module } = await importTest('as-static-variables');
       expect(module.weird).to.be.null;
+      expect(JSON.stringify(module.weird)).to.equal('null');
     })
     it('should ignore a function accepting null as arguments', async function() {
       this.timeout(120000);

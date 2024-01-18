@@ -42,6 +42,15 @@ export function addTests(importModule, options) {
       }
       module.useMonkey();
       expect(module.bare_union.monkey).to.equal(777n);
+      expect(module.variant_c.valueOf()).to.eql({ Float: 3.14 });
+      expect(JSON.stringify(module.variant_c)).to.equal('{"Float":3.14}');
+      expect(JSON.stringify(module.variant_a)).to.equal('{"String":[97,112,112,108,101]}');
+      expect(module.extern_union.valueOf()).to.eql({ 
+        dog: 100,
+        cat: 100,
+        pig: 4.94e-322,
+      });
+      expect(JSON.stringify(module.extern_union)).to.equal('{"dog":100,"cat":100,"pig":4.94e-322}');
     })
     it('should print union arguments', async function() {
       this.timeout(120000);

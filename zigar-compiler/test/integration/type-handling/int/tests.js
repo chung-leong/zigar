@@ -35,6 +35,7 @@ export function addTests(importModule, options) {
       const [ after ] = await capture(() => print());
       expect(after).to.equal("123");
       expect(() => module.int16 = 0).to.throw();
+      expect(JSON.stringify(module.uint16)).to.equal('123');
     })
     it('should print int arguments', async function() {
       this.timeout(120000);

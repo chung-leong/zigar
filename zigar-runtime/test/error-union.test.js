@@ -78,7 +78,6 @@ describe('Error union functions', function() {
       expect(object.valueOf()).to.equal(1234n);
       object.$ = MyError.UnableToCreateObject;
       expect(() => object.valueOf()).to.throw(Hello.UnableToCreateObject);
-      expect(JSON.stringify(object)).to.equal('{"error":"Unable to create object"}');
     })
     it('should define an error union that accepts anyerror', function() {
       const anyErrorStructure = env.beginStructure({
@@ -157,7 +156,6 @@ describe('Error union functions', function() {
       expect(object.valueOf()).to.equal(1234n);
       object.$ = MyError.UnableToCreateObject;
       expect(() => object.valueOf()).to.throw(Hello.UnableToCreateObject);
-      expect(JSON.stringify(object)).to.equal('{"error":"Unable to create object"}');
     })
     it('should cast the same buffer to the same object', function() {
       const errorStructure = env.beginStructure({
@@ -1146,93 +1144,6 @@ describe('Error union functions', function() {
       expect(() => pets.$ = { cat: 123 }).to.throw(TypeError)
         .with.property('message').that.contains('read-only');
     });
-    it('should initialize error union object from toJSON output', function() {
-      const structStructure = env.beginStructure({
-        type: StructureType.Struct,
-        name: 'Hello',
-        byteSize: 4 * 2,
-      });
-      env.attachMember(structStructure, {
-        name: 'dog',
-        type: MemberType.Int,
-        isRequired: true,
-        byteSize: 4,
-        bitOffset: 0,
-        bitSize: 32,
-      });
-      env.attachMember(structStructure, {
-        name: 'cat',
-        type: MemberType.Int,
-        isRequired: true,
-        byteSize: 4,
-        bitOffset: 32,
-        bitSize: 32,
-      });     
-      env.finalizeShape(structStructure);
-      env.finalizeStructure(structStructure);
-      const errorStructure = env.beginStructure({
-        type: StructureType.ErrorSet,
-        name: 'MyError',
-        byteSize: 2,
-      });      
-      env.attachMember(errorStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-      });
-      env.finalizeShape(errorStructure);
-      const { constructor: MyError } = errorStructure;
-      env.attachMember(errorStructure, {
-        name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Comptime,
-        slot: 0,
-        structure: errorStructure,
-      }, true);
-      env.attachMember(errorStructure, {
-        name: 'UnableToCreateObject',
-        type: MemberType.Comptime,
-        slot: 1,
-        structure: errorStructure,
-      }, true);
-      env.attachTemplate(errorStructure, {
-        [SLOTS]: {
-          0: MyError.call(ENVIRONMENT, errorData(5)),
-          1: MyError.call(ENVIRONMENT, errorData(8)),
-        }
-      }, true);
-      env.finalizeStructure(errorStructure);
-      const structure = env.beginStructure({
-        type: StructureType.ErrorUnion,
-        name: 'Hello',
-        byteSize: structStructure.byteSize + 2,
-      });
-      env.attachMember(structure, {
-        name: 'value',
-        type: MemberType.Object,
-        bitOffset: 0,
-        bitSize: structStructure.byteSize * 8,
-        byteSize: structStructure.byteSize,
-        structure: structStructure,
-      });
-      env.attachMember(structure, {
-        name: 'error',
-        type: MemberType.Error,
-        bitOffset: structStructure.byteSize * 8,
-        bitSize: 16,
-        byteSize: 2,
-        structure: errorStructure,
-      });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      const object1 = new Hello(MyError.UnableToCreateObject);
-      const json = object1.toJSON();
-      const object2 = new Hello(json);
-      expect(() => object2.$).to.throw(MyError.UnableToCreateObject);
-      expect(() => new Hello({ error: 'Something' })).to.throw(TypeError)
-        .with.property('message').to.contain('Something');
-    })    
     it('should do nothing when undefined is assigned to it', function() {
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,

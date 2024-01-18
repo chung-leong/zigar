@@ -63,6 +63,8 @@ export function addTests(importModule, options) {
       const { string } = u8_slice_w_sentinel;
       expect(string).to.equal('Hello world');
       expect([ ...i64_slice_w_sentinel ]).to.eql([ 0n, 1n, 2n, 3n, 4n, 5n, 6n, 7n ]);
+      expect(int32_slice.valueOf()).to.eql([ 123, 456, 789 ]);
+      expect(JSON.stringify(int32_slice)).to.equal('[123,456,789]');
     })
     it('should print pointer arguments', async function() {
       this.timeout(120000);

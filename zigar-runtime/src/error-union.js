@@ -106,14 +106,6 @@ export function defineErrorUnion(structure, env) {
 }
 
 export function normalizeErrorUnion(map, forJSON) {
-  try {
-    const value = this.$;
-    return value[NORMALIZER]?.(map, forJSON) ?? value;
-  } catch (err) {
-    if (forJSON) {
-      return { error: err.message };
-    } else {
-      throw err;
-    }
-  }
+  const value = this.$;
+  return value[NORMALIZER]?.(map, forJSON) ?? value;
 }

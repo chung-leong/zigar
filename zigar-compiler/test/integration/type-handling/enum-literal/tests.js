@@ -25,6 +25,7 @@ export function addTests(importModule, options) {
         7: 'Alfheim',
         8: 'Nidavellir',
       });
+      expect(JSON.stringify(world)).to.equal('{"0":"Asgard","1":"Midgard","2":"Jotunheim","3":"Svartalfheim","4":"Vanaheim","5":"Muspelheim","6":"Niflheim","7":"Alfheim","8":"Nidavellir"}');
     })
     it('should ignore function accepting enum literal as arguments', async function() {
       this.timeout(120000);

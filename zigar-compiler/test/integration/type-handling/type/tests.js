@@ -27,6 +27,7 @@ export function addTests(importModule, options) {
       const object = new Struct({});
       expect(object.number1).to.equal(123);
       expect(object.number2).to.equal(456);
+      expect(JSON.stringify(Int32)).to.equal(undefined);
     })
     it('should ignore a function accepting type as arguments', async function() {
       this.timeout(120000);

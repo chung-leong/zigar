@@ -30,6 +30,8 @@ export function addTests(importModule, options) {
       expect(f64_value).to.equal(3.14);
       expect(() => module.f64_value = null).to.throw();
       expect(() => module.f64_empty = 3.14).to.throw();
+      expect(JSON.stringify(module.bool_empty)).to.equal('null');
+      expect(JSON.stringify(module.bool_value)).to.equal('true');
     })
     it('should print optional arguments', async function() {
       this.timeout(120000);

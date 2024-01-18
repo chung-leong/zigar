@@ -24,6 +24,7 @@ export function addTests(importModule, options) {
       expect(module.bool1).to.be.false;
       const [ after ] = await capture(() => print());
       expect(after).to.equal('no');
+      expect(JSON.stringify(module.bool1)).to.equal('false');
     })
     it('should print bool arguments', async function() {
       this.timeout(120000);

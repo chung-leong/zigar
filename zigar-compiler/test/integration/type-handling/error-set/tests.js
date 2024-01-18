@@ -34,8 +34,9 @@ export function addTests(importModule, options) {
       expect(module.error_var).to.equal(NormalError.OutOfMemory);
       const [ after ] = await capture(() => print());
       expect(after).to.equal('error.OutOfMemory');
+      expect(module.error_var.valueOf()).equal(NormalError.OutOfMemory);
+      expect(JSON.stringify(module.error_var)).to.equal('{"error":"Out of memory"}');
     })
-
     it('should print error arguments', async function() {
       this.timeout(120000);
       const { StrangeError, print, printAny } = await importTest('as-function-parameters');

@@ -6,7 +6,7 @@ export function addTests(importModule, options) {
     const url = new URL(`./${name}.zig`, import.meta.url).href;
     return importModule(url);
   };
-  describe('Crypto functions', function() {
+  describe('Built-in functions', function() {
     it('should produce MD5 hash matching that from Node native function', async function() {
       this.timeout(120000);
       const { md5 } = await importTest('generate-md5-hash');

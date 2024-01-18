@@ -16,6 +16,7 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { default: module } = await importTest('as-static-variables');
       expect(module.empty).to.be.undefined;
+      expect(JSON.stringify(module.empty)).to.equal(undefined);
     })
     it('should print void arguments', async function() {
       this.timeout(120000);
