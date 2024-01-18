@@ -183,7 +183,7 @@ fn clearBytes(bytes: [*]u8, len: usize, ptr_align: u8) void {
 }
 
 test "clearBytes" {
-    var len: usize = 64;
+    const len: usize = 64;
     var ptr_align: u8 = 0;
     while (ptr_align <= 4) : (ptr_align += 1) {
         if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
@@ -297,10 +297,12 @@ pub fn createGetFactoryThunk(comptime T: type) fn (*usize) callconv(.C) Result {
 }
 
 pub fn createModule(comptime T: type) Module {
+    // support both 0.11 and 0.12
+    const le = if (@hasField(std.builtin.Endian, "Little")) .Little else .little;
     return .{
         .version = 2,
         .attributes = .{
-            .little_endian = builtin.target.cpu.arch.endian() == .Little,
+            .little_endian = builtin.target.cpu.arch.endian() == le,
             .runtime_safety = switch (builtin.mode) {
                 .Debug, .ReleaseSafe => true,
                 else => false,
