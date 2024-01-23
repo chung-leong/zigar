@@ -104,7 +104,7 @@ export async function compile(path, options = {}) {
   return soPath;
 }
 
-function isWASM(arch) {
+export function isWASM(arch) {
   switch (arch) {
     case 'wasm32':
     case 'wasm64':
@@ -218,7 +218,7 @@ export async function acquireLock(soBuildDir, staleTime) {
         throw err;
       }
     }
-    await delay(50);
+    await delay(250);
   }
 }
 
@@ -227,7 +227,7 @@ export async function releaseLock(soBuildDir) {
   await deleteFile(pidPath);
 }
 
-export async function createProject(config, dir) {
+export function formatProjectConfig(config) {
   // translate from names used by Node to those used by Zig
   const cpuArchs = {
     arm: 'arm',
@@ -264,7 +264,11 @@ export async function createProject(config, dir) {
   lines.push(`pub const stub_path = ${JSON.stringify(config.stubPath)};`);
   lines.push(`pub const use_libc = ${config.useLibC ? true : false};`);
   lines.push(``);
-  const content = lines.join('\n');
+  return lines.join('\n');
+}
+
+export async function createProject(config, dir) {
+  const content = formatProjectConfig(config);
   const cfgFilePath = join(dir, 'build-cfg.zig');
   await writeFile(cfgFilePath, content);
   const buildFilePath = join(dir, 'build.zig');
@@ -309,7 +313,7 @@ export async function deleteFile(path) {
   try {
     await unlink(path);
   } catch (err) {
-    if (err.code !== 'ENOENT') {
+    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
       throw err;
     }
   }
@@ -349,22 +353,22 @@ export async function deleteDirectory(dir) {
     }
     await rmdir(dir);
   } catch (err) {
-    if (err.code !== 'ENOENT') {
+    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
       throw err;
     }
   }
 }
 
-function md5(text) {
+export function md5(text) {
   const hash = createHash('md5');
   hash.update(text);
   return hash.digest('hex');
 }
 
-async function delay(ms) {
-  await new Promise(r => setTimeout(r, ms));
+export function absolute(relpath) {
+  return fileURLToPath(new URL(relpath, import.meta.url));
 }
 
-function absolute(relpath) {
-  return fileURLToPath(new URL(relpath, import.meta.url));
+export async function delay(ms) {
+  await new Promise(r => setTimeout(r, ms));
 }

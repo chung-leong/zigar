@@ -3,6 +3,10 @@
   "version": "0.11.0",
   "description": "NodeJS C++ addon for loading compiled Zig module",
   "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./cjs": "./dist/index.cjs"
+  },
   "type": "module",
   "directories": {
     "test": "test"

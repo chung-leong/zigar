@@ -9,8 +9,12 @@ import { CONST, MEMORY, SLOTS } from '../../zigar-runtime/src/symbol.js';
 import { generateCode } from '../src/code-generator.js';
 
 describe('Code generation', function() {
+  const options = {
+    littleEndian: true,
+    runtimeSafety: true,
+  };
   describe('generateCode', function() {
-    const options = {
+    const params = {
       declareFeatures: true,
     };
     it('should generate code for defining a standard int type', function() {
@@ -39,8 +43,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const def = { structures: [ structure ], keys: { MEMORY, SLOTS, CONST }};
-      const { code } = generateCode(def, options);
+      const def = { structures: [ structure ], options, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, params);
       expect(code).to.contain('useInt()');
       expect(code).to.contain('i32');
       expect(code).to.not.contain('const source =');
@@ -71,8 +75,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const def = { structures: [ structure ], keys: { MEMORY, SLOTS, CONST }};
-      const { code } = generateCode(def, options);
+      const def = { structures: [ structure ], options, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, params);
       expect(code).to.contain('useExtendedInt()');
       expect(code).to.contain('useInt()');
       expect(code).to.contain('i31');
@@ -103,8 +107,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const def = { structures: [ structure ], keys: { MEMORY, SLOTS, CONST }};
-      const { code } = generateCode(def, options);
+      const def = { structures: [ structure ], options, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, params);
       expect(code).to.contain('useUint()');
       expect(code).to.contain('u32');
     })
@@ -134,8 +138,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const def = { structures: [ structure ], keys: { MEMORY, SLOTS, CONST }};
-      const { code } = generateCode(def, options);
+      const def = { structures: [ structure ], options, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, params);
       expect(code).to.contain('useExtendedUint()');
       expect(code).to.contain('useUint()');
       expect(code).to.contain('u31');
@@ -166,8 +170,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const def = { structures: [ structure ], keys: { MEMORY, SLOTS, CONST }};
-      const { code } = generateCode(def, options);
+      const def = { structures: [ structure ], options, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, params);
       expect(code).to.contain('useFloat()');
       expect(code).to.contain('f32');
     })
@@ -197,8 +201,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const def = { structures: [ structure ], keys: { MEMORY, SLOTS, CONST }};
-      const { code } = generateCode(def, options);
+      const def = { structures: [ structure ], options, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, params);
       expect(code).to.contain('useExtendedFloat()');
       expect(code).to.contain('useFloat()');
       expect(code).to.contain('f80');
@@ -229,8 +233,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const def = { structures: [ structure ], keys: { MEMORY, SLOTS, CONST }};
-      const { code } = generateCode(def, options);
+      const def = { structures: [ structure ], options, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, params);
       expect(code).to.contain('useBool()');
       expect(code).to.contain('bool');
     })
@@ -266,8 +270,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const def = { structures: [ structure ], keys: { MEMORY, SLOTS, CONST }};
-      const { code } = generateCode(def, options);
+      const def = { structures: [ structure ], options, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, params);
       expect(code).to.contain('useBool()');
       expect(code).to.contain('useExtendedBool()');
       expect(code).to.contain('flags');
@@ -324,8 +328,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const def = { structures: [ enumSetStructure, structure ], keys: { MEMORY, SLOTS, CONST }};
-      const { code } = generateCode(def, options);
+      const def = { structures: [ enumSetStructure, structure ], options, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, params);
       expect(code).to.contain('useEnumerationItem()');
       expect(code).to.contain('enumItem');
       expect(code).to.contain('enum {}');
@@ -381,8 +385,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const def = { structures: [ enumSetStructure, structure ], keys: { MEMORY, SLOTS, CONST }};
-      const { code } = generateCode(def, options);
+      const def = { structures: [ enumSetStructure, structure ], options, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, params);
       expect(code).to.contain('useEnumerationItem()');
       expect(code).to.contain('enumItem');
       expect(code).to.contain('enum {}');
@@ -429,8 +433,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const def = { structures: [ enumSetStructure, structure ], keys: { MEMORY, SLOTS, CONST }};
-      const { code } = generateCode(def, options);
+      const def = { structures: [ enumSetStructure, structure ], options, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, params);
       expect(code).to.contain('useType()');
       expect(code).to.contain('package');
       expect(code).to.contain('Enum');
@@ -486,8 +490,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const def = { structures: [ ptrStructure, structure ], keys: { MEMORY, SLOTS, CONST }};
-      const { code } = generateCode(def, options);
+      const def = { structures: [ ptrStructure, structure ], options, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, params);
       expect(code).to.contain('package');
       expect(code).to.contain('useStruct()');
       expect(code).to.contain('usePointer()');
@@ -544,8 +548,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const def = { structures: [ argStructure, structure ], keys: { MEMORY, SLOTS, CONST }};
-      const { code } = generateCode(def, { binarySource: `loadWASM()`, topLevelAwait: true, ...options });
+      const def = { structures: [ argStructure, structure ], options, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, { binarySource: `loadWASM()`, topLevelAwait: true, ...params });
       expect(code).to.contain('package');
       expect(code).to.contain('useStruct()');
       const m = /export const \{([\s\S]*)\} = constructor/.exec(code);
@@ -613,8 +617,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const def = { structures: [ structStructure, structure ], keys: { MEMORY, SLOTS, CONST }};
-      const { code } = generateCode(def, options);
+      const def = { structures: [ structStructure, structure ], options, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, params);
       expect(code).to.contain('package');
       expect(code).to.contain('useStruct()');
       expect(code).to.contain('Hello');
@@ -670,8 +674,8 @@ describe('Code generation', function() {
           template: null,
         },
       };
-      const def = { structures: [ structStructure, structure ], keys: { MEMORY, SLOTS, CONST }};
-      const { code, exports } = generateCode(def, { omitExports: true, ...options });
+      const def = { structures: [ structStructure, structure ], options, keys: { MEMORY, SLOTS, CONST }};
+      const { code, exports } = generateCode(def, { omitExports: true, ...params });
       expect(code).to.not.contain('export {');
       expect(exports).to.contain('__zigar');
     })
@@ -704,8 +708,8 @@ describe('Code generation', function() {
           },
         });
       }
-      const def = { structures, keys: { MEMORY, SLOTS, CONST }};
-      const { code } = generateCode(def, options);
+      const def = { structures, options, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, params);
     })
   })
 })
