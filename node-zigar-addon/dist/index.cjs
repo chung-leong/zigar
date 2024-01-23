@@ -1,6 +1,6 @@
-const { fileURLToPath } = require('url');
+const { resolve } = require('path');
 
-const extPath = fileURLToPath(new URL('../build/Release/node-zigar-addon', import.meta.url));
+const extPath = resolve(`${__dirname}/../build/Release/node-zigar-addon`);
 
 function createEnvironment() {
   const { createEnvironment } = require(extPath);

@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import os from 'os';
 import { fileURLToPath } from 'url';
 
+import cjs from '../dist/index.cjs';
 import {
   importModule,
 } from '../dist/index.js';
@@ -17,23 +18,33 @@ function getSOFilename(name, platform) {
 describe('Module loading', function() {
   const arch = os.arch();
   const platform = os.platform();
-  it('should load module', async function() {
-    const filename = getSOFilename('integers', platform);
+  it('should load module', function() {
+    this.timeout(120000);
+    const filename = getSOFilename('as-static-variables', platform);
     const url = new URL(`./so-samples/${platform}/${arch}/${filename}`, import.meta.url);
     const path = fileURLToPath(url);
-    const module = await importModule(path);
+    const module = importModule(path);
     expect(module.int32).to.equal(1234);
   })
-  it('should throw when module is missing', async function() {
+  it('should throw when module is missing', function() {
+    this.timeout(120000);
     const filename = getSOFilename('missing', platform);
     const url = new URL(`./so-samples/${platform}/${arch}/${filename}`, import.meta.url);
     const path = fileURLToPath(url);
     let error;
     try {
-      await importModule(path);
+      importModule(path);
     } catch (err) {
       error = err;
     }
     expect(error).to.be.an('error');
+  })
+  it('should load module using CommonJS function', function() {
+    this.timeout(120000);
+    const filename = getSOFilename('as-static-variables', platform);
+    const url = new URL(`./so-samples/${platform}/${arch}/${filename}`, import.meta.url);
+    const path = fileURLToPath(url);
+    const module = cjs.importModule(path);
+    expect(module.int32).to.equal(1234);
   })
 });
