@@ -5,7 +5,8 @@
   "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js",
-    "./n14": "./dist/index-n14.js"
+    "./n14": "./dist/index-n14.js",
+    "./cjs": "./dist/index.cjs"
   },
   "type": "module",
   "directories": {

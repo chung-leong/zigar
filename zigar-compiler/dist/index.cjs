@@ -4474,9 +4474,9 @@ async function compile(path$1, options = {}) {
     packageName: rootFile.name,
     packagePath: fullPath,
     packageRoot: rootFile.dir,
-    exporterPath: absolute(`../zig/exporter-${suffix}.zig`),
-    stubPath: absolute(`../zig/stub-${suffix}.zig`),
-    buildFilePath: absolute(`../zig/build.zig`),
+    exporterPath: absolute$1(`../zig/exporter-${suffix}.zig`),
+    stubPath: absolute$1(`../zig/stub-${suffix}.zig`),
+    buildFilePath: absolute$1(`../zig/build.zig`),
     useLibC: (platform === 'win32') ? true : false,
   };
   const dirHash = md5(rootFile.dir);
@@ -4513,7 +4513,7 @@ async function compile(path$1, options = {}) {
     }
   });
   if (!changed) {
-    const zigFolder = absolute('../zig');
+    const zigFolder = absolute$1('../zig');
     // rebuild when source files have changed
     await scanDirectory(zigFolder, /\.zig$/i, (dir, name, { mtime }) => {
       if (!(soMTime > mtime)) {
@@ -4807,12 +4807,12 @@ function md5(text) {
   return hash.digest('hex');
 }
 
-function absolute(relpath) {
-  return url.fileURLToPath(new URL(relpath, (typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (_documentCurrentScript && _documentCurrentScript.src || new URL('index.cjs', document.baseURI).href))));
-}
-
 async function delay(ms) {
   await new Promise(r => setTimeout(r, ms));
+}
+
+function absolute$1(relpath) {
+  return url.fileURLToPath(new URL(relpath, (typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (_documentCurrentScript && _documentCurrentScript.src || new URL('index.cjs', document.baseURI).href))));
 }
 
 const cwd = process.cwd();
@@ -5103,6 +5103,14 @@ function delaySync(ms) {
     child_process.execSync(`node`, options);
   } catch (err) {    
     console.log(err);
+  }
+}
+
+function absolute(relpath) {
+  if (path.isAbsolute(relpath)) {
+    return relpath;
+  } else {
+    return path.resolve(`${__dirname}/${relpath}`);
   }
 }
 

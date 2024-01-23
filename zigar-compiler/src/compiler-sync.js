@@ -4,9 +4,9 @@ import {
   statSync, unlinkSync, utimesSync, writeFileSync, writeSync
 } from 'fs';
 import os, { tmpdir } from 'os';
-import { join, parse, resolve } from 'path';
+import { isAbsolute, join, parse, resolve } from 'path';
 import {
-  absolute, formatProjectConfig, getBuildFolder, getLibraryName, isWASM, md5,
+  formatProjectConfig, getBuildFolder, getLibraryName, isWASM, md5,
 } from './compiler.js';
 
 const cwd = process.cwd();
@@ -297,5 +297,13 @@ export function delaySync(ms) {
     execSync(`node`, options);
   } catch (err) {    
     console.log(err);
+  }
+}
+
+function absolute(relpath) {
+  if (isAbsolute(relpath)) {
+    return relpath;
+  } else {
+    return resolve(`${__dirname}/${relpath}`);
   }
 }

@@ -365,10 +365,10 @@ export function md5(text) {
   return hash.digest('hex');
 }
 
-export function absolute(relpath) {
-  return fileURLToPath(new URL(relpath, import.meta.url));
-}
-
 export async function delay(ms) {
   await new Promise(r => setTimeout(r, ms));
+}
+
+function absolute(relpath) {
+  return fileURLToPath(new URL(relpath, import.meta.url));
 }

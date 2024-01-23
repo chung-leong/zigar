@@ -1,23 +1,23 @@
-const { createEnvironment } = require('node-zigar-addon/cjs');
+const { importModule } = require('node-zigar-addon/cjs');
 const { cwd } = require('process');
 const { fileURLToPath, pathToFileURL } = require('url');
-const { compile } = require('zigar-compiler');
+const { compileSync } = require('zigar-compiler/cjs');
+const Module = require('module');
 
 const baseURL = pathToFileURL(`${cwd()}/`).href;
-const extensionsRegex = /\.zig$/;
-
-function isZig(url) {
-  const { pathname } = new URL(url);
-  return extensionsRegex.test(pathname);
-}
+const srcExtRegEx = /\.zig$/;
 
 function importZig(url) {
-  
+  const zigPath = fileURLToPath(url);
+  const soPath = compileSync(zigPath);
+  return importModule(soPath);
 }
 
-Module.prototype.require = new Proxy(Module.prototype.require, {
-  apply(target, self, [ url ]) {
-    if (isZig(url)) {
+Module._load = new Proxy(Module._load, {
+  apply(target, self, args) {
+    const [ request, parent ] = args;
+    const url = new URL(request, pathToFileURL(parent.filename));
+    if (srcExtRegEx.test(url.pathname)) {
       return importZig(url);
     }
     return Reflect.apply(target, self, args);

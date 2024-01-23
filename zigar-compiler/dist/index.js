@@ -1,7 +1,7 @@
 import { exec, execSync } from 'child_process';
 import { statSync, lstatSync, readdirSync, writeFileSync, openSync, writeSync, closeSync, renameSync, readFileSync, chmodSync, utimesSync, unlinkSync, mkdirSync, rmdirSync } from 'fs';
 import os, { tmpdir } from 'os';
-import { join, resolve, parse, basename } from 'path';
+import { join, resolve, parse, isAbsolute, basename } from 'path';
 import { createHash } from 'crypto';
 import { stat, lstat, readdir, writeFile, open, rename, readFile, chmod, utimes, unlink, mkdir, rmdir } from 'fs/promises';
 import { fileURLToPath } from 'url';
@@ -4471,9 +4471,9 @@ async function compile(path, options = {}) {
     packageName: rootFile.name,
     packagePath: fullPath,
     packageRoot: rootFile.dir,
-    exporterPath: absolute(`../zig/exporter-${suffix}.zig`),
-    stubPath: absolute(`../zig/stub-${suffix}.zig`),
-    buildFilePath: absolute(`../zig/build.zig`),
+    exporterPath: absolute$1(`../zig/exporter-${suffix}.zig`),
+    stubPath: absolute$1(`../zig/stub-${suffix}.zig`),
+    buildFilePath: absolute$1(`../zig/build.zig`),
     useLibC: (platform === 'win32') ? true : false,
   };
   const dirHash = md5(rootFile.dir);
@@ -4510,7 +4510,7 @@ async function compile(path, options = {}) {
     }
   });
   if (!changed) {
-    const zigFolder = absolute('../zig');
+    const zigFolder = absolute$1('../zig');
     // rebuild when source files have changed
     await scanDirectory(zigFolder, /\.zig$/i, (dir, name, { mtime }) => {
       if (!(soMTime > mtime)) {
@@ -4804,12 +4804,12 @@ function md5(text) {
   return hash.digest('hex');
 }
 
-function absolute(relpath) {
-  return fileURLToPath(new URL(relpath, import.meta.url));
-}
-
 async function delay(ms) {
   await new Promise(r => setTimeout(r, ms));
+}
+
+function absolute$1(relpath) {
+  return fileURLToPath(new URL(relpath, import.meta.url));
 }
 
 const cwd = process.cwd();
@@ -5100,6 +5100,14 @@ function delaySync(ms) {
     execSync(`node`, options);
   } catch (err) {    
     console.log(err);
+  }
+}
+
+function absolute(relpath) {
+  if (isAbsolute(relpath)) {
+    return relpath;
+  } else {
+    return resolve(`${__dirname}/${relpath}`);
   }
 }
 
