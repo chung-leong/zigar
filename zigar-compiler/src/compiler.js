@@ -1,11 +1,15 @@
-import { exec } from 'child_process';
-import { createHash } from 'crypto';
-import {
-  chmod, lstat, mkdir, open, readFile, readdir, rename, rmdir, stat, unlink, utimes, writeFile
-} from 'fs/promises';
+import { exec, execSync } from 'child_process';
+import { writeFileSync } from 'fs';
+import { writeFile } from 'fs/promises';
 import os, { tmpdir } from 'os';
 import { join, parse, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import {
+  acquireLock, acquireLockSync, copyFile, copyFileSync, createDirectory, createDirectorySync,
+  deleteDirectory, deleteDirectorySync, findFile, findFileSync,
+  loadFile, loadFileSync, md5, moveFile, moveFileSync, releaseLock, releaseLockSync,
+  scanDirectory, scanDirectorySync, touchFile, touchFileSync,
+} from './utility-functions.js';
 
 const cwd = process.cwd();
 
@@ -104,6 +108,101 @@ export async function compile(path, options = {}) {
   return soPath;
 }
 
+export function compileSync(path, options = {}) {
+  const {
+    optimize = 'Debug',
+    clean = false,
+    platform = os.platform(),
+    arch = os.arch(),
+    nativeCpu = false,
+    buildDir = tmpdir(),
+    cacheDir = join(cwd, 'zigar-cache'),
+    zigCmd = `zig build -Doptimize=${optimize}`,
+    staleTime = 60000,
+  } = options;
+  const fullPath = resolve(path);
+  const rootFile = parse(fullPath);
+  const suffix = isWASM(arch) ? 'wasm' : 'c';
+  const config = {
+    platform,
+    arch,
+    nativeCpu,
+    packageName: rootFile.name,
+    packagePath: fullPath,
+    packageRoot: rootFile.dir,
+    exporterPath: absolute(`../zig/exporter-${suffix}.zig`),
+    stubPath: absolute(`../zig/stub-${suffix}.zig`),
+    buildFilePath: absolute(`../zig/build.zig`),
+    useLibC: (platform === 'win32') ? true : false,
+  };
+  const dirHash = md5(rootFile.dir);
+  const soName = getLibraryName(rootFile.name, platform, arch);
+  const soDir = join(cacheDir, platform, arch, optimize, dirHash);
+  const soPath = join(soDir, soName);
+  const soMTime = findFileSync(soPath)?.mtime;
+  if (!buildDir || !cacheDir || !zigCmd) {
+    // can't build when no command or build directory is set to empty
+    if (soMTime) {
+      return soPath;
+    } else {
+      throw new Error(`Cannot find shared library and compilation is disabled: ${soPath}`);
+    }
+  }
+  if (!findFileSync(fullPath)) {
+    throw new Error(`Source file not found: ${fullPath}`);
+  }
+  // scan the dir containing the file to see if recompilation is necessary
+  // also check if there's a custom build file and for C dependency
+  let changed = false;
+  scanDirectorySync(rootFile.dir, /\.zig$/i, (dir, name, { mtime }) => {
+    if (dir === rootFile.dir && name === 'build.zig') {
+      config.buildFilePath = join(dir, name);
+    }
+    if (!config.useLibC) {
+      const content = loadFileSync(join(dir, name));
+      if (content.includes('@cImport')) {
+        config.useLibC = true;
+      }
+    }
+    if (!(soMTime > mtime)) {
+      changed = true;
+    }
+  });
+  if (!changed) {
+    const zigFolder = absolute('../zig');
+    // rebuild when source files have changed
+    scanDirectorySync(zigFolder, /\.zig$/i, (dir, name, { mtime }) => {
+      if (!(soMTime > mtime)) {
+        changed = true;
+      }
+    });
+  }
+  if (!changed) {
+    return soPath;
+  }
+  // build in a unique temp dir
+  const soBuildDir = getBuildFolder(fullPath, platform, arch);
+  // only one process can compile a given file at a time
+  acquireLockSync(soBuildDir, staleTime);
+  try {
+    // create config file
+    createProjectSync(config, soBuildDir);
+    // then run the compiler
+    runCompilerSync(zigCmd, soBuildDir);
+    // move library to cache directory
+    const libPath = join(soBuildDir, 'zig-out', 'lib', soName);
+    createDirectorySync(soDir);
+    moveFileSync(libPath, soPath);
+    touchFileSync(soPath);
+  } finally {
+    releaseLockSync(soBuildDir);
+    if (clean) {
+      deleteDirectorySync(soBuildDir);
+    }
+  }
+  return soPath;
+}
+
 export function isWASM(arch) {
   switch (arch) {
     case 'wasm32':
@@ -159,72 +258,25 @@ export async function runCompiler(zigCmd, soBuildDir) {
   });
 }
 
-export async function findFile(path, follow = true) {
-  try {
-    return await (follow ? stat(path) : lstat(path));
-  } catch (err) {
-  }
-}
-
-export async function scanDirectory(dir, re, cb) {
-  const ino = (await findFile(dir))?.ino;
-  /* c8 ignore next 3 */
-  if (!ino) {
-    return;
-  }
-  const scanned = [ ino ];
-  const scan = async (dir) => {
-    try {
-      const list = await readdir(dir);
-      for (const name of list) {
-        if (name.startsWith('.') || name === 'node_modules' || name === 'zig-cache') {
-          continue;
-        }
-        const path = join(dir, name);
-        const info = await findFile(path);
-        if (info?.isDirectory() && !scanned.includes(info.ino)) {
-          await scan(path);
-        } else if (info?.isFile() && re.test(name)) {
-          await cb(dir, name, info);
-        }
-      }
-      /* c8 ignore next 2 */
-    } catch (err) {
-    }
+export function runCompilerSync(zigCmd, soBuildDir) {
+  const options = {
+    cwd: soBuildDir,
+    windowsHide: true,
+    stdio: 'pipe',
   };
-  await scan(dir);
-}
-
-export async function acquireLock(soBuildDir, staleTime) {
-  const pidPath = join(soBuildDir, 'pid');
-  while (true)   {
-    try {
-      await createDirectory(soBuildDir);
-      const handle = await open(pidPath, 'wx');
-      handle.write(`${process.pid}`);
-      handle.close();
-      return;
-    } catch (err) {
-      if (err.code === 'EEXIST') {
-        const last = (await findFile(pidPath))?.mtime;
-        const now = new Date();
-        const diff = now - last;
-        if (diff > staleTime) {
-          // lock file has been abandoned
-          await deleteFile(pidPath);
-          continue;
-        }
-      } else {
-        throw err;
+  try {
+    execSync(zigCmd, options);
+  } catch (err) {
+    const log = err.stderr ?? '';
+    if (log) {
+      const logPath = join(soBuildDir, 'log');
+      try {
+        writeFileSync(logPath, log);
+      } catch (_) {         
       }
     }
-    await delay(250);
+    throw new Error(`Zig compilation failed\n\n${log}`);
   }
-}
-
-export async function releaseLock(soBuildDir) {
-  const pidPath = join(soBuildDir, 'pid');
-  await deleteFile(pidPath);
 }
 
 export function formatProjectConfig(config) {
@@ -275,98 +327,12 @@ export async function createProject(config, dir) {
   await copyFile(config.buildFilePath, buildFilePath);
 }
 
-export async function moveFile(srcPath, dstPath) {
-  try {
-    await rename(srcPath, dstPath);
-    /* c8 ignore next 8 -- hard to test */
-  } catch (err) {
-    if (err.code == 'EXDEV') {
-      await copyFile(srcPath, dstPath);
-      await deleteFile(srcPath);
-    } else {
-      throw err;
-    }
-  }
-}
-
-export async function copyFile(srcPath, dstPath) {
-  const info = await stat(srcPath);
-  const data = await readFile(srcPath);
-  await writeFile(dstPath, data);
-  await chmod(dstPath, info.mode);
-}
-
-export async function loadFile(path, def) {
-  try {
-    return await readFile(path, 'utf8');
-  } catch (err) {
-    return def;
-  }
-}
-
-export async function touchFile(path) {
-  const now = new Date();
-  await utimes(path, now, now);
-}
-
-export async function deleteFile(path) {
-  try {
-    await unlink(path);
-  } catch (err) {
-    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
-      throw err;
-    }
-  }
-}
-
-export async function createDirectory(path) {
-  const exists = await findDirectory(path);
-  if (!exists) {
-    const { root, dir } = parse(path);
-    await createDirectory(dir);
-    try {
-      await mkdir(path);
-    } catch (err) {
-      /* c8 ignore next 3 */
-      if (err.code != 'EEXIST') {
-        throw err;
-      }
-    }
-  }
-}
-
-export async function findDirectory(path) {
-  return findFile(path);
-}
-
-export async function deleteDirectory(dir) {
-  try {
-    const list = await readdir(dir);
-    for (const name of list) {
-      const path = join(dir, name);
-      const info = await findFile(path, false);
-      if (info?.isDirectory()) {
-        await deleteDirectory(path);
-      } else if (info) {
-        await deleteFile(path);
-      }
-    }
-    await rmdir(dir);
-  } catch (err) {
-    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
-      throw err;
-    }
-  }
-}
-
-export function md5(text) {
-  const hash = createHash('md5');
-  hash.update(text);
-  return hash.digest('hex');
-}
-
-export async function delay(ms) {
-  await new Promise(r => setTimeout(r, ms));
+export function createProjectSync(config, dir) {
+  const content = formatProjectConfig(config);
+  const cfgFilePath = join(dir, 'build-cfg.zig');
+  writeFileSync(cfgFilePath, content);
+  const buildFilePath = join(dir, 'build.zig');
+  copyFileSync(config.buildFilePath, buildFilePath);
 }
 
 function absolute(relpath) {

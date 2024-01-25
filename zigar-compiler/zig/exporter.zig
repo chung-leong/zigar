@@ -1587,18 +1587,17 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                 const DT = @TypeOf(decl_value_ptr.*);
                 if (comptime isSupported(DT) and (DT != type or isSupported(decl_value_ptr.*))) {
                     const is_const = comptime isConst(@TypeOf(decl_value_ptr));
-                    if (!is_const and host.options.omit_variables) {
-                        continue;
+                    if (!is_const or !host.options.omit_variables) {
+                        const slot = getObjectSlot(Static, index);
+                        try host.attachMember(structure, .{
+                            .name = getCString(decl.name),
+                            .member_type = if (is_const) .Comptime else .Static,
+                            .slot = slot,
+                            .structure = try getStructure(host, DT),
+                        }, true);
+                        const value_obj = try exportPointerTarget(host, decl_value_ptr, is_const);
+                        try host.writeSlot(template, slot, value_obj);
                     }
-                    const slot = getObjectSlot(Static, index);
-                    try host.attachMember(structure, .{
-                        .name = getCString(decl.name),
-                        .member_type = if (is_const) .Comptime else .Static,
-                        .slot = slot,
-                        .structure = try getStructure(host, DT),
-                    }, true);
-                    const value_obj = try exportPointerTarget(host, decl_value_ptr, is_const);
-                    try host.writeSlot(template, slot, value_obj);
                 }
                 offset += 1;
             }

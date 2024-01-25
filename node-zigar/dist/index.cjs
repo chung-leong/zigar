@@ -8,8 +8,13 @@ const baseURL = pathToFileURL(`${cwd()}/`).href;
 const srcExtRegEx = /\.zig$/;
 
 function importZig(url) {
+  const {
+    omitFunctions = false,
+    omitVariables = isElectron(),
+    ...compileOptions
+  } = options;
   const zigPath = fileURLToPath(url);
-  const soPath = compileSync(zigPath);
+  const soPath = compileSync(zigPath, compileOptions);
   return importModule(soPath);
 }
 
@@ -23,3 +28,9 @@ Module._load = new Proxy(Module._load, {
     return Reflect.apply(target, self, args);
   }
 });
+
+function isElectron() {
+  return typeof(process) === 'object' 
+      && typeof(process?.versions) === 'object' 
+      && !!process.versions?.electron;
+}

@@ -35,6 +35,7 @@ async function loadZig(url) {
   }
   const {
     omitFunctions = false,
+    omitVariables = false,
     ...compileOptions
   } = options;
   const libPath = await compile(zigPath, compileOptions);

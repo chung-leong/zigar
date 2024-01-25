@@ -1,27 +1,30 @@
 import { expect, use } from 'chai';
 import ChaiAsPromised from 'chai-as-promised';
+import { statSync, utimesSync } from 'fs';
 import { stat, utimes } from 'fs/promises';
 import os, { tmpdir } from 'os';
-import { join } from 'path';
 
 use(ChaiAsPromised);
 
 import { fileURLToPath } from 'url';
 import {
-  acquireLock,
   compile,
-  deleteDirectory,
-  deleteFile,
-  findDirectory,
-  findFile,
+  compileSync,
   getBuildFolder,
   getLibraryName,
-  loadFile,
-  releaseLock,
   runCompiler,
-  scanDirectory,
-  touchFile,
+  runCompilerSync,
 } from '../src/compiler.js';
+import {
+  delay,
+  delaySync,
+  findDirectory,
+  findDirectorySync,
+  findFile,
+  findFileSync,
+  touchFile,
+  touchFileSync,
+} from '../src/utility-functions.js';
 
 describe('Compilation', function() {
   describe('getLibraryName', function() {
@@ -42,104 +45,6 @@ describe('Compilation', function() {
       expect(name).to.equal('hello.wasm');
     })
   })
-  describe('scanDirectory', function() {
-    it('should not throw when directory is missing', async function() {
-      const path = absolute('./non-existing');
-      await expect(scanDirectory(path, /.*/, () => {})).to.eventually.be.fulfilled;
-    })
-    it('should find matching files', async function() {
-      const path = absolute('./');
-      const list = [];
-      await scanDirectory(path, /\.zig$/, async (dir, name, info) => {
-        list.push(name);
-      });
-      expect(list.length).to.be.above(0);
-      for (const name of list) {
-        expect(name).to.match(/\.zig$/);
-      }
-    })
-    it('should ignore node_modules', async function() {
-      const path = absolute('../');
-      const list = [];
-      await scanDirectory(path, /\.js$/, async (dir, name, info) => {
-        list.push(dir);
-      });
-      expect(list.length).to.be.above(0);
-      for (const dir of list) {
-        expect(dir).to.not.contain('node_modules');
-      }
-    })
-  })
-  describe('loadFile', function() {
-    it('should load a file', async function() {
-      const path = absolute('./zig-samples/basic/console.zig');
-      const text = await loadFile(path, '');
-      expect(text.length).to.be.above(0);
-    })
-    it('should default string when file is missing', async function() {
-      const path = absolute('./does-not-exists.zig');
-      const text = await loadFile(path, 'default');
-      expect(text).to.equal('default');
-    })
-  })
-  describe('deleteFile', function() {
-    it('should not throw when file is missing', async function() {
-      const promise = deleteFile('/dev/non-existing');
-      expect(promise).to.eventually.be.fulfilled;
-    })
-    it('should throw when file cannot be removed', async function() {
-      const promise = deleteFile('/dev/null');
-      expect(promise).to.eventually.be.rejected;
-    })
-  })
-  describe('deleteDirectory', function() {
-    it('should not throw when directory is missing', async function() {
-      const promise = deleteDirectory('/dev/non-existing');
-      expect(promise).to.eventually.be.fulfilled;
-    })
-    it('should throw when directory cannot be removed', async function() {
-      const promise = deleteDirectory('/dev/null');
-      expect(promise).to.eventually.be.rejected;
-    })
-  })
-  describe('acquireLock', function() {
-    it('should create a directory and place a lock on it', async function() {
-      const dir = join(tmpdir(), (Math.random() * 0x7FFFFFF).toString(16));
-      let lock1 = false, lock2 = false;
-      const promise1 = acquireLock(dir, 60 * 1000);
-      promise1.then(() => lock1 = true);
-      await delay(100);
-      expect(lock1).to.be.true;
-      const promise2 = acquireLock(dir, 60 * 1000);
-      promise2.then(() => lock2 = true);
-      await delay(100);
-      expect(lock2).to.be.false;
-      await releaseLock(dir);
-      await delay(250);
-      expect(lock2).to.be.true;
-      await releaseLock(dir);
-      await deleteDirectory(dir);
-      const info = await findDirectory(dir);
-      expect(info).to.be.undefined;
-    })
-    it('should fail when directory is illegal', async function() {
-      const promise = acquireLock(`/dir/null`, 60 * 1000);
-      await expect(promise).to.eventually.be.rejected;
-    })
-    it('should overwrite a lock after a while', async function() {
-      const dir = join(tmpdir(), (Math.random() * 0x7FFFFFF).toString(16));
-      await acquireLock(dir, 60 * 1000);
-      let lock2 = false;
-      const promise2 = acquireLock(dir, 200);
-      promise2.then(() => lock2 = true);
-      await delay(100);
-      expect(lock2).to.be.false;
-      await delay(300);
-      expect(lock2).to.be.true;
-      await releaseLock(dir);
-      await deleteDirectory(dir);
-    })
-  })
   describe('runCompiler', function() {
     it('should run the Zig compiler', async function() {
       const zigCmd = `zig help`;
@@ -150,6 +55,17 @@ describe('Compilation', function() {
       const zigCmd = `zig`;
       const promise = runCompiler(zigCmd, tmpdir());
       await expect(promise).to.eventually.be.rejected;
+    })
+  })
+  describe('runCompilerSync', function() {
+    it('should run the Zig compiler', function() {
+      const zigCmd = `zig help`;
+      runCompilerSync(zigCmd, tmpdir());
+      expect(() => runCompilerSync(zigCmd, tmpdir())).to.not.throw();
+    })
+    it('should throw when the Zig compiler returns an error', function() {
+      const zigCmd = `zig`;
+      expect(() => runCompilerSync(zigCmd, tmpdir())).to.throw();
     })
   })
   describe('compile', function() {
@@ -268,6 +184,121 @@ describe('Compilation', function() {
       expect(info).to.be.undefined;
     })
   })
+  describe('compileSync', function() {
+    it('should compile zig source code for C addon', function() {
+      this.timeout(60000);
+      const path = absolute('./zig-samples/basic/integers.zig');
+      const libpath = compileSync(path);
+      expect(libpath).to.be.a('string');
+      expect(libpath).to.contain('libintegers');
+    })
+    it('should compile code for WASM32', function() {
+      this.timeout(60000);
+      const path = absolute('./zig-samples/basic/integers.zig');
+      forceChangeSync(path, () => {
+        const libpath = compileSync(path, { arch: 'wasm32', platform: 'freestanding' });
+        expect(libpath).to.be.a('string');
+        expect(libpath).to.contain('integers.wasm');
+      });
+    })
+    it('should compile optimized code', function() {
+      this.timeout(60000);
+      const path = absolute('./zig-samples/basic/integers.zig');
+      const libpath1 = compileSync(path, { arch: 'wasm32', platform: 'freestanding' });
+      const { size: before } = statSync(libpath1);
+      const libpath2 = compileSync(path, { arch: 'wasm32', platform: 'freestanding', optimize: 'ReleaseSmall' });
+      const { size: after } = statSync(libpath2);
+      expect(after).to.be.below(before);
+    })
+    it('should compile with C library enabled when Zig code imports C code', function() {
+      this.timeout(60000);
+      const path = absolute('./zig-samples/strlen-from-c/strlen.zig');
+      forceChangeSync(path, () => {
+        const libpath = compileSync(path);
+        expect(libpath).to.be.a('string');
+        expect(libpath).to.contain('libstrlen');
+      });
+    })
+    it('should work correctly when the same file is compiled at the same time', async function() {
+      this.timeout(60000);
+      const path = absolute('./zig-samples/basic/integers.zig');
+      forceChangeSync(path, async () => {
+        const promise1 = compile(path);
+        const libpath2 = compileSync(path);
+        const libpath1 = await promise1;
+        expect(libpath2).to.equal(libpath1);
+      });
+    })
+    it('should throw when source file is missing', function() {
+      this.timeout(60000);
+      const path = absolute('./zig-samples/non-existing.zig');
+      expect(() => compileSync(path)).to.throw();
+    })
+    it('should throw when certain options are set to empty and library does not exist', function() {
+      const path = absolute('./zig-samples/non-existing.zig');
+      expect(() => compileSync(path, { buildDir: '' })).to.throw();
+      expect(() => compileSync(path, { cacheDir: '' })).to.throw();
+      expect(() => compileSync(path, { zigCmd: '' })).to.throw();
+    })
+    it('should return library path when the file exists and buildDir is empty', function() {
+      this.timeout(60000);
+      const path = absolute('./zig-samples/basic/integers.zig');
+      const libpath = compileSync(path);
+      const libpath2 = compileSync(path, { buildDir: '' });
+      expect(libpath2).to.equal(libpath);
+    })
+    it('should use custom build file', function() {
+      this.timeout(60000);
+      const path = absolute('./zig-samples/custom/custom.zig');
+      const libpath = compileSync(path);
+      expect(libpath).to.contain('libcustom');
+    })
+    it('should compile code that uses C libraries', function() {
+      this.timeout(60000);
+      const path = absolute('./zig-samples/strlen-from-c/strlen.zig');
+      const libpath = compileSync(path);
+      expect(libpath).to.contain('libstrlen');
+    })
+    it('should recompile when one of the files has a newer modification date', function() {
+      this.timeout(60000);
+      const path = absolute('./zig-samples/custom/custom.zig');
+      const libpath1 = compileSync(path);
+      const { mtime: before } = statSync(libpath1);
+      delaySync(1000);
+      forceChangeSync(path, () => {
+        const libpath2 = compileSync(path);
+        const { mtime: after } = statSync(libpath2);
+        expect(after).to.be.above(before);
+      });
+    })
+    it('should recompile when code exporter has changed', function() {
+      this.timeout(60000);
+      const path = absolute('./zig-samples/custom/custom.zig');
+      const libpath1 = compileSync(path);
+      const { mtime: before } = statSync(libpath1);
+      const exportPath = absolute('../zig/exporter.zig');
+      delaySync(1000);
+      forceChangeSync(exportPath, () => {
+        const libpath2 = compileSync(path);
+        const { mtime: after } = statSync(libpath2);
+        expect(after).to.be.above(before);
+      });
+    })
+    it('should throw when code cannot be compiled', function() {
+      this.timeout(60000);
+      const path = absolute('./zig-samples/basic/invalid-syntax.zig');
+      expect(() => compileSync(path)).to.throw(Error)
+        .with.property('message').that.contains(`expected ';' after declaration`);
+    })
+    it('should remove build folder when the clean option is given', function() {
+      this.timeout(60000);
+      const path = absolute('./zig-samples/basic/invalid-syntax.zig');
+      expect(() => compileSync(path, { clean: true })).to.throw(Error);
+      const buildFolder = getBuildFolder(path, os.platform(), os.arch());
+      const info = findDirectorySync(buildFolder);
+      expect(info).to.be.undefined;
+    })
+  })
 })
 
 async function forceChange(path, cb) {
@@ -280,8 +311,14 @@ async function forceChange(path, cb) {
   }
 }
 
-async function delay(ms) {
-  return new Promise(r => setTimeout(r, ms));
+function forceChangeSync(path, cb) {
+  const info = findFileSync(path);
+  touchFileSync(path);
+  try {
+    cb();
+  } finally {
+    utimesSync(path, info.atime, info.mtime);
+  }
 }
 
 function absolute(relpath) {
