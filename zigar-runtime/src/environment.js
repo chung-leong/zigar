@@ -4,7 +4,10 @@ import { MemberType, useBool, useObject } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { addMethods } from './method.js';
 import { addStaticMembers } from './static.js';
-import { StructureType, defineProperties, findAllObjects, getStructureFactory, getStructureName, useArgStruct } from './structure.js';
+import {
+  StructureType, defineProperties, findAllObjects, getStructureFactory, getStructureName,
+  useArgStruct
+} from './structure.js';
 import {
   ALIGN, ATTRIBUTES, CONST, COPIER, ENVIRONMENT, FIXED_LOCATION, LOCATION_GETTER, LOCATION_SETTER,
   MEMORY, POINTER, POINTER_VISITOR, SIZE, SLOTS, TARGET_GETTER
@@ -31,6 +34,7 @@ export class Environment {
   variables = [];
   /* RUNTIME-ONLY-END */
   imports;
+  console = globalThis.console;
 
   /*
   Functions to be defined in subclass:
@@ -283,7 +287,7 @@ export class Environment {
     const options = this.beginStructure({
       type: StructureType.Struct,
       name: 'Options',
-      byteSize: 1,
+      byteSize: 2,
       hasPointer: false,
     })
     this.attachMember(options, {
@@ -293,11 +297,18 @@ export class Environment {
       bitSize: 1,
       byteSize: 1,      
     });
+    this.attachMember(options, {
+      type: MemberType.Bool,
+      name: 'omitVariables',
+      bitOffset: 8,
+      bitSize: 1,
+      byteSize: 1,      
+    });
     this.finalizeShape(options);
     const structure = this.beginStructure({
       type: StructureType.ArgStruct,
       name: 'factory',
-      byteSize: 1,
+      byteSize: 2,
       hasPointer: false,
     });
     this.attachMember(structure, {
@@ -312,7 +323,7 @@ export class Environment {
     this.attachMember(structure, {
       type: MemberType.Void,
       name: 'retval',
-      bitOffset: 8,
+      bitOffset: 16,
       bitSize: 0,
       byteSize: 0
     });
@@ -588,7 +599,8 @@ export class Environment {
       init: () => this.initPromise ?? Promise.resolve(),
       abandon: () => this.abandon(),
       released: () => this.released,
-    }
+      connect: (c) => this.console = c,
+    };
   }
 
   abandon() {
@@ -600,6 +612,7 @@ export class Environment {
   }
 
   writeToConsole(dv) {
+    const { console } = this;
     try {
       // make copy of array, in case incoming buffer is pointing to stack memory
       const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice();

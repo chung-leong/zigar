@@ -97,6 +97,7 @@ fn getCString(comptime s: []const u8) [*:0]const u8 {
 // enums and external structs
 pub const HostOptions = struct {
     omit_methods: bool = false,
+    omit_variables: bool = false,
 };
 
 pub const StructureType = enum(u32) {
@@ -1586,6 +1587,9 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                 const DT = @TypeOf(decl_value_ptr.*);
                 if (comptime isSupported(DT) and (DT != type or isSupported(decl_value_ptr.*))) {
                     const is_const = comptime isConst(@TypeOf(decl_value_ptr));
+                    if (!is_const and host.options.omit_variables) {
+                        continue;
+                    }
                     const slot = getObjectSlot(Static, index);
                     try host.attachMember(structure, .{
                         .name = getCString(decl.name),

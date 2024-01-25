@@ -10,6 +10,7 @@ export async function transpile(path, options = {}) {
     embedWASM = true,
     topLevelAwait = true,
     omitFunctions = false,
+    omitVariables = false,
     omitExports = false,
     stripWASM = (options.optimize && options.optimize !== 'Debug'),
     keepNames = false,
@@ -31,7 +32,7 @@ export async function transpile(path, options = {}) {
   const env = createEnvironment();
   env.loadModule(content);
   await env.initPromise;
-  env.acquireStructures({ omitFunctions });
+  env.acquireStructures({ omitFunctions, omitVariables });
   const definition = env.exportStructures();
   const runtimeURL = moduleResolver('zigar-runtime');
   let binarySource;
