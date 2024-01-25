@@ -315,8 +315,8 @@ export class Environment {
       type: MemberType.Object,
       name: '0',
       bitOffset: 0,
-      bitSize: 1,
-      byteSize: 1,
+      bitSize: 16,
+      byteSize: 2,
       slot: 0,
       structure: options,
     });

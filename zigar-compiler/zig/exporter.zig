@@ -1293,21 +1293,6 @@ fn exportError(host: anytype, err: anyerror, structure: Value) !Value {
     return obj;
 }
 
-fn hasComptimeFields(comptime T: type) bool {
-    switch (@typeInfo(T)) {
-        .Struct => |st| {
-            inline for (st.fields) |field| {
-                const comptime_only = field.is_comptime or isComptimeOnly(field.type);
-                if (comptime_only and comptime isSupported(field.type)) {
-                    return true;
-                }
-            }
-        },
-        else => {},
-    }
-    return false;
-}
-
 fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
     const st = @typeInfo(T).Struct;
     // pre-allocate relocatable slots for fields that always need them
@@ -1334,32 +1319,37 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
             }, false);
         }
     }
-    if (!isArgumentStruct(T) and (@sizeOf(T) > 0 or hasComptimeFields(T))) {
-        var values: ComptimeFree(T) = undefined;
-        // obtain byte array containing data of default values
-        // can't use std.mem.zeroInit() here, since it'd fail with unions
-        const bytes: []u8 = std.mem.asBytes(&values);
-        for (bytes) |*byte_ptr| {
-            byte_ptr.* = 0;
-        }
-        inline for (st.fields) |field| {
-            if (field.default_value) |opaque_ptr| {
-                const FT = @TypeOf(@field(values, field.name));
-                if (@sizeOf(FT) != 0) {
-                    const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-                    if (FT == field.type) {
-                        @field(values, field.name) = default_value_ptr.*;
-                    } else {
-                        // need cast here, as destination field is a different type with matching layout
-                        const dest_ptr: *field.type = @ptrCast(&@field(values, field.name));
-                        dest_ptr.* = default_value_ptr.*;
+    if (!isArgumentStruct(T)) {
+        // add default values
+        var template_maybe: ?Value = null;
+        const CFT = ComptimeFree(T);
+        if (@sizeOf(CFT) > 0) {
+            var values: CFT = undefined;
+            // obtain byte array containing data of default values
+            // can't use std.mem.zeroInit() here, since it'd fail with unions
+            const bytes: []u8 = std.mem.asBytes(&values);
+            for (bytes) |*byte_ptr| {
+                byte_ptr.* = 0;
+            }
+            inline for (st.fields) |field| {
+                if (field.default_value) |opaque_ptr| {
+                    const FT = @TypeOf(@field(values, field.name));
+                    if (@sizeOf(FT) != 0) {
+                        const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+                        if (FT == field.type) {
+                            @field(values, field.name) = default_value_ptr.*;
+                        } else {
+                            // need cast here, as destination field is a different type with matching layout
+                            const dest_ptr: *field.type = @ptrCast(&@field(values, field.name));
+                            dest_ptr.* = default_value_ptr.*;
+                        }
                     }
                 }
             }
+            const memory = toMemory(&values, true);
+            const dv = try host.captureView(memory);
+            template_maybe = try host.createTemplate(dv);
         }
-        const memory = toMemory(&values, true);
-        const dv = try host.captureView(memory);
-        const template = try host.createTemplate(dv);
         inline for (st.fields, 0..) |field, index| {
             if (field.default_value) |opaque_ptr| {
                 const comptime_only = field.is_comptime or isComptimeOnly(field.type);
@@ -1369,11 +1359,14 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
                     const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
                     const value_obj = try exportPointerTarget(host, default_value_ptr, true);
                     const slot = getObjectSlot(T, index);
-                    try host.writeSlot(template, slot, value_obj);
+                    template_maybe = template_maybe orelse try host.createTemplate(null);
+                    try host.writeSlot(template_maybe.?, slot, value_obj);
                 }
             }
         }
-        try host.attachTemplate(structure, template, false);
+        if (template_maybe) |template| {
+            try host.attachTemplate(structure, template, false);
+        }
     }
 }
 
@@ -1523,61 +1516,10 @@ fn addErrorSetMember(host: anytype, structure: Value, comptime T: type) !void {
     }, false);
 }
 
-fn containsSupported(comptime T: type) bool {
-    switch (@typeInfo(T)) {
-        inline .Struct, .Union, .Enum, .Opaque => |st| {
-            inline for (st.decls) |decl| {
-                const DT = @TypeOf(@field(T, decl.name));
-                if (isSupported(DT)) {
-                    return true;
-                }
-            }
-        },
-        else => {},
-    }
-    return false;
-}
-
-test "containsSupported" {
-    const S1 = struct {
-        pub const a: u32 = 5;
-    };
-    const S2 = struct {};
-    assert(containsSupported(u32) == false);
-    assert(containsSupported(S1) == true);
-    assert(containsSupported(S2) == false);
-}
-
-fn hasStaticMembers(comptime T: type) bool {
-    return switch (@typeInfo(T)) {
-        // enum and error set always have static templates due to implicit members
-        .Enum, .ErrorSet => true,
-        // while other structure types might not
-        else => containsSupported(T),
-    };
-}
-
-test "hasStaticMembers" {
-    const A = struct {
-        pub const hello: u32 = 0;
-    };
-    const B = struct {
-        const hello: u32 = 0;
-    };
-    const E = enum { Cat, Dog };
-    assert(hasStaticMembers(A) == true);
-    assert(hasStaticMembers(B) == false);
-    assert(hasStaticMembers(E) == true);
-    assert(hasStaticMembers(anyerror) == true);
-}
-
 fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
-    if (!hasStaticMembers(T)) {
-        return;
-    }
     // a stand-in type representing the "static side" of the structure
     const Static = opaque {};
-    const template = try host.createTemplate(null);
+    var template_maybe: ?Value = null;
     // add declared static members
     comptime var offset = 0;
     switch (@typeInfo(T)) {
@@ -1596,7 +1538,8 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                             .structure = try getStructure(host, DT),
                         }, true);
                         const value_obj = try exportPointerTarget(host, decl_value_ptr, is_const);
-                        try host.writeSlot(template, slot, value_obj);
+                        template_maybe = template_maybe orelse try host.createTemplate(null);
+                        try host.writeSlot(template_maybe.?, slot, value_obj);
                     }
                 }
                 offset += 1;
@@ -1618,7 +1561,8 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                     .structure = structure,
                 }, true);
                 const value_obj = try exportPointerTarget(host, &value, true);
-                try host.writeSlot(template, slot, value_obj);
+                template_maybe = template_maybe orelse try host.createTemplate(null);
+                try host.writeSlot(template_maybe.?, slot, value_obj);
             }
         },
         .ErrorSet => |es| if (es) |errors| {
@@ -1635,12 +1579,15 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                 // can't use exportPointerTarget(), since each error in the set would be
                 // considered a separate type--need special handling
                 const value_obj = try exportError(host, err, structure);
-                try host.writeSlot(template, slot, value_obj);
+                template_maybe = template_maybe orelse try host.createTemplate(null);
+                try host.writeSlot(template_maybe.?, slot, value_obj);
             }
         },
         else => {},
     }
-    try host.attachTemplate(structure, template, true);
+    if (template_maybe) |template| {
+        try host.attachTemplate(structure, template, true);
+    }
 }
 
 fn hasUnsupported(comptime params: []const std.builtin.Type.Fn.Param) bool {
