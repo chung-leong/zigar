@@ -11,7 +11,6 @@ import {
   compile,
   compileSync,
   getBuildFolder,
-  getLibraryName,
   runCompiler,
   runCompilerSync,
 } from '../src/compiler.js';
@@ -27,24 +26,24 @@ import {
 } from '../src/utility-functions.js';
 
 describe('Compilation', function() {
-  describe('getLibraryName', function() {
-    it('should return the correct name for Linux', function() {
-      const name = getLibraryName('hello', 'linux', 'ia32');
-      expect(name).to.equal('libhello.so');
-    })
-    it('should return the correct name for Darwin', function() {
-      const name = getLibraryName('hello', 'darwin', 'x64');
-      expect(name).to.equal('libhello.dylib');
-    })
-    it('should return the correct name for Windows', function() {
-      const name = getLibraryName('hello', 'win32', 'x64');
-      expect(name).to.equal('hello.dll');
-    })
-    it('should return the correct name for WASM', function() {
-      const name = getLibraryName('hello', 'freestanding', 'wasm32');
-      expect(name).to.equal('hello.wasm');
-    })
-  })
+  // describe('getLibraryName', function() {
+  //   it('should return the correct name for Linux', function() {
+  //     const name = getLibraryName('hello', 'linux', 'ia32');
+  //     expect(name).to.equal('libhello.so');
+  //   })
+  //   it('should return the correct name for Darwin', function() {
+  //     const name = getLibraryName('hello', 'darwin', 'x64');
+  //     expect(name).to.equal('libhello.dylib');
+  //   })
+  //   it('should return the correct name for Windows', function() {
+  //     const name = getLibraryName('hello', 'win32', 'x64');
+  //     expect(name).to.equal('hello.dll');
+  //   })
+  //   it('should return the correct name for WASM', function() {
+  //     const name = getLibraryName('hello', 'freestanding', 'wasm32');
+  //     expect(name).to.equal('hello.wasm');
+  //   })
+  // })
   describe('runCompiler', function() {
     it('should run the Zig compiler', async function() {
       const zigCmd = `zig help`;

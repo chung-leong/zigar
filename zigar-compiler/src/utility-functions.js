@@ -22,14 +22,14 @@ export function findFileSync(path, follow = true) {
   }
 }
 
-export async function scanDirectory(dir, re, cb) {
-  const ino = (await findFile(dir))?.ino;
-  /* c8 ignore next 3 */
-  if (!ino) {
-    return;
-  }
-  const scanned = [ ino ];
+export async function findMatchingFiles(dir, re) {
+  const map = new Map();
+  const scanned = new Map();
   const scan = async (dir) => {
+    if (scanned.get(dir)) {
+      return;
+    } 
+    scanned.set(dir, true);
     try {
       const list = await readdir(dir);
       for (const name of list) {
@@ -38,10 +38,10 @@ export async function scanDirectory(dir, re, cb) {
         }
         const path = join(dir, name);
         const info = await findFile(path);
-        if (info?.isDirectory() && !scanned.includes(info.ino)) {
+        if (info?.isDirectory()) {
           await scan(path);
         } else if (info?.isFile() && re.test(name)) {
-          await cb(dir, name, info);
+          map.set(path, info);
         }
       }
       /* c8 ignore next 2 */
@@ -49,16 +49,17 @@ export async function scanDirectory(dir, re, cb) {
     }
   };
   await scan(dir);
+  return map;
 }
 
-export function scanDirectorySync(dir, re, cb) {
-  const ino = findFileSync(dir)?.ino;
-  /* c8 ignore next 3 */
-  if (!ino) {
-    return;
-  }
-  const scanned = [ ino ];
+export function findMatchingFilesSync(dir, re) {
+  const map = new Map();
+  const scanned = new Map();
   const scan = (dir) => {
+    if (scanned.get(dir)) {
+      return;
+    } 
+    scanned.set(dir, true);
     try {
       const list = readdirSync(dir);
       for (const name of list) {
@@ -67,10 +68,10 @@ export function scanDirectorySync(dir, re, cb) {
         }
         const path = join(dir, name);
         const info = findFileSync(path);
-        if (info?.isDirectory() && !scanned.includes(info.ino)) {
+        if (info?.isDirectory()) {
           scan(path);
         } else if (info?.isFile() && re.test(name)) {
-          cb(dir, name, info);
+          map.set(path, info);
         }
       }
       /* c8 ignore next 2 */
@@ -78,6 +79,7 @@ export function scanDirectorySync(dir, re, cb) {
     }
   };
   scan(dir);
+  return map;
 }
 
 export async function acquireLock(soBuildDir, staleTime) {

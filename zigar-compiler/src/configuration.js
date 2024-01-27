@@ -144,7 +144,7 @@ export function getCachePath(srcPath, options) {
   return addPlatformExt(soPathPI, options);
 }
 
-export function addPlatformExt(path, options) {
+export function getPlatformExt(options) {
   const {
     platform,
     arch,
@@ -152,17 +152,21 @@ export function addPlatformExt(path, options) {
   switch (arch) {
     case 'wasm32':
     case 'wasm64':
-      return `${path}.wasm`;
+      return '.wasm';
     default:
       switch (platform) {
         case 'darwin':
-          return `${path}.dylib`;
+          return '.dylib';
         case 'win32': ;
-          return `${path}.dll`;
+          return '.dll';
         default:
-          return `${path}.so`;
+          return '.so';
       }
   }
+}
+
+export function addPlatformExt(path, options) {
+  return path + getPlatformExt(options);
 }
 
 export async function loadConfigFile(cfgPath, availableOptions) {

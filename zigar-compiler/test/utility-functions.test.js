@@ -17,68 +17,56 @@ import {
   deleteFileSync,
   findDirectory,
   findDirectorySync,
+  findMatchingFiles,
+  findMatchingFilesSync,
   loadFile,
   loadFileSync,
   releaseLock,
   releaseLockSync,
-  scanDirectory,
-  scanDirectorySync
 } from '../src/utility-functions.js';
 
 describe('Utility functions', function() {
-  describe('scanDirectory', function() {
+  describe('findMatchingFiles', function() {
     it('should not throw when directory is missing', async function() {
       const path = absolute('./non-existing');
-      await expect(scanDirectory(path, /.*/, () => {})).to.eventually.be.fulfilled;
+      await expect(findMatchingFiles(path, /.*/)).to.eventually.be.fulfilled;
     })
     it('should find matching files', async function() {
       const path = absolute('./');
-      const list = [];
-      await scanDirectory(path, /\.zig$/, async (dir, name, info) => {
-        list.push(name);
-      });
-      expect(list.length).to.be.above(0);
-      for (const name of list) {
-        expect(name).to.match(/\.zig$/);
+      const map = await findMatchingFiles(path, /\.zig$/);
+      expect(map.size).to.be.above(0);
+      for (const [ path ] of map) {
+        expect(path).to.match(/\.zig$/);
       }
     })
     it('should ignore node_modules', async function() {
       const path = absolute('../');
-      const list = [];
-      await scanDirectory(path, /\.js$/, async (dir, name, info) => {
-        list.push(dir);
-      });
-      expect(list.length).to.be.above(0);
-      for (const dir of list) {
-        expect(dir).to.not.contain('node_modules');
+      const map = await findMatchingFiles(path, /\.js$/);
+      expect(map.size).to.be.above(0);
+      for (const [ path ] of map) {
+        expect(path).to.not.contain('node_modules');
       }
     })
   })
-  describe('scanDirectorySync', function() {
+  describe('findMatchingFilesSync', function() {
     it('should not throw when directory is missing', function() {
       const path = absolute('./non-existing');
-      expect(() => scanDirectorySync(path, /.*/, () => {})).to.not.throw();
+      expect(() => findMatchingFilesSync(path, /.*/)).to.not.throw()
     })
-    it('should find matching files', function() {      
+    it('should find matching files', function() {
       const path = absolute('./');
-      const list = [];
-      scanDirectorySync(path, /\.zig$/, (dir, name, info) => {
-        list.push(name);
-      });
-      expect(list.length).to.be.above(0);
-      for (const name of list) {
-        expect(name).to.match(/\.zig$/);
+      const map = findMatchingFilesSync(path, /\.zig$/);
+      expect(map.size).to.be.above(0);
+      for (const [ path ] of map) {
+        expect(path).to.match(/\.zig$/);
       }
     })
     it('should ignore node_modules', function() {
       const path = absolute('../');
-      const list = [];
-      scanDirectorySync(path, /\.js$/, (dir, name, info) => {
-        list.push(dir);
-      });
-      expect(list.length).to.be.above(0);
-      for (const dir of list) {
-        expect(dir).to.not.contain('node_modules');
+      const map = findMatchingFilesSync(path, /\.js$/);
+      expect(map.size).to.be.above(0);
+      for (const [ path ] of map) {
+        expect(path).to.not.contain('node_modules');
       }
     })
   })

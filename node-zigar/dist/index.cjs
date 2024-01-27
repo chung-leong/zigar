@@ -29,8 +29,12 @@ Module._load = new Proxy(Module._load, {
   }
 });
 
-function isElectron() {
+export function isElectron() {
   return typeof(process) === 'object' 
       && typeof(process?.versions) === 'object' 
       && !!process.versions?.electron;
+}
+
+export function camelCase(name) {
+  return name.toLowerCase().replace(/_(\w)/g, (m0, m1) => m1.toUpperCase());
 }
