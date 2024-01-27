@@ -1,0 +1,7 @@
+{
+  "optimize": "Debug",
+  "sourceFiles": {
+    "world": "./src/world.zig",
+    "hello/world": "./src/hello-world.zig"
+  }
+}

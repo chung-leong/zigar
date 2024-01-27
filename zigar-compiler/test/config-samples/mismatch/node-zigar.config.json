@@ -1,0 +1,7 @@
+{
+  "clean": "yes",
+  "optimize": "Debug",
+  "sourceFiles": {
+    "hello": "./src/hello.zig"
+  }
+}

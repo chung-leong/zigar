@@ -1,0 +1,6 @@
+{
+  "optimise": "Debug",
+  "sourceFiles": {
+    "hello": "./src/hello.zig"
+  }
+}
