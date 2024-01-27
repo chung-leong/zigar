@@ -76,7 +76,7 @@ describe('Configuration', function() {
         cacheDir: '/project/zigar-cache',
       };
       const soPath = getCachePath(srcPath, options);
-      expect(soPath).to.match(/\/project\/zigar-cache\/win32\/x64\/Debug\/src\-\w{8}\/hello\.zigar\.dll/);
+      expect(soPath).to.match(/\/project\/zigar-cache\/win32\/x64\/src\-\w{8}\/Debug\/hello\.zigar\.dll/);
     })
   })
   describe('addPlatformExt', function () {

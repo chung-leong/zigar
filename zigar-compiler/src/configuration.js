@@ -140,7 +140,7 @@ export function getCachePath(srcPath, options) {
   } = options;
   const src = parse(srcPath);
   const folder = basename(src.dir).slice(0, 16).trim() + '-' + md5(src.dir).slice(0, 8);  
-  const soPathPI = join(cacheDir, platform, arch, optimize, folder, `${src.name}.zigar`);
+  const soPathPI = join(cacheDir, platform, arch, folder, optimize, `${src.name}.zigar`);
   return addPlatformExt(soPathPI, options);
 }
 

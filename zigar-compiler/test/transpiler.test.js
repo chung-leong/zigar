@@ -1,6 +1,6 @@
 import { expect, use } from 'chai';
-import { fileURLToPath } from 'url';
 import ChaiAsPromised from 'chai-as-promised';
+import { fileURLToPath } from 'url';
 
 use(ChaiAsPromised);
 
@@ -15,29 +15,35 @@ describe('Transpilation', function() {
     it('should transpile zig source code containing no methods', async function() {
       this.timeout(30000);
       const path = getSamplePath('integers');
-      const { code } = await transpile(path);
+      const options = { optimize: 'Debug' };
+      const { code } = await transpile(path, options);
       expect(code).to.be.a('string');
       expect(code).to.contain('integers');
     })
     it('should transpile zig source code contain a method', async function() {
       this.timeout(30000);
       const path = getSamplePath('function-simple');
-      const { code } = await transpile(path);
+      const options = { optimize: 'Debug' };
+      const { code } = await transpile(path, options);
       expect(code).to.be.a('string');
       expect(code).to.contain('"add"');
     })
     it('should strip out unnecessary code when stripWASM is specified', async function() {
       this.timeout(30000);
       const path = getSamplePath('function-simple');
-      const { code: before } = await transpile(path);
-      const { code: after } = await transpile(path, { stripWASM: true });
+      const options1 = { optimize: 'Debug' };
+      const options2 = { optimize: 'Debug', stripWASM: true };
+      const { code: before } = await transpile(path, options1);
+      const { code: after } = await transpile(path, options2);
       expect(after.length).to.be.below(before.length);
     })
     it('should default to strip WASM when optimize is not Debug', async function() {
       this.timeout(30000);
       const path = getSamplePath('function-simple');
-      const { code: before } = await transpile(path, { optimize: 'ReleaseSmall', stripWASM: false });
-      const { code: after } = await transpile(path, { optimize: 'ReleaseSmall' });
+      const options1 = { optimize: 'ReleaseSmall', stripWASM: false };
+      const options2 = { optimize: 'ReleaseSmall' };
+      const { code: before } = await transpile(path, options1);
+      const { code: after } = await transpile(path, options2);
       expect(after.length).to.be.below(before.length);
     })
     it('should call wasmLoader when embedWASM is false', async function() {
@@ -49,14 +55,16 @@ describe('Transpilation', function() {
         wasmDV = dv;
         return `loadWASM()`;
       };
-      const { code } = await transpile(path, { embedWASM: false, wasmLoader });
+      const options = { optimize: 'Debug', embedWASM: false, wasmLoader };
+      const { code } = await transpile(path, options);
       expect(srcPath).to.equal(path);
       expect(wasmDV).to.be.instanceOf(DataView);
       expect(code).to.contain(`loadWASM()`);
     })
     it('should throw when embedWASM is false and wasmLoader is not provided', async function() {
       const path = getSamplePath('integers');
-      await expect(transpile(path, { embedWASM: false })).to.eventually.be.rejected;
+      const options = { optimize: 'Debug', embedWASM: false };
+      await expect(transpile(path, options)).to.eventually.be.rejected;
     })
   })
 })

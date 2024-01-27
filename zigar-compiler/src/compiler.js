@@ -6,11 +6,13 @@ import { basename, dirname, join, parse } from 'path';
 import { fileURLToPath } from 'url';
 import { getPlatformExt } from './configuration.js';
 import {
-  acquireLock, copyFile, copyFileSync, createDirectory, deleteDirectory, findFile,
-  findMatchingFiles, loadFile, md5, moveFile, releaseLock, touchFile
+  acquireLock, acquireLockSync, copyFile, copyFileSync, createDirectory, createDirectorySync,
+  deleteDirectory, deleteDirectorySync, findFile, findFileSync, findMatchingFiles,
+  findMatchingFilesSync, loadFile, loadFileSync, md5, moveFile, moveFileSync, releaseLock,
+  releaseLockSync, touchFile, touchFileSync
 } from './utility-functions.js';
 
-export async function compile(srcPath, soPath, options = {}) {
+export async function compile(srcPath, soPath, options) {
   const {
     optimize = 'Debug',
     clean = false,
@@ -25,16 +27,6 @@ export async function compile(srcPath, soPath, options = {}) {
   const soInfo = await findFile(soPath);
   const config = createConfig(srcPath, srcInfo, soPath, soInfo, options);
   const srcFileMap = await findMatchingFiles(config.packageRoot, /\.zig$/);
-  // see if C library is needed
-  if (!config.useLibC && !srcInfo.isDirectory()) {
-    for (const [ path, info ] of srcFileMap) {
-      const content = await loadFile(path);
-      if (content.includes('@cImport')) {
-        config.useLibC = true;
-        break;
-      }
-    }
-  }
   let changed = false;
   // see if the (re-)compilation is necessary
   if (soInfo) {
@@ -59,6 +51,27 @@ export async function compile(srcPath, soPath, options = {}) {
     }
   }
   if (changed) {
+    // see if C library is needed
+    if (!config.useLibC && !srcInfo.isDirectory()) {
+      for (const [ path, info ] of srcFileMap) {
+        const content = await loadFile(path);
+        if (content.includes('@cImport')) {
+          config.useLibC = true;
+          break;
+        }
+      }
+    }
+    // add custom build file
+    for (const [ path, info ] of srcFileMap) {
+      switch (basename(path)) {
+        case 'build.zig':
+          config.buildFilePath = path;
+          break;
+        case 'build.zig.zon':
+          config.packageConfigFilePath = path;
+          break;
+      }
+    }
     // build in a unique temp dir
     const soBuildDir = join(buildDir, getBuildFolder(config));
       // only one process can compile a given file at a time
@@ -92,18 +105,107 @@ export async function compile(srcPath, soPath, options = {}) {
   }
 }
 
-export function compileSync(srcPath, soPath, options = {}) {
-  // TODO
+export function compileSync(srcPath, soPath, options) {
+  const {
+    optimize = 'Debug',
+    clean = false,
+    zigCmd = `zig build -Doptimize=${optimize}`,
+    buildDir = join(tmpdir(), 'zigar-build'),
+    staleTime = 60000,
+  } = options;
+  const srcInfo = findFileSync(srcPath);
+  if (!srcInfo) {
+    throw new Error(`Source file not found: ${fullPath}`);
+  }
+  const soInfo = findFileSync(soPath);
+  const config = createConfig(srcPath, srcInfo, soPath, soInfo, options);
+  const srcFileMap = findMatchingFilesSync(config.packageRoot, /\.zig$/);
+  let changed = false;
+  // see if the (re-)compilation is necessary
+  if (soInfo) {
+    for (const [ path, info ] of srcFileMap) {
+      if (info.mtime > soInfo.mtime) {
+        changed = true;
+        break;
+      }
+    }
+  } else {
+    changed = true;
+  }
+  if (!changed) {
+    // rebuild when exporter or build files have changed
+    const zigFolder = absolute('../zig');
+    const zigFileMap = findMatchingFilesSync(zigFolder, /\.zig$/);
+    for (const [ path, info ] of zigFileMap) {
+      if (info.mtime > soInfo.mtime) {
+        changed = true;
+        break;
+      }
+    }
+  }
+  if (changed) {
+    // see if C library is needed
+    if (!config.useLibC && !srcInfo.isDirectory()) {
+      for (const [ path, info ] of srcFileMap) {
+        const content = loadFileSync(path);
+        if (content.includes('@cImport')) {
+          config.useLibC = true;
+          break;
+        }
+      }
+    }
+    // add custom build file
+    for (const [ path, info ] of srcFileMap) {
+      switch (basename(path)) {
+        case 'build.zig':
+          config.buildFilePath = path;
+          break;
+        case 'build.zig.zon':
+          config.packageConfigFilePath = path;
+          break;
+      }
+    }
+    // build in a unique temp dir
+    const soBuildDir = join(buildDir, getBuildFolder(config));
+      // only one process can compile a given file at a time
+    acquireLockSync(soBuildDir, staleTime);
+    try {
+      // create config file
+      createProjectSync(config, soBuildDir);
+      // then run the compiler
+      runCompilerSync(zigCmd, soBuildDir);
+      // move library to designated location      
+      const re = new RegExp(`\\${getPlatformExt(options)}$`);
+      const outputDir = join(soBuildDir, 'zig-out', 'lib');
+      // look for most recently create file
+      const fileMap = findMatchingFilesSync(outputDir, re);
+      let resultPath, resultMTime;
+      for (const [ path, info ] of fileMap) {
+        if (!(resultMTime >= info.mtime)) {
+          resultPath = path;
+          resultMTime = info.mtime;
+        }
+      }
+      createDirectorySync(dirname(soPath));
+      moveFileSync(resultPath, soPath);
+      touchFileSync(soPath);
+    } finally {
+      releaseLockSync(soBuildDir);
+      if (clean) {
+        deleteDirectorySync(soBuildDir);
+      }
+    }
+  }
 }
 
-function getBuildFolder(config) {
+export function getBuildFolder(config) {
   const { packageName, packageRoot } = config;
   const soBuildPrefix = basename(packageName).slice(0, 16);
   const soBuildHash = md5(`${packageRoot}/${packageName}`).slice(0, 8);
   return soBuildPrefix + '-' + soBuildHash;
 }
 
-function createConfig(srcPath, srcInfo, soPath, soInfo, options) {
+export function createConfig(srcPath, srcInfo, soPath, soInfo, options) {
   const {
     platform = os.platform(),
     arch = os.arch(),
@@ -122,6 +224,7 @@ function createConfig(srcPath, srcInfo, soPath, soInfo, options) {
     exporterPath: absolute(`../zig/exporter-${suffix}.zig`),
     stubPath: absolute(`../zig/stub-${suffix}.zig`),
     buildFilePath: absolute(`../zig/build.zig`),
+    packageConfigFilePath: undefined,
     useLibC: (platform === 'win32') ? true : false,
   };
 }
@@ -215,6 +318,10 @@ export async function createProject(config, dir) {
   await writeFile(cfgFilePath, content);
   const buildFilePath = join(dir, 'build.zig');
   await copyFile(config.buildFilePath, buildFilePath);
+  if (config.packageConfigFilePath) {
+    packageConfigFilePath = join(dir, 'build.zig.zon');
+    await copyFile(config.packageConfigFilePath, packageConfigFilePath);
+  }
 }
 
 export function createProjectSync(config, dir) {
@@ -223,6 +330,10 @@ export function createProjectSync(config, dir) {
   writeFileSync(cfgFilePath, content);
   const buildFilePath = join(dir, 'build.zig');
   copyFileSync(config.buildFilePath, buildFilePath);
+  if (config.packageConfigFilePath) {
+    packageConfigFilePath = join(dir, 'build.zig.zon');
+    copyFileSync(config.packageConfigFilePath, packageConfigFilePath);
+  }
 }
 
 function absolute(relpath) {

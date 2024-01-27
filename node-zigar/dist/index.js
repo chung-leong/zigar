@@ -14,13 +14,9 @@ function isZig(url) {
 }
 
 async function importModule(soPath, options) {
-  const {
-    omitFunctions = false,
-    omitVariables = false,
-  } = options;
   const env = createEnvironment();
   env.loadModule(soPath);
-  env.acquireStructures({ omitFunctions, omitVariables });
+  env.acquireStructures(options);
   const definition = env.exportStructures();
   const require = createRequire(import.meta.url);
   // get the absolute path to node-zigar-addon so the transpiled code can find it

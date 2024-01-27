@@ -1378,16 +1378,8 @@ function defineErrorUnion(structure, env) {
 }
 
 function normalizeErrorUnion(map, forJSON) {
-  try {
-    const value = this.$;
-    return value[NORMALIZER]?.(map, forJSON) ?? value;
-  } catch (err) {
-    if (forJSON) {
-      return { error: err.message };
-    } else {
-      throw err;
-    }
-  }
+  const value = this.$;
+  return value[NORMALIZER]?.(map, forJSON) ?? value;
 }
 
 function defineOptional(structure, env) {
@@ -4057,6 +4049,7 @@ class Environment {
   variables = [];
   /* RUNTIME-ONLY-END */
   imports;
+  console = globalThis.console;
 
   /*
   Functions to be defined in subclass:
@@ -4409,7 +4402,8 @@ class Environment {
       init: () => this.initPromise ?? Promise.resolve(),
       abandon: () => this.abandon(),
       released: () => this.released,
-    }
+      connect: (c) => this.console = c,
+    };
   }
 
   abandon() {
@@ -4421,6 +4415,7 @@ class Environment {
   }
 
   writeToConsole(dv) {
+    const { console } = this;
     try {
       // make copy of array, in case incoming buffer is pointing to stack memory
       const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice();

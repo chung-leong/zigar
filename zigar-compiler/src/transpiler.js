@@ -3,14 +3,13 @@ import { basename } from 'path';
 import { createEnvironment } from '../../zigar-runtime/src/index.js';
 import { generateCode } from './code-generator.js';
 import { compile } from './compiler.js';
+import { getCachePath } from './configuration.js';
 import { stripUnused } from './wasm-stripper.js';
 
-export async function transpile(path, options = {}) {
+export async function transpile(path, options) {
   const {
     embedWASM = true,
     topLevelAwait = true,
-    omitFunctions = false,
-    omitVariables = false,
     omitExports = false,
     stripWASM = (options.optimize && options.optimize !== 'Debug'),
     keepNames = false,
@@ -23,16 +22,14 @@ export async function transpile(path, options = {}) {
       throw new Error(`wasmLoader is a required option when embedWASM is false`);
     }
   }
-  const wasmPath = await compile(path, {
-    ...compileOptions,
-    arch: 'wasm32',
-    platform: 'freestanding'
-  });
+  Object.assign(compileOptions, { arch: 'wasm32', platform: 'freestanding' });
+  const wasmPath = getCachePath(path, compileOptions) 
+  await compile(path, wasmPath, compileOptions);
   const content = await readFile(wasmPath);
   const env = createEnvironment();
   env.loadModule(content);
   await env.initPromise;
-  env.acquireStructures({ omitFunctions, omitVariables });
+  env.acquireStructures(compileOptions);
   const definition = env.exportStructures();
   const runtimeURL = moduleResolver('zigar-runtime');
   let binarySource;

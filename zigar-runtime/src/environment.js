@@ -332,10 +332,14 @@ export class Environment {
   }
 
   acquireStructures(options) {
+    const {
+      omitFunctions = false,
+      omitVariables = isElectron(),
+    } = options;
     createGlobalErrorSet();
     const thunkId = this.getFactoryThunk();
     const ArgStruct = this.defineFactoryArgStruct();
-    const args = new ArgStruct([ options ]);
+    const args = new ArgStruct([ { omitFunctions, omitVariables } ]);
     this.comptime = true;
     this.invokeThunk(thunkId, args);
     this.comptime = false;
@@ -990,4 +994,10 @@ export function add(address, len) {
 
 export function subtract(address, len) {
   return address - ((typeof(address) === 'bigint') ? BigInt(len) : len);
+}
+
+function isElectron() {
+  return typeof(process) === 'object'
+      && typeof(process?.versions) === 'object' 
+      && !!process.versions?.electron;
 }
