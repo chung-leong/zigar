@@ -43,8 +43,8 @@ export async function load(url, context, nextLoad) {
   }
   const path = fileURLToPath(url);
   const options = {
-    clean: process.env.NODE_ENV === 'production',
-    optimize: (process.env.NODE_ENV === 'production') ? 'ReleaseFast' : 'Debug',
+    clean: false,
+    optimize: 'Debug',
     nativeCpu: true,
     platform: os.platform(),
     arch: os.arch(),
@@ -52,7 +52,7 @@ export async function load(url, context, nextLoad) {
   const configPath = await findConfigFile('node-zigar.config.json', dirname(path));
   if (configPath) {
     // add options from config file
-    Object.assign(options, await loadConfigFile(configPath));
+    Object.assign(options, await loadConfigFile(configPath, optionsForCompile));
   }
   if (m[2]) {
     // allow overriding of options using query variables

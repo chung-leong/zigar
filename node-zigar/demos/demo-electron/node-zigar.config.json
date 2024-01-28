@@ -1,0 +1,6 @@
+{
+  "optimize": "ReleaseFast",
+  "sourceFiles": {
+    "sha1": "./sha1.zig"
+  }
+}

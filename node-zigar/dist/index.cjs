@@ -29,7 +29,7 @@ Module._load = new Proxy(Module._load, {
     const configPath = findConfigFileSync('node-zigar.config.json', dirname(path));
     if (configPath) {
       // add options from config file
-      Object.assign(options, loadConfigFileSync(configPath));
+      Object.assign(options, loadConfigFileSync(configPath, optionsForCompile));
     }
     if (m[2]) {
       // allow overriding of options using query variables
