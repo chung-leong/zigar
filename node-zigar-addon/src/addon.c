@@ -1,5 +1,4 @@
 #include "addon.h"
-#include <stdio.h>
 
 int module_count = 0;
 int buffer_count = 0;
@@ -499,15 +498,20 @@ napi_value run_thunk(napi_env env,
     napi_value js_env;
     double thunk_id;
     void* args_ptr;
+    size_t args_len;
     if (napi_get_cb_info(env, info, &argc, args, &js_env, (void*) &md) != napi_ok
      || napi_get_value_double(env, args[0], &thunk_id) != napi_ok) {
         return throw_error(env, "Thunk id must be a number");
-    } else if (napi_get_dataview_info(env, args[1], NULL, &args_ptr, NULL, NULL) != napi_ok) {
+    } else if (napi_get_dataview_info(env, args[1], &args_len, &args_ptr, NULL, NULL) != napi_ok) {
         return throw_error(env, "Arguments must be a DataView");
     }
     call_context ctx = { env, js_env, md };
     size_t thunk_address = md->base_address + thunk_id;
     napi_value result;
+    if (args_len == 0) {
+        // pointer might not be valid when length is zero
+        args_ptr = NULL;
+    }
     if (md->mod->imports->run_thunk(&ctx, thunk_address, args_ptr, &result) != OK) {
         return throw_error(env, "Unable to execute function");
     }

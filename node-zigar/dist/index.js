@@ -1,6 +1,6 @@
 import { createRequire } from 'module';
 import { createEnvironment } from 'node-zigar-addon';
-import { arch, platform } from 'os';
+import os from 'os';
 import { dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import {
@@ -46,8 +46,8 @@ export async function load(url, context, nextLoad) {
     clean: process.env.NODE_ENV === 'production',
     optimize: (process.env.NODE_ENV === 'production') ? 'ReleaseFast' : 'Debug',
     nativeCpu: true,
-    platform: platform(),
-    arch: arch(),
+    platform: os.platform(),
+    arch: os.arch(),
   };
   const configPath = await findConfigFile('node-zigar.config.json', dirname(path));
   if (configPath) {

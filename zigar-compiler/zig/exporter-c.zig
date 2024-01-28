@@ -155,6 +155,7 @@ pub const Host = struct {
         const memory: Memory = .{
             .bytes = @constCast(bytes),
             .len = len,
+            .attributes = .{ .is_comptime = true },
         };
         const dv = try self.captureView(memory);
         try self.writeToConsole(dv);

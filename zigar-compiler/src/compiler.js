@@ -2,7 +2,7 @@ import { exec, execSync } from 'child_process';
 import { writeFileSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import os, { tmpdir } from 'os';
-import { basename, dirname, join, parse } from 'path';
+import { basename, dirname, join, parse, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { getPlatformExt } from './configuration.js';
 import {
@@ -337,5 +337,11 @@ export function createProjectSync(config, dir) {
 }
 
 function absolute(relpath) {
-  return fileURLToPath(new URL(relpath, import.meta.url));
+  // import.meta.url don't always yield the right URL when transpiled to CommonJS
+  // just use __dirname as it's going to be there
+  if (typeof(__dirname) === 'string') {
+    return resolve(__dirname, relpath);
+  } else {
+    return fileURLToPath(new URL(relpath, import.meta.url));
+  }
 }

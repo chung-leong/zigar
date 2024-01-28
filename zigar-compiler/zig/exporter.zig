@@ -1529,7 +1529,7 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                 const DT = @TypeOf(decl_value_ptr.*);
                 if (comptime isSupported(DT) and (DT != type or isSupported(decl_value_ptr.*))) {
                     const is_const = comptime isConst(@TypeOf(decl_value_ptr));
-                    if (!is_const or !host.options.omit_variables) {
+                    if (is_const or !host.options.omit_variables) {
                         const slot = getObjectSlot(Static, index);
                         try host.attachMember(structure, .{
                             .name = getCString(decl.name),

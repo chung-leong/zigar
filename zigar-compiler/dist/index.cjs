@@ -2613,7 +2613,7 @@ function throwBufferSizeMismatch(structure, dv, target = null) {
   const { type, byteSize } = structure;
   const name = getStructureName(structure);
   const actual = dv.byteLength;
-  const s = (byteSize > 1) ? 's' : '';
+  const s = (byteSize !== 1) ? 's' : '';
   if (type === StructureType.Slice && !target) {
     throw new TypeError(`${name} has elements that are ${byteSize} byte${s} in length, received ${actual}`);
   } else {
@@ -2624,7 +2624,7 @@ function throwBufferSizeMismatch(structure, dv, target = null) {
 
 function throwBufferExpected(structure) {
   const { type, byteSize, typedArray } = structure;
-  const s = (byteSize > 1) ? 's' : '';
+  const s = (byteSize !== 1) ? 's' : '';
   const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle);
   if (typedArray) {
     acceptable.push(addArticle(typedArray.name));
@@ -2717,7 +2717,7 @@ function throwArrayLengthMismatch(structure, target, arg) {
   const { length: argLength, constructor: argConstructor } = arg;
   // get length from object whech it's a slice
   const actualLength = target?.length ?? length;
-  const s = (actualLength > 1) ? 's' : '';
+  const s = (actualLength !== 1) ? 's' : '';
   let received;
   if (argConstructor === elementConstructor) {
     received = `only a single one`;
@@ -2749,7 +2749,7 @@ function throwArgumentCountMismatch(structure, actual) {
   const { instance: { members } } = structure;
   const name = getStructureName(structure);
   const argCount = members.length - 1;
-  const s = (argCount > 1) ? 's' : '';
+  const s = (argCount !== 1) ? 's' : '';
   throw new Error(`${name} expects ${argCount} argument${s}, received ${actual}`);
 }
 
@@ -5314,7 +5314,13 @@ function createProjectSync(config, dir) {
 }
 
 function absolute(relpath) {
-  return url.fileURLToPath(new URL(relpath, (typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (_documentCurrentScript && _documentCurrentScript.src || new URL('index.cjs', document.baseURI).href))));
+  // import.meta.url don't always yield the right URL when transpiled to CommonJS
+  // just use __dirname as it's going to be there
+  if (typeof(__dirname) === 'string') {
+    return path.resolve(__dirname, relpath);
+  } else {
+    return url.fileURLToPath(new URL(relpath, (typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (_documentCurrentScript && _documentCurrentScript.src || new URL('index.cjs', document.baseURI).href))));
+  }
 }
 
 function addMethods(s, env) {

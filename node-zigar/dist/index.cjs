@@ -1,40 +1,45 @@
-const { importModule } = require('node-zigar-addon/cjs');
-const { cwd } = require('process');
-const { fileURLToPath, pathToFileURL } = require('url');
-const { compileSync } = require('zigar-compiler/cjs');
 const Module = require('module');
+const { importModule } = require('node-zigar-addon/cjs');
+const os = require('os');
+const { dirname } = require('path');
+const { fileURLToPath, pathToFileURL } = require('url');
+const { 
+  compileSync, addPlatformExt, findConfigFileSync, findSourceFile, getCachePath, 
+  loadConfigFileSync, optionsForCompile
+} = require('zigar-compiler/cjs');
 
-const baseURL = pathToFileURL(`${cwd()}/`).href;
-const srcExtRegEx = /\.zig$/;
-
-function importZig(url) {
-  const {
-    omitFunctions = false,
-    omitVariables = isElectron(),
-    ...compileOptions
-  } = options;
-  const zigPath = fileURLToPath(url);
-  const soPath = compileSync(zigPath, compileOptions);
-  return importModule(soPath);
-}
+const extensionsRegex = /\.(zig|zigar)(\?|$)/;
 
 Module._load = new Proxy(Module._load, {
   apply(target, self, args) {
     const [ request, parent ] = args;
-    const url = new URL(request, pathToFileURL(parent.filename));
-    if (srcExtRegEx.test(url.pathname)) {
-      return importZig(url);
+    const m = extensionsRegex.exec(request);
+    if (!m) {
+      return Reflect.apply(target, self, args);
     }
-    return Reflect.apply(target, self, args);
+    const url = new URL(request, pathToFileURL(parent.filename));
+    const path = fileURLToPath(url);
+    const options = {
+      clean: process.env.NODE_ENV === 'production',
+      optimize: (process.env.NODE_ENV === 'production') ? 'ReleaseFast' : 'Debug',
+      nativeCpu: true,
+      platform: os.platform(),
+      arch: os.arch(),
+    };
+    const configPath = findConfigFileSync('node-zigar.config.json', dirname(path));
+    if (configPath) {
+      // add options from config file
+      Object.assign(options, loadConfigFileSync(configPath));
+    }
+    if (m[2]) {
+      // allow overriding of options using query variables
+      Object.assign(options, extractOptions(url.searchParams, optionsForCompile));
+    }
+    const srcPath = (m[1] === 'zig') ? path : findSourceFile(path, options);
+    const soPath = (m[1] === 'zig') ? getCachePath(path, options) : addPlatformExt(path, options);
+    if (srcPath) {
+      compileSync(srcPath, soPath, options);
+    }
+    return importModule(soPath, options); 
   }
 });
-
-export function isElectron() {
-  return typeof(process) === 'object' 
-      && typeof(process?.versions) === 'object' 
-      && !!process.versions?.electron;
-}
-
-export function camelCase(name) {
-  return name.toLowerCase().replace(/_(\w)/g, (m0, m1) => m1.toUpperCase());
-}
