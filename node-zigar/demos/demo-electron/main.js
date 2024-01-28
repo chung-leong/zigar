@@ -4,7 +4,7 @@ const { join } = require('path');
 
 // use node-zigar
 require('node-zigar/cjs');
-const { sha1 } = require('lib/sha1.zigar');
+const { sha1 } = require('./lib/sha1.zigar');
 
 const isMac = process.platform === 'darwin'
 
@@ -31,7 +31,7 @@ app.whenReady().then(() => {
 });
 
 // create app menu
-const openMenuClick = async () => {
+const onOpenlick = async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({ properties: [ 'openFile' ]});
   if (!canceled) {
     const [ path ] = filePaths;
@@ -50,7 +50,7 @@ const menuTemplate = [
   {
     label: '&File',
     submenu: [
-      { label: '&Open', click: openMenuClick },
+      { label: '&Open', click: onOpenlick },
       { type: 'separator' },
       isMac ? { role: 'close' } : { role: 'quit' }
     ]

@@ -1,14 +1,10 @@
 {
-  "name": "electron-zigar-demo",
+  "name": "nwjs-zigar-demo",
   "version": "0.11.1",
   "description": "",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "license": "MIT",
-  "devDependencies": {
-    "electron": "^28.1.4"
-  }
+  "license": "MIT"
 }
