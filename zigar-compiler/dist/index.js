@@ -5000,7 +5000,7 @@ async function compile(srcPath, soPath, options) {
   }
   const soInfo = await findFile(soPath);
   const config = createConfig(srcPath, srcInfo, soPath, soInfo, options);
-  const srcFileMap = await findMatchingFiles(config.packageRoot, /\.zig$/);
+  const srcFileMap = await findMatchingFiles(config.packageRoot, /\.(zig|zon)$/);
   let changed = false;
   // see if the (re-)compilation is necessary
   if (soInfo) {
@@ -5093,7 +5093,7 @@ function compileSync(srcPath, soPath, options) {
   }
   const soInfo = findFileSync(soPath);
   const config = createConfig(srcPath, srcInfo, soPath, soInfo, options);
-  const srcFileMap = findMatchingFilesSync(config.packageRoot, /\.zig$/);
+  const srcFileMap = findMatchingFilesSync(config.packageRoot, /\.(zig|zon)$/);
   let changed = false;
   // see if the (re-)compilation is necessary
   if (soInfo) {
@@ -5293,7 +5293,7 @@ async function createProject(config, dir) {
   const buildFilePath = join(dir, 'build.zig');
   await copyFile(config.buildFilePath, buildFilePath);
   if (config.packageConfigFilePath) {
-    packageConfigFilePath = join(dir, 'build.zig.zon');
+    const packageConfigFilePath = join(dir, 'build.zig.zon');
     await copyFile(config.packageConfigFilePath, packageConfigFilePath);
   }
 }
@@ -5305,7 +5305,7 @@ function createProjectSync(config, dir) {
   const buildFilePath = join(dir, 'build.zig');
   copyFileSync(config.buildFilePath, buildFilePath);
   if (config.packageConfigFilePath) {
-    packageConfigFilePath = join(dir, 'build.zig.zon');
+    const packageConfigFilePath = join(dir, 'build.zig.zon');
     copyFileSync(config.packageConfigFilePath, packageConfigFilePath);
   }
 }
