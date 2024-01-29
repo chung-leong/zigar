@@ -12,7 +12,13 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    const imports = .{};
+    const zigplotlib = b.dependency("zigplotlib", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const imports = .{
+        .{ .name = "plotlib", .module = zigplotlib.module("zigplotlib") },
+    };
     if (@hasDecl(std.Build.Step.Compile, "addModule")) {
         // Zig 0.11.0
         lib.addModule("exporter", b.createModule(.{

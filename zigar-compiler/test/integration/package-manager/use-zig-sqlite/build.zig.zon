@@ -1,0 +1,13 @@
+.{
+    .name = "use-ziglua",
+    .version = "0.0.0",
+    .dependencies = .{
+        .sqlite = .{
+            .url = "https://github.com/vrischmann/zig-sqlite/archive/7ef20308bdf1cf7fbe107ffbe0d9c7607a263b08.tar.gz",
+            .hash = "122007f33ec840d1693ff065bcdc93cca64c1e75a80cab7d7a53260273a8d5a9e036",
+        },
+    },
+    .paths = .{
+        "",
+    },
+}

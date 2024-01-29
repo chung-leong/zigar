@@ -12,7 +12,13 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    const imports = .{};
+    const sqlite = b.dependency("sqlite", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const imports = .{
+        .{ .name = "sqlite", .module = sqlite.module("sqlite") },
+    };
     if (@hasDecl(std.Build.Step.Compile, "addModule")) {
         // Zig 0.11.0
         lib.addModule("exporter", b.createModule(.{
@@ -32,9 +38,8 @@ pub fn build(b: *std.Build) void {
             .imports = &imports,
         }));
     }
-    if (cfg.use_libc) {
-        lib.linkLibC();
-    }
+    lib.linkLibC();
+    lib.linkLibrary(sqlite.artifact("sqlite"));
     if (cfg.target.cpu_arch == .wasm32) {
         lib.use_lld = false;
         lib.rdynamic = true;

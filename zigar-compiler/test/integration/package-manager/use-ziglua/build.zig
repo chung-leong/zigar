@@ -16,28 +16,27 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    const imports = .{
+        .{ .name = "ziglua", .module = ziglua.module("ziglua") },
+    };
     if (@hasDecl(std.Build.Step.Compile, "addModule")) {
         // Zig 0.11.0
-        const exporter = b.createModule(.{
+        lib.addModule("exporter", b.createModule(.{
             .source_file = .{ .path = cfg.exporter_path },
-        });
-        const package = b.createModule(.{
+        }));
+        lib.addModule("package", b.createModule(.{
             .source_file = .{ .path = cfg.package_path },
-        });
-        lib.addModule("exporter", exporter);
-        lib.addModule("package", package);
-        lib.addModule("ziglua", ziglua.module("ziglua"));
+            .dependencies = &imports,
+        }));
     } else if (@hasField(std.Build.Step.Compile, "root_module")) {
         // Zig 0.12.0
-        const exporter = b.createModule(.{
+        lib.root_module.addImport("exporter", b.createModule(.{
             .root_source_file = .{ .path = cfg.exporter_path },
-        });
-        const package = b.createModule(.{
+        }));
+        lib.root_module.addImport("package", b.createModule(.{
             .root_source_file = .{ .path = cfg.package_path },
-        });
-        lib.root_module.addImport("exporter", exporter);
-        lib.root_module.addImport("package", package);
-        package.addImport("ziglua", ziglua.module("ziglua"));
+            .imports = &imports,
+        }));
     }
     if (cfg.use_libc) {
         lib.linkLibC();
