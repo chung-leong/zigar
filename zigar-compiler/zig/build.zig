@@ -12,12 +12,23 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    lib.addModule("exporter", b.createModule(.{
-        .source_file = .{ .path = cfg.exporter_path },
-    }));
-    lib.addModule("package", b.createModule(.{
-        .source_file = .{ .path = cfg.package_path },
-    }));
+    if (@hasDecl(std.Build.Step.Compile, "addModule")) {
+        // Zig 0.11.0
+        lib.addModule("exporter", b.createModule(.{
+            .source_file = .{ .path = cfg.exporter_path },
+        }));
+        lib.addModule("package", b.createModule(.{
+            .source_file = .{ .path = cfg.package_path },
+        }));
+    } else if (@hasField(std.Build.Step.Compile, "root_module")) {
+        // Zig 0.12.0
+        lib.root_module.addImport("exporter", b.createModule(.{
+            .root_source_file = .{ .path = cfg.exporter_path },
+        }));
+        lib.root_module.addImport("package", b.createModule(.{
+            .root_source_file = .{ .path = cfg.package_path },
+        }));
+    }
     if (cfg.use_libc) {
         lib.linkLibC();
     }
