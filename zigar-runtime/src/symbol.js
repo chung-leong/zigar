@@ -12,6 +12,7 @@ export const ELEMENT_SETTER = Symbol('elementSetter');
 export const LOCATION_GETTER = Symbol('addressGetter');
 export const LOCATION_SETTER = Symbol('addressSetter');
 export const TARGET_GETTER = Symbol('targetGetter');
+export const TARGET_SETTER = Symbol('targetSetter');
 export const FIXED_LOCATION = Symbol('fixedLocation');
 export const PROP_SETTERS = Symbol('propSetters');
 export const ALL_KEYS = Symbol('allKeys');

@@ -11,6 +11,7 @@ import { StructureType, attachDescriptors, createConstructor, defineProperties }
 import {
   ALIGN, CONST, COPIER, ENVIRONMENT, FIXED_LOCATION, GETTER, LOCATION_GETTER, LOCATION_SETTER,
   MEMORY, NORMALIZER, PARENT, POINTER, POINTER_VISITOR, PROXY, SETTER, SIZE, SLOTS, TARGET_GETTER,
+  TARGET_SETTER,
   VIVIFICATOR
 } from './symbol.js';
 
@@ -61,6 +62,22 @@ export function definePointer(structure, env) {
     updateTarget.call(this);
     return this[SLOTS][0] ?? throwNullPointer();
   };
+  const setTargetObject = function(arg) {
+    if (env.inFixedMemory(this)) {
+      // the pointer sits in fixed memory--apply the change immediately
+      if (env.inFixedMemory(arg)) {
+        const loc = {
+          address: env.getViewAddress(arg[MEMORY]),
+          length: (hasLength) ? arg.length : 1
+        };
+        addressSetter.call(this, loc);
+        this[FIXED_LOCATION] = loc;
+      } else {
+        throwFixedMemoryTargetRequired(structure, arg);
+      }
+    }
+    this[SLOTS][0] = arg;
+  };
   const getTarget = isValueExpected(targetStructure)
   ? function() {
       const target = getTargetObject.call(this);
@@ -104,7 +121,6 @@ export function definePointer(structure, env) {
       }
       arg = arg[SLOTS][0];
     }
-    const fixed = env.inFixedMemory(this);
     if (arg instanceof Target) {
       /* wasm-only */
       restoreMemory.call(arg);
@@ -121,6 +137,7 @@ export function definePointer(structure, env) {
       arg = Target(dv, { writable: !isConst });
     } else if (isTargetSlice) {
       // autovivificate target object
+      const fixed = env.inFixedMemory(this);
       const autoObj = new Target(arg, { writable: !isConst, fixed });
       if (runtimeSafety) {
         // creation of a new slice using a typed array is probably
@@ -134,20 +151,7 @@ export function definePointer(structure, env) {
     } else if (arg !== undefined) {
       throwInvalidPointerTarget(structure, arg);
     }
-    if (fixed) {
-      // the pointer sits in fixed memory--apply the change immediately
-      if (env.inFixedMemory(arg)) {
-        const loc = {
-          address: env.getViewAddress(arg[MEMORY]),
-          length: (hasLength) ? arg.length : 1
-        };
-        addressSetter.call(this, loc);
-        this[FIXED_LOCATION] = loc;
-      } else {
-        throwFixedMemoryTargetRequired(structure, arg);
-      }
-    }
-    this[SLOTS][0] = arg;
+    this[TARGET_SETTER](arg);
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster, finalizer }, env);
   const addressSetter = function({ address, length }) {
@@ -170,6 +174,7 @@ export function definePointer(structure, env) {
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [TARGET_GETTER]: { value: getTargetObject },
+    [TARGET_SETTER]: { value: setTargetObject },
     [LOCATION_GETTER]: { value: addressGetter },
     [LOCATION_SETTER]: { value: addressSetter },
     [POINTER_VISITOR]: { value: visitPointer },
@@ -201,7 +206,10 @@ export function getProxy() {
 }
 
 export function copyPointer({ source }) {
-  this[SLOTS][0] = source[SLOTS][0];
+  const target = source[SLOTS][0];
+  if (target) {
+    this[TARGET_SETTER](target);
+  }
 }
 
 export function resetPointer({ isActive }) {

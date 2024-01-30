@@ -1196,6 +1196,80 @@ describe('Struct functions', function() {
       expect(() => pets.$ = { cat: 123 }).to.throw(TypeError)
         .with.property('message').that.contains('read-only');
     });
+    it('should throw when copying a struct with pointer in reloc memory to one in fixed memory', function() {
+      const env = new NodeEnvironment();
+      env.allocateExternMemory = function(len, align) {
+        return new ArrayBuffer(len);
+      };
+      env.extractBufferAddress = function(buffer) {
+        return 0x1000n;
+      };
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        byteSize: 8,
+        hasPointer: true
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const { constructor: Int32Ptr } = ptrStructure;
+      const structure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 8 * 2,
+        hasPointer: true
+      });
+      env.attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 64,
+        byteSize: 8,
+        slot: 1,
+        structure: ptrStructure,
+      })
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const object1 = new Hello({
+        cat: new Int32(1234),
+        dog: new Int32(4567),
+      });
+      const object2 = new Hello(undefined, { fixed: true });
+      expect(() => object2.$ = object1).to.throw(TypeError)
+        .with.property('message').that.contains('cannot point to garbage-collected');
+    })  
   })
 })
 
