@@ -6,6 +6,7 @@ import {
   formatList,
   rethrowArgumentError,
   rethrowRangeError,
+  throwAccessingOpaque,
   throwAlignmentConflict,
   throwArgumentCountMismatch,
   throwArrayLengthMismatch,
@@ -13,6 +14,7 @@ import {
   throwBufferExpected,
   throwBufferSizeMismatch,
   throwConstantConstraint,
+  throwCreatingOpaque,
   throwEnumExpected,
   throwErrorExpected,
   throwFixedMemoryTargetRequired,
@@ -625,6 +627,16 @@ describe('Error functions', function() {
       };
       expect(() => throwNotOnByteBoundary(member)).to.throw(TypeError)
         .with.property('message').that.contains('hello');
+    })
+  })
+  describe('throwCreatingOpaque', function() {
+    it('should throw a type error', function() {
+      expect(() => throwCreatingOpaque()).to.throw(TypeError);
+    })
+  })
+  describe('throwAccessingOpaque', function() {
+    it('should throw a type error', function() {
+      expect(() => throwAccessingOpaque()).to.throw(TypeError);
     })
   })
   describe('decamelizeErrorName', function() {

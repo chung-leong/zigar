@@ -270,6 +270,14 @@ export function throwReadOnlyTarget(structure) {
   throw new TypeError(`${name} cannot point to a read-only object`);
 }
 
+export function throwAccessingOpaque() {
+  throw new TypeError(`Unable to access opaque structure`);
+}
+
+export function throwCreatingOpaque() {
+  throw new TypeError(`Unable to create opaque structure`);
+}
+
 export function throwZigError(name) {
   throw new Error(decamelizeErrorName(name));
 }

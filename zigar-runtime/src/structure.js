@@ -6,6 +6,7 @@ import { defineErrorSet } from './error-set.js';
 import { defineErrorUnion } from './error-union.js';
 import { throwMissingInitializers, throwNoInitializer, throwNoProperty, throwReadOnly } from './error.js';
 import { MemberType, hasStandardFloatSize, hasStandardIntSize, isByteAligned, isReadOnly } from './member.js';
+import { defineOpaque } from './opaque.js';
 import { defineOptional } from './optional.js';
 import { copyPointer, definePointer } from './pointer.js';
 import { definePrimitive } from './primitive.js';
@@ -100,7 +101,8 @@ export function useVector() {
 }
 
 export function useOpaque() {
-  factories[StructureType.Opaque] = defineStructShape;
+  factories[StructureType.Opaque] = defineOpaque
+  ;
 }
 
 export function useArgStruct() {
