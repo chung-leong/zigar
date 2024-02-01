@@ -67,13 +67,8 @@ export class NodeEnvironment extends Environment {
   }
 
   allocateFixedMemory(len, align) {
-    if (len === 0) {
-      return this.obtainView(new ArrayBuffer(0));
-    }
-    const buffer = this.allocateExternMemory(len, align);
-    const address = this.extractBufferAddress(buffer);
-    this.addressMap.set(buffer, address);
-    const dv = this.obtainView(buffer, 0, len);
+    const address = this.allocateExternMemory(len, align);
+    const dv = this.obtainFixedView(address, len);
     dv[ALIGN] = align;
     return dv;
   }

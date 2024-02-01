@@ -1493,10 +1493,10 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structure);
       const { constructor: Int32Ptr } = structure;
       env.allocateExternMemory = function(len, align) {
-        return new ArrayBuffer(len);
-      };
-      env.extractBufferAddress = function(buffer) {
         return 0x1000n;
+      };
+      env.obtainExternBuffer = function(address, len) {
+        return new ArrayBuffer(len);
       };
       const dv = env.allocateFixedMemory(structure.byteSize, 0);
       const intPtr = Int32Ptr.call(ENVIRONMENT, dv);
@@ -1517,9 +1517,6 @@ describe('Pointer functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      env.obtainFixedView = (address, len) => {
-        return new DataView(new ArrayBuffer(4));
-      };
       env.finalizeShape(intStructure);
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
@@ -1542,10 +1539,10 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structure);
       const { constructor: Int32Ptr } = structure;
       env.allocateExternMemory = function(len, align) {
-        return new ArrayBuffer(len);
-      };
-      env.extractBufferAddress = function(buffer) {
         return 0x1000n;
+      };
+      env.obtainExternBuffer = function(address, len) {
+        return new ArrayBuffer(len);
       };
       const dv = env.allocateFixedMemory(structure.byteSize, 0);
       const intPtr1 = Int32Ptr.call(ENVIRONMENT, dv);
@@ -1588,13 +1585,13 @@ describe('Pointer functions', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: Int32Ptr } = structure;
-      env.allocateExternMemory = function(len, align) {
-        return new ArrayBuffer(len);
-      };
       let address = 0n;
-      env.extractBufferAddress = function(buffer) {
+      env.allocateExternMemory = function(len, align) {
         address += 1000n;
         return address;
+      };
+      env.obtainExternBuffer = function(address, len) {
+        return new ArrayBuffer(len);
       };
       const dv1 = env.allocateFixedMemory(intStructure.byteSize, 0);
       const dv2 = env.allocateFixedMemory(structure.byteSize, 0);
@@ -1658,19 +1655,19 @@ describe('Pointer functions', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: HelloPtr } = structure;
-      env.allocateExternMemory = function(len, align) {
-        return new ArrayBuffer(len);
-      };
       let nextAddress = 1000n;
-      const bufferAddresses = new Map();
-      env.extractBufferAddress = function(buffer) {
-        let address = bufferAddresses.get(buffer);
-        if (address === undefined) {
-          address = nextAddress;
-          bufferAddresses.set(buffer, address);
-          nextAddress += 1000n;
-        }
+      const bufferMap = new Map();
+      const addressMap = new Map();
+      env.allocateExternMemory = function(len, align) {
+        const address = nextAddress;
+        nextAddress += 1000n;
+        const buffer = new ArrayBuffer(len);
+        bufferMap.set(address, buffer);
+        addressMap.set(buffer, address);
         return address;
+      };
+      env.obtainExternBuffer = function(address, len) {
+        return bufferMap.get(address);
       };
       const dv1 = env.allocateFixedMemory(sliceStructure.byteSize * 4, 0);
       const dv2 = env.allocateFixedMemory(structure.byteSize, 0);
@@ -2098,24 +2095,31 @@ describe('Pointer functions', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: Int32SlicePtr } = structure;
+      const bufferMap = new Map();
       const addressMap = new Map();
       let nextAddress = 0x1000n;
       env.allocateExternMemory = function(len, align) {
-        const buffer = new ArrayBuffer(len);
         const address = nextAddress;
         nextAddress += 0x1000n;
+        const buffer = new ArrayBuffer(len);
+        bufferMap.set(address, buffer);
         addressMap.set(buffer, address);
-        return buffer;
+        return address;
       };
       env.extractBufferAddress = function(buffer) {
         return addressMap.get(buffer);
       };
       env.obtainExternBuffer = function(address, len) {
-        const buffer = new ArrayBuffer(len);
-        addressMap.set(buffer, address);
-        const dv = new DataView(buffer);
-        for (let i = 0; i < dv.byteLength; i += 4) {
-          dv.setInt32(i, 8, true);
+        let buffer = bufferMap.get(address);
+        if (!buffer && address === 0x30000n) {
+          buffer = new ArrayBuffer(len);
+          // fill with byte value 8 
+          const dv = new DataView(buffer);
+          for (let i = 0; i < dv.byteLength; i += 4) {
+            dv.setInt32(i, 8, true);
+          }
+          bufferMap.set(address, buffer);
+          addressMap.set(buffer, address);          
         }
         return buffer;
       }
@@ -2124,8 +2128,8 @@ describe('Pointer functions', function() {
       const loc = pointer[LOCATION_GETTER]();
       pointer[LOCATION_SETTER]({ ...loc, address: 0x30000n });
       expect([ ...pointer ]).to.eql([ 8, 8, 8, 8 ]);
-      pointer[LOCATION_SETTER]({ ...loc, length: 5 });
-      expect([ ...pointer ]).to.eql([ 8, 8, 8, 8, 8 ]);
+      pointer[LOCATION_SETTER]({ ...loc, length: 3 });
+      expect([ ...pointer ]).to.eql([ 1, 2, 3 ]);
     })
   })
 })

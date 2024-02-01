@@ -40,23 +40,6 @@ void finalize_external_buffer(napi_env env,
     buffer_count--;
 }
 
-bool create_external_buffer(napi_env env,
-                            uint8_t* bytes,
-                            size_t len,
-                            module_data* md,
-                            napi_value* dest) {
-    if (len > 0) {
-        reference_module(md);
-        buffer_count++;
-        /* create a reference to the module so that the shared library doesn't get unloaded
-        while the external buffer is still around pointing to it */
-        return napi_create_external_arraybuffer(env, bytes, len, finalize_external_buffer, md, dest) == napi_ok;
-    } else {
-        /* external array buffer cannot be zero-length--return a regular buffer instead */
-        return napi_create_arraybuffer(env, len, NULL, dest) == napi_ok;
-    }
-}
-
 bool call_js_function(call ctx,
                       const char* fn_name,
                       size_t argc,
@@ -371,11 +354,11 @@ napi_value allocate_external_memory(napi_env env,
     if (md->mod->imports->allocate_extern_memory(len, align, &mem) != OK) {
         return throw_error(env, "Unable to allocate fixed memory");
     }
-    napi_value buffer;
-    if (!create_external_buffer(env, mem.bytes, mem.len, md, &buffer)) {
-        return throw_last_error(env);
+    napi_value address;
+    if (!napi_create_uintptr(env, (uintptr_t) mem.bytes, &address) != napi_ok) {
+        return throw_error(env, "Unable to create memory address");
     }
-    return buffer;
+    return address;
 }
 
 napi_value free_external_memory(napi_env env,
@@ -413,8 +396,25 @@ napi_value obtain_external_buffer(napi_env env,
         return throw_error(env, "Length must be number");
     }
     napi_value buffer;
-    if (!create_external_buffer(env, (uint8_t*) address, len, md, &buffer)) {
-        return throw_last_error(env);
+    void* src = (void*) address;
+    void* dest;
+    switch (napi_create_external_arraybuffer(env, src, len, finalize_external_buffer, md, &buffer)) {
+        case napi_ok:
+            /* create a reference to the module so that the shared library doesn't get unloaded
+            while the external buffer is still around pointing to it */
+            reference_module(md);
+            buffer_count++;
+            break;
+        case napi_no_external_buffers_allowed:
+            /* use a regular buffer instead when we can't create an external one */
+            if (napi_create_arraybuffer(env, len, &dest, &buffer) == napi_ok) {
+                if (len > 0) {
+                    memcpy(dest, src, len);
+                }
+                break;
+            }
+        default:
+            return throw_last_error(env);
     }
     return buffer;
 }

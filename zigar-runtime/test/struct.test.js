@@ -1199,10 +1199,10 @@ describe('Struct functions', function() {
     it('should throw when copying a struct with pointer in reloc memory to one in fixed memory', function() {
       const env = new NodeEnvironment();
       env.allocateExternMemory = function(len, align) {
-        return new ArrayBuffer(len);
-      };
-      env.extractBufferAddress = function(buffer) {
         return 0x1000n;
+      };
+      env.obtainExternBuffer = function(address, len) {
+        return new ArrayBuffer(len);
       };
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,

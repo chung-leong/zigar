@@ -75,16 +75,25 @@ describe('NodeEnvironment', function() {
   describe('allocateFixedMemory', function() {    
     it('should try to allocate fixed memory from zig', function() {
       const env = new NodeEnvironment();
+      const buffers = {};
       env.allocateExternMemory = function(len, align) {
+        return 0x1000n;
+      };
+      env.obtainExternBuffer = function(address, len) {
         return new ArrayBuffer(len);
       };
-      env.extractBufferAddress = function() { return 0x1000n };
       const dv = env.allocateFixedMemory(400, 4);
       expect(dv).to.be.instanceOf(DataView);
       expect(dv.byteLength).to.equal(400);
     })
     it('should return empty data view when len is 0', function() {
       const env = new NodeEnvironment();
+      env.allocateExternMemory = function(len, align) {
+        return 0x1000n;
+      };
+      env.obtainExternBuffer = function(address, len) {
+        return new ArrayBuffer(len);
+      };
       const dv1 = env.allocateFixedMemory(0, 4);
       const dv2 = env.allocateFixedMemory(0, 1);
       expect(dv1.byteLength).to.equal(0);
@@ -132,9 +141,11 @@ describe('NodeEnvironment', function() {
     it('should free a data view that was allocated using allocateFixedMemory', function() {
       const env = new NodeEnvironment();
       env.allocateExternMemory = function(len, align) {
+        return 0x1000n;
+      };
+      env.obtainExternBuffer = function(address, len) {  
         return new ArrayBuffer(len);
       };
-      env.extractBufferAddress = function() { return 0x1000n };
       let args;
       env.freeExternMemory = function(address, len, align) {
         args = { address, len, align };
@@ -148,9 +159,11 @@ describe('NodeEnvironment', function() {
     it('should return true when memory is obtained from allocateFixedMemory', function() {
       const env = new NodeEnvironment();
       env.allocateExternMemory = function(len, align) {
+        return 0x1000n 
+      };
+      env.obtainExternBuffer = function(address, len) { 
         return new ArrayBuffer(len);
       };
-      env.extractBufferAddress = function() { return 0x1000n };
       const object = {
         [MEMORY]: env.allocateMemory(64, 8, true),
       };
