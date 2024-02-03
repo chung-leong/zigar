@@ -12,7 +12,15 @@ export function addTests(importModule, options) {
   describe('Opaque', function() {
     it('should not compile code with opaque as static variable', async function() {
       this.timeout(120000);
-      await expect(importTest('as-static-variables')).to.eventually.be.rejected;      
+      const { default: module, Orange, Apple, print } = await importTest('as-static-variables');
+      expect(Orange).to.be.a('function');
+      expect(Apple).to.be.a('function');
+      expect(() => new Orange()).to.throw();
+      expect(() => new Apple()).to.throw();
+      const [ line ] = await capture(() => {
+        print(module.orange_ptr);
+      });
+      expect(line).to.equal('Number = 1234');
     })
     it('should not compile code with function accepting opaque arguments', async function() {
       this.timeout(120000);

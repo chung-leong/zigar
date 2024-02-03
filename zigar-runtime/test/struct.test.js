@@ -1053,7 +1053,7 @@ describe('Struct functions', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: Hello } = structure;
-      expect(Hello.name).to.equal('Hello');
+      expect(Hello.name).to.equal('zig.super.Hello');
       const object = new Hello({});
       const desc = Object.prototype.toString.call(object);
       expect(desc).to.equal('[object zig.super.Hello]');

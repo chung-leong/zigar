@@ -1,16 +1,15 @@
 import { getTypeName } from './data-view.js';
 import { MemberType } from './member.js';
 import { getPrimitiveType } from './primitive.js';
-import { StructureType, getStructureName } from './structure.js';
+import { StructureType } from './structure.js';
 
 export function throwNoInitializer(structure) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   throw new TypeError(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`);
 }
 
 export function throwBufferSizeMismatch(structure, dv, target = null) {
-  const { type, byteSize } = structure;
-  const name = getStructureName(structure);
+  const { name, type, byteSize } = structure;
   const actual = dv.byteLength;
   const s = (byteSize !== 1) ? 's' : '';
   if (type === StructureType.Slice && !target) {
@@ -36,7 +35,7 @@ export function throwBufferExpected(structure) {
 }
 
 export function throwEnumExpected(structure, arg) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
     throw new TypeError(`Value given does not correspond to an item of enum ${name}: ${arg}`);
   } else {
@@ -45,7 +44,7 @@ export function throwEnumExpected(structure, arg) {
 }
 
 export function throwErrorExpected(structure, arg) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   const type = typeof(arg);
   if (type === 'string' || type === 'number') {
     throw new TypeError(`Error ${type} does not corresponds to any error in error set ${name}: ${arg}`);
@@ -55,17 +54,17 @@ export function throwErrorExpected(structure, arg) {
 }
 
 export function throwNotInErrorSet(structure) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   throw new TypeError(`Error given is not a part of error set ${name}`);
 }
 
 export function throwInvalidType(structure) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   throw new TypeError(`Object of specific type expected: ${name}`);
 }
 
 export function throwMultipleUnionInitializers(structure) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   throw new TypeError(`Only one property of ${name} can be given a value`);
 }
 
@@ -74,14 +73,13 @@ export function throwInactiveUnionProperty(structure, name, currentName) {
 }
 
 export function throwMissingUnionInitializer(structure, arg, exclusion) {
-  const { instance: { members } } = structure;
-  const name = getStructureName(structure);
+  const { name, instance: { members } } = structure;
   const missing = members.slice(0, exclusion ? -1 : undefined).map(m => m.name);
   throw new TypeError(`${name} needs an initializer for one of its union properties: ${missing.join(', ')}`);
 }
 
 export function throwInvalidInitializer(structure, expected, arg) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   const acceptable = [];
   if (Array.isArray(expected)) {
     for (const type of expected) {
@@ -115,8 +113,7 @@ export function throwInvalidArrayInitializer(structure, arg, shapeless = false) 
 }
 
 export function throwArrayLengthMismatch(structure, target, arg) {
-  const { length, instance: { members: [ member ] } } = structure;
-  const name = getStructureName(structure);
+  const { name, length, instance: { members: [ member ] } } = structure;
   const { structure: { constructor: elementConstructor} } = member;
   const { length: argLength, constructor: argConstructor } = arg;
   // get length from object whech it's a slice
@@ -134,32 +131,29 @@ export function throwArrayLengthMismatch(structure, target, arg) {
 }
 
 export function throwMissingInitializers(structure, missing) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   throw new TypeError(`Missing initializers for ${name}: ${missing.join(', ')}`);
 }
 
 export function throwNoProperty(structure, propName) {
-  const { instance: { members } } = structure;
+  const { name, instance: { members } } = structure;
   const member = members.find(m => m.name === propName);
   if (member) {
     throw new TypeError(`Comptime value cannot be changed: ${propName}`);
   } else {
-    const name = getStructureName(structure);
     throw new TypeError(`${name} does not have a property with that name: ${propName}`);
   }
 }
 
 export function throwArgumentCountMismatch(structure, actual) {
-  const { instance: { members } } = structure;
-  const name = getStructureName(structure);
+  const { name, instance: { members } } = structure;
   const argCount = members.length - 1;
   const s = (argCount !== 1) ? 's' : '';
   throw new Error(`${name} expects ${argCount} argument${s}, received ${actual}`);
 }
 
 export function rethrowArgumentError(structure, index, err) {
-  const { instance: { members } } = structure;
-  const name = getStructureName(structure);
+  const { name, instance: { members } } = structure;
   // Zig currently does not provide the argument name
   const argName = `args[${index}]`;
   const argCount = members.length - 1;
@@ -176,23 +170,23 @@ export function throwNoCastingToPointer(structure) {
 }
 
 export function throwConstantConstraint(structure, pointer) {
-  const name1 = getStructureName(structure);
-  const { constructor: { name: name2 } } = pointer;
-  throw new TypeError(`Conversion of ${name2} to ${name1} requires an explicit cast`);
+  const { name: target } = structure;
+  const { constructor: { name } } = pointer;
+  throw new TypeError(`Conversion of ${name} to ${target} requires an explicit cast`);
 }
 
 export function throwMisplacedSentinel(structure, value, index, length) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}, found at ${index}`);
 }
 
 export function throwMissingSentinel(structure, value, length) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}`);
 }
 
 export function throwAlignmentConflict(align1, align2) {
-  throw new TypeError(`Cannot simultaneously align memory to ${align2}-byte and ${align1}-byte boundary`);
+  throw new TypeError(`Unable to simultaneously align memory to ${align2}-byte and ${align1}-byte boundary`);
 }
 
 export function throwAssigningToConstant(pointer) {
@@ -214,7 +208,7 @@ export function throwNullPointer() {
 }
 
 export function throwInvalidPointerTarget(structure, arg) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   let target;
   if (arg != null) {
     const type = typeof(arg)
@@ -256,9 +250,8 @@ export function throwNotUndefined(member) {
 }
 
 export function throwNotOnByteBoundary(member) {
-  const { name, structure } = member;
-  const sname = getStructureName(structure);
-  throw new TypeError(`Unable to create ${sname} as it is not situated on a byte boundary: ${name}`);
+  const { name, structure: { name: { struct }} } = member;
+  throw new TypeError(`Unable to create ${struct} as it is not situated on a byte boundary: ${name}`);
 }
 
 export function throwReadOnly() {
@@ -266,16 +259,18 @@ export function throwReadOnly() {
 }
 
 export function throwReadOnlyTarget(structure) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   throw new TypeError(`${name} cannot point to a read-only object`);
 }
 
-export function throwAccessingOpaque() {
-  throw new TypeError(`Unable to access opaque structure`);
+export function throwAccessingOpaque(structure) {
+  const { name } = structure;
+  throw new TypeError(`Unable to access opaque structure ${name}`);
 }
 
-export function throwCreatingOpaque() {
-  throw new TypeError(`Unable to create opaque structure`);
+export function throwCreatingOpaque(structure) {
+  const { name } = structure;
+  throw new TypeError(`Unable to create instance of ${name}, as it is opaque`);
 }
 
 export function throwZigError(name) {

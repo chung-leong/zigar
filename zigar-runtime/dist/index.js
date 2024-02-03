@@ -12,6 +12,7 @@ const ELEMENT_SETTER = Symbol('elementSetter');
 const LOCATION_GETTER = Symbol('addressGetter');
 const LOCATION_SETTER = Symbol('addressSetter');
 const TARGET_GETTER = Symbol('targetGetter');
+const TARGET_SETTER = Symbol('targetSetter');
 const FIXED_LOCATION = Symbol('fixedLocation');
 const PROP_SETTERS = Symbol('propSetters');
 const ALL_KEYS = Symbol('allKeys');
@@ -525,6 +526,22 @@ function definePointer(structure, env) {
     updateTarget.call(this);
     return this[SLOTS][0] ?? throwNullPointer();
   };
+  const setTargetObject = function(arg) {
+    if (env.inFixedMemory(this)) {
+      // the pointer sits in fixed memory--apply the change immediately
+      if (env.inFixedMemory(arg)) {
+        const loc = {
+          address: env.getViewAddress(arg[MEMORY]),
+          length: (hasLength) ? arg.length : 1
+        };
+        addressSetter.call(this, loc);
+        this[FIXED_LOCATION] = loc;
+      } else {
+        throwFixedMemoryTargetRequired();
+      }
+    }
+    this[SLOTS][0] = arg;
+  };
   const getTarget = isValueExpected(targetStructure)
   ? function() {
       const target = getTargetObject.call(this);
@@ -568,7 +585,6 @@ function definePointer(structure, env) {
       }
       arg = arg[SLOTS][0];
     }
-    const fixed = env.inFixedMemory(this);
     if (arg instanceof Target) {
       /* wasm-only */
       restoreMemory.call(arg);
@@ -585,6 +601,7 @@ function definePointer(structure, env) {
       arg = Target(dv, { writable: !isConst });
     } else if (isTargetSlice) {
       // autovivificate target object
+      const fixed = env.inFixedMemory(this);
       const autoObj = new Target(arg, { writable: !isConst, fixed });
       if (runtimeSafety) {
         // creation of a new slice using a typed array is probably
@@ -598,20 +615,7 @@ function definePointer(structure, env) {
     } else if (arg !== undefined) {
       throwInvalidPointerTarget(structure, arg);
     }
-    if (fixed) {
-      // the pointer sits in fixed memory--apply the change immediately
-      if (env.inFixedMemory(arg)) {
-        const loc = {
-          address: env.getViewAddress(arg[MEMORY]),
-          length: (hasLength) ? arg.length : 1
-        };
-        addressSetter.call(this, loc);
-        this[FIXED_LOCATION] = loc;
-      } else {
-        throwFixedMemoryTargetRequired();
-      }
-    }
-    this[SLOTS][0] = arg;
+    this[TARGET_SETTER](arg);
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster, finalizer }, env);
   const addressSetter = function({ address, length }) {
@@ -634,6 +638,7 @@ function definePointer(structure, env) {
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [TARGET_GETTER]: { value: getTargetObject },
+    [TARGET_SETTER]: { value: setTargetObject },
     [LOCATION_GETTER]: { value: addressGetter },
     [LOCATION_SETTER]: { value: addressSetter },
     [POINTER_VISITOR]: { value: visitPointer },
@@ -665,7 +670,10 @@ function getProxy() {
 }
 
 function copyPointer({ source }) {
-  this[SLOTS][0] = source[SLOTS][0];
+  const target = source[SLOTS][0];
+  if (target) {
+    this[TARGET_SETTER](target);
+  }
 }
 
 function resetPointer({ isActive }) {
@@ -1382,6 +1390,33 @@ function normalizeErrorUnion(map, forJSON) {
   return value[NORMALIZER]?.(map, forJSON) ?? value;
 }
 
+function defineOpaque(structure, env) {
+  const {
+    byteSize,
+    align,
+  } = structure;
+  const initializer = function() {
+    throwCreatingOpaque(structure);
+  };
+  const valueAccessor = function() {
+    throwAccessingOpaque(structure);
+  };
+  const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
+  const instanceDescriptors = {
+    $: { get: valueAccessor, set: valueAccessor },
+    valueOf: { value: valueAccessor },
+    toJSON: { value: valueAccessor },
+    delete: { value: getDestructor(env) },
+    [Symbol.toPrimitive]: { value: valueAccessor },
+  };
+  const staticDescriptors = {
+    [COMPAT]: { value: getCompatibleTags(structure) },
+    [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+
 function defineOptional(structure, env) {
   const {
     byteSize,
@@ -2064,22 +2099,12 @@ function useVector() {
 }
 
 function useOpaque() {
-  factories$2[StructureType.Opaque] = defineStructShape;
+  factories$2[StructureType.Opaque] = defineOpaque
+  ;
 }
 
 function useArgStruct() {
   factories$2[StructureType.ArgStruct] = defineArgStruct;
-}
-
-function getStructureName(structure, full = false) {
-  let r = structure.name;
-  if (!full) {
-    r = r.replace(/{.*}/, '');
-    if (!r.endsWith('.enum_literal)')) {
-      r = r.replace(/[^\.\s]*?\./g, '');
-    }
-  }
-  return r;
 }
 
 function getStructureFactory(type) {
@@ -2886,13 +2911,12 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
 }
 
 function throwNoInitializer(structure) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   throw new TypeError(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`);
 }
 
 function throwBufferSizeMismatch(structure, dv, target = null) {
-  const { type, byteSize } = structure;
-  const name = getStructureName(structure);
+  const { name, type, byteSize } = structure;
   const actual = dv.byteLength;
   const s = (byteSize !== 1) ? 's' : '';
   if (type === StructureType.Slice && !target) {
@@ -2918,7 +2942,7 @@ function throwBufferExpected(structure) {
 }
 
 function throwEnumExpected(structure, arg) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
     throw new TypeError(`Value given does not correspond to an item of enum ${name}: ${arg}`);
   } else {
@@ -2927,7 +2951,7 @@ function throwEnumExpected(structure, arg) {
 }
 
 function throwErrorExpected(structure, arg) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   const type = typeof(arg);
   if (type === 'string' || type === 'number') {
     throw new TypeError(`Error ${type} does not corresponds to any error in error set ${name}: ${arg}`);
@@ -2937,12 +2961,12 @@ function throwErrorExpected(structure, arg) {
 }
 
 function throwNotInErrorSet(structure) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   throw new TypeError(`Error given is not a part of error set ${name}`);
 }
 
 function throwMultipleUnionInitializers(structure) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   throw new TypeError(`Only one property of ${name} can be given a value`);
 }
 
@@ -2951,14 +2975,13 @@ function throwInactiveUnionProperty(structure, name, currentName) {
 }
 
 function throwMissingUnionInitializer(structure, arg, exclusion) {
-  const { instance: { members } } = structure;
-  const name = getStructureName(structure);
+  const { name, instance: { members } } = structure;
   const missing = members.slice(0, exclusion ? -1 : undefined).map(m => m.name);
   throw new TypeError(`${name} needs an initializer for one of its union properties: ${missing.join(', ')}`);
 }
 
 function throwInvalidInitializer(structure, expected, arg) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   const acceptable = [];
   if (Array.isArray(expected)) {
     for (const type of expected) {
@@ -2992,8 +3015,7 @@ function throwInvalidArrayInitializer(structure, arg, shapeless = false) {
 }
 
 function throwArrayLengthMismatch(structure, target, arg) {
-  const { length, instance: { members: [ member ] } } = structure;
-  const name = getStructureName(structure);
+  const { name, length, instance: { members: [ member ] } } = structure;
   const { structure: { constructor: elementConstructor} } = member;
   const { length: argLength, constructor: argConstructor } = arg;
   // get length from object whech it's a slice
@@ -3011,32 +3033,29 @@ function throwArrayLengthMismatch(structure, target, arg) {
 }
 
 function throwMissingInitializers(structure, missing) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   throw new TypeError(`Missing initializers for ${name}: ${missing.join(', ')}`);
 }
 
 function throwNoProperty(structure, propName) {
-  const { instance: { members } } = structure;
+  const { name, instance: { members } } = structure;
   const member = members.find(m => m.name === propName);
   if (member) {
     throw new TypeError(`Comptime value cannot be changed: ${propName}`);
   } else {
-    const name = getStructureName(structure);
     throw new TypeError(`${name} does not have a property with that name: ${propName}`);
   }
 }
 
 function throwArgumentCountMismatch(structure, actual) {
-  const { instance: { members } } = structure;
-  const name = getStructureName(structure);
+  const { name, instance: { members } } = structure;
   const argCount = members.length - 1;
   const s = (argCount !== 1) ? 's' : '';
   throw new Error(`${name} expects ${argCount} argument${s}, received ${actual}`);
 }
 
 function rethrowArgumentError(structure, index, err) {
-  const { instance: { members } } = structure;
-  const name = getStructureName(structure);
+  const { name, instance: { members } } = structure;
   // Zig currently does not provide the argument name
   const argName = `args[${index}]`;
   const argCount = members.length - 1;
@@ -3053,23 +3072,23 @@ function throwNoCastingToPointer(structure) {
 }
 
 function throwConstantConstraint(structure, pointer) {
-  const name1 = getStructureName(structure);
-  const { constructor: { name: name2 } } = pointer;
-  throw new TypeError(`Conversion of ${name2} to ${name1} requires an explicit cast`);
+  const { name: target } = structure;
+  const { constructor: { name } } = pointer;
+  throw new TypeError(`Conversion of ${name} to ${target} requires an explicit cast`);
 }
 
 function throwMisplacedSentinel(structure, value, index, length) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}, found at ${index}`);
 }
 
 function throwMissingSentinel(structure, value, length) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}`);
 }
 
 function throwAlignmentConflict(align1, align2) {
-  throw new TypeError(`Cannot simultaneously align memory to ${align2}-byte and ${align1}-byte boundary`);
+  throw new TypeError(`Unable to simultaneously align memory to ${align2}-byte and ${align1}-byte boundary`);
 }
 
 function throwTypeMismatch(expected, arg) {
@@ -3086,7 +3105,7 @@ function throwNullPointer() {
 }
 
 function throwInvalidPointerTarget(structure, arg) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   let target;
   if (arg != null) {
     const type = typeof(arg);
@@ -3128,9 +3147,8 @@ function throwNotUndefined(member) {
 }
 
 function throwNotOnByteBoundary(member) {
-  const { name, structure } = member;
-  const sname = getStructureName(structure);
-  throw new TypeError(`Unable to create ${sname} as it is not situated on a byte boundary: ${name}`);
+  const { name, structure: { name: { struct }} } = member;
+  throw new TypeError(`Unable to create ${struct} as it is not situated on a byte boundary: ${name}`);
 }
 
 function throwReadOnly() {
@@ -3138,8 +3156,18 @@ function throwReadOnly() {
 }
 
 function throwReadOnlyTarget(structure) {
-  const name = getStructureName(structure);
+  const { name } = structure;
   throw new TypeError(`${name} cannot point to a read-only object`);
+}
+
+function throwAccessingOpaque(structure) {
+  const { name } = structure;
+  throw new TypeError(`Unable to access opaque structure ${name}`);
+}
+
+function throwCreatingOpaque(structure) {
+  const { name } = structure;
+  throw new TypeError(`Unable to create instance of ${name}, as it is opaque`);
 }
 
 function throwZigError(name) {
@@ -4222,9 +4250,8 @@ class Environment {
     const f = getStructureFactory(structure.type);
     const constructor = f(structure, this);
     if (typeof(constructor) === 'function') {
-      const name = getStructureName(structure);
       defineProperties(constructor, {
-        name: { value: name, configurable: true },
+        name: { value: structure.name, configurable: true },
       });
       if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
         defineProperties(constructor.prototype, {

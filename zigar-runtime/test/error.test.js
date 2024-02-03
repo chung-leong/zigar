@@ -631,11 +631,13 @@ describe('Error functions', function() {
   })
   describe('throwCreatingOpaque', function() {
     it('should throw a type error', function() {
+      const structure =  { name: 'Apple' };
       expect(() => throwCreatingOpaque()).to.throw(TypeError);
     })
   })
   describe('throwAccessingOpaque', function() {
     it('should throw a type error', function() {
+      const structure =  { name: 'Apple' };
       expect(() => throwAccessingOpaque()).to.throw(TypeError);
     })
   })

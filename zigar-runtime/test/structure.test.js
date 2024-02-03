@@ -10,7 +10,6 @@ import {
   getFeaturesUsed,
   getSelf,
   getStructureFactory,
-  getStructureName,
   needSlots,
   useOpaque
 } from '../src/structure.js';
@@ -30,15 +29,6 @@ describe('Structure functions', function() {
       env.finalizeStructure(structure);
       const { constructor: Hello } = structure;
       expect(Hello).to.be.an('function');
-    })
-  })
-  describe('getStructureName', function() {
-    it('should shorten names by removing namespace qualifiers', function() {
-      expect(getStructureName({ name: 'u8' })).to.equal('u8');
-      expect(getStructureName({ name: 'zig.Hello' })).to.equal('Hello');
-      expect(getStructureName({ name: '[]const zig.Hello' })).to.equal('[]const Hello');
-      expect(getStructureName({ name: '[]const zig.world.joga.Hello' })).to.equal('[]const Hello');
-      expect(getStructureName({ name: '?@TypeOf(.enum_literal)' })).to.equal('?@TypeOf(.enum_literal)');
     })
   })
   describe('getStructureFactory', function() {

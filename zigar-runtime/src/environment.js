@@ -5,8 +5,7 @@ import { getMemoryCopier } from './memory.js';
 import { addMethods } from './method.js';
 import { addStaticMembers } from './static.js';
 import {
-  StructureType, defineProperties, findAllObjects, getStructureFactory, getStructureName,
-  useArgStruct
+  StructureType, defineProperties, findAllObjects, getStructureFactory, useArgStruct
 } from './structure.js';
 import {
   ALIGN, ATTRIBUTES, CONST, COPIER, ENVIRONMENT, FIXED_LOCATION, LOCATION_GETTER, LOCATION_SETTER,
@@ -370,9 +369,9 @@ export class Environment {
     const list = [];
     for (const object of objects) {
       if (object[MEMORY]) {
-        let dv = object[MEMORY];
         if (this.inFixedMemory(object)) {
           // replace fixed memory
+          const dv = object[MEMORY];
           const address = this.getViewAddress(dv);
           const offset = this.getMemoryOffset(address);
           const len = dv.byteLength;
@@ -423,9 +422,8 @@ export class Environment {
     const f = getStructureFactory(structure.type);
     const constructor = f(structure, this);
     if (typeof(constructor) === 'function') {
-      const name = getStructureName(structure);
       defineProperties(constructor, {
-        name: { value: name, configurable: true },
+        name: { value: structure.name, configurable: true },
       });
       if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
         defineProperties(constructor.prototype, {

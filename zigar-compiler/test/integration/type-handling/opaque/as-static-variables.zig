@@ -1,1 +1,12 @@
-pub const something: anyopaque = {};
+const std = @import("std");
+
+pub const Apple = opaque {};
+pub const Orange = opaque {};
+var number: i32 = 1234;
+
+pub var orange_ptr: *Orange = @ptrCast(&number);
+
+pub fn print(ptr: *Orange) void {
+    const int_ptr: *i32 = @alignCast(@ptrCast(ptr));
+    std.debug.print("Number = {d}\n", .{int_ptr.*});
+}

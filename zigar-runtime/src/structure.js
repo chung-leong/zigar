@@ -109,17 +109,6 @@ export function useArgStruct() {
   factories[StructureType.ArgStruct] = defineArgStruct;
 }
 
-export function getStructureName(structure, full = false) {
-  let r = structure.name;
-  if (!full) {
-    r = r.replace(/{.*}/, '');
-    if (!r.endsWith('.enum_literal)')) {
-      r = r.replace(/[^\.\s]*?\./g, '');
-    }
-  }
-  return r;
-}
-
 export function getStructureFactory(type) {
   const f = factories[type];
   /* DEV-TEST */

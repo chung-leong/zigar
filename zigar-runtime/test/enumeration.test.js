@@ -423,7 +423,7 @@ describe('Enumeration functions', function() {
         },
       }, true);
       env.finalizeStructure(structure);
-      expect(Hello.name).to.equal('Hello');
+      expect(Hello.name).to.equal('zig.Hello');
       const desc = Object.prototype.toString.call(Hello.Dog);
       expect(desc).to.equal('[object zig.Hello]');
     })
