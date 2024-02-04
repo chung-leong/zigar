@@ -1,18 +1,15 @@
 const std = @import("std");
 
+var number: i32 = 1234;
+
 pub const StructA = packed struct {
-    opaque1: void = opaque {},
-    opaque2: void = opaque {},
+    opaque1: *anyopaque = @ptrCast(&number),
+    opaque2: *anyopaque = @ptrCast(&number),
     number: u10 = 100,
-    opaque3: void = opaque {},
+    opaque3: *anyopaque = @ptrCast(&number),
 };
 
-pub var struct_a: StructA = .{
-    .opaque1 = opaque {},
-    .opaque2 = opaque {},
-    .number = 200,
-    .opaque3 = opaque {},
-};
+pub var struct_a: StructA = .{};
 
 pub fn print() void {
     std.debug.print("{any}\n", .{struct_a});

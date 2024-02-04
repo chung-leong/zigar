@@ -1401,13 +1401,20 @@ function defineOpaque(structure, env) {
   const valueAccessor = function() {
     throwAccessingOpaque(structure);
   };
+  const toPrimitive = function(hint) {
+    const { name } = structure;
+    return `[opaque ${name}]`;
+  };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
   const instanceDescriptors = {
     $: { get: valueAccessor, set: valueAccessor },
-    valueOf: { value: valueAccessor },
-    toJSON: { value: valueAccessor },
+    dataView: getDataViewDescriptor(structure),
+    valueOf: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    [Symbol.toPrimitive]: { value: valueAccessor },
+    [Symbol.toPrimitive]: { value: toPrimitive },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [NORMALIZER]: { value: normalizeOpaque },
   };
   const staticDescriptors = {
     [COMPAT]: { value: getCompatibleTags(structure) },
@@ -1415,6 +1422,9 @@ function defineOpaque(structure, env) {
     [SIZE]: { value: byteSize },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+function normalizeOpaque(map, forJSON) {
+  return {};
 }
 
 function defineOptional(structure, env) {
@@ -4368,31 +4378,29 @@ class Environment {
       return;
     }
     const dv = object[MEMORY];
-    if (dv.byteLength !== 0) {
-      const address = this.recreateAddress(reloc);
-      const fixedDV = this.obtainFixedView(address, dv.byteLength);
-      if (writeBack) {
-        const dest = Object.create(object.constructor.prototype);
-        dest[MEMORY] = fixedDV;
-        dest[COPIER](object);
-      }
-      object[MEMORY] = fixedDV;
-      const linkChildren = (object) => {
-        if (object[SLOTS]) {
-          for (const child of Object.values(object[SLOTS])) {
-            if (child) {
-              const childDV = child[MEMORY];
-              if (childDV.buffer === dv.buffer) {
-                const offset = childDV.byteOffset - dv.byteOffset;
-                child[MEMORY] = this.obtainView(fixedDV.buffer, offset, childDV.byteLength);
-                linkChildren(child); 
-              }
+    const address = this.recreateAddress(reloc);
+    const fixedDV = this.obtainFixedView(address, dv.byteLength);
+    if (writeBack) {
+      const dest = Object.create(object.constructor.prototype);
+      dest[MEMORY] = fixedDV;
+      dest[COPIER](object);
+    }
+    object[MEMORY] = fixedDV;
+    const linkChildren = (object) => {
+      if (object[SLOTS]) {
+        for (const child of Object.values(object[SLOTS])) {
+          if (child) {
+            const childDV = child[MEMORY];
+            if (childDV.buffer === dv.buffer) {
+              const offset = childDV.byteOffset - dv.byteOffset;
+              child[MEMORY] = this.obtainView(fixedDV.buffer, offset, childDV.byteLength);
+              linkChildren(child); 
             }
           }
         }
-      };
-      linkChildren(object);
-    }
+      }
+    };
+    linkChildren(object);
   }
 
   unlinkVariables() {

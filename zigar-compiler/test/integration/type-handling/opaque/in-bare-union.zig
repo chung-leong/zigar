@@ -1,6 +1,8 @@
+var number: i32 = 1234;
+
 pub const UnionA = union {
-    unknown: anyopaque,
+    ptr: *anyopaque,
     number: i32,
 };
 
-pub var union_a: UnionA = .{ .unknown = opaque {} };
+pub var union_a: UnionA = .{ .ptr = @ptrCast(&number) };

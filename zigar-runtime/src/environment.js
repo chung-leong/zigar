@@ -540,31 +540,29 @@ export class Environment {
       return;
     }
     const dv = object[MEMORY];
-    if (dv.byteLength !== 0) {
-      const address = this.recreateAddress(reloc);
-      const fixedDV = this.obtainFixedView(address, dv.byteLength);
-      if (writeBack) {
-        const dest = Object.create(object.constructor.prototype);
-        dest[MEMORY] = fixedDV;
-        dest[COPIER](object);
-      }
-      object[MEMORY] = fixedDV;
-      const linkChildren = (object) => {
-        if (object[SLOTS]) {
-          for (const child of Object.values(object[SLOTS])) {
-            if (child) {
-              const childDV = child[MEMORY];
-              if (childDV.buffer === dv.buffer) {
-                const offset = childDV.byteOffset - dv.byteOffset;
-                child[MEMORY] = this.obtainView(fixedDV.buffer, offset, childDV.byteLength);
-                linkChildren(child); 
-              }
+    const address = this.recreateAddress(reloc);
+    const fixedDV = this.obtainFixedView(address, dv.byteLength);
+    if (writeBack) {
+      const dest = Object.create(object.constructor.prototype);
+      dest[MEMORY] = fixedDV;
+      dest[COPIER](object);
+    }
+    object[MEMORY] = fixedDV;
+    const linkChildren = (object) => {
+      if (object[SLOTS]) {
+        for (const child of Object.values(object[SLOTS])) {
+          if (child) {
+            const childDV = child[MEMORY];
+            if (childDV.buffer === dv.buffer) {
+              const offset = childDV.byteOffset - dv.byteOffset;
+              child[MEMORY] = this.obtainView(fixedDV.buffer, offset, childDV.byteLength);
+              linkChildren(child); 
             }
           }
         }
-      };
-      linkChildren(object);
-    }
+      }
+    };
+    linkChildren(object);
   }
 
   unlinkVariables() {

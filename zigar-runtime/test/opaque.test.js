@@ -26,6 +26,10 @@ describe('Opaque functions', function() {
       expect(Hello).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(0));
       const object = Hello.call(ENVIRONMENT, dv);
+      expect(String(object)).to.equal('[opaque Hello]');
+      expect(Number(object)).to.be.NaN;
+      expect(object.valueOf()).to.eql({});
+      expect(JSON.stringify(object)).to.equal('{}');
       expect(() => object.$).to.throw(TypeError);
     })
     it('should not allow the creation of opaque instances', function() {

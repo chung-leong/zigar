@@ -1,8 +1,9 @@
 import { getCompatibleTags } from './data-view.js';
 import { throwAccessingOpaque, throwCreatingOpaque } from './error.js';
-import { getDestructor } from './memory.js';
+import { getDestructor, getMemoryCopier } from './memory.js';
+import { convertToJSON, getDataViewDescriptor, getValueOf } from './special.js';
 import { attachDescriptors, createConstructor } from './structure.js';
-import { ALIGN, COMPAT, SIZE } from './symbol.js';
+import { ALIGN, COMPAT, COPIER, NORMALIZER, SIZE } from './symbol.js';
 
 export function defineOpaque(structure, env) {
   const {
@@ -15,13 +16,20 @@ export function defineOpaque(structure, env) {
   const valueAccessor = function() {
     throwAccessingOpaque(structure);
   };
+  const toPrimitive = function(hint) {
+    const { name } = structure;
+    return `[opaque ${name}]`;
+  };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
   const instanceDescriptors = {
     $: { get: valueAccessor, set: valueAccessor },
-    valueOf: { value: valueAccessor },
-    toJSON: { value: valueAccessor },
+    dataView: getDataViewDescriptor(structure),
+    valueOf: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    [Symbol.toPrimitive]: { value: valueAccessor },
+    [Symbol.toPrimitive]: { value: toPrimitive },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [NORMALIZER]: { value: normalizeOpaque },
   };
   const staticDescriptors = {
     [COMPAT]: { value: getCompatibleTags(structure) },
@@ -30,3 +38,7 @@ export function defineOpaque(structure, env) {
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };
+
+function normalizeOpaque(map, forJSON) {
+  return {};
+}
