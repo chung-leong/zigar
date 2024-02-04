@@ -31,6 +31,7 @@ describe('Opaque functions', function() {
       expect(object.valueOf()).to.eql({});
       expect(JSON.stringify(object)).to.equal('{}');
       expect(() => object.$).to.throw(TypeError);
+      expect(() => new Hello(undefined)).to.throw(TypeError);
     })
     it('should not allow the creation of opaque instances', function() {
       const structure = env.beginStructure({
