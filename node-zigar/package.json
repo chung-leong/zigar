@@ -8,6 +8,9 @@
     "./n14": "./dist/index-n14.js",
     "./cjs": "./dist/index.cjs"
   },
+  "bin": {
+    "build-so": "./bin/build-so.js"
+  },
   "type": "module",
   "directories": {
     "test": "test"
@@ -20,7 +23,8 @@
     "integration-coverage": "NODE_OPTIONS='--experimental-loader ./dist/index.js --no-warnings' node ./node_modules/c8/bin/c8.js ./node_modules/mocha/bin/mocha.js --parallel -- test/integration.test.js"
   },
   "files": [
-    "dist/*"
+    "dist/*",
+    "bin/*"
   ],
   "repository": {
     "type": "git",

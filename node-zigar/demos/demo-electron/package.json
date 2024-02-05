@@ -5,6 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "build": "build-so",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "license": "MIT",

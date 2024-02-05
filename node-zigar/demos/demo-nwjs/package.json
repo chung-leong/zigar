@@ -4,6 +4,7 @@
   "description": "",
   "main": "main.js",
   "scripts": {
+    "build": "build-so",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "license": "MIT"

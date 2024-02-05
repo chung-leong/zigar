@@ -1,6 +1,14 @@
 {
   "optimize": "ReleaseFast",
   "sourceFiles": {
-    "sha1": "./sha1.zig"
-  }
+    "./lib/sha1.zigar": "./sha1.zig"
+  },
+  "targets": [
+    { "platform": "win32", "arch": "x64" },
+    { "platform": "win32", "arch": "ia32" },
+    { "platform": "linux", "arch": "x64" },
+    { "platform": "linux", "arch": "arm64" },
+    { "platform": "darwin", "arch": "x64" },
+    { "platform": "darwin", "arch": "arm64" }
+  ]
 }

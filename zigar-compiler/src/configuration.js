@@ -1,4 +1,4 @@
-import { basename, dirname, join, parse, resolve, sep } from 'path';
+import { basename, dirname, join, parse, resolve } from 'path';
 import { findFile, findFileSync, loadFile, loadFileSync, md5 } from './utility-functions.js';
 
 export const optionsForCompile = {
@@ -210,9 +210,12 @@ function processConfigFile(text, cfgPath, availableOptions) {
   }
   const { sourceFiles } = options;
   if (sourceFiles) {
+    const map = options.sourceFiles = {};    
     const cfgDir = dirname(cfgPath)
-    for (const [ name, path ] of Object.entries(sourceFiles)) {
-      sourceFiles[name] = resolve(cfgDir, path);
+    for (const [ module, source ] of Object.entries(sourceFiles)) {
+      const modulePath = resolve(cfgDir, module);
+      const sourcePath = resolve(cfgDir, source);
+      map[modulePath] = sourcePath;
     }
   }
   return options;
@@ -220,16 +223,5 @@ function processConfigFile(text, cfgPath, availableOptions) {
 
 export function findSourceFile(soPathPI, options) {
   const { sourceFiles } = options;
-  if (typeof(sourceFiles) === 'object' && sourceFiles) {
-    const so = parse(soPathPI);
-    const parts = [ ...so.dir.substring(so.base.length).split(sep), so.name ];
-    do {
-      const key = parts.join('/');
-      const srcPath = sourceFiles[key];
-      if (srcPath) {
-        return srcPath;
-      }
-      parts.shift();
-    } while (parts.length !== 0);
-  }
+  return sourceFiles?.[soPathPI];
 }
