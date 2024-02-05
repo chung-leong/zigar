@@ -47,6 +47,10 @@ export const optionsForCompile = {
     type: 'boolean',
     title: 'Remove temporary build directory after compilation finishes',
   },
+  targets: {
+    type: 'object',
+    title: 'List of cross-compilation targets',
+  },
 };
 
 export const optionsForTranspile = {
@@ -140,7 +144,7 @@ export function getCachePath(srcPath, options) {
   } = options;
   const src = parse(srcPath);
   const folder = basename(src.dir).slice(0, 16).trim() + '-' + md5(src.dir).slice(0, 8);  
-  const soPathPI = join(cacheDir, platform, arch, folder, optimize, `${src.name}.zigar`);
+  const soPathPI = join(cacheDir, folder, optimize, `${src.name}.zigar`);
   return addPlatformExt(soPathPI, options);
 }
 
@@ -148,21 +152,35 @@ export function getPlatformExt(options) {
   const {
     platform,
     arch,
-  } = options;
-  switch (arch) {
-    case 'wasm32':
-    case 'wasm64':
-      return '.wasm';
+  } = options;  
+  let ext;
+  switch (platform) {
+    case 'darwin':
+      ext = '.dylib';
+      if (arch !== 'arm64') {
+        ext = `.${arch}` + ext;
+      }
+      break;
+    case 'win32':
+      ext = '.dll';
+      if (arch !== 'x64') {
+        ext = `.${arch}` + ext;
+      }
+      break;
     default:
-      switch (platform) {
-        case 'darwin':
-          return '.dylib';
-        case 'win32': ;
-          return '.dll';
-        default:
-          return '.so';
+      if (arch === 'wasm32' || arch === 'wasm64') {
+        ext = '.wasm';
+      } else {
+        ext = '.so';
+        if (arch !== 'x64') {
+          ext = `.${arch}` + ext;
+        }
+        if (platform !== 'linux') {
+          ext = `.${platform}` + ext;
+        }
       }
   }
+  return ext;
 }
 
 export function addPlatformExt(path, options) {
