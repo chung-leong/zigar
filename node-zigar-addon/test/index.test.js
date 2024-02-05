@@ -1,36 +1,33 @@
 import { expect } from 'chai';
 import os from 'os';
 import { fileURLToPath } from 'url';
+import { addPlatformExt } from '../../zigar-compiler/src/configuration.js';
 
 import cjs from '../dist/index.cjs';
+
 import {
   importModule,
 } from '../dist/index.js';
 
-function getSOFilename(name, platform) {
-  switch (platform) {
-    case 'darwin': return `${name}.dylib`;
-    case 'win32': return `${name}.dll`;
-    default: return `lib${name}.so`
-  }
-}
 
 describe('Module loading', function() {
-  const arch = os.arch();
-  const platform = os.platform();
+  const options = {
+    arch: os.arch(),
+    platform: os.platform(),  
+  };
+  const getModulePath = (name) => {
+    const path = fileURLToPath(new URL(`./so-samples/${name}.zigar`, import.meta.url));
+    return addPlatformExt(path, options);
+  };
   it('should load module', function() {
     this.timeout(120000);
-    const filename = getSOFilename('as-static-variables', platform);
-    const url = new URL(`./so-samples/${platform}/${arch}/${filename}`, import.meta.url);
-    const path = fileURLToPath(url);
+    const path = getModulePath('integers');
     const module = importModule(path);
     expect(module.int32).to.equal(1234);
   })
   it('should throw when module is missing', function() {
     this.timeout(120000);
-    const filename = getSOFilename('missing', platform);
-    const url = new URL(`./so-samples/${platform}/${arch}/${filename}`, import.meta.url);
-    const path = fileURLToPath(url);
+    const path = getModulePath('missing');
     let error;
     try {
       importModule(path);
@@ -41,9 +38,7 @@ describe('Module loading', function() {
   })
   it('should load module using CommonJS function', function() {
     this.timeout(120000);
-    const filename = getSOFilename('as-static-variables', platform);
-    const url = new URL(`./so-samples/${platform}/${arch}/${filename}`, import.meta.url);
-    const path = fileURLToPath(url);
+    const path = getModulePath('integers');
     const module = cjs.importModule(path);
     expect(module.int32).to.equal(1234);
   })

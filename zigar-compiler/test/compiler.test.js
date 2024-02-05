@@ -74,7 +74,7 @@ describe('Compilation', function() {
     it('should compile code for 64-bit Linux', async function() {
       this.timeout(60000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'Debug', arch: 'x64', platform: 'linux' };
+      const options = { optimize: 'ReleaseSmall', arch: 'x64', platform: 'linux' };
       const soPath = getCachePath(srcPath, options);
       await compile(srcPath, soPath, options);
       const { size } = await stat(soPath);
@@ -83,7 +83,7 @@ describe('Compilation', function() {
     it('should compile code for 32-bit Windows', async function() {
       this.timeout(60000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'Debug', arch: 'ia32', platform: 'win32' };
+      const options = { optimize: 'ReleaseSmall', arch: 'ia32', platform: 'win32' };
       const soPath = getCachePath(srcPath, options);
       await compile(srcPath, soPath, options);
       const { size } = await stat(soPath);
@@ -92,7 +92,7 @@ describe('Compilation', function() {
     it('should compile code for 64-bit Windows', async function() {
       this.timeout(60000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'Debug', arch: 'x64', platform: 'win32' };
+      const options = { optimize: 'ReleaseSmall', arch: 'x64', platform: 'win32' };
       const soPath = getCachePath(srcPath, options);
       await compile(srcPath, soPath, options);
       const { size } = await stat(soPath);
@@ -101,9 +101,8 @@ describe('Compilation', function() {
     it('should compile code for x64 OSX', async function() {
       this.timeout(60000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'Debug', arch: 'x64', platform: 'darwin' };
+      const options = { optimize: 'ReleaseSmall', arch: 'x64', platform: 'darwin' };
       const soPath = getCachePath(srcPath, options);
-      console.log({ soPath });
       await compile(srcPath, soPath, options);
       const { size } = await stat(soPath);
       expect(size).to.be.at.least(1000);
@@ -111,9 +110,8 @@ describe('Compilation', function() {
     it('should compile code for Arm64 OSX', async function() {
       this.timeout(60000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'Debug', arch: 'arm64', platform: 'darwin' };
+      const options = { optimize: 'ReleaseSmall', arch: 'arm64', platform: 'darwin' };
       const soPath = getCachePath(srcPath, options);
-      console.log({ soPath });
       await compile(srcPath, soPath, options);
       const { size } = await stat(soPath);
       expect(size).to.be.at.least(1000);
