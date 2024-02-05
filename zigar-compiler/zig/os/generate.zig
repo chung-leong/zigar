@@ -1,20 +1,10 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub fn main() !void {
+    const name = @tagName(builtin.os.tag);
     try generate(std.c, "std.c", "c.zig");
-    const names: [8][]const u8 = .{
-        "darwin",
-        "dragonfly",
-        "freebsd",
-        "haiku",
-        "linux",
-        "netbsd",
-        "openbsd",
-        "solaris",
-    };
-    inline for (names) |name| {
-        try generate(@field(std.os, name), "std.os." ++ name, name ++ ".zig");
-    }
+    try generate(@field(std.os, name), "std.os." ++ name, name ++ ".zig");
 }
 
 pub fn generate(comptime target: anytype, comptime target_name: []const u8, comptime file_name: []const u8) !void {
@@ -30,8 +20,8 @@ pub fn generate(comptime target: anytype, comptime target_name: []const u8, comp
     inline for (@typeInfo(target).Struct.decls) |decl| {
         try code.print("\t\tpub const {s} = if (@hasDecl(substitutes, \"{s}\")) ", .{ decl.name, decl.name });
         try code.print("substitutes.{s} ", .{decl.name});
-        try code.print("else ", .{});
-        try code.print("{s}.{s};\n", .{ target_name, decl.name });
+        try code.print("else if (@hasDecl({s}, \"{s}\")) ", .{ target_name, decl.name });
+        try code.print("{s}.{s} else null;\n", .{ target_name, decl.name });
     }
     try code.print("\t}};\n", .{});
     try code.print("}}\n", .{});

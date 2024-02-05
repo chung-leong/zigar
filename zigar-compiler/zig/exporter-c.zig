@@ -349,13 +349,7 @@ pub fn getOS() type {
                 @import("./os/c.zig")
             else switch (builtin.os.tag) {
                 .ios, .macos, .watchos, .tvos => @import("./os/darwin.zig"),
-                .dragonfly => @import("./os/dragonfly.zig"),
-                .freebsd => @import("./os/freebsd.zig"),
-                .haiku => @import("./os/haiku.zig"),
                 .linux => @import("./os/linux.zig"),
-                .netbsd => @import("./os/netbsd.zig"),
-                .openbsd => @import("./os/openbsd.zig"),
-                .solaris => @import("./os/solaris.zig"),
                 .windows => @import("./os/windows.zig"),
                 else => @import("./os/c.zig"),
             };
