@@ -2,6 +2,6 @@
   "clean": "yes",
   "optimize": "Debug",
   "sourceFiles": {
-    "hello": "./src/hello.zig"
+    "./hello.zigar": "./src/hello.zig"
   }
 }

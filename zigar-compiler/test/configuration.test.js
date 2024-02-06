@@ -141,7 +141,10 @@ describe('Configuration', function() {
     it('should load config file', async function() {
       const path = await findConfigFile('node-zigar.config.json', absolute('./config-samples/correct/hello/world'));
       const options = await loadConfigFile(path, optionsForCompile);
-      expect(options).to.eql({ optimize: 'Debug', sourceFiles: { hello: `${absolute('./config-samples/correct')}/src/hello.zig` } });
+      const cfgPath = absolute('./config-samples/correct');
+      const soPath = `${cfgPath}/hello.zigar`;
+      const srcPath = `${cfgPath}/src/hello.zig`;
+      expect(options).to.eql({ optimize: 'Debug', sourceFiles: { [soPath]: srcPath } });
     })
     it('should throw when config file is malformed', async function() {
       const path = await findConfigFile('node-zigar.config.json', absolute('./config-samples/malformed/hello/world'));
@@ -160,7 +163,10 @@ describe('Configuration', function() {
     it('should load config file', async function() {
       const path = findConfigFileSync('node-zigar.config.json', absolute('./config-samples/correct/hello/world'));
       const options = loadConfigFileSync(path, optionsForCompile);
-      expect(options).to.eql({ optimize: 'Debug', sourceFiles: { hello: `${absolute('./config-samples/correct')}/src/hello.zig` } });
+      const cfgPath = absolute('./config-samples/correct');
+      const soPath = `${cfgPath}/hello.zigar`;
+      const srcPath = `${cfgPath}/src/hello.zig`;
+      expect(options).to.eql({ optimize: 'Debug', sourceFiles: { [soPath]: srcPath } });
     })
     it('should throw when config file is malformed', async function() {
       const path = findConfigFileSync('node-zigar.config.json', absolute('./config-samples/malformed/hello/world'));
@@ -177,10 +183,11 @@ describe('Configuration', function() {
   })
   describe('findSourceFile', function () {
     it('should find source file for Zigar module', function() {
-      const options = loadConfigFileSync(absolute('./config-samples/overlapping/node-zigar.config.json'), optionsForCompile);
-      const src1 = findSourceFile('/somewhere/world.zigar', options);
-      const src2 = findSourceFile('/somewhere/hello/world.zigar', options);
-      const src3 = findSourceFile('/somewhere/hello.zigar', options);
+      const cfgPath = absolute('./config-samples/overlapping');
+      const options = loadConfigFileSync(`${cfgPath}/node-zigar.config.json`, optionsForCompile);
+      const src1 = findSourceFile(`${cfgPath}/lib/world.zigar`, options);
+      const src2 = findSourceFile(`${cfgPath}/lib/hello/world.zigar`, options);
+      const src3 = findSourceFile(`${cfgPath}/lib/hello.zigar`, options);
       expect(src1).to.equal(`${absolute('./config-samples/overlapping')}/src/world.zig`);
       expect(src2).to.equal(`${absolute('./config-samples/overlapping')}/src/hello-world.zig`);
       expect(src3).to.be.undefined;

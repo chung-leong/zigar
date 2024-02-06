@@ -1,6 +1,6 @@
 {
-  "optimise": "Debug",
+  "optimisssse": "Debug",
   "sourceFiles": {
-    "hello": "./src/hello.zig"
+    "./hello.zigar": "./src/hello.zig"
   }
 }

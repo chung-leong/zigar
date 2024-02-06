@@ -12,9 +12,11 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    const module = b.createModule(.{
-        .source_file = .{ .path = cfg.package_root ++ "/modules/module.zig" },
-    });
+    const source_file = .{ .path = cfg.package_root ++ "/modules/module.zig" };
+    const module = if (@hasDecl(std.Build, "CreateModuleOptions"))
+        b.createModule(.{ .source_file = source_file })
+    else
+        b.createModule(.{ .root_source_file = source_file });
     const imports = .{
         .{ .name = "module", .module = module },
     };
