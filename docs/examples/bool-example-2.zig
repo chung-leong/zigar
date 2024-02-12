@@ -1,0 +1,18 @@
+pub const UserPreferences = packed struct {
+    option1: bool = false,
+    option2: bool = false,
+    option3: bool = false,
+    option4: bool = false,
+    option5: bool = false,
+    option6: bool = false,
+    option7: bool = false,
+    option8: bool = false,
+    option9: bool = false,
+    option10: bool = false,
+    option11: bool = false,
+    option12: bool = false,
+    option13: bool = false,
+    option14: bool = false,
+    option15: bool = false,
+    option16: bool = false,
+};
