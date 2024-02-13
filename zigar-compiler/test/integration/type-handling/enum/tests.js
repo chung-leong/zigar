@@ -36,6 +36,10 @@ export function addTests(importModule, options) {
       expect(after).to.equal('as-static-variables.Pet.Dog');
       expect(module.pet.valueOf()).to.equal('Dog');
       expect(JSON.stringify(module.pet)).to.equal('"Dog"');
+      expect(Donut(1n)).to.not.be.undefined;
+      expect(Donut(5n)).to.not.be.undefined;
+      expect(module.donut).to.equal(Donut(5n));
+      expect(module.donut.valueOf()).to.equal('5');
     })
     it('should print enum arguments', async function() {
       this.timeout(120000);

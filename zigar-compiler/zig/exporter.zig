@@ -29,7 +29,7 @@ pub const Error = error{
 };
 
 // slot allocators
-const slot_allocator = struct {
+const SlotAllocator = struct {
     fn get(comptime S1: anytype) type {
         _ = S1;
         // results of comptime functions are memoized
@@ -52,7 +52,7 @@ const slot_allocator = struct {
 };
 
 // allocate slots for classe, function, and other language constructs on the host side
-const structure_slot = slot_allocator.get(.{});
+const structure_slot = SlotAllocator.get(.{});
 
 pub fn getStructureSlot(comptime T: anytype, comptime size: std.builtin.Type.Pointer.Size) usize {
     return structure_slot.get(.{ .Type = T, .Size = size });
@@ -71,7 +71,7 @@ test "getStructureSlot" {
 
 fn getObjectSlot(comptime T: anytype, comptime index: comptime_int) usize {
     // per-struct slot allocator
-    const relocatable_slot = slot_allocator.get(.{ .Type = T });
+    const relocatable_slot = SlotAllocator.get(.{ .Type = T });
     return relocatable_slot.get(.{ .Index = index });
 }
 
@@ -740,7 +740,7 @@ fn getStructureName(comptime T: type) [*:0]const u8 {
                     break :select "struct";
                 };
                 const struct_prefix = if (struct_type[0] == 'e') "ErrorSet" else "Struct";
-                const id_allocator = slot_allocator.get(.{ .type = struct_type });
+                const id_allocator = SlotAllocator.get(.{ .type = struct_type });
                 const id = id_allocator.get(getBigInt(name));
                 return std.fmt.comptimePrint("{s}{d:0>4}", .{ struct_prefix, id });
             }
@@ -752,7 +752,7 @@ fn getStructureName(comptime T: type) [*:0]const u8 {
             // @typeInfo(@typeInfo(@TypeOf([function])).Fn.returnType).error_set
             const parent_index = getIndexOf(name, '(');
             if (parent_index != -1) {
-                const id_allocator = slot_allocator.get(.{ .type = "error set" });
+                const id_allocator = SlotAllocator.get(.{ .type = "error set" });
                 const id = id_allocator.get(getBigInt(name));
                 return std.fmt.comptimePrint("ErrorSet{d:0>4}", .{id});
             }
@@ -967,7 +967,7 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
         .ExternUnion, .BareUnion, .TaggedUnion => addUnionMembers(host, structure, T),
         .ErrorUnion => addErrorUnionMembers(host, structure, T),
         .ErrorSet => addErrorSetMember(host, structure, T),
-        .Enumeration => addEnumMember(host, structure, T),
+        .Enumeration => addEnumerationMember(host, structure, T),
         .Optional => addOptionalMembers(host, structure, T),
         .Pointer => addPointerMember(host, structure, T),
         .Vector => addVectorMember(host, structure, T),
@@ -1426,7 +1426,7 @@ test "StandardInt" {
     assert(StandardInt(i127) == i128);
 }
 
-fn addEnumMember(host: anytype, structure: Value, comptime T: type) !void {
+fn addEnumerationMember(host: anytype, structure: Value, comptime T: type) !void {
     const IT = StandardInt(@typeInfo(T).Enum.tag_type);
     try host.attachMember(structure, .{
         .member_type = getMemberType(IT),
@@ -1563,6 +1563,12 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                 const value_obj = try exportPointerTarget(host, &value, true);
                 template_maybe = template_maybe orelse try host.createTemplate(null);
                 try host.writeSlot(template_maybe.?, slot, value_obj);
+            }
+            if (!en.is_exhaustive) {
+                try host.attachMember(structure, .{
+                    .member_type = .Comptime,
+                    .structure = structure,
+                }, true);
             }
         },
         .ErrorSet => |es| if (es) |errors| {

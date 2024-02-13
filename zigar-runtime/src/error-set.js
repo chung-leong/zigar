@@ -4,7 +4,7 @@ import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf } from './special.js';
 import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
-import { ALIGN, COPIER, ITEMS, MESSAGES, NORMALIZER, SIZE } from './symbol.js';
+import { ALIGN, COPIER, ITEMS, NORMALIZER, SIZE } from './symbol.js';
 
 export function defineErrorSet(structure, env) {
   const {
@@ -47,10 +47,7 @@ export function defineErrorSet(structure, env) {
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
   Object.setPrototypeOf(constructor.prototype, globalErrorSet.prototype);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
-  const getMessage = function() {
-    const index = getIndex.call(this);
-    return constructor[MESSAGES][index];
-  };
+  const getMessage = function() { return this.$.message; };
   const toStringTag = function() { return 'Error' };
   const toPrimitive = function(hint) {
     if (hint === 'string') {
@@ -79,7 +76,6 @@ export function defineErrorSet(structure, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
     [ITEMS]: { value: {} },
-    [MESSAGES]: { value: {} },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };

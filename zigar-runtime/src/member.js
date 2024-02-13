@@ -189,16 +189,17 @@ export function getFloatDescriptor(member, env) {
   return getDescriptorUsing(member, env, getNumericAccessor)
 }
 
+function getValueDescriptor(member, env) {
+  // enum can be int or uint--need the type from the structure
+  const { type, structure } = member.structure.instance.members[0];
+  // combine that with the offset/size
+  const valueMember = { ...member, type, structure };
+  return getDescriptor(valueMember, env);
+}
+
 export function getEnumerationItemDescriptor(member, env) {
   const { structure } = member;
-  // enum can be int or uint--need the type from the structure
-  const { type: intType, structure: intStructure } = structure.instance.members[0];
-  const valueMember = {
-    ...member,
-    type: intType,
-    structure: intStructure,
-  };
-  const { get: getValue, set: setValue } = getDescriptor(valueMember, env);
+  const { get: getValue, set: setValue } = getValueDescriptor(member, env);
   const findEnum = function(value) {
     const { constructor } = structure;
     // the enumeration constructor returns the object for the int value
@@ -233,19 +234,12 @@ export function getEnumerationItemDescriptor(member, env) {
 
 export function getErrorDescriptor(member, env) {
   const { structure } = member;
-  const { name, instance: { members } } = structure;
-  const { type: intType, structure: intStructure } = members[0];
-  const valueMember = {
-    ...member,
-    type: intType,
-    structure: intStructure,
-  };
-  const { get: getValue, set: setValue } = getDescriptor(valueMember, env);  
+  const { name } = structure;
+  const { get: getValue, set: setValue } = getValueDescriptor(member, env);  
   const acceptAny = name === 'anyerror';
   const globalErrorSet = getGlobalErrorSet();
   const findError = function(value, allowZero = false) {
     const { constructor } = structure;
-    // the enumeration constructor returns the object for the int value
     let item;
     if (value === 0 && allowZero) {
       return;

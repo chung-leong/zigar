@@ -57,6 +57,53 @@ describe('Enumeration functions', function() {
       e.$ = Hello.Dog;
       expect(e.$).to.equal(Hello.Dog);
     })
+    it('should define a non-exhaustive enum class', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Enumeration,
+        name: 'Hello',
+        byteSize: 4,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(structure);
+      const { constructor: Hello } = structure;
+      env.attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure,
+      }, true);
+      env.attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure,
+      }, true);
+      env.attachMember(structure, {
+        type: MemberType.Comptime,
+        structure,
+      }, true);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ])), { writable: false }),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ])), { writable: false }),
+        },
+      }, true);
+      env.finalizeStructure(structure);
+      expect(Number(Hello.Dog)).to.equal(0);
+      expect(Number(Hello.Cat)).to.equal(1);
+      const e1 = new Hello(3);
+      expect(Number(e1)).to.equal(3);
+      e1.$ = 2;
+      expect(Number(e1)).to.equal(2);
+      const e2 = new Hello(2);
+      expect(e1.$).to.equal(e2.$);
+      expect(String(e1)).to.equal('2');
+    })
     it('should cast the same buffer to the same object', function() {
       const structure = env.beginStructure({
         type: StructureType.Enumeration,

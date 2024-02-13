@@ -3,8 +3,8 @@ import { throwInvalidInitializer } from './error.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf } from './special.js';
-import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
-import { ALIGN, COPIER, ITEMS, NAME, NORMALIZER, SIZE, TAG } from './symbol.js';
+import { attachDescriptors, createConstructor, createPropertyApplier, defineProperties } from './structure.js';
+import { ALIGN, COPIER, ITEMS, MORE, NAME, NORMALIZER, SIZE, TAG } from './symbol.js';
 
 export function defineEnumerationShape(structure, env) {
   const {
@@ -14,7 +14,7 @@ export function defineEnumerationShape(structure, env) {
       members: [ member ],
     },
   } = structure;
-  const { get: getIndex } = getDescriptor(member, env);
+  const { get: getIndex, set: setIndex } = getDescriptor(member, env);
   // get the enum descriptor instead of the int/uint descriptor
   const { get, set } = getDescriptor({ ...member, type: MemberType.EnumerationItem, structure }, env);
   const expected = [ 'string', 'number', 'tagged union' ];
@@ -29,10 +29,18 @@ export function defineEnumerationShape(structure, env) {
     }
   };
   const alternateCaster = function(arg) {
-    if (typeof(arg)  === 'string') {
-      return constructor[arg];
-    } else if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
-      return constructor[ITEMS][arg];
+    if (typeof(arg)  === 'string' || typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+      const items = constructor[ITEMS];
+      let item = items[arg];
+      if (!item) {
+        if (constructor[MORE] && typeof(arg) !== 'string') {
+          // create the item on-the-fly when enum is non-exhaustive
+          item = items[arg] = new constructor(undefined);          
+          setIndex.call(item, arg);
+          defineProperties(item, { [NAME]: { value: `${arg}` } });
+        }
+      }
+      return item;
     } else if (arg?.[TAG] instanceof constructor) {
       // a tagged union, return the active tag
       return arg[TAG];
@@ -45,11 +53,7 @@ export function defineEnumerationShape(structure, env) {
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
   const toPrimitive = function(hint) {
-    if (hint === 'string') {
-      return this[NAME];
-    } else {
-      return getIndex.call(this);
-    }
+    return (hint === 'string') ? this.$[NAME] : getIndex.call(this);
   };
   const instanceDescriptors = {
     $: { get, set },

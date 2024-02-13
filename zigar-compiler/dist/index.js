@@ -1,8 +1,8 @@
 import { exec, execSync } from 'child_process';
-import { statSync, lstatSync, openSync, writeSync, closeSync, renameSync, readFileSync, writeFileSync, chmodSync, utimesSync, unlinkSync, mkdirSync, readdirSync, rmdirSync } from 'fs';
-import { stat, lstat, open, rename, readFile, writeFile, chmod, utimes, unlink, mkdir, readdir, rmdir } from 'fs/promises';
+import { statSync, lstatSync, openSync, writeSync, closeSync, readFileSync, writeFileSync, chmodSync, unlinkSync, mkdirSync, readdirSync, rmdirSync } from 'fs';
+import { stat, lstat, open, readFile, writeFile, chmod, unlink, mkdir, readdir, rmdir } from 'fs/promises';
 import os, { tmpdir } from 'os';
-import { join, parse, dirname, basename, resolve } from 'path';
+import { join, parse, basename, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
 
@@ -12,7 +12,6 @@ const PARENT = Symbol('parent');
 const NAME = Symbol('name');
 const TAG = Symbol('tag');
 const ITEMS = Symbol('items');
-const MESSAGES = Symbol('messages');
 const GETTER = Symbol('getter');
 const SETTER = Symbol('setter');
 const ELEMENT_GETTER = Symbol('elementGetter');
@@ -40,6 +39,7 @@ const VIVIFICATOR = Symbol('vivificator');
 const POINTER_VISITOR = Symbol('pointerVisitor');
 const ENVIRONMENT = Symbol('environment');
 const ATTRIBUTES = Symbol('attributes');
+const MORE = Symbol('more');
 
 function getDestructor(env) {
   return function() {
@@ -1240,7 +1240,7 @@ function defineEnumerationShape(structure, env) {
       members: [ member ],
     },
   } = structure;
-  const { get: getIndex } = getDescriptor(member, env);
+  const { get: getIndex, set: setIndex } = getDescriptor(member, env);
   // get the enum descriptor instead of the int/uint descriptor
   const { get, set } = getDescriptor({ ...member, type: MemberType.EnumerationItem, structure }, env);
   const expected = [ 'string', 'number', 'tagged union' ];
@@ -1255,10 +1255,18 @@ function defineEnumerationShape(structure, env) {
     }
   };
   const alternateCaster = function(arg) {
-    if (typeof(arg)  === 'string') {
-      return constructor[arg];
-    } else if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
-      return constructor[ITEMS][arg];
+    if (typeof(arg)  === 'string' || typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+      const items = constructor[ITEMS];
+      let item = items[arg];
+      if (!item) {
+        if (constructor[MORE] && typeof(arg) !== 'string') {
+          // create the item on-the-fly when enum is non-exhaustive
+          item = items[arg] = new constructor(undefined);          
+          setIndex.call(item, arg);
+          defineProperties(item, { [NAME]: { value: `${arg}` } });
+        }
+      }
+      return item;
     } else if (arg?.[TAG] instanceof constructor) {
       // a tagged union, return the active tag
       return arg[TAG];
@@ -1271,11 +1279,7 @@ function defineEnumerationShape(structure, env) {
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
   const toPrimitive = function(hint) {
-    if (hint === 'string') {
-      return this[NAME];
-    } else {
-      return getIndex.call(this);
-    }
+    return (hint === 'string') ? this.$[NAME] : getIndex.call(this);
   };
   const instanceDescriptors = {
     $: { get, set },
@@ -1342,10 +1346,7 @@ function defineErrorSet(structure, env) {
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
   Object.setPrototypeOf(constructor.prototype, globalErrorSet.prototype);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
-  const getMessage = function() {
-    const index = getIndex.call(this);
-    return constructor[MESSAGES][index];
-  };
+  const getMessage = function() { return this.$.message; };
   const toStringTag = function() { return 'Error' };
   const toPrimitive = function(hint) {
     if (hint === 'string') {
@@ -1374,7 +1375,6 @@ function defineErrorSet(structure, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
     [ITEMS]: { value: {} },
-    [MESSAGES]: { value: {} },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
@@ -3851,16 +3851,17 @@ function getFloatDescriptor(member, env) {
   return getDescriptorUsing(member, env, getNumericAccessor)
 }
 
+function getValueDescriptor(member, env) {
+  // enum can be int or uint--need the type from the structure
+  const { type, structure } = member.structure.instance.members[0];
+  // combine that with the offset/size
+  const valueMember = { ...member, type, structure };
+  return getDescriptor(valueMember, env);
+}
+
 function getEnumerationItemDescriptor(member, env) {
   const { structure } = member;
-  // enum can be int or uint--need the type from the structure
-  const { type: intType, structure: intStructure } = structure.instance.members[0];
-  const valueMember = {
-    ...member,
-    type: intType,
-    structure: intStructure,
-  };
-  const { get: getValue, set: setValue } = getDescriptor(valueMember, env);
+  const { get: getValue, set: setValue } = getValueDescriptor(member, env);
   const findEnum = function(value) {
     const { constructor } = structure;
     // the enumeration constructor returns the object for the int value
@@ -3895,19 +3896,12 @@ function getEnumerationItemDescriptor(member, env) {
 
 function getErrorDescriptor(member, env) {
   const { structure } = member;
-  const { name, instance: { members } } = structure;
-  const { type: intType, structure: intStructure } = members[0];
-  const valueMember = {
-    ...member,
-    type: intType,
-    structure: intStructure,
-  };
-  const { get: getValue, set: setValue } = getDescriptor(valueMember, env);  
+  const { name } = structure;
+  const { get: getValue, set: setValue } = getValueDescriptor(member, env);  
   const acceptAny = name === 'anyerror';
   const globalErrorSet = getGlobalErrorSet();
   const findError = function(value, allowZero = false) {
     const { constructor } = structure;
-    // the enumeration constructor returns the object for the int value
     let item;
     if (value === 0 && allowZero) {
       return;
@@ -4623,34 +4617,6 @@ function releaseLockSync(soBuildDir) {
   deleteFileSync(pidPath);
 }
 
-async function moveFile(srcPath, dstPath) {
-  try {
-    await rename(srcPath, dstPath);
-    /* c8 ignore next 8 -- hard to test */
-  } catch (err) {
-    if (err.code == 'EXDEV') {
-      await copyFile(srcPath, dstPath);
-      await deleteFile(srcPath);
-    } else {
-      throw err;
-    }
-  }
-}
-
-function moveFileSync(srcPath, dstPath) {
-  try {
-    renameSync(srcPath, dstPath);
-    /* c8 ignore next 8 -- hard to test */
-  } catch (err) {
-    if (err.code == 'EXDEV') {
-      copyFileSync(srcPath, dstPath);
-      deleteFileSync(srcPath);
-    } else {
-      throw err;
-    }
-  }
-}
-
 async function copyFile(srcPath, dstPath) {
   const info = await stat(srcPath);
   const data = await readFile(srcPath);
@@ -4679,16 +4645,6 @@ function loadFileSync(path, def) {
   } catch (err) {
     return def;
   }
-}
-
-async function touchFile(path) {
-  const now = new Date();
-  await utimes(path, now, now);
-}
-
-function touchFileSync(path) {
-  const now = new Date();
-  utimesSync(path, now, now);
 }
 
 async function deleteFile(path) {
@@ -4808,6 +4764,315 @@ function md5(text) {
   const hash = createHash('md5');
   hash.update(text);
   return hash.digest('hex');
+}
+
+async function compile(srcPath, soPath, options) {
+  const srcInfo = await findFile(srcPath);
+  if (!srcInfo) {
+    throw new Error(`Source file not found: ${fullPath}`);
+  }
+  const soInfo = await findFile(soPath);
+  const config = createConfig(srcPath, srcInfo, soPath, soInfo, options);
+  const srcFileMap = await findMatchingFiles(config.packageRoot, /\.(zig|zon)$/);
+  let changed = false;
+  // see if the (re-)compilation is necessary
+  if (soInfo) {
+    for (const [ name, info ] of srcFileMap) {
+      if (info.mtime > soInfo.mtime) {
+        changed = true;
+        break;
+      }
+    }
+  } else {
+    changed = true;
+  }
+  if (!changed) {
+    // rebuild when exporter or build files have changed
+    const zigFolder = absolute('../zig');
+    const zigFileMap = await findMatchingFiles(zigFolder, /\.zig$/);
+    for (const [ name, info ] of zigFileMap) {
+      if (info.mtime > soInfo.mtime) {
+        changed = true;
+        break;
+      }
+    }
+  }
+  if (changed) {
+    // see if C library is needed
+    if (!config.useLibC && !srcInfo.isDirectory()) {
+      for (const [ path, info ] of srcFileMap) {
+        const content = await loadFile(path);
+        if (content.includes('@cImport')) {
+          config.useLibC = true;
+          break;
+        }
+      }
+    }
+    // add custom build file
+    for (const [ path, info ] of srcFileMap) {
+      switch (basename(path)) {
+        case 'build.zig':
+          config.buildFilePath = path;
+          break;
+        case 'build.zig.zon':
+          config.packageConfigFilePath = path;
+          break;
+      }
+    }
+    // build in a unique temp dir
+    const soBuildDir = getBuildFolder(config);
+    const soBuildCmd = getBuildCommand(config);
+      // only one process can compile a given file at a time
+    await acquireLock(soBuildDir, config.staleTime);
+    try {
+      // create config file
+      await createProject(config, soBuildDir);
+      // then run the compiler
+      await runCompiler(soBuildCmd, soBuildDir);
+    } finally {
+      await releaseLock(soBuildDir);
+      if (config.clean) {
+        await deleteDirectory(soBuildDir);
+      }
+    }
+  }
+}
+
+function compileSync(srcPath, soPath, options) {
+  const srcInfo = findFileSync(srcPath);
+  if (!srcInfo) {
+    throw new Error(`Source file not found: ${fullPath}`);
+  }
+  const soInfo = findFileSync(soPath);
+  const config = createConfig(srcPath, srcInfo, soPath, soInfo, options);
+  const srcFileMap = findMatchingFilesSync(config.packageRoot, /\.(zig|zon)$/);
+  let changed = false;
+  // see if the (re-)compilation is necessary
+  if (soInfo) {
+    for (const [ path, info ] of srcFileMap) {
+      if (info.mtime > soInfo.mtime) {
+        changed = true;
+        break;
+      }
+    }
+  } else {
+    changed = true;
+  }
+  if (!changed) {
+    // rebuild when exporter or build files have changed
+    const zigFolder = absolute('../zig');
+    const zigFileMap = findMatchingFilesSync(zigFolder, /\.zig$/);
+    for (const [ path, info ] of zigFileMap) {
+      if (info.mtime > soInfo.mtime) {
+        changed = true;
+        break;
+      }
+    }
+  }
+  if (changed) {
+    // see if C library is needed
+    if (!config.useLibC && !srcInfo.isDirectory()) {
+      for (const [ path, info ] of srcFileMap) {
+        const content = loadFileSync(path);
+        if (content.includes('@cImport')) {
+          config.useLibC = true;
+          break;
+        }
+      }
+    }
+    // add custom build file
+    for (const [ path, info ] of srcFileMap) {
+      switch (basename(path)) {
+        case 'build.zig':
+          config.buildFilePath = path;
+          break;
+        case 'build.zig.zon':
+          config.packageConfigFilePath = path;
+          break;
+      }
+    }
+    // build in a unique temp dir
+    const soBuildDir = getBuildFolder(config);
+    const soBuildCmd = getBuildCommand(config);
+      // only one process can compile a given file at a time
+    acquireLockSync(soBuildDir, config.staleTime);
+    try {
+      // create config file
+      createProjectSync(config, soBuildDir);
+      // then run the compiler
+      runCompilerSync(soBuildCmd, soBuildDir);
+    } finally {
+      releaseLockSync(soBuildDir);
+      if (config.clean) {
+        deleteDirectorySync(soBuildDir);
+      }
+    }
+  }
+}
+
+function getBuildCommand(config) {
+  const { arch, platform, nativeCpu, optimize, zigCmd } = config;
+  if (zigCmd) {
+    return zigCmd;
+  }
+  // translate from names used by Node to those used by Zig
+  const cpuArchs = {
+    arm: 'arm',
+    arm64: 'aarch64',
+    ia32: 'x86',
+    mips: 'mips',
+    mipsel: 'mipsel',
+    ppc: 'powerpc',
+    ppc64: 'powerpc64',
+    s390: undefined,
+    s390x: 's390x',
+    x64: 'x86_64',
+  };
+  const osTags = {
+    aix: 'aix',
+    darwin: 'macos',
+    freebsd: 'freebsd',
+    linux: 'linux',
+    openbsd: 'openbsd',
+    sunos: 'solaris',
+    win32: 'windows',
+  };
+  const cpuArch = cpuArchs[arch] ?? arch;
+  const osTag = osTags[platform] ?? platform;
+  const target = `${nativeCpu ? 'native' : cpuArch}-${osTag}`;
+  return `zig build -Dtarget=${target} -Doptimize=${optimize}`;
+}
+
+function getBuildFolder(config) {
+  const { packageName, packageRoot, buildDir } = config;
+  const soBuildPrefix = basename(packageName).slice(0, 16);
+  const soBuildHash = md5(`${packageRoot}/${packageName}`).slice(0, 8);
+  return join(buildDir, soBuildPrefix + '-' + soBuildHash);
+}
+
+function createConfig(srcPath, srcInfo, soPath, soInfo, options) {
+  const {
+    platform = os.platform(),
+    arch = os.arch(),
+    nativeCpu = false,
+    optimize = 'Debug',
+    clean = false,
+    buildDir = join(tmpdir(), 'zigar-build'),
+    staleTime = 60000,
+    zigCmd,
+  } = options;
+  const suffix = /^wasm(32|64)$/.test(arch) ? 'wasm' : 'c';
+  const src = parse(srcPath);
+  const so = parse(soPath);
+  return {    
+    platform,
+    arch,
+    optimize,
+    nativeCpu,
+    packageName: so.name,
+    packagePath: srcInfo.isDirectory() ? undefined : srcPath,
+    packageRoot: srcInfo.isDirectory() ? srcPath : src.dir,
+    exporterPath: absolute(`../zig/exporter-${suffix}.zig`),
+    stubPath: absolute(`../zig/stub-${suffix}.zig`),
+    buildDir,
+    buildFilePath: absolute(`../zig/build.zig`),
+    outputPath: soPath,
+    packageConfigFilePath: undefined,
+    useLibC: (platform === 'win32') ? true : false,
+    clean,
+    staleTime,
+    zigCmd,
+  };
+}
+
+async function runCompiler(zigCmd, soBuildDir) {
+  const options = {
+    cwd: soBuildDir,
+    windowsHide: true,
+  };
+  return new Promise((resolve, reject) => {
+    exec(zigCmd, options, (err, stdout, stderr) => {
+      if (err) {
+        const log = stderr;
+        if (log) {
+          const logPath = join(soBuildDir, 'log');
+          writeFile(logPath, log).catch(() => {});
+          err = new Error(`Zig compilation failed\n\n${log}`);
+        }
+        reject(err);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+function runCompilerSync(zigCmd, soBuildDir) {
+  const options = {
+    cwd: soBuildDir,
+    windowsHide: true,
+    stdio: 'pipe',
+  };
+  try {
+    execSync(zigCmd, options);
+  } catch (err) {
+    const log = err.stderr ?? '';
+    if (log) {
+      const logPath = join(soBuildDir, 'log');
+      try {
+        writeFileSync(logPath, log);
+      } catch (_) {         
+      }
+    }
+    throw new Error(`Zig compilation failed\n\n${log}`);
+  }
+}
+
+function formatProjectConfig(config) {
+  const lines = [];
+  lines.push(`pub const package_name = ${JSON.stringify(config.packageName)};`);
+  lines.push(`pub const package_path = ${JSON.stringify(config.packagePath)};`);
+  lines.push(`pub const package_root = ${JSON.stringify(config.packageRoot)};`);
+  lines.push(`pub const exporter_path = ${JSON.stringify(config.exporterPath)};`);
+  lines.push(`pub const output_path = ${JSON.stringify(config.outputPath)};`);
+  lines.push(`pub const stub_path = ${JSON.stringify(config.stubPath)};`);
+  lines.push(`pub const use_libc = ${config.useLibC ? true : false};`);
+  lines.push(``);
+  return lines.join('\n');
+}
+
+async function createProject(config, dir) {
+  const content = formatProjectConfig(config);
+  const cfgFilePath = join(dir, 'build-cfg.zig');
+  await writeFile(cfgFilePath, content);
+  const buildFilePath = join(dir, 'build.zig');
+  await copyFile(config.buildFilePath, buildFilePath);
+  if (config.packageConfigFilePath) {
+    const packageConfigFilePath = join(dir, 'build.zig.zon');
+    await copyFile(config.packageConfigFilePath, packageConfigFilePath);
+  }
+}
+
+function createProjectSync(config, dir) {
+  const content = formatProjectConfig(config);
+  const cfgFilePath = join(dir, 'build-cfg.zig');
+  writeFileSync(cfgFilePath, content);
+  const buildFilePath = join(dir, 'build.zig');
+  copyFileSync(config.buildFilePath, buildFilePath);
+  if (config.packageConfigFilePath) {
+    const packageConfigFilePath = join(dir, 'build.zig.zon');
+    copyFileSync(config.packageConfigFilePath, packageConfigFilePath);
+  }
+}
+
+function absolute(relpath) {
+  // import.meta.url don't always yield the right URL when transpiled to CommonJS
+  // just use __dirname as it's going to be there
+  if (typeof(__dirname) === 'string') {
+    return resolve(__dirname, relpath);
+  } else {
+    return fileURLToPath(new URL(relpath, import.meta.url));
+  }
 }
 
 const optionsForCompile = {
@@ -5035,340 +5300,6 @@ function findSourceFile(soPathPI, options) {
   return sourceFiles?.[soPathPI];
 }
 
-async function compile(srcPath, soPath, options) {
-  const {
-    optimize = 'Debug',
-    clean = false,
-    zigCmd = `zig build -Doptimize=${optimize}`,
-    buildDir = join(tmpdir(), 'zigar-build'),
-    staleTime = 60000,
-  } = options;
-  const srcInfo = await findFile(srcPath);
-  if (!srcInfo) {
-    throw new Error(`Source file not found: ${fullPath}`);
-  }
-  const soInfo = await findFile(soPath);
-  const config = createConfig(srcPath, srcInfo, soPath, soInfo, options);
-  const srcFileMap = await findMatchingFiles(config.packageRoot, /\.(zig|zon)$/);
-  let changed = false;
-  // see if the (re-)compilation is necessary
-  if (soInfo) {
-    for (const [ name, info ] of srcFileMap) {
-      if (info.mtime > soInfo.mtime) {
-        changed = true;
-        break;
-      }
-    }
-  } else {
-    changed = true;
-  }
-  if (!changed) {
-    // rebuild when exporter or build files have changed
-    const zigFolder = absolute('../zig');
-    const zigFileMap = await findMatchingFiles(zigFolder, /\.zig$/);
-    for (const [ name, info ] of zigFileMap) {
-      if (info.mtime > soInfo.mtime) {
-        changed = true;
-        break;
-      }
-    }
-  }
-  if (changed) {
-    // see if C library is needed
-    if (!config.useLibC && !srcInfo.isDirectory()) {
-      for (const [ path, info ] of srcFileMap) {
-        const content = await loadFile(path);
-        if (content.includes('@cImport')) {
-          config.useLibC = true;
-          break;
-        }
-      }
-    }
-    // add custom build file
-    for (const [ path, info ] of srcFileMap) {
-      switch (basename(path)) {
-        case 'build.zig':
-          config.buildFilePath = path;
-          break;
-        case 'build.zig.zon':
-          config.packageConfigFilePath = path;
-          break;
-      }
-    }
-    // build in a unique temp dir
-    const soBuildDir = join(buildDir, getBuildFolder(config));
-      // only one process can compile a given file at a time
-    await acquireLock(soBuildDir, staleTime);
-    try {
-      // create config file
-      await createProject(config, soBuildDir);
-      // then run the compiler
-      await runCompiler(zigCmd, soBuildDir);
-      // move library to designated location      
-      const re = new RegExp(`\\${getPlatformExt(options)}$`);
-      const outputDir = join(soBuildDir, 'zig-out', 'lib');
-      // look for most recently create file
-      const fileMap = await findMatchingFiles(outputDir, re);
-      let resultPath, resultMTime;
-      for (const [ path, info ] of fileMap) {
-        if (!(resultMTime >= info.mtime)) {
-          resultPath = path;
-          resultMTime = info.mtime;
-        }
-      }
-      await createDirectory(dirname(soPath));
-      await moveFile(resultPath, soPath);
-      await touchFile(soPath);
-    } finally {
-      await releaseLock(soBuildDir);
-      if (clean) {
-        await deleteDirectory(soBuildDir);
-      }
-    }
-  }
-}
-
-function compileSync(srcPath, soPath, options) {
-  const {
-    optimize = 'Debug',
-    clean = false,
-    zigCmd = `zig build -Doptimize=${optimize}`,
-    buildDir = join(tmpdir(), 'zigar-build'),
-    staleTime = 60000,
-  } = options;
-  const srcInfo = findFileSync(srcPath);
-  if (!srcInfo) {
-    throw new Error(`Source file not found: ${fullPath}`);
-  }
-  const soInfo = findFileSync(soPath);
-  const config = createConfig(srcPath, srcInfo, soPath, soInfo, options);
-  const srcFileMap = findMatchingFilesSync(config.packageRoot, /\.(zig|zon)$/);
-  let changed = false;
-  // see if the (re-)compilation is necessary
-  if (soInfo) {
-    for (const [ path, info ] of srcFileMap) {
-      if (info.mtime > soInfo.mtime) {
-        changed = true;
-        break;
-      }
-    }
-  } else {
-    changed = true;
-  }
-  if (!changed) {
-    // rebuild when exporter or build files have changed
-    const zigFolder = absolute('../zig');
-    const zigFileMap = findMatchingFilesSync(zigFolder, /\.zig$/);
-    for (const [ path, info ] of zigFileMap) {
-      if (info.mtime > soInfo.mtime) {
-        changed = true;
-        break;
-      }
-    }
-  }
-  if (changed) {
-    // see if C library is needed
-    if (!config.useLibC && !srcInfo.isDirectory()) {
-      for (const [ path, info ] of srcFileMap) {
-        const content = loadFileSync(path);
-        if (content.includes('@cImport')) {
-          config.useLibC = true;
-          break;
-        }
-      }
-    }
-    // add custom build file
-    for (const [ path, info ] of srcFileMap) {
-      switch (basename(path)) {
-        case 'build.zig':
-          config.buildFilePath = path;
-          break;
-        case 'build.zig.zon':
-          config.packageConfigFilePath = path;
-          break;
-      }
-    }
-    // build in a unique temp dir
-    const soBuildDir = join(buildDir, getBuildFolder(config));
-      // only one process can compile a given file at a time
-    acquireLockSync(soBuildDir, staleTime);
-    try {
-      // create config file
-      createProjectSync(config, soBuildDir);
-      // then run the compiler
-      runCompilerSync(zigCmd, soBuildDir);
-      // move library to designated location      
-      const re = new RegExp(`\\${getPlatformExt(options)}$`);
-      const outputDir = join(soBuildDir, 'zig-out', 'lib');
-      // look for most recently create file
-      const fileMap = findMatchingFilesSync(outputDir, re);
-      let resultPath, resultMTime;
-      for (const [ path, info ] of fileMap) {
-        if (!(resultMTime >= info.mtime)) {
-          resultPath = path;
-          resultMTime = info.mtime;
-        }
-      }
-      createDirectorySync(dirname(soPath));
-      moveFileSync(resultPath, soPath);
-      touchFileSync(soPath);
-    } finally {
-      releaseLockSync(soBuildDir);
-      if (clean) {
-        deleteDirectorySync(soBuildDir);
-      }
-    }
-  }
-}
-
-function getBuildFolder(config) {
-  const { packageName, packageRoot } = config;
-  const soBuildPrefix = basename(packageName).slice(0, 16);
-  const soBuildHash = md5(`${packageRoot}/${packageName}`).slice(0, 8);
-  return soBuildPrefix + '-' + soBuildHash;
-}
-
-function createConfig(srcPath, srcInfo, soPath, soInfo, options) {
-  const {
-    platform = os.platform(),
-    arch = os.arch(),
-    nativeCpu = false,
-  } = options;
-  const suffix = /^wasm(32|64)$/.test(arch) ? 'wasm' : 'c';
-  const src = parse(srcPath);
-  const so = parse(soPath);
-  return {
-    platform,
-    arch,
-    nativeCpu,
-    packageName: so.name,
-    packagePath: srcInfo.isDirectory() ? undefined : srcPath,
-    packageRoot: srcInfo.isDirectory() ? srcPath : src.dir,
-    exporterPath: absolute(`../zig/exporter-${suffix}.zig`),
-    stubPath: absolute(`../zig/stub-${suffix}.zig`),
-    buildFilePath: absolute(`../zig/build.zig`),
-    packageConfigFilePath: undefined,
-    useLibC: (platform === 'win32') ? true : false,
-  };
-}
-
-async function runCompiler(zigCmd, soBuildDir) {
-  const options = {
-    cwd: soBuildDir,
-    windowsHide: true,
-  };
-  return new Promise((resolve, reject) => {
-    exec(zigCmd, options, (err, stdout, stderr) => {
-      if (err) {
-        const log = stderr;
-        if (log) {
-          const logPath = join(soBuildDir, 'log');
-          writeFile(logPath, log).catch(() => {});
-          err = new Error(`Zig compilation failed\n\n${log}`);
-        }
-        reject(err);
-      } else {
-        resolve();
-      }
-    });
-  });
-}
-
-function runCompilerSync(zigCmd, soBuildDir) {
-  const options = {
-    cwd: soBuildDir,
-    windowsHide: true,
-    stdio: 'pipe',
-  };
-  try {
-    execSync(zigCmd, options);
-  } catch (err) {
-    const log = err.stderr ?? '';
-    if (log) {
-      const logPath = join(soBuildDir, 'log');
-      try {
-        writeFileSync(logPath, log);
-      } catch (_) {         
-      }
-    }
-    throw new Error(`Zig compilation failed\n\n${log}`);
-  }
-}
-
-function formatProjectConfig(config) {
-  // translate from names used by Node to those used by Zig
-  const cpuArchs = {
-    arm: 'arm',
-    arm64: 'aarch64',
-    ia32: 'x86',
-    mips: 'mips',
-    mipsel: 'mipsel',
-    ppc: 'powerpc',
-    ppc64: 'powerpc64',
-    s390: undefined,
-    s390x: 's390x',
-    x64: 'x86_64',
-  };
-  const osTags = {
-    aix: 'aix',
-    darwin: 'macos',
-    freebsd: 'freebsd',
-    linux: 'linux',
-    openbsd: 'openbsd',
-    sunos: 'solaris',
-    win32: 'windows',
-  };
-  const cpuArch = cpuArchs[config.arch] ?? config.arch;
-  const cpuModel = (config.nativeCpu) ? 'native' : 'baseline';
-  const osTag = osTags[config.platform] ?? config.platform;
-  const target = `.{ .cpu_arch = .${cpuArch}, .cpu_model = .${cpuModel}, .os_tag = .${osTag} }`;
-  const lines = [];
-  lines.push(`const std = @import("std");\n`);
-  lines.push(`pub const target: std.zig.CrossTarget = ${target};`);
-  lines.push(`pub const package_name = ${JSON.stringify(config.packageName)};`);
-  lines.push(`pub const package_path = ${JSON.stringify(config.packagePath)};`);
-  lines.push(`pub const package_root = ${JSON.stringify(config.packageRoot)};`);
-  lines.push(`pub const exporter_path = ${JSON.stringify(config.exporterPath)};`);
-  lines.push(`pub const stub_path = ${JSON.stringify(config.stubPath)};`);
-  lines.push(`pub const use_libc = ${config.useLibC ? true : false};`);
-  lines.push(``);
-  return lines.join('\n');
-}
-
-async function createProject(config, dir) {
-  const content = formatProjectConfig(config);
-  const cfgFilePath = join(dir, 'build-cfg.zig');
-  await writeFile(cfgFilePath, content);
-  const buildFilePath = join(dir, 'build.zig');
-  await copyFile(config.buildFilePath, buildFilePath);
-  if (config.packageConfigFilePath) {
-    const packageConfigFilePath = join(dir, 'build.zig.zon');
-    await copyFile(config.packageConfigFilePath, packageConfigFilePath);
-  }
-}
-
-function createProjectSync(config, dir) {
-  const content = formatProjectConfig(config);
-  const cfgFilePath = join(dir, 'build-cfg.zig');
-  writeFileSync(cfgFilePath, content);
-  const buildFilePath = join(dir, 'build.zig');
-  copyFileSync(config.buildFilePath, buildFilePath);
-  if (config.packageConfigFilePath) {
-    const packageConfigFilePath = join(dir, 'build.zig.zon');
-    copyFileSync(config.packageConfigFilePath, packageConfigFilePath);
-  }
-}
-
-function absolute(relpath) {
-  // import.meta.url don't always yield the right URL when transpiled to CommonJS
-  // just use __dirname as it's going to be there
-  if (typeof(__dirname) === 'string') {
-    return resolve(__dirname, relpath);
-  } else {
-    return fileURLToPath(new URL(relpath, import.meta.url));
-  }
-}
-
 function addMethods(s, env) {
   const add = (target, { methods }, pushThis) => {
     const descriptors = {};
@@ -5425,19 +5356,23 @@ function addStaticMembers(structure, env) {
   if (type === StructureType.Enumeration) {
     const enums = constructor[ITEMS];
     for (const { name, slot } of members) {
-      // place item in hash to facilitate lookup, 
-      const item = constructor[SLOTS][slot];
-      if (item instanceof constructor) {
-        const index = item[Symbol.toPrimitive]();
-        enums[index] = item;
-        // attach name to item so tagged union code can quickly find it
-        defineProperties(item, { [NAME]: { value: name } });  
-      }      
+      if (name !== undefined) {
+        // place item in hash to facilitate lookup, 
+        const item = constructor[SLOTS][slot];
+        if (item instanceof constructor) {
+          // attach name to item so tagged union code can quickly find it
+          defineProperties(item, { [NAME]: { value: name } });  
+          const index = item[Symbol.toPrimitive]();
+          enums[index] = enums[name] = item;          
+        }      
+      } else {
+        // non-exhaustive enum
+        defineProperties(constructor, { [MORE]: { value: true } });
+      }
     }
   } else if (type === StructureType.ErrorSet) {
     const allErrors = getGlobalErrorSet();
     const errors = constructor[ITEMS];
-    const messages = constructor[MESSAGES];
     for (const { name, slot } of members) {
       let error = constructor[SLOTS][slot];
       const index = Number(error);
@@ -5465,17 +5400,11 @@ function addStaticMembers(structure, env) {
         }
         error = constructor[SLOTS][slot] = previous;       
       } else {
-        // set error message
-        const message = decamelizeErrorName(name);
-        messages[index] = message;
-        // add to hash
-        allErrors[index] = error;
-        allErrors[message] = error;
-        allErrors[`${error}`] = error;
+        // set error message (overriding prototype) and add to hash
+        defineProperties(error, { message: { value: decamelizeErrorName(name) } });
+        allErrors[index] = allErrors[error.message] = allErrors[`${error}`] = error;
       }
-      errors[index] = error;
-      errors[error.message] = error;
-      errors[`${error}`] = error;
+      errors[index] = errors[error.message] = errors[`${error}`] = error;
     }
   }
 }

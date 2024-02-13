@@ -2,7 +2,7 @@ import { getGlobalErrorSet } from './error-set.js';
 import { decamelizeErrorName } from './error.js';
 import { getDescriptor } from './member.js';
 import { StructureType, defineProperties } from './structure.js';
-import { ITEMS, MESSAGES, NAME, SLOTS } from './symbol.js';
+import { ITEMS, MORE, NAME, SLOTS } from './symbol.js';
 
 export function addStaticMembers(structure, env) {
   const {
@@ -25,19 +25,23 @@ export function addStaticMembers(structure, env) {
   if (type === StructureType.Enumeration) {
     const enums = constructor[ITEMS];
     for (const { name, slot } of members) {
-      // place item in hash to facilitate lookup, 
-      const item = constructor[SLOTS][slot];
-      if (item instanceof constructor) {
-        const index = item[Symbol.toPrimitive]();
-        enums[index] = item;
-        // attach name to item so tagged union code can quickly find it
-        defineProperties(item, { [NAME]: { value: name } });  
-      }      
+      if (name !== undefined) {
+        // place item in hash to facilitate lookup, 
+        const item = constructor[SLOTS][slot];
+        if (item instanceof constructor) {
+          // attach name to item so tagged union code can quickly find it
+          defineProperties(item, { [NAME]: { value: name } });  
+          const index = item[Symbol.toPrimitive]();
+          enums[index] = enums[name] = item;          
+        }      
+      } else {
+        // non-exhaustive enum
+        defineProperties(constructor, { [MORE]: { value: true } });
+      }
     }
   } else if (type === StructureType.ErrorSet) {
     const allErrors = getGlobalErrorSet();
     const errors = constructor[ITEMS];
-    const messages = constructor[MESSAGES];
     for (const { name, slot } of members) {
       let error = constructor[SLOTS][slot];
       const index = Number(error);
@@ -65,17 +69,11 @@ export function addStaticMembers(structure, env) {
         }
         error = constructor[SLOTS][slot] = previous;       
       } else {
-        // set error message
-        const message = decamelizeErrorName(name);
-        messages[index] = message;
-        // add to hash
-        allErrors[index] = error;
-        allErrors[message] = error;
-        allErrors[`${error}`] = error;
+        // set error message (overriding prototype) and add to hash
+        defineProperties(error, { message: { value: decamelizeErrorName(name) } });
+        allErrors[index] = allErrors[error.message] = allErrors[`${error}`] = error;
       }
-      errors[index] = error;
-      errors[error.message] = error;
-      errors[`${error}`] = error;
+      errors[index] = errors[error.message] = errors[`${error}`] = error;
     }
   }
 }

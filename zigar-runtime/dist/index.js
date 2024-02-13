@@ -4,7 +4,6 @@ const PARENT = Symbol('parent');
 const NAME = Symbol('name');
 const TAG = Symbol('tag');
 const ITEMS = Symbol('items');
-const MESSAGES = Symbol('messages');
 const GETTER = Symbol('getter');
 const SETTER = Symbol('setter');
 const ELEMENT_GETTER = Symbol('elementGetter');
@@ -32,6 +31,7 @@ const VIVIFICATOR = Symbol('vivificator');
 const POINTER_VISITOR = Symbol('pointerVisitor');
 const ENVIRONMENT = Symbol('environment');
 const ATTRIBUTES = Symbol('attributes');
+const MORE = Symbol('more');
 
 function getDestructor(env) {
   return function() {
@@ -1232,7 +1232,7 @@ function defineEnumerationShape(structure, env) {
       members: [ member ],
     },
   } = structure;
-  const { get: getIndex } = getDescriptor(member, env);
+  const { get: getIndex, set: setIndex } = getDescriptor(member, env);
   // get the enum descriptor instead of the int/uint descriptor
   const { get, set } = getDescriptor({ ...member, type: MemberType.EnumerationItem, structure }, env);
   const expected = [ 'string', 'number', 'tagged union' ];
@@ -1247,10 +1247,18 @@ function defineEnumerationShape(structure, env) {
     }
   };
   const alternateCaster = function(arg) {
-    if (typeof(arg)  === 'string') {
-      return constructor[arg];
-    } else if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
-      return constructor[ITEMS][arg];
+    if (typeof(arg)  === 'string' || typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+      const items = constructor[ITEMS];
+      let item = items[arg];
+      if (!item) {
+        if (constructor[MORE] && typeof(arg) !== 'string') {
+          // create the item on-the-fly when enum is non-exhaustive
+          item = items[arg] = new constructor(undefined);          
+          setIndex.call(item, arg);
+          defineProperties(item, { [NAME]: { value: `${arg}` } });
+        }
+      }
+      return item;
     } else if (arg?.[TAG] instanceof constructor) {
       // a tagged union, return the active tag
       return arg[TAG];
@@ -1263,11 +1271,7 @@ function defineEnumerationShape(structure, env) {
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
   const toPrimitive = function(hint) {
-    if (hint === 'string') {
-      return this[NAME];
-    } else {
-      return getIndex.call(this);
-    }
+    return (hint === 'string') ? this.$[NAME] : getIndex.call(this);
   };
   const instanceDescriptors = {
     $: { get, set },
@@ -2436,10 +2440,7 @@ function defineErrorSet(structure, env) {
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
   Object.setPrototypeOf(constructor.prototype, globalErrorSet.prototype);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
-  const getMessage = function() {
-    const index = getIndex.call(this);
-    return constructor[MESSAGES][index];
-  };
+  const getMessage = function() { return this.$.message; };
   const toStringTag = function() { return 'Error' };
   const toPrimitive = function(hint) {
     if (hint === 'string') {
@@ -2468,7 +2469,6 @@ function defineErrorSet(structure, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
     [ITEMS]: { value: {} },
-    [MESSAGES]: { value: {} },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
@@ -2657,16 +2657,17 @@ function getFloatDescriptor(member, env) {
   return getDescriptorUsing(member, env, getNumericAccessor)
 }
 
+function getValueDescriptor(member, env) {
+  // enum can be int or uint--need the type from the structure
+  const { type, structure } = member.structure.instance.members[0];
+  // combine that with the offset/size
+  const valueMember = { ...member, type, structure };
+  return getDescriptor(valueMember, env);
+}
+
 function getEnumerationItemDescriptor(member, env) {
   const { structure } = member;
-  // enum can be int or uint--need the type from the structure
-  const { type: intType, structure: intStructure } = structure.instance.members[0];
-  const valueMember = {
-    ...member,
-    type: intType,
-    structure: intStructure,
-  };
-  const { get: getValue, set: setValue } = getDescriptor(valueMember, env);
+  const { get: getValue, set: setValue } = getValueDescriptor(member, env);
   const findEnum = function(value) {
     const { constructor } = structure;
     // the enumeration constructor returns the object for the int value
@@ -2701,19 +2702,12 @@ function getEnumerationItemDescriptor(member, env) {
 
 function getErrorDescriptor(member, env) {
   const { structure } = member;
-  const { name, instance: { members } } = structure;
-  const { type: intType, structure: intStructure } = members[0];
-  const valueMember = {
-    ...member,
-    type: intType,
-    structure: intStructure,
-  };
-  const { get: getValue, set: setValue } = getDescriptor(valueMember, env);  
+  const { name } = structure;
+  const { get: getValue, set: setValue } = getValueDescriptor(member, env);  
   const acceptAny = name === 'anyerror';
   const globalErrorSet = getGlobalErrorSet();
   const findError = function(value, allowZero = false) {
     const { constructor } = structure;
-    // the enumeration constructor returns the object for the int value
     let item;
     if (value === 0 && allowZero) {
       return;
@@ -4016,19 +4010,23 @@ function addStaticMembers(structure, env) {
   if (type === StructureType.Enumeration) {
     const enums = constructor[ITEMS];
     for (const { name, slot } of members) {
-      // place item in hash to facilitate lookup, 
-      const item = constructor[SLOTS][slot];
-      if (item instanceof constructor) {
-        const index = item[Symbol.toPrimitive]();
-        enums[index] = item;
-        // attach name to item so tagged union code can quickly find it
-        defineProperties(item, { [NAME]: { value: name } });  
-      }      
+      if (name !== undefined) {
+        // place item in hash to facilitate lookup, 
+        const item = constructor[SLOTS][slot];
+        if (item instanceof constructor) {
+          // attach name to item so tagged union code can quickly find it
+          defineProperties(item, { [NAME]: { value: name } });  
+          const index = item[Symbol.toPrimitive]();
+          enums[index] = enums[name] = item;          
+        }      
+      } else {
+        // non-exhaustive enum
+        defineProperties(constructor, { [MORE]: { value: true } });
+      }
     }
   } else if (type === StructureType.ErrorSet) {
     const allErrors = getGlobalErrorSet();
     const errors = constructor[ITEMS];
-    const messages = constructor[MESSAGES];
     for (const { name, slot } of members) {
       let error = constructor[SLOTS][slot];
       const index = Number(error);
@@ -4056,17 +4054,11 @@ function addStaticMembers(structure, env) {
         }
         error = constructor[SLOTS][slot] = previous;       
       } else {
-        // set error message
-        const message = decamelizeErrorName(name);
-        messages[index] = message;
-        // add to hash
-        allErrors[index] = error;
-        allErrors[message] = error;
-        allErrors[`${error}`] = error;
+        // set error message (overriding prototype) and add to hash
+        defineProperties(error, { message: { value: decamelizeErrorName(name) } });
+        allErrors[index] = allErrors[error.message] = allErrors[`${error}`] = error;
       }
-      errors[index] = error;
-      errors[error.message] = error;
-      errors[`${error}`] = error;
+      errors[index] = errors[error.message] = errors[`${error}`] = error;
     }
   }
 }
