@@ -2,24 +2,15 @@ import { exec, execSync } from 'child_process';
 import { writeFileSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import os, { tmpdir } from 'os';
-import { basename, dirname, join, parse, resolve } from 'path';
+import { basename, join, parse, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { getPlatformExt } from './configuration.js';
 import {
-  acquireLock, acquireLockSync, copyFile, copyFileSync, createDirectory, createDirectorySync,
-  deleteDirectory, deleteDirectorySync, findFile, findFileSync, findMatchingFiles,
-  findMatchingFilesSync, loadFile, loadFileSync, md5, moveFile, moveFileSync, releaseLock,
-  releaseLockSync, touchFile, touchFileSync
+  acquireLock, acquireLockSync, copyFile, copyFileSync, deleteDirectory, deleteDirectorySync, 
+  findFile, findFileSync, findMatchingFiles, findMatchingFilesSync, loadFile, loadFileSync, md5, 
+  releaseLock, releaseLockSync
 } from './utility-functions.js';
 
 export async function compile(srcPath, soPath, options) {
-  const {
-    optimize = 'Debug',
-    clean = false,
-    zigCmd = `zig build -Doptimize=${optimize}`,
-    buildDir = join(tmpdir(), 'zigar-build'),
-    staleTime = 60000,
-  } = options;
   const srcInfo = await findFile(srcPath);
   if (!srcInfo) {
     throw new Error(`Source file not found: ${fullPath}`);
@@ -73,32 +64,18 @@ export async function compile(srcPath, soPath, options) {
       }
     }
     // build in a unique temp dir
-    const soBuildDir = join(buildDir, getBuildFolder(config));
+    const soBuildDir = getBuildFolder(config);
+    const soBuildCmd = getBuildCommand(config);
       // only one process can compile a given file at a time
-    await acquireLock(soBuildDir, staleTime);
+    await acquireLock(soBuildDir, config.staleTime);
     try {
       // create config file
       await createProject(config, soBuildDir);
       // then run the compiler
-      await runCompiler(zigCmd, soBuildDir);
-      // move library to designated location      
-      const re = new RegExp(`\\${getPlatformExt(options)}$`);
-      const outputDir = join(soBuildDir, 'zig-out', 'lib');
-      // look for most recently create file
-      const fileMap = await findMatchingFiles(outputDir, re);
-      let resultPath, resultMTime;
-      for (const [ path, info ] of fileMap) {
-        if (!(resultMTime >= info.mtime)) {
-          resultPath = path;
-          resultMTime = info.mtime;
-        }
-      }
-      await createDirectory(dirname(soPath));
-      await moveFile(resultPath, soPath);
-      await touchFile(soPath);
+      await runCompiler(soBuildCmd, soBuildDir);
     } finally {
       await releaseLock(soBuildDir);
-      if (clean) {
+      if (config.clean) {
         await deleteDirectory(soBuildDir);
       }
     }
@@ -106,13 +83,6 @@ export async function compile(srcPath, soPath, options) {
 }
 
 export function compileSync(srcPath, soPath, options) {
-  const {
-    optimize = 'Debug',
-    clean = false,
-    zigCmd = `zig build -Doptimize=${optimize}`,
-    buildDir = join(tmpdir(), 'zigar-build'),
-    staleTime = 60000,
-  } = options;
   const srcInfo = findFileSync(srcPath);
   if (!srcInfo) {
     throw new Error(`Source file not found: ${fullPath}`);
@@ -166,43 +136,62 @@ export function compileSync(srcPath, soPath, options) {
       }
     }
     // build in a unique temp dir
-    const soBuildDir = join(buildDir, getBuildFolder(config));
+    const soBuildDir = getBuildFolder(config);
+    const soBuildCmd = getBuildCommand(config);
       // only one process can compile a given file at a time
-    acquireLockSync(soBuildDir, staleTime);
+    acquireLockSync(soBuildDir, config.staleTime);
     try {
       // create config file
       createProjectSync(config, soBuildDir);
       // then run the compiler
-      runCompilerSync(zigCmd, soBuildDir);
-      // move library to designated location      
-      const re = new RegExp(`\\${getPlatformExt(options)}$`);
-      const outputDir = join(soBuildDir, 'zig-out', 'lib');
-      // look for most recently create file
-      const fileMap = findMatchingFilesSync(outputDir, re);
-      let resultPath, resultMTime;
-      for (const [ path, info ] of fileMap) {
-        if (!(resultMTime >= info.mtime)) {
-          resultPath = path;
-          resultMTime = info.mtime;
-        }
-      }
-      createDirectorySync(dirname(soPath));
-      moveFileSync(resultPath, soPath);
-      touchFileSync(soPath);
+      runCompilerSync(soBuildCmd, soBuildDir);
     } finally {
       releaseLockSync(soBuildDir);
-      if (clean) {
+      if (config.clean) {
         deleteDirectorySync(soBuildDir);
       }
     }
   }
 }
 
+export function getBuildCommand(config) {
+  const { arch, platform, nativeCpu, optimize, zigCmd } = config;
+  if (zigCmd) {
+    return zigCmd;
+  }
+  // translate from names used by Node to those used by Zig
+  const cpuArchs = {
+    arm: 'arm',
+    arm64: 'aarch64',
+    ia32: 'x86',
+    mips: 'mips',
+    mipsel: 'mipsel',
+    ppc: 'powerpc',
+    ppc64: 'powerpc64',
+    s390: undefined,
+    s390x: 's390x',
+    x64: 'x86_64',
+  };
+  const osTags = {
+    aix: 'aix',
+    darwin: 'macos',
+    freebsd: 'freebsd',
+    linux: 'linux',
+    openbsd: 'openbsd',
+    sunos: 'solaris',
+    win32: 'windows',
+  };
+  const cpuArch = cpuArchs[arch] ?? arch;
+  const osTag = osTags[platform] ?? platform;
+  const target = `${nativeCpu ? 'native' : cpuArch}-${osTag}`;
+  return `zig build -Dtarget=${target} -Doptimize=${optimize}`;
+}
+
 export function getBuildFolder(config) {
-  const { packageName, packageRoot } = config;
+  const { packageName, packageRoot, buildDir } = config;
   const soBuildPrefix = basename(packageName).slice(0, 16);
   const soBuildHash = md5(`${packageRoot}/${packageName}`).slice(0, 8);
-  return soBuildPrefix + '-' + soBuildHash;
+  return join(buildDir, soBuildPrefix + '-' + soBuildHash);
 }
 
 export function createConfig(srcPath, srcInfo, soPath, soInfo, options) {
@@ -210,22 +199,33 @@ export function createConfig(srcPath, srcInfo, soPath, soInfo, options) {
     platform = os.platform(),
     arch = os.arch(),
     nativeCpu = false,
+    optimize = 'Debug',
+    clean = false,
+    buildDir = join(tmpdir(), 'zigar-build'),
+    staleTime = 60000,
+    zigCmd,
   } = options;
   const suffix = /^wasm(32|64)$/.test(arch) ? 'wasm' : 'c';
   const src = parse(srcPath);
   const so = parse(soPath);
-  return {
+  return {    
     platform,
     arch,
+    optimize,
     nativeCpu,
     packageName: so.name,
     packagePath: srcInfo.isDirectory() ? undefined : srcPath,
     packageRoot: srcInfo.isDirectory() ? srcPath : src.dir,
     exporterPath: absolute(`../zig/exporter-${suffix}.zig`),
     stubPath: absolute(`../zig/stub-${suffix}.zig`),
+    buildDir,
     buildFilePath: absolute(`../zig/build.zig`),
+    outputPath: soPath,
     packageConfigFilePath: undefined,
     useLibC: (platform === 'win32') ? true : false,
+    clean,
+    staleTime,
+    zigCmd,
   };
 }
 
@@ -273,39 +273,12 @@ export function runCompilerSync(zigCmd, soBuildDir) {
 }
 
 export function formatProjectConfig(config) {
-  // translate from names used by Node to those used by Zig
-  const cpuArchs = {
-    arm: 'arm',
-    arm64: 'aarch64',
-    ia32: 'x86',
-    mips: 'mips',
-    mipsel: 'mipsel',
-    ppc: 'powerpc',
-    ppc64: 'powerpc64',
-    s390: undefined,
-    s390x: 's390x',
-    x64: 'x86_64',
-  };
-  const osTags = {
-    aix: 'aix',
-    darwin: 'macos',
-    freebsd: 'freebsd',
-    linux: 'linux',
-    openbsd: 'openbsd',
-    sunos: 'solaris',
-    win32: 'windows',
-  };
-  const cpuArch = cpuArchs[config.arch] ?? config.arch;
-  const cpuModel = (config.nativeCpu) ? 'native' : 'baseline';
-  const osTag = osTags[config.platform] ?? config.platform;
-  const target = `.{ .cpu_arch = .${cpuArch}, .cpu_model = .${cpuModel}, .os_tag = .${osTag} }`;
   const lines = [];
-  lines.push(`const std = @import("std");\n`);
-  lines.push(`pub const target: std.zig.CrossTarget = ${target};`);
   lines.push(`pub const package_name = ${JSON.stringify(config.packageName)};`);
   lines.push(`pub const package_path = ${JSON.stringify(config.packagePath)};`);
   lines.push(`pub const package_root = ${JSON.stringify(config.packageRoot)};`);
   lines.push(`pub const exporter_path = ${JSON.stringify(config.exporterPath)};`);
+  lines.push(`pub const output_path = ${JSON.stringify(config.outputPath)};`);
   lines.push(`pub const stub_path = ${JSON.stringify(config.stubPath)};`);
   lines.push(`pub const use_libc = ${config.useLibC ? true : false};`);
   lines.push(``);

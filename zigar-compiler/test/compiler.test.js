@@ -12,6 +12,7 @@ import {
   compile,
   compileSync,
   createConfig,
+  getBuildCommand,
   getBuildFolder,
   runCompiler,
   runCompilerSync,
@@ -29,6 +30,35 @@ import {
 } from '../src/utility-functions.js';
 
 describe('Compilation', function() {
+  describe('getBuildCommand', function() {
+    it('should return custom command when provided', async function() {
+      const srcPath = absolute('./zig-samples/basic/integers.zig');
+      const options = { optimize: 'Debug', zigCmd: 'zig build -Dsomething=123' };
+      const soPath = getCachePath(srcPath, options);
+      const srcInfo = await stat(srcPath);
+      const config = createConfig(srcPath, srcInfo, soPath, null, options);
+      const soBuildCmd = getBuildCommand(config);
+      expect(soBuildCmd).to.equal(options.zigCmd);
+    })
+    it('should use specific target when nativeCpu is false', async function() {
+      const srcPath = absolute('./zig-samples/basic/integers.zig');
+      const options = { optimize: 'Debug', arch: 'arm64', platform: 'linux', nativeCpu: false };
+      const soPath = getCachePath(srcPath, options);
+      const srcInfo = await stat(srcPath);
+      const config = createConfig(srcPath, srcInfo, soPath, null, options);
+      const soBuildCmd = getBuildCommand(config);
+      expect(soBuildCmd).to.contain('-Dtarget=aarch64-linux');
+    })
+    it('should omit cpu arch when nativeCpu is true', async function() {
+      const srcPath = absolute('./zig-samples/basic/integers.zig');
+      const options = { optimize: 'Debug', arch: 'arm64', platform: 'linux', nativeCpu: true };
+      const soPath = getCachePath(srcPath, options);
+      const srcInfo = await stat(srcPath);
+      const config = createConfig(srcPath, srcInfo, soPath, null, options);
+      const soBuildCmd = getBuildCommand(config);
+      expect(soBuildCmd).to.contain('-Dtarget=native-linux');
+    })
+  })
   describe('runCompiler', function() {
     it('should run the Zig compiler', async function() {
       const zigCmd = `zig help`;
@@ -65,7 +95,7 @@ describe('Compilation', function() {
     it('should compile code for WASM32', async function() {
       this.timeout(60000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'Debug', arch: 'wasm32', platform: 'freestanding' };
+      const options = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'freestanding' };
       const soPath = getCachePath(srcPath, options);
       await compile(srcPath, soPath, options);
       const { size } = await stat(soPath);
@@ -213,7 +243,7 @@ describe('Compilation', function() {
       await expect(compile(srcPath, soPath, options)).to.eventually.be.rejectedWith(Error);
       const srcInfo = await stat(srcPath);
       const config = createConfig(srcPath, srcInfo, soPath, null, options);
-      const buildFolder = join(tmpdir(), 'zigar-build', getBuildFolder(config));
+      const buildFolder = getBuildFolder(config);
       const info = await findDirectory(buildFolder);
       expect(info).to.be.undefined;
     })
@@ -231,7 +261,7 @@ describe('Compilation', function() {
     it('should compile code for WASM32', function() {
       this.timeout(60000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'Debug', arch: 'wasm32', platform: 'freestanding' };
+      const options = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'freestanding' };
       const soPath = getCachePath(srcPath, options);
       compileSync(srcPath, soPath, options);
       const { size } = statSync(soPath);
@@ -333,7 +363,7 @@ describe('Compilation', function() {
       expect(() => compileSync(srcPath, soPath, options)).to.throw(Error);
       const srcInfo = statSync(srcPath);
       const config = createConfig(srcPath, srcInfo, soPath, null, options);
-      const buildFolder = join(tmpdir(), 'zigar-build', getBuildFolder(config));
+      const buildFolder = getBuildFolder(config);
       const info = findDirectorySync(buildFolder);
       expect(info).to.be.undefined;
     })

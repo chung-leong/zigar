@@ -74,7 +74,7 @@ fn clearBytes(bytes: [*]u8, len: usize, ptr_align: u8) void {
 }
 
 test "clearBytes" {
-    var len: usize = 64;
+    const len: usize = 64;
     var ptr_align: u8 = 0;
     while (ptr_align <= 4) : (ptr_align += 1) {
         if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
@@ -339,7 +339,7 @@ pub const Host = struct {
 
 pub fn runThunk(thunk_id: usize, arg_struct: Value) ?Value {
     // note that std.debug.print() doesn't work here since the initial context is not set
-    var fallback_allocator: std.mem.Allocator = .{ .ptr = undefined, .vtable = &std.heap.WasmAllocator.vtable };
+    const fallback_allocator: std.mem.Allocator = .{ .ptr = undefined, .vtable = &std.heap.WasmAllocator.vtable };
     var stack_allocator = std.heap.stackFallback(1024 * 8, fallback_allocator);
     var call_ctx: CallContext = .{ .allocator = stack_allocator.get() };
     const arg_ptr = _startCall(&call_ctx, arg_struct);
