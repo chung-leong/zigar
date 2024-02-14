@@ -1,6 +1,7 @@
 import { throwArrayLengthMismatch, throwBufferExpected, throwBufferSizeMismatch, throwTypeMismatch } from './error.js';
 import { MemberType, isByteAligned } from './member.js';
 import { getBitAlignFunction } from './memory.js';
+import { getPrimitiveClass } from './primitive.js';
 import { StructureType } from './structure.js';
 import { COMPAT, COPIER, MEMORY } from './symbol.js';
 
@@ -283,12 +284,8 @@ export function isBuffer(arg, typedArray) {
 }
 
 export function getTypeName(member) {
-  const { type, bitSize, byteSize, structure } = member;
-  if (structure?.name === 'usize') {
-    return `USize${bitSize}`;
-  } else if (structure?.name === 'isize') {
-    return `ISize${bitSize}`;
-  } else if (type === MemberType.Int) {
+  const { type, bitSize, byteSize } = member;
+  if (type === MemberType.Int) {
     return `${bitSize <= 32 ? '' : 'Big' }Int${bitSize}`;
   } else if (type === MemberType.Uint) {
     return `${bitSize <= 32 ? '' : 'Big' }Uint${bitSize}`;
@@ -671,55 +668,42 @@ function getUnalignedNumericAccessor(access, member) {
 const methodCache = {};
 
 function cacheMethod(access, member, cb) {
-  const { type, bitOffset, bitSize } = member;
+  const { type, bitOffset, bitSize, structure } = member;
   const bitPos = bitOffset & 0x07;
   const typeName = getTypeName(member);
   const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
-  const name = `${access}${typeName}${suffix}`;
+  const isInt = type === MemberType.Int || type === MemberType.Uint;
+  let name = `${access}${typeName}${suffix}`;
+  let isSize = false, originalName = name;
+  if (isInt && bitSize === 64) {
+    const zigTypeName = structure?.name;
+    if (zigTypeName === 'usize' || zigTypeName === 'isize') {
+      name += 'Size';
+      isSize = true;
+    }
+  }
   let fn = methodCache[name];
   if (!fn) {
-    // usize and isize can return/accept number or bigint
-    if ((type === MemberType.Int && typeName === 'ISize64')
-     || (type === MemberType.Uint && typeName === 'USize64')) {
-      const realTypeName = (type === MemberType.Int) ? 'BigInt64' : 'BigUint64';
-      const realName = `${access}${realTypeName}`;
-      if (access === 'get') {
-        const get = cb(realName);
-        const min = BigInt(Number.MIN_SAFE_INTEGER);
-        const max = BigInt(Number.MAX_SAFE_INTEGER);
-        fn = function(offset, littleEndian) {
-          const value = get.call(this, offset, littleEndian);
-          if (min <= value && value <= max) {
-            return Number(value);
-          } else {
-            return value;
-          }
-        };
-      } else {
-        const set = cb(realName);
-        fn = function(offset, value, littleEndian) {
-          // automatically convert number to bigint
-          if (typeof(value) === 'number') {
-            value = BigInt(value);
-          }
-          set.call(this, offset, value, littleEndian);
-        };
-      }
-     } else if ((type === MemberType.Int && typeName === 'ISize32')
-             || (type === MemberType.Uint && typeName === 'USize32')) {
-      const realTypeName = (type === MemberType.Int) ? 'Int32' : 'Uint32';
-      const realName = `${access}${realTypeName}`;
-      if (access === 'get') {
-        fn = cb(realName);
-      } else {
-        const set = cb(realName);
-        fn = function(offset, value, littleEndian) {
-          if (typeof(value) === 'bigint') {
-            value = Number(value);
-          }
-          set.call(this, offset, value, littleEndian);
-        };
-      }
+    if (isInt && access === 'set') {
+      // add auto-conversion between number and bigint
+      const Primitive = getPrimitiveClass(member);
+      const set = cb(originalName);
+      fn = function(offset, value, littleEndian) {
+        set.call(this, offset, Primitive(value), littleEndian);
+      };
+    } else if (isSize && access === 'get') {
+      // use number instead of bigint where possible
+      const get = cb(originalName);
+      const min = BigInt(Number.MIN_SAFE_INTEGER);
+      const max = BigInt(Number.MAX_SAFE_INTEGER);
+      fn = function(offset, littleEndian) {
+        const value = get.call(this, offset, littleEndian);
+        if (min <= value && value <= max) {
+          return Number(value);
+        } else {
+          return value;
+        }
+      };
     } else {
       fn = cb(name);
     }

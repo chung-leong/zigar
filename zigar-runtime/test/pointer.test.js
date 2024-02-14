@@ -1138,7 +1138,6 @@ describe('Pointer functions', function() {
       expect(pointer['*']).to.be.instanceOf(I8Slice);
       expect([ ...pointer ]).to.eql([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
     })
-
     it('should require explicit casting of a buffer to a slice of structs', function() {
       const structStructure = env.beginStructure({
         type: StructureType.Struct,

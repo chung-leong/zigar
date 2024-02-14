@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 
+import { useAllExtendedTypes } from '../src/data-view.js';
 import { NodeEnvironment } from '../src/environment-node.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
@@ -12,6 +13,7 @@ describe('Struct functions', function() {
     beforeEach(function() {
       useAllMemberTypes();
       useAllStructureTypes();
+      useAllExtendedTypes();
     })
     it('should define a simple struct', function() {
       const structure = env.beginStructure({

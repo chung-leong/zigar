@@ -225,7 +225,7 @@ describe('ArgStruct functions', function() {
       });
       env.attachMember(structure, {
         name: '1',
-        type: MemberType.Int,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -240,7 +240,7 @@ describe('ArgStruct functions', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: ArgStruct } = structure;
-      expect(() => new ArgStruct([ 123, 456n ])).to.throw(TypeError)
+      expect(() => new ArgStruct([ 123, -456 ])).to.throw(TypeError)
         .with.property('message').that.contains('args[1]');
     })
   })

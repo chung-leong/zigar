@@ -868,13 +868,13 @@ describe('Member functions', function() {
         [MEMORY]: dv,
       };
       const member = {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       };
       const { get, set } = getDescriptor(member, env);
-      expect(() => set.call(object, 123n)).to.throw(TypeError);
+      expect(() => set.call(object, -123)).to.throw(TypeError);
       // force a specific error
       Object.defineProperty(object, MEMORY, {
         get() {
@@ -911,7 +911,7 @@ describe('Member functions', function() {
         [MEMORY]: dv,
       };
       const member = {
-        type: MemberType.Int,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
@@ -919,7 +919,7 @@ describe('Member functions', function() {
       const { get, set } = getDescriptor(member, env);
       set.call(object, 123);
       expect(get.call(object)).to.equal(123);
-      expect(() => set.call(object, 123n)).to.throw(TypeError);
+      expect(() => set.call(object, -123)).to.throw(TypeError);
     })
     it('should return type descriptor', function() {
       const DummyClass = function(value) {};
