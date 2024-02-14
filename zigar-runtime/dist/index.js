@@ -1059,9 +1059,9 @@ function getArrayIterator() {
     next() {
       let value, done;
       if (index < length) {
-        value = self.get(index);
+        const current = index++;
+        value = self.get(current);
         done = false;
-        index++;
       } else {
         done = true;
       }
@@ -1070,17 +1070,28 @@ function getArrayIterator() {
   };
 }
 
-function getArrayEntriesIterator() {
+function getArrayEntriesIterator(options = {}) {
+  const { error = 'throw' } = options;
   const self = this[ARRAY] ?? this;
   const length = this.length;
   let index = 0;
   return {
     next() {
-      let value, done;
-      if (index < length) {
-        value = [ index, self.get(index) ];
+      let value, done;      
+      if (index < length) {        
+        const current = index++;
+        let result;
+        try {
+          result = self.get(current);
+        } catch (err) {
+          if (error === 'return') {
+            result = err;
+          } else {
+            throw err;
+          }
+        }
+        value = [ current, result ];
         done = false;
-        index++;
       } else {
         done = true;
       }
@@ -1089,9 +1100,9 @@ function getArrayEntriesIterator() {
   };
 }
 
-function getArrayEntries() {
+function getArrayEntries(options) {
   return {
-    [Symbol.iterator]: getArrayEntriesIterator.bind(this),
+    [Symbol.iterator]: getArrayEntriesIterator.bind(this, options),
     length: this.length,
   };
 }

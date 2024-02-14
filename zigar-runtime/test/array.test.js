@@ -1280,5 +1280,22 @@ describe('Array functions', function() {
       expect(indexList).to.eql([ 0, 1, 2 ]);
       expect(valueList).to.eql([ 1234, -2, -1]);
     })
+    it('should trap and return errors when specified', function() {
+      const object = {
+        get(index) {
+          throw new Error(`Doh: ${index}`);
+        },
+        get length() {
+          return 4;
+        },
+      };
+      const entries = getArrayEntries.call(object, { error: 'return' });
+      const indexList = [];
+      for (const [ index, value ] of entries) {
+        indexList.push(index);
+        expect(value).to.be.an('error');
+      }
+      expect(indexList).to.eql([ 0, 1, 2, 3 ]);
+    })
   })
 })
