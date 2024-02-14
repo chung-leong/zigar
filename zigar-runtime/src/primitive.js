@@ -2,7 +2,7 @@ import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
 import { throwInvalidInitializer } from './error.js';
 import { MemberType, getDescriptor, isByteAligned } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, normalizeValue } from './special.js';
+import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf, normalizeValue } from './special.js';
 import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import { ALIGN, COMPAT, COPIER, NORMALIZER, SIZE } from './symbol.js';
 
@@ -35,8 +35,8 @@ export function definePrimitive(structure, env) {
     dataView: getDataViewDescriptor(structure),
     base64: getBase64Descriptor(structure),
     typedArray: typedArray && getTypedArrayDescriptor(structure),
-    valueOf: { value: get },
-    toJSON: { value: get },
+    valueOf: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.toPrimitive]: { value: get },
     [COPIER]: { value: getMemoryCopier(byteSize) },

@@ -78,6 +78,8 @@ describe('Error union functions', function() {
       expect(object.valueOf()).to.equal(1234n);
       object.$ = MyError.UnableToCreateObject;
       expect(() => object.valueOf()).to.throw(Hello.UnableToCreateObject);
+      const json = JSON.stringify(object);
+      expect(json).to.equal('{"error":"Unable to create object"}');
     })
     it('should allow the initialization of an error union with an object literal', function() {
       const errorStructure = env.beginStructure({

@@ -1130,12 +1130,31 @@ describe('Environment', function() {
       expect(object.init).to.be.a('function');
       expect(object.abandon).to.be.a('function');
       expect(object.released).to.be.a('function');
+      expect(object.connect).to.be.a('function');
       await object.init();
       expect(env.abandoned).to.be.false;
       object.abandon();
       expect(env.abandoned).to.be.true;
       expect(object.released()).to.be.false;
     })    
+    it('should allow redirection of console output', async function() {
+      const env = new Environment();
+      const dv = new DataView(new ArrayBuffer(2));
+      dv.setUint8(0, '?'.charCodeAt(0));
+      dv.setUint8(1, '\n'.charCodeAt(0));
+      const [ before ] = await capture(() => env.writeToConsole(dv));
+      expect(before).to.equal('?');
+      const object = env.getControlObject();
+      let content;
+      object.connect({ 
+        log(s) {
+          content = s;
+        }
+      });
+      const [ after ] = await capture(() => env.writeToConsole(dv));
+      expect(after).to.be.undefined;
+      expect(content).to.equal('?');
+    })
   })
   describe('abandon', function() {
     it('should release imported functions and variables', function() {
