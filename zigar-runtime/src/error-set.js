@@ -70,7 +70,7 @@ export function defineErrorSet(structure, env) {
     [Symbol.toStringTag]: { get: toStringTag },
     [Symbol.toPrimitive]: { value: toPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizeError },
+    [NORMALIZER]: { value: get },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
@@ -79,16 +79,6 @@ export function defineErrorSet(structure, env) {
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };
-
-export function normalizeError(map, forJSON) {
-  const err = this.$;
-  if (forJSON) {
-    const { message } = err;
-    return { error: message };
-  } else {
-    return err;
-  }
-}
 
 let globalErrorSet;
 

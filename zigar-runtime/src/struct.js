@@ -2,9 +2,14 @@ import { throwInvalidInitializer, throwNotOnByteBoundary } from './error.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { always, copyPointer } from './pointer.js';
-import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf } from './special.js';
+import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, handleError } from './special.js';
 import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
-import { ALIGN, COPIER, MEMORY, NORMALIZER, PARENT, POINTER_VISITOR, SIZE, SLOTS, VIVIFICATOR } from './symbol.js';
+import {
+  ALIGN, COPIER,
+  MEMORY, NORMALIZER, PARENT, POINTER_VISITOR,
+  PROPS,
+  SIZE, SLOTS, VIVIFICATOR
+} from './symbol.js';
 
 export function defineStructShape(structure, env) {
   const {
@@ -36,25 +41,6 @@ export function defineStructShape(structure, env) {
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
-  const memberNames = members.map(m => m.name);
-  const interatorCreator = function() {
-    const self = this;
-    let index = 0;
-    return {
-      next() {
-        let value, done;
-        if (index < memberNames.length) {
-          const name = memberNames[index];
-          value = [ name, self[name] ];
-          done = false;
-          index++;
-        } else {
-          done = true;
-        }
-        return { value, done };
-      },
-    };
-  };
   const instanceDescriptors = {
     $: { get: getSelf, set: initializer },
     dataView: getDataViewDescriptor(structure),
@@ -63,11 +49,12 @@ export function defineStructShape(structure, env) {
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     ...memberDescriptors,
-    [Symbol.iterator]: { value: interatorCreator },
+    [Symbol.iterator]: { value: getStructIterator },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, always) },
     [NORMALIZER]: { value: normalizeStruct },
+    [PROPS]: { value: members.map(m => m.name) },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
@@ -76,18 +63,45 @@ export function defineStructShape(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-export function normalizeStruct(map, forJSON) {
-  let object = map.get(this);
-  if (!object) {
-    object = {};
-    map.set(this, object);
-    for (const [ name, value ] of this) {
-      object[name] = value?.[NORMALIZER]?.(map, forJSON) ?? value;
-    }
+export function normalizeStruct(cb, options) {
+  const object = {};
+  for (const [ name, value ] of getStructEntries.call(this, options)) {
+    object[name] = cb(value);
   }
   return object;
 }
 
+export function getStructEntries(options) {
+  return {
+    [Symbol.iterator]: getStructEntriesIterator.bind(this, options),
+    length: this[PROPS].length,
+  };
+}
+
+export function getStructIterator(options) { 
+  const entries = getStructEntries.call(this, options);
+  return entries[Symbol.iterator]();
+}
+
+export function getStructEntriesIterator(options) {
+  const self = this;
+  const props = this[PROPS];
+  let index = 0;
+  return {
+    next() {
+      let value, done;      
+      if (index < props.length) {
+        const current = props[index++];
+        value = [ current, handleError(() => self[current], options) ];
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+  
 export function getChildVivificator(structure) {
   const { instance: { members } } = structure;
   const objectMembers = {};

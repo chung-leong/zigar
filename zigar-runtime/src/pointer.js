@@ -192,13 +192,14 @@ export function definePointer(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-function normalizePointer(map, forJSON) {
+function normalizePointer(cb) {
+  let target;
   try {
-    const target = this['*'];
-    return target[NORMALIZER]?.(map, forJSON) ?? target;  
+    target = this['*'];
   } catch (err) {
-    return Symbol.for('inaccessible');
+    target = Symbol.for('inaccessible');
   }
+  return cb(target);
 }
 
 export function getProxy() {

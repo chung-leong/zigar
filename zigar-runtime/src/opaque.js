@@ -39,6 +39,6 @@ export function defineOpaque(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };
 
-function normalizeOpaque(map, forJSON) {
+function normalizeOpaque(cb) {
   return {};
 }

@@ -287,34 +287,34 @@ describe('Special property functions', function() {
   })
   describe('getValueOf', function() {
     it('should invoke normalizer function', function() {
-      let map, forJSON;
+      let cb, options;
       const object = {
         [NORMALIZER](arg1, arg2) {
-          map = arg1;
-          forJSON = arg2;
+          cb = arg1;
+          options = arg2;
           return 1234;
         }
       };
       const result = getValueOf.call(object);
       expect(result).to.equal(1234);
-      expect(map).to.be.an.instanceOf(Map);
-      expect(forJSON).to.be.false;
+      expect(cb).to.be.a('function');
+      expect(options).to.be.an('object');
     })
   })
   describe('convertToJSON', function() {
     it('should invoke normalizer function', function() {
-      let map, forJSON;
+      let cb, options;
       const object = {
         [NORMALIZER](arg1, arg2) {
-          map = arg1;
-          forJSON = arg2;
+          cb = arg1;
+          options = arg2;
           return 1234;
         }
       };
       const result = convertToJSON.call(object);
       expect(result).to.equal(1234);
-      expect(map).to.be.an.instanceOf(Map);
-      expect(forJSON).to.be.true;
+      expect(cb).to.be.a('function');
+      expect(options).to.be.an('object');
     })
     it('should enable correct output from JSON.stringify()', function() {
       const structStructure = env.beginStructure({

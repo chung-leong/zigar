@@ -64,7 +64,7 @@ export function defineVector(structure, env) {
     typedArray: typedArray && getTypedArrayDescriptor(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
-    entries: { value: createVectorEntries },
+    entries: { value: getVectorEntries },
     delete: { value: getDestructor(structure) },
     [Symbol.iterator]: { value: getVectorIterator },
     [COPIER]: { value: getMemoryCopier(byteSize) },
@@ -79,11 +79,10 @@ export function defineVector(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-export function normalizeVector(map, forJSON) {
-  let array = map.get(this);
-  if (!array) {
-    array = [ ...this ];
-    map.set(this, array);
+export function normalizeVector(cb, options) {
+  const array = [];
+  for (const [ index, value ] of getVectorEntries.call(this, options)) {
+    array.push(cb(value));
   }
   return array;
 }
@@ -96,9 +95,9 @@ export function getVectorIterator() {
     next() {
       let value, done;
       if (index < length) {
-        value = self[index];
+        const current = index++;
+        value = self[current];
         done = false;
-        index++;
       } else {
         done = true;
       }
@@ -115,9 +114,9 @@ export function getVectorEntriesIterator() {
     next() {
       let value, done;
       if (index < length) {
-        value = [ index, self[index] ];
+        const current = index++;
+        value = [ current, self[current] ];
         done = false;
-        index++;
       } else {
         done = true;
       }
@@ -126,7 +125,7 @@ export function getVectorEntriesIterator() {
   };
 }
 
-export function createVectorEntries() {
+export function getVectorEntries() {
   return {
     [Symbol.iterator]: getVectorEntriesIterator.bind(this),
     length: this.length,

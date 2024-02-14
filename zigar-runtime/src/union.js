@@ -1,23 +1,18 @@
 import {
-  throwInactiveUnionProperty,
-  throwInvalidInitializer, throwMissingUnionInitializer, throwMultipleUnionInitializers
+  throwInactiveUnionProperty, throwInvalidInitializer, throwMissingUnionInitializer,
+  throwMultipleUnionInitializers
 } from './error.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { copyPointer, disablePointer, never, resetPointer } from './pointer.js';
-import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf } from './special.js';
-import { getChildVivificator, getPointerVisitor, normalizeStruct } from './struct.js';
+import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, handleError } from './special.js';
+import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { StructureType, attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
 import {
-  ALIGN,
-  COPIER,
-  NAME,
-  NORMALIZER,
-  POINTER_VISITOR,
-  PROP_SETTERS,
-  SIZE,
-  TAG,
-  VIVIFICATOR
+  ALIGN, COPIER,
+  NAME, NORMALIZER, POINTER_VISITOR,
+  PROPS,
+  PROP_GETTERS, PROP_SETTERS, SIZE, TAG, VIVIFICATOR
 } from './symbol.js';
 
 export function defineUnionShape(structure, env) {
@@ -133,32 +128,15 @@ export function defineUnionShape(structure, env) {
     }
   : undefined;
   const constructor = structure.constructor = createConstructor(structure, { modifier, initializer }, env);
-  // for bare and extern union, all members will be included 
-  // tagged union meanwhile will only give the entity for the active field
-  const memberNames = (isTagged) ? [ '' ] : valueMembers.map(m => m.name);
-  const interatorCreator = function() {
-    const self = this;
-    let index = 0;
-    if (isTagged) {
-      memberNames[0] = getActiveField.call(this);
+  const fieldDescriptor = (isTagged)
+  ? { 
+      // for tagged union,  only the active field
+      get() { return [ getActiveField.call(this) ] } 
     }
-    return {
-      next() {
-        let value, done;
-        if (index < memberNames.length) {
-          const name = memberNames[index];
-          // get value of field with no check
-          const get = memberValueGetters[name];
-          value = [ name, get.call(self) ];
-          done = false;
-          index++;
-        } else {
-          done = true;
-        }
-        return { value, done };
-      },
+  : { 
+      // for bare and extern union, all members are included 
+      value: valueMembers.map(m => m.name)
     };
-  };
   const isChildActive = (isTagged)
   ? function(child) {
       const name = getActiveField.call(this);
@@ -176,12 +154,14 @@ export function defineUnionShape(structure, env) {
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     ...memberDescriptors,
-    [Symbol.iterator]: { value: interatorCreator },
+    [Symbol.iterator]: { value: getUnionIterator },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [TAG]: isTagged && { get: getSelector, configurable: true },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
     [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor(structure, { isChildActive }) },
-    [NORMALIZER]: { value: normalizeStruct },
+    [PROP_GETTERS]: { value: memberValueGetters },
+    [NORMALIZER]: { value: normalizeUnion },
+    [PROPS]: fieldDescriptor,
   };  
   const staticDescriptors = {
     [ALIGN]: { value: align },
@@ -196,3 +176,44 @@ export function defineUnionShape(structure, env) {
     }
   }
 };
+
+export function normalizeUnion(cb, options) {
+  const object = {};
+  for (const [ name, value ] of getUnionEntries.call(this, options)) {
+    object[name] = cb(value);
+  }
+  return object;
+}
+
+export function getUnionEntries(options) {
+  return {
+    [Symbol.iterator]: getUnionEntriesIterator.bind(this, options),
+    length: this[PROPS].length,
+  };
+}
+
+export function getUnionIterator(options) { 
+  const entries = getUnionEntries.call(this, options);
+  return entries[Symbol.iterator]();
+}
+
+export function getUnionEntriesIterator(options) {
+  const self = this;
+  const props = this[PROPS];
+  const getters = this[PROP_GETTERS];
+  let index = 0;
+  return {
+    next() {
+      let value, done;      
+      if (index < props.length) {
+        const current = props[index++];
+        // get value of prop with no check
+        value = [ current, handleError(() => getters[current].call(self), options) ];
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}

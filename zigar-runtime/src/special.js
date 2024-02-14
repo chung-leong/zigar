@@ -6,12 +6,67 @@ import { decodeBase64, decodeText, encodeBase64, encodeText } from './text.js';
 
 export function getValueOf() {
   const map = new Map();
-  return this[NORMALIZER](map, false);
+  const options = { error: 'throw' };
+  const process = function(value) {
+    const normalizer = value?.[NORMALIZER];
+    if (normalizer) {
+      let result = map.get(value);
+      if (result === undefined) {
+        result = normalizer.call(value, process, options);
+        map.set(value, result);
+      }
+      return result;
+    } else {
+      return value;
+    }
+  }
+  return process(this);
 }
+
+const INT_MAX = BigInt(Number.MAX_SAFE_INTEGER);
+const INT_MIN = BigInt(Number.MIN_SAFE_INTEGER);
 
 export function convertToJSON() {
   const map = new Map();
-  return this[NORMALIZER](map, true);
+  const options = { error: 'return' };
+  const process = function(value) {
+    const normalizer = value?.[NORMALIZER];
+    if (normalizer) {
+      if (value instanceof Error) {
+        return { error: value.message };
+      }      
+      let result = map.get(value);
+      if (result === undefined) {
+        result = normalizer.call(value, process, options);
+        map.set(value, result);
+      }
+      return result;
+    } else {
+      if (typeof(value) === 'bigint' && INT_MIN <= value && value <= INT_MAX) {
+        return Number(value);
+      } 
+      return value;
+    }
+  }
+  return process(this);
+}
+
+export function normalizeValue(cb, options) {
+  const value = handleError(() => this.$, options);
+  return cb(value);
+}
+
+export function handleError(cb, options = {}) {
+  const { error = 'throw' } = options;
+  try {
+    return cb();
+  } catch (err) {
+    if (error === 'return') {
+      return err;
+    } else {
+      throw err;
+    }
+  }
 }
 
 export function getDataViewDescriptor(structure, handlers = {}) {

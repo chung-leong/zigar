@@ -2,9 +2,9 @@ import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
 import { throwInvalidInitializer } from './error.js';
 import { MemberType, getDescriptor, isByteAligned } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor } from './special.js';
+import { getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, normalizeValue } from './special.js';
 import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
-import { ALIGN, COMPAT, COPIER, SIZE } from './symbol.js';
+import { ALIGN, COMPAT, COPIER, NORMALIZER, SIZE } from './symbol.js';
 
 export function definePrimitive(structure, env) {
   const {
@@ -40,6 +40,7 @@ export function definePrimitive(structure, env) {
     delete: { value: getDestructor(env) },
     [Symbol.toPrimitive]: { value: get },
     [COPIER]: { value: getMemoryCopier(byteSize) },
+    [NORMALIZER]: { value: normalizeValue },
   };
   const staticDescriptors = {
     [COMPAT]: { value: getCompatibleTags(structure) },

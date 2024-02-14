@@ -5,15 +5,13 @@ import { getDestructor, getMemoryCopier } from './memory.js';
 import { always, copyPointer, getProxy } from './pointer.js';
 import {
   convertToJSON, getBase64Descriptor, getDataViewDescriptor, getStringDescriptor,
-  getTypedArrayDescriptor, getValueOf
+  getTypedArrayDescriptor, getValueOf, handleError
 } from './special.js';
 import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import {
-  ALIGN, ARRAY, COMPAT, COPIER, ELEMENT_GETTER, ELEMENT_SETTER, MEMORY, NORMALIZER, PARENT,
-  POINTER_VISITOR,
-  PROXY,
-  SIZE, SLOTS,
-  VIVIFICATOR
+  ALIGN, ARRAY, COMPAT, COPIER, ELEMENT_GETTER, ELEMENT_SETTER,
+  MEMORY, NORMALIZER, PARENT,
+  POINTER_VISITOR, PROXY, SIZE, SLOTS, VIVIFICATOR
 } from './symbol.js';
 
 export function defineArray(structure, env) {
@@ -111,14 +109,10 @@ export function canBeString(member) {
   return member.type === MemberType.Uint && [ 8, 16 ].includes(member.bitSize);
 }
 
-export function normalizeArray(map, forJSON) {
-  let array = map.get(this);
-  if (!array) {
-    array = [];
-    map.set(this, array);
-    for (const value of this) {      
-      array.push(value[NORMALIZER]?.(map, forJSON) ?? value);
-    }
+export function normalizeArray(cb, options) {
+  const array = [];
+  for (const [ index, value ] of getArrayEntries.call(this, options)) {
+    array.push(cb(value));
   }
   return array;
 }
@@ -142,27 +136,16 @@ export function getArrayIterator() {
   };
 }
 
-export function getArrayEntriesIterator(options = {}) {
-  const { error = 'throw' } = options;
+export function getArrayEntriesIterator(options) {
   const self = this[ARRAY] ?? this;
   const length = this.length;
   let index = 0;
   return {
     next() {
       let value, done;      
-      if (index < length) {        
+      if (index < length) {
         const current = index++;
-        let result;
-        try {
-          result = self.get(current);
-        } catch (err) {
-          if (error === 'return') {
-            result = err;
-          } else {
-            throw err;
-          }
-        }
-        value = [ current, result ];
+        value = [ current, handleError(() => self.get(current), options) ];
         done = false;
       } else {
         done = true;

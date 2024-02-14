@@ -75,7 +75,6 @@ export function defineEnumerationShape(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };
 
-export function normalizeEnumerationItem(map, forJSON) {
-  const item = this.$;
-  return item[NAME];
+export function normalizeEnumerationItem(cb) {
+  return cb(this.$[NAME]);
 }

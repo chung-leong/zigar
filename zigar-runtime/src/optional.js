@@ -1,7 +1,7 @@
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
 import { copyPointer, resetPointer } from './pointer.js';
-import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf } from './special.js';
+import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, normalizeValue } from './special.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { attachDescriptors, createConstructor } from './structure.js';
 import {
@@ -75,16 +75,11 @@ export function defineOptional(structure, env) {
     [RESETTER]: !hasPointer && { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
-    [NORMALIZER]: { value: normalizeOptional },
+    [NORMALIZER]: { value: normalizeValue },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
-}
-
-export function normalizeOptional(map, forJSON) {
-  const value = this.$;
-  return value?.[NORMALIZER]?.(map, forJSON) ?? value;
 }
