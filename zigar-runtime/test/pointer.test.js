@@ -597,7 +597,7 @@ describe('Pointer functions', function() {
       expect(intPointer['*']).to.equal(1234);
       expect(() => intPointer['*'] = 4567).to.throw(TypeError);
     })
-    it('should throw when initializer is not of the right type', function() {
+    it('should auto-vivificate target', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
@@ -629,13 +629,65 @@ describe('Pointer functions', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: Int32Ptr } = structure;
-      // no autovivification
-      expect(() => new Int32Ptr(1234)).to.throw();
-      expect(() => new Int32Ptr(1234n)).to.throw();
-      const int32 = new Int32(1234);
-      expect(() => new Int32Ptr(int32)).to.not.throw();
-      const intPtr = new Int32Ptr(int32);
-      expect(() => new Int32Ptr(intPtr)).to.not.throw();
+      const ptr1 = new Int32Ptr(1234);
+      expect(ptr1['*']).to.equal(1234);
+      const ptr2 = new Int32Ptr(1234n);
+      expect(ptr2['*']).to.equal(1234);
+      const ptr3 = new Int32Ptr(new Int32(1234));
+      expect(ptr3['*']).to.equal(1234);
+    })
+    it('should throw when initializer is a zig object', function() {
+      const boolStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Bool',
+        byteSize: 1,
+      });
+      env.attachMember(boolStructure, {
+        type: MemberType.Bool,
+        bitSize: 1,
+        bitOffset: 0,
+        byteSize: 1,
+      });
+      env.finalizeShape(boolStructure);
+      env.finalizeStructure(boolStructure);
+      const { constructor: Bool } = boolStructure;
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
+      // autovivification
+      const ptr1 = new Int32Ptr(1234);
+      const ptr2 = new Int32Ptr(ptr1);
+      expect(ptr2['*']).to.equal(1234);
+      const bool = new Bool(true);
+      expect(() => new Int32Ptr(bool)).to.throw(TypeError);
     })
     it('should throw when attempting to cast a buffer to a pointer type', function() {
       const intStructure = env.beginStructure({

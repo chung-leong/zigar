@@ -135,7 +135,7 @@ export function definePointer(structure, env) {
       // autocast to target type
       const dv = getDataView(targetStructure, arg, env);
       arg = Target(dv, { writable: !isConst });
-    } else if (isTargetSlice) {
+    } else if (arg && !arg[MEMORY]) {
       // autovivificate target object
       const fixed = env.inFixedMemory(this);
       const autoObj = new Target(arg, { writable: !isConst, fixed });
