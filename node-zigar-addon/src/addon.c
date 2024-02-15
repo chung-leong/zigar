@@ -355,7 +355,7 @@ napi_value allocate_external_memory(napi_env env,
         return throw_error(env, "Unable to allocate fixed memory");
     }
     napi_value address;
-    if (!napi_create_uintptr(env, (uintptr_t) mem.bytes, &address) != napi_ok) {
+    if (napi_create_uintptr(env, (uintptr_t) mem.bytes, &address) != napi_ok) {
         return throw_error(env, "Unable to create memory address");
     }
     return address;
