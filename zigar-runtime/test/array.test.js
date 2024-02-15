@@ -4,6 +4,7 @@ import {
   getArrayEntries,
   getArrayEntriesIterator,
   getArrayIterator,
+  transformIterable,
 } from '../src/array.js';
 import { NodeEnvironment } from '../src/environment-node.js';
 import { MemberType, getDescriptor, useAllMemberTypes } from '../src/member.js';
@@ -1296,6 +1297,36 @@ describe('Array functions', function() {
         expect(value).to.be.an('error');
       }
       expect(indexList).to.eql([ 0, 1, 2, 3 ]);
+    })
+  })
+  describe('transformIterable', function() {
+    it('should return array as is when given one', function() {
+      const array = [];
+      const result = transformIterable(array);
+      expect(result).to.equal(array);
+    })
+    it('should return items from generator in an array', function() {
+      const generate = function*() {
+        for (let i = 0; i < 5; i++) {
+          yield i;
+        }
+      };
+      const result = transformIterable(generate());
+      expect(result).to.be.an('array');
+      expect(result).to.eql([ 0, 1, 2, 3, 4 ]);
+    })
+    it('should return new generator with length', function() {
+      const generate = function*() {
+        yield { length: 5 };
+        for (let i = 0; i < 5; i++) {
+          yield i;
+        }
+      };
+      const result = transformIterable(generate());
+      expect(result).to.not.be.an('array');
+      expect(result).to.be.a('generator');
+      expect(result).to.have.lengthOf(5);
+      expect([ ...result ]).to.eql([ 0, 1, 2, 3, 4 ]);
     })
   })
 })

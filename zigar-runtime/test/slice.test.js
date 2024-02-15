@@ -603,7 +603,7 @@ describe('Slice functions', function() {
         expect(slice[i]).to.equal(i);
       }
     })
-    it('should accept a generator with attached length as initializer', function() {
+    it('should accept a generator that provide a length as first item', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
@@ -618,19 +618,23 @@ describe('Slice functions', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: U8Slice } = structure;
-      const f = function*() {
+      // incorrect length would lead to too small a buffer
+      const f1 = function*() {
+        yield { length: 4 };
         let i = 0;
         while (i < 8) {
           yield i++;
         }
       };
-      const gen1 = f();
-      gen1.length = 4;
-      // incorrect length would lead to too small a buffer
-      expect(() => new U8Slice(gen1)).throw(RangeError);
-      const gen2 = f();
-      gen2.length = 8;
-      const slice = new U8Slice(gen2);
+      expect(() => new U8Slice(f1())).throw(RangeError);
+      const f2 = function*() {
+        yield { length: 8 };
+        let i = 0;
+        while (i < 8) {
+          yield i++;
+        }
+      };
+      const slice = new U8Slice(f2());
       expect(slice).to.have.lengthOf(8);
       for (let i = 0; i < slice.length; i++) {
         expect(slice[i]).to.equal(i);

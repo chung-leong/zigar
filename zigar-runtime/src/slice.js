@@ -1,15 +1,10 @@
 import {
-  canBeString, createArrayProxy,
-  getArrayEntries,
-  getArrayIterator,
-  getChildVivificator,
-  getPointerVisitor, normalizeArray
+  canBeString, createArrayProxy, getArrayEntries, getArrayIterator, getChildVivificator,
+  getPointerVisitor, normalizeArray, transformIterable
 } from './array.js';
 import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
 import {
-  throwArrayLengthMismatch,
-  throwInvalidArrayInitializer,
-  throwMisplacedSentinel,
+  throwArrayLengthMismatch, throwInvalidArrayInitializer, throwMisplacedSentinel,
   throwMissingSentinel
 } from './error.js';
 import { MemberType, getDescriptor } from './member.js';
@@ -21,14 +16,7 @@ import {
 } from './special.js';
 import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import {
-  ALIGN,
-  COMPAT,
-  COPIER,
-  LENGTH, MEMORY,
-  NORMALIZER,
-  POINTER_VISITOR,
-  SIZE,
-  VIVIFICATOR
+  ALIGN, COMPAT, COPIER, LENGTH, MEMORY, NORMALIZER, POINTER_VISITOR, SIZE, VIVIFICATOR
 } from './symbol.js';
 
 export function defineSlice(structure, env) {
@@ -86,19 +74,15 @@ export function defineSlice(structure, env) {
     } else if (typeof(arg) === 'string' && hasStringProp) {
       initializer.call(this, { string: arg }, fixed);
     } else if (arg?.[Symbol.iterator]) {
-      let argLen = arg.length;
-      if (typeof(argLen) !== 'number') {
-        arg = [ ...arg ];
-        argLen = arg.length;
-      }
+      arg = transformIterable(arg);
       if (!this[MEMORY]) {
-        shapeDefiner.call(this, null, argLen, fixed);
+        shapeDefiner.call(this, null, arg.length, fixed);
       } else {
-        shapeChecker.call(this, arg, argLen);
+        shapeChecker.call(this, arg, arg.length);
       }
       let i = 0;
       for (const value of arg) {
-        sentinel?.validateValue(value, i, argLen);
+        sentinel?.validateValue(value, i, arg.length);
         set.call(this, i++, value);
       }
     } else if (typeof(arg) === 'number') {

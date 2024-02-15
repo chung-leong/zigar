@@ -45,12 +45,8 @@ export function defineArray(structure, env) {
         arg = { string: arg };
       }
       if (arg?.[Symbol.iterator]) {
-        let argLen = arg.length;
-        if (typeof(argLen) !== 'number') {
-          arg = [ ...arg ];
-          argLen = arg.length;
-        }
-        if (argLen !== length) {
+        arg = transformIterable(arg);
+        if (arg.length !== length) {
           throwArrayLengthMismatch(structure, this, arg);
         }
         let i = 0;
@@ -200,6 +196,33 @@ export function getPointerVisitor(structure) {
       }
     }
   };
+}
+
+export function transformIterable(arg) {
+  if (typeof(arg.length) === 'number') {
+    // it's an array of sort
+    return arg;
+  }
+  const iterator = arg[Symbol.iterator]();
+  const first = iterator.next();
+  const length = first.value?.length;
+  if (typeof(length) === 'number' && Object.keys(first.value).join() === 'length') {
+    // return generator with length attached
+    return Object.assign((function*() {
+      let result;
+      while (!(result = iterator.next()).done) {
+        yield result.value;
+      }
+    })(), { length });
+  } else {
+    const array = [];
+    let result = first;
+    while (!result.done) {
+      array.push(result.value);
+      result = iterator.next();
+    }
+    return array;
+  }
 }
 
 const proxyHandlers = {
