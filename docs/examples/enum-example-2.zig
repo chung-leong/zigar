@@ -1,9 +1,16 @@
-pub const Pet = enum { dog, cat, dragon, kangaroo };
-pub const Car = enum { Toyota, Ford, Volkswagen, Tesla, Saab, Fiat, Nissan, Kia };
-pub const Computer = enum { Apple, Dell, Lenovo, HP };
+const std = @import("std");
 
-pub const Owner = packed struct {
-    pet: Pet,
-    car: Car,
-    computer: Computer,
+pub const JunkFood = enum(u16) {
+    hamburger,
+    hotdog,
+    donut,
+    pizza,
+    taco,
+    _,
 };
+
+pub var junk: JunkFood = .donut;
+
+pub fn print() void {
+    std.debug.print("junk = {any}\n", .{junk});
+}
