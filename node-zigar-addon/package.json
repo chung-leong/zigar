@@ -48,6 +48,6 @@
     "rollup-plugin-strip-code": "^0.2.7"
   },
   "dependencies": {
-    "cmake-js": "^7.3.0"
+    "cmake-js": "chung-leong/cmake-js#master"
   }
 }
