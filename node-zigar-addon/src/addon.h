@@ -25,8 +25,6 @@
     #define UINTPTR_JS_TYPE             "number"
 #endif
 
-#include <stdio.h>
-
 inline napi_status napi_create_uintptr(napi_env env,
                                        uintptr_t value,
                                        napi_value* result) {
