@@ -1,9 +1,4 @@
-import { print32, print33 } from './int-example-1.zig';
+import { getInt32, getInt33 } from './int-example-1.zig';
 
-print32(123);
-try {
-    print33(123);
-} catch (err) {
-    console.log(err.message);
-}
-print33(123n);
+console.log(typeof getInt32(1234));
+console.log(typeof getInt33(1234));
