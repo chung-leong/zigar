@@ -152,7 +152,7 @@ function addStructureDefinitions(lines, definition) {
   }
   // add properties to objects
   if (objects.length > 0) {
-    add('\n// define objects');
+    add('\n// define objects');    
     for (const object of objects) {
       const varname = objectNames.get(object);
       const structure = structureMap.get(object.constructor);

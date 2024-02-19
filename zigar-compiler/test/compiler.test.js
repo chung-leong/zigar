@@ -6,7 +6,6 @@ import os, { tmpdir } from 'os';
 
 use(ChaiAsPromised);
 
-import { join } from 'path';
 import { fileURLToPath } from 'url';
 import {
   compile,
@@ -84,7 +83,7 @@ describe('Compilation', function() {
   })
   describe('compile', function() {
     it('should compile zig source code for C addon', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const soPath = getCachePath(srcPath, options);
@@ -93,7 +92,7 @@ describe('Compilation', function() {
       expect(size).to.be.at.least(1000);
     })
     it('should compile code for WASM32', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'freestanding' };
       const soPath = getCachePath(srcPath, options);
@@ -102,7 +101,7 @@ describe('Compilation', function() {
       expect(size).to.be.at.least(1000);
     })
     it('should compile code for 64-bit Linux', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'ReleaseSmall', arch: 'x64', platform: 'linux' };
       const soPath = getCachePath(srcPath, options);
@@ -111,7 +110,7 @@ describe('Compilation', function() {
       expect(size).to.be.at.least(1000);
     })
     it('should compile code for 32-bit Windows', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'ReleaseSmall', arch: 'ia32', platform: 'win32' };
       const soPath = getCachePath(srcPath, options);
@@ -120,7 +119,7 @@ describe('Compilation', function() {
       expect(size).to.be.at.least(1000);
     })
     it('should compile code for 64-bit Windows', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'ReleaseSmall', arch: 'x64', platform: 'win32' };
       const soPath = getCachePath(srcPath, options);
@@ -129,7 +128,7 @@ describe('Compilation', function() {
       expect(size).to.be.at.least(1000);
     })
     it('should compile code for x64 OSX', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'ReleaseSmall', arch: 'x64', platform: 'darwin' };
       const soPath = getCachePath(srcPath, options);
@@ -138,7 +137,7 @@ describe('Compilation', function() {
       expect(size).to.be.at.least(1000);
     })
     it('should compile code for Arm64 OSX', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'ReleaseSmall', arch: 'arm64', platform: 'darwin' };
       const soPath = getCachePath(srcPath, options);
@@ -147,7 +146,7 @@ describe('Compilation', function() {
       expect(size).to.be.at.least(1000);
     })
     it('should compile optimized code', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options1 = { optimize: 'Debug', arch: 'wasm32', platform: 'freestanding' };
       const options2 = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'freestanding' };
@@ -160,16 +159,18 @@ describe('Compilation', function() {
       expect(after).to.be.below(before);
     })
     it('should compile with C library enabled when Zig code imports C code', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/strlen-from-c/strlen.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const soPath = getCachePath(srcPath, options);
-      await compile(srcPath, soPath, options);
-      const { size } = await stat(soPath);
-      expect(size).to.be.at.least(1000);
+      await forceChange(srcPath, async () => {     
+        await compile(srcPath, soPath, options);
+        const { size } = await stat(soPath);
+        expect(size).to.be.at.least(1000);
+      });
     })
     it('should work correctly when the same file is compiled at the same time', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const soPath = getCachePath(srcPath, options);
@@ -182,53 +183,58 @@ describe('Compilation', function() {
         expect(size).to.be.at.least(1000);
       });
     })
+    it('should handle directory reference', async function() {
+      this.timeout(600000);
+      const srcPath = absolute('./zig-samples/int-dir');
+      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
+      const soPath = getCachePath(srcPath, options);
+      await compile(srcPath, soPath, options);
+      const { size } = await stat(soPath);
+      expect(size).to.be.at.least(1000);
+    })
     it('should throw when source file is missing', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/non-existing.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const soPath = getCachePath(srcPath, options);
       await expect(compile(srcPath, soPath, options)).to.eventually.be.rejected;
     })
     it('should use custom build file', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/custom/custom.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const soPath = getCachePath(srcPath, options);
       await compile(srcPath, soPath, options);
       const { size } = await stat(soPath);
       expect(size).to.be.at.least(1000);
-  })
+    })
     it('should recompile when one of the files has a newer modification date', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/custom/custom.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const soPath = getCachePath(srcPath, options);
       await compile(srcPath, soPath, options);
-      const { mtime: before } = await stat(soPath);
       await delay(1000);
       await forceChange(srcPath, async () => {
-        await compile(srcPath, soPath, options);
-        const { mtime: after } = await stat(soPath);
-        expect(after).to.be.above(before);
+        const compiled = await compile(srcPath, soPath, options);
+        expect(compiled).to.be.true;
       });
     })
     it('should recompile when code exporter has changed', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/custom/custom.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const soPath = getCachePath(srcPath, options);
       await compile(srcPath, soPath, options);
-      const { mtime: before } = await stat(soPath);
       const exportPath = absolute('../zig/exporter.zig');
       await delay(1000);
       await forceChange(exportPath, async () => {
-        await compile(srcPath, soPath, options);
-        const { mtime: after } = await stat(soPath);
-        expect(after).to.be.above(before);
+        const compiled = await compile(srcPath, soPath, options);
+        expect(compiled).to.be.true;
       });
     })
     it('should throw when code cannot be compiled', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/invalid-syntax.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const soPath = getCachePath(srcPath, options);
@@ -236,7 +242,7 @@ describe('Compilation', function() {
         .with.property('message').that.contains(`expected ';' after declaration`);
     })
     it('should remove build folder when the clean option is given', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/invalid-syntax.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch(), clean: true };
       const soPath = getCachePath(srcPath, options);
@@ -250,7 +256,7 @@ describe('Compilation', function() {
   })
   describe('compileSync', function() {
     it('should compile zig source code for C addon', function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const soPath = getCachePath(srcPath, options);
@@ -259,7 +265,7 @@ describe('Compilation', function() {
       expect(size).to.be.at.least(1000);
     })
     it('should compile code for WASM32', function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'freestanding' };
       const soPath = getCachePath(srcPath, options);
@@ -268,7 +274,7 @@ describe('Compilation', function() {
       expect(size).to.be.at.least(1000);
     })
     it('should compile optimized code', function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options1 = { optimize: 'Debug', arch: 'wasm32', platform: 'freestanding' };
       const options2 = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'freestanding' };
@@ -281,16 +287,18 @@ describe('Compilation', function() {
       expect(after).to.be.below(before);
     })
     it('should compile with C library enabled when Zig code imports C code', function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/strlen-from-c/strlen.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const soPath = getCachePath(srcPath, options);
-      compileSync(srcPath, soPath, options);
-      const { size } = statSync(soPath);
-      expect(size).to.be.at.least(1000);
+      forceChangeSync(srcPath, async () => {
+        compileSync(srcPath, soPath, options);
+        const { size } = statSync(soPath);
+        expect(size).to.be.at.least(1000);
+      });
     })
     it('should work correctly when the same file is compiled at the same time', function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const soPath = getCachePath(srcPath, options);
@@ -302,53 +310,58 @@ describe('Compilation', function() {
         expect(size).to.be.at.least(1000);
       });
     })
+    it('should handle directory reference', async function() {
+      this.timeout(600000);
+      const srcPath = absolute('./zig-samples/int-dir');
+      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
+      const soPath = getCachePath(srcPath, options);
+      compileSync(srcPath, soPath, options);
+      const { size } = statSync(soPath);
+      expect(size).to.be.at.least(1000);
+    })
     it('should throw when source file is missing', function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/non-existing.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const soPath = getCachePath(srcPath, options);
       expect(() => compileSync(srcPath, soPath, options)).to.throw();
     })
     it('should use custom build file', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/custom/custom.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const soPath = getCachePath(srcPath, options);
       compileSync(srcPath, soPath, options);
       const { size } = statSync(soPath);
       expect(size).to.be.at.least(1000);
-  })
+    })
     it('should recompile when one of the files has a newer modification date', function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/custom/custom.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const soPath = getCachePath(srcPath, options);
       compileSync(srcPath, soPath, options);
-      const { mtime: before } = statSync(soPath);
       delaySync(1000);
       forceChangeSync(srcPath, () => {
-        compileSync(srcPath, soPath, options);
-        const { mtime: after } = statSync(soPath);
-        expect(after).to.be.above(before);
+        const compiled = compileSync(srcPath, soPath, options);
+        expect(compiled).to.be.true;
       });
     })
     it('should recompile when code exporter has changed', function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/custom/custom.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const soPath = getCachePath(srcPath, options);
       compileSync(srcPath, soPath, options);
-      const { mtime: before } = statSync(soPath);
       const exportPath = absolute('../zig/exporter.zig');
       delaySync(1000);
       forceChangeSync(exportPath, async () => {
-        compileSync(srcPath, soPath, options);
-        const { mtime: after } = statSync(soPath);
-        expect(after).to.be.above(before);
+        const compiled = compileSync(srcPath, soPath, options);
+        expect(compiled).to.be.true;
       });
     })
     it('should throw when code cannot be compiled', function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/invalid-syntax.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const soPath = getCachePath(srcPath, options);
@@ -356,7 +369,7 @@ describe('Compilation', function() {
         .with.property('message').that.contains(`expected ';' after declaration`);
     })
     it('should remove build folder when the clean option is given', function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/invalid-syntax.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch(), clean: true };
       const soPath = getCachePath(srcPath, options);

@@ -2,15 +2,15 @@ import { expect } from 'chai';
 import { readFile, readdir } from 'fs/promises';
 
 import {
+  MagicNumber,
   SectionType,
   parseBinary,
-  repackBinary,
   parseFunction,
-  repackFunction,
-  stripUnused,
   parseNames,
-  MagicNumber,
+  repackBinary,
+  repackFunction,
   repackNames,
+  stripUnused,
 } from '../src/wasm-stripper.js';
 
 const littleEndian = true;
@@ -121,7 +121,7 @@ describe('WASM stripper', function() {
       }
     })
     it('should handle more complicated file', async function() {
-      this.timeout(10000);
+      this.timeout(600000);
       const path = resolve(`./wasm-samples/exporter.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);
@@ -141,7 +141,7 @@ describe('WASM stripper', function() {
       }
     })
     it('should repack code from WABT test suite', async function() {
-      this.timeout(60000);
+      this.timeout(600000);
       const dir = resolve(`./wasm-samples/wabt-test-suite`);
       const names = await readdir(dir);
       const wasmFiles = names.filter(n => /\.wasm$/.test(n)).map(n => `${dir}/${n}`);

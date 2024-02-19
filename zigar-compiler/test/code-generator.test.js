@@ -3,7 +3,7 @@ import ChaiAsPromised from 'chai-as-promised';
 
 use(ChaiAsPromised);
 
-import { MemberType } from '../../zigar-runtime/src/member.js';
+import { MemberType, hasStandardFloatSize } from '../../zigar-runtime/src/member.js';
 import { StructureType } from '../../zigar-runtime/src/structure.js';
 import { CONST, MEMORY, SLOTS } from '../../zigar-runtime/src/symbol.js';
 import { generateCode } from '../src/code-generator.js';
@@ -567,14 +567,14 @@ describe('Code generation', function() {
       const structStructure = {
         constructor: null,
         type: StructureType.Struct,
-        name: "struct {}",
+        name: 'struct {}',
         byteSize: 4,
-        hasPointer: true,
+        hasPointer: hasStandardFloatSize,
         instance: {
           members: [
             {
               type: MemberType.Int,
-              name: "number",
+              name: 'number',
               bitOffset: 0,
               bitSize: 32,
               byteSize: 4,
@@ -591,13 +591,12 @@ describe('Code generation', function() {
         static: {
           members: [],
           methods: [],
-          template: null,
         },
       };
       const structure = {
         constructor: null,
         type: StructureType.Struct,
-        name: "package",
+        name: 'package',
         byteSize: 0,
         hasPointer: false,
         instance: {
@@ -621,6 +620,72 @@ describe('Code generation', function() {
       const { code } = generateCode(def, params);
       expect(code).to.contain('package');
       expect(code).to.contain('useStruct()');
+      expect(code).to.contain('Hello');
+    })
+    it('should generate code for exporting a struct with static variable', function() {
+      const i32 = {
+        [MEMORY]: (() => { 
+          const dv = new DataView(new ArrayBuffer(4));
+          dv.reloc = 0x0100_0000;
+          return dv;
+        })(),
+        [CONST]: true,
+      };
+      const structStructure = {
+        constructor: null,
+        type: StructureType.Struct,
+        name: "struct {}",
+        byteSize: 4,
+        hasPointer: true,
+        instance: {
+          members: [
+            {
+              type: MemberType.Static,
+              name: 'number',
+              slot: 0,
+            },
+          ],
+          methods: [],
+        },
+        static: {
+          members: [],
+          methods: [],
+          template: {
+            [MEMORY]: new DataView(new ArrayBuffer()),
+            [SLOTS]: {
+              0: i32,
+            }
+          },
+        },
+      };
+      const structure = {
+        constructor: null,
+        type: StructureType.Struct,
+        name: 'package',
+        byteSize: 0,
+        hasPointer: false,
+        instance: {
+          members: [],
+          methods: [],
+          template: null,
+        },
+        static: {
+          members: [
+            {
+              type: MemberType.Type,
+              name: 'Hello',
+              structure: structStructure,
+            }
+          ],
+          methods: [],
+          template: null,
+        },
+      };
+      const def = { structures: [ structStructure, structure ], options, keys: { MEMORY, SLOTS, CONST }};
+      const { code } = generateCode(def, params);
+      expect(code).to.contain('package');
+      expect(code).to.contain('useStruct()');
+      expect(code).to.contain('useStatic()');
       expect(code).to.contain('Hello');
     })
     it('should omit exports when omitExports is true', function() {

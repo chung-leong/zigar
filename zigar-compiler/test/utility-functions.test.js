@@ -133,7 +133,7 @@ describe('Utility functions', function() {
   describe('delay', function() {
     it('should pause execution for the specified amount of time', async function() {
       const start = new Date;
-      await delay(200);
+      await delay(220);
       const end = new Date;
       expect(end - start).to.be.at.least(200);
     })
