@@ -4,24 +4,28 @@ const os = require('os');
 const { dirname } = require('path');
 const { fileURLToPath, pathToFileURL } = require('url');
 const { 
-  compileSync, addPlatformExt, findConfigFileSync, findSourceFile, getCachePath, 
+  compileSync, addPlatformExt, extractOptions, findConfigFileSync, findSourceFile, getCachePath, 
   loadConfigFileSync, optionsForCompile
 } = require('zigar-compiler/cjs');
 
 const extensionsRegex = /\.(zig|zigar)(\?|$)/;
 
+function parseZigURL(url) {
+  return extensionsRegex.exec(url);
+}
+
 Module._load = new Proxy(Module._load, {
   apply(target, self, args) {
     const [ request, parent ] = args;
-    const m = extensionsRegex.exec(request);
+    const m = parseZigURL(request);
     if (!m) {
       return Reflect.apply(target, self, args);
     }
     const url = new URL(request, pathToFileURL(parent.filename));
     const path = fileURLToPath(url);
     const options = {
-      clean: process.env.NODE_ENV === 'production',
-      optimize: (process.env.NODE_ENV === 'production') ? 'ReleaseFast' : 'Debug',
+      clean: false,
+      optimize: 'Debug',
       nativeCpu: true,
       platform: os.platform(),
       arch: os.arch(),

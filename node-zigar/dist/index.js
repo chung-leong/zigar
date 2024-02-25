@@ -8,36 +8,18 @@ import {
   getCachePath, loadConfigFile, optionsForCompile
 } from 'zigar-compiler';
 
-function isZig(url) {
-  const { pathname } = new URL(url);
-  return extensionsRegex.test(pathname);
-}
-
-async function importModule(soPath, options) {
-  const env = createEnvironment();
-  env.loadModule(soPath);
-  env.acquireStructures(options);
-  const definition = env.exportStructures();
-  const require = createRequire(import.meta.url);
-  // get the absolute path to node-zigar-addon so the transpiled code can find it
-  const runtimeURL = pathToFileURL(require.resolve('node-zigar-addon'));
-  const binarySource = env.hasMethods() ? JSON.stringify(soPath) : undefined;
-  const { code } = generateCode(definition, { runtimeURL, binarySource });
-  return {
-    format: 'module',
-    shortCircuit: true,
-    source: code,
-  };
-}
-
 export async function resolve(specifier, context, nextResolve) {
-  return nextResolve(specifier);
+  return nextResolve(specifier, context);
 }
 
 const extensionsRegex = /\.(zig|zigar)(\?|$)/;
 
+export function parseZigURL(url) {
+  return extensionsRegex.exec(url);
+}
+
 export async function load(url, context, nextLoad) {
-  const m = extensionsRegex.exec(url);
+  const m = parseZigURL(url);
   if (!m) {
     return nextLoad(url);
   }
@@ -63,6 +45,19 @@ export async function load(url, context, nextLoad) {
   if (srcPath) {
     await compile(srcPath, soPath, options);
   }
-  return importModule(soPath, options)
+  const env = createEnvironment();
+  env.loadModule(soPath);
+  env.acquireStructures(options);
+  const definition = env.exportStructures();
+  const require = createRequire(import.meta.url);
+  // get the absolute path to node-zigar-addon so the transpiled code can find it
+  const runtimeURL = pathToFileURL(require.resolve('node-zigar-addon'));
+  const binarySource = env.hasMethods() ? JSON.stringify(soPath) : undefined;
+  const { code } = generateCode(definition, { runtimeURL, binarySource });
+  return {
+    format: 'module',
+    shortCircuit: true,
+    source: code,
+  };
 }
 
