@@ -28,7 +28,7 @@ export function stripUnused(binary, options = {}) {
   } = options;
   const { sections, size } = parseBinary(binary);
   const blacklist = [
-    /^define$/,
+    /^getFactoryThunk$/,
     /^exporter.createRootFactory/,
   ];
 
@@ -117,16 +117,16 @@ export function stripUnused(binary, options = {}) {
   for (const fn of functions) {
     if (fn.name && blacklist.some(re => re.test(fn.name))) {
       fn.using = false;
-      if (fn.name === 'define' && functionNames.length === 0) {
+      if (fn.name === 'getFactoryThunk' && functionNames.length === 0) {
         // when compiled for ReleaseSmall, we don't get the name section
         // therefore unable to remove the factory function by name
-        // we know that define loads its address, however
+        // we know that getFactoryThunk loads its address, however
         // and that a function pointer is just an index into table 0
         const ops = fn.instructions;
-        if (ops.length === 4 && ops[1].opcode === 0x41 && ops[2].opcode === 0x10) {
-          // 0x10 is call
+        if (ops.length === 2 && ops[0].opcode === 0x41 && ops[1].opcode === 0x0B) {
           // 0x41 is i32.const
-          const elemIndex = ops[1].operand;
+          // 0x0B is end
+          const elemIndex = ops[0].operand;
           const elemSection = getSection(SectionType.Element);
           for (const segment of elemSection.segments) {
             if (segment.indices) {

@@ -1,10 +1,10 @@
 import { createHash } from 'crypto';
 import {
-  chmodSync, closeSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmdirSync,
-  statSync, unlinkSync, utimesSync, writeFileSync, writeSync
+  chmodSync, closeSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, rmdirSync,
+  statSync, unlinkSync, writeFileSync, writeSync
 } from 'fs';
 import {
-  chmod, lstat, mkdir, open, readFile, readdir, rename, rmdir, stat, unlink, utimes, writeFile
+  chmod, lstat, mkdir, open, readFile, readdir, rmdir, stat, unlink, writeFile
 } from 'fs/promises';
 import { join, parse } from 'path';
 
@@ -26,6 +26,7 @@ export async function findMatchingFiles(dir, re) {
   const map = new Map();
   const scanned = new Map();
   const scan = async (dir) => {
+    /* c8 ignore next 3 */
     if (scanned.get(dir)) {
       return;
     } 
@@ -56,6 +57,7 @@ export function findMatchingFilesSync(dir, re) {
   const map = new Map();
   const scanned = new Map();
   const scan = (dir) => {
+    /* c8 ignore next 3 */
     if (scanned.get(dir)) {
       return;
     } 
@@ -146,34 +148,6 @@ export function releaseLockSync(soBuildDir) {
   deleteFileSync(pidPath);
 }
 
-export async function moveFile(srcPath, dstPath) {
-  try {
-    await rename(srcPath, dstPath);
-    /* c8 ignore next 8 -- hard to test */
-  } catch (err) {
-    if (err.code == 'EXDEV') {
-      await copyFile(srcPath, dstPath);
-      await deleteFile(srcPath);
-    } else {
-      throw err;
-    }
-  }
-}
-
-export function moveFileSync(srcPath, dstPath) {
-  try {
-    renameSync(srcPath, dstPath);
-    /* c8 ignore next 8 -- hard to test */
-  } catch (err) {
-    if (err.code == 'EXDEV') {
-      copyFileSync(srcPath, dstPath);
-      deleteFileSync(srcPath);
-    } else {
-      throw err;
-    }
-  }
-}
-
 export async function copyFile(srcPath, dstPath) {
   const info = await stat(srcPath);
   const data = await readFile(srcPath);
@@ -202,16 +176,6 @@ export function loadFileSync(path, def) {
   } catch (err) {
     return def;
   }
-}
-
-export async function touchFile(path) {
-  const now = new Date();
-  await utimes(path, now, now);
-}
-
-export function touchFileSync(path) {
-  const now = new Date();
-  utimesSync(path, now, now);
 }
 
 export async function deleteFile(path) {
@@ -319,12 +283,9 @@ export async function delay(ms) {
 }
 
 export function delaySync(ms) {   
-  try {
-    const buffer = new SharedArrayBuffer(8);
-    const ta = new BigInt64Array(buffer);
-    Atomics.wait(ta, 0, 0n, ms);
-  } catch (err) {    
-  }
+  const buffer = new SharedArrayBuffer(8);
+  const ta = new BigInt64Array(buffer);
+  Atomics.wait(ta, 0, 0n, ms);
 }
 
 export function md5(text) {

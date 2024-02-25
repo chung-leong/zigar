@@ -23,9 +23,7 @@ import {
   findDirectory,
   findDirectorySync,
   findFile,
-  findFileSync,
-  touchFile,
-  touchFileSync,
+  findFileSync
 } from '../src/utility-functions.js';
 
 describe('Compilation', function() {
@@ -385,7 +383,8 @@ describe('Compilation', function() {
 
 async function forceChange(path, cb) {
   const info = await findFile(path);
-  await touchFile(path);
+  const now = new Date();
+  await utimes(path, now, now);
   try {
     await cb();
   } finally {
@@ -395,7 +394,8 @@ async function forceChange(path, cb) {
 
 function forceChangeSync(path, cb) {
   const info = findFileSync(path);
-  touchFileSync(path);
+  const now = new Date();
+  utimesSync(path, now, now); 
   try {
     cb();
   } finally {
