@@ -1,15 +1,16 @@
-import { join, parse } from 'path';
-import { expect } from 'chai';
-import { tmpdir } from 'os';
-import { readFile } from 'fs/promises';
-import { rollup } from 'rollup'
 import NodeResolve from '@rollup/plugin-node-resolve';
-import Zigar from '../dist/index.js';
+import { expect } from 'chai';
+import { readFile } from 'fs/promises';
 import 'mocha-skip-if';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { rollup } from 'rollup';
+import { createServer } from 'vite';
+import Zigar from '../dist/index.js';
 
 describe('Loader', function() {
   describe('Options', function() {
-    const path = resolve('../../zigar-compiler/test/zig-samples/basic/console.zig');
+    const path = absolute('../../zigar-compiler/test/zig-samples/basic/console.zig');
     it('should generate code with embedded WASM by default', async function() {
       this.timeout(60000);
       const code = await transpile(path, { embedWASM: true });
@@ -21,12 +22,12 @@ describe('Loader', function() {
       expect(code).to.contain('fetch');
     })
     it('should generate code that uses readFile when embedWASM is false and useReadFile is true', async function() {
-      this.timeout(60000);
+      this.timeout(300000);
       const code = await transpile(path, { embedWASM: false, useReadFile: true });
       expect(code).to.contain('readFile');
     })
     it('should default to ReleaseSmall where NODE_ENV is production', async function() {
-      this.timeout(60000);
+      this.timeout(300000);
       const code1 = await transpile(path, { embedWASM: true });
       process.env.NODE_ENV = 'production';
       try {
@@ -54,6 +55,38 @@ describe('Loader', function() {
       }
       expect(error).to.be.an('error').with.property('message').that.contains('ReleaseFast');
     })
+    it('should serve transcoded files through Vite', async function() {
+      this.timeout(300000);
+      const host = 'localhost';
+      const port = 10001;
+      const server = await createServer({
+        root: absolute('./example'),
+        server: { host, port },
+        plugins: [
+          Zigar({}),
+          NodeResolve({
+            modulePaths: [ absolute(`../node_modules`) ],
+          }),
+        ],
+        optimizeDeps: {
+          include: [],
+        },
+      });
+      await server.listen();
+      const rootJsReq = await fetch(`http://${host}:${port}/test.js`);
+      const rootJsText = await rootJsReq.text();
+      const jsURI = /from "(.*?)"/.exec(rootJsText)?.[1];
+      expect(jsURI).to.be.a('string');
+      const jsReq = await fetch(`http://${host}:${port}${jsURI}`);
+      const jsText = await jsReq.text();
+      const wasmURI = /url = "(.*?\.wasm.*?)"/.exec(jsText)?.[1];
+      expect(wasmURI).to.be.a('string');
+      const wasmReq = await fetch(`http://${host}:${port}${wasmURI}`);
+      const wasmBlob = await wasmReq.blob();
+      expect(wasmBlob).to.be.a('blob');
+      expect(wasmBlob.size).to.be.at.least(100000);
+      server.close();
+    })
   })
 })
 
@@ -63,9 +96,9 @@ async function transpile(path, options = {}) {
   const inputOptions = {
     input: path,
     plugins: [
-      Zigar({ ...options }),
+      Zigar(options),
       NodeResolve({
-        modulePaths: [ resolve(`../node_modules`) ],
+        modulePaths: [ absolute(`../node_modules`) ],
       }),
     ],
   };
@@ -90,6 +123,6 @@ async function md5(text) {
   return hash.digest('hex');
 }
 
-function resolve(relPath) {
+function absolute(relPath) {
   return new URL(relPath, import.meta.url).pathname;
 }

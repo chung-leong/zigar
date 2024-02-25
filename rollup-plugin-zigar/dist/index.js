@@ -1,5 +1,5 @@
-import { parse } from 'path';
 import { createHash } from 'crypto';
+import { parse } from 'path';
 import { transpile } from 'zigar-compiler';
 
 export const schema = {
