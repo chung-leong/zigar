@@ -6,6 +6,7 @@ import { addPlatformExt } from '../../zigar-compiler/src/configuration.js';
 import cjs from '../dist/index.cjs';
 
 import {
+  getGCStatistics,
   importModule,
 } from '../dist/index.js';
 
@@ -36,10 +37,18 @@ describe('Module loading', function() {
     }
     expect(error).to.be.an('error');
   })
+  it('should get gc statistics', function() {
+    const stats = getGCStatistics();
+    expect(stats).to.be.an('object');
+  })
   it('should load module using CommonJS function', function() {
     this.timeout(120000);
     const path = getModulePath('integers');
     const module = cjs.importModule(path);
     expect(module.int32).to.equal(1234);
+  })
+  it('should get gc statistics using CommonJS function', function() {
+    const stats = cjs.getGCStatistics();
+    expect(stats).to.be.an('object');
   })
 });
