@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { compile } from '../../../zigar-compiler/src/compiler.js';
+import { getCachePath } from '../../../zigar-compiler/src/configuration.js';
 import { createEnvironment, getGCStatistics, importModule } from '../../dist/index.js';
 
 const require = createRequire(import.meta.url);
@@ -10,7 +11,7 @@ describe('Garbage collection', function() {
   // NOTE: if one test fails, then all subsequent tests will fail as well
   describe('createEnvironment', function() {
     it('should release module when environment is released', async function() {
-      this.timeout(60000);
+      this.timeout(300000);
       let env = createEnvironment();
       const stats1 = getGCStatistics();
       expect(stats1.modules).to.equal(1);
@@ -24,7 +25,7 @@ describe('Garbage collection', function() {
       expect(stats2.buffers).to.equal(0);
     })
     it('should release module when abandon is called', async function() {
-      this.timeout(60000);
+      this.timeout(300000);
       let env = await createEnvironment();
       const stats1 = getGCStatistics();
       expect(stats1.modules).to.equal(1);
@@ -40,9 +41,11 @@ describe('Garbage collection', function() {
   })
   describe('importModule', function() {
     it('should hang onto module when variables from it are accessible', async function() {
+      this.timeout(300000);
       const zigPath = fileURLToPath(new URL('../zig-samples/integers.zig', import.meta.url));
-      const pathLib = await compile(zigPath);
-      let module = await importModule(pathLib);
+      const soPath = getCachePath(zigPath, { optimize: 'Debug' });
+      await compile(zigPath, soPath);
+      let module = await importModule(soPath);
       await collectGarbage();
       const stats1 = getGCStatistics();
       expect(stats1.modules).to.equal(1);
@@ -56,9 +59,11 @@ describe('Garbage collection', function() {
       expect(stats2.buffers).to.equal(0);
     })
     it('should hang onto module when functions from it are accessible', async function() {
+      this.timeout(300000);
       const zigPath = fileURLToPath(new URL('../zig-samples/function-simple.zig', import.meta.url));
-      const pathLib = await compile(zigPath);
-      let { add } = await importModule(pathLib);
+      const soPath = getCachePath(zigPath, { optimize: 'Debug' });
+      await compile(zigPath, soPath);
+      let { add } = await importModule(soPath);
       await collectGarbage();
       const stats1 = getGCStatistics();
       expect(stats1.modules).to.equal(1);
@@ -72,9 +77,11 @@ describe('Garbage collection', function() {
       expect(stats2.buffers).to.equal(0);
     })
     it('should release module when abandon is called', async function() {
+      this.timeout(300000);
       const zigPath = fileURLToPath(new URL('../zig-samples/function-simple.zig', import.meta.url));
-      const pathLib = await compile(zigPath);
-      const { add, __zigar } = await importModule(pathLib);
+      const soPath = getCachePath(zigPath, { optimize: 'Debug' });
+      await compile(zigPath, soPath);
+      const { add, __zigar } = await importModule(soPath);
       await collectGarbage();
       const stats1 = getGCStatistics();
       expect(stats1.modules).to.equal(1);

@@ -10,14 +10,14 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Error set', function() {
     it('should handle error set as static variables', async function() {
       this.timeout(120000);
-      const { 
-        default: module, 
-        NormalError, 
-        StrangeError, 
+      const {
+        default: module,
+        NormalError,
+        StrangeError,
         PossibleError,
         print,
       } = await importTest('as-static-variables');
@@ -54,7 +54,7 @@ export function addTests(importModule, options) {
     })
     it('should handle error in array', async function() {
       this.timeout(120000);
-      const { default: module, StrangeError, print } = await importTest('array-of');      
+      const { default: module, StrangeError, print } = await importTest('array-of');
       expect(module.array.length).to.equal(4);
       expect(module.array[0]).to.equal(StrangeError.SystemIsOnFire);
       expect(module.array[1]).to.equal(StrangeError.DogAteAllMemory);
@@ -133,7 +133,6 @@ export function addTests(importModule, options) {
     it('should handle error in optional', async function() {
       this.timeout(120000);
       const { default: module, StrangeError, print } = await importTest('in-optional');
-      debugger;
       module.optional;
       // expect(module.optional).to.equal(StrangeError.SystemIsOnFire);
       const [ before ] = await capture(() => print());
@@ -153,7 +152,7 @@ export function addTests(importModule, options) {
     })
     it('should not compile code containing error vector', async function() {
       this.timeout(120000);
-      await expect(importTest('vector-of')).to.eventually.be.rejected;      
+      await expect(importTest('vector-of')).to.eventually.be.rejected;
     })
   })
 }

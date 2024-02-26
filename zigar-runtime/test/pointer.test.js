@@ -122,7 +122,6 @@ describe('Pointer functions', function() {
       const { constructor: Int32 } = intStructure;
       const object1 = new Int32Ptr(new Int32(1234));
       expect(object1['*']).to.equal(1234);
-      debugger;
       const object2 = Int32Ptr(object1, { writable: false });
       expect(object2['*']).to.equal(1234);
     })
@@ -592,7 +591,6 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structure);
       const { constructor: Int32Ptr } = structure;
       const int32 = new Int32(1234);
-      debugger;
       const intPointer = new Int32Ptr(int32);
       expect(intPointer['*']).to.equal(1234);
       expect(() => intPointer['*'] = 4567).to.throw(TypeError);
@@ -1586,7 +1584,7 @@ describe('Pointer functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      env.finalizeShape(structure);     
+      env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: Int32Ptr } = structure;
       env.allocateExternMemory = function(len, align) {
@@ -1769,7 +1767,7 @@ describe('Pointer functions', function() {
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32, { writable: false });
       expect(() => intPointer.$ = int32).to.throw(TypeError);
-    }) 
+    })
     it('should yield underlying pointer object', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -1805,9 +1803,9 @@ describe('Pointer functions', function() {
       expect(Int32Ptr.child).to.equal(Int32);
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
-      const actualIntPointer = intPointer[POINTER];      
+      const actualIntPointer = intPointer[POINTER];
       expect(actualIntPointer).to.be.instanceOf(Int32Ptr);
-    }) 
+    })
     it('should detect property of pointer object', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -1860,7 +1858,7 @@ describe('Pointer functions', function() {
         byteSize: 4,
       });
       env.finalizeShape(intStructure);
-      env.finalizeStructure(intStructure);      
+      env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -1900,7 +1898,7 @@ describe('Pointer functions', function() {
         byteSize: 4,
       });
       env.finalizeShape(intStructure);
-      env.finalizeStructure(intStructure);      
+      env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -2025,7 +2023,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structure);
       const { constructor: Int32SlicePtr } = structure;
       const ta = new Int32Array([ 1, 2, 3, 4 ]);
-      const pointer = new Int32SlicePtr(ta);      
+      const pointer = new Int32SlicePtr(ta);
       pointer[LOCATION_SETTER]({ address: 0x1000n, length: 4 });
       expect(pointer[MEMORY].getBigUint64(0, true)).to.equal(0x1000n);
       expect(pointer[MEMORY].getBigUint64(8, true)).to.equal(4n);
@@ -2164,13 +2162,13 @@ describe('Pointer functions', function() {
         let buffer = bufferMap.get(address);
         if (!buffer && address === 0x30000n) {
           buffer = new ArrayBuffer(len);
-          // fill with byte value 8 
+          // fill with byte value 8
           const dv = new DataView(buffer);
           for (let i = 0; i < dv.byteLength; i += 4) {
             dv.setInt32(i, 8, true);
           }
           bufferMap.set(address, buffer);
-          addressMap.set(buffer, address);          
+          addressMap.set(buffer, address);
         }
         return buffer;
       }

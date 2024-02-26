@@ -1,7 +1,7 @@
 {
   "name": "node-zigar-addon",
-  "version": "0.11.0",
-  "description": "NodeJS C++ addon for loading compiled Zig module",
+  "version": "0.11.1",
+  "description": "NodeJS addon for loading Zig native modules",
   "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js",
@@ -12,13 +12,13 @@
     "test": "test"
   },
   "scripts": {
-    "test": "node ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.js",
-    "test:gc": "node --expose-gc ./node_modules/mocha/bin/mocha.js -- test/gc/*.test.js",
-    "debug": "node --inspect-brk ./node_modules/mocha/bin/mocha.js -- test/*.test.js",
-    "coverage": "node ./node_modules/c8/bin/c8.js ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.js",
-    "build": "npm run rollup && cmake-js compile",
-    "install": "cmake-js compile",
-    "rollup": "rollup -c rollup.config.js"
+    "test": "mocha --parallel -- test/*.test.js",
+    "test:gc": "mocha --v8-expose-gc -- test/gc/*.test.js",
+    "debug": "mocha --reporter spec --inspect-brk -- test/*.test.js",
+    "coverage": "c8 mocha --parallel -- test/*.test.js",
+    "rollup": "rollup -c rollup.config.js",
+    "build": "rollup -c rollup.config.js && cmake-js compile",
+    "install": "cmake-js compile"
   },
   "files": [
     "src/*",
@@ -38,6 +38,9 @@
     "url": "https://github.com/chung-leong/zigar/issues"
   },
   "homepage": "https://github.com/chung-leong/zigar#readme",
+  "dependencies": {
+    "cmake-js": "^7.3.0"
+  },
   "devDependencies": {
     "@rollup/plugin-terser": "^0.4.4",
     "c8": "^9.1.0",
@@ -46,8 +49,5 @@
     "mocha-skip-if": "^1.0.4",
     "rollup": "^4.9.6",
     "rollup-plugin-strip-code": "^0.2.7"
-  },
-  "dependencies": {
-    "cmake-js": "chung-leong/cmake-js#master"
   }
 }

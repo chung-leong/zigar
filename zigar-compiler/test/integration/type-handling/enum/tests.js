@@ -10,12 +10,12 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Enum', function() {
     it('should handle enum as static variables', async function() {
       this.timeout(120000);
-      const { default: module, Pet, Donut, print } = await importTest('as-static-variables');      
-      expect(Pet.Cat).to.be.instanceOf(Pet);      
+      const { default: module, Pet, Donut, print } = await importTest('as-static-variables');
+      expect(Pet.Cat).to.be.instanceOf(Pet);
       expect(Pet.Donut).to.not.be.instanceOf(Pet);
       expect(Pet.Cat.valueOf()).to.equal('Cat');
       expect(Number(Pet.Cat)).to.equal(1);
@@ -54,7 +54,7 @@ export function addTests(importModule, options) {
     })
     it('should handle enum in array', async function() {
       this.timeout(120000);
-      const { array, Pet, print } = await importTest('array-of');      
+      const { array, Pet, print } = await importTest('array-of');
       expect(array.length).to.equal(3);
       expect([ ...array ]).to.eql([ Pet.Monkey, Pet.Dog, Pet.Cat ]);
       const [ line ] = await capture(() => print());
@@ -77,8 +77,6 @@ export function addTests(importModule, options) {
     it('should handle enum in packed struct', async function() {
       this.timeout(120000);
       const { default: module, Pet, StructA, print } = await importTest('in-packed-struct');
-      debugger;
-      module.struct_a.pet1;
       expect(module.struct_a.pet1).to.equal(Pet.Dog);
       expect(module.struct_a.pet2).to.equal(Pet.Cat);
       expect(module.struct_a.number).to.equal(200);
@@ -172,7 +170,7 @@ export function addTests(importModule, options) {
     })
     it('should not compile code containing enum vector', async function() {
       this.timeout(120000);
-      await expect(importTest('vector-of')).to.eventually.be.rejected;      
+      await expect(importTest('vector-of')).to.eventually.be.rejected;
     })
   })
 }

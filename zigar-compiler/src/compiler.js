@@ -198,7 +198,7 @@ export function getBuildFolder(config) {
   return join(buildDir, soBuildPrefix + '-' + soBuildHash);
 }
 
-export function createConfig(srcPath, srcInfo, soPath, soInfo, options) {
+export function createConfig(srcPath, srcInfo, soPath, soInfo, options = {}) {
   const {
     platform = os.platform(),
     arch = os.arch(),
@@ -212,7 +212,7 @@ export function createConfig(srcPath, srcInfo, soPath, soInfo, options) {
   const suffix = /^wasm(32|64)$/.test(arch) ? 'wasm' : 'c';
   const src = parse(srcPath);
   const so = parse(soPath);
-  return {    
+  return {
     platform,
     arch,
     optimize,

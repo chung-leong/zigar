@@ -1,6 +1,6 @@
 {
   "name": "rollup-plugin-zigar",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "Rollup plugin for transpiling Zig code",
   "main": "./dist/index.js",
   "type": "module",
@@ -8,10 +8,10 @@
     "test": "test"
   },
   "scripts": {
-    "test": "node ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.js",
-    "test:extended": "node ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.js",
-    "debug": "node --inspect-brk ./node_modules/mocha/bin/mocha.js -- test/*.test.js",
-    "coverage": "node ./node_modules/c8/bin/c8.js ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.js"
+    "test": "mocha --parallel -- test/*.test.js",
+    "test:extended": "mocha --parallel -- test/*.test.js",
+    "debug": "mocha --reporter spec --inspect-brk -- test/*.test.js",
+    "coverage": "c8 mocha --parallel -- test/*.test.js"
   },
   "files": [
     "dist/*"
@@ -31,8 +31,8 @@
   },
   "homepage": "https://github.com/chung-leong/zigar#readme",
   "dependencies": {
-    "zigar-compiler": "^0.11.0",
-    "zigar-runtime": "^0.11.0"
+    "zigar-compiler": "^0.11.1",
+    "zigar-runtime": "^0.11.1"
   },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^15.2.3",

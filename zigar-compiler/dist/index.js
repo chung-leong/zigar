@@ -12,6 +12,7 @@ const PARENT = Symbol('parent');
 const NAME = Symbol('name');
 const TAG = Symbol('tag');
 const ITEMS = Symbol('items');
+const PROPS = Symbol('props');
 const GETTER = Symbol('getter');
 const SETTER = Symbol('setter');
 const ELEMENT_GETTER = Symbol('elementGetter');
@@ -21,6 +22,7 @@ const LOCATION_SETTER = Symbol('addressSetter');
 const TARGET_GETTER = Symbol('targetGetter');
 const TARGET_SETTER = Symbol('targetSetter');
 const FIXED_LOCATION = Symbol('fixedLocation');
+const PROP_GETTERS = Symbol('propGetters');
 const PROP_SETTERS = Symbol('propSetters');
 const ALL_KEYS = Symbol('allKeys');
 const LENGTH = Symbol('length');
@@ -399,12 +401,67 @@ function decodeBase64(str) {
 
 function getValueOf() {
   const map = new Map();
-  return this[NORMALIZER](map, false);
+  const options = { error: 'throw' };
+  const process = function(value) {
+    const normalizer = value?.[NORMALIZER];
+    if (normalizer) {
+      let result = map.get(value);
+      if (result === undefined) {
+        result = normalizer.call(value, process, options);
+        map.set(value, result);
+      }
+      return result;
+    } else {
+      return value;
+    }
+  };
+  return process(this);
 }
+
+const INT_MAX = BigInt(Number.MAX_SAFE_INTEGER);
+const INT_MIN = BigInt(Number.MIN_SAFE_INTEGER);
 
 function convertToJSON() {
   const map = new Map();
-  return this[NORMALIZER](map, true);
+  const options = { error: 'return' };
+  const process = function(value) {
+    const normalizer = value?.[NORMALIZER];
+    if (normalizer) {
+      if (value instanceof Error) {
+        return { error: value.message };
+      }      
+      let result = map.get(value);
+      if (result === undefined) {
+        result = normalizer.call(value, process, options);
+        map.set(value, result);
+      }
+      return result;
+    } else {
+      if (typeof(value) === 'bigint' && INT_MIN <= value && value <= INT_MAX) {
+        return Number(value);
+      } 
+      return value;
+    }
+  };
+  return process(this);
+}
+
+function normalizeValue(cb, options) {
+  const value = handleError(() => this.$, options);
+  return cb(value);
+}
+
+function handleError(cb, options = {}) {
+  const { error = 'throw' } = options;
+  try {
+    return cb();
+  } catch (err) {
+    if (error === 'return') {
+      return err;
+    } else {
+      throw err;
+    }
+  }
 }
 
 function getDataViewDescriptor(structure, handlers = {}) {
@@ -607,7 +664,7 @@ function definePointer(structure, env) {
       // autocast to target type
       const dv = getDataView(targetStructure, arg, env);
       arg = Target(dv, { writable: !isConst });
-    } else if (isTargetSlice) {
+    } else if (arg && !arg[MEMORY]) {
       // autovivificate target object
       const fixed = env.inFixedMemory(this);
       const autoObj = new Target(arg, { writable: !isConst, fixed });
@@ -664,13 +721,14 @@ function definePointer(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-function normalizePointer(map, forJSON) {
+function normalizePointer(cb) {
+  let target;
   try {
-    const target = this['*'];
-    return target[NORMALIZER]?.(map, forJSON) ?? target;  
+    target = this['*'];
   } catch (err) {
-    return Symbol.for('inaccessible');
+    target = Symbol.for('inaccessible');
   }
+  return cb(target);
 }
 
 function getProxy() {
@@ -792,25 +850,6 @@ function defineStructShape(structure, env) {
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
-  const memberNames = members.map(m => m.name);
-  const interatorCreator = function() {
-    const self = this;
-    let index = 0;
-    return {
-      next() {
-        let value, done;
-        if (index < memberNames.length) {
-          const name = memberNames[index];
-          value = [ name, self[name] ];
-          done = false;
-          index++;
-        } else {
-          done = true;
-        }
-        return { value, done };
-      },
-    };
-  };
   const instanceDescriptors = {
     $: { get: getSelf, set: initializer },
     dataView: getDataViewDescriptor(structure),
@@ -819,11 +858,12 @@ function defineStructShape(structure, env) {
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     ...memberDescriptors,
-    [Symbol.iterator]: { value: interatorCreator },
+    [Symbol.iterator]: { value: getStructIterator },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, always) },
     [NORMALIZER]: { value: normalizeStruct },
+    [PROPS]: { value: members.map(m => m.name) },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
@@ -832,18 +872,45 @@ function defineStructShape(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-function normalizeStruct(map, forJSON) {
-  let object = map.get(this);
-  if (!object) {
-    object = {};
-    map.set(this, object);
-    for (const [ name, value ] of this) {
-      object[name] = value?.[NORMALIZER]?.(map, forJSON) ?? value;
-    }
+function normalizeStruct(cb, options) {
+  const object = {};
+  for (const [ name, value ] of getStructEntries.call(this, options)) {
+    object[name] = cb(value);
   }
   return object;
 }
 
+function getStructEntries(options) {
+  return {
+    [Symbol.iterator]: getStructEntriesIterator.bind(this, options),
+    length: this[PROPS].length,
+  };
+}
+
+function getStructIterator(options) { 
+  const entries = getStructEntries.call(this, options);
+  return entries[Symbol.iterator]();
+}
+
+function getStructEntriesIterator(options) {
+  const self = this;
+  const props = this[PROPS];
+  let index = 0;
+  return {
+    next() {
+      let value, done;      
+      if (index < props.length) {
+        const current = props[index++];
+        value = [ current, handleError(() => self[current], options) ];
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+  
 function getChildVivificator$1(structure) {
   const { instance: { members } } = structure;
   const objectMembers = {};
@@ -983,12 +1050,8 @@ function defineArray(structure, env) {
         arg = { string: arg };
       }
       if (arg?.[Symbol.iterator]) {
-        let argLen = arg.length;
-        if (typeof(argLen) !== 'number') {
-          arg = [ ...arg ];
-          argLen = arg.length;
-        }
-        if (argLen !== length) {
+        arg = transformIterable(arg);
+        if (arg.length !== length) {
           throwArrayLengthMismatch(structure, this, arg);
         }
         let i = 0;
@@ -1047,14 +1110,10 @@ function canBeString(member) {
   return member.type === MemberType.Uint && [ 8, 16 ].includes(member.bitSize);
 }
 
-function normalizeArray(map, forJSON) {
-  let array = map.get(this);
-  if (!array) {
-    array = [];
-    map.set(this, array);
-    for (const value of this) {      
-      array.push(value[NORMALIZER]?.(map, forJSON) ?? value);
-    }
+function normalizeArray(cb, options) {
+  const array = [];
+  for (const [ index, value ] of getArrayEntries.call(this, options)) {
+    array.push(cb(value));
   }
   return array;
 }
@@ -1067,9 +1126,9 @@ function getArrayIterator() {
     next() {
       let value, done;
       if (index < length) {
-        value = self.get(index);
+        const current = index++;
+        value = self.get(current);
         done = false;
-        index++;
       } else {
         done = true;
       }
@@ -1078,17 +1137,17 @@ function getArrayIterator() {
   };
 }
 
-function getArrayEntriesIterator() {
+function getArrayEntriesIterator(options) {
   const self = this[ARRAY] ?? this;
   const length = this.length;
   let index = 0;
   return {
     next() {
-      let value, done;
+      let value, done;      
       if (index < length) {
-        value = [ index, self.get(index) ];
+        const current = index++;
+        value = [ current, handleError(() => self.get(current), options) ];
         done = false;
-        index++;
       } else {
         done = true;
       }
@@ -1097,9 +1156,9 @@ function getArrayEntriesIterator() {
   };
 }
 
-function getArrayEntries() {
+function getArrayEntries(options) {
   return {
-    [Symbol.iterator]: getArrayEntriesIterator.bind(this),
+    [Symbol.iterator]: getArrayEntriesIterator.bind(this, options),
     length: this.length,
   };
 }
@@ -1142,6 +1201,33 @@ function getPointerVisitor(structure) {
       }
     }
   };
+}
+
+function transformIterable(arg) {
+  if (typeof(arg.length) === 'number') {
+    // it's an array of sort
+    return arg;
+  }
+  const iterator = arg[Symbol.iterator]();
+  const first = iterator.next();
+  const length = first.value?.length;
+  if (typeof(length) === 'number' && Object.keys(first.value).join() === 'length') {
+    // return generator with length attached
+    return Object.assign((function*() {
+      let result;
+      while (!(result = iterator.next()).done) {
+        yield result.value;
+      }
+    })(), { length });
+  } else {
+    const array = [];
+    let result = first;
+    while (!result.done) {
+      array.push(result.value);
+      result = iterator.next();
+    }
+    return array;
+  }
 }
 
 const proxyHandlers = {
@@ -1300,9 +1386,8 @@ function defineEnumerationShape(structure, env) {
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
-function normalizeEnumerationItem(map, forJSON) {
-  const item = this.$;
-  return item[NAME];
+function normalizeEnumerationItem(cb) {
+  return cb(this.$[NAME]);
 }
 
 function defineErrorSet(structure, env) {
@@ -1369,7 +1454,7 @@ function defineErrorSet(structure, env) {
     [Symbol.toStringTag]: { get: toStringTag },
     [Symbol.toPrimitive]: { value: toPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizeError },
+    [NORMALIZER]: { value: get },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
@@ -1378,16 +1463,6 @@ function defineErrorSet(structure, env) {
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
-function normalizeError(map, forJSON) {
-  const err = this.$;
-  if (forJSON) {
-    const { message } = err;
-    return { error: message };
-  } else {
-    return err;
-  }
-}
-
 let globalErrorSet;
 
 function createGlobalErrorSet() {
@@ -1482,18 +1557,13 @@ function defineErrorUnion(structure, env) {
     [RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, { isChildActive }) },
-    [NORMALIZER]: { value: normalizeErrorUnion },
+    [NORMALIZER]: { value: normalizeValue },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
-}
-
-function normalizeErrorUnion(map, forJSON) {
-  const value = this.$;
-  return value[NORMALIZER]?.(map, forJSON) ?? value;
 }
 
 function defineOpaque(structure, env) {
@@ -1529,7 +1599,7 @@ function defineOpaque(structure, env) {
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
-function normalizeOpaque(map, forJSON) {
+function normalizeOpaque(cb) {
   return {};
 }
 
@@ -1594,18 +1664,13 @@ function defineOptional(structure, env) {
     [RESETTER]: !hasPointer && { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, { isChildActive }) },
-    [NORMALIZER]: { value: normalizeOptional },
+    [NORMALIZER]: { value: normalizeValue },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
-}
-
-function normalizeOptional(map, forJSON) {
-  const value = this.$;
-  return value?.[NORMALIZER]?.(map, forJSON) ?? value;
 }
 
 function defineSlice(structure, env) {
@@ -1654,19 +1719,15 @@ function defineSlice(structure, env) {
     } else if (typeof(arg) === 'string' && hasStringProp) {
       initializer.call(this, { string: arg }, fixed);
     } else if (arg?.[Symbol.iterator]) {
-      let argLen = arg.length;
-      if (typeof(argLen) !== 'number') {
-        arg = [ ...arg ];
-        argLen = arg.length;
-      }
+      arg = transformIterable(arg);
       if (!this[MEMORY]) {
-        shapeDefiner.call(this, null, argLen, fixed);
+        shapeDefiner.call(this, null, arg.length, fixed);
       } else {
-        shapeChecker.call(this, arg, argLen);
+        shapeChecker.call(this, arg, arg.length);
       }
       let i = 0;
       for (const value of arg) {
-        sentinel?.validateValue(value, i, argLen);
+        sentinel?.validateValue(value, i, arg.length);
         set.call(this, i++, value);
       }
     } else if (typeof(arg) === 'number') {
@@ -1880,32 +1941,15 @@ function defineUnionShape(structure, env) {
     }
   : undefined;
   const constructor = structure.constructor = createConstructor(structure, { modifier, initializer }, env);
-  // for bare and extern union, all members will be included 
-  // tagged union meanwhile will only give the entity for the active field
-  const memberNames = (isTagged) ? [ '' ] : valueMembers.map(m => m.name);
-  const interatorCreator = function() {
-    const self = this;
-    let index = 0;
-    if (isTagged) {
-      memberNames[0] = getActiveField.call(this);
+  const fieldDescriptor = (isTagged)
+  ? { 
+      // for tagged union,  only the active field
+      get() { return [ getActiveField.call(this) ] } 
     }
-    return {
-      next() {
-        let value, done;
-        if (index < memberNames.length) {
-          const name = memberNames[index];
-          // get value of field with no check
-          const get = memberValueGetters[name];
-          value = [ name, get.call(self) ];
-          done = false;
-          index++;
-        } else {
-          done = true;
-        }
-        return { value, done };
-      },
+  : { 
+      // for bare and extern union, all members are included 
+      value: valueMembers.map(m => m.name)
     };
-  };
   const isChildActive = (isTagged)
   ? function(child) {
       const name = getActiveField.call(this);
@@ -1923,12 +1967,14 @@ function defineUnionShape(structure, env) {
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     ...memberDescriptors,
-    [Symbol.iterator]: { value: interatorCreator },
+    [Symbol.iterator]: { value: getUnionIterator },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [TAG]: isTagged && { get: getSelector, configurable: true },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
     [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor$1(structure, { isChildActive }) },
-    [NORMALIZER]: { value: normalizeStruct },
+    [PROP_GETTERS]: { value: memberValueGetters },
+    [NORMALIZER]: { value: normalizeUnion },
+    [PROPS]: fieldDescriptor,
   };  
   const staticDescriptors = {
     [ALIGN]: { value: align },
@@ -1942,6 +1988,46 @@ function defineUnionShape(structure, env) {
       setters[name] = init;
     }
   }
+}
+function normalizeUnion(cb, options) {
+  const object = {};
+  for (const [ name, value ] of getUnionEntries.call(this, options)) {
+    object[name] = cb(value);
+  }
+  return object;
+}
+
+function getUnionEntries(options) {
+  return {
+    [Symbol.iterator]: getUnionEntriesIterator.bind(this, options),
+    length: this[PROPS].length,
+  };
+}
+
+function getUnionIterator(options) { 
+  const entries = getUnionEntries.call(this, options);
+  return entries[Symbol.iterator]();
+}
+
+function getUnionEntriesIterator(options) {
+  const self = this;
+  const props = this[PROPS];
+  const getters = this[PROP_GETTERS];
+  let index = 0;
+  return {
+    next() {
+      let value, done;      
+      if (index < props.length) {
+        const current = props[index++];
+        // get value of prop with no check
+        value = [ current, handleError(() => getters[current].call(self), options) ];
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
 }
 
 function defineVector(structure, env) {
@@ -1993,7 +2079,7 @@ function defineVector(structure, env) {
     typedArray: typedArray && getTypedArrayDescriptor(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
-    entries: { value: createVectorEntries },
+    entries: { value: getVectorEntries },
     delete: { value: getDestructor(structure) },
     [Symbol.iterator]: { value: getVectorIterator },
     [COPIER]: { value: getMemoryCopier(byteSize) },
@@ -2008,11 +2094,10 @@ function defineVector(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-function normalizeVector(map, forJSON) {
-  let array = map.get(this);
-  if (!array) {
-    array = [ ...this ];
-    map.set(this, array);
+function normalizeVector(cb, options) {
+  const array = [];
+  for (const [ index, value ] of getVectorEntries.call(this, options)) {
+    array.push(cb(value));
   }
   return array;
 }
@@ -2025,9 +2110,9 @@ function getVectorIterator() {
     next() {
       let value, done;
       if (index < length) {
-        value = self[index];
+        const current = index++;
+        value = self[current];
         done = false;
-        index++;
       } else {
         done = true;
       }
@@ -2044,9 +2129,9 @@ function getVectorEntriesIterator() {
     next() {
       let value, done;
       if (index < length) {
-        value = [ index, self[index] ];
+        const current = index++;
+        value = [ current, self[current] ];
         done = false;
-        index++;
       } else {
         done = true;
       }
@@ -2055,7 +2140,7 @@ function getVectorEntriesIterator() {
   };
 }
 
-function createVectorEntries() {
+function getVectorEntries() {
   return {
     [Symbol.iterator]: getVectorEntriesIterator.bind(this),
     length: this.length,
@@ -2586,11 +2671,12 @@ function definePrimitive(structure, env) {
     dataView: getDataViewDescriptor(structure),
     base64: getBase64Descriptor(structure),
     typedArray: typedArray && getTypedArrayDescriptor(structure),
-    valueOf: { value: get },
-    toJSON: { value: get },
+    valueOf: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.toPrimitive]: { value: get },
     [COPIER]: { value: getMemoryCopier(byteSize) },
+    [NORMALIZER]: { value: normalizeValue },
   };
   const staticDescriptors = {
     [COMPAT]: { value: getCompatibleTags(structure) },
@@ -3224,12 +3310,8 @@ function isBuffer(arg, typedArray) {
 }
 
 function getTypeName(member) {
-  const { type, bitSize, byteSize, structure } = member;
-  if (structure?.name === 'usize') {
-    return `USize${bitSize}`;
-  } else if (structure?.name === 'isize') {
-    return `ISize${bitSize}`;
-  } else if (type === MemberType.Int) {
+  const { type, bitSize, byteSize } = member;
+  if (type === MemberType.Int) {
     return `${bitSize <= 32 ? '' : 'Big' }Int${bitSize}`;
   } else if (type === MemberType.Uint) {
     return `${bitSize <= 32 ? '' : 'Big' }Uint${bitSize}`;
@@ -3612,55 +3694,42 @@ function getUnalignedNumericAccessor(access, member) {
 const methodCache = {};
 
 function cacheMethod(access, member, cb) {
-  const { type, bitOffset, bitSize } = member;
+  const { type, bitOffset, bitSize, structure } = member;
   const bitPos = bitOffset & 0x07;
   const typeName = getTypeName(member);
   const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
-  const name = `${access}${typeName}${suffix}`;
+  const isInt = type === MemberType.Int || type === MemberType.Uint;
+  let name = `${access}${typeName}${suffix}`;
+  let isSize = false, originalName = name;
+  if (isInt && bitSize === 64) {
+    const zigTypeName = structure?.name;
+    if (zigTypeName === 'usize' || zigTypeName === 'isize') {
+      name += 'Size';
+      isSize = true;
+    }
+  }
   let fn = methodCache[name];
   if (!fn) {
-    // usize and isize can return/accept number or bigint
-    if ((type === MemberType.Int && typeName === 'ISize64')
-     || (type === MemberType.Uint && typeName === 'USize64')) {
-      const realTypeName = (type === MemberType.Int) ? 'BigInt64' : 'BigUint64';
-      const realName = `${access}${realTypeName}`;
-      if (access === 'get') {
-        const get = cb(realName);
-        const min = BigInt(Number.MIN_SAFE_INTEGER);
-        const max = BigInt(Number.MAX_SAFE_INTEGER);
-        fn = function(offset, littleEndian) {
-          const value = get.call(this, offset, littleEndian);
-          if (min <= value && value <= max) {
-            return Number(value);
-          } else {
-            return value;
-          }
-        };
-      } else {
-        const set = cb(realName);
-        fn = function(offset, value, littleEndian) {
-          // automatically convert number to bigint
-          if (typeof(value) === 'number') {
-            value = BigInt(value);
-          }
-          set.call(this, offset, value, littleEndian);
-        };
-      }
-     } else if ((type === MemberType.Int && typeName === 'ISize32')
-             || (type === MemberType.Uint && typeName === 'USize32')) {
-      const realTypeName = (type === MemberType.Int) ? 'Int32' : 'Uint32';
-      const realName = `${access}${realTypeName}`;
-      if (access === 'get') {
-        fn = cb(realName);
-      } else {
-        const set = cb(realName);
-        fn = function(offset, value, littleEndian) {
-          if (typeof(value) === 'bigint') {
-            value = Number(value);
-          }
-          set.call(this, offset, value, littleEndian);
-        };
-      }
+    if (isInt && access === 'set') {
+      // add auto-conversion between number and bigint
+      const Primitive = getPrimitiveClass(member);
+      const set = cb(originalName);
+      fn = function(offset, value, littleEndian) {
+        set.call(this, offset, Primitive(value), littleEndian);
+      };
+    } else if (isSize && access === 'get') {
+      // use number instead of bigint where possible
+      const get = cb(originalName);
+      const min = BigInt(Number.MIN_SAFE_INTEGER);
+      const max = BigInt(Number.MAX_SAFE_INTEGER);
+      fn = function(offset, littleEndian) {
+        const value = get.call(this, offset, littleEndian);
+        if (min <= value && value <= max) {
+          return Number(value);
+        } else {
+          return value;
+        }
+      };
     } else {
       fn = cb(name);
     }
@@ -4276,7 +4345,7 @@ function addStructureDefinitions(lines, definition) {
   }
   // add properties to objects
   if (objects.length > 0) {
-    add('\n// define objects');
+    add('\n// define objects');    
     for (const object of objects) {
       const varname = objectNames.get(object);
       const structure = structureMap.get(object.constructor);
@@ -4497,6 +4566,7 @@ async function findMatchingFiles(dir, re) {
   const map = new Map();
   const scanned = new Map();
   const scan = async (dir) => {
+    /* c8 ignore next 3 */
     if (scanned.get(dir)) {
       return;
     } 
@@ -4527,6 +4597,7 @@ function findMatchingFilesSync(dir, re) {
   const map = new Map();
   const scanned = new Map();
   const scan = (dir) => {
+    /* c8 ignore next 3 */
     if (scanned.get(dir)) {
       return;
     } 
@@ -4752,12 +4823,9 @@ async function delay(ms) {
 }
 
 function delaySync(ms) {   
-  try {
-    const buffer = new SharedArrayBuffer(8);
-    const ta = new BigInt64Array(buffer);
-    Atomics.wait(ta, 0, 0n, ms);
-  } catch (err) {    
-  }
+  const buffer = new SharedArrayBuffer(8);
+  const ta = new BigInt64Array(buffer);
+  Atomics.wait(ta, 0, 0n, ms);
 }
 
 function md5(text) {
@@ -4769,7 +4837,7 @@ function md5(text) {
 async function compile(srcPath, soPath, options) {
   const srcInfo = await findFile(srcPath);
   if (!srcInfo) {
-    throw new Error(`Source file not found: ${fullPath}`);
+    throw new Error(`Source file not found: ${srcPath}`);
   }
   const soInfo = await findFile(soPath);
   const config = createConfig(srcPath, srcInfo, soPath, soInfo, options);
@@ -4797,51 +4865,53 @@ async function compile(srcPath, soPath, options) {
       }
     }
   }
-  if (changed) {
-    // see if C library is needed
-    if (!config.useLibC && !srcInfo.isDirectory()) {
-      for (const [ path, info ] of srcFileMap) {
-        const content = await loadFile(path);
-        if (content.includes('@cImport')) {
-          config.useLibC = true;
-          break;
-        }
-      }
-    }
-    // add custom build file
+  if (!changed) {
+    return false;
+  }
+  // see if C library is needed
+  if (!config.useLibC && !srcInfo.isDirectory()) {
     for (const [ path, info ] of srcFileMap) {
-      switch (basename(path)) {
-        case 'build.zig':
-          config.buildFilePath = path;
-          break;
-        case 'build.zig.zon':
-          config.packageConfigFilePath = path;
-          break;
-      }
-    }
-    // build in a unique temp dir
-    const soBuildDir = getBuildFolder(config);
-    const soBuildCmd = getBuildCommand(config);
-      // only one process can compile a given file at a time
-    await acquireLock(soBuildDir, config.staleTime);
-    try {
-      // create config file
-      await createProject(config, soBuildDir);
-      // then run the compiler
-      await runCompiler(soBuildCmd, soBuildDir);
-    } finally {
-      await releaseLock(soBuildDir);
-      if (config.clean) {
-        await deleteDirectory(soBuildDir);
+      const content = await loadFile(path);
+      if (content.includes('@cImport')) {
+        config.useLibC = true;
+        break;
       }
     }
   }
+  // add custom build file
+  for (const [ path, info ] of srcFileMap) {
+    switch (basename(path)) {
+      case 'build.zig':
+        config.buildFilePath = path;
+        break;
+      case 'build.zig.zon':
+        config.packageConfigFilePath = path;
+        break;
+    }
+  }
+  // build in a unique temp dir
+  const soBuildDir = getBuildFolder(config);
+  const soBuildCmd = getBuildCommand(config);
+    // only one process can compile a given file at a time
+  await acquireLock(soBuildDir, config.staleTime);
+  try {
+    // create config file
+    await createProject(config, soBuildDir);
+    // then run the compiler
+    await runCompiler(soBuildCmd, soBuildDir);
+  } finally {
+    await releaseLock(soBuildDir);
+    if (config.clean) {
+      await deleteDirectory(soBuildDir);
+    }
+  }
+  return true;
 }
 
 function compileSync(srcPath, soPath, options) {
   const srcInfo = findFileSync(srcPath);
   if (!srcInfo) {
-    throw new Error(`Source file not found: ${fullPath}`);
+    throw new Error(`Source file not found: ${srcPath}`);
   }
   const soInfo = findFileSync(soPath);
   const config = createConfig(srcPath, srcInfo, soPath, soInfo, options);
@@ -4869,45 +4939,47 @@ function compileSync(srcPath, soPath, options) {
       }
     }
   }
-  if (changed) {
-    // see if C library is needed
-    if (!config.useLibC && !srcInfo.isDirectory()) {
-      for (const [ path, info ] of srcFileMap) {
-        const content = loadFileSync(path);
-        if (content.includes('@cImport')) {
-          config.useLibC = true;
-          break;
-        }
-      }
-    }
-    // add custom build file
+  if (!changed) {
+    return false;
+  }
+  // see if C library is needed
+  if (!config.useLibC && !srcInfo.isDirectory()) {
     for (const [ path, info ] of srcFileMap) {
-      switch (basename(path)) {
-        case 'build.zig':
-          config.buildFilePath = path;
-          break;
-        case 'build.zig.zon':
-          config.packageConfigFilePath = path;
-          break;
-      }
-    }
-    // build in a unique temp dir
-    const soBuildDir = getBuildFolder(config);
-    const soBuildCmd = getBuildCommand(config);
-      // only one process can compile a given file at a time
-    acquireLockSync(soBuildDir, config.staleTime);
-    try {
-      // create config file
-      createProjectSync(config, soBuildDir);
-      // then run the compiler
-      runCompilerSync(soBuildCmd, soBuildDir);
-    } finally {
-      releaseLockSync(soBuildDir);
-      if (config.clean) {
-        deleteDirectorySync(soBuildDir);
+      const content = loadFileSync(path);
+      if (content.includes('@cImport')) {
+        config.useLibC = true;
+        break;
       }
     }
   }
+  // add custom build file
+  for (const [ path, info ] of srcFileMap) {
+    switch (basename(path)) {
+      case 'build.zig':
+        config.buildFilePath = path;
+        break;
+      case 'build.zig.zon':
+        config.packageConfigFilePath = path;
+        break;
+    }
+  }
+  // build in a unique temp dir
+  const soBuildDir = getBuildFolder(config);
+  const soBuildCmd = getBuildCommand(config);
+    // only one process can compile a given file at a time
+  acquireLockSync(soBuildDir, config.staleTime);
+  try {
+    // create config file
+    createProjectSync(config, soBuildDir);
+    // then run the compiler
+    runCompilerSync(soBuildCmd, soBuildDir);
+  } finally {
+    releaseLockSync(soBuildDir);
+    if (config.clean) {
+      deleteDirectorySync(soBuildDir);
+    }
+  }
+  return true;
 }
 
 function getBuildCommand(config) {
@@ -4950,7 +5022,7 @@ function getBuildFolder(config) {
   return join(buildDir, soBuildPrefix + '-' + soBuildHash);
 }
 
-function createConfig(srcPath, srcInfo, soPath, soInfo, options) {
+function createConfig(srcPath, srcInfo, soPath, soInfo, options = {}) {
   const {
     platform = os.platform(),
     arch = os.arch(),
@@ -4964,7 +5036,7 @@ function createConfig(srcPath, srcInfo, soPath, soInfo, options) {
   const suffix = /^wasm(32|64)$/.test(arch) ? 'wasm' : 'c';
   const src = parse(srcPath);
   const so = parse(soPath);
-  return {    
+  return {
     platform,
     arch,
     optimize,
@@ -4996,7 +5068,7 @@ async function runCompiler(zigCmd, soBuildDir) {
         const log = stderr;
         if (log) {
           const logPath = join(soBuildDir, 'log');
-          writeFile(logPath, log).catch(() => {});
+          writeFile(logPath, log);
           err = new Error(`Zig compilation failed\n\n${log}`);
         }
         reject(err);
@@ -5016,13 +5088,10 @@ function runCompilerSync(zigCmd, soBuildDir) {
   try {
     execSync(zigCmd, options);
   } catch (err) {
-    const log = err.stderr ?? '';
+    const log = err.stderr;
     if (log) {
       const logPath = join(soBuildDir, 'log');
-      try {
-        writeFileSync(logPath, log);
-      } catch (_) {         
-      }
+      writeFileSync(logPath, log);
     }
     throw new Error(`Zig compilation failed\n\n${log}`);
   }
@@ -5068,6 +5137,7 @@ function createProjectSync(config, dir) {
 function absolute(relpath) {
   // import.meta.url don't always yield the right URL when transpiled to CommonJS
   // just use __dirname as it's going to be there
+  /* c8 ignore next 2 */
   if (typeof(__dirname) === 'string') {
     return resolve(__dirname, relpath);
   } else {
@@ -6404,7 +6474,7 @@ function stripUnused(binary, options = {}) {
   } = options;
   const { sections, size } = parseBinary(binary);
   const blacklist = [
-    /^define$/,
+    /^getFactoryThunk$/,
     /^exporter.createRootFactory/,
   ];
 
@@ -6493,16 +6563,16 @@ function stripUnused(binary, options = {}) {
   for (const fn of functions) {
     if (fn.name && blacklist.some(re => re.test(fn.name))) {
       fn.using = false;
-      if (fn.name === 'define' && functionNames.length === 0) {
+      if (fn.name === 'getFactoryThunk' && functionNames.length === 0) {
         // when compiled for ReleaseSmall, we don't get the name section
         // therefore unable to remove the factory function by name
-        // we know that define loads its address, however
+        // we know that getFactoryThunk loads its address, however
         // and that a function pointer is just an index into table 0
         const ops = fn.instructions;
-        if (ops.length === 4 && ops[1].opcode === 0x41 && ops[2].opcode === 0x10) {
-          // 0x10 is call
+        if (ops.length === 2 && ops[0].opcode === 0x41 && ops[1].opcode === 0x0B) {
           // 0x41 is i32.const
-          const elemIndex = ops[1].operand;
+          // 0x0B is end
+          const elemIndex = ops[0].operand;
           const elemSection = getSection(SectionType.Element);
           for (const segment of elemSection.segments) {
             if (segment.indices) {

@@ -72,7 +72,7 @@ export const optionsForTranspile = {
   },
 };
 
-const allOptions = { 
+const allOptions = {
   ...optionsForCompile,
   ...optionsForTranspile,
 };
@@ -139,11 +139,9 @@ export function getCachePath(srcPath, options) {
   const {
     cacheDir = join(cwd, 'zigar-cache'),
     optimize,
-    platform,
-    arch,
   } = options;
   const src = parse(srcPath);
-  const folder = basename(src.dir).slice(0, 16).trim() + '-' + md5(src.dir).slice(0, 8);  
+  const folder = basename(src.dir).slice(0, 16).trim() + '-' + md5(src.dir).slice(0, 8);
   const soPathPI = join(cacheDir, folder, optimize, `${src.name}.zigar`);
   return addPlatformExt(soPathPI, options);
 }
@@ -152,7 +150,7 @@ export function getPlatformExt(options) {
   const {
     platform,
     arch,
-  } = options;  
+  } = options;
   let ext;
   switch (platform) {
     case 'darwin':
@@ -203,14 +201,14 @@ function processConfigFile(text, cfgPath, availableOptions) {
     const option = availableOptions[key];
     if (!option) {
       throwUnknownOption(key);
-    }    
+    }
     if (typeof(value) !== option.type) {
       throw new Error(`${key} is expected to be a ${option.type}, received: ${value}`);
     }
   }
   const { sourceFiles } = options;
   if (sourceFiles) {
-    const map = options.sourceFiles = {};    
+    const map = options.sourceFiles = {};
     const cfgDir = dirname(cfgPath)
     for (const [ module, source ] of Object.entries(sourceFiles)) {
       const modulePath = resolve(cfgDir, module);

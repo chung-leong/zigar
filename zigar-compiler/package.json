@@ -1,17 +1,16 @@
 {
   "name": "zigar-compiler",
-  "version": "0.11.0",
-  "description": "Compile Zig code into WASM or C++ module",
+  "version": "0.11.1",
+  "description": "Compile Zig code into WASM or native module",
   "main": "./dist/index.js",
   "type": "module",
   "directories": {
     "test": "test"
   },
   "scripts": {
-    "test": "node ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.js",
-    "debug": "node --inspect-brk ./node_modules/mocha/bin/mocha.js -- test/*.test.js",
-    "coverage": "node ./node_modules/c8/bin/c8.js ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.js",
-    "integration-coverage": "node ./node_modules/c8/bin/c8.js ./node_modules/mocha/bin/mocha.js --parallel -- test/integration.test.js",
+    "test": "mocha --parallel -- test/*.test.js",
+    "debug": "mocha --reporter spec --inspect-brk -- test/*.test.js",
+    "coverage": "c8 mocha --parallel -- test/*.test.js",
     "rollup": "rollup -c rollup.config.js"
   },
   "files": [

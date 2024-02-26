@@ -1,7 +1,7 @@
 {
   "name": "node-zigar",
-  "version": "0.11.0",
-  "description": "Enable the use of Zig in NodeJS",
+  "version": "0.11.1",
+  "description": "Enable the use of Zig in Node.js",
   "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js",
@@ -16,10 +16,10 @@
     "test": "test"
   },
   "scripts": {
-    "test": "node --experimental-loader ./dist/index.js --no-warnings ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.*js",
-    "test:extended": "node --experimental-loader ./dist/index.js --no-warnings ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.*js",
-    "debug": "node --inspect-brk --experimental-loader ./dist/index.js --no-warnings ./node_modules/mocha/bin/mocha.js -- test/*.test.*js",
-    "coverage": "NODE_OPTIONS='--experimental-loader ./dist/index.js --no-warnings' node ./node_modules/c8/bin/c8.js ./node_modules/mocha/bin/mocha.js --parallel -- test/*.test.*js"
+    "test": "mocha --loader=./dist/index.js --no-warnings --parallel -- test/*.test.*js",
+    "test:extended": "mocha --loader=./dist/index.js --no-warnings --parallel -- test/*.test.*js",
+    "debug": "mocha --loader=./dist/index.js --no-warnings --reporter spec --inspect-brk -- test/*.test.*js",
+    "coverage": "c8 mocha --loader=./dist/index.js --no-warnings --parallel -- test/*.test.*js"
   },
   "files": [
     "dist/*",
@@ -41,8 +41,8 @@
   },
   "homepage": "https://github.com/chung-leong/zigar#readme",
   "dependencies": {
-    "node-zigar-addon": "^0.11.0",
-    "zigar-compiler": "^0.11.0"
+    "node-zigar-addon": "^0.11.1",
+    "zigar-compiler": "^0.11.1"
   },
   "devDependencies": {
     "c8": "^8.0.1",

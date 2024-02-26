@@ -7,7 +7,7 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Struct', function() {
     it('should import struct as static variables', async function() {
       this.timeout(120000);
@@ -41,11 +41,11 @@ export function addTests(importModule, options) {
     })
     it('should handle struct in array', async function() {
       this.timeout(120000);
-      const { 
-        default: module, 
+      const {
+        default: module,
         array_a,
         array_b,
-        print, 
+        print,
       } = await importTest('array-of');
       expect(array_a.valueOf()).to.eql(
         [
@@ -71,7 +71,6 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ struct1: { number1: 1, number2: 2 }, struct2: { number1: 3, number2: 4 } });
-      debugger;
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ struct1: { number1: 10, number2: 20 }, struct2: { number1: 11, number2: 21 } });
       const [ before ] = await capture(() => print());
@@ -159,7 +158,7 @@ export function addTests(importModule, options) {
     })
     it('should not compile code containing struct vector', async function() {
       this.timeout(120000);
-      await expect(importTest('vector-of')).to.eventually.be.rejected;      
+      await expect(importTest('vector-of')).to.eventually.be.rejected;
     })
   })
 }

@@ -405,6 +405,7 @@ napi_value obtain_external_buffer(napi_env env,
             reference_module(md);
             buffer_count++;
             break;
+#ifdef napi_no_external_buffers_allowed
         case napi_no_external_buffers_allowed:
             /* use a regular buffer instead when we can't create an external one */
             if (napi_create_arraybuffer(env, len, &dest, &buffer) == napi_ok) {
@@ -413,6 +414,7 @@ napi_value obtain_external_buffer(napi_env env,
                 }
                 break;
             }
+#endif
         default:
             return throw_last_error(env);
     }
@@ -530,7 +532,7 @@ napi_value get_memory_offset(napi_env env,
     }
     size_t base = md->base_address;
     if (address < base) {
-        /* this happens when we encounter a regular ArrayBuffer with byteLength = 0 */ 
+        /* this happens when we encounter a regular ArrayBuffer with byteLength = 0 */
         address = base;
     }
     napi_value offset;
@@ -700,7 +702,7 @@ bool compile_javascript(napi_env env,
 napi_value create_environment(napi_env env,
                               napi_callback_info info) {
     /* look for cached copy of environment constructor */
-    addon_data* ad;                                
+    addon_data* ad;
     napi_value env_constructor;
     if (napi_get_cb_info(env, info, NULL, NULL, NULL, (void*) &ad) != napi_ok
      || !ad->env_constructor
@@ -722,9 +724,9 @@ napi_value create_environment(napi_env env,
             ad->env_constructor = NULL;
         }
     }
-    /* create the environment and add loadModule--the function keeps a reference to 
+    /* create the environment and add loadModule--the function keeps a reference to
        the module data, allowing its freeing when js_env gets gc'ed */
-    napi_value js_env;   
+    napi_value js_env;
     module_data* md = new_module(env);
     if (napi_new_instance(env, env_constructor, 0, NULL, &js_env) != napi_ok
      || napi_create_reference(env, js_env, 0, &md->js_env) != napi_ok
