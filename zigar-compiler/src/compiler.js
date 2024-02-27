@@ -168,6 +168,7 @@ export function getBuildCommand(config) {
     arm: 'arm',
     arm64: 'aarch64',
     ia32: 'x86',
+    loong64: 'loong64',
     mips: 'mips',
     mipsel: 'mipsel',
     ppc: 'powerpc',
