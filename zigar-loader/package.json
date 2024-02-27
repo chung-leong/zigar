@@ -8,10 +8,10 @@
     "test": "test"
   },
   "scripts": {
-    "test": "mocha --parallel -- test/*.test.mjs",
-    "test:extended": "mocha --parallel -- test/*.test.mjs",
+    "test": "mocha -- test/*.test.mjs",
+    "test:extended": "mocha -- test/*.test.mjs",
     "debug": "mocha --reporter spec --inspect-brk -- test/*.test.mjs",
-    "coverage": "c8 mocha --parallel -- test/*.test.mjs"
+    "coverage": "c8 mocha -- test/*.test.mjs"
   },
   "files": [
     "dist/*"

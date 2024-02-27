@@ -16,10 +16,10 @@
     "test": "test"
   },
   "scripts": {
-    "test": "mocha --loader=./dist/index.js --no-warnings --parallel -- test/*.test.*js",
-    "test:extended": "mocha --loader=./dist/index.js --no-warnings --parallel -- test/*.test.*js",
+    "test": "mocha --loader=./dist/index.js --no-warnings -- test/*.test.*js",
+    "test:extended": "mocha --loader=./dist/index.js --no-warnings -- test/*.test.*js",
     "debug": "mocha --loader=./dist/index.js --no-warnings --reporter spec --inspect-brk -- test/*.test.*js",
-    "coverage": "c8 mocha --loader=./dist/index.js --no-warnings --parallel -- test/*.test.*js"
+    "coverage": "c8 mocha --loader=./dist/index.js --no-warnings  -- test/*.test.*js"
   },
   "files": [
     "dist/*",
