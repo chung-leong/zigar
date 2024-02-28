@@ -1,27 +1,91 @@
-const { resolve } = require('path');
+const { resolve, join } = require('path');
+const { execFileSync } = require('child_process');
+const { existsSync } = require('fs');
 const os = require('os');
 
-const extPath = resolve(`${__dirname}/../build/${os.platform()}.${os.arch()}.node`);
-
-function createEnvironment() {
-  const { createEnvironment } = require(extPath);
+function createEnvironment(addonDir) {
+  const { createEnvironment } = loadAddon(addonDir);
   return createEnvironment();
 }
-
-function importModule(libPath, options = {}) {
-  const env = createEnvironment();
-  env.loadModule(libPath);
+  
+function importModule(soPath, addonDir, options = {}) {
+  const env = createEnvironment(addonDir);
+  env.loadModule(soPath);
   env.acquireStructures(options);
   return env.useStructures();
 }
-
-function getGCStatistics() {
-  const { getGCStatistics } = require(extPath);
+  
+function getGCStatistics(addonDir) {
+  const { getGCStatistics } = loadAddon(addonDir);
   return getGCStatistics();
+}
+  
+function buildAddOn(addonPath, options = {}) {
+  const { platform, arch } = options;
+  const cwd = resolve(__dirname, '../');
+  const args = [ 'build', `-Doptimize=ReleaseSmall`, `-Doutput=${addonPath}` ];
+  if (platform && arch) {
+    // translate from names used by Node to those used by Zig
+    const cpuArchs = {
+      arm: 'arm',
+      arm64: 'aarch64',
+      ia32: 'x86',
+      loong64: 'loong64',
+      mips: 'mips',
+      mipsel: 'mipsel',
+      ppc: 'powerpc',
+      ppc64: 'powerpc64',
+      s390: undefined,
+      s390x: 's390x',
+      x64: 'x86_64',
+    };
+    const osTags = {
+      aix: 'aix',
+      darwin: 'macos',
+      freebsd: 'freebsd',
+      linux: 'linux-gnu',
+      openbsd: 'openbsd',
+      sunos: 'solaris',
+      win32: 'windows',
+    };
+    const cpuArch = cpuArchs[arch] ?? arch;
+    const osTag = osTags[platform] ?? platform;
+    args.push(`-Dtarget=${cpuArch}-${osTag}`);
+  }
+  execFileSync('zig', args, { cwd, stdio: 'pipe' });
+}
+  
+let isGNU;
+
+function loadAddon(addonDir) {
+  const arch = os.arch();
+  let platform = os.platform();
+  if (platform === 'linux') {
+    // differentiate glibc from musl
+    if (isGNU === undefined) {
+      try {
+        execFileSync('getconf', [ 'GNU_LIBC_VERSION' ], { stdio: 'pipe' });
+        isGNU = true;
+        /* c8 ignore next 3 */
+      } catch (err) {
+        isGNU = false;
+      }
+    }
+    /* c8 ignore next 3 */
+    if (!isGNU) {
+      platform += '-musl';
+    }
+  }
+  const addonPath = join(addonDir, `${platform}.${arch}.node`);
+  if (!existsSync(addonPath)) {
+    buildAddOn(addonPath);
+  }
+  return require(addonPath);
 }
 
 module.exports = {
   createEnvironment,
   importModule,
   getGCStatistics,
+  buildAddOn,
 };

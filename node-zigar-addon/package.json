@@ -16,9 +16,7 @@
     "test:gc": "mocha --v8-expose-gc -- test/gc/*.test.js",
     "debug": "mocha --reporter spec --inspect-brk -- test/*.test.js",
     "coverage": "c8 mocha --parallel -- test/*.test.js",
-    "rollup": "rollup -c rollup.config.js",
-    "install": "zig build -Doptimize=ReleaseFast",
-    "build": "npm run rollup && npm run install"
+    "rollup": "rollup -c rollup.config.js"
   },
   "files": [
     "src/*",
