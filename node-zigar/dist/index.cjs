@@ -1,7 +1,7 @@
 const Module = require('module');
 const { importModule } = require('node-zigar-addon/cjs');
 const os = require('os');
-const { dirname } = require('path');
+const { dirname, join } = require('path');
 const { fileURLToPath, pathToFileURL } = require('url');
 const { 
   compileSync, extractOptions, findConfigFileSync, findSourceFile, getModuleCachePath,
@@ -45,6 +45,7 @@ Module._load = new Proxy(Module._load, {
     // the matching so/dylib/dll file in modPath; basically, when node-zigar.config.json 
     // is absent, compilation does not occur
     const { outputPath } = compileSync(srcPath, modPath, options);
-    return importModule(outputPath, options); 
+    const addonDir = join(dirname(modPath), 'node-zigar-addon');
+    return importModule(outputPath, addonDir, options); 
   }
 });

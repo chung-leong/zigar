@@ -244,13 +244,20 @@ export function createProjectSync(config, dir) {
 
 const cwd = process.cwd();
 
-export function getModuleCachePath(srcPath, options) {
+export function getCachePath(options) {
   const {
     cacheDir = join(cwd, 'zigar-cache'),
+  } = options;
+  return cacheDir;
+}
+
+export function getModuleCachePath(srcPath, options) {
+  const {
     optimize,
   } = options;
   const src = parse(srcPath);
   const folder = basename(src.dir).slice(0, 16).trim() + '-' + md5(src.dir).slice(0, 8);
+  const cacheDir = getCachePath(options);
   return join(cacheDir, folder, optimize, `${src.name}.zigar`);
 }
 

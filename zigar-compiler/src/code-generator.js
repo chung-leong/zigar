@@ -9,6 +9,7 @@ export function generateCode(definition, params) {
     topLevelAwait = true,
     omitExports = false,
     declareFeatures = false,
+    addonDir = null
   } = params;
   const features = (declareFeatures) ? getFeaturesUsed(structures) : [];
   const exports = getExports(structures);
@@ -28,7 +29,7 @@ export function generateCode(definition, params) {
   // write out the structures as object literals 
   addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
-  add(`const env = createEnvironment();`);
+  add(`const env = createEnvironment(${JSON.stringify(addonDir)});`);
   add(`const __zigar = env.getControlObject();`);
   add(`\n// recreate structures`);
   add(`env.recreateStructures(structures, options);`);

@@ -4205,6 +4205,7 @@ function generateCode(definition, params) {
     topLevelAwait = true,
     omitExports = false,
     declareFeatures = false,
+    addonDir = null
   } = params;
   const features = (declareFeatures) ? getFeaturesUsed(structures) : [];
   const exports = getExports(structures);
@@ -4224,7 +4225,7 @@ function generateCode(definition, params) {
   // write out the structures as object literals 
   addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
-  add(`const env = createEnvironment();`);
+  add(`const env = createEnvironment(${JSON.stringify(addonDir)});`);
   add(`const __zigar = env.getControlObject();`);
   add(`\n// recreate structures`);
   add(`env.recreateStructures(structures, options);`);
@@ -5071,13 +5072,20 @@ function createProjectSync(config, dir) {
 
 const cwd = process.cwd();
 
-function getModuleCachePath(srcPath, options) {
+function getCachePath(options) {
   const {
     cacheDir = path.join(cwd, 'zigar-cache'),
+  } = options;
+  return cacheDir;
+}
+
+function getModuleCachePath(srcPath, options) {
+  const {
     optimize,
   } = options;
   const src = path.parse(srcPath);
   const folder = path.basename(src.dir).slice(0, 16).trim() + '-' + md5(src.dir).slice(0, 8);
+  const cacheDir = getCachePath(options);
   return path.join(cacheDir, folder, optimize, `${src.name}.zigar`);
 }
 
@@ -7759,6 +7767,7 @@ exports.findConfigFile = findConfigFile;
 exports.findConfigFileSync = findConfigFileSync;
 exports.findSourceFile = findSourceFile;
 exports.generateCode = generateCode;
+exports.getCachePath = getCachePath;
 exports.getModuleCachePath = getModuleCachePath;
 exports.loadConfigFile = loadConfigFile;
 exports.loadConfigFileSync = loadConfigFileSync;
