@@ -13,24 +13,35 @@ pub fn build(b: *std.Build) !void {
     lib.addIncludePath(.{ .path = "./node_modules/node-api-headers/include" });
     lib.addCSourceFile(.{ .file = .{ .path = "./src/addon-node.c" }, .flags = &.{} });
     lib.addCSourceFile(.{ .file = .{ .path = "./src/addon.c" }, .flags = &.{} });
-    if (os == .windows) {
-        // add win32 shim
-        lib.addCSourceFile(.{ .file = .{ .path = "./src/win32-shm.c" }, .flags = &.{} });
-        lib.linkSystemLibrary("dbghelp");
+    switch (os) {
+        .windows => {
+            lib.addCSourceFile(.{ .file = .{ .path = "./src/win32-shim.c" }, .flags = &.{} });
+            lib.linkSystemLibrary("dbghelp");
+            lib.addLibraryPath(.{ .path = "./lib" });
+            const node_api = try std.fmt.bufPrint(&node_api_buffer, "node_api.{s}", .{
+                try getArchName(arch),
+            });
+            lib.linkSystemLibrary(node_api);
+        },
+        .macos => {
+            lib.linker_allow_shlib_undefined = true;
+        },
+        else => {},
     }
     lib.linkLibC();
     const wf = b.addWriteFiles();
-    const outputPath = try std.fmt.bufPrint(&outputPathBuffer, "./build/{s}/{s}/node-zigar-addon.node", .{
+    const output_path = try std.fmt.bufPrint(&output_path_buffer, "./build/{s}.{s}.node", .{
         try getPlatformName(os),
         try getArchName(arch),
     });
-    wf.addCopyFileToSource(lib.getEmittedBin(), outputPath);
+    wf.addCopyFileToSource(lib.getEmittedBin(), output_path);
     wf.step.dependOn(&lib.step);
     b.getInstallStep().dependOn(&wf.step);
 }
 
 const Error = error{Unsupported};
-var outputPathBuffer: [256]u8 = undefined;
+var output_path_buffer: [256]u8 = undefined;
+var node_api_buffer: [64]u8 = undefined;
 
 fn getArchName(arch: std.Target.Cpu.Arch) ![]const u8 {
     return switch (arch) {

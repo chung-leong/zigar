@@ -1,8 +1,7 @@
 import { expect } from 'chai';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
-import { compile } from '../../../zigar-compiler/src/compiler.js';
-import { getCachePath } from '../../../zigar-compiler/src/configuration.js';
+import { compile, getModuleCachePath } from '../../../zigar-compiler/src/compiler.js';
 import { createEnvironment, getGCStatistics, importModule } from '../../dist/index.js';
 
 const require = createRequire(import.meta.url);
@@ -43,9 +42,9 @@ describe('Garbage collection', function() {
     it('should hang onto module when variables from it are accessible', async function() {
       this.timeout(300000);
       const zigPath = fileURLToPath(new URL('../zig-samples/integers.zig', import.meta.url));
-      const soPath = getCachePath(zigPath, { optimize: 'Debug' });
-      await compile(zigPath, soPath);
-      let module = await importModule(soPath);
+      const modPath = getModuleCachePath(zigPath, { optimize: 'Debug' });
+      const { outputPath } = await compile(zigPath, modPath);
+      let module = await importModule(outputPath);
       await collectGarbage();
       const stats1 = getGCStatistics();
       expect(stats1.modules).to.equal(1);
@@ -61,9 +60,9 @@ describe('Garbage collection', function() {
     it('should hang onto module when functions from it are accessible', async function() {
       this.timeout(300000);
       const zigPath = fileURLToPath(new URL('../zig-samples/function-simple.zig', import.meta.url));
-      const soPath = getCachePath(zigPath, { optimize: 'Debug' });
-      await compile(zigPath, soPath);
-      let { add } = await importModule(soPath);
+      const modPath = getModuleCachePath(zigPath, { optimize: 'Debug' });
+      const { outputPath } = await compile(zigPath, modPath);
+      let { add } = await importModule(outputPath);
       await collectGarbage();
       const stats1 = getGCStatistics();
       expect(stats1.modules).to.equal(1);
@@ -79,9 +78,9 @@ describe('Garbage collection', function() {
     it('should release module when abandon is called', async function() {
       this.timeout(300000);
       const zigPath = fileURLToPath(new URL('../zig-samples/function-simple.zig', import.meta.url));
-      const soPath = getCachePath(zigPath, { optimize: 'Debug' });
-      await compile(zigPath, soPath);
-      const { add, __zigar } = await importModule(soPath);
+      const modPath = getModuleCachePath(zigPath, { optimize: 'Debug' });
+      const { outputPath } = await compile(zigPath, modPath);
+      const { add, __zigar } = await importModule(outputPath);
       await collectGarbage();
       const stats1 = getGCStatistics();
       expect(stats1.modules).to.equal(1);

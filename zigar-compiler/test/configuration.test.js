@@ -5,12 +5,10 @@ import { fileURLToPath } from 'url';
 use(ChaiAsPromised);
 
 import {
-  addPlatformExt,
   extractOptions,
   findConfigFile,
   findConfigFileSync,
   findSourceFile,
-  getCachePath,
   loadConfigFile,
   loadConfigFileSync,
   optionsForCompile
@@ -64,77 +62,6 @@ describe('Configuration', function() {
     it('should return undefined when config file is absent', function() {
       const path = findConfigFileSync('node-zigar.config.json', absolute('./config-samples/missing/hello/world'));
       expect(path).to.be.undefined;
-    })
-  })
-  describe('getCachePath', function () {
-    it('should return path for source file', function() {
-      const srcPath = '/project/src/hello.zig';
-      const options = {
-        optimize: 'Debug',
-        platform: 'win32',
-        arch: 'x64',
-        cacheDir: '/project/zigar-cache',
-      };
-      const soPath = getCachePath(srcPath, options);
-      expect(soPath).to.match(/\/project\/zigar-cache\/src\-\w{8}\/Debug\/hello\.zigar\.dll/);
-    })
-  })
-  describe('addPlatformExt', function () {
-    it('should add extension for Windows', function() {
-      const path1 = addPlatformExt('hello.zigar', {
-        platform: 'win32',
-        arch: 'x64',
-      });
-      expect(path1).to.equal('hello.zigar.dll');
-      const path2 = addPlatformExt('hello.zigar', {
-        platform: 'win32',
-        arch: 'ia32',
-      });
-      expect(path2).to.equal('hello.zigar.ia32.dll');
-    })
-    it('should add extension for Mac', function() {
-      const path1 = addPlatformExt('hello.zigar', {
-        platform: 'darwin',
-        arch: 'arm64',
-      });
-      expect(path1).to.equal('hello.zigar.dylib');
-      const path2 = addPlatformExt('hello.zigar', {
-        platform: 'darwin',
-        arch: 'x64',
-      });
-      expect(path2).to.equal('hello.zigar.x64.dylib');
-    })
-    it('should add extension for Linux', function() {
-      const path1 = addPlatformExt('hello.zigar', {
-        platform: 'linux',
-        arch: 'x64',
-      });
-      expect(path1).to.equal('hello.zigar.so');
-      const path2 = addPlatformExt('hello.zigar', {
-        platform: 'linux',
-        arch: 'arm64',
-      });
-      expect(path2).to.equal('hello.zigar.arm64.so');
-    })
-    it('should add extension for FreeBSD', function() {
-      const path1 = addPlatformExt('hello.zigar', {
-        platform: 'freebsd',
-        arch: 'x64',
-      });
-      expect(path1).to.equal('hello.zigar.freebsd.so');
-      const path2 = addPlatformExt('hello.zigar', {
-        platform: 'freebsd',
-        arch: 'arm64',
-      });
-      expect(path2).to.equal('hello.zigar.freebsd.arm64.so');
-    })
-    it('should add extension for WebAssembly', function() {
-      const options = {
-        platform: 'free-standing',
-        arch: 'wasm32',
-      }
-      const path = addPlatformExt('hello.zigar', options);
-      expect(path).to.equal('hello.zigar.wasm');
     })
   })
   describe('loadConfigFile', function () {

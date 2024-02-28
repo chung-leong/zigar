@@ -3,7 +3,7 @@ import os from 'os';
 import { fileURLToPath } from 'url';
 
 const require = createRequire(import.meta.url);
-const extPath = fileURLToPath(new URL(`../build/${os.platform()}/${os.arch()}/node-zigar-addon`, import.meta.url));
+const extPath = fileURLToPath(new URL(`../build/${os.platform()}.${os.arch()}.node`, import.meta.url));
 
 export function createEnvironment() {
   const { createEnvironment } = require(extPath);

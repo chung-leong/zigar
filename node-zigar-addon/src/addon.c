@@ -780,4 +780,3 @@ napi_value create_addon(napi_env env) {
     }
     return exports;
 }
-

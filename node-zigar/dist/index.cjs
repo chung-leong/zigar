@@ -4,7 +4,7 @@ const os = require('os');
 const { dirname } = require('path');
 const { fileURLToPath, pathToFileURL } = require('url');
 const { 
-  compileSync, addPlatformExt, extractOptions, findConfigFileSync, findSourceFile, getCachePath, 
+  compileSync, extractOptions, findConfigFileSync, findSourceFile, getModuleCachePath,
   loadConfigFileSync, optionsForCompile
 } = require('zigar-compiler/cjs');
 
@@ -40,10 +40,11 @@ Module._load = new Proxy(Module._load, {
       Object.assign(options, extractOptions(url.searchParams, optionsForCompile));
     }
     const srcPath = (m[1] === 'zig') ? path : findSourceFile(path, options);
-    const soPath = (m[1] === 'zig') ? getCachePath(path, options) : addPlatformExt(path, options);
-    if (srcPath) {
-      compileSync(srcPath, soPath, options);
-    }
-    return importModule(soPath, options); 
+    const modPath = (m[1] === 'zig') ? getModuleCachePath(path, options) : path;
+    // srcPath can be undefined, in which case compile() will simply return the path to 
+    // the matching so/dylib/dll file in modPath; basically, when node-zigar.config.json 
+    // is absent, compilation does not occur
+    const { outputPath } = compileSync(srcPath, modPath, options);
+    return importModule(outputPath, options); 
   }
 });

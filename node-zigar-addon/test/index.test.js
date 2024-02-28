@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import os from 'os';
 import { fileURLToPath } from 'url';
-import { addPlatformExt } from '../../zigar-compiler/src/configuration.js';
+import { createConfig } from '../../zigar-compiler/src/compiler.js';
 
 import cjs from '../dist/index.cjs';
 
@@ -17,8 +17,9 @@ describe('Module loading', function() {
     platform: os.platform(),  
   };
   const getModulePath = (name) => {
-    const path = fileURLToPath(new URL(`./so-samples/${name}.zigar`, import.meta.url));
-    return addPlatformExt(path, options);
+    const modPath = fileURLToPath(new URL(`./sample-modules/${name}.zigar`, import.meta.url));
+    const { outputPath } = createConfig(null, modPath, options);
+    return outputPath;
   };
   it('should load module', function() {
     this.timeout(120000);

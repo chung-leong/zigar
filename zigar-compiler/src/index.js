@@ -1,8 +1,8 @@
 export { generateCode } from './code-generator.js';
-export { compile, compileSync } from './compiler.js';
+export { compile, compileSync, getModuleCachePath } from './compiler.js';
 export {
-  addPlatformExt, extractOptions, findConfigFile, findConfigFileSync, findSourceFile, getCachePath,
-  loadConfigFile, loadConfigFileSync, optionsForCompile, optionsForTranspile
+  extractOptions, findConfigFile, findConfigFileSync, findSourceFile, loadConfigFile,
+  loadConfigFileSync, optionsForCompile, optionsForTranspile
 } from './configuration.js';
 export { transpile } from './transpiler.js';
 

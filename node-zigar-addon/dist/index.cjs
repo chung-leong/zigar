@@ -1,7 +1,7 @@
 const { resolve } = require('path');
 const os = require('os');
 
-const extPath = resolve(`${__dirname}/../build/${os.platform()}/${os.arch()}/node-zigar-addon`);
+const extPath = resolve(`${__dirname}/../build/${os.platform()}.${os.arch()}.node`);
 
 function createEnvironment() {
   const { createEnvironment } = require(extPath);

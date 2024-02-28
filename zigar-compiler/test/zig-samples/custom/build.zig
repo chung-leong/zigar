@@ -10,18 +10,18 @@ pub fn build(b: *std.Build) void {
         else => false,
     };
     const lib = b.addSharedLibrary(.{
-        .name = cfg.package_name,
+        .name = cfg.module_name,
         .root_source_file = .{ .path = cfg.stub_path },
         .target = target,
         .optimize = optimize,
     });
-    const source_file = .{ .path = cfg.package_root ++ "/modules/module.zig" };
-    const module = if (@hasDecl(std.Build, "CreateModuleOptions"))
+    const source_file = .{ .path = cfg.module_dir ++ "/modules/number.zig" };
+    const number = if (@hasDecl(std.Build, "CreateModuleOptions"))
         b.createModule(.{ .source_file = source_file })
     else
         b.createModule(.{ .root_source_file = source_file });
     const imports = .{
-        .{ .name = "module", .module = module },
+        .{ .name = "number", .module = number },
     };
     if (is_wasm) {
         lib.rdynamic = true;
@@ -31,8 +31,8 @@ pub fn build(b: *std.Build) void {
         lib.addModule("exporter", b.createModule(.{
             .source_file = .{ .path = cfg.exporter_path },
         }));
-        lib.addModule("package", b.createModule(.{
-            .source_file = .{ .path = cfg.package_path },
+        lib.addModule("module", b.createModule(.{
+            .source_file = .{ .path = cfg.module_path },
             .dependencies = &imports,
         }));
     } else if (@hasField(std.Build.Step.Compile, "root_module")) {
@@ -40,8 +40,8 @@ pub fn build(b: *std.Build) void {
         lib.root_module.addImport("exporter", b.createModule(.{
             .root_source_file = .{ .path = cfg.exporter_path },
         }));
-        lib.root_module.addImport("package", b.createModule(.{
-            .root_source_file = .{ .path = cfg.package_path },
+        lib.root_module.addImport("module", b.createModule(.{
+            .root_source_file = .{ .path = cfg.module_path },
             .imports = &imports,
         }));
         if (is_wasm) {

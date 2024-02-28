@@ -1,4 +1,8 @@
 .{
     .name = "custom",
     .version = "0.11.1",
+    .paths = .{
+        "custom.zig",
+        "build.zig",
+    },
 }

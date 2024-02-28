@@ -4,8 +4,8 @@ import os from 'os';
 import { dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import {
-  addPlatformExt, compile, extractOptions, findConfigFile, findSourceFile, generateCode,
-  getCachePath, loadConfigFile, optionsForCompile
+  compile, extractOptions, findConfigFile, findSourceFile, generateCode, getModuleCachePath,
+  loadConfigFile, optionsForCompile
 } from 'zigar-compiler';
 
 export async function resolve(specifier, context, nextResolve) {
@@ -41,18 +41,19 @@ export async function load(url, context, nextLoad) {
     Object.assign(options, extractOptions(new URL(url).searchParams, optionsForCompile));
   }
   const srcPath = (m[1] === 'zig') ? path : findSourceFile(path, options);
-  const soPath = (m[1] === 'zig') ? getCachePath(path, options) : addPlatformExt(path, options);
-  if (srcPath) {
-    await compile(srcPath, soPath, options);
-  }
+  const modPath = (m[1] === 'zig') ? getModuleCachePath(path, options) : path;
+  // srcPath can be undefined, in which case compile() will simply return the path to 
+  // the matching so/dylib/dll file in modPath; basically, when node-zigar.config.json 
+  // is absent, compilation does not occur
+  const { outputPath } = await compile(srcPath, modPath, options);
   const env = createEnvironment();
-  env.loadModule(soPath);
+  env.loadModule(outputPath);
   env.acquireStructures(options);
   const definition = env.exportStructures();
   const require = createRequire(import.meta.url);
   // get the absolute path to node-zigar-addon so the transpiled code can find it
   const runtimeURL = pathToFileURL(require.resolve('node-zigar-addon'));
-  const binarySource = env.hasMethods() ? JSON.stringify(soPath) : undefined;
+  const binarySource = env.hasMethods() ? JSON.stringify(outputPath) : undefined;
   const { code } = generateCode(definition, { runtimeURL, binarySource });
   return {
     format: 'module',

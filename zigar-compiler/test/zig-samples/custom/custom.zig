@@ -1,3 +1,1 @@
-const module = @import("module");
-
-pub const number = module.number;
+pub const number = @import("number").hello;

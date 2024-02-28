@@ -3,7 +3,6 @@ import { basename } from 'path';
 import { createEnvironment } from '../../zigar-runtime/src/index.js';
 import { generateCode } from './code-generator.js';
 import { compile } from './compiler.js';
-import { getCachePath } from './configuration.js';
 import { stripUnused } from './wasm-stripper.js';
 
 export async function transpile(path, options) {
@@ -23,9 +22,8 @@ export async function transpile(path, options) {
     }
   }
   Object.assign(compileOptions, { arch: 'wasm32', platform: 'freestanding' });
-  const wasmPath = getCachePath(path, compileOptions) 
-  await compile(path, wasmPath, compileOptions);
-  const content = await readFile(wasmPath);
+  const { outputPath } = await compile(path, null, compileOptions);
+  const content = await readFile(outputPath);
   const env = createEnvironment();
   env.loadModule(content);
   await env.initPromise;

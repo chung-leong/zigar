@@ -1,6 +1,5 @@
 const std = @import("std");
 const exporter = @import("exporter");
-const package = @import("package");
 
 const Value = exporter.Value;
 const Call = exporter.Call;
@@ -24,7 +23,7 @@ export fn freeShadowMemory(call: Call, bytes: [*]u8, len: usize, alignment: u16)
 }
 
 export fn getFactoryThunk() usize {
-    return exporter.getFactoryThunk(package);
+    return exporter.getFactoryThunk(@import("module"));
 }
 
 export fn runThunk(thunk_id: usize, arg_struct: Value) ?Value {

@@ -1,5 +1,5 @@
-import { basename, dirname, join, parse, resolve } from 'path';
-import { findFile, findFileSync, loadFile, loadFileSync, md5 } from './utility-functions.js';
+import { dirname, join, resolve } from 'path';
+import { findFile, findFileSync, loadFile, loadFileSync } from './utility-functions.js';
 
 export const optionsForCompile = {
   optimize: {
@@ -131,58 +131,6 @@ export function findConfigFileSync(name, dir) {
       return findConfigFileSync(name, parent);
     }
   }
-}
-
-const cwd = process.cwd();
-
-export function getCachePath(srcPath, options) {
-  const {
-    cacheDir = join(cwd, 'zigar-cache'),
-    optimize,
-  } = options;
-  const src = parse(srcPath);
-  const folder = basename(src.dir).slice(0, 16).trim() + '-' + md5(src.dir).slice(0, 8);
-  const soPathPI = join(cacheDir, folder, optimize, `${src.name}.zigar`);
-  return addPlatformExt(soPathPI, options);
-}
-
-export function getPlatformExt(options) {
-  const {
-    platform,
-    arch,
-  } = options;
-  let ext;
-  switch (platform) {
-    case 'darwin':
-      ext = '.dylib';
-      if (arch !== 'arm64') {
-        ext = `.${arch}` + ext;
-      }
-      break;
-    case 'win32':
-      ext = '.dll';
-      if (arch !== 'x64') {
-        ext = `.${arch}` + ext;
-      }
-      break;
-    default:
-      if (arch === 'wasm32' || arch === 'wasm64') {
-        ext = '.wasm';
-      } else {
-        ext = '.so';
-        if (arch !== 'x64') {
-          ext = `.${arch}` + ext;
-        }
-        if (platform !== 'linux') {
-          ext = `.${platform}` + ext;
-        }
-      }
-  }
-  return ext;
-}
-
-export function addPlatformExt(path, options) {
-  return path + getPlatformExt(options);
 }
 
 export async function loadConfigFile(cfgPath, availableOptions) {
