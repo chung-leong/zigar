@@ -1,5 +1,5 @@
 import { execFileSync } from 'child_process';
-import { existsSync } from 'fs';
+import { readdirSync, statSync } from 'fs';
 import { createRequire } from 'module';
 import os from 'os';
 import { join } from 'path';
@@ -78,9 +78,22 @@ function loadAddon(addonDir) {
       platform += '-musl';
     }
   }
+  let srcMTime;
+  const srcDir = fileURLToPath(new URL('../src', import.meta.url));
+  for (const file of readdirSync(srcDir)) {
+    const { mtime } = statSync(join(srcDir, file));
+    if (!(srcMTime >= mtime)) {
+      srcMTime = mtime;
+    }
+  }
   const require = createRequire(import.meta.url);
   const addonPath = join(addonDir, `${platform}.${arch}.node`);
-  if (!existsSync(addonPath)) {
+  let addonMTime;
+  try {
+    addonMTime = statSync(addonPath).mtime;
+  } catch (err) {    
+  }
+  if (!(addonMTime > srcMTime)) {
     buildAddOn(addonPath);
   }
   return require(addonPath);

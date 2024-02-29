@@ -14,56 +14,66 @@ import {
 } from '../dist/index.js';
 
 describe('Addon functionalities', function() {
-  const sampleDir = fileURLToPath(new URL('./sample-modules', import.meta.url));
-  after(function() {
-    try {
-      execSync(`rm -R '${sampleDir}/addon-test'*`);
-    } catch (err) {      
-    }
-  })
   describe('Addon compilation', function() {
+    const addonDir = fileURLToPath(new URL('./addon-results', import.meta.url));
     it('should build addon for Windows', function() {
       this.timeout(300000);
-      const addonPath = join(sampleDir, 'addon-test1', 'windows.x64.node');
+      const addonPath = join(addonDir, 'windows.x64.node');
       buildAddOn(addonPath, { platform: 'windows', arch: 'x64' });
+    })
+    it('should build addon for Windows-ia32', function() {
+      this.timeout(300000);
+      const addonPath = join(addonDir, 'windows.ia32.node');
+      buildAddOn(addonPath, { platform: 'windows', arch: 'ia32' });
     })
     it('should build addon for MacOS', function() {
       this.timeout(300000);
-      const addonPath = join(sampleDir, 'addon-test1', 'windows.arm64.node');
+      const addonPath = join(addonDir, 'windows.arm64.node');
       buildAddOn(addonPath, { platform: 'darwin', arch: 'arm64' });
+    })
+    it('should build addon for MacOS-Intel', function() {
+      this.timeout(300000);
+      const addonPath = join(addonDir, 'windows.x64.node');
+      buildAddOn(addonPath, { platform: 'darwin', arch: 'x64' });
     })
     it('should build addon for Linux', function() {
       this.timeout(300000);
-      const addonPath = join(sampleDir, 'addon-test1', 'linux.x64.node');
+      const addonPath = join(addonDir, 'linux.x64.node');
       buildAddOn(addonPath, { platform: 'linux', arch: 'x64' });
     })
     it('should build addon for Linux-musl', function() {
       this.timeout(300000);
-      const addonPath = join(sampleDir, 'addon-test1', 'linux-musl.x64.node');
+      const addonPath = join(addonDir, 'linux-musl.x64.node');
       buildAddOn(addonPath, { platform: 'linux-musl', arch: 'x64' });
     })
-    it('should build addon for Linux using CommonJS function', function() {
+    it('should try to compile for unknown architecture', function() {
       this.timeout(300000);
-      const addonPath = join(sampleDir, 'addon-test3', 'linux.x64.node');
+      const addonPath = join(addonDir, 'windows.xxx.node');
+      expect(() => buildAddOn(addonPath, { platform: 'windows', arch: 'xxx' })).to.throw(Error);
+    })
+  })
+  describe('Addon compilation using CJS function', function() {
+    const addonDir = fileURLToPath(new URL('./addon-results', import.meta.url));
+    it('should build addon for Linux', function() {
+      this.timeout(300000);
+      const addonPath = join(addonDir, 'linux.x64.node');
       cjs.buildAddOn(addonPath, { platform: 'linux', arch: 'x64' });
     })
-    it('should build addon for Linux-musl using CommonJS function', function() {
+    it('should build addon for Linux-musl', function() {
       this.timeout(300000);
-      const addonPath = join(sampleDir, 'addon-test3', 'linux-musl.x64.node');
+      const addonPath = join(addonDir, 'linux-musl.x64.node');
       cjs.buildAddOn(addonPath, { platform: 'linux-musl', arch: 'x64' });
     }) 
     it('should try to compile for unknown architecture', function() {
       this.timeout(300000);
-      const addonPath = join(sampleDir, 'addon-test1', 'windows.xxx.node');
-      expect(() => buildAddOn(addonPath, { platform: 'windows', arch: 'xxx' })).to.throw(Error);
-    })
-    it('should try to compile for unknown architecture using CommonJS function', function() {
-      this.timeout(300000);
-      const addonPath = join(sampleDir, 'addon-test3', 'windows.xxx.node');
+      const addonPath = join(addonDir, 'windows.xxx.node');
       expect(() => cjs.buildAddOn(addonPath, { platform: 'windows', arch: 'xxx' })).to.throw(Error);
     })
   })
   describe('Module loading', function() {
+    const sampleDir = fileURLToPath(new URL('./sample-modules', import.meta.url));
+    const addonDir = join(sampleDir, 'node-zigar-addon');
+    after(() => execSync(`rm -rf '${addonDir}'`))
     const options = {
       arch: os.arch(),
       platform: os.platform(),
@@ -76,7 +86,6 @@ describe('Addon functionalities', function() {
     it('should load module', function() {
       this.timeout(300000);
       const path = getModulePath('integers');
-      const addonDir = join(sampleDir, 'addon-test2');
       const module = importModule(path, addonDir);
       expect(module.int32).to.equal(1234);
     })
@@ -92,19 +101,30 @@ describe('Addon functionalities', function() {
       expect(error).to.be.an('error');
     })
     it('should get gc statistics', function() {
-      const addonDir = join(sampleDir, 'addon-test2');
       const stats = getGCStatistics(addonDir);
       expect(stats).to.be.an('object');
     })
-    it('should load module using CommonJS function', function() {
+  })
+  describe('Module loading using CommonJS function', function() {
+    const sampleDir = fileURLToPath(new URL('./sample-modules', import.meta.url));
+    const addonDir = join(sampleDir, 'node-zigar-addon');
+    after(() => execSync(`rm -rf '${addonDir}'`))
+    const options = {
+      arch: os.arch(),
+      platform: os.platform(),
+    };
+    const getModulePath = (name) => {
+      const modPath = join(sampleDir, `${name}.zigar`);
+      const { outputPath } = createConfig(null, modPath, options);
+      return outputPath;
+    };
+    it('should load module', function() {
       this.timeout(300000);
       const path = getModulePath('integers');
-      const addonDir = join(sampleDir, 'addon-test4');
       const module = cjs.importModule(path, addonDir);
       expect(module.int32).to.equal(1234);
     })
-    it('should get gc statistics using CommonJS function', function() {
-      const addonDir = join(sampleDir, 'addon-test4');
+    it('should get gc statistics', function() {
       const stats = cjs.getGCStatistics(addonDir);
       expect(stats).to.be.an('object');
     })    

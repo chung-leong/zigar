@@ -1,6 +1,6 @@
 const { resolve, join } = require('path');
 const { execFileSync } = require('child_process');
-const { existsSync } = require('fs');
+const { readdirSync, statSync } = require('fs');
 const os = require('os');
 
 function createEnvironment(addonDir) {
@@ -76,8 +76,21 @@ function loadAddon(addonDir) {
       platform += '-musl';
     }
   }
+  let srcMTime;
+  const srcDir = resolve(__dirname, '../src');
+  for (const file of readdirSync(srcDir)) {
+    const { mtime } = statSync(join(srcDir, file));
+    if (!(srcMTime >= mtime)) {
+      srcMTime = mtime;
+    }
+  }
   const addonPath = join(addonDir, `${platform}.${arch}.node`);
-  if (!existsSync(addonPath)) {
+  let addonMTime;
+  try {
+    addonMTime = statSync(addonPath).mtime;
+  } catch (err) {    
+  }
+  if (!(addonMTime > srcMTime)) {
     buildAddOn(addonPath);
   }
   return require(addonPath);
