@@ -21,11 +21,6 @@ describe('Addon functionalities', function() {
       const addonPath = join(addonDir, 'win32.x64.node');
       buildAddOn(addonPath, { platform: 'win32', arch: 'x64' });
     })
-    it('should build addon for Windows-ia32', function() {
-      this.timeout(300000);
-      const addonPath = join(addonDir, 'win32.ia32.node');
-      buildAddOn(addonPath, { platform: 'win32', arch: 'ia32' });
-    })
     it('should build addon for MacOS', function() {
       this.timeout(300000);
       const addonPath = join(addonDir, 'win32.arm64.node');

@@ -69,19 +69,26 @@ describe('Compilation', function() {
       const config = createConfig(srcPath, modPath, options);
       expect(config.zigCmd).to.equal(options.zigCmd);
     })
-    it('should use specific target when nativeCpu is false', async function() {
+    it('should set mcpu to native when nativeCpu is true', async function() {
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'Debug', arch: 'arm64', platform: 'linux', nativeCpu: false };
+      const options = { optimize: 'Debug', nativeCpu: true };
       const modPath = getModuleCachePath(srcPath, options);
       const config = createConfig(srcPath, modPath, options);
-      expect(config.zigCmd).to.contain('-Dtarget=aarch64-linux');
+      expect(config.zigCmd).to.contain('-Dmcpu=native');
     })
-    it('should omit cpu arch when nativeCpu is true', async function() {
+    it('should omit mcpu despite nativeCpu being true when arch does not match', async function() {
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'Debug', arch: 'arm64', platform: 'linux', nativeCpu: true };
+      const options = { optimize: 'Debug', arch: 'loong64', nativeCpu: true };
       const modPath = getModuleCachePath(srcPath, options);
       const config = createConfig(srcPath, modPath, options);
-      expect(config.zigCmd).to.contain('-Dtarget=native-linux');
+      expect(config.zigCmd).to.not.contain('-Dmcpu=native');
+    })
+    it('should omit mcpu despite nativeCpu being true when platform does not match', async function() {
+      const srcPath = absolute('./zig-samples/basic/integers.zig');
+      const options = { optimize: 'Debug', platform: 'aix', nativeCpu: true };
+      const modPath = getModuleCachePath(srcPath, options);
+      const config = createConfig(srcPath, modPath, options);
+      expect(config.zigCmd).to.not.contain('-Dmcpu=native');
     })
     it('should place DLL inside module folder', function() {
       const srcPath = '/project/src/hello.zig';
@@ -178,6 +185,24 @@ describe('Compilation', function() {
       const { size: before } = await stat(result1.outputPath);
       const { size: after } = await stat(result2.outputPath);
       expect(after).to.be.below(before);
+    })
+    it('should compile code for CPU of current system', async function() {
+      this.timeout(600000);
+      const srcPath = absolute('./zig-samples/basic/function-simple.zig');
+      const options = { optimize: 'ReleaseSmall', nativeCpu: true };
+      const modPath = getModuleCachePath(srcPath, options);
+      const { outputPath } = await compile(srcPath, modPath, options);
+      const { size } = await stat(outputPath);
+      expect(size).to.be.at.least(1000);
+    })
+    it('should not fail when nativeCpu is set in a cross compilation scenario', async function() {
+      this.timeout(600000);
+      const srcPath = absolute('./zig-samples/basic/function-simple.zig');
+      const options = { optimize: 'Debug', platform: 'linux', arch: 'ppc64', nativeCpu: true };
+      const modPath = getModuleCachePath(srcPath, options);
+      const { outputPath } = await compile(srcPath, modPath, options);
+      const { size } = await stat(outputPath);
+      expect(size).to.be.at.least(1000);
     })
     it('should compile with C library enabled when Zig code imports C code', async function() {
       this.timeout(600000);

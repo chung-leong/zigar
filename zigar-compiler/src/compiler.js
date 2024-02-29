@@ -298,8 +298,17 @@ export function createConfig(srcPath, modPath, options = {}) {
       };
       const cpuArch = cpuArchs[arch] ?? arch;
       const osTag = osTags[platform] ?? platform;
-      const target = `${nativeCpu ? 'native' : cpuArch}-${osTag}`;
-      return `zig build -Dtarget=${target} -Doptimize=${optimize}`;
+      const args = [
+        `build`,
+        `-Doptimize=${optimize}`,
+        `-Dtarget=${cpuArch}-${osTag}`,        
+      ];
+      if (nativeCpu) {
+        if (arch === os.arch() && platform === os.platform()) {
+          args.push(`-Dmcpu=native`);
+        }
+      }
+      return `zig ${args.join(' ')}`;
     })(),
   } = options;
   const suffix = isWASM.test(arch) ? 'wasm' : 'c';
