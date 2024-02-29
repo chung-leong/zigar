@@ -167,7 +167,7 @@ function processConfigFile(text, cfgPath, availableOptions) {
   return options;
 }
 
-export function findSourceFile(soPathPI, options) {
+export function findSourceFile(modulePath, options) {
   const { sourceFiles } = options;
-  return sourceFiles?.[soPathPI];
+  return sourceFiles?.[modulePath]; 
 }

@@ -1,7 +1,7 @@
 const Module = require('module');
 const { importModule } = require('node-zigar-addon/cjs');
 const os = require('os');
-const { dirname, join } = require('path');
+const { dirname, join, relative } = require('path');
 const { fileURLToPath, pathToFileURL } = require('url');
 const { 
   compileSync, extractOptions, findConfigFileSync, findSourceFile, getModuleCachePath,

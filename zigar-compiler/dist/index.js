@@ -5123,8 +5123,17 @@ function createConfig(srcPath, modPath, options = {}) {
       };
       const cpuArch = cpuArchs[arch] ?? arch;
       const osTag = osTags[platform] ?? platform;
-      const target = `${nativeCpu ? 'native' : cpuArch}-${osTag}`;
-      return `zig build -Dtarget=${target} -Doptimize=${optimize}`;
+      const args = [
+        `build`,
+        `-Doptimize=${optimize}`,
+        `-Dtarget=${cpuArch}-${osTag}`,        
+      ];
+      if (nativeCpu) {
+        if (arch === os.arch() && platform === os.platform()) {
+          args.push(`-Dmcpu=native`);
+        }
+      }
+      return `zig ${args.join(' ')}`;
     })(),
   } = options;
   const suffix = isWASM.test(arch) ? 'wasm' : 'c';
@@ -5351,9 +5360,9 @@ function processConfigFile(text, cfgPath, availableOptions) {
   return options;
 }
 
-function findSourceFile(soPathPI, options) {
+function findSourceFile(modulePath, options) {
   const { sourceFiles } = options;
-  return sourceFiles?.[soPathPI];
+  return sourceFiles?.[modulePath]; 
 }
 
 function addMethods(s, env) {

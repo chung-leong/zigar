@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
+import { basename } from 'path';
 import {
-  addPlatformExt, compile, findConfigFile, loadConfigFile, optionsForCompile
+  compile, findConfigFile, loadConfigFile, optionsForCompile
 } from 'zigar-compiler';
 
 const possiblePlatforms = [ 
@@ -42,11 +43,11 @@ try {
       }
     }
   }
-  for (const [ soPathPI, srcPath ] of Object.entries(config.sourceFiles)) {
+  for (const [ modPath, srcPath ] of Object.entries(config.sourceFiles)) {
+    console.log(`Building ${modPath}:`);
     for (const options of config.targets) {
-      const soPath = addPlatformExt(soPathPI, options);
-      console.log(`Building ${soPath}...`);
-      await compile(srcPath, soPath, { ...config, ...options}); 
+      const { outputPath } = await compile(srcPath, modPath, { ...config, ...options}); 
+      console.log(`  ${basename(outputPath)}`);
     }
   }
 } catch (err) {
