@@ -18,22 +18,22 @@ describe('Addon functionalities', function() {
     const addonDir = fileURLToPath(new URL('./addon-results', import.meta.url));
     it('should build addon for Windows', function() {
       this.timeout(300000);
-      const addonPath = join(addonDir, 'windows.x64.node');
-      buildAddOn(addonPath, { platform: 'windows', arch: 'x64' });
+      const addonPath = join(addonDir, 'win32.x64.node');
+      buildAddOn(addonPath, { platform: 'win32', arch: 'x64' });
     })
     it('should build addon for Windows-ia32', function() {
       this.timeout(300000);
-      const addonPath = join(addonDir, 'windows.ia32.node');
-      buildAddOn(addonPath, { platform: 'windows', arch: 'ia32' });
+      const addonPath = join(addonDir, 'win32.ia32.node');
+      buildAddOn(addonPath, { platform: 'win32', arch: 'ia32' });
     })
     it('should build addon for MacOS', function() {
       this.timeout(300000);
-      const addonPath = join(addonDir, 'windows.arm64.node');
+      const addonPath = join(addonDir, 'win32.arm64.node');
       buildAddOn(addonPath, { platform: 'darwin', arch: 'arm64' });
     })
-    it('should build addon for MacOS-Intel', function() {
+    it('should build addon for MacOS-x64', function() {
       this.timeout(300000);
-      const addonPath = join(addonDir, 'windows.x64.node');
+      const addonPath = join(addonDir, 'win32.x64.node');
       buildAddOn(addonPath, { platform: 'darwin', arch: 'x64' });
     })
     it('should build addon for Linux', function() {
@@ -48,8 +48,8 @@ describe('Addon functionalities', function() {
     })
     it('should try to compile for unknown architecture', function() {
       this.timeout(300000);
-      const addonPath = join(addonDir, 'windows.xxx.node');
-      expect(() => buildAddOn(addonPath, { platform: 'windows', arch: 'xxx' })).to.throw(Error);
+      const addonPath = join(addonDir, 'win32.xxx.node');
+      expect(() => buildAddOn(addonPath, { platform: 'win32', arch: 'xxx' })).to.throw(Error);
     })
   })
   describe('Addon compilation using CJS function', function() {
@@ -66,8 +66,8 @@ describe('Addon functionalities', function() {
     }) 
     it('should try to compile for unknown architecture', function() {
       this.timeout(300000);
-      const addonPath = join(addonDir, 'windows.xxx.node');
-      expect(() => cjs.buildAddOn(addonPath, { platform: 'windows', arch: 'xxx' })).to.throw(Error);
+      const addonPath = join(addonDir, 'win32.xxx.node');
+      expect(() => cjs.buildAddOn(addonPath, { platform: 'win32', arch: 'xxx' })).to.throw(Error);
     })
   })
   describe('Module loading', function() {

@@ -27,7 +27,7 @@ export async function load(url, context, nextLoad) {
   const options = {
     clean: false,
     optimize: 'Debug',
-    nativeCpu: true,
+    nativeCpu: false,
     platform: os.platform(),
     arch: os.arch(),
   };

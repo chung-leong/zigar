@@ -94,7 +94,7 @@ function loadAddon(addonDir) {
   } catch (err) {    
   }
   if (!(addonMTime > srcMTime)) {
-    buildAddOn(addonPath);
+    buildAddOn(addonPath, { platform, arch });
   }
   return require(addonPath);
 }
