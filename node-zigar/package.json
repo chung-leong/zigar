@@ -1,6 +1,6 @@
 {
   "name": "node-zigar",
-  "version": "0.11.1",
+  "version": "0.11.1-alpha.0",
   "description": "Enable the use of Zig in Node.js",
   "main": "./dist/index.js",
   "exports": {
@@ -16,10 +16,10 @@
     "test": "test"
   },
   "scripts": {
-    "test": "mocha --loader=./dist/index.js --no-warnings -- test/*.test.*js",
-    "test:extended": "mocha --loader=./dist/index.js --no-warnings -- test/*.test.*js",
-    "debug": "mocha --loader=./dist/index.js --no-warnings --reporter spec --inspect-brk -- test/*.test.*js",
-    "coverage": "c8 mocha --loader=./dist/index.js --no-warnings  -- test/*.test.*js"
+    "test": "mocha --loader=./dist/index.js --no-warnings -- test/*.test.js",
+    "test:extended": "mocha --loader=./dist/index.js --no-warnings -- test/*.test.js",
+    "debug": "mocha --loader=./dist/index.js --no-warnings --reporter spec --inspect-brk -- test/*.test.js",
+    "coverage": "c8 mocha --loader=./dist/index.js --no-warnings  -- test/*.test.js"
   },
   "files": [
     "dist/*",
@@ -41,13 +41,13 @@
   },
   "homepage": "https://github.com/chung-leong/zigar#readme",
   "dependencies": {
-    "node-zigar-addon": "^0.11.1",
-    "zigar-compiler": "^0.11.1"
+    "node-zigar-addon": "^0.11.1-alpha.0",
+    "zigar-compiler": "^0.11.1-alpha.0"
   },
   "devDependencies": {
-    "c8": "^8.0.1",
-    "chai": "^4.3.10",
-    "mocha": "^10.2.0",
+    "c8": "^9.1.0",
+    "chai": "^5.1.0",
+    "mocha": "^10.3.0",
     "mocha-skip-if": "^1.0.4"
   }
 }
