@@ -8,7 +8,7 @@
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
-    "publish": "build-so && electron-forge publish",
+    "publish": "node-zigar build && electron-forge publish",
     "lint": "echo \"No linting configured\""
   },
   "devDependencies": {
@@ -30,6 +30,6 @@
   "license": "MIT",
   "dependencies": {
     "electron-squirrel-startup": "^1.0.0",
-    "node-zigar": "0.11.1"
+    "node-zigar": "0.11.1-alpha.0"
   }
 }

@@ -4,8 +4,16 @@
   "description": "",
   "main": "main.js",
   "scripts": {
-    "build": "build-so",
+    "build": "node-zigar build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "license": "MIT"
+  "keywords": [],
+  "author": {
+    "name": "Chung Leong",
+    "email": "chernyshevsky@hotmail.com"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "node-zigar": "0.11.1-alpha.0"
+  }
 }

@@ -9,7 +9,7 @@
     "./cjs": "./dist/index.cjs"
   },
   "bin": {
-    "build-so": "./bin/build-so.js"
+    "node-zigar": "./bin/cli.js"
   },
   "type": "module",
   "directories": {
