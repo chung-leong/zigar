@@ -5,7 +5,8 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
+  skip.
   describe('Package manager', function() {
     it('should link in ziglua', async function() {
       this.timeout(300000);

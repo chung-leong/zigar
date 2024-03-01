@@ -58,7 +58,7 @@ export function addTests(importModule, options) {
       const b = new StructA({ number: 500 });
       expect(b).to.not.have.property('function');
       const [ line ] = await capture(() => print(b));
-      expect(line).to.match(/as\-comptime\-field\.StructA{ \.number = 500, \.function = fn\(\) void@/);
+      expect(line).to.match(/as\-comptime\-field\.StructA{ \.number = 500, \.function = fn\s*\(\) void@/);
     })
     it('should ignore function in bare union', async function() {
       this.timeout(120000);
@@ -75,14 +75,14 @@ export function addTests(importModule, options) {
       const { default: module, print } = await importTest('in-optional');
       expect(module).to.not.have.property('optional');
       const [ line ] = await capture(() => print());
-      expect(line).to.match(/fn\(\) void@/);
+      expect(line).to.match(/fn\s*\(\) void@/);
     })
     it('should ignore function in error union', async function() {
       this.timeout(120000);
       const { default: module, print } = await importTest('in-error-union');
       expect(module).to.not.have.property('error_union');
       const [ line ] = await capture(() => print());
-      expect(line).to.match(/fn\(\) void@/);
+      expect(line).to.match(/fn\s*\(\) void@/);
     })
     it('should not compile code containing function vector', async function() {
       this.timeout(120000);

@@ -7,7 +7,7 @@ import { basename, dirname, join } from 'path';
 import { compile, findConfigFile, loadConfigFile, optionsForCompile } from 'zigar-compiler';
 
 const possiblePlatforms = [ 
-  'aix', 'darwin', 'freebsd','linux', 'linux-musl', 'openbsd', 'sunos', 'win32'
+  'aix', 'darwin', 'freebsd', 'linux', 'linux-musl', 'openbsd', 'sunos', 'win32'
 ];
 const possibleArchs = [
   'arm', 'arm64', 'ia32', 'loong64', 'mips', 'mipsel', 'ppc', 'ppc64', 'riscv64', 's390', 's390x',
