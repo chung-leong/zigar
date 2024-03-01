@@ -8,7 +8,7 @@ var number3: i32 = 567;
 var number4: i32 = 789;
 var number5: i32 = 5555;
 
-pub var array: [4]*anyopaque = .{
+pub var array = [_]*anyopaque{
     @ptrCast(&number1),
     @ptrCast(&number2),
     @ptrCast(&number3),

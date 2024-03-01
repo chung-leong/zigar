@@ -10,7 +10,7 @@ pub fn build(b: *std.Build) void {
         else => false,
     };
     const lib = b.addSharedLibrary(.{
-        .name = cfg.package_name,
+        .name = cfg.module_name,
         .root_source_file = .{ .path = cfg.stub_path },
         .target = target,
         .optimize = optimize,
@@ -31,7 +31,7 @@ pub fn build(b: *std.Build) void {
             .source_file = .{ .path = cfg.exporter_path },
         }));
         lib.addModule("package", b.createModule(.{
-            .source_file = .{ .path = cfg.package_path },
+            .source_file = .{ .path = cfg.module_path },
             .dependencies = &imports,
         }));
     } else if (@hasField(std.Build.Step.Compile, "root_module")) {
@@ -40,7 +40,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = .{ .path = cfg.exporter_path },
         }));
         lib.root_module.addImport("package", b.createModule(.{
-            .root_source_file = .{ .path = cfg.package_path },
+            .root_source_file = .{ .path = cfg.module_path },
             .imports = &imports,
         }));
         if (is_wasm) {

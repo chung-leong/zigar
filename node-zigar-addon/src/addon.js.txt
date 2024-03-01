@@ -660,7 +660,7 @@
 "        // autocast to target type\n"
 "        const dv = getDataView(targetStructure, arg, env);\n"
 "        arg = Target(dv, { writable: !isConst });\n"
-"      } else if (arg && !arg[MEMORY]) {\n"
+"      } else if (arg !== undefined && !arg[MEMORY]) {\n"
 "        // autovivificate target object\n"
 "        const fixed = env.inFixedMemory(this);\n"
 "        const autoObj = new Target(arg, { writable: !isConst, fixed });\n"
