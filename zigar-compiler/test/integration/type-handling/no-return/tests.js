@@ -25,11 +25,11 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       await expect(importTest('array-of')).to.eventually.be.rejected;
     })
-    it('should handle void in struct', async function() {
+    it('should handle no return in struct', async function() {
       this.timeout(120000);
       await expect(importTest('in-struct')).to.eventually.be.rejected;
     })
-    it('should handle void in packed struct', async function() {
+    it('should handle no return in packed struct', async function() {
       this.timeout(120000);
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })

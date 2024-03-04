@@ -4965,6 +4965,9 @@ class WebAssemblyEnvironment extends Environment {
 
   obtainFixedView(address, len) {
     const { memory } = this;
+    if (len === 0 && address === -1431655766) { // 0xAAAAAAAA
+      address = 0;
+    }
     const dv = this.obtainView(memory.buffer, address, len);
     dv[MEMORY] = { memory, address, len };
     return dv;
