@@ -1,7 +1,8 @@
 import { expect } from 'chai';
 import { readFile } from 'fs/promises';
-import { fileURLToPath } from 'url';
 import 'mocha-skip-if';
+import { fileURLToPath } from 'url';
+import { capture } from '../capture.js';
 
 export function addTests(importModule, options) {
   const importTest = async (name) => {
@@ -12,7 +13,7 @@ export function addTests(importModule, options) {
     const url = new URL(`./data/${name}.txt`, import.meta.url).href;
     const path = fileURLToPath(url);
     const text = await readFile(path, 'utf-8');
-    return text.split(/\r?\n/);
+    return text.trim().split(/\r?\n/);
   };
   skip.if(!process.env.npm_lifecycle_event?.includes(':extended')).  
   describe('Zig Benchmarks Game', function() {
