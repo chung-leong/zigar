@@ -3175,7 +3175,7 @@ function getDataView(structure, arg, env) {
       }
     }
   }
-  if (dv) {
+  if (dv && byteSize !== undefined) {
     checkDataViewSize(dv, structure);
   }
   return dv;
@@ -5571,11 +5571,11 @@ class Environment {
     return this.obtainView(new ArrayBuffer(len), 0, len);
   }
 
-  registerMemory(dv, targetDV = null) {
+  registerMemory(dv, targetDV = null, targetAlign = undefined) {
     const { memoryList } = this.context;
     const address = this.getViewAddress(dv);
     const index = findMemoryIndex(memoryList, address);
-    memoryList.splice(index, 0, { address, dv, len: dv.byteLength, targetDV });
+    memoryList.splice(index, 0, { address, dv, len: dv.byteLength, targetDV, targetAlign });
     return address;
   }
 
@@ -5591,19 +5591,28 @@ class Environment {
   findMemory(address, len) {
     // check for null address (=== can't be used since address can be both number and bigint)
     if (this.context) {
-      const { memoryList, shadowMap } = this.context;
+      const { memoryList } = this.context;
       const index = findMemoryIndex(memoryList, address);
       const entry = memoryList[index - 1];
       if (entry?.address === address && entry.len === len) {
         return entry.targetDV ?? entry.dv;
       } else if (entry?.address <= address && address < add(entry.address, entry.len)) {
         const offset = Number(address - entry.address);
-        const dv = entry.targetDV ?? entry.dv;
-        return this.obtainView(dv.buffer, dv.byteOffset + offset, len);
+        const targetDV = entry.targetDV ?? entry.dv;
+        const isOpaque = len === undefined;
+        if (isOpaque) {
+          len = targetDV.byteLength - offset;
+        }
+        const dv = this.obtainView(targetDV.buffer, targetDV.byteOffset + offset, len);
+        if (isOpaque) {
+          // opaque structure--need to save the alignment 
+          dv[ALIGN] = entry.targetAlign;
+        }
+        return dv;
       }
     }
     // not found in any of the buffers we've seen--assume it's fixed memory
-    return this.obtainFixedView(address, len);
+    return this.obtainFixedView(address, len ?? 0);
   }
 
   getViewAddress(dv) {
@@ -5934,24 +5943,26 @@ class Environment {
 
   createShadow(object) {
     const dv = object[MEMORY];
-    const align = object.constructor[ALIGN];
+    // use the alignment of the structure; in the case of an opaque pointer's target,
+    // try to the alignment specified when the memory was allocated
+    const align = object.constructor[ALIGN] ?? dv[ALIGN];
     const shadow = Object.create(object.constructor.prototype);
     const shadowDV = shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
     shadow[ATTRIBUTES] = {
       address: this.getViewAddress(shadowDV),
       len: shadowDV.byteLength,
-      align: align,
+      align,
     };
-    return this.addShadow(shadow, object);
+    return this.addShadow(shadow, object, align);
   }
 
-  addShadow(shadow, object) {
+  addShadow(shadow, object, align) {
     let { shadowMap } = this.context;
     if (!shadowMap) {
       shadowMap = this.context.shadowMap = new Map();
     }
     shadowMap.set(shadow, object);
-    this.registerMemory(shadow[MEMORY], object[MEMORY]);
+    this.registerMemory(shadow[MEMORY], object[MEMORY], align);
     return shadow;
   }
 
@@ -6017,7 +6028,8 @@ class Environment {
           // obtain address and length from memory
           location = pointer[LOCATION_GETTER]();
           // get view of memory that pointer points to
-          const dv = env.findMemory(location.address, location.length * Target[SIZE]);
+          const len = (Target[SIZE] !== undefined) ? location.length * Target[SIZE] : undefined;
+          const dv = env.findMemory(location.address, len);
           // create the target
           newTarget = Target.call(ENVIRONMENT, dv, { writable });
         } else {
@@ -6144,7 +6156,7 @@ class WebAssemblyEnvironment extends Environment {
     const object = { constructor, [MEMORY]: dv, [COPIER]: copier };
     const shadow = { constructor, [MEMORY]: shadowDV, [COPIER]: copier };
     shadow[ATTRIBUTES] = { address: this.getViewAddress(shadowDV), len, align };
-    this.addShadow(shadow, object);
+    this.addShadow(shadow, object, align);
     return shadowDV;
   }
 

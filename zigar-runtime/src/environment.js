@@ -110,11 +110,11 @@ export class Environment {
     return this.obtainView(new ArrayBuffer(len), 0, len);
   }
 
-  registerMemory(dv, targetDV = null) {
+  registerMemory(dv, targetDV = null, targetAlign = undefined) {
     const { memoryList } = this.context;
     const address = this.getViewAddress(dv);
     const index = findMemoryIndex(memoryList, address);
-    memoryList.splice(index, 0, { address, dv, len: dv.byteLength, targetDV });
+    memoryList.splice(index, 0, { address, dv, len: dv.byteLength, targetDV, targetAlign });
     return address;
   }
 
@@ -130,19 +130,28 @@ export class Environment {
   findMemory(address, len) {
     // check for null address (=== can't be used since address can be both number and bigint)
     if (this.context) {
-      const { memoryList, shadowMap } = this.context;
+      const { memoryList } = this.context;
       const index = findMemoryIndex(memoryList, address);
       const entry = memoryList[index - 1];
       if (entry?.address === address && entry.len === len) {
         return entry.targetDV ?? entry.dv;
       } else if (entry?.address <= address && address < add(entry.address, entry.len)) {
         const offset = Number(address - entry.address);
-        const dv = entry.targetDV ?? entry.dv;
-        return this.obtainView(dv.buffer, dv.byteOffset + offset, len);
+        const targetDV = entry.targetDV ?? entry.dv;
+        const isOpaque = len === undefined;
+        if (isOpaque) {
+          len = targetDV.byteLength - offset;
+        }
+        const dv = this.obtainView(targetDV.buffer, targetDV.byteOffset + offset, len);
+        if (isOpaque) {
+          // opaque structure--need to save the alignment 
+          dv[ALIGN] = entry.targetAlign;
+        }
+        return dv;
       }
     }
     // not found in any of the buffers we've seen--assume it's fixed memory
-    return this.obtainFixedView(address, len);
+    return this.obtainFixedView(address, len ?? 0);
   }
 
   getViewAddress(dv) {
@@ -759,8 +768,9 @@ export class Environment {
     // look for largest align
     let maxAlign = 0, maxAlignOffset;
     for (const target of targets) {
-      const offset = target[MEMORY].byteOffset;
-      const align = target.constructor[ALIGN];
+      const dv = target[MEMORY];
+      const offset = dv.byteOffset;
+      const align = target.constructor[ALIGN] ?? dv[ALIGN];
       if (maxAlign === undefined || align > maxAlign) {
         maxAlign = align;
         maxAlignOffset = offset;
@@ -776,9 +786,10 @@ export class Environment {
     const shadowDV = new DataView(unalignedShadowDV.buffer, shadowOffset, len);
     // make sure that other pointers are correctly aligned also
     for (const target of targets) {
-      const offset = target[MEMORY].byteOffset;
+      const dv = target[MEMORY];
+      const offset = dv.byteOffset;
       if (offset !== maxAlignOffset) {
-        const align = target.constructor[ALIGN];
+        const align = target.constructor[ALIGN] ?? dv[ALIGN];
         if (isMisaligned(add(shadowAddress, offset), align)) {
           throwAlignmentConflict(align, maxAlign);
         }
@@ -797,7 +808,7 @@ export class Environment {
       len: unalignedShadowDV.byteLength,
       align: 1,
     };
-    return this.addShadow(shadow, source);
+    return this.addShadow(shadow, source, align);
   }
   /* RUNTIME-ONLY-END */
 
@@ -817,24 +828,26 @@ export class Environment {
 
   createShadow(object) {
     const dv = object[MEMORY]
-    const align = object.constructor[ALIGN];
+    // use the alignment of the structure; in the case of an opaque pointer's target,
+    // try to the alignment specified when the memory was allocated
+    const align = object.constructor[ALIGN] ?? dv[ALIGN];
     const shadow = Object.create(object.constructor.prototype);
     const shadowDV = shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
     shadow[ATTRIBUTES] = {
       address: this.getViewAddress(shadowDV),
       len: shadowDV.byteLength,
-      align: align,
+      align,
     };
-    return this.addShadow(shadow, object);
+    return this.addShadow(shadow, object, align);
   }
 
-  addShadow(shadow, object) {
+  addShadow(shadow, object, align) {
     let { shadowMap } = this.context;
     if (!shadowMap) {
       shadowMap = this.context.shadowMap = new Map();
     }
     shadowMap.set(shadow, object);
-    this.registerMemory(shadow[MEMORY], object[MEMORY]);
+    this.registerMemory(shadow[MEMORY], object[MEMORY], align);
     return shadow;
   }
 
@@ -900,7 +913,8 @@ export class Environment {
           // obtain address and length from memory
           location = pointer[LOCATION_GETTER]();
           // get view of memory that pointer points to
-          const dv = env.findMemory(location.address, location.length * Target[SIZE]);
+          const len = (Target[SIZE] !== undefined) ? location.length * Target[SIZE] : undefined;
+          const dv = env.findMemory(location.address, len);
           // create the target
           newTarget = Target.call(ENVIRONMENT, dv, { writable });
         } else {
@@ -966,6 +980,9 @@ function findMemoryIndex(array, address) {
 }
 
 export function isMisaligned(address, align) {
+  if (align === undefined) {
+    return false;
+  }
   if (typeof(address) === 'bigint') {
     address = Number(address & 0xFFFFFFFFn);
   }

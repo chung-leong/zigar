@@ -146,7 +146,7 @@ export function getDataView(structure, arg, env) {
       }
     }
   }
-  if (dv) {
+  if (dv && byteSize !== undefined) {
     checkDataViewSize(dv, structure);
   }
   return dv;

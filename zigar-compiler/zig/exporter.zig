@@ -149,16 +149,18 @@ pub const Structure = extern struct {
     has_pointer: bool,
 };
 
-pub const missing = std.math.maxInt(usize);
+pub fn missing(comptime T: type) T {
+    return std.math.maxInt(T);
+}
 
 pub const Member = extern struct {
     name: ?[*:0]const u8 = null,
     member_type: MemberType,
     is_required: bool = false,
-    bit_offset: usize = missing,
-    bit_size: usize = missing,
-    byte_size: usize = missing,
-    slot: usize = missing,
+    bit_offset: usize = missing(usize),
+    bit_size: usize = missing(usize),
+    byte_size: usize = missing(usize),
+    slot: usize = missing(usize),
     structure: ?Value,
 };
 
@@ -508,7 +510,8 @@ test "getStructureType" {
 
 fn getStructureSize(comptime T: type) usize {
     return switch (@typeInfo(T)) {
-        .Null, .Opaque, .Undefined => 0,
+        .Null, .Undefined => 0,
+        .Opaque => missing(usize),
         else => return @sizeOf(T),
     };
 }
@@ -517,6 +520,18 @@ test "getStructureSize" {
     assert(getStructureSize(void) == 0);
     assert(getStructureSize(@TypeOf(null)) == 0);
     assert(getStructureSize(u8) == 1);
+}
+
+fn getStructureAlign(comptime T: type) u16 {
+    return switch (@typeInfo(T)) {
+        .Opaque => missing(u16),
+        else => return @alignOf(T),
+    };
+}
+
+test "getStructureAlign" {
+    assert(getStructureAlign(void) == 0);
+    assert(getStructureAlign(u8) == 1);
 }
 
 fn getStructureBitSize(comptime T: type) usize {
@@ -536,7 +551,7 @@ fn getStructureLength(comptime T: type) usize {
     return switch (@typeInfo(T)) {
         .Array => |ar| ar.len,
         .Vector => |ve| ve.len,
-        else => 1,
+        else => missing(usize),
     };
 }
 
@@ -691,7 +706,7 @@ fn getStructure(host: anytype, comptime T: type) Error!Value {
             .structure_type = getStructureType(T),
             .length = getStructureLength(T),
             .byte_size = getStructureSize(T),
-            .alignment = @alignOf(T),
+            .alignment = getStructureAlign(T),
             .is_const = isConst(T),
             .has_pointer = hasPointer(T),
         };
@@ -983,7 +998,7 @@ fn addPrimitiveMember(host: anytype, structure: Value, comptime T: type) !void {
         .byte_size = getStructureSize(T),
         .slot = switch (getMemberType(T)) {
             .Comptime, .Literal, .Type => 0,
-            else => missing,
+            else => missing(usize),
         },
         .structure = try getStructure(host, T),
     }, false);
@@ -1007,7 +1022,7 @@ fn addVectorMember(host: anytype, structure: Value, comptime T: type) !void {
         .member_type = getMemberType(ve.child),
         .bit_size = getStructureBitSize(ve.child),
         // byte_size is missing when it's a vector of bools (i.e. bits)
-        .byte_size = if (is_bitfields) missing else child_size,
+        .byte_size = if (is_bitfields) missing(usize) else child_size,
         .structure = try getStructure(host, ve.child),
     }, false);
 }
@@ -1311,9 +1326,9 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
                 .name = getCString(field.name),
                 .member_type = if (field.is_comptime) .Comptime else getMemberType(field.type),
                 .is_required = field.default_value == null,
-                .bit_offset = if (comptime_only) missing else @bitOffsetOf(T, field.name),
-                .bit_size = if (comptime_only) missing else getStructureBitSize(field.type),
-                .byte_size = if (comptime_only or isPacked(T)) missing else getStructureSize(field.type),
+                .bit_offset = if (comptime_only) missing(usize) else @bitOffsetOf(T, field.name),
+                .bit_size = if (comptime_only) missing(usize) else getStructureBitSize(field.type),
+                .byte_size = if (comptime_only or isPacked(T)) missing(usize) else getStructureSize(field.type),
                 .slot = getObjectSlot(T, index),
                 .structure = try getStructure(host, field.type),
             }, false);
@@ -1385,7 +1400,7 @@ fn addUnionMembers(host: anytype, structure: Value, comptime T: type) !void {
         true
     else
         false;
-    const tag_offset = if (has_selector) getUnionSelectorOffset(TT, un.fields) else missing;
+    const tag_offset = if (has_selector) getUnionSelectorOffset(TT, un.fields) else missing(usize);
     const value_offset = if (tag_offset == 0) @sizeOf(TT) * 8 else 0;
     inline for (un.fields, 0..) |field, index| {
         try host.attachMember(structure, .{
@@ -1393,7 +1408,7 @@ fn addUnionMembers(host: anytype, structure: Value, comptime T: type) !void {
             .member_type = getMemberType(field.type),
             .bit_offset = value_offset,
             .bit_size = getStructureBitSize(field.type),
-            .byte_size = if (isPacked(T)) missing else getStructureSize(field.type),
+            .byte_size = if (isPacked(T)) missing(usize) else getStructureSize(field.type),
             .slot = getObjectSlot(T, index),
             .structure = try getStructure(host, field.type),
         }, false);
@@ -1404,7 +1419,7 @@ fn addUnionMembers(host: anytype, structure: Value, comptime T: type) !void {
             .member_type = getMemberType(TT),
             .bit_offset = tag_offset,
             .bit_size = @bitSizeOf(TT),
-            .byte_size = if (isPacked(T)) missing else @sizeOf(TT),
+            .byte_size = if (isPacked(T)) missing(usize) else @sizeOf(TT),
             .structure = try getStructure(host, TT),
         }, false);
     }

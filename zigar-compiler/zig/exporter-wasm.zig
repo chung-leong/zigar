@@ -249,9 +249,15 @@ pub const Host = struct {
         const structure = beginDefinition();
         try insertProperty(structure, "name", def.name);
         try insertProperty(structure, "type", def.structure_type);
-        try insertProperty(structure, "length", def.length);
-        try insertProperty(structure, "byteSize", def.byte_size);
-        try insertProperty(structure, "align", def.alignment);
+        if (def.length != missing(usize)) {
+            try insertProperty(structure, "length", def.length);
+        }
+        if (def.byte_size != missing(usize)) {
+            try insertProperty(structure, "byteSize", def.byte_size);
+        }
+        if (def.alignment != missing(u16)) {
+            try insertProperty(structure, "align", def.alignment);
+        }
         try insertProperty(structure, "isConst", def.is_const);
         try insertProperty(structure, "hasPointer", def.has_pointer);
         if (_beginStructure(structure)) |s| {
@@ -265,16 +271,16 @@ pub const Host = struct {
         const def = beginDefinition();
         try insertProperty(def, "type", member.member_type);
         try insertProperty(def, "isRequired", member.is_required);
-        if (member.bit_offset != missing) {
+        if (member.bit_offset != missing(usize)) {
             try insertProperty(def, "bitOffset", member.bit_offset);
         }
-        if (member.bit_size != missing) {
+        if (member.bit_size != missing(usize)) {
             try insertProperty(def, "bitSize", member.bit_size);
         }
-        if (member.byte_size != missing) {
+        if (member.byte_size != missing(usize)) {
             try insertProperty(def, "byteSize", member.byte_size);
         }
-        if (member.slot != missing) {
+        if (member.slot != missing(usize)) {
             try insertProperty(def, "slot", member.slot);
         }
         if (member.name) |name| {

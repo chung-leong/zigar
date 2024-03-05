@@ -56,7 +56,7 @@ export class WebAssemblyEnvironment extends Environment {
     const object = { constructor, [MEMORY]: dv, [COPIER]: copier };
     const shadow = { constructor, [MEMORY]: shadowDV, [COPIER]: copier };
     shadow[ATTRIBUTES] = { address: this.getViewAddress(shadowDV), len, align };
-    this.addShadow(shadow, object);
+    this.addShadow(shadow, object, align);
     return shadowDV;
   }
 

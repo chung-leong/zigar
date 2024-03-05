@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MISSING   SIZE_MAX
+#define MISSING(T)                      ((T) -1)
 
 #if UINTPTR_MAX == UINT64_MAX 
     #define UINTPTR_JS_TYPE             "bigint"

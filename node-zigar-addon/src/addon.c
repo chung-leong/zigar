@@ -171,16 +171,15 @@ result begin_structure(call ctx,
     napi_env env = ctx->env;
     napi_value args[1];
     napi_value type, length, byte_size, align, is_const, has_pointer, name;
-    bool no_length = !(s->type == Array || s->type == Vector);
     if (napi_create_object(env, &args[0]) == napi_ok
      && napi_create_uint32(env, s->type, &type) == napi_ok
      && napi_set_named_property(env, args[0], "type", type) == napi_ok
-     && (no_length || napi_create_uint32(env, s->length, &length) == napi_ok)
-     && (no_length || napi_set_named_property(env, args[0], "length", length) == napi_ok)
-     && napi_create_uint32(env, s->byte_size, &byte_size) == napi_ok
-     && napi_set_named_property(env, args[0], "byteSize", byte_size) == napi_ok
-     && napi_create_uint32(env, s->align, &align) == napi_ok
-     && napi_set_named_property(env, args[0], "align", align) == napi_ok
+     && (s->length == MISSING(size_t) || napi_create_uint32(env, s->length, &length) == napi_ok)
+     && (s->length == MISSING(size_t) || napi_set_named_property(env, args[0], "length", length) == napi_ok)
+     && (s->byte_size == MISSING(size_t)  || napi_create_uint32(env, s->byte_size, &byte_size) == napi_ok)
+     && (s->byte_size == MISSING(size_t) || napi_set_named_property(env, args[0], "byteSize", byte_size) == napi_ok)
+     && (s->align == MISSING(uint16_t) || napi_create_uint32(env, s->align, &align) == napi_ok)
+     && (s->align == MISSING(uint16_t) || napi_set_named_property(env, args[0], "align", align) == napi_ok)
      && napi_get_boolean(env, s->is_const, &is_const) == napi_ok
      && napi_set_named_property(env, args[0], "isConst", is_const) == napi_ok
      && napi_get_boolean(env, s->has_pointer, &has_pointer) == napi_ok
@@ -207,14 +206,14 @@ result attach_member(call ctx,
      && napi_set_named_property(env, args[1], "type", type) == napi_ok
      && napi_get_boolean(env, m->is_required, &is_required) == napi_ok
      && napi_set_named_property(env, args[1], "isRequired", is_required) == napi_ok
-     && (m->bit_size == MISSING || napi_create_uint32(env, m->bit_size, &bit_size) == napi_ok)
-     && (m->bit_size == MISSING || napi_set_named_property(env, args[1], "bitSize", bit_size) == napi_ok)
-     && (m->bit_offset == MISSING || napi_create_uint32(env, m->bit_offset, &bit_offset) == napi_ok)
-     && (m->bit_offset == MISSING || napi_set_named_property(env, args[1], "bitOffset", bit_offset) == napi_ok)
-     && (m->byte_size == MISSING || napi_create_uint32(env, m->byte_size, &byte_size) == napi_ok)
-     && (m->byte_size == MISSING || napi_set_named_property(env, args[1], "byteSize", byte_size) == napi_ok)
-     && (m->slot == MISSING || napi_create_uint32(env, m->slot, &slot) == napi_ok)
-     && (m->slot == MISSING || napi_set_named_property(env, args[1], "slot", slot) == napi_ok)
+     && (m->bit_size == MISSING(size_t) || napi_create_uint32(env, m->bit_size, &bit_size) == napi_ok)
+     && (m->bit_size == MISSING(size_t) || napi_set_named_property(env, args[1], "bitSize", bit_size) == napi_ok)
+     && (m->bit_offset == MISSING(size_t) || napi_create_uint32(env, m->bit_offset, &bit_offset) == napi_ok)
+     && (m->bit_offset == MISSING(size_t) || napi_set_named_property(env, args[1], "bitOffset", bit_offset) == napi_ok)
+     && (m->byte_size == MISSING(size_t) || napi_create_uint32(env, m->byte_size, &byte_size) == napi_ok)
+     && (m->byte_size == MISSING(size_t) || napi_set_named_property(env, args[1], "byteSize", byte_size) == napi_ok)
+     && (m->slot == MISSING(size_t) || napi_create_uint32(env, m->slot, &slot) == napi_ok)
+     && (m->slot == MISSING(size_t) || napi_set_named_property(env, args[1], "slot", slot) == napi_ok)
      && (!m->name || napi_create_string_utf8(env, m->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
      && (!m->name || napi_set_named_property(env, args[1], "name", name) == napi_ok)
      && (!m->structure || napi_set_named_property(env, args[1], "structure", m->structure) == napi_ok)
