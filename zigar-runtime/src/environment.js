@@ -394,18 +394,20 @@ export class Environment {
     // larger memory blocks come first
     list.sort((a, b) => b.len - a.len);
     for (const a of list) {
-      for (const b of list) {
-        if (a !== b && !a.replaced) {
-          if (a.offset <= b.offset && b.offset + b.len <= a.offset + a.len) {
-            // B is inside A--replace it with a view of A's buffer
-            const dv = a.owner[MEMORY];
-            const pos = b.offset - a.offset + dv.byteOffset;
-            const newDV = this.obtainView(dv.buffer, pos, b.len);
-            newDV.reloc = b.offset;
-            b.owner[MEMORY] = newDV;
-            b.replaced = true;
+      if (!a.replaced) {
+        for (const b of list) {
+          if (a !== b && !b.replaced) {
+            if (a.offset <= b.offset && b.offset < a.offset + a.len) {
+              // B is inside A--replace it with a view of A's buffer
+              const dv = a.owner[MEMORY];
+              const pos = b.offset - a.offset + dv.byteOffset;
+              const newDV = this.obtainView(dv.buffer, pos, b.len);
+              newDV.reloc = b.offset;
+              b.owner[MEMORY] = newDV;
+              b.replaced = true;
+            }
           }
-        }
+        }  
       }
     }
   }  
