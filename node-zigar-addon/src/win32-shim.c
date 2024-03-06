@@ -62,3 +62,16 @@ void patch_write_file(void* handle,
         }
     }
 }
+
+static FARPROC WINAPI load_exe_hook(unsigned int event, DelayLoadInfo* info) {
+    if (event != dliNotePreLoadLibrary) {
+        return NULL;
+    }
+    if (_stricmp(info->szDll, "NODE.EXE") != 0) {
+        return NULL;
+    }
+    HMODULE m = GetModuleHandle(NULL);
+    return (FARPROC) m;
+}
+
+extern PfnDliHook __pfnDliNotifyHook2 = load_exe_hook;

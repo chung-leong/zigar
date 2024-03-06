@@ -2,7 +2,9 @@
 #define _WIN32_SHIM_H_
 #include <windows.h>
 #include <imagehlp.h>
+#include <delayimp.h>
 #include <stdbool.h>
+#include <string.h>
 
 #define RTLD_LAZY   0
 #define RTLD_NOW    0
