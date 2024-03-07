@@ -63,15 +63,36 @@ void patch_write_file(void* handle,
     }
 }
 
-static FARPROC WINAPI load_exe_hook(unsigned int event, DelayLoadInfo* info) {
-    if (event != dliNotePreLoadLibrary) {
-        return NULL;
-    }
-    if (_stricmp(info->szDll, "NODE.EXE") != 0) {
-        return NULL;
-    }
-    HMODULE m = GetModuleHandle(NULL);
-    return (FARPROC) m;
-}
+extern const IMAGE_DOS_HEADER __ImageBase;
 
-extern PfnDliHook __pfnDliNotifyHook2 = load_exe_hook;
+FORCEINLINE PVOID PFromRva(RVA rva) {
+    return (PVOID)(((ULONG_PTR)(rva)) + ((ULONG_PTR)&__ImageBase));
+}
+ 
+__declspec(dllexport) 
+FARPROC WINAPI __delayLoadHelper2(PCImgDelayDescr descr, 
+                                  PImgThunkData iat_entry) {
+    HMODULE* module_ptr = PFromRva(descr->rvaHmod);
+    HMODULE module = *module_ptr;
+    if (!module) {
+        LPCSTR dll_name = PFromRva(descr->rvaDLLName);
+        if (_stricmp(dll_name, "NODE.EXE") != 0) {
+            return NULL;
+        }
+        /* get handle of executable */
+        module = *module_ptr = GetModuleHandle(NULL);
+    }
+    PImgThunkData im_addr_tbl = PFromRva(descr->rvaIAT);
+    PImgThunkData im_name_tbl = PFromRva(descr->rvaINT);
+    PImgThunkData int_entry = &im_name_tbl[iat_entry - im_addr_tbl];
+    LPCSTR proc_name;
+    if (!IMAGE_SNAP_BY_ORDINAL(int_entry->u1.Ordinal)) {
+        PIMAGE_IMPORT_BY_NAME by_name = PFromRva((RVA) int_entry->u1.AddressOfData);
+        proc_name = (LPCSTR) &by_name->Name;
+    } else {
+        proc_name = (LPCSTR) IMAGE_ORDINAL(int_entry->u1.Ordinal); 
+    }    
+    FARPROC proc = GetProcAddress(module, proc_name);
+    iat_entry->u1.Function = (DWORD_PTR) proc;
+    return proc;
+}
