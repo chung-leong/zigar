@@ -3,6 +3,7 @@
   "sourceFiles": {
     "./lib/sha1.zigar": "./zig/sha1.zig"
   },
+  "exeName": "electron",
   "targets": [
     { "platform": "win32", "arch": "x64" },
     { "platform": "win32", "arch": "ia32" },

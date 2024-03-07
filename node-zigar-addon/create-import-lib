@@ -1,0 +1,5 @@
+#!/bin/bash
+zig dlltool -D $1.exe -d node_modules/node-api-headers/def/node_api.def -l ./lib/$1.ia32.lib -m i386
+zig dlltool -D $1.exe -d node_modules/node-api-headers/def/node_api.def -l ./lib/$1.x64.lib -m i386:x86-64
+zig dlltool -D $1.exe -d node_modules/node-api-headers/def/node_api.def -l ./lib/$1.arm.lib -m arm
+zig dlltool -D $1.exe -d node_modules/node-api-headers/def/node_api.def -l ./lib/$1.arm64.lib -m arm64

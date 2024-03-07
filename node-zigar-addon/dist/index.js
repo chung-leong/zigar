@@ -2,7 +2,7 @@ import { execFileSync } from 'child_process';
 import { readdirSync, statSync } from 'fs';
 import { createRequire } from 'module';
 import os from 'os';
-import { join } from 'path';
+import { join, parse } from 'path';
 import { fileURLToPath } from 'url';
 
 export function createEnvironment(addonDir) {
@@ -23,7 +23,7 @@ export function getGCStatistics(addonDir) {
 }
 
 export function buildAddOn(addonPath, options = {}) {
-  const { platform, arch } = options;
+  const { platform, arch, exeName } = options;
   const cwd = fileURLToPath(new URL('../', import.meta.url));
   const args = [ 'build', `-Doptimize=ReleaseSmall`, `-Doutput=${addonPath}` ];
   if (platform && arch) {
@@ -53,6 +53,9 @@ export function buildAddOn(addonPath, options = {}) {
     const cpuArch = cpuArchs[arch] ?? arch;
     const osTag = osTags[platform] ?? platform;
     args.push(`-Dtarget=${cpuArch}-${osTag}`);
+  }
+  if (exeName) {
+    args.push(`-Dexe=${exeName}`);
   }
   execFileSync('zig', args, { cwd, stdio: 'pipe' });
 }
@@ -94,7 +97,8 @@ function loadAddon(addonDir) {
   } catch (err) {    
   }
   if (!(addonMTime > srcMTime)) {
-    buildAddOn(addonPath, { platform, arch });
+    const exeName = parse(process.execPath).name;
+    buildAddOn(addonPath, { platform, arch, exeName });
   }
   return require(addonPath);
 }

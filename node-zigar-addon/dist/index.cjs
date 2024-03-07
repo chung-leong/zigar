@@ -1,4 +1,4 @@
-const { resolve, join } = require('path');
+const { join, parse, resolve } = require('path');
 const { execFileSync } = require('child_process');
 const { readdirSync, statSync } = require('fs');
 const os = require('os');
@@ -21,7 +21,7 @@ function getGCStatistics(addonDir) {
 }
   
 function buildAddOn(addonPath, options = {}) {
-  const { platform, arch } = options;
+  const { platform, arch, exeName } = options;
   const cwd = resolve(__dirname, '../');
   const args = [ 'build', `-Doptimize=ReleaseSmall`, `-Doutput=${addonPath}` ];
   if (platform && arch) {
@@ -51,6 +51,9 @@ function buildAddOn(addonPath, options = {}) {
     const cpuArch = cpuArchs[arch] ?? arch;
     const osTag = osTags[platform] ?? platform;
     args.push(`-Dtarget=${cpuArch}-${osTag}`);
+  }
+  if (exeName) {
+    args.push(`-Dexe=${exeName}`);
   }
   execFileSync('zig', args, { cwd, stdio: 'pipe' });
 }
@@ -91,7 +94,8 @@ function loadAddon(addonDir) {
   } catch (err) {    
   }
   if (!(addonMTime > srcMTime)) {
-    buildAddOn(addonPath, { platform, arch });
+    const exeName = parse(process.execPath).name;
+    buildAddOn(addonPath, { platform, arch, exeName });
   }
   return require(addonPath);
 }
