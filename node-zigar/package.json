@@ -39,7 +39,7 @@
   "bugs": {
     "url": "https://github.com/chung-leong/zigar/issues"
   },
-  "homepage": "https://github.com/chung-leong/zigar#readme",
+  "homepage": "https://github.com/chung-leong/zigar/wiki",
   "dependencies": {
     "node-zigar-addon": "^0.11.1-alpha.0",
     "zigar-compiler": "^0.11.1-alpha.0"

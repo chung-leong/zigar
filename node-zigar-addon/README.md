@@ -1,33 +1,5 @@
 # node-zigar-addon
 
-Extension written in C++, used by [node-zigar](../node-zigar/) to load shared libraries
-compiled from Zig code into Node.js. It manages the interface between JavaScript and Zig. It also
-provides an embedded copy of [zigar-runtime](../zigar-runtime).
+Node.js addon used by node-zigar to load shared libraries compiled from Zig code into Node.js. 
 
-This module can be used independently from node-zigar to create libraries with precompiled
-binaries.
-
-## Installation
-
-```sh
-npm install --save node-zigar-addon
-```
-
-## Usage
-
-```js
-import { os } from 'os;
-import { fileURLToPath } from 'url';
-import { load } from 'node-zigar-addon';
-
-const platform = os.platform();
-const arch = os.arch();
-const extensions = { windows: 'dll', darwin: 'dylib' };
-const ext = extensions[platform] ?? 'so';
-const path = fileURLToPath(new URL(`./${platform}/${arch}/libmojo.${ext}`, import.meta.url));
-const module = load(path);
-```
-
-## Limitations
-
-* No support for Windows currently. Tested in Linux and MacOS only.
+Consult [the project wiki](https://github.com/chung-leong/zigar/wiki) for more details.

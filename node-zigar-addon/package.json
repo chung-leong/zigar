@@ -20,7 +20,9 @@
   },
   "files": [
     "src/*",
-    "dist/*"
+    "dist/*",
+    "lib/*",
+    "build.zig"
   ],
   "repository": {
     "type": "git",
@@ -35,7 +37,7 @@
   "bugs": {
     "url": "https://github.com/chung-leong/zigar/issues"
   },
-  "homepage": "https://github.com/chung-leong/zigar#readme",
+  "homepage": "https://github.com/chung-leong/zigar/wiki",
   "devDependencies": {
     "@rollup/plugin-terser": "^0.4.4",
     "c8": "^9.1.0",
