@@ -58,27 +58,9 @@ function buildAddOn(addonPath, options = {}) {
   execFileSync('zig', args, { cwd, stdio: 'pipe' });
 }
   
-let isGNU;
-
 function loadAddon(addonDir) {
-  const arch = os.arch();
-  let platform = os.platform();
-  if (platform === 'linux') {
-    // differentiate glibc from musl
-    if (isGNU === undefined) {
-      try {
-        execFileSync('getconf', [ 'GNU_LIBC_VERSION' ], { stdio: 'pipe' });
-        isGNU = true;
-        /* c8 ignore next 3 */
-      } catch (err) {
-        isGNU = false;
-      }
-    }
-    /* c8 ignore next 3 */
-    if (!isGNU) {
-      platform += '-musl';
-    }
-  }
+  const arch = getArch();
+  const platform = getPlatform();
   let srcMTime;
   const srcDir = resolve(__dirname, '../src');
   for (const file of readdirSync(srcDir)) {
@@ -98,6 +80,33 @@ function loadAddon(addonDir) {
     buildAddOn(addonPath, { platform, arch, exeName });
   }
   return require(addonPath);
+}
+
+let isGNU;
+
+function getPlatform() {
+  let platform = os.platform();
+  if (platform === 'linux') {
+    // differentiate glibc from musl
+    if (isGNU === undefined) {
+      try {
+        execFileSync('getconf', [ 'GNU_LIBC_VERSION' ], { stdio: 'pipe' });
+        isGNU = true;
+        /* c8 ignore next 3 */
+      } catch (err) {
+        isGNU = false;
+      }
+    }
+    /* c8 ignore next 3 */
+    if (!isGNU) {
+      platform += '-musl';
+    }
+  }
+  return platform;
+}
+
+function getArch() {
+  return os.arch();
 }
 
 module.exports = {

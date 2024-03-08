@@ -1,11 +1,10 @@
 import { createRequire } from 'module';
 import { createEnvironment } from 'node-zigar-addon';
-import os from 'os';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import {
-  compile, extractOptions, findConfigFile, findSourceFile, generateCode, getCachePath,
-  getModuleCachePath, loadConfigFile, optionsForCompile
+  compile, extractOptions, findConfigFile, findSourceFile, generateCode, getArch, getCachePath,
+  getModuleCachePath, getPlatform, loadConfigFile, optionsForCompile
 } from 'zigar-compiler';
 
 export async function resolve(specifier, context, nextResolve) {
@@ -28,8 +27,8 @@ export async function load(url, context, nextLoad) {
     clean: false,
     optimize: 'Debug',
     nativeCpu: false,
-    platform: os.platform(),
-    arch: os.arch(),
+    platform: getPlatform(),
+    arch: getArch(),
   };
   const configPath = await findConfigFile('node-zigar.config.json', dirname(path));
   if (configPath) {
@@ -63,4 +62,3 @@ export async function load(url, context, nextLoad) {
     source: code,
   };
 }
-

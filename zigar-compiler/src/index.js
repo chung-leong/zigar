@@ -5,4 +5,5 @@ export {
   loadConfigFileSync, optionsForCompile, optionsForTranspile
 } from './configuration.js';
 export { transpile } from './transpiler.js';
+export { getArch, getPlatform } from './utility-functions.js';
 

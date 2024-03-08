@@ -4,8 +4,8 @@ const os = require('os');
 const { dirname, join, relative } = require('path');
 const { fileURLToPath, pathToFileURL } = require('url');
 const { 
-  compileSync, extractOptions, findConfigFileSync, findSourceFile, getModuleCachePath,
-  loadConfigFileSync, optionsForCompile
+  compileSync, extractOptions, findConfigFileSync, findSourceFile, getArch, getModuleCachePath,
+  getPlatform, loadConfigFileSync, optionsForCompile
 } = require('zigar-compiler/cjs');
 
 const extensionsRegex = /\.(zig|zigar)(\?|$)/;
@@ -27,8 +27,8 @@ Module._load = new Proxy(Module._load, {
       clean: false,
       optimize: 'Debug',
       nativeCpu: false,
-      platform: os.platform(),
-      arch: os.arch(),
+      platform: getPlatform(),
+      arch: getArch(),
     };
     const configPath = findConfigFileSync('node-zigar.config.json', dirname(path));
     if (configPath) {

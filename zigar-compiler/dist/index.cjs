@@ -4838,6 +4838,33 @@ function md5(text) {
   return hash.digest('hex');
 }
 
+let isGNU;
+
+function getPlatform() {
+  let platform = os.platform();
+  if (platform === 'linux') {
+    // differentiate glibc from musl
+    if (isGNU === undefined) {
+      try {
+        execFileSync('getconf', [ 'GNU_LIBC_VERSION' ], { stdio: 'pipe' });
+        isGNU = true;
+        /* c8 ignore next 3 */
+      } catch (err) {
+        isGNU = false;
+      }
+    }
+    /* c8 ignore next 3 */
+    if (!isGNU) {
+      platform += '-musl';
+    }
+  }
+  return platform;
+}
+
+function getArch() {
+  return os.arch();
+}
+
 async function compile(srcPath, modPath, options) {
   const srcInfo = (srcPath) ? await findFile(srcPath) : null;
   if (srcInfo === undefined) {
@@ -5093,8 +5120,8 @@ const isWASM = /^wasm(32|64)$/;
 
 function createConfig(srcPath, modPath, options = {}) {
   const {
-    platform = os.platform(),
-    arch = os.arch(),
+    platform = getPlatform(),
+    arch = getArch(),
     nativeCpu = false,
     optimize = 'Debug',
     clean = false,
@@ -5132,8 +5159,8 @@ function createConfig(srcPath, modPath, options = {}) {
         `-Dtarget=${cpuArch}-${osTag}`,        
       ];
       if (nativeCpu) {
-        if (arch === os.arch() && platform === os.platform()) {
-          args.push(`-Dmcpu=native`);
+        if (arch === getArch() && platform === getPlatform()) {
+          args.push(`-Dcpu=native`);
         }
       }
       return `zig ${args.join(' ')}`;
@@ -7797,8 +7824,10 @@ exports.findConfigFile = findConfigFile;
 exports.findConfigFileSync = findConfigFileSync;
 exports.findSourceFile = findSourceFile;
 exports.generateCode = generateCode;
+exports.getArch = getArch;
 exports.getCachePath = getCachePath;
 exports.getModuleCachePath = getModuleCachePath;
+exports.getPlatform = getPlatform;
 exports.loadConfigFile = loadConfigFile;
 exports.loadConfigFileSync = loadConfigFileSync;
 exports.optionsForCompile = optionsForCompile;

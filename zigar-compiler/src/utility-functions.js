@@ -6,6 +6,7 @@ import {
 import {
   chmod, lstat, mkdir, open, readFile, readdir, rmdir, stat, unlink, writeFile
 } from 'fs/promises';
+import os from 'os';
 import { join, parse } from 'path';
 
 export async function findFile(path, follow = true) {
@@ -292,4 +293,31 @@ export function md5(text) {
   const hash = createHash('md5');
   hash.update(text);
   return hash.digest('hex');
+}
+
+let isGNU;
+
+export function getPlatform() {
+  let platform = os.platform();
+  if (platform === 'linux') {
+    // differentiate glibc from musl
+    if (isGNU === undefined) {
+      try {
+        execFileSync('getconf', [ 'GNU_LIBC_VERSION' ], { stdio: 'pipe' });
+        isGNU = true;
+        /* c8 ignore next 3 */
+      } catch (err) {
+        isGNU = false;
+      }
+    }
+    /* c8 ignore next 3 */
+    if (!isGNU) {
+      platform += '-musl';
+    }
+  }
+  return platform;
+}
+
+export function getArch() {
+  return os.arch();
 }

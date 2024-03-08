@@ -6,8 +6,8 @@ import { basename, join, parse, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import {
   acquireLock, acquireLockSync, copyFile, copyFileSync, deleteDirectory, deleteDirectorySync,
-  findFile, findFileSync, findMatchingFiles, findMatchingFilesSync, loadFile, loadFileSync, md5,
-  releaseLock, releaseLockSync
+  findFile, findFileSync, findMatchingFiles, findMatchingFilesSync, getArch, getPlatform, loadFile,
+  loadFileSync, md5, releaseLock, releaseLockSync
 } from './utility-functions.js';
 
 export async function compile(srcPath, modPath, options) {
@@ -265,8 +265,8 @@ const isWASM = /^wasm(32|64)$/;
 
 export function createConfig(srcPath, modPath, options = {}) {
   const {
-    platform = os.platform(),
-    arch = os.arch(),
+    platform = getPlatform(),
+    arch = getArch(),
     nativeCpu = false,
     optimize = 'Debug',
     clean = false,
@@ -304,8 +304,8 @@ export function createConfig(srcPath, modPath, options = {}) {
         `-Dtarget=${cpuArch}-${osTag}`,        
       ];
       if (nativeCpu) {
-        if (arch === os.arch() && platform === os.platform()) {
-          args.push(`-Dmcpu=native`);
+        if (arch === getArch() && platform === getPlatform()) {
+          args.push(`-Dcpu=native`);
         }
       }
       return `zig ${args.join(' ')}`;

@@ -69,26 +69,26 @@ describe('Compilation', function() {
       const config = createConfig(srcPath, modPath, options);
       expect(config.zigCmd).to.equal(options.zigCmd);
     })
-    it('should set mcpu to native when nativeCpu is true', async function() {
+    it('should set cpu to native when nativeCpu is true', async function() {
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'Debug', nativeCpu: true };
       const modPath = getModuleCachePath(srcPath, options);
       const config = createConfig(srcPath, modPath, options);
-      expect(config.zigCmd).to.contain('-Dmcpu=native');
+      expect(config.zigCmd).to.contain('-Dcpu=native');
     })
-    it('should omit mcpu despite nativeCpu being true when arch does not match', async function() {
+    it('should omit cpu despite nativeCpu being true when arch does not match', async function() {
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'Debug', arch: 'loong64', nativeCpu: true };
       const modPath = getModuleCachePath(srcPath, options);
       const config = createConfig(srcPath, modPath, options);
-      expect(config.zigCmd).to.not.contain('-Dmcpu=native');
+      expect(config.zigCmd).to.not.contain('-Dcpu=native');
     })
-    it('should omit mcpu despite nativeCpu being true when platform does not match', async function() {
+    it('should omit cpu despite nativeCpu being true when platform does not match', async function() {
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'Debug', platform: 'aix', nativeCpu: true };
       const modPath = getModuleCachePath(srcPath, options);
       const config = createConfig(srcPath, modPath, options);
-      expect(config.zigCmd).to.not.contain('-Dmcpu=native');
+      expect(config.zigCmd).to.not.contain('-Dcpu=native');
     })
     it('should place DLL inside module folder', function() {
       const srcPath = '/project/src/hello.zig';
@@ -191,9 +191,11 @@ describe('Compilation', function() {
       const srcPath = absolute('./zig-samples/basic/function-simple.zig');
       const options = { optimize: 'ReleaseSmall', nativeCpu: true };
       const modPath = getModuleCachePath(srcPath, options);
-      const { outputPath } = await compile(srcPath, modPath, options);
-      const { size } = await stat(outputPath);
-      expect(size).to.be.at.least(1000);
+      await forceChange(srcPath, async() => {
+        const { outputPath } = await compile(srcPath, modPath, options);
+        const { size } = await stat(outputPath);
+        expect(size).to.be.at.least(1000); 
+      })
     })
     it('should not fail when nativeCpu is set in a cross compilation scenario', async function() {
       this.timeout(600000);
@@ -244,6 +246,14 @@ describe('Compilation', function() {
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const modPath = getModuleCachePath(srcPath, options);
       await expect(compile(srcPath, modPath, options)).to.eventually.be.rejected;
+    })
+    it('should return sub-path of module path when source file is omitted', async function() {
+      this.timeout(600000);
+      const options = { optimize: 'Debug', platform: 'linux', arch: 'arm64' };
+      const modPath = '/lib/hello.zigar';
+      const { outputPath, changed } = await compile(null, modPath, options);
+      expect(outputPath).to.equal('/lib/hello.zigar/linux.arm64.so');
+      expect(changed).to.be.false;
     })
     it('should use custom build file', async function() {
       this.timeout(600000);
@@ -321,7 +331,7 @@ describe('Compilation', function() {
       this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options1 = { optimize: 'Debug', arch: 'wasm32', platform: 'freestanding' };
-      const options2 = { optimize: 'ReleaseFast', arch: 'wasm32', platform: 'freestanding' };
+      const options2 = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'freestanding' };
       const result1 = compileSync(srcPath, null, options1);
       const result2 = compileSync(srcPath, null, options2);
       const { size: before } = statSync(result1.outputPath);
@@ -367,6 +377,14 @@ describe('Compilation', function() {
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const modPath = getModuleCachePath(srcPath, options);
       expect(() => compileSync(srcPath, modPath, options)).to.throw();
+    })
+    it('should return sub-path of module path when source file is omitted', function() {
+      this.timeout(600000);
+      const options = { optimize: 'Debug', platform: 'linux', arch: 'arm64' };
+      const modPath = '/lib/hello.zigar';
+      const { outputPath, changed } = compileSync(null, modPath, options);
+      expect(outputPath).to.equal('/lib/hello.zigar/linux.arm64.so');
+      expect(changed).to.be.false;
     })
     it('should use custom build file', async function() {
       this.timeout(600000);
