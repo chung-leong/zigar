@@ -40,7 +40,7 @@ async function importModule(url, optimize) {
   const inputOptions = {
     input: path,
     plugins: [
-      Zigar({ optimize, useReadFile: true }),
+      Zigar({ optimize, useReadFile: true, keepNames: optimize === 'ReleaseSafe' }),
       NodeResolve({
         modulePaths: [ resolve(`../node_modules`) ],
       }),

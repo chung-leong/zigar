@@ -60,6 +60,7 @@ async function importModule(url, optimize) {
           exclude: /node_modules/,
           options: {
             embedWASM: true,
+            keepNames: optimize === 'ReleaseSafe',
             optimize,
           }
         },
