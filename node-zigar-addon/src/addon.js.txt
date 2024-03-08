@@ -4953,7 +4953,7 @@
 "        len: unalignedShadowDV.byteLength,\n"
 "        align: 1,\n"
 "      };\n"
-"      return this.addShadow(shadow, source, align);\n"
+"      return this.addShadow(shadow, source, 1);\n"
 "    }\n"
 "    /* RUNTIME-ONLY-END */\n"
 "\n"

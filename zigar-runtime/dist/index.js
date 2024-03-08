@@ -4707,7 +4707,7 @@ class Environment {
       len: unalignedShadowDV.byteLength,
       align: 1,
     };
-    return this.addShadow(shadow, source, align);
+    return this.addShadow(shadow, source, 1);
   }
   /* RUNTIME-ONLY-END */
 

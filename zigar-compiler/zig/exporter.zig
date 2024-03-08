@@ -149,7 +149,7 @@ pub const Structure = extern struct {
     has_pointer: bool,
 };
 
-pub fn missing(comptime T: type) T {
+pub fn missing(comptime T: type) comptime_int {
     return std.math.maxInt(T);
 }
 
@@ -1400,8 +1400,8 @@ fn addUnionMembers(host: anytype, structure: Value, comptime T: type) !void {
         true
     else
         false;
-    const tag_offset = if (has_selector) getUnionSelectorOffset(TT, un.fields) else missing(usize);
-    const value_offset = if (tag_offset == 0) @sizeOf(TT) * 8 else 0;
+    const tag_offset: comptime_int = if (has_selector) getUnionSelectorOffset(TT, un.fields) else missing(usize);
+    const value_offset: comptime_int = if (tag_offset == 0) @sizeOf(TT) * 8 else 0;
     inline for (un.fields, 0..) |field, index| {
         try host.attachMember(structure, .{
             .name = getCString(field.name),

@@ -114,6 +114,18 @@ describe('Environment', function() {
       expect(dv2.buffer).to.equal(dv1.buffer);
       expect(dv2.byteOffset).to.equal(dv1.byteOffset);
     })
+    it('should find previously imported buffer when len is undefined', function() {
+      const env = new Environment();
+      env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
+      env.getBufferAddress = () => 0x1000n;
+      const dv1 = new DataView(new ArrayBuffer(32));
+      env.startContext();
+      const address = env.registerMemory(dv1);
+      const dv2 = env.findMemory(address, undefined);
+      expect(dv2).to.be.instanceOf(DataView);
+      expect(dv2.buffer).to.equal(dv1.buffer);
+      expect(dv2.byteOffset).to.equal(dv1.byteOffset);
+    })
     it('should find a subslice of previously imported buffer', function() {
       const env = new Environment();
       env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
@@ -134,6 +146,17 @@ describe('Environment', function() {
       env.startContext();
       const address = env.registerMemory(dv1);
       const dv2 = env.findMemory(0xFF0000n, 8);
+      expect(dv2).to.be.instanceOf(DataView);
+      expect(dv2.buffer).to.be.instanceOf(SharedArrayBuffer);
+    })
+    it('should return data view of shared memory if address is not knownand len is undefined', function() {
+      const env = new Environment();
+      env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
+      env.getBufferAddress = () => 0x1000n;
+      const dv1 = new DataView(new ArrayBuffer(32));
+      env.startContext();
+      const address = env.registerMemory(dv1);
+      const dv2 = env.findMemory(0xFF0000n, undefined);
       expect(dv2).to.be.instanceOf(DataView);
       expect(dv2.buffer).to.be.instanceOf(SharedArrayBuffer);
     })
@@ -1752,6 +1775,38 @@ describe('Environment', function() {
       env.updateShadows();
       expect(shadow[MEMORY].getUint32(0, true)).to.equal(1234);
     })
+    it('should use alignment attached to data views', function() {
+      const env = new Environment();
+      env.allocateShadowMemory = function(len, align) {
+        return new DataView(new ArrayBuffer(len));
+      };
+      env.getBufferAddress = function() {
+        return 0x1000;
+      };
+      const Test = function(dv) {
+        this[MEMORY] = dv;
+        dv[ALIGN] = 4;
+      };
+      Test.prototype[COPIER] = getMemoryCopier(8);
+      Test[ALIGN] = undefined;
+      const buffer = new ArrayBuffer(32);
+      const object1 = new Test(new DataView(buffer, 3, 8));
+      const object2 = new Test(new DataView(buffer, 7, 8));
+      const object3 = new Test(new DataView(buffer, 11, 8));
+      const cluster = {
+        targets: [ object1, object2, object3 ],
+        start: 3,
+        end: 19,
+      };
+      object1[MEMORY].setUint32(0, 1234, true);
+      env.startContext();
+      const shadow = env.createClusterShadow(cluster);
+      expect(shadow[MEMORY].byteLength).to.equal(16);
+      expect(shadow[MEMORY].buffer.byteLength).to.equal(20);
+      env.updateShadows();
+      expect(shadow[MEMORY].getUint32(0, true)).to.equal(1234);
+    })
+
     it('should throw when objects have incompatible alignments', function() {
       const env = new Environment();
       env.allocateShadowMemory = function(len, align) {
@@ -1900,7 +1955,7 @@ describe('Environment', function() {
       expect(align).to.equal(1);
     })
   })
-  describe('acquirePointerTargets', function() {    
+  describe('acquirePointerTargets', function() {
     it('should set pointer slot to undefined when pointer is inactive', function() {
       const env = new Environment();
       const intStructure = env.beginStructure({
@@ -2253,6 +2308,47 @@ describe('Environment', function() {
       expect(object2.sibling['*']).to.equal(object1);
       expect(object1.sibling['*']).to.equal(object3);     
     })
+    it('should acquire missing opaque structures', function() {
+      const env = new Environment();
+      const opaqueStructure = env.beginStructure({
+        type: StructureType.Opaque,
+        name: 'Hello',
+        hasPointer: false,
+      });
+      env.finalizeShape(opaqueStructure);
+      env.finalizeStructure(opaqueStructure);
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Hello',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: opaqueStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      env.inFixedMemory = function() {
+        return false;
+      };
+      const { constructor: Ptr } = ptrStructure;    
+      const pointer = new Ptr(undefined);
+      const dv = new DataView(new ArrayBuffer(16))
+      const map = new Map([
+        [ 0x1000n, dv ],
+      ]);      
+      env.obtainFixedView = function(address, len) {
+        return map.get(address);
+      };
+      pointer[MEMORY].setBigUint64(0, 0x1000n, true);
+      env.acquirePointerTargets(pointer);
+      expect(pointer.dataView).to.equal(dv);
+    })
   })
   describe('acquireDefaultPointers', function() {
     it('should acquire targets of pointers in structure template slots ', function() {
@@ -2375,6 +2471,10 @@ describe('Environment', function() {
       expect(isMisaligned(0xF000000000001002n, 4)).to.be.true;
       expect(isMisaligned(0xF000000000001004n, 4)).to.be.false;
       expect(isMisaligned(0xF000000000001004n, 8)).to.be.true;
+    })
+    it(`should return false when align is undefined`, function() {
+      expect(isMisaligned(0x1000, undefined)).to.be.false;
+      expect(isMisaligned(0xF000000000001000n, undefined)).to.be.false;
     })
   })
   describe('getAlignedAddress', function() {

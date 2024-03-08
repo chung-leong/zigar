@@ -8,6 +8,7 @@
 * Added support for latest version of Node.js 
 * Added support for Electron and NW.js, including cross-compilation handling
 * Added support for master branch version of Zig compiler
+* Added support for packages
 * Implemented proper handling of const pointers
 * Improved handling of tagged union
 * Improved handling of enum

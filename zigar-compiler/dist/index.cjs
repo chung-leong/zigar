@@ -388,14 +388,12 @@ function encodeText(text, encoding = 'utf-8') {
 }
 
 function encodeBase64(dv) {
-
   const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
   const bstr = String.fromCharCode.apply(null, ta);
   return btoa(bstr);
 }
 
 function decodeBase64(str) {
-
   const bstr = atob(str);
   const ta = new Uint8Array(bstr.length);
   for (let i = 0; i < ta.byteLength; i++) {
@@ -1041,7 +1039,6 @@ function defineArray(structure, env) {
     instance: { members: [ member ] },
     hasPointer,
   } = structure;
-
   const { get, set } = getDescriptor(member, env);
   const hasStringProp = canBeString(member);
   const propApplier = createPropertyApplier(structure);
@@ -1687,7 +1684,6 @@ function defineSlice(structure, env) {
     },
     hasPointer,
   } = structure;
-
   const { get, set } = getDescriptor(member, env);
   const { byteSize: elementSize, structure: elementStructure } = member;
   const sentinel = getSentinel(structure, env);
@@ -1799,7 +1795,6 @@ function getSentinel(structure, env) {
   if (!sentinel) {
     return;
   }
-
   const { get: getSentinelValue } = getDescriptor(sentinel, env);
   const value = getSentinelValue.call(template, 0);
   const { get } = getDescriptor(member, env);
@@ -2045,7 +2040,6 @@ function defineVector(structure, env) {
     align,
     instance: { members: [ member ] },
   } = structure;
-
   const { bitSize: elementBitSize, structure: elementStructure } = member;
   const elementDescriptors = {};
   for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
@@ -2240,7 +2234,6 @@ function useArgStruct() {
 
 function getStructureFactory(type) {
   const f = factories$2[type];
-
   return f;
 }
 
@@ -3103,7 +3096,6 @@ function useExtendedFloat() {
 
 function getExtendedTypeAccessor(access, member) {
   const f = factories$1[member.type];
-
   return f(access, member);
 }
 
@@ -3859,7 +3851,6 @@ function hasStandardFloatSize({ bitSize }) {
 
 function getDescriptor(member, env) {
   const f = factories[member.type];
-
   return f(member, env);
 }
 
@@ -4119,7 +4110,6 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
   const { bitOffset, byteSize } = member;
   const getter = getDataViewAccessor('get', member);
   const setter = getDataViewAccessor('set', member);
-
   if (bitOffset !== undefined) {
     const offset = bitOffset >> 3;
     return {
@@ -5507,7 +5497,6 @@ class Environment {
   slots = {};
   structures = [];
   /* COMPTIME-ONLY-END */
-
   imports;
   console = globalThis.console;
 
@@ -5944,7 +5933,6 @@ class Environment {
   }
 
 
-
   getShadowAddress(target, cluster) {
     if (cluster) {
       const dv = target[MEMORY];
@@ -6186,7 +6174,6 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   getBufferAddress(buffer) {
-
     return 0;
   }
 
