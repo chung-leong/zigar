@@ -10,6 +10,7 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
+    lib.addIncludePath(.{ .path = "../node-api-headers/include" });
     lib.addIncludePath(.{ .path = "./node_modules/node-api-headers/include" });
     lib.addCSourceFile(.{ .file = .{ .path = "./src/addon-node.c" }, .flags = &.{} });
     lib.addCSourceFile(.{ .file = .{ .path = "./src/addon.c" }, .flags = &.{} });

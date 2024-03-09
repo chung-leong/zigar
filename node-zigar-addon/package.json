@@ -1,6 +1,6 @@
 {
   "name": "node-zigar-addon",
-  "version": "0.11.1-alpha.0",
+  "version": "0.11.1-alpha.2",
   "description": "NodeJS addon for loading Zig native modules",
   "main": "./dist/index.js",
   "exports": {
@@ -38,14 +38,16 @@
     "url": "https://github.com/chung-leong/zigar/issues"
   },
   "homepage": "https://github.com/chung-leong/zigar/wiki",
+  "dependencies": {
+    "node-api-headers": "^1.1.0"
+  },
   "devDependencies": {
     "@rollup/plugin-terser": "^0.4.4",
     "c8": "^9.1.0",
     "chai": "^5.1.0",
     "mocha": "^10.3.0",
     "mocha-skip-if": "^1.0.4",
-    "node-api-headers": "^1.1.0",
-    "rollup": "^4.12.0",
+    "rollup": "^4.12.1",
     "rollup-plugin-strip-code": "^0.2.7"
   }
 }
