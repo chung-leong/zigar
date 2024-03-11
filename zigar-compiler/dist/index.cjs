@@ -4845,12 +4845,17 @@ function getPlatform() {
   if (platform === 'linux') {
     // differentiate glibc from musl
     if (isGNU === undefined) {
-      try {
-        execFileSync('getconf', [ 'GNU_LIBC_VERSION' ], { stdio: 'pipe' });
+      /* c8 ignore next 3 */
+      if (process.versions?.electron || process.__nwjs) {
         isGNU = true;
-        /* c8 ignore next 3 */
-      } catch (err) {
-        isGNU = false;
+      } else {
+        try {
+          execFileSync('getconf', [ 'GNU_LIBC_VERSION' ], { stdio: 'pipe' });
+          isGNU = true;
+          /* c8 ignore next 3 */
+        } catch (err) {
+          isGNU = false;
+        }  
       }
     }
     /* c8 ignore next 3 */
