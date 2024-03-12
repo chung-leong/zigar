@@ -63,24 +63,27 @@ export function buildAddOn(addonPath, options = {}) {
 function loadAddon(addonDir) {
   const arch = getArch();
   const platform = getPlatform();
-  let srcMTime;
-  const srcDir = fileURLToPath(new URL('../src', import.meta.url));
-  for (const file of readdirSync(srcDir)) {
-    const { mtime } = statSync(join(srcDir, file));
-    if (!(srcMTime >= mtime)) {
-      srcMTime = mtime;
-    }
-  }
-  const require = createRequire(import.meta.url);
   const addonPath = join(addonDir, `${platform}.${arch}.node`);
-  let addonMTime;
-  try {
-    addonMTime = statSync(addonPath).mtime;
-  } catch (err) {    
-  }
-  if (!(addonMTime > srcMTime)) {
-    const exeName = parse(process.execPath).name;
-    buildAddOn(addonPath, { platform, arch, exeName });
+  const recompile = !addonDir.includes('/app.asar.unpacked/');
+  if (recompile) {
+    let srcMTime;
+    const srcDir = fileURLToPath(new URL('../src', import.meta.url));
+    for (const file of readdirSync(srcDir)) {
+      const { mtime } = statSync(join(srcDir, file));
+      if (!(srcMTime >= mtime)) {
+        srcMTime = mtime;
+      }
+    }
+    const require = createRequire(import.meta.url);
+    let addonMTime;
+    try {
+      addonMTime = statSync(addonPath).mtime;
+    } catch (err) {    
+    }
+    if (!(addonMTime > srcMTime)) {
+      const exeName = parse(process.execPath).name;
+      buildAddOn(addonPath, { platform, arch, exeName });
+    }
   }
   return require(addonPath);
 }

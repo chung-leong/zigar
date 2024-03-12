@@ -22,7 +22,7 @@ export async function load(url, context, nextLoad) {
   if (!m) {
     return nextLoad(url);
   }
-  const path = fileURLToPath(url);
+  const path = fileURLToPath(url).replace(/\/app\.asar\//, '/app.asar.unpacked/');
   const options = {
     clean: false,
     optimize: 'Debug',
@@ -30,10 +30,12 @@ export async function load(url, context, nextLoad) {
     platform: getPlatform(),
     arch: getArch(),
   };
-  const configPath = await findConfigFile('node-zigar.config.json', dirname(path));
-  if (configPath) {
-    // add options from config file
-    Object.assign(options, await loadConfigFile(configPath, optionsForCompile));
+  if (!path.includes('/app.asar.unpacked/')) {
+    const configPath = await findConfigFile('node-zigar.config.json', dirname(path));
+    if (configPath) {
+      // add options from config file
+      Object.assign(options, await loadConfigFile(configPath, optionsForCompile));
+    }
   }
   if (m[2]) {
     // allow overriding of options using query variables
