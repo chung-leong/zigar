@@ -81,7 +81,7 @@ describe('Addon functionalities', function() {
     it('should load module', function() {
       this.timeout(300000);
       const path = getModulePath('integers');
-      const module = importModule(path, addonDir);
+      const module = importModule(path, { addonDir, recompile: true });
       expect(module.int32).to.equal(1234);
     })
     it('should throw when module is missing', function() {
@@ -89,14 +89,14 @@ describe('Addon functionalities', function() {
       const path = getModulePath('missing');
       let error;
       try {
-        importModule(path);
+        importModule(path, { addonDir });
       } catch (err) {
         error = err;
       }
       expect(error).to.be.an('error');
     })
     it('should get gc statistics', function() {
-      const stats = getGCStatistics(addonDir);
+      const stats = getGCStatistics({ addonDir, recompile: true });
       expect(stats).to.be.an('object');
     })
   })
@@ -116,11 +116,11 @@ describe('Addon functionalities', function() {
     it('should load module', function() {
       this.timeout(300000);
       const path = getModulePath('integers');
-      const module = cjs.importModule(path, addonDir);
+      const module = cjs.importModule(path, { addonDir, recompile: true });
       expect(module.int32).to.equal(1234);
     })
     it('should get gc statistics', function() {
-      const stats = cjs.getGCStatistics(addonDir);
+      const stats = cjs.getGCStatistics({ addonDir, recompile: true });
       expect(stats).to.be.an('object');
     })    
   })

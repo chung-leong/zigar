@@ -1,8 +1,8 @@
 import { expect, use } from 'chai';
-import ChaiAsPromised from 'chai-as-promised';
+import { chaiPromised } from 'chai-promised';
 import { fileURLToPath } from 'url';
 
-use(ChaiAsPromised);
+use(chaiPromised);
 
 import {
   extractOptions,

@@ -1,11 +1,10 @@
 const Module = require('module');
 const { importModule } = require('node-zigar-addon/cjs');
-const os = require('os');
-const { dirname, join, relative } = require('path');
-const { fileURLToPath, pathToFileURL } = require('url');
+const { dirname, join } = require('path');
+const { pathToFileURL } = require('url');
 const { 
   compileSync, extractOptions, findConfigFileSync, findSourceFile, getArch, getModuleCachePath,
-  getPlatform, loadConfigFileSync, optionsForCompile
+  getPlatform, loadConfigFileSync, normalizePath, optionsForCompile
 } = require('zigar-compiler/cjs');
 
 const extensionsRegex = /\.(zig|zigar)(\?|$)/;
@@ -22,7 +21,7 @@ Module._load = new Proxy(Module._load, {
       return Reflect.apply(target, self, args);
     }
     const url = new URL(request, pathToFileURL(parent.filename));
-    const path = fileURLToPath(url).replace('app.asar', 'app.asar.unpacked');
+    const { path, archive } = normalizePath(url);
     const options = {
       clean: false,
       optimize: 'Debug',
@@ -30,7 +29,7 @@ Module._load = new Proxy(Module._load, {
       platform: getPlatform(),
       arch: getArch(),
     };
-    if (!path.includes('app.asar.unpacked')) {
+    if (!archive) {
       const configPath = findConfigFileSync('node-zigar.config.json', dirname(path));
       if (configPath) {
         // add options from config file
@@ -48,6 +47,7 @@ Module._load = new Proxy(Module._load, {
     // is absent, compilation does not occur
     const { outputPath } = compileSync(srcPath, modPath, options);
     const addonDir = join(dirname(modPath), 'node-zigar-addon');
-    return importModule(outputPath, addonDir, options); 
+    const recompile = !archive;
+    return importModule(outputPath,  { addonDir, recompile, ...options }); 
   }
 });

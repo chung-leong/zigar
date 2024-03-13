@@ -1,10 +1,10 @@
 import { expect, use } from 'chai';
-import ChaiAsPromised from 'chai-as-promised';
+import { chaiPromised } from 'chai-promised';
 import { statSync, utimesSync } from 'fs';
 import { stat, utimes } from 'fs/promises';
 import os, { tmpdir } from 'os';
 
-use(ChaiAsPromised);
+use(chaiPromised);
 
 import { fileURLToPath } from 'url';
 import {

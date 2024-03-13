@@ -1,10 +1,10 @@
 import { expect, use } from 'chai';
-import ChaiAsPromised from 'chai-as-promised';
+import { chaiPromised } from 'chai-promised';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
-use(ChaiAsPromised);
+use(chaiPromised);
 
 import {
   acquireLock,
@@ -21,6 +21,7 @@ import {
   findMatchingFilesSync,
   loadFile,
   loadFileSync,
+  normalizePath,
   releaseLock,
   releaseLockSync,
 } from '../src/utility-functions.js';
@@ -210,6 +211,15 @@ describe('Utility functions', function() {
       acquireLockSync(dir, 200);
       releaseLockSync(dir);
       deleteDirectorySync(dir);
+    })
+  })
+  describe('normalizePath', function() {
+    it('should report ASAR archive path', function() {
+      const url = new URL('./app.asar/hello.zigar', import.meta.url);
+      const unpacked = fileURLToPath(new URL('./app.asar.unpacked/hello.zigar', import.meta.url));
+      const { path, archive } = normalizePath(url.href);
+      expect(archive).to.equal('asar');
+      expect(path).to.equal(unpacked);
     })
   })
 })

@@ -4215,7 +4215,7 @@ function generateCode(definition, params) {
     topLevelAwait = true,
     omitExports = false,
     declareFeatures = false,
-    addonDir = null
+    addonDir = null,
   } = params;
   const features = (declareFeatures) ? getFeaturesUsed(structures) : [];
   const exports = getExports(structures);
@@ -4235,7 +4235,7 @@ function generateCode(definition, params) {
   // write out the structures as object literals 
   addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
-  add(`const env = createEnvironment(${JSON.stringify(addonDir)});`);
+  add(`const env = createEnvironment(${addonDir ? JSON.stringify({ addonDir }, undefined, 2) : null});`);
   add(`const __zigar = env.getControlObject();`);
   add(`\n// recreate structures`);
   add(`env.recreateStructures(structures, options);`);
@@ -4878,6 +4878,19 @@ function getPlatform() {
 
 function getArch() {
   return os.arch();
+}
+
+function normalizePath(url$1) {
+  let archive;
+  const parts = url.fileURLToPath(url$1).split(path.sep).map((part) => {
+    if (part === 'app.asar') {
+      archive = 'asar';
+      return part + '.unpacked';
+    }
+    return part;
+  });
+  const path$1 = parts.join(path.sep);
+  return { path: path$1, archive }
 }
 
 async function compile(srcPath, modPath, options) {
@@ -7844,6 +7857,7 @@ exports.getModuleCachePath = getModuleCachePath;
 exports.getPlatform = getPlatform;
 exports.loadConfigFile = loadConfigFile;
 exports.loadConfigFileSync = loadConfigFileSync;
+exports.normalizePath = normalizePath;
 exports.optionsForCompile = optionsForCompile;
 exports.optionsForTranspile = optionsForTranspile;
 exports.transpile = transpile;

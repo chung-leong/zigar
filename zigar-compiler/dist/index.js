@@ -2,7 +2,7 @@ import { exec, execSync } from 'child_process';
 import { statSync, lstatSync, openSync, writeSync, closeSync, readFileSync, writeFileSync, chmodSync, unlinkSync, mkdirSync, readdirSync, rmdirSync } from 'fs';
 import { stat, lstat, open, readFile, writeFile, chmod, unlink, mkdir, readdir, rmdir } from 'fs/promises';
 import os from 'os';
-import { join, parse, basename, resolve, dirname } from 'path';
+import { sep, join, parse, basename, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
 
@@ -4212,7 +4212,7 @@ function generateCode(definition, params) {
     topLevelAwait = true,
     omitExports = false,
     declareFeatures = false,
-    addonDir = null
+    addonDir = null,
   } = params;
   const features = (declareFeatures) ? getFeaturesUsed(structures) : [];
   const exports = getExports(structures);
@@ -4232,7 +4232,7 @@ function generateCode(definition, params) {
   // write out the structures as object literals 
   addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
-  add(`const env = createEnvironment(${JSON.stringify(addonDir)});`);
+  add(`const env = createEnvironment(${addonDir ? JSON.stringify({ addonDir }, undefined, 2) : null});`);
   add(`const __zigar = env.getControlObject();`);
   add(`\n// recreate structures`);
   add(`env.recreateStructures(structures, options);`);
@@ -4875,6 +4875,19 @@ function getPlatform() {
 
 function getArch() {
   return os.arch();
+}
+
+function normalizePath(url) {
+  let archive;
+  const parts = fileURLToPath(url).split(sep).map((part) => {
+    if (part === 'app.asar') {
+      archive = 'asar';
+      return part + '.unpacked';
+    }
+    return part;
+  });
+  const path = parts.join(sep);
+  return { path, archive }
 }
 
 async function compile(srcPath, modPath, options) {
@@ -7828,4 +7841,4 @@ function embed(path, dv) {
 })()`;
 }
 
-export { compile, compileSync, extractOptions, findConfigFile, findConfigFileSync, findSourceFile, generateCode, getArch, getCachePath, getModuleCachePath, getPlatform, loadConfigFile, loadConfigFileSync, optionsForCompile, optionsForTranspile, transpile };
+export { compile, compileSync, extractOptions, findConfigFile, findConfigFileSync, findSourceFile, generateCode, getArch, getCachePath, getModuleCachePath, getPlatform, loadConfigFile, loadConfigFileSync, normalizePath, optionsForCompile, optionsForTranspile, transpile };

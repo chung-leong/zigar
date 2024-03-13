@@ -9,7 +9,7 @@ export function generateCode(definition, params) {
     topLevelAwait = true,
     omitExports = false,
     declareFeatures = false,
-    addonDir = null
+    addonDir = null,
   } = params;
   const features = (declareFeatures) ? getFeaturesUsed(structures) : [];
   const exports = getExports(structures);
@@ -29,7 +29,7 @@ export function generateCode(definition, params) {
   // write out the structures as object literals 
   addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
-  add(`const env = createEnvironment(${JSON.stringify(addonDir)});`);
+  add(`const env = createEnvironment(${addonDir ? JSON.stringify({ addonDir }, undefined, 2) : null});`);
   add(`const __zigar = env.getControlObject();`);
   add(`\n// recreate structures`);
   add(`env.recreateStructures(structures, options);`);

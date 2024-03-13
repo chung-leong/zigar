@@ -1,10 +1,10 @@
 import { createRequire } from 'module';
 import { createEnvironment } from 'node-zigar-addon';
 import { dirname, join } from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { pathToFileURL } from 'url';
 import {
   compile, extractOptions, findConfigFile, findSourceFile, generateCode, getArch, getCachePath,
-  getModuleCachePath, getPlatform, loadConfigFile, optionsForCompile
+  getModuleCachePath, getPlatform, loadConfigFile, normalizePath, optionsForCompile
 } from 'zigar-compiler';
 
 export async function resolve(specifier, context, nextResolve) {
@@ -22,7 +22,7 @@ export async function load(url, context, nextLoad) {
   if (!m) {
     return nextLoad(url);
   }
-  const path = fileURLToPath(url).replace('app.asar', 'app.asar.unpacked');
+  const { path, archive } = normalizePath(url);
   const options = {
     clean: false,
     optimize: 'Debug',
@@ -30,7 +30,7 @@ export async function load(url, context, nextLoad) {
     platform: getPlatform(),
     arch: getArch(),
   };
-  if (!path.includes('app.asar.unpacked')) {
+  if (!archive) {
     const configPath = await findConfigFile('node-zigar.config.json', dirname(path));
     if (configPath) {
       // add options from config file
@@ -49,7 +49,8 @@ export async function load(url, context, nextLoad) {
   const { outputPath } = await compile(srcPath, modPath, options);
   const addonParentDir = (m[1] === 'zig') ? getCachePath(options) : dirname(path);
   const addonDir = join(addonParentDir, 'node-zigar-addon');
-  const env = createEnvironment(addonDir);
+  const recompile = !archive;
+  const env = createEnvironment({ addonDir, recompile });
   env.loadModule(outputPath);
   env.acquireStructures(options);
   const definition = env.exportStructures();

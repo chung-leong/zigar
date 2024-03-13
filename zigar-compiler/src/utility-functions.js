@@ -7,7 +7,8 @@ import {
   chmod, lstat, mkdir, open, readFile, readdir, rmdir, stat, unlink, writeFile
 } from 'fs/promises';
 import os from 'os';
-import { join, parse } from 'path';
+import { join, parse, sep } from 'path';
+import { fileURLToPath } from 'url';
 
 export async function findFile(path, follow = true) {
   try {
@@ -325,4 +326,17 @@ export function getPlatform() {
 
 export function getArch() {
   return os.arch();
+}
+
+export function normalizePath(url) {
+  let archive;
+  const parts = fileURLToPath(url).split(sep).map((part) => {
+    if (part === 'app.asar') {
+      archive = 'asar';
+      return part + '.unpacked';
+    }
+    return part;
+  });
+  const path = parts.join(sep);
+  return { path, archive }
 }

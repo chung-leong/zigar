@@ -2,27 +2,27 @@ import { execFileSync } from 'child_process';
 import { readdirSync, statSync } from 'fs';
 import { createRequire } from 'module';
 import os from 'os';
-import { join, parse } from 'path';
+import { join } from 'path';
 import { fileURLToPath } from 'url';
 
-export function createEnvironment(addonDir) {
-  const { createEnvironment } = loadAddon(addonDir);
+export function createEnvironment(options) {
+  const { createEnvironment } = loadAddon(options);
   return createEnvironment();
 }
 
-export function importModule(soPath, addonDir, options = {}) {
-  const env = createEnvironment(addonDir);
+export function importModule(soPath, options) {
+  const env = createEnvironment(options);
   env.loadModule(soPath);
   env.acquireStructures(options);
   return env.useStructures();
 }
 
-export function getGCStatistics(addonDir) {
-  const { getGCStatistics } = loadAddon(addonDir);
+export function getGCStatistics(options) {
+  const { getGCStatistics } = loadAddon(options);
   return getGCStatistics();
 }
 
-export function buildAddOn(addonPath, options = {}) {
+export function buildAddOn(addonPath, options) {
   const { platform, arch } = options;
   const cwd = fileURLToPath(new URL('../', import.meta.url));
   const args = [ 'build', `-Doptimize=ReleaseSmall`, `-Doutput=${addonPath}` ];
@@ -57,11 +57,11 @@ export function buildAddOn(addonPath, options = {}) {
   execFileSync('zig', args, { cwd, stdio: 'pipe' });
 }
 
-function loadAddon(addonDir) {
+function loadAddon(options) {
+  const { addonDir, recompile = false } = options;
   const arch = getArch();
   const platform = getPlatform();
   const addonPath = join(addonDir, `${platform}.${arch}.node`);
-  const recompile = !addonDir.includes('app.asar.unpacked');
   if (recompile) {
     let srcMTime;
     const srcDir = fileURLToPath(new URL('../src', import.meta.url));
@@ -88,27 +88,26 @@ let isGNU;
 
 function getPlatform() {
   let platform = os.platform();
+  /* c8 ignore start */
   if (platform === 'linux') {
     // differentiate glibc from musl
     if (isGNU === undefined) {
-      /* c8 ignore next 3 */
       if (process.versions?.electron || process.__nwjs) {
         isGNU = true;
       } else {
         try {
           execFileSync('getconf', [ 'GNU_LIBC_VERSION' ], { stdio: 'pipe' });
           isGNU = true;
-          /* c8 ignore next 3 */
         } catch (err) {
           isGNU = false;
         }  
       }
     }
-    /* c8 ignore next 3 */
     if (!isGNU) {
       platform += '-musl';
     }
   }
+  /* c8 ignore end */
   return platform;
 }
 

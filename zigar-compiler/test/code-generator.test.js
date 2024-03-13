@@ -1,7 +1,4 @@
-import { expect, use } from 'chai';
-import ChaiAsPromised from 'chai-as-promised';
-
-use(ChaiAsPromised);
+import { expect } from 'chai';
 
 import { MemberType, hasStandardFloatSize } from '../../zigar-runtime/src/member.js';
 import { StructureType } from '../../zigar-runtime/src/structure.js';

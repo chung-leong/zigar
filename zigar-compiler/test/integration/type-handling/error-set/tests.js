@@ -1,8 +1,8 @@
 import { expect, use } from 'chai';
-import ChaiAsPromised from 'chai-as-promised';
+import { chaiPromised } from 'chai-promised';
 import { capture } from '../../capture.js';
 
-use(ChaiAsPromised);
+use(chaiPromised);
 
 export function addTests(importModule, options) {
   const { optimize } = options;
