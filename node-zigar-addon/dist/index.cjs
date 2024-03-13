@@ -59,7 +59,7 @@ function loadAddon(addonDir) {
   const arch = getArch();
   const platform = getPlatform();
   const addonPath = join(addonDir, `${platform}.${arch}.node`);
-  const recompile = !addonDir.includes('/app.asar.unpacked/');
+  const recompile = !addonDir.includes('app.asar.unpacked');
   if (recompile) {
     let srcMTime;
     const srcDir = resolve(__dirname, '../src');
@@ -75,8 +75,7 @@ function loadAddon(addonDir) {
     } catch (err) {    
     }
     if (!(addonMTime > srcMTime)) {
-      const exeName = parse(process.execPath).name;
-      buildAddOn(addonPath, { platform, arch, exeName });
+      buildAddOn(addonPath, { platform, arch });
     } 
   }
   return require(addonPath);

@@ -22,7 +22,7 @@ export async function load(url, context, nextLoad) {
   if (!m) {
     return nextLoad(url);
   }
-  const path = fileURLToPath(url).replace(/\/app\.asar\//, '/app.asar.unpacked/');
+  const path = fileURLToPath(url).replace('app.asar', 'app.asar.unpacked');
   const options = {
     clean: false,
     optimize: 'Debug',
@@ -30,7 +30,7 @@ export async function load(url, context, nextLoad) {
     platform: getPlatform(),
     arch: getArch(),
   };
-  if (!path.includes('/app.asar.unpacked/')) {
+  if (!path.includes('app.asar.unpacked')) {
     const configPath = await findConfigFile('node-zigar.config.json', dirname(path));
     if (configPath) {
       // add options from config file

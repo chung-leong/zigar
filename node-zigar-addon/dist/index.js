@@ -61,7 +61,7 @@ function loadAddon(addonDir) {
   const arch = getArch();
   const platform = getPlatform();
   const addonPath = join(addonDir, `${platform}.${arch}.node`);
-  const recompile = !addonDir.includes('/app.asar.unpacked/');
+  const recompile = !addonDir.includes('app.asar.unpacked');
   if (recompile) {
     let srcMTime;
     const srcDir = fileURLToPath(new URL('../src', import.meta.url));

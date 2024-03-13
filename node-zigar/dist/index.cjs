@@ -22,7 +22,7 @@ Module._load = new Proxy(Module._load, {
       return Reflect.apply(target, self, args);
     }
     const url = new URL(request, pathToFileURL(parent.filename));
-    const path = fileURLToPath(url).replace(/\/app\.asar\//, '/app.asar.unpacked/');
+    const path = fileURLToPath(url).replace('app.asar', 'app.asar.unpacked');
     const options = {
       clean: false,
       optimize: 'Debug',
@@ -30,7 +30,7 @@ Module._load = new Proxy(Module._load, {
       platform: getPlatform(),
       arch: getArch(),
     };
-    if (!path.includes('/app.asar.unpacked/')) {
+    if (!path.includes('app.asar.unpacked')) {
       const configPath = findConfigFileSync('node-zigar.config.json', dirname(path));
       if (configPath) {
         // add options from config file
