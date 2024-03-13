@@ -51,10 +51,6 @@ export const optionsForCompile = {
     type: 'object',
     title: 'List of cross-compilation targets',
   },
-  exeName: {
-    type: 'string',
-    title: 'Name of Windows executable',
-  }
 };
 
 export const optionsForTranspile = {

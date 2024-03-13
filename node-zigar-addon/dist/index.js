@@ -23,7 +23,7 @@ export function getGCStatistics(addonDir) {
 }
 
 export function buildAddOn(addonPath, options = {}) {
-  const { platform, arch, exeName } = options;
+  const { platform, arch } = options;
   const cwd = fileURLToPath(new URL('../', import.meta.url));
   const args = [ 'build', `-Doptimize=ReleaseSmall`, `-Doutput=${addonPath}` ];
   if (platform && arch) {
@@ -54,9 +54,6 @@ export function buildAddOn(addonPath, options = {}) {
     const osTag = osTags[platform] ?? platform;
     args.push(`-Dtarget=${cpuArch}-${osTag}`);
   }
-  if (exeName) {
-    args.push(`-Dexe=${exeName}`);
-  }
   execFileSync('zig', args, { cwd, stdio: 'pipe' });
 }
 
@@ -74,17 +71,16 @@ function loadAddon(addonDir) {
         srcMTime = mtime;
       }
     }
-    const require = createRequire(import.meta.url);
     let addonMTime;
     try {
       addonMTime = statSync(addonPath).mtime;
     } catch (err) {    
     }
     if (!(addonMTime > srcMTime)) {
-      const exeName = parse(process.execPath).name;
-      buildAddOn(addonPath, { platform, arch, exeName });
+      buildAddOn(addonPath, { platform, arch });
     }
   }
+  const require = createRequire(import.meta.url);
   return require(addonPath);
 }
 

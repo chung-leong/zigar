@@ -21,7 +21,7 @@ function getGCStatistics(addonDir) {
 }
   
 function buildAddOn(addonPath, options = {}) {
-  const { platform, arch, exeName } = options;
+  const { platform, arch } = options;
   const cwd = resolve(__dirname, '../');
   const args = [ 'build', `-Doptimize=ReleaseSmall`, `-Doutput=${addonPath}` ];
   if (platform && arch) {
@@ -51,9 +51,6 @@ function buildAddOn(addonPath, options = {}) {
     const cpuArch = cpuArchs[arch] ?? arch;
     const osTag = osTags[platform] ?? platform;
     args.push(`-Dtarget=${cpuArch}-${osTag}`);
-  }
-  if (exeName) {
-    args.push(`-Dexe=${exeName}`);
   }
   execFileSync('zig', args, { cwd, stdio: 'pipe' });
 }

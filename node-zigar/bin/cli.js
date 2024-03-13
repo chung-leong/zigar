@@ -59,9 +59,8 @@ async function buildModules() {
   console.log(`Building node-zigar-addon:`);
   for (const parentDir of parentDirs) {
     for (const { platform, arch } of config.targets) {
-      const { exeName = 'node' } = config;
       const addonPath = join(parentDir, 'node-zigar-addon', `${platform}.${arch}.node`);
-      buildAddOn(addonPath, { platform, arch, exeName });
+      buildAddOn(addonPath, { platform, arch });
       console.log(`  ${basename(addonPath)}`);
     } 
   }
@@ -72,7 +71,6 @@ async function createConfig() {
   const config = {
     optimize: 'ReleaseSmall',
     sourceFiles: {},
-    exeName: 'node',
     targets: [ 
       {
         platform: os.platform(),

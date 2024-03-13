@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <imagehlp.h>
 #include <stdbool.h>
+#include <node_api.h>
 
 #define RTLD_LAZY   0
 #define RTLD_NOW    0
