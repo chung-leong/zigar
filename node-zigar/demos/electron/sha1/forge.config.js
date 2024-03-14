@@ -3,7 +3,13 @@ const { FuseV1Options, FuseVersion } = require('@electron/fuses');
 
 module.exports = {
   packagerConfig: {
-    asar: true,
+    asar: {
+      unpack: '*.{dll,dylib,so}',
+    },
+    ignore: [ 
+      /\/(zig|zig-cache|zigar-cache)(\/|$)/, 
+      /\/node-zigar\.config\.json$/,
+    ],    
   },
   rebuildConfig: {},
   makers: [

@@ -1,7 +1,7 @@
 const { app, dialog, BrowserWindow, Menu } = require('electron');
 const path = require('path');
 require('node-zigar/cjs');
-const { sha1 } = require('../zig/sha1.zig');
+const { sha1 } = require('../lib/sha1.zigar');
 const { readFile } = require('fs/promises');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
