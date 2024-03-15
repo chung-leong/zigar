@@ -5144,11 +5144,11 @@ class WebAssemblyEnvironment extends Environment {
 
   async instantiateWebAssembly(source) {
     const env = this.exportFunctions();
-    if (source[Symbol.toStringTag] === 'Response') {
-      return WebAssembly.instantiateStreaming(source, { env });
+    const res = await source;
+    if (res[Symbol.toStringTag] === 'Response') {
+      return WebAssembly.instantiateStreaming(res, { env });
     } else {
-      const buffer = await source;
-      return WebAssembly.instantiate(buffer, { env });
+      return WebAssembly.instantiate(res, { env });
     }
   }
 

@@ -385,14 +385,12 @@ function encodeText(text, encoding = 'utf-8') {
 }
 
 function encodeBase64(dv) {
-
   const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
   const bstr = String.fromCharCode.apply(null, ta);
   return btoa(bstr);
 }
 
 function decodeBase64(str) {
-
   const bstr = atob(str);
   const ta = new Uint8Array(bstr.length);
   for (let i = 0; i < ta.byteLength; i++) {
@@ -1038,7 +1036,6 @@ function defineArray(structure, env) {
     instance: { members: [ member ] },
     hasPointer,
   } = structure;
-
   const { get, set } = getDescriptor(member, env);
   const hasStringProp = canBeString(member);
   const propApplier = createPropertyApplier(structure);
@@ -1684,7 +1681,6 @@ function defineSlice(structure, env) {
     },
     hasPointer,
   } = structure;
-
   const { get, set } = getDescriptor(member, env);
   const { byteSize: elementSize, structure: elementStructure } = member;
   const sentinel = getSentinel(structure, env);
@@ -1796,7 +1792,6 @@ function getSentinel(structure, env) {
   if (!sentinel) {
     return;
   }
-
   const { get: getSentinelValue } = getDescriptor(sentinel, env);
   const value = getSentinelValue.call(template, 0);
   const { get } = getDescriptor(member, env);
@@ -2042,7 +2037,6 @@ function defineVector(structure, env) {
     align,
     instance: { members: [ member ] },
   } = structure;
-
   const { bitSize: elementBitSize, structure: elementStructure } = member;
   const elementDescriptors = {};
   for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
@@ -2237,7 +2231,6 @@ function useArgStruct() {
 
 function getStructureFactory(type) {
   const f = factories$2[type];
-
   return f;
 }
 
@@ -3100,7 +3093,6 @@ function useExtendedFloat() {
 
 function getExtendedTypeAccessor(access, member) {
   const f = factories$1[member.type];
-
   return f(access, member);
 }
 
@@ -3856,7 +3848,6 @@ function hasStandardFloatSize({ bitSize }) {
 
 function getDescriptor(member, env) {
   const f = factories[member.type];
-
   return f(member, env);
 }
 
@@ -4116,7 +4107,6 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
   const { bitOffset, byteSize } = member;
   const getter = getDataViewAccessor('get', member);
   const setter = getDataViewAccessor('set', member);
-
   if (bitOffset !== undefined) {
     const offset = bitOffset >> 3;
     return {
@@ -5545,7 +5535,6 @@ class Environment {
   slots = {};
   structures = [];
   /* COMPTIME-ONLY-END */
-
   imports;
   console = globalThis.console;
 
@@ -5982,7 +5971,6 @@ class Environment {
   }
 
 
-
   getShadowAddress(target, cluster) {
     if (cluster) {
       const dv = target[MEMORY];
@@ -6224,7 +6212,6 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   getBufferAddress(buffer) {
-
     return 0;
   }
 
@@ -6409,11 +6396,11 @@ class WebAssemblyEnvironment extends Environment {
 
   async instantiateWebAssembly(source) {
     const env = this.exportFunctions();
-    if (source[Symbol.toStringTag] === 'Response') {
-      return WebAssembly.instantiateStreaming(source, { env });
+    const res = await source;
+    if (res[Symbol.toStringTag] === 'Response') {
+      return WebAssembly.instantiateStreaming(res, { env });
     } else {
-      const buffer = await source;
-      return WebAssembly.instantiate(buffer, { env });
+      return WebAssembly.instantiate(res, { env });
     }
   }
 
@@ -6487,6 +6474,13 @@ class WebAssemblyEnvironment extends Environment {
     }
   }
 
+  async runThunk(thunkId, args) {
+    // wait for compilation
+    await this.initPromise;
+    // invoke runThunk() from WASM code
+    return this.runThunk(thunkId, args);
+  }
+
   invokeThunk(thunkId, args) {
     // wasm-exporter.zig will invoke startCall() with the context address and the args
     // we can't do pointer fix up here since we need the context in order to allocate
@@ -6498,7 +6492,18 @@ class WebAssemblyEnvironment extends Environment {
     // error strings returned by the thunk are due to problems in the thunking process
     // (i.e. bugs in export.zig)
     if (err) {
-      throwZigError(err);
+      if (err[Symbol.toStringTag] === 'Promise') {
+        // getting a promise, WASM is not yet ready
+        // wait for fulfillment, then either return result or throw
+        return err.then((err) => {
+          if (err) {
+            throwZigError(err);
+          }
+          return args.retval;
+        });
+      } else {
+        throwZigError(err);
+      }
     }
     return args.retval;
   }
