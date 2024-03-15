@@ -51,3 +51,5 @@ Module._load = new Proxy(Module._load, {
     return importModule(outputPath,  { addonDir, recompile, ...options }); 
   }
 });
+
+exports.createRequire = Module.createRequire;
