@@ -618,5 +618,39 @@ describe('WebAssemblyEnvironment', function() {
       expect(() => env.invokeThunk(100, {})).to.throw(Error)
         .with.property('message', 'No donut');
     })
+    it('should return promise when thunk runner is not ready', async function() {
+      const env = new WebAssemblyEnvironment();
+      let done;
+      env.initPromise = new Promise(resolve => done = resolve);
+      const promise = env.invokeThunk(100, { retval: 123 });
+      expect(promise).to.be.a('promise');
+      let thunkId, argStruct;
+      env.runThunk = function(...args) {
+        thunkId = args[0];
+        argStruct = args[1];
+      };
+      done();
+      const result = await promise;
+      expect(result).to.equal(123);
+      expect(thunkId).to.equal(100);
+      expect(argStruct).to.be.an('object');
+    })
+    it('should throw when thunk runner eventually returns a string', async function() {
+      const env = new WebAssemblyEnvironment();
+      let done;
+      env.initPromise = new Promise(resolve => done = resolve);
+      const promise = env.invokeThunk(100, { retval: 123 });
+      expect(promise).to.be.a('promise');
+      env.runThunk = function(...args) {
+        return 'TooManyDonuts';
+      };
+      done();
+      try {
+        await promise;
+        expect.fail('Not throwing');
+      } catch (err) {
+        expect(err).to.have.property('message', 'Too many donuts');
+      }
+    })
   })
 })

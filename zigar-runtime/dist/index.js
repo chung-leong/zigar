@@ -5213,6 +5213,13 @@ class WebAssemblyEnvironment extends Environment {
     }
   }
 
+  async runThunk(thunkId, args) {
+    // wait for compilation
+    await this.initPromise;
+    // invoke runThunk() from WASM code
+    return this.runThunk(thunkId, args);
+  }
+
   invokeThunk(thunkId, args) {
     // wasm-exporter.zig will invoke startCall() with the context address and the args
     // we can't do pointer fix up here since we need the context in order to allocate
@@ -5224,7 +5231,18 @@ class WebAssemblyEnvironment extends Environment {
     // error strings returned by the thunk are due to problems in the thunking process
     // (i.e. bugs in export.zig)
     if (err) {
-      throwZigError(err);
+      if (err[Symbol.toStringTag] === 'Promise') {
+        // getting a promise, WASM is not yet ready
+        // wait for fulfillment, then either return result or throw
+        return err.then((err) => {
+          if (err) {
+            throwZigError(err);
+          }
+          return args.retval;
+        });
+      } else {
+        throwZigError(err);
+      }
     }
     return args.retval;
   }
