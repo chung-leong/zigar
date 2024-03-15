@@ -10,8 +10,9 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.2.3",
     "rollup": "^4.13.0",
-    "rollup-plugin-zigar": "^0.11.1-alpha.2"
+    "rollup-plugin-zigar": "^0.11.1-alpha.3"
   }
 }

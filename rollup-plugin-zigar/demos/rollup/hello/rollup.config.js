@@ -1,7 +1,7 @@
 import nodeResolve from '@rollup/plugin-node-resolve';
 import zigar from 'rollup-plugin-zigar';
 
-const input = './src/index.js';
+const input = './zig/hello.zig';
 
 export default [
   {
@@ -31,6 +31,7 @@ export default [
     output: {
       file: './dist/index.cjs',
       format: 'cjs',
+      exports: 'named',
     },
   },
   {
@@ -46,6 +47,7 @@ export default [
     output: {
       file: './dist/index.umd.cjs',
       format: 'umd',
+      exports: 'named',
       name: 'Hello',
     },
   },
