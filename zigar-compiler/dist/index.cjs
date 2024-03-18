@@ -4850,7 +4850,7 @@ function getPlatform() {
         isGNU = true;
       } else {
         try {
-          execFileSync('getconf', [ 'GNU_LIBC_VERSION' ], { stdio: 'pipe' });
+          child_process.execFileSync('getconf', [ 'GNU_LIBC_VERSION' ], { stdio: 'pipe' });
           isGNU = true;
           /* c8 ignore next 3 */
         } catch (err) {

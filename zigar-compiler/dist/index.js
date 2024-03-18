@@ -1,4 +1,4 @@
-import { exec, execSync } from 'child_process';
+import { execFileSync, exec, execSync } from 'child_process';
 import { statSync, lstatSync, openSync, writeSync, closeSync, readFileSync, writeFileSync, chmodSync, unlinkSync, mkdirSync, readdirSync, rmdirSync } from 'fs';
 import { stat, lstat, open, readFile, writeFile, chmod, unlink, mkdir, readdir, rmdir } from 'fs/promises';
 import os from 'os';

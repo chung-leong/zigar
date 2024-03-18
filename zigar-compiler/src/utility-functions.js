@@ -1,3 +1,4 @@
+import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
 import {
   chmodSync, closeSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, rmdirSync,
