@@ -59,4 +59,11 @@ describe('Loader', function() {
       expect(source).to.contain('runtimeSafety: false');
     })
   })
+  describe('import', function() {
+    it('should load Zigar module', async function() {
+      this.timeout(60000);
+      const module = await import('./sample-modules/integers.zigar');
+      expect(module.int16).to.equal(-44);
+    })
+  })
 })

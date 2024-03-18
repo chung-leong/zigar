@@ -1,14 +1,27 @@
 import { createRequire } from 'module';
 import { createEnvironment } from 'node-zigar-addon';
 import { dirname, join } from 'path';
+import { cwd } from 'process';
 import { pathToFileURL } from 'url';
 import {
   compile, extractOptions, findConfigFile, findSourceFile, generateCode, getArch, getCachePath,
   getModuleCachePath, getPlatform, loadConfigFile, normalizePath, optionsForCompile
 } from 'zigar-compiler';
 
+const baseURL = pathToFileURL(`${cwd()}/`).href;
+
 export async function resolve(specifier, context, nextResolve) {
-  return nextResolve(specifier, context);
+  const m = parseZigURL(specifier);
+  if (!m) {
+    return nextResolve(specifier);
+  }
+  const { parentURL = baseURL } = context;
+  const { href } = new URL(specifier, parentURL);
+  return {
+    format: 'module',
+    shortCircuit: true,
+    url: href,
+  };
 }
 
 const extensionsRegex = /\.(zig|zigar)(\?|$)/;
@@ -50,7 +63,7 @@ export async function load(url, context, nextLoad) {
   const addonParentDir = (m[1] === 'zig') ? getCachePath(options) : dirname(path);
   const addonDir = join(addonParentDir, 'node-zigar-addon');
   const recompile = !archive;
-  const env = createEnvironment({ addonDir, recompile });
+  const env = createEnvironment({ addonDir, recompile });  
   env.loadModule(outputPath);
   env.acquireStructures(options);
   const definition = env.exportStructures();
