@@ -1,15 +1,14 @@
 const path = require('path');
-const HtmlWebpackPlugin = require('html-webpack-plugin');
+const htmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
-  entry: './src/main.jsx',
+  entry: './src/index.js',
   output: {
-    publicPath: '/zigar/demo-2',
-    path: path.join(path.resolve(`${__dirname}/../../../docs`), '/demo-2'),
+    path: path.join(__dirname, '/dist'),
     filename: 'bundle.js',
   },
   plugins: [
-    new HtmlWebpackPlugin({
+    new htmlWebpackPlugin({
       template: 'src/index.html',
     }),
   ],
@@ -19,7 +18,7 @@ module.exports = {
   module: {
     rules: [
       {
-        test: /\.jsx?$/,
+        test: /\.js?$/,
         exclude: /node_modules/,
         use: 'babel-loader',
       },
@@ -30,7 +29,7 @@ module.exports = {
       {
         test: /\.zig$/,
         exclude: /node_modules/,
-        use: '../../dist/index.js',
+        use: 'zigar-loader',
       },
     ],
   },
