@@ -1,10 +1,11 @@
 {
-  "optimize": "ReleaseFast",
+  "optimize": "ReleaseSmall",
   "sourceFiles": {
-    "./lib/sha1.zigar": "./sha1.zig"
+    "lib/hello.zigar": "zig/hello.zig"
   },
   "targets": [
     { "platform": "win32", "arch": "x64" },
+    { "platform": "win32", "arch": "arm64" },
     { "platform": "win32", "arch": "ia32" },
     { "platform": "linux", "arch": "x64" },
     { "platform": "linux", "arch": "arm64" },
