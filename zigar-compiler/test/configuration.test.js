@@ -11,18 +11,19 @@ import {
   findSourceFile,
   loadConfigFile,
   loadConfigFileSync,
-  optionsForCompile
+  optionsForCompile,
+  optionsForTranspile,
 } from '../src/configuration.js';
 
 describe('Configuration', function() {
   describe('extractOptions', function() {
     it('should extract options from query string', function() {
-      const { searchParams } = new URL('file:///home/someone/hello.zig?build-dir=/tmp&clean=0&stale-time=50000');
-      const options = extractOptions(searchParams, optionsForCompile);
+      const { searchParams } = new URL('file:///home/someone/hello.zig?build-dir=/tmp&clean=0&embed-wasm=1');
+      const options = extractOptions(searchParams, { ...optionsForCompile, ...optionsForTranspile });
       expect(options).to.eql({
         buildDir: '/tmp',
         clean: false,
-        staleTime: 50000
+        embedWASM: true,
       });
     })
     it('should throw when option is not recognized', function() {

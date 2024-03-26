@@ -68,9 +68,9 @@ export async function compile(srcPath, modPath, options) {
             break;
         }
       }
-      const { zigCmd, moduleBuildDir, staleTime } = config;
+      const { zigCmd, moduleBuildDir } = config;
       // only one process can compile a given file at a time
-      await acquireLock(moduleBuildDir, staleTime);
+      await acquireLock(moduleBuildDir);
       try {
         // create config file
         await createProject(config, moduleBuildDir);
@@ -145,9 +145,9 @@ export function compileSync(srcPath, modPath, options) {
             break;
         }
       }
-      const { zigCmd, moduleBuildDir, staleTime } = config;
+      const { zigCmd, moduleBuildDir } = config;
       // only one process can compile a given file at a time
-      acquireLockSync(moduleBuildDir, staleTime);
+      acquireLockSync(moduleBuildDir);
       try {
         // create config file
         createProjectSync(config, moduleBuildDir);
@@ -270,7 +270,6 @@ export function createConfig(srcPath, modPath, options = {}) {
     nativeCpu = false,
     optimize = 'Debug',
     clean = false,
-    staleTime = 60000,
     buildDir = join(os.tmpdir(), 'zigar-build'),
     zigCmd = (() => {
       // translate from names used by Node to those used by Zig
@@ -353,7 +352,6 @@ export function createConfig(srcPath, modPath, options = {}) {
     outputPath,
     useLibc,
     clean,
-    staleTime,
     zigCmd,
   };
 }

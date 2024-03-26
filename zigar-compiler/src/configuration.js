@@ -39,10 +39,6 @@ export const optionsForCompile = {
     type: 'object',
     title: 'Map of modules to source files/directories',
   },
-  staleTime: {
-    type: 'number',
-    title: 'Time interval in milliseconds before a lock file is considered stale',
-  },
   clean: {
     type: 'boolean',
     title: 'Remove temporary build directory after compilation finishes',

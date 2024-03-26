@@ -4628,7 +4628,8 @@ function findMatchingFilesSync(dir, re) {
   return map;
 }
 
-async function acquireLock(soBuildDir, staleTime) {
+async function acquireLock(soBuildDir) {
+  const staleTime = 60000;
   const pidPath = path.join(soBuildDir, 'pid');
   while (true)   {
     try {
@@ -4655,7 +4656,8 @@ async function acquireLock(soBuildDir, staleTime) {
   }
 }
 
-function acquireLockSync(soBuildDir, staleTime) {
+function acquireLockSync(soBuildDir) {
+  const staleTime = 60000;
   const pidPath = path.join(soBuildDir, 'pid');
   while (true)   {
     try {
@@ -4941,9 +4943,9 @@ async function compile(srcPath, modPath, options) {
             break;
         }
       }
-      const { zigCmd, moduleBuildDir, staleTime } = config;
+      const { zigCmd, moduleBuildDir } = config;
       // only one process can compile a given file at a time
-      await acquireLock(moduleBuildDir, staleTime);
+      await acquireLock(moduleBuildDir);
       try {
         // create config file
         await createProject(config, moduleBuildDir);
@@ -5018,9 +5020,9 @@ function compileSync(srcPath, modPath, options) {
             break;
         }
       }
-      const { zigCmd, moduleBuildDir, staleTime } = config;
+      const { zigCmd, moduleBuildDir } = config;
       // only one process can compile a given file at a time
-      acquireLockSync(moduleBuildDir, staleTime);
+      acquireLockSync(moduleBuildDir);
       try {
         // create config file
         createProjectSync(config, moduleBuildDir);
@@ -5143,7 +5145,6 @@ function createConfig(srcPath, modPath, options = {}) {
     nativeCpu = false,
     optimize = 'Debug',
     clean = false,
-    staleTime = 60000,
     buildDir = path.join(os.tmpdir(), 'zigar-build'),
     zigCmd = (() => {
       // translate from names used by Node to those used by Zig
@@ -5226,7 +5227,6 @@ function createConfig(srcPath, modPath, options = {}) {
     outputPath,
     useLibc,
     clean,
-    staleTime,
     zigCmd,
   };
 }
@@ -5279,10 +5279,6 @@ const optionsForCompile = {
   sourceFiles: {
     type: 'object',
     title: 'Map of modules to source files/directories',
-  },
-  staleTime: {
-    type: 'number',
-    title: 'Time interval in milliseconds before a lock file is considered stale',
   },
   clean: {
     type: 'boolean',

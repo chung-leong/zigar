@@ -87,7 +87,8 @@ export function findMatchingFilesSync(dir, re) {
   return map;
 }
 
-export async function acquireLock(soBuildDir, staleTime) {
+export async function acquireLock(soBuildDir) {
+  const staleTime = 60000;
   const pidPath = join(soBuildDir, 'pid');
   while (true)   {
     try {
@@ -114,7 +115,8 @@ export async function acquireLock(soBuildDir, staleTime) {
   }
 }
 
-export function acquireLockSync(soBuildDir, staleTime) {
+export function acquireLockSync(soBuildDir) {
+  const staleTime = 60000;
   const pidPath = join(soBuildDir, 'pid');
   while (true)   {
     try {

@@ -1,4 +1,4 @@
-const { transpile } = require('zigar-compiler/cjs');
+const { transpile, optionsForCompile, optionsForTranspile } = require('zigar-compiler/cjs');
 const { createHash } = require('crypto');
 const { parse } = require('path');
 
@@ -19,59 +19,8 @@ const schema = {
   required: [],
   additionalProperties: false,
   properties: {
-    useReadFile: {
-      type: 'boolean',
-      title: 'Enable the use of readFile() to Load WASM file when library is used in Node.js',
-    },
-    embedWASM: {
-      type: 'boolean',
-      title: 'Embed WASM file in JavaScript source code',
-    },
-    topLevelAwait: {
-      type: 'boolean',
-      title: 'Use top-level await to load WASM file',
-    },
-    omitFunctions: {
-      type: 'boolean',
-      title: 'Omit all Zig functions',
-    },
-    omitExports: {
-      type: 'boolean',
-      title: 'Omit export statements',
-    },
-    optimize: {
-      type: 'string',
-      enum: [ 'Debug', 'ReleaseSmall', 'ReleaseFast', 'ReleaseSafe' ],
-      title: 'Zig optimization mode',
-    },
-    clean: {
-      type: 'boolean',
-      title: 'Remove temporary build directory after compilation finishes',
-    },
-    stripWASM: {
-      type: 'boolean',
-      title: 'Remove unnecessary code from WASM file',
-    },
-    keepNames: {
-      type: 'boolean',
-      title: 'Keep names of function in WASM binary when stripping',
-    },
-    buildDir: {
-      type: 'string',
-      title: 'Root directory where temporary build directories are placed',
-    },
-    cacheDir: {
-      type: 'string',
-      title: 'Directory where library files re placed',
-    },
-    zigCmd: {
-      type: 'string',
-      title: 'Zig command used to build libraries',
-    },
-    staleTime: {
-      type: 'number',
-      title: 'Time interval in milliseconds before a lock file is considered stale',
-    },
+    ...optionsForCompile, 
+    ...optionsForTranspile,
   },
 };
 
