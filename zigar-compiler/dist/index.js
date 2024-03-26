@@ -4923,7 +4923,7 @@ async function compile(srcPath, modPath, options) {
       if (!config.useLibc && !srcInfo.isDirectory()) {
         for (const [ path, info ] of srcFileMap) {
           const content = await loadFile(path);
-          if (content.includes('@cImport')) {
+          if (findCUsage(content)) {
             config.useLibc = true;
             break;
           }
@@ -5000,7 +5000,7 @@ function compileSync(srcPath, modPath, options) {
       if (!config.useLibc && !srcInfo.isDirectory()) {
         for (const [ path, info ] of srcFileMap) {
           const content = loadFileSync(path);
-          if (content.includes('@cImport')) {
+          if (findCUsage(content)) {
             config.useLibc = true;
             break;
           }
@@ -5034,6 +5034,10 @@ function compileSync(srcPath, modPath, options) {
     } 
   }
   return { outputPath, changed }
+}
+
+function findCUsage(content) {
+  return content.includes('@cImport') || content.includes('std.heap.c_allocator');
 }
 
 async function runCompiler(zigCmd, soBuildDir) {
@@ -5313,32 +5317,45 @@ const allOptions = {
 
 function extractOptions(searchParams, availableOptions) {
   const options = {};
+  const names = Object.keys(availableOptions);
   for (const [ name, string ] of searchParams) {
-    const key = camelCase(name);
-    options[key] = convertValue(key, string, availableOptions);
+    const key = getCamelCase(name, names);
+    const option = availableOptions[key];
+    if (!option) {
+      throwUnknownOption(name);
+    }
+    if (key === 'optimize') {
+      options[key] = getCamelCase(string, [ 'Debug', 'ReleaseSafe', 'ReleaseFast', 'ReleaseSmall' ]);
+    } else {
+      switch (option.type) {
+        case 'boolean': 
+          options[key] = !!parseInt(string);
+          break;
+        case 'number': 
+          options[key] = parseInt(string);
+          break;
+        default: 
+          options[key] = string;
+      }
+    }
   }
   return options;
 }
 
-function camelCase(name) {
-  return name.toLowerCase().replace(/[_-](\w)/g, (m0, m1) => m1.toUpperCase());
+function getCamelCase(name, names) {
+  for (const nameCC of names) {
+    const nameSC = nameCC.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
+    const nameKC = nameSC.replace(/_/g, '-');
+    if (name === nameKC || name === nameSC || name === nameCC) {
+      return nameCC;
+    }
+  }
+  return name;
 }
 
 function throwUnknownOption(key) {
   const adjective = (allOptions[key]) ? 'Unavailable' : 'Unrecognized';
   throw new Error(`${adjective} option: ${key}`);
-}
-
-function convertValue(key, string, availableOptions) {
-  const option = availableOptions[key];
-  if (!option) {
-    throwUnknownOption(key);
-  }
-  switch (option.type) {
-    case 'boolean': return !!parseInt(string);
-    case 'number': return parseInt(string);
-    default: return string;
-  }
 }
 
 async function findConfigFile(name, dir) {

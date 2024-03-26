@@ -17,11 +17,32 @@ import {
 
 describe('Configuration', function() {
   describe('extractOptions', function() {
-    it('should extract options from query string', function() {
-      const { searchParams } = new URL('file:///home/someone/hello.zig?build-dir=/tmp&clean=0&embed-wasm=1');
+    it('should extract options in kebab-case from query string', function() {
+      const { searchParams } = new URL('file:///home/someone/hello.zig?build-dir=/tmp&optimize=release-small&clean=0&embed-wasm=1');
       const options = extractOptions(searchParams, { ...optionsForCompile, ...optionsForTranspile });
       expect(options).to.eql({
         buildDir: '/tmp',
+        optimize: 'ReleaseSmall',
+        clean: false,
+        embedWASM: true,
+      });
+    })
+    it('should extract options in snake_case from query string', function() {
+      const { searchParams } = new URL('file:///home/someone/hello.zig?build-dir=/tmp&optimize=release_fast&clean=0&embed_wasm=1');
+      const options = extractOptions(searchParams, { ...optionsForCompile, ...optionsForTranspile });
+      expect(options).to.eql({
+        buildDir: '/tmp',
+        optimize: 'ReleaseFast',
+        clean: false,
+        embedWASM: true,
+      });
+    })
+    it('should extract options in camelCase from query string', function() {
+      const { searchParams } = new URL('file:///home/someone/hello.zig?build-dir=/tmp&optimize=ReleaseSafe&clean=0&embedWASM=1');
+      const options = extractOptions(searchParams, { ...optionsForCompile, ...optionsForTranspile });
+      expect(options).to.eql({
+        buildDir: '/tmp',
+        optimize: 'ReleaseSafe',
         clean: false,
         embedWASM: true,
       });
