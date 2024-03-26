@@ -16,6 +16,9 @@ const Error = exporter.Error;
 const missing = exporter.missing;
 const Call = *anyopaque;
 
+// support both 0.11 and 0.12
+const Little = if (@hasField(std.builtin.Endian, "Little")) .Little else .little;
+
 pub const Result = enum(u32) {
     OK,
     Failure,
@@ -298,12 +301,10 @@ pub fn createGetFactoryThunk(comptime T: type) fn (*usize) callconv(.C) Result {
 }
 
 pub fn createModule(comptime T: type) Module {
-    // support both 0.11 and 0.12
-    const le = if (@hasField(std.builtin.Endian, "Little")) .Little else .little;
     return .{
         .version = 2,
         .attributes = .{
-            .little_endian = builtin.target.cpu.arch.endian() == le,
+            .little_endian = builtin.target.cpu.arch.endian() == Little,
             .runtime_safety = switch (builtin.mode) {
                 .Debug, .ReleaseSafe => true,
                 else => false,

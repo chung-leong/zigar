@@ -4,6 +4,10 @@ const assert = std.debug.assert;
 
 const runtime_safety = (builtin.mode == .ReleaseSafe or builtin.mode == .Debug);
 
+// support both 0.11 and 0.12
+const Auto = if (@hasField(std.builtin.Type.ContainerLayout, "Auto")) .Auto else .auto;
+const Packed = if (@hasField(std.builtin.Type.ContainerLayout, "Packed")) .Packed else .@"packed";
+
 // error type
 pub const Error = error{
     Unknown,
@@ -254,8 +258,8 @@ test "isConst" {
 
 fn isPacked(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        .Struct => |st| st.layout == .Packed,
-        .Union => |un| un.layout == .Packed,
+        .Struct => |st| st.layout == Packed,
+        .Union => |un| un.layout == Packed,
         else => false,
     };
 }
@@ -1130,7 +1134,7 @@ fn ComptimeFree(comptime T: type) type {
                     .type = FT,
                     .default_value = null,
                     .is_comptime = false,
-                    .alignment = if (st.layout != .Packed) @alignOf(FT) else 0,
+                    .alignment = if (st.layout != Packed) @alignOf(FT) else 0,
                 };
             }
             break :derive @Type(.{
@@ -1723,7 +1727,7 @@ fn ArgumentStruct(comptime function: anytype) type {
     count += 1;
     return @Type(.{
         .Struct = .{
-            .layout = .Auto,
+            .layout = Auto,
             .decls = &.{},
             .fields = fields[0..count],
             .is_tuple = false,
