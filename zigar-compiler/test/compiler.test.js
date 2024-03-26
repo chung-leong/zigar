@@ -217,6 +217,18 @@ describe('Compilation', function() {
         expect(size).to.be.at.least(1000);
       });
     })
+    it('should compile with C library enabled when C allocator is used', async function() {
+      this.timeout(600000);
+      const srcPath = absolute('./zig-samples/c-allocator/dupe.zig');
+      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
+      const modPath = getModuleCachePath(srcPath, options);
+      await forceChange(srcPath, async () => {     
+        const { outputPath } = await compile(srcPath, modPath, options);
+        const { size } = await stat(outputPath);
+        expect(size).to.be.at.least(1000);
+      });
+    })
+
     it('should work correctly when the same file is compiled at the same time', async function() {
       this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');

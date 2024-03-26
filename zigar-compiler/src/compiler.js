@@ -51,7 +51,7 @@ export async function compile(srcPath, modPath, options) {
       if (!config.useLibc && !srcInfo.isDirectory()) {
         for (const [ path, info ] of srcFileMap) {
           const content = await loadFile(path);
-          if (content.includes('@cImport')) {
+          if (findCUsage(content)) {
             config.useLibc = true;
             break;
           }
@@ -128,7 +128,7 @@ export function compileSync(srcPath, modPath, options) {
       if (!config.useLibc && !srcInfo.isDirectory()) {
         for (const [ path, info ] of srcFileMap) {
           const content = loadFileSync(path);
-          if (content.includes('@cImport')) {
+          if (findCUsage(content)) {
             config.useLibc = true;
             break;
           }
@@ -162,6 +162,10 @@ export function compileSync(srcPath, modPath, options) {
     } 
   }
   return { outputPath, changed }
+}
+
+function findCUsage(content) {
+  return content.includes('@cImport') || content.includes('std.heap.c_allocator');
 }
 
 export async function runCompiler(zigCmd, soBuildDir) {
