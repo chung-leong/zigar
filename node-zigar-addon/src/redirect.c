@@ -75,7 +75,7 @@ void patch_write_file(void* handle,
 #include <link.h>
 #include <dlfcn.h>
 #include <unistd.h>
-#include "./redirect.h"
+#include <sys/mman.h>
 
 #if defined __x86_64 || defined __aarch64__
     #define Elf_Ehdr Elf64_Ehdr
@@ -97,9 +97,8 @@ void patch_write_file(void* handle,
 
 ssize_t write_hook(int fd, 
                    const void* buffer, 
-                   size_t len) {
-    printf("Hook!\n");
-    if (fd == 1 || fd == 2) {
+                   size_t len) {    
+    if (fd == 1 || fd == 2) {   /* 1 = stdout, 2 = stderr */
         /* return value of zero means success */
         if (override(buffer, len) == 0) {
             return len;
@@ -111,12 +110,14 @@ ssize_t write_hook(int fd,
 int read_string_table(int fd,
                       Elf_Shdr* strtab,
                       char** ps) {
-    char* s = malloc(strtab->sh_size);
-    if (lseek(fd, strtab->sh_offset, SEEK_SET) < 0 
-     || read(fd, s, strtab->sh_size) <= 0) {
+    char* buffer = malloc(strtab->sh_size);
+    if (!buffer 
+     || lseek(fd, strtab->sh_offset, SEEK_SET) < 0 
+     || read(fd, buffer, strtab->sh_size) <= 0) {
+        *ps = NULL;
         return 0;
     }
-    *ps = s;
+    *ps = buffer;
     return 1;
 }
 
@@ -129,13 +130,15 @@ void patch_write_file(void* handle,
     }
     Elf_Shdr* sections = NULL;
     char* section_strs = NULL;
+    /* read ELF header */
     Elf_Ehdr header;
     if (read(fd, &header, sizeof(header)) <= 0) {
         goto exit;
     }
     /* read all sections */
     sections = malloc(header.e_shnum * sizeof(Elf_Shdr));
-    if (lseek(fd, header.e_shoff, SEEK_SET) < 0 
+    if (!sections
+     || lseek(fd, header.e_shoff, SEEK_SET) < 0 
      || read(fd, sections, header.e_shnum * sizeof(Elf_Shdr)) <= 0
      || read_string_table(fd, &sections[header.e_shstrndx], &section_strs) == 0) {
         goto exit;
@@ -152,9 +155,11 @@ void patch_write_file(void* handle,
                 Elf_Sym* symbols = malloc(dynsym->sh_size);
                 size_t symbol_count = dynsym->sh_size / sizeof(Elf_Sym);
                 char* symbol_strs = NULL;
-                if (lseek(fd, dynsym->sh_offset, SEEK_SET) < 0 
+                if (!symbols
+                 || lseek(fd, dynsym->sh_offset, SEEK_SET) < 0 
                  || read(fd, symbols, dynsym->sh_size) <= 0
                  || read_string_table(fd, &sections[dynsym->sh_link], &symbol_strs) == 0) {
+                    free(symbols);
                     goto exit;
                 }
                 /* look for symbol for write() */
@@ -165,7 +170,7 @@ void patch_write_file(void* handle,
                         break;
                     }
                 }
-                /* find base address */
+                /* find base address of library */
                 for (int j = 0; j < symbol_count; j++) {
                     const int binding = ELF_ST_BIND(symbols[j].st_info);
                     if ((binding == STB_GLOBAL || binding == STB_WEAK) && symbols[j].st_value != 0) {
@@ -181,6 +186,7 @@ void patch_write_file(void* handle,
                 free(symbols);
             } break;
             case SHT_RELA: {
+                /* look for PLT */
                 Elf_Shdr* rela = &sections[i]; 
                 const char* name = section_strs + rela->sh_name;
                 if (strcmp(name, REL_PLT) == 0) {
@@ -195,12 +201,22 @@ void patch_write_file(void* handle,
         /* look for PLT entry for write() */
         for (int i = 0; i < plt_entry_count; i++) {
             if (ELF_R_SYM(plt_entries[i].r_info) == func_index) {
-                printf("match!\n");
-                void** ptr = (void **) (base_address + plt_entries[i].r_offset);
-                printf("Setting...\n");
+                /* get address to GOT entry */
+                uintptr_t got_entry_address = base_address + plt_entries[i].r_offset;
+                /* disable write protection */
+                int page_size = sysconf(_SC_PAGE_SIZE);
+                if (page_size == -1) {
+                    goto exit;
+                }
+                uintptr_t page_address = got_entry_address & ~(page_size - 1);
+                if (mprotect((void*) page_address, page_size, PROT_READ | PROT_WRITE) < 0) {
+                    goto exit;
+                }
+                void** ptr = (void **) got_entry_address;
                 *ptr = write_hook;
-                printf("OK!\n");
                 override = cb;
+                /* reenable write protection */
+                mprotect((void*) page_address, page_size, PROT_READ);
                 break;
             }
         }
@@ -211,6 +227,14 @@ exit:
     close(fd);
 }
 #elif defined(__MACH__)
-// TODO
+void patch_write_file(void* handle,
+                      const char* filename,
+                      override_callback cb) {
+}
+#else
+void patch_write_file(void* handle,
+                      const char* filename,
+                      override_callback cb) {
+}
 #endif
 
