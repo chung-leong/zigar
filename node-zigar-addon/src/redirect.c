@@ -70,12 +70,11 @@ void patch_write_file(void* handle,
 #elif defined(__ELF__)
 #include <stdio.h>
 #include <string.h>
-#include <elf.h>
 #include <fcntl.h>
-#include <link.h>
 #include <dlfcn.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <elf.h>
 
 #if defined __x86_64 || defined __aarch64__
     #define Elf_Ehdr Elf64_Ehdr
@@ -227,9 +226,53 @@ exit:
     close(fd);
 }
 #elif defined(__MACH__)
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
+#include <dlfcn.h>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <mach-o/loader.h>
+#include <mach-o/reloc.h>
+#include <mach-o/nlist.h>
+#include <mach-o/stab.h>
+#include <mach-o/x86_64/reloc.h>
+
+#if defined(__aarch64__)
+    #define CPU_TYPE    (CPU_TYPE_ARM | CPU_ARCH_ABI64)
+    #define LC_SEGMENT_X  LC_SEGMENT_64
+#elif defined(__x86_64)
+    #define CPU_TYPE    (CPU_TYPE_I386 | CPU_ARCH_ABI64)
+    #define LC_SEGMENT_X  LC_SEGMENT_64
+#elif defined(__i386)
+    #define CPU_TYPE    CPU_TYPE_I386
+    #define LC_SEGMENT_X  LC_SEGMENT
+#endif    
+
 void patch_write_file(void* handle,
                       const char* filename,
                       override_callback cb) {
+    int fd = open(filename, O_RDONLY);
+    if (fd <= 0) {
+        return;
+    }
+	mach_section *sections = NULL;
+	mach_header header;
+	if(read(fd, &header, sizeof(mach_header)) < 0) {
+		goto exit;
+	}
+    mach_load_command command;
+	off_t pos = sizeof(mach_header);
+	for(int i = 0; i < header.ncmds; i++) {
+		if(lseek(fd, pos, SEEK_SET) < 0 || read(fd, command, sizeof(mach_load_command)) <= 0) {
+			goto exit;
+		}
+		pos += command.cmdsize;
+    }
+
+exit:
+    free(sections);
+    close(fd);
 }
 #else
 void patch_write_file(void* handle,
