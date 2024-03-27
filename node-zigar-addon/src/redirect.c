@@ -143,86 +143,85 @@ void patch_write_file(void* handle,
         goto exit;
     }
     const char* func_name = "write";
-    int func_index = -1;
+    Elf_Sym* symbols = NULL;
+    size_t symbol_count = 0;
+    char* symbol_strs = NULL;
     Elf_Shdr* rela_plt = NULL;
-    uintptr_t base_address = 0;
-    /* look for dynsym and PLT */
-    for (int i = 0; i < header.e_shnum && (!rela_plt || !base_address); i++) {
+    for (int i = 0; i < header.e_shnum; i++) {
         switch (sections[i].sh_type) {
-            case SHT_DYNSYM: {
-                Elf_Shdr* dynsym = &sections[i];
-                Elf_Sym* symbols = malloc(dynsym->sh_size);
-                size_t symbol_count = dynsym->sh_size / sizeof(Elf_Sym);
-                char* symbol_strs = NULL;
-                if (!symbols
-                 || lseek(fd, dynsym->sh_offset, SEEK_SET) < 0 
-                 || read(fd, symbols, dynsym->sh_size) <= 0
-                 || read_string_table(fd, &sections[dynsym->sh_link], &symbol_strs) == 0) {
-                    free(symbols);
-                    goto exit;
-                }
-                /* look for symbol for write() */
-                for (int j = 0; j < symbol_count; j++) {
-                    const char* symbol_name = symbol_strs + symbols[j].st_name;
-                    if (strcmp(symbol_name, func_name) == 0) {
-                        func_index = j;
-                        break;
-                    }
-                }
-                /* find base address of library */
-                for (int j = 0; j < symbol_count; j++) {
-                    const int binding = ELF_ST_BIND(symbols[j].st_info);
-                    if ((binding == STB_GLOBAL || binding == STB_WEAK) && symbols[j].st_value != 0) {
-                        const char* symbol_name = symbol_strs + symbols[j].st_name;
-                        void *symbol = dlsym(handle, symbol_name);
-                        if(symbol != NULL) {
-                            base_address = ((uintptr_t) symbol) - symbols[j].st_value;
-                            break;
-                        }
-                    }
-                }
-                free(symbol_strs);
-                free(symbols);
-            } break;
             case SHT_RELA: {
-                /* look for PLT */
+                /* see if it holds the PLT */
                 Elf_Shdr* rela = &sections[i]; 
                 const char* name = section_strs + rela->sh_name;
                 if (strcmp(name, REL_PLT) == 0) {
                     rela_plt = rela;
                 }
             } break;
+            case SHT_DYNSYM: {
+                /* load symbols */
+                Elf_Shdr* dynsym = &sections[i];
+                symbols = malloc(dynsym->sh_size);
+                symbol_count = dynsym->sh_size / sizeof(Elf_Sym);
+                if (!symbols
+                 || lseek(fd, dynsym->sh_offset, SEEK_SET) < 0 
+                 || read(fd, symbols, dynsym->sh_size) <= 0
+                 || read_string_table(fd, &sections[dynsym->sh_link], &symbol_strs) == 0) {
+                    goto exit;
+                }
+            } break;
         }
     }
-    if (rela_plt && base_address != 0 && func_index != -1) {
-        Elf_Rel* plt_entries = (Elf_Rel*) (base_address + rela_plt->sh_addr);
-        size_t plt_entry_count = rela_plt->sh_size / sizeof(Elf_Rel);
-        /* look for PLT entry for write() */
-        for (int i = 0; i < plt_entry_count; i++) {
-            if (ELF_R_SYM(plt_entries[i].r_info) == func_index) {
-                /* get address to GOT entry */
-                uintptr_t got_entry_address = base_address + plt_entries[i].r_offset;
-                /* disable write protection */
-                int page_size = sysconf(_SC_PAGE_SIZE);
-                if (page_size == -1) {
-                    goto exit;
-                }
-                uintptr_t page_address = got_entry_address & ~(page_size - 1);
-                if (mprotect((void*) page_address, page_size, PROT_READ | PROT_WRITE) < 0) {
-                    goto exit;
-                }
-                void** ptr = (void **) got_entry_address;
-                *ptr = write_hook;
-                override = cb;
-                /* reenable write protection */
-                mprotect((void*) page_address, page_size, PROT_READ);
+    if (!symbols || !rela_plt) {
+        goto exit;
+    }
+    /* find base address of library */
+    uintptr_t base_address = 0;
+    for (int i = 0; i < symbol_count; i++) {
+        const int binding = ELF_ST_BIND(symbols[i].st_info);
+        if ((binding == STB_GLOBAL || binding == STB_WEAK) && symbols[i].st_value != 0) {
+            const char* symbol_name = symbol_strs + symbols[i].st_name;
+            void *symbol = dlsym(handle, symbol_name);
+            if(symbol != NULL) {
+                base_address = ((uintptr_t) symbol) - symbols[i].st_value;
                 break;
             }
+        }
+    }
+    /* look for symbol for write() */
+    for (int i = 0; i < symbol_count; i++) {
+        const char* symbol_name = symbol_strs + symbols[i].st_name;
+        if (strcmp(symbol_name, func_name) == 0) {
+            Elf_Rel* plt_entries = (Elf_Rel*) (base_address + rela_plt->sh_addr);
+            size_t plt_entry_count = rela_plt->sh_size / sizeof(Elf_Rel);
+            for (int j = 0; j < plt_entry_count; j++) {
+                if (ELF_R_SYM(plt_entries[j].r_info) == i) {
+                    /* get address to GOT entry */
+                    uintptr_t got_entry_address = base_address + plt_entries[j].r_offset;
+                    /* disable write protection */
+                    int page_size = sysconf(_SC_PAGE_SIZE);
+                    if (page_size == -1) {
+                        goto exit;
+                    }
+                    uintptr_t page_address = got_entry_address & ~(page_size - 1);
+                    if (mprotect((void*) page_address, page_size, PROT_READ | PROT_WRITE) < 0) {
+                        goto exit;
+                    }
+                    void** ptr = (void **) got_entry_address;
+                    *ptr = write_hook;
+                    override = cb;
+                    /* reenable write protection */
+                    mprotect((void*) page_address, page_size, PROT_READ);
+                    break;
+                }
+            }
+            break;
         }
     }
 exit:
     free(sections);
     free(section_strs);
+    free(symbols);
+    free(symbol_strs);
     close(fd);
 }
 #elif defined(__MACH__)
