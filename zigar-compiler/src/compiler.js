@@ -6,8 +6,8 @@ import { basename, join, parse, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import {
   acquireLock, acquireLockSync, copyFile, copyFileSync, deleteDirectory, deleteDirectorySync,
-  findFile, findFileSync, findMatchingFiles, findMatchingFilesSync, getArch, getPlatform, loadFile,
-  loadFileSync, md5, releaseLock, releaseLockSync
+  findFile, findFileSync, findMatchingFiles, findMatchingFilesSync, getArch, getPlatform,
+  md5, releaseLock, releaseLockSync
 } from './utility-functions.js';
 
 export async function compile(srcPath, modPath, options) {
@@ -47,16 +47,6 @@ export async function compile(srcPath, modPath, options) {
       }
     }
     if (changed) {
-      // see if C library is needed
-      if (!config.useLibc && !srcInfo.isDirectory()) {
-        for (const [ path, info ] of srcFileMap) {
-          const content = await loadFile(path);
-          if (findCUsage(content)) {
-            config.useLibc = true;
-            break;
-          }
-        }
-      }
       // add custom build file
       for (const [ path, info ] of srcFileMap) {
         switch (basename(path)) {
@@ -124,16 +114,6 @@ export function compileSync(srcPath, modPath, options) {
       }
     }
     if (changed) {
-      // see if C library is needed
-      if (!config.useLibc && !srcInfo.isDirectory()) {
-        for (const [ path, info ] of srcFileMap) {
-          const content = loadFileSync(path);
-          if (findCUsage(content)) {
-            config.useLibc = true;
-            break;
-          }
-        }
-      }
       // add custom build file
       for (const [ path, info ] of srcFileMap) {
         switch (basename(path)) {
@@ -211,7 +191,7 @@ export function runCompilerSync(zigCmd, soBuildDir) {
 export function formatProjectConfig(config) {
   const lines = [];
   const fields = [ 
-    'moduleName', 'modulePath', 'moduleDir', 'exporterPath', 'stubPath', 'outputPath', 'useLibc'
+    'moduleName', 'modulePath', 'moduleDir', 'exporterPath', 'stubPath', 'outputPath'
   ];  
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -339,7 +319,6 @@ export function createConfig(srcPath, modPath, options = {}) {
   const exporterPath = absolute(`../zig/exporter-${suffix}.zig`);
   const stubPath = absolute(`../zig/stub-${suffix}.zig`);
   const buildFilePath = absolute(`../zig/build.zig`);
-  const useLibc = (platform === 'win32') ? true : false;
   return {
     platform,
     arch,
@@ -354,7 +333,6 @@ export function createConfig(srcPath, modPath, options = {}) {
     buildFilePath,
     packageConfigPath: undefined,
     outputPath,
-    useLibc,
     clean,
     zigCmd,
   };

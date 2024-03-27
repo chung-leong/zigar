@@ -4919,16 +4919,6 @@ async function compile(srcPath, modPath, options) {
       }
     }
     if (changed) {
-      // see if C library is needed
-      if (!config.useLibc && !srcInfo.isDirectory()) {
-        for (const [ path, info ] of srcFileMap) {
-          const content = await loadFile(path);
-          if (findCUsage(content)) {
-            config.useLibc = true;
-            break;
-          }
-        }
-      }
       // add custom build file
       for (const [ path, info ] of srcFileMap) {
         switch (basename(path)) {
@@ -4996,16 +4986,6 @@ function compileSync(srcPath, modPath, options) {
       }
     }
     if (changed) {
-      // see if C library is needed
-      if (!config.useLibc && !srcInfo.isDirectory()) {
-        for (const [ path, info ] of srcFileMap) {
-          const content = loadFileSync(path);
-          if (findCUsage(content)) {
-            config.useLibc = true;
-            break;
-          }
-        }
-      }
       // add custom build file
       for (const [ path, info ] of srcFileMap) {
         switch (basename(path)) {
@@ -5034,10 +5014,6 @@ function compileSync(srcPath, modPath, options) {
     } 
   }
   return { outputPath, changed }
-}
-
-function findCUsage(content) {
-  return content.includes('@cImport') || content.includes('std.heap.c_allocator');
 }
 
 async function runCompiler(zigCmd, soBuildDir) {
@@ -5083,7 +5059,7 @@ function runCompilerSync(zigCmd, soBuildDir) {
 function formatProjectConfig(config) {
   const lines = [];
   const fields = [ 
-    'moduleName', 'modulePath', 'moduleDir', 'exporterPath', 'stubPath', 'outputPath', 'useLibc'
+    'moduleName', 'modulePath', 'moduleDir', 'exporterPath', 'stubPath', 'outputPath'
   ];  
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -5211,7 +5187,6 @@ function createConfig(srcPath, modPath, options = {}) {
   const exporterPath = absolute(`../zig/exporter-${suffix}.zig`);
   const stubPath = absolute(`../zig/stub-${suffix}.zig`);
   const buildFilePath = absolute(`../zig/build.zig`);
-  const useLibc = (platform === 'win32') ? true : false;
   return {
     platform,
     arch,
@@ -5226,7 +5201,6 @@ function createConfig(srcPath, modPath, options = {}) {
     buildFilePath,
     packageConfigPath: undefined,
     outputPath,
-    useLibc,
     clean,
     zigCmd,
   };

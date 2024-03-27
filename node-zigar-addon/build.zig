@@ -17,6 +17,7 @@ pub fn build(b: *std.Build) !void {
     lib.addIncludePath(.{ .path = "./node_modules/node-api-headers/include" });
     lib.addCSourceFile(.{ .file = .{ .path = "./src/addon-node.c" }, .flags = &.{} });
     lib.addCSourceFile(.{ .file = .{ .path = "./src/addon.c" }, .flags = &.{} });
+    lib.addCSourceFile(.{ .file = .{ .path = "./src/redirect.c" }, .flags = &.{} });
     switch (os) {
         .windows => {
             lib.addCSourceFile(.{ .file = .{ .path = "./src/win32-shim.c" }, .flags = &.{} });

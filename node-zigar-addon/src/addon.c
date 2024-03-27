@@ -628,7 +628,6 @@ napi_value load_module(napi_env env,
     char* path = malloc(path_len + 1);
     napi_get_value_string_utf8(env, args[0], path, path_len + 1, &path_len);
     void* handle = md->so_handle = dlopen(path, RTLD_NOW);
-    free(path);
     if (!handle) {
         return throw_error(env, "Unable to load shared library");
     }
@@ -650,11 +649,8 @@ napi_value load_module(napi_env env,
     }
     md->base_address = (uintptr_t) dl_info.dli_fbase;
 
-#ifdef WIN32
-    /* we can't override write() the normal way on Windows
-        need to intercept the call to kernel32.dll instead */
-    patch_write_file(handle, mod->imports->override_write);
-#endif
+    patch_write_file(handle, path, mod->imports->override_write);
+    free(path);
 
     /* attach exports to module */
     export_table* exports = mod->exports;

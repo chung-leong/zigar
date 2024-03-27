@@ -1,8 +1,6 @@
 #ifndef _WIN32_SHIM_H_
 #define _WIN32_SHIM_H_
 #include <windows.h>
-#include <imagehlp.h>
-#include <stdbool.h>
 #include <node_api.h>
 
 #define RTLD_LAZY   0
@@ -40,10 +38,5 @@ inline int dladdr(const void *addr, Dl_info *dest) {
     dest->dli_saddr = (void*) addr;
     return 1;
 }
-
-typedef unsigned int (*override_callback)(const void*, size_t);
-
-void patch_write_file(void* handle,
-                      override_callback cb);
 
 #endif

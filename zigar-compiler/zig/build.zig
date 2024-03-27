@@ -44,7 +44,7 @@ pub fn build(b: *std.Build) void {
             lib.entry = .disabled;
         }
     }
-    if (cfg.use_libc) {
+    if (!is_wasm) {
         lib.linkLibC();
     }
     const wf = b.addWriteFiles();
