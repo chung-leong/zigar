@@ -17,6 +17,8 @@ pub fn build(b: *std.Build) void {
     });
     if (is_wasm) {
         lib.rdynamic = true;
+    } else {
+        lib.pie = true;
     }
     const imports = .{};
     if (@hasDecl(std.Build.Step.Compile, "addModule")) {

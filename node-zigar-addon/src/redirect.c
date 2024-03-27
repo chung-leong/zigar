@@ -226,6 +226,7 @@ exit:
     close(fd);
 }
 #elif defined(__MACH__)
+#define __STRICT_BSD__
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
@@ -238,16 +239,43 @@ exit:
 #include <mach-o/stab.h>
 #include <mach-o/x86_64/reloc.h>
 
-#if defined(__aarch64__)
-    #define CPU_TYPE    (CPU_TYPE_ARM | CPU_ARCH_ABI64)
-    #define LC_SEGMENT_X  LC_SEGMENT_64
-#elif defined(__x86_64)
-    #define CPU_TYPE    (CPU_TYPE_I386 | CPU_ARCH_ABI64)
-    #define LC_SEGMENT_X  LC_SEGMENT_64
-#elif defined(__i386)
-    #define CPU_TYPE    CPU_TYPE_I386
-    #define LC_SEGMENT_X  LC_SEGMENT
-#endif    
+#if defined(__x86_64) || defined(__aarch64__)
+    #define ADD_BITS(t)     t##_64
+#else
+    #define ADD_BITS(t)     t
+#endif
+
+typedef struct ADD_BITS(mach_header)        mach_header;
+typedef struct load_command                 load_command;
+typedef struct symtab_command			    symtab_command;
+typedef struct dysymtab_command             dysymtab_command;
+typedef struct ADD_BITS(segment_command)    segment_command;
+typedef struct ADD_BITS(section)            section;
+typedef struct ADD_BITS(nlist)              nlist;
+typedef struct ADD_BITS(dylib_module)       dylib_module;
+
+ssize_t write_hook(int fd, 
+                   const void* buffer, 
+                   size_t len) {    
+    if (fd == 1 || fd == 2) {   /* 1 = stdout, 2 = stderr */
+        /* return value of zero means success */
+        if (override(buffer, len) == 0) {
+            return len;
+        }
+    }
+    return write(fd, buffer, len);
+}
+
+int read_command(int fd, 
+                 load_command* lc, 
+                 void *dest,
+                 size_t size) {
+    if (read(fd, ((load_command*) dest) + 1, size - sizeof(load_command)) < 0) {
+        return 0;
+    }
+    memcpy(dest, lc, sizeof(load_command));
+    return 1;
+}
 
 void patch_write_file(void* handle,
                       const char* filename,
@@ -256,22 +284,119 @@ void patch_write_file(void* handle,
     if (fd <= 0) {
         return;
     }
-	mach_section *sections = NULL;
+    const char* func_name = "_write";
+    section* data_sections = NULL;
+    size_t data_section_count = 0;
+    nlist* symbols = NULL;
+    size_t symbol_count = 0;
+    char* symbol_strs = NULL;
+    uint32_t* indirect_symbol_indices = NULL;
+    size_t indirect_symbol_count = 0;
+    /* read mach-o header */
 	mach_header header;
-	if(read(fd, &header, sizeof(mach_header)) < 0) {
+	if(read(fd, &header, sizeof(header)) < 0) {
 		goto exit;
 	}
-    mach_load_command command;
+    load_command load_cmd;
 	off_t pos = sizeof(mach_header);
+    /* process mach-o commands */
 	for(int i = 0; i < header.ncmds; i++) {
-		if(lseek(fd, pos, SEEK_SET) < 0 || read(fd, command, sizeof(mach_load_command)) <= 0) {
+		if(lseek(fd, pos, SEEK_SET) < 0 || read(fd, &load_cmd, sizeof(load_cmd)) <= 0) {
 			goto exit;
 		}
-		pos += command.cmdsize;
+        switch (load_cmd.cmd) {
+            case ADD_BITS(LC_SEGMENT): {
+                /* look for data sections */
+                segment_command seg_cmd;
+                if (read_command(fd, &load_cmd, &seg_cmd, sizeof(seg_cmd)) == 0) {
+                    goto exit;
+                }
+                if (strcmp(seg_cmd.segname, SEG_DATA) == 0) {
+                    data_sections = malloc(seg_cmd.nsects * sizeof(section));
+                    data_section_count = seg_cmd.nsects;
+                    if (!data_sections || read(fd, data_sections, seg_cmd.nsects * sizeof(section)) <= 0) {
+                        goto exit;
+                    }
+                }
+            } break;
+            case LC_SYMTAB: {
+                /* load symbols */
+                symtab_command sym_cmd;
+                if (read_command(fd, &load_cmd, &sym_cmd, sizeof(sym_cmd)) == 0) {
+                    goto exit;
+                }
+                symbols = malloc(sym_cmd.nsyms * sizeof(nlist));
+                symbol_count = sym_cmd.nsyms;
+                symbol_strs = malloc(sym_cmd.strsize);
+                if (!symbols || !symbol_strs
+                 || lseek(fd, sym_cmd.symoff, SEEK_SET) < 0 
+                 || read(fd, symbols, sym_cmd.nsyms * sizeof(nlist)) <= 0
+                 || lseek(fd, sym_cmd.stroff, SEEK_SET) < 0
+                 || read(fd, symbol_strs, sym_cmd.strsize) <= 0) {
+                    goto exit;
+                }
+            } break;
+            case LC_DYSYMTAB: {
+                /* find out which symbols are indirect */
+                dysymtab_command dysym_cmd;
+                if (read_command(fd, &load_cmd, &dysym_cmd, sizeof(dysym_cmd)) == 0) {
+                    goto exit;
+                }
+                indirect_symbol_indices = malloc(dysym_cmd.nindirectsyms * sizeof(uint32_t));
+                indirect_symbol_count = dysym_cmd.nindirectsyms;
+                if (!indirect_symbol_indices
+                 || lseek(fd, dysym_cmd.indirectsymoff, SEEK_SET) < 0
+                 || read(fd, indirect_symbol_indices, dysym_cmd.nindirectsyms * sizeof(uint32_t)) <= 0) {
+                    goto exit;
+                }
+            } break;
+        }
+		pos += load_cmd.cmdsize;
     }
-
+    if (!symbols || !indirect_symbol_indices || !data_sections) {
+        goto exit;
+    }
+    uintptr_t base_address = 0;
+    for (int i = 0; i < symbol_count; i++) {
+        nlist* symbol = &symbols[i];
+        if (symbol->n_type & N_EXT) {
+            const char* symbol_name = symbol_strs + symbol->n_un.n_strx;
+            uintptr_t symbol_address = (uintptr_t) dlsym(handle, symbol_name + 1);
+            if (symbol_address != 0) {
+                base_address = symbol_address - symbol->n_value;
+                break;
+            }
+        }
+    }
+    uintptr_t got_offset = 0;
+    for (int i = 0; i < data_section_count; i++) {
+        section* data_section = &data_sections[i];
+        if ((data_section->flags & SECTION_TYPE) == S_LAZY_SYMBOL_POINTERS) {
+            got_offset = data_section->addr;
+            break;
+        }
+    }
+    if (base_address == 0 || got_offset == 0) {
+        goto exit;
+    }
+    for (int i = 0; i < indirect_symbol_count; i++) {
+        nlist* symbol = &symbols[indirect_symbol_indices[i]];
+        const char* symbol_name = symbol_strs + symbol->n_un.n_strx;
+        if (strcmp(symbol_name, func_name) == 0) {
+            /* calculate the address to the GOT entry */
+            uintptr_t got_entry_address = base_address + got_offset + (i * sizeof(void*));
+            void** ptr = (void**) got_entry_address;
+            /* insert our hook */
+            *ptr = write_hook;
+            override = cb;
+            break;
+        }
+    }
 exit:
-    free(sections);
+    free(data_sections);
+    free(symbols);
+    free(symbol_strs);
+    free(indirect_symbol_indices);
     close(fd);
 }
 #else
