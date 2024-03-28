@@ -42,7 +42,6 @@ extern fn _attachTemplate(structure: Value, def: Value, is_static: bool) void;
 extern fn _finalizeShape(structure: Value) void;
 extern fn _endStructure(structure: Value) void;
 extern fn _createTemplate(buffer: ?Value) ?Value;
-extern fn _writeToConsole(dv: Value) bool;
 extern fn _startCall(call: Call, arg_struct: Value) *anyopaque;
 extern fn _endCall(call: Call, arg_struct: Value) void;
 
@@ -321,26 +320,6 @@ pub const Host = struct {
             return Error.UnableToCreateStructureTemplate;
         }
     }
-
-    pub fn writeToConsole(_: Host, dv: Value) !void {
-        if (!_writeToConsole(dv)) {
-            return Error.UnableToWriteToConsole;
-        }
-    }
-
-    pub fn write(ptr: [*]const u8, len: usize) !void {
-        if (initial_context) |context| {
-            const host = Host.init(@ptrCast(@constCast(context)), null);
-            const memory: Memory = .{
-                .bytes = @constCast(ptr),
-                .len = len,
-            };
-            const dv = try host.captureView(memory);
-            try host.writeToConsole(dv);
-        } else {
-            return Error.UnableToWriteToConsole;
-        }
-    }
 };
 
 pub fn runThunk(thunk_id: usize, arg_struct: Value) ?Value {
@@ -367,29 +346,4 @@ pub fn getFactoryThunk(comptime T: type) usize {
 
 pub fn isRuntimeSafetyActive() bool {
     return builtin.mode == .ReleaseSafe or builtin.mode == .Debug;
-}
-
-pub fn getOS() type {
-    return struct {
-        pub const system = struct {
-            pub const fd_t = u8;
-            pub const STDOUT_FILENO = 1;
-            pub const STDERR_FILENO = 2;
-            pub const E = std.os.linux.E;
-
-            pub fn getErrno(T: usize) E {
-                _ = T;
-                return .SUCCESS;
-            }
-
-            pub fn write(f: fd_t, ptr: [*]const u8, len: usize) usize {
-                if (f == STDOUT_FILENO or f == STDERR_FILENO) {
-                    if (Host.write(ptr, len)) {
-                        return @intCast(len);
-                    } else |_| {}
-                }
-                return len;
-            }
-        };
-    };
 }

@@ -6166,7 +6166,6 @@ class WebAssemblyEnvironment extends Environment {
     attachTemplate: { argType: 'vvb' },
     finalizeShape: { argType: 'v' },
     endStructure: { argType: 'v' },
-    writeToConsole: { argType: 'v' },
     startCall: { argType: 'iv', returnType: 'i' },
     endCall: { argType: 'iv', returnType: 'i' },
   };
@@ -6384,10 +6383,12 @@ class WebAssemblyEnvironment extends Environment {
   async instantiateWebAssembly(source) {
     const env = this.exportFunctions();
     const res = await source;
+    const wasi = await this.getWASI();
+    const imports = { env, wasi_snapshot_preview1: wasi };
     if (res[Symbol.toStringTag] === 'Response') {
-      return WebAssembly.instantiateStreaming(res, { env });
+      return WebAssembly.instantiateStreaming(res, imports);
     } else {
-      return WebAssembly.instantiate(res, { env });
+      return WebAssembly.instantiate(res, imports);
     }
   }
 
@@ -6425,7 +6426,6 @@ class WebAssemblyEnvironment extends Environment {
   }
   /* COMPTIME-ONLY-END */
 
-  /* RUNTIME-ONLY */
   getMemoryOffset(address) {
     // WASM address space starts at 0
     return address;
@@ -6494,7 +6494,29 @@ class WebAssemblyEnvironment extends Environment {
     }
     return args.retval;
   }
-  /* RUNTIME-ONLY */
+
+  async getWASI() {
+    return { 
+      fd_write: (fd, iovs_ptr, iovs_count, written_ptr) => {
+        if (fd === 1 || fd === 2) {
+          debugger;
+          const dv = new DataView(this.memory.buffer);
+          let written = 0;
+          for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
+            const buf_ptr = dv.getUint32(p, true);
+            const buf_len = dv.getUint32(p + 4, true);
+            const buf = new DataView(this.memory.buffer, buf_ptr, buf_len);
+            this.writeToConsole(buf);
+            written += buf_len;
+          }
+          dv.setUint32(written_ptr, written, true);
+          return 0;            
+        } else {
+          return 1;
+        }
+      },
+    };
+  }
 }
 
 useAllMemberTypes();
@@ -7790,7 +7812,7 @@ async function transpile(path, options) {
       throw new Error(`wasmLoader is a required option when embedWASM is false`);
     }
   }
-  Object.assign(compileOptions, { arch: 'wasm32', platform: 'freestanding' });
+  Object.assign(compileOptions, { arch: 'wasm32', platform: 'wasi' });
   const { outputPath } = await compile(path, null, compileOptions);
   const content = await readFile(outputPath);
   const env = createEnvironment();

@@ -21,7 +21,7 @@ export async function transpile(path, options) {
       throw new Error(`wasmLoader is a required option when embedWASM is false`);
     }
   }
-  Object.assign(compileOptions, { arch: 'wasm32', platform: 'freestanding' });
+  Object.assign(compileOptions, { arch: 'wasm32', platform: 'wasi' });
   const { outputPath } = await compile(path, null, compileOptions);
   const content = await readFile(outputPath);
   const env = createEnvironment();

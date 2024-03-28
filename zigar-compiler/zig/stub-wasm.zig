@@ -4,8 +4,6 @@ const exporter = @import("exporter");
 const Value = exporter.Value;
 const Call = exporter.Call;
 
-pub const os = exporter.getOS();
-
 export fn allocateExternMemory(len: usize, alignment: u16) ?[*]u8 {
     return exporter.allocateExternMemory(len, alignment);
 }
