@@ -70,7 +70,7 @@ result allocate_host_memory(call ctx,
         dest->attributes.align = align;
         return OK;
     }
-    return Failure;
+    return FAILURE;
 }
 
 result free_host_memory(call ctx,
@@ -84,7 +84,7 @@ result free_host_memory(call ctx,
      && call_js_function(ctx, "freeHostMemory", 3, args, &result)) {
         return OK;
     }
-    return Failure;
+    return FAILURE;
 }
 
 result capture_string(call ctx,
@@ -94,7 +94,7 @@ result capture_string(call ctx,
     if (napi_create_string_utf8(env, (const char*) mem->bytes, mem->len, dest) == napi_ok) {
         return OK;
     }
-    return Failure;
+    return FAILURE;
 }
 
 result capture_view(call ctx,
@@ -109,7 +109,7 @@ result capture_view(call ctx,
      && call_js_function(ctx, "captureView", 3, args, dest)) {
         return OK;
     }
-    return Failure;
+    return FAILURE;
 }
 
 result cast_view(call ctx,
@@ -123,7 +123,7 @@ result cast_view(call ctx,
      && call_js_function(ctx, "castView", 3, args, dest)) {
         return OK;
     }
-    return Failure;
+    return FAILURE;
 }
 
 result get_slot_number(call ctx,
@@ -139,7 +139,7 @@ result get_slot_number(call ctx,
      && napi_get_value_uint32(env, result, dest) == napi_ok) {
         return OK;
     }
-    return Failure;
+    return FAILURE;
 }
 
 result read_slot(call ctx,
@@ -158,7 +158,7 @@ result read_slot(call ctx,
         *dest = result;
         return OK;
     }
-    return Failure;
+    return FAILURE;
 }
 
 result write_slot(call ctx,
@@ -168,7 +168,7 @@ result write_slot(call ctx,
     napi_env env = ctx->env;
     if (!value) {
         if (napi_get_null(env, &value) != napi_ok) {
-            return Failure;
+            return FAILURE;
         }
     }
     napi_value args[3] = { object, NULL, value };
@@ -178,7 +178,7 @@ result write_slot(call ctx,
      && call_js_function(ctx, "writeSlot", 3, args, &result)) {
         return OK;
     }
-    return Failure;
+    return FAILURE;
 }
 
 result begin_structure(call ctx,
@@ -205,7 +205,7 @@ result begin_structure(call ctx,
      && call_js_function(ctx, "beginStructure", 1, args, dest)) {
         return OK;
      }
-     return Failure;
+     return FAILURE;
 }
 
 result attach_member(call ctx,
@@ -236,7 +236,7 @@ result attach_member(call ctx,
      && call_js_function(ctx, "attachMember", 3, args, &result)) {
         return OK;
      }
-     return Failure;
+     return FAILURE;
 }
 
 result attach_method(call ctx,
@@ -259,7 +259,7 @@ result attach_method(call ctx,
      && call_js_function(ctx, "attachMethod", 3, args, &result)) {
         return OK;
      }
-     return Failure;
+     return FAILURE;
 }
 
 result attach_template(call ctx,
@@ -273,7 +273,7 @@ result attach_template(call ctx,
      && call_js_function(ctx, "attachTemplate", 3, args, &result)) {
         return OK;
     }
-    return Failure;
+    return FAILURE;
 }
 
 result finalize_shape(call ctx,
@@ -284,7 +284,7 @@ result finalize_shape(call ctx,
     if (call_js_function(ctx, "finalizeShape", 1, args, &result)) {
         return OK;
     }
-    return Failure;
+    return FAILURE;
 }
 
 result end_structure(call ctx,
@@ -295,7 +295,7 @@ result end_structure(call ctx,
     if (call_js_function(ctx, "endStructure", 1, args, &result)) {
         return OK;
     }
-    return Failure;
+    return FAILURE;
 }
 
 result create_template(call ctx,
@@ -307,7 +307,7 @@ result create_template(call ctx,
      && call_js_function(ctx, "createTemplate", 1, args, dest)) {
         return OK;
     }
-    return Failure;
+    return FAILURE;
 }
 
 result write_to_console(call ctx,
@@ -318,7 +318,7 @@ result write_to_console(call ctx,
     if (call_js_function(ctx, "writeToConsole", 1, args, &result)) {
         return OK;
     }
-    return Failure;
+    return FAILURE;
 }
 
 napi_value throw_error(napi_env env,

@@ -14,15 +14,13 @@ const Memory = exporter.Memory;
 const Thunk = exporter.Thunk;
 const Error = exporter.Error;
 const missing = exporter.missing;
+
 const Call = *anyopaque;
 
 // support both 0.11 and 0.12
-const Little = if (@hasField(std.builtin.Endian, "Little")) .Little else .little;
+const enum_little = if (@hasField(std.builtin.Endian, "Little")) .Little else .little;
 
-pub const Result = enum(u32) {
-    OK,
-    Failure,
-};
+pub const Result = enum(u32) { ok, failure };
 
 threadlocal var initial_context: ?Call = null;
 
@@ -48,117 +46,117 @@ pub const Host = struct {
 
     pub fn allocateMemory(self: Host, size: usize, alignment: u16) !Memory {
         var memory: Memory = undefined;
-        if (imports.allocate_host_memory(self.context, size, alignment, &memory) != .OK) {
-            return Error.UnableToAllocateMemory;
+        if (imports.allocate_host_memory(self.context, size, alignment, &memory) != .ok) {
+            return Error.unable_to_allocate_memory;
         }
         return memory;
     }
 
     pub fn freeMemory(self: Host, memory: Memory) !void {
-        if (imports.free_host_memory(self.context, &memory) != .OK) {
-            return Error.UnableToFreeMemory;
+        if (imports.free_host_memory(self.context, &memory) != .ok) {
+            return Error.unable_to_free_memory;
         }
     }
 
     pub fn captureString(self: Host, memory: Memory) !Value {
         var value: Value = undefined;
-        if (imports.capture_string(self.context, &memory, &value) != .OK) {
-            return Error.UnableToCreateObject;
+        if (imports.capture_string(self.context, &memory, &value) != .ok) {
+            return Error.unable_to_create_object;
         }
         return value;
     }
 
     pub fn captureView(self: Host, memory: Memory) !Value {
         var value: Value = undefined;
-        if (imports.capture_view(self.context, &memory, &value) != .OK) {
-            return Error.UnableToCreateDataView;
+        if (imports.capture_view(self.context, &memory, &value) != .ok) {
+            return Error.unable_to_create_data_view;
         }
         return value;
     }
 
     pub fn castView(self: Host, structure: Value, dv: Value, writable: bool) !Value {
         var value: Value = undefined;
-        if (imports.cast_view(self.context, structure, dv, writable, &value) != .OK) {
-            return Error.UnableToCreateObject;
+        if (imports.cast_view(self.context, structure, dv, writable, &value) != .ok) {
+            return Error.unable_to_create_object;
         }
         return value;
     }
 
     pub fn getSlotNumber(self: Host, scope: u32, key: u32) !usize {
         var result: u32 = undefined;
-        if (imports.get_slot_number(self.context, scope, key, &result) != .OK) {
-            return Error.UnableToObtainSlot;
+        if (imports.get_slot_number(self.context, scope, key, &result) != .ok) {
+            return Error.unable_to_obtain_slot;
         }
         return result;
     }
 
     pub fn readSlot(self: Host, target: ?Value, id: usize) !Value {
         var result: Value = undefined;
-        if (imports.read_slot(self.context, target, id, &result) != .OK) {
-            return Error.UnableToRetrieveObject;
+        if (imports.read_slot(self.context, target, id, &result) != .ok) {
+            return Error.unable_to_retrieve_object;
         }
         return result;
     }
 
     pub fn writeSlot(self: Host, target: ?Value, id: usize, value: ?Value) !void {
-        if (imports.write_slot(self.context, target, id, value) != .OK) {
-            return Error.UnableToInsertObject;
+        if (imports.write_slot(self.context, target, id, value) != .ok) {
+            return Error.unable_to_insert_object;
         }
     }
 
     pub fn beginStructure(self: Host, def: Structure) !Value {
         var structure: Value = undefined;
-        if (imports.begin_structure(self.context, &def, &structure) != .OK) {
-            return Error.UnableToStartStructureDefinition;
+        if (imports.begin_structure(self.context, &def, &structure) != .ok) {
+            return Error.unable_to_start_structure_definition;
         }
         return structure;
     }
 
     pub fn attachMember(self: Host, structure: Value, member: Member, is_static: bool) !void {
-        if (imports.attach_member(self.context, structure, &member, is_static) != .OK) {
+        if (imports.attach_member(self.context, structure, &member, is_static) != .ok) {
             if (is_static) {
-                return Error.UnableToAddStaticMember;
+                return Error.unable_to_add_static_member;
             } else {
-                return Error.UnableToAddStructureMember;
+                return Error.unable_to_add_structure_member;
             }
         }
     }
 
     pub fn attachMethod(self: Host, structure: Value, method: Method, is_static_only: bool) !void {
-        if (imports.attach_method(self.context, structure, &method, is_static_only) != .OK) {
-            return Error.UnableToAddMethod;
+        if (imports.attach_method(self.context, structure, &method, is_static_only) != .ok) {
+            return Error.unable_to_add_method;
         }
     }
 
     pub fn attachTemplate(self: Host, structure: Value, template: Value, is_static: bool) !void {
-        if (imports.attach_template(self.context, structure, template, is_static) != .OK) {
-            return Error.UnableToAddStructureTemplate;
+        if (imports.attach_template(self.context, structure, template, is_static) != .ok) {
+            return Error.unable_to_add_structure_template;
         }
     }
 
     pub fn finalizeShape(self: Host, structure: Value) !void {
-        if (imports.finalize_shape(self.context, structure) != .OK) {
-            return Error.UnableToDefineStructure;
+        if (imports.finalize_shape(self.context, structure) != .ok) {
+            return Error.unable_to_define_structure;
         }
     }
 
     pub fn endStructure(self: Host, structure: Value) !void {
-        if (imports.end_structure(self.context, structure) != .OK) {
-            return Error.UnableToDefineStructure;
+        if (imports.end_structure(self.context, structure) != .ok) {
+            return Error.unable_to_define_structure;
         }
     }
 
     pub fn createTemplate(self: Host, dv: ?Value) !Value {
         var value: Value = undefined;
-        if (imports.create_template(self.context, dv, &value) != .OK) {
-            return Error.UnableToCreateStructureTemplate;
+        if (imports.create_template(self.context, dv, &value) != .ok) {
+            return Error.unable_to_create_structure_template;
         }
         return value;
     }
 
     pub fn writeToConsole(self: Host, dv: Value) !void {
-        if (imports.write_to_console(self.context, dv) != .OK) {
-            return Error.UnableToWriteToConsole;
+        if (imports.write_to_console(self.context, dv) != .ok) {
+            return Error.unable_to_write_to_console;
         }
     }
 
@@ -217,9 +215,9 @@ fn allocateExternMemory(len: usize, alignment: u8, memory: *Memory) callconv(.C)
         memory.attributes.alignment = alignment;
         memory.attributes.is_const = false;
         memory.attributes.is_comptime = false;
-        return .OK;
+        return .ok;
     } else {
-        return .Failure;
+        return .failure;
     }
 }
 
@@ -229,9 +227,9 @@ fn freeExternMemory(memory: *const Memory) callconv(.C) Result {
         const len = memory.len;
         const ptr_align = if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
         allocator.rawFree(bytes[0..len], ptr_align, 0);
-        return .OK;
+        return .ok;
     } else {
-        return .Failure;
+        return .failure;
     }
 }
 
@@ -239,10 +237,10 @@ pub fn overrideWrite(bytes: [*]const u8, len: usize) callconv(.C) Result {
     if (initial_context) |context| {
         const host = Host.init(context, null);
         if (host.writeBytesToConsole(bytes, len)) {
-            return .OK;
+            return .ok;
         } else |_| {}
     }
-    return .Failure;
+    return .failure;
 }
 
 pub fn runThunk(call: Call, thunk_address: usize, args: *anyopaque, dest: *?Value) callconv(.C) Result {
@@ -252,7 +250,7 @@ pub fn runThunk(call: Call, thunk_address: usize, args: *anyopaque, dest: *?Valu
     } else {
         dest.* = null;
     }
-    return .OK;
+    return .ok;
 }
 
 // pointer table that's filled on the C side
@@ -303,7 +301,7 @@ pub fn createGetFactoryThunk(comptime T: type) fn (*usize) callconv(.C) Result {
         fn getFactoryThunk(dest: *usize) callconv(.C) Result {
             const factory = exporter.createRootFactory(Host, T);
             dest.* = @intFromPtr(factory);
-            return .OK;
+            return .ok;
         }
     };
     return ns.getFactoryThunk;
@@ -313,7 +311,7 @@ pub fn createModule(comptime T: type) Module {
     return .{
         .version = 2,
         .attributes = .{
-            .little_endian = builtin.target.cpu.arch.endian() == Little,
+            .little_endian = builtin.target.cpu.arch.endian() == enum_little,
             .runtime_safety = switch (builtin.mode) {
                 .Debug, .ReleaseSafe => true,
                 else => false,
@@ -337,8 +335,8 @@ test "createModule" {
         pub var c: bool = true;
         pub const d: f64 = 3.14;
         pub const e: [4]i32 = .{ 3, 4, 5, 6 };
-        pub const f = enum { Dog, Cat, Chicken };
-        pub const g = enum(c_int) { Dog = -100, Cat, Chicken };
+        pub const f = enum { dog, cat, chicken };
+        pub const g = enum(c_int) { dog = -100, cat, chicken };
         pub fn h(arg1: i32, arg2: i32) bool {
             return arg1 < arg2;
         }

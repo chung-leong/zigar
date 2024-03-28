@@ -155,7 +155,7 @@ pub const Host = struct {
                 .len = size,
             };
         } else {
-            return Error.UnableToAllocateMemory;
+            return Error.unable_to_allocate_memory;
         }
     }
 
@@ -169,7 +169,7 @@ pub const Host = struct {
         if (_captureString(memory.bytes, memory.len)) |str| {
             return str;
         } else {
-            return Error.UnableToCreateString;
+            return Error.unable_to_create_string;
         }
     }
 
@@ -177,7 +177,7 @@ pub const Host = struct {
         if (_captureView(memory.bytes, memory.len, memory.attributes.is_comptime)) |dv| {
             return dv;
         } else {
-            return Error.UnableToCreateDataView;
+            return Error.unable_to_create_data_view;
         }
     }
 
@@ -185,7 +185,7 @@ pub const Host = struct {
         if (_castView(structure, dv, writable)) |object| {
             return object;
         } else {
-            return Error.UnableToCreateObject;
+            return Error.unable_to_create_object;
         }
     }
 
@@ -197,7 +197,7 @@ pub const Host = struct {
         if (_readSlot(container, slot)) |value| {
             return value;
         } else {
-            return Error.UnableToRetrieveObject;
+            return Error.unable_to_retrieve_object;
         }
     }
 
@@ -219,11 +219,11 @@ pub const Host = struct {
             },
             else => {},
         }
-        const key_str = _captureString(key.ptr, key.len) orelse return Error.UnableToCreateString;
+        const key_str = _captureString(key.ptr, key.len) orelse return Error.unable_to_create_string;
         switch (@typeInfo(T)) {
             .Pointer => {
                 if (T == [*:0]const u8) {
-                    const str = _captureString(value, strlen(value)) orelse return Error.UnableToCreateString;
+                    const str = _captureString(value, strlen(value)) orelse return Error.unable_to_create_string;
                     _insertString(container, key_str, str);
                 } else if (T == Value) {
                     _insertObject(container, key_str, value);
@@ -267,7 +267,7 @@ pub const Host = struct {
         if (_beginStructure(structure)) |s| {
             return s;
         } else {
-            return Error.UnableToStartStructureDefinition;
+            return Error.unable_to_start_structure_definition;
         }
     }
 
@@ -322,7 +322,7 @@ pub const Host = struct {
         if (_createTemplate(dv)) |templ| {
             return templ;
         } else {
-            return Error.UnableToCreateStructureTemplate;
+            return Error.unable_to_create_structure_template;
         }
     }
 };

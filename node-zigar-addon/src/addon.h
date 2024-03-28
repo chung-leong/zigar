@@ -52,46 +52,11 @@ napi_value create_addon(napi_env env);
 typedef uint32_t result;
 enum {
     OK,
-    Failure,
+    FAILURE,
 };
 
 typedef uint32_t structure_type;
-enum {
-    Primitive,
-    Array,
-    Struct,
-    ArgStruct,
-    ExternUnion,
-    BareUnion,
-    TaggedUnion,
-    ErrorUnion,
-    ErrorSet,
-    Enumeration,
-    Optional,
-    Pointer,
-    Slice,
-    Vector,
-    Opaque,
-    Function,
-};
-
 typedef uint32_t member_type;
-enum {
-    Void,
-    Bool,
-    Int,
-    Uint,
-    Float,
-    EnumerationItem,
-    Error,
-    Object,
-    Type,
-    Comptime,
-    Static,
-    Literal,
-    Null,
-    Undefined,
-};
 
 typedef struct {
     const char* name;
