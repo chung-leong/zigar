@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub const AnyOpaque = anyopaque;
-pub const Error = error{ GoldfishDied, NoMoney };
+pub const Error = error{ goldfish_died, no_money };
 
 var number1: i32 = 1234;
 var number2: i32 = 4567;

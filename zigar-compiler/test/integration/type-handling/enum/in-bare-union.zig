@@ -1,11 +1,11 @@
 pub const Pet = enum {
-    Dog,
-    Cat,
-    Monkey,
+    dog,
+    cat,
+    monkey,
 };
 pub const UnionA = union {
     pet: Pet,
     number: i32,
 };
 
-pub var union_a: UnionA = .{ .pet = Pet.Cat };
+pub var union_a: UnionA = .{ .pet = Pet.cat };

@@ -1,11 +1,11 @@
 const std = @import("std");
 
 pub const Pet = enum {
-    Dog,
-    Cat,
-    Monkey,
+    dog,
+    cat,
+    monkey,
 };
-pub var optional: ?Pet = Pet.Cat;
+pub var optional: ?Pet = Pet.cat;
 
 pub fn print() void {
     std.debug.print("{any}\n", .{optional});

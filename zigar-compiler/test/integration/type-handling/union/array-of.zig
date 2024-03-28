@@ -1,16 +1,16 @@
 const std = @import("std");
 
-const ValueType = enum { String, Integer, Float };
+const ValueType = enum { string, integer, float };
 pub const Variant = union(ValueType) {
-    String: []const u8,
-    Integer: u32,
-    Float: f64,
+    string: []const u8,
+    integer: u32,
+    float: f64,
 };
 pub var array: [4]Variant = .{
-    .{ .Integer = 123 },
-    .{ .Float = 1.23 },
-    .{ .String = "world" },
-    .{ .Integer = 777 },
+    .{ .integer = 123 },
+    .{ .float = 1.23 },
+    .{ .string = "world" },
+    .{ .integer = 777 },
 };
 
 pub fn print() void {

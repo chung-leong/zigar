@@ -15,27 +15,27 @@ export function addTests(importModule, options) {
     it('should handle enum as static variables', async function() {
       this.timeout(120000);
       const { default: module, Pet, Donut, print } = await importTest('as-static-variables');
-      expect(Pet.Cat).to.be.instanceOf(Pet);
-      expect(Pet.Donut).to.not.be.instanceOf(Pet);
-      expect(Pet.Cat.valueOf()).to.equal('Cat');
-      expect(Number(Pet.Cat)).to.equal(1);
-      expect(`${Pet.Dog} ${Pet.Cat} ${Pet.Monkey}`).to.equal('Dog Cat Monkey');
-      expect(Pet(1)).to.equal(Pet.Cat);
-      expect(Pet('Cat')).to.equal(Pet.Cat);
+      expect(Pet.dog).to.be.instanceOf(Pet);
+      expect(Pet.donut).to.not.be.instanceOf(Pet);
+      expect(Pet.cat.valueOf()).to.equal('cat');
+      expect(Number(Pet.cat)).to.equal(1);
+      expect(`${Pet.dog} ${Pet.cat} ${Pet.monkey}`).to.equal('dog cat monkey');
+      expect(Pet(1)).to.equal(Pet.cat);
+      expect(Pet('cat')).to.equal(Pet.cat);
       expect(Donut(0)).to.equal(Donut.Plain);
       expect(Donut(0xffff_ffff_ffff_ffff_ffff_ffff_ffff_fffen)).to.equal(Donut.Jelly);
       expect(Pet(5)).to.be.undefined;
       expect(Pet('Bear')).to.be.undefined;
       expect(module.pet).to.be.instanceOf(Pet);
-      expect(module.pet).to.be.equal(Pet.Cat);
+      expect(module.pet).to.be.equal(Pet.cat);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('as-static-variables.Pet.Cat');
-      module.pet = Pet.Dog;
-      expect(module.pet).to.be.equal(Pet.Dog);
+      expect(before).to.equal('as-static-variables.Pet.cat');
+      module.pet = Pet.dog;
+      expect(module.pet).to.be.equal(Pet.dog);
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('as-static-variables.Pet.Dog');
-      expect(module.pet.valueOf()).to.equal('Dog');
-      expect(JSON.stringify(module.pet)).to.equal('"Dog"');
+      expect(after).to.equal('as-static-variables.Pet.dog');
+      expect(module.pet.valueOf()).to.equal('dog');
+      expect(JSON.stringify(module.pet)).to.equal('"dog"');
       expect(Donut(1n)).to.not.be.undefined;
       expect(Donut(5n)).to.not.be.undefined;
       expect(module.donut).to.equal(Donut(5n));
@@ -44,79 +44,79 @@ export function addTests(importModule, options) {
     it('should print enum arguments', async function() {
       this.timeout(120000);
       const { Pet, print } = await importTest('as-function-parameters');
-      const lines = await capture(() => print(Pet.Cat, Pet.Dog));
-      expect(lines).to.eql([ 'as-function-parameters.Pet.Cat as-function-parameters.Pet.Dog' ]);
+      const lines = await capture(() => print(Pet.cat, Pet.dog));
+      expect(lines).to.eql([ 'as-function-parameters.Pet.cat as-function-parameters.Pet.dog' ]);
     })
     it('should return enum', async function() {
       this.timeout(120000);
       const { default: module, Pet } = await importTest('as-return-value');
-      expect(module.getEnum()).to.equal(Pet.Cat);
+      expect(module.getEnum()).to.equal(Pet.cat);
     })
     it('should handle enum in array', async function() {
       this.timeout(120000);
       const { array, Pet, print } = await importTest('array-of');
       expect(array.length).to.equal(3);
-      expect([ ...array ]).to.eql([ Pet.Monkey, Pet.Dog, Pet.Cat ]);
+      expect([ ...array ]).to.eql([ Pet.monkey, Pet.dog, Pet.cat ]);
       const [ line ] = await capture(() => print());
-      expect(line).to.equal('{ array-of.Pet.Monkey, array-of.Pet.Dog, array-of.Pet.Cat }');
+      expect(line).to.equal('{ array-of.Pet.monkey, array-of.Pet.dog, array-of.Pet.cat }');
     })
     it('should handle enum in struct', async function() {
       this.timeout(120000);
       const { default: module, Pet, StructA, print } = await importTest('in-struct');
-      expect(module.struct_a.pet1).to.equal(Pet.Dog);
-      expect(module.struct_a.pet2).to.equal(Pet.Cat);
+      expect(module.struct_a.pet1).to.equal(Pet.dog);
+      expect(module.struct_a.pet2).to.equal(Pet.cat);
       const b = new StructA({});
-      expect(b.pet1).to.equal(Pet.Monkey);
-      expect(b.pet2).to.equal(Pet.Dog);
+      expect(b.pet1).to.equal(Pet.monkey);
+      expect(b.pet2).to.equal(Pet.dog);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-struct.StructA{ .pet1 = in-struct.Pet.Dog, .pet2 = in-struct.Pet.Cat }');
+      expect(before).to.equal('in-struct.StructA{ .pet1 = in-struct.Pet.dog, .pet2 = in-struct.Pet.cat }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-struct.StructA{ .pet1 = in-struct.Pet.Monkey, .pet2 = in-struct.Pet.Dog }');
+      expect(after).to.equal('in-struct.StructA{ .pet1 = in-struct.Pet.monkey, .pet2 = in-struct.Pet.dog }');
     })
     it('should handle enum in packed struct', async function() {
       this.timeout(120000);
       const { default: module, Pet, StructA, print } = await importTest('in-packed-struct');
-      expect(module.struct_a.pet1).to.equal(Pet.Dog);
-      expect(module.struct_a.pet2).to.equal(Pet.Cat);
+      expect(module.struct_a.pet1).to.equal(Pet.dog);
+      expect(module.struct_a.pet2).to.equal(Pet.cat);
       expect(module.struct_a.number).to.equal(200);
-      expect(module.struct_a.pet3).to.equal(Pet.Monkey);
+      expect(module.struct_a.pet3).to.equal(Pet.monkey);
       const b = new StructA({});
-      expect(b.pet1).to.equal(Pet.Monkey);
-      expect(b.pet2).to.equal(Pet.Dog);
+      expect(b.pet1).to.equal(Pet.monkey);
+      expect(b.pet2).to.equal(Pet.dog);
       expect(b.number).to.equal(100);
-      expect(b.pet3).to.equal(Pet.Cat);
+      expect(b.pet3).to.equal(Pet.cat);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-packed-struct.StructA{ .pet1 = in-packed-struct.Pet.Dog, .pet2 = in-packed-struct.Pet.Cat, .number = 200, .pet3 = in-packed-struct.Pet.Monkey }');
+      expect(before).to.equal('in-packed-struct.StructA{ .pet1 = in-packed-struct.Pet.dog, .pet2 = in-packed-struct.Pet.cat, .number = 200, .pet3 = in-packed-struct.Pet.monkey }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-packed-struct.StructA{ .pet1 = in-packed-struct.Pet.Monkey, .pet2 = in-packed-struct.Pet.Dog, .number = 100, .pet3 = in-packed-struct.Pet.Cat }');
+      expect(after).to.equal('in-packed-struct.StructA{ .pet1 = in-packed-struct.Pet.monkey, .pet2 = in-packed-struct.Pet.dog, .number = 100, .pet3 = in-packed-struct.Pet.cat }');
     })
     it('should handle enum as comptime field', async function() {
       this.timeout(120000);
       const { default: module, Pet, StructA, print } = await importTest('as-comptime-field');
-      expect(module.struct_a.pet).to.equal(Pet.Cat);
+      expect(module.struct_a.pet).to.equal(Pet.cat);
       const b = new StructA({ number: 500 });
-      expect(b.pet).to.equal(Pet.Cat);
+      expect(b.pet).to.equal(Pet.cat);
       const [ line ] = await capture(() => print(b));
-      expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .pet = as-comptime-field.Pet.Cat }');
+      expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .pet = as-comptime-field.Pet.cat }');
     })
     it('should handle enum in bare union', async function() {
       this.timeout(120000);
       const { default: module, Pet, UnionA } = await importTest('in-bare-union');
-      expect(module.union_a.pet).to.equal(Pet.Cat);
+      expect(module.union_a.pet).to.equal(Pet.cat);
       if (runtimeSafety) {
         expect(() => module.union_a.number).to.throw();
       }
-      const b = new UnionA({ pet: Pet.Dog });
+      const b = new UnionA({ pet: Pet.dog });
       const c = new UnionA({ number: 123 });
-      expect(b.pet).to.equal(Pet.Dog);
+      expect(b.pet).to.equal(Pet.dog);
       expect(c.number).to.equal(123);
       if (runtimeSafety) {
         expect(() => c.pet).to.throw();
       }
       module.union_a = b;
-      expect(module.union_a.pet).to.equal(Pet.Dog);
+      expect(module.union_a.pet).to.equal(Pet.dog);
       module.union_a = c;
       if (runtimeSafety) {
         expect(() => module.union_a.pet).to.throw();
@@ -125,48 +125,48 @@ export function addTests(importModule, options) {
     it('should handle enum in tagged union', async function() {
       this.timeout(120000);
       const { default: module, TagType, Pet, UnionA } = await importTest('in-tagged-union');
-      expect(module.union_a.pet).to.equal(Pet.Cat);
+      expect(module.union_a.pet).to.equal(Pet.cat);
       expect(TagType(module.union_a)).to.equal(TagType.pet);
       expect(module.union_a.number).to.be.null;
-      const b = new UnionA({ pet: Pet.Monkey });
+      const b = new UnionA({ pet: Pet.monkey });
       const c = new UnionA({ number: 123 });
-      expect(b.pet).to.equal(Pet.Monkey);
+      expect(b.pet).to.equal(Pet.monkey);
       expect(c.number).to.equal(123);
       expect(c.pet).to.be.null;
       module.union_a = b;
-      expect(module.union_a.pet).to.equal(Pet.Monkey);
+      expect(module.union_a.pet).to.equal(Pet.monkey);
       module.union_a = c;
       expect(module.union_a.pet).to.be.null;
     })
     it('should handle enum in optional', async function() {
       this.timeout(120000);
       const { default: module, Pet, print } = await importTest('in-optional');
-      expect(module.optional).to.equal(Pet.Cat);
+      expect(module.optional).to.equal(Pet.cat);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-optional.Pet.Cat');
+      expect(before).to.equal('in-optional.Pet.cat');
       module.optional = null;
       expect(module.optional).to.be.null;
       const [ after1 ] = await capture(() => print());
       expect(after1).to.equal('null');
-      module.optional = Pet.Monkey;
-      expect(module.optional).to.equal(Pet.Monkey);
+      module.optional = Pet.monkey;
+      expect(module.optional).to.equal(Pet.monkey);
       const [ after2 ] = await capture(() => print());
-      expect(after2).to.equal('in-optional.Pet.Monkey');
+      expect(after2).to.equal('in-optional.Pet.monkey');
     })
     it('should handle enum in error union', async function() {
       this.timeout(120000);
       const { default: module, Error, Pet, print } = await importTest('in-error-union');
-      expect(module.error_union).to.equal(Pet.Cat);
+      expect(module.error_union).to.equal(Pet.cat);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-error-union.Pet.Cat');
-      module.error_union = Error.GoldfishDied;
-      expect(() => module.error_union).to.throw(Error.GoldfishDied);
+      expect(before).to.equal('in-error-union.Pet.cat');
+      module.error_union = Error.goldfish_died;
+      expect(() => module.error_union).to.throw(Error.goldfish_died);
       const [ after1 ] = await capture(() => print());
-      expect(after1).to.equal('error.GoldfishDied');
-      module.error_union = Pet.Dog;
-      expect(module.error_union).to.equal(Pet.Dog);
+      expect(after1).to.equal('error.goldfish_died');
+      module.error_union = Pet.dog;
+      expect(module.error_union).to.equal(Pet.dog);
       const [ after2 ] = await capture(() => print());
-      expect(after2).to.equal('in-error-union.Pet.Dog');
+      expect(after2).to.equal('in-error-union.Pet.dog');
     })
     it('should not compile code containing enum vector', async function() {
       this.timeout(120000);

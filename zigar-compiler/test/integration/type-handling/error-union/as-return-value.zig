@@ -1,9 +1,9 @@
-pub const Error = error{ GoldfishDied, NoMoney };
+pub const Error = error{ goldfish_died, no_money };
 
 pub fn getSomething() Error!i32 {
     return 1234;
 }
 
 pub fn getFailure() Error!i32 {
-    return Error.GoldfishDied;
+    return Error.goldfish_died;
 }

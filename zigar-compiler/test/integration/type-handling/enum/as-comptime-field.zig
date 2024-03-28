@@ -1,13 +1,13 @@
 const std = @import("std");
 
 pub const Pet = enum {
-    Dog,
-    Cat,
-    Monkey,
+    dog,
+    cat,
+    monkey,
 };
 pub const StructA = struct {
     number: i32,
-    comptime pet: Pet = Pet.Cat,
+    comptime pet: Pet = Pet.cat,
 };
 
 pub var struct_a: StructA = .{ .number = 123 };

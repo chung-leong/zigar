@@ -82,7 +82,7 @@ export function addTests(importModule, options) {
       expect(module.error_union1).to.equal(1234);
       expect(error_union1).to.equal(1234);
       expect(error_union2).to.be.undefined;
-      expect(() => module.error_union2).to.throw(Error.GoldfishDied);
+      expect(() => module.error_union2).to.throw(Error.goldfish_died);
     })
     it('should not compile code with comptime float vector', async function() {
       this.timeout(120000);

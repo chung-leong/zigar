@@ -1,10 +1,10 @@
-const ValueType = enum { String, Number };
-const Error = error{ BadThing1, BadThign2 };
+const ValueType = enum { string, Number };
+const Error = error{ bad_thing1, bad_thign2 };
 
 pub const OptionalString = ?[]const u8;
 pub const ErrorOrString = Error![]const u8;
 pub const StringOrNumber = union(ValueType) {
-    String: []const u8,
+    string: []const u8,
     Number: i32,
 };
 
@@ -13,7 +13,7 @@ pub fn setOptionalNull(ptr: *OptionalString) void {
 }
 
 pub fn setErrorUnion(ptr: *ErrorOrString) void {
-    ptr.* = Error.BadThing1;
+    ptr.* = Error.bad_thing1;
 }
 
 pub fn setUnionNumber(ptr: *StringOrNumber) void {

@@ -1,9 +1,9 @@
 pub const Pet = enum {
-    Dog,
-    Cat,
-    Monkey,
+    dog,
+    cat,
+    monkey,
 };
 
 pub fn getEnum() Pet {
-    return Pet.Cat;
+    return Pet.cat;
 }

@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const Error = error{ GoldfishDied, NoMoney };
+pub const Error = error{ goldfish_died, no_money };
 
 pub var error_union: Error!i32 = 3000;
 

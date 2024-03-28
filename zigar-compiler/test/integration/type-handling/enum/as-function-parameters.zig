@@ -1,9 +1,9 @@
 const std = @import("std");
 
 pub const Pet = enum {
-    Dog,
-    Cat,
-    Monkey,
+    dog,
+    cat,
+    monkey,
 };
 
 pub fn print(value1: Pet, value2: Pet) void {

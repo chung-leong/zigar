@@ -178,10 +178,10 @@ export function addTests(importModule, options) {
       expect(module.error_union).to.equal(3000);
       const [ before ] = await capture(() => print());
       expect(before).to.equal('3000');
-      module.error_union = Error.GoldfishDied;
-      expect(() => module.error_union).to.throw(Error.GoldfishDied);
+      module.error_union = Error.goldfish_died;
+      expect(() => module.error_union).to.throw(Error.goldfish_died);
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('error.GoldfishDied');
+      expect(after).to.equal('error.goldfish_died');
       module.error_union = -4000;
       expect(module.error_union).to.equal(-4000);
     })

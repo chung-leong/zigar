@@ -1,14 +1,14 @@
 const std = @import("std");
 
-const ValueType = enum { String, Integer, Float };
+const ValueType = enum { string, integer, float };
 pub const Variant = union(ValueType) {
-    String: []const u8,
-    Integer: u32,
-    Float: f64,
+    string: []const u8,
+    integer: u32,
+    float: f64,
 };
 pub const StructA = struct {
     number: i32,
-    comptime variant: Variant = .{ .String = "world" },
+    comptime variant: Variant = .{ .string = "world" },
 };
 
 pub var struct_a: StructA = .{ .number = 123 };

@@ -49,18 +49,18 @@ export function addTests(importModule, options) {
       const { print, Error } = await importTest('as-function-parameters');
       const lines = await capture(() => {
         print(221);
-        print(Error.NoMoney);
+        print(Error.no_money);
       });
       expect(lines).to.eql([
         '221',
-        'error.NoMoney' 
+        'error.no_money' 
       ]);
     })
     it('should return error union', async function() {
       this.timeout(120000);
       const { default: module, Error } = await importTest('as-return-value');
       expect(module.getSomething()).to.equal(1234);
-      expect(() => module.getFailure()).to.throw(Error.GoldfishDied);
+      expect(() => module.getFailure()).to.throw(Error.goldfish_died);
     })
     it('should handle error union in array', async function() {
       this.timeout(120000);
@@ -68,29 +68,29 @@ export function addTests(importModule, options) {
       expect(module.array).to.have.lengthOf(4);      
       expect(module.array[0]).to.equal(1);
       expect(module.array[1]).to.equal(2);
-      expect(() => module.array[2]).to.throw(Error.NoMoney);
-      expect(() => [ ...module.array ]).to.throw(Error.NoMoney);
+      expect(() => module.array[2]).to.throw(Error.no_money);
+      expect(() => [ ...module.array ]).to.throw(Error.no_money);
       expect(module.array[3]).to.equal(4);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('{ 1, 2, error.NoMoney, 4 }');
-      module.array[1] = Error.GoldfishDied;
+      expect(before).to.equal('{ 1, 2, error.no_money, 4 }');
+      module.array[1] = Error.goldfish_died;
       module.array[2] = 3;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('{ 1, error.GoldfishDied, 3, 4 }');
+      expect(after).to.equal('{ 1, error.goldfish_died, 3, 4 }');
     })
     it('should handle error union in struct', async function() {
       this.timeout(120000);
       const { default: module, Error, StructA, print } = await importTest('in-struct');
-      expect(() => module.struct_a.number1).to.throw(Error.GoldfishDied);
+      expect(() => module.struct_a.number1).to.throw(Error.goldfish_died);
       expect(module.struct_a.number2).to.equal(-444n);
       const b = new StructA({});
       expect(b.number1).to.equal(123);
-      expect(() => b.number2).to.throw(Error.NoMoney);
+      expect(() => b.number2).to.throw(Error.no_money);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-struct.StructA{ .number1 = error.GoldfishDied, .number2 = -444 }');
+      expect(before).to.equal('in-struct.StructA{ .number1 = error.goldfish_died, .number2 = -444 }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-struct.StructA{ .number1 = 123, .number2 = error.NoMoney }');
+      expect(after).to.equal('in-struct.StructA{ .number1 = 123, .number2 = error.no_money }');
     })
     it('should not compile code with error union in packed struct', async function() {
       this.timeout(120000);
@@ -100,12 +100,12 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { default: module, Error, StructA, print } = await importTest('as-comptime-field');
       expect(module.struct_a.number1).to.equal(5000);
-      expect(() => module.struct_a.number2).to.throw(Error.GoldfishDied);
+      expect(() => module.struct_a.number2).to.throw(Error.goldfish_died);
       const b = new StructA({ state: true });
       expect(b.number1).to.equal(5000);
-      expect(() => b.number2).to.throw(Error.GoldfishDied);
+      expect(() => b.number2).to.throw(Error.goldfish_died);
       const [ line ] = await capture(() => print(b));
-      expect(line).to.equal('as-comptime-field.StructA{ .state = true, .number1 = 5000, .number2 = error.GoldfishDied }');
+      expect(line).to.equal('as-comptime-field.StructA{ .state = true, .number1 = 5000, .number2 = error.goldfish_died }');
     })
     it('should handle error union in bare union', async function() {
       this.timeout(120000);
@@ -114,15 +114,15 @@ export function addTests(importModule, options) {
       if (runtimeSafety) {
         expect(() => module.union_a.state).to.throw();
       }
-      const b = new UnionA({ number: Error.GoldfishDied });
+      const b = new UnionA({ number: Error.goldfish_died });
       const c = new UnionA({ state: false });
-      expect(() => b.number).to.throw(Error.GoldfishDied);
+      expect(() => b.number).to.throw(Error.goldfish_died);
       expect(c.state).to.be.false;
       if (runtimeSafety) {
         expect(() => c.number).to.throw();
       }
       module.union_a = b;
-      expect(() => module.union_a.number).to.throw(Error.GoldfishDied);
+      expect(() => module.union_a.number).to.throw(Error.goldfish_died);
       module.union_a = c;
       if (runtimeSafety) {
         expect(() => module.union_a.number).to.throw();
@@ -134,13 +134,13 @@ export function addTests(importModule, options) {
       expect(module.union_a.number).to.equal(3456);
       expect(TagType(module.union_a)).to.equal(TagType.number);
       expect(module.union_a.state).to.be.null;
-      const b = new UnionA({ number: Error.GoldfishDied });
+      const b = new UnionA({ number: Error.goldfish_died });
       const c = new UnionA({ state: false });
-      expect(() => b.number).to.throw(Error.GoldfishDied);
+      expect(() => b.number).to.throw(Error.goldfish_died);
       expect(c.state).to.false;
       expect(c.number).to.be.null;
       module.union_a = b;
-      expect(() => module.union_a.number).to.throw(Error.GoldfishDied);
+      expect(() => module.union_a.number).to.throw(Error.goldfish_died);
       module.union_a = c;
       expect(module.union_a.number).to.be.null;
     })
@@ -154,10 +154,10 @@ export function addTests(importModule, options) {
       expect(module.optional).to.be.null;
       const [ after1 ] = await capture(() => print());
       expect(after1).to.equal('null');
-      module.optional = Error.GoldfishDied;
-      expect(() => module.optional).to.throw(Error.GoldfishDied);
+      module.optional = Error.goldfish_died;
+      expect(() => module.optional).to.throw(Error.goldfish_died);
       const [ after2 ] = await capture(() => print());
-      expect(after2).to.equal('error.GoldfishDied');
+      expect(after2).to.equal('error.goldfish_died');
     })
     it('should handle error union in error union', async function() {
       this.timeout(120000);
@@ -165,13 +165,13 @@ export function addTests(importModule, options) {
       expect(module.error_union).to.equal(3000);
       const [ before ] = await capture(() => print());
       expect(before).to.equal('3000');
-      module.error_union = Error.GoldfishDied;
-      expect(() => module.error_union).to.throw(Error.GoldfishDied);
+      module.error_union = Error.goldfish_died;
+      expect(() => module.error_union).to.throw(Error.goldfish_died);
       const [ after1 ] = await capture(() => print());
-      expect(after1).to.equal('error.GoldfishDied');
-      module.error_union = FileError.Corrupted;
+      expect(after1).to.equal('error.goldfish_died');
+      module.error_union = FileError.corrupted;
       const [ after2 ] = await capture(() => print());
-      expect(after2).to.equal('error.Corrupted');
+      expect(after2).to.equal('error.corrupted');
     })
     it('should handle error union in vector', async function() {
       this.timeout(120000);

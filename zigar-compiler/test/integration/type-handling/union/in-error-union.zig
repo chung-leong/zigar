@@ -1,13 +1,13 @@
 const std = @import("std");
 
-pub const Error = error{ GoldfishDied, NoMoney };
-const ValueType = enum { String, Integer, Float };
+pub const Error = error{ goldfish_died, no_money };
+const ValueType = enum { string, integer, float };
 pub const Variant = union(ValueType) {
-    String: []const u8,
-    Integer: u32,
-    Float: f64,
+    string: []const u8,
+    integer: u32,
+    float: f64,
 };
-pub var error_union: Error!Variant = .{ .Integer = 100 };
+pub var error_union: Error!Variant = .{ .integer = 100 };
 
 pub fn print() void {
     std.debug.print("{any}\n", .{error_union});

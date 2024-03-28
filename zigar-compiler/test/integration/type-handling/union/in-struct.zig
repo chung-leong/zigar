@@ -1,17 +1,17 @@
 const std = @import("std");
 
-const ValueType = enum { String, Integer, Float };
+const ValueType = enum { string, integer, float };
 pub const Variant = union(ValueType) {
-    String: []const u8,
-    Integer: u32,
-    Float: f64,
+    string: []const u8,
+    integer: u32,
+    float: f64,
 };
 pub const StructA = struct {
-    variant1: Variant = .{ .String = "world" },
-    variant2: Variant = .{ .Float = 3.14 },
+    variant1: Variant = .{ .string = "world" },
+    variant2: Variant = .{ .float = 3.14 },
 };
 
-pub var variant_a: StructA = .{ .variant1 = .{ .Float = 7.777 }, .variant2 = .{ .String = "Hello" } };
+pub var variant_a: StructA = .{ .variant1 = .{ .float = 7.777 }, .variant2 = .{ .string = "Hello" } };
 
 pub fn print() void {
     std.debug.print("{any}\n", .{variant_a});

@@ -199,8 +199,8 @@ export function addTests(importModule, options) {
       // change the error union thru Zig
       setErrorUnion(errorUnion);
       expect(pointer2[SLOTS][0]).to.be.undefined;
-      const union = new StringOrNumber({ String: 'Hello world' });
-      const pointer3 = union.String;
+      const union = new StringOrNumber({ string: 'Hello world' });
+      const pointer3 = union.string;
       setUnionNumber(union);
       expect(pointer3[SLOTS][0]).to.be.undefined;
     })

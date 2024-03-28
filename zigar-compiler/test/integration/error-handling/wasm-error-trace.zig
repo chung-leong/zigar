@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const Error = error{SomeError};
+const Error = error{some_error};
 
 pub fn fail() void {
     @call(.never_inline, a, .{});
