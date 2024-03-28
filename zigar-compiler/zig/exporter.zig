@@ -7,6 +7,7 @@ const runtime_safety = (builtin.mode == .ReleaseSafe or builtin.mode == .Debug);
 // support both 0.11 and 0.12
 const Auto = if (@hasField(std.builtin.Type.ContainerLayout, "Auto")) .Auto else .auto;
 const Packed = if (@hasField(std.builtin.Type.ContainerLayout, "Packed")) .Packed else .@"packed";
+const Extern = if (@hasField(std.builtin.Type.ContainerLayout, "Extern")) .Extern else .@"extern";
 
 // error type
 pub const Error = error{
@@ -484,7 +485,7 @@ fn getStructureType(comptime T: type) StructureType {
         => .Primitive,
         .Struct => if (isArgumentStruct(T)) .ArgStruct else .Struct,
         .Union => |un| switch (un.layout) {
-            .Extern => .ExternUnion,
+            Extern => .ExternUnion,
             else => if (un.tag_type) |_| .TaggedUnion else .BareUnion,
         },
         .ErrorUnion => .ErrorUnion,
@@ -1400,7 +1401,7 @@ fn addUnionMembers(host: anytype, structure: Value, comptime T: type) !void {
     const TT = getUnionSelectorType(T);
     const has_selector = if (un.tag_type) |_|
         true
-    else if (runtime_safety and un.layout != .Extern)
+    else if (runtime_safety and un.layout != Extern)
         true
     else
         false;
