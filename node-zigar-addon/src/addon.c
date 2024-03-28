@@ -126,6 +126,22 @@ result cast_view(call ctx,
     return Failure;
 }
 
+result get_slot_number(call ctx,
+                       uint32_t scope,
+                       uint32_t key,
+                       uint32_t* dest) {
+    napi_env env = ctx->env;
+    napi_value args[2];
+    napi_value result;
+    if (napi_create_uint32(env, scope, &args[0]) == napi_ok
+     && napi_create_uint32(env, key, &args[1]) == napi_ok
+     && call_js_function(ctx, "getSlotNumber", 2, args, &result)
+     && napi_get_value_uint32(env, result, dest) == napi_ok) {
+        return OK;
+    }
+    return Failure;
+}
+
 result read_slot(call ctx,
                  napi_value object,
                  size_t slot,
@@ -659,6 +675,7 @@ napi_value load_module(napi_env env,
     exports->capture_string = capture_string;
     exports->capture_view = capture_view;
     exports->cast_view = cast_view;
+    exports->get_slot_number = get_slot_number;
     exports->read_slot = read_slot;
     exports->write_slot = write_slot;
     exports->begin_structure = begin_structure;

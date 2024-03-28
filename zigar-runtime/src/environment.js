@@ -26,6 +26,7 @@ export class Environment {
   runtimeSafety = true;
   comptime = false;
   /* COMPTIME-ONLY */
+  slotNumbers = {};
   slots = {};
   structures = [];
   /* COMPTIME-ONLY-END */
@@ -211,6 +212,18 @@ export class Environment {
   }
 
   /* COMPTIME-ONLY */
+  getSlotNumber(scope, key) {
+    let slotNumber = this.slotNumbers[scope];
+    if (!slotNumber) {
+      slotNumber = this.slotNumbers[scope] = { next: 0, map: {} };
+    }
+    let slot = slotNumber.map[key];
+    if (slot === undefined) {
+      slot = slotNumber.map[key] = slotNumber.next++;
+    }
+    return slot;
+  }
+  
   readSlot(target, slot) {
     const slots = target ? target[SLOTS] : this.slots;
     return slots?.[slot];

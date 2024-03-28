@@ -28,6 +28,7 @@ extern fn _captureString(bytes: ?[*]const u8, len: usize) ?Value;
 extern fn _captureView(bytes: ?[*]u8, len: usize, copy: bool) ?Value;
 extern fn _castView(structure: Value, dv: Value, writable: bool) ?Value;
 extern fn _getViewAddress(dv: Value) usize;
+extern fn _getSlotNumber(scope: u32, key: u32) u32;
 extern fn _readSlot(container: ?Value, slot: usize) ?Value;
 extern fn _writeSlot(container: ?Value, slot: usize, object: ?Value) void;
 extern fn _beginDefinition() Value;
@@ -186,6 +187,10 @@ pub const Host = struct {
         } else {
             return Error.UnableToCreateObject;
         }
+    }
+
+    pub fn getSlotNumber(_: Host, scope: u32, key: u32) !usize {
+        return _getSlotNumber(scope, key);
     }
 
     pub fn readSlot(_: Host, container: ?Value, slot: usize) !Value {

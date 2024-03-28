@@ -17,8 +17,7 @@ pub const Error = error{
     UnableToRetrieveMemoryLocation,
     UnableToCreateDataView,
     UnableToCreateObject,
-    UnableToFindObjectType,
-    UnableToSetObjectType,
+    UnableToObtainSlot,
     UnableToRetrieveObject,
     UnableToInsertObject,
     UnableToStartStructureDefinition,
@@ -32,68 +31,6 @@ pub const Error = error{
     UnableToWriteToConsole,
     PointerIsInvalid,
 };
-
-// slot allocators
-const SlotAllocator = struct {
-    fn get(comptime S1: anytype) type {
-        _ = S1;
-        // results of comptime functions are memoized
-        // that means the same S1 will yield the same counter
-        return blk: {
-            comptime var next = 0;
-            const counter = struct {
-                // same principle here; the same S2 will yield the same number
-                // established by the very first call
-                fn get(comptime S2: anytype) comptime_int {
-                    _ = S2;
-                    const slot = next;
-                    next += 1;
-                    return slot;
-                }
-            };
-            break :blk counter;
-        };
-    }
-};
-
-// allocate slots for classe, function, and other language constructs on the host side
-const structure_slot = SlotAllocator.get(.{});
-
-pub fn getStructureSlot(comptime T: anytype, comptime size: std.builtin.Type.Pointer.Size) usize {
-    return structure_slot.get(.{ .Type = T, .Size = size });
-}
-
-test "getStructureSlot" {
-    const A = struct {};
-    const slotA = getStructureSlot(A, .One);
-    assert(slotA == 0);
-    const B = struct {};
-    const slotB = getStructureSlot(B, .One);
-    assert(slotB == 1);
-    assert(getStructureSlot(A, .One) == 0);
-    assert(getStructureSlot(B, .One) == 1);
-}
-
-fn getObjectSlot(comptime T: anytype, comptime index: comptime_int) usize {
-    // per-struct slot allocator
-    const relocatable_slot = SlotAllocator.get(.{ .Type = T });
-    return relocatable_slot.get(.{ .Index = index });
-}
-
-test "getObjectSlot" {
-    const A = struct {};
-    const slotA1 = getObjectSlot(A, 0);
-    const slotA2 = getObjectSlot(A, 1);
-    assert(slotA1 == 0);
-    assert(slotA2 == 1);
-    const B = struct {};
-    const slotB1 = getObjectSlot(B, 1);
-    const slotB2 = getObjectSlot(B, 0);
-    assert(slotB1 == 0);
-    assert(slotB2 == 1);
-    assert(getObjectSlot(A, 1) == 1);
-    assert(getObjectSlot(A, 2) == 2);
-}
 
 fn getCString(comptime s: []const u8) [*:0]const u8 {
     return std.fmt.comptimePrint("{s}\x00", .{s});
@@ -385,6 +322,22 @@ test "hasPointerArguments" {
     assert(hasPointerArguments(ArgC) == false);
 }
 
+fn getUniqueId(comptime arg: anytype) u32 {
+    return std.hash.cityhash.CityHash32.hash(@typeName(@TypeOf(arg)));
+}
+
+test "getUniqueId" {
+    const id1 = getUniqueId(.{ .hello = i32 });
+    const id2 = getUniqueId(.{ .hello = i32 });
+    const id3 = getUniqueId(.{ .hello = u32 });
+    const id4 = getUniqueId(.{ .hello = u32, .something = 123 });
+    const id5 = getUniqueId(.{ .hello = u32, .something = 124 });
+    assert(id1 == id2);
+    assert(id1 != id3);
+    assert(id3 != id4);
+    assert(id4 != id5);
+}
+
 fn getMemberType(comptime T: type) MemberType {
     return switch (@typeInfo(T)) {
         .Bool => .Bool,
@@ -535,7 +488,7 @@ fn getStructureAlign(comptime T: type) u16 {
 }
 
 test "getStructureAlign" {
-    assert(getStructureAlign(void) == 0);
+    assert(getStructureAlign(void) == 1);
     assert(getStructureAlign(u8) == 1);
 }
 
@@ -562,7 +515,7 @@ fn getStructureLength(comptime T: type) usize {
 
 test "getStructureLength" {
     assert(getStructureLength([5]u8) == 5);
-    assert(getStructureLength(u8) == 1);
+    assert(getStructureLength(u8) == missing(usize));
     assert(getStructureLength(@Vector(3, f32)) == 3);
 }
 
@@ -701,10 +654,18 @@ test "comparePointers" {
     assert(comparePointers(j, k) == false);
 }
 
+fn getGlobalSlot(host: anytype, comptime key: anytype) !usize {
+    return host.getSlotNumber(0, getUniqueId(key));
+}
+
+fn getTypeSlot(host: anytype, comptime T: type, comptime key: anytype) !usize {
+    return host.getSlotNumber(getUniqueId(.{T}), getUniqueId(key));
+}
+
 // NOTE: error type has to be specified here since the function is called recursively
 // and https://github.com/ziglang/zig/issues/2971 has not been fully resolved yet
 fn getStructure(host: anytype, comptime T: type) Error!Value {
-    const s_slot = getStructureSlot(T, .One);
+    const s_slot = try getGlobalSlot(host, .{ .structure = T });
     return host.readSlot(null, s_slot) catch undefined: {
         const def: Structure = .{
             .name = getStructureName(T),
@@ -760,9 +721,8 @@ fn getStructureName(comptime T: type) [*:0]const u8 {
                     break :select "struct";
                 };
                 const struct_prefix = if (struct_type[0] == 'e') "ErrorSet" else "Struct";
-                const id_allocator = SlotAllocator.get(.{ .type = struct_type });
-                const id = id_allocator.get(getBigInt(name));
-                return std.fmt.comptimePrint("{s}{d:0>4}", .{ struct_prefix, id });
+                const id = std.hash.cityhash.CityHash32.hash(name);
+                return std.fmt.comptimePrint("{s}{d}", .{ struct_prefix, id });
             }
             return name;
         }
@@ -772,8 +732,7 @@ fn getStructureName(comptime T: type) [*:0]const u8 {
             // @typeInfo(@typeInfo(@TypeOf([function])).Fn.returnType).error_set
             const parent_index = getIndexOf(name, '(');
             if (parent_index != -1) {
-                const id_allocator = SlotAllocator.get(.{ .type = "error set" });
-                const id = id_allocator.get(getBigInt(name));
+                const id = std.hash.cityhash.CityHash32.hash(name);
                 return std.fmt.comptimePrint("ErrorSet{d:0>4}", .{id});
             }
             // named error set looks like a struct
@@ -817,15 +776,12 @@ test "getStructureName" {
     const name3 = getStructureName(@TypeOf(ns.cow));
     assert(name3[0] == 'S');
     assert(name3[1] == 't');
-    assert(name3[9] == '0');
     const name4 = getStructureName(@TypeOf(ns.pig));
     assert(name4[0] == 'S');
     assert(name4[1] == 't');
-    assert(name4[9] == '1');
     const name5 = getStructureName(@typeInfo(@TypeOf(ns.hello)).Fn.return_type orelse void);
     assert(name5[0] == 'E');
     assert(name5[1] == 'r');
-    assert(name5[11] == '0');
 }
 
 fn getSliceName(comptime T: type) [*:0]const u8 {
@@ -867,19 +823,19 @@ fn getSliceName(comptime T: type) [*:0]const u8 {
 }
 
 test "getSliceName" {
-    const name1 = getSliceName([]const u8);
+    const name1 = comptime getSliceName([]const u8);
     assert(name1[0] == '[');
     assert(name1[1] == '_');
     assert(name1[2] == ']');
     assert(name1[11] == 0);
-    const name2 = getSliceName([:0]const u8);
+    const name2 = comptime getSliceName([:0]const u8);
     assert(name2[0] == '[');
     assert(name2[1] == '_');
     assert(name2[2] == ':');
     assert(name2[3] == '0');
     assert(name2[4] == ']');
     assert(name2[13] == 0);
-    const name3 = getSliceName([][4]u8);
+    const name3 = comptime getSliceName([][4]u8);
     assert(name3[0] == '[');
     assert(name3[1] == '_');
     assert(name3[2] == ']');
@@ -887,14 +843,14 @@ test "getSliceName" {
     assert(name3[4] == '4');
     assert(name3[5] == ']');
     assert(name3[8] == 0);
-    const name4 = getSliceName([*:0]const u8);
+    const name4 = comptime getSliceName([*:0]const u8);
     assert(name4[0] == '[');
     assert(name4[1] == '_');
     assert(name4[2] == ':');
     assert(name4[3] == '0');
     assert(name4[4] == ']');
     assert(name4[13] == 0);
-    const name5 = getSliceName([*]const u8);
+    const name5 = comptime getSliceName([*]const u8);
     assert(name5[0] == '[');
     assert(name5[1] == '0');
     assert(name5[2] == ']');
@@ -1038,7 +994,7 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
     const target_structure = switch (pt.size) {
         .One => child_structure,
         else => slice: {
-            const slice_slot = getStructureSlot(pt.child, pt.size);
+            const slice_slot = getGlobalSlot(host, .{ .structure = pt.child, .size = pt.size });
             const slice_def: Structure = .{
                 .name = getSliceName(T),
                 .structure_type = .Slice,
@@ -1246,7 +1202,7 @@ fn attachComptimeValues(host: anytype, target: Value, comptime value: anytype) !
                 if (isComptimeOnly(field.type)) {
                     const field_value = @field(value, field.name);
                     const obj = try exportComptimeValue(host, field_value);
-                    const slot = getObjectSlot(T, index);
+                    const slot = try getTypeSlot(host, T, .{ .index = index });
                     try host.writeSlot(target, slot, obj);
                 }
             }
@@ -1259,7 +1215,7 @@ fn attachComptimeValues(host: anytype, target: Value, comptime value: anytype) !
                         if (isComptimeOnly(field.type)) {
                             const field_value = @field(value, field.name);
                             const obj = try exportComptimeValue(host, field_value);
-                            const slot = getObjectSlot(T, index);
+                            const slot = try getTypeSlot(host, T, .{ .index = index });
                             try host.writeSlot(target, slot, obj);
                         }
                     }
@@ -1319,7 +1275,7 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
     inline for (st.fields, 0..) |field, index| {
         if (!field.is_comptime) {
             switch (getMemberType(field.type)) {
-                .Object => _ = getObjectSlot(T, index),
+                .Object => _ = try getTypeSlot(host, T, .{ .index = index }),
                 else => {},
             }
         }
@@ -1334,7 +1290,7 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
                 .bit_offset = if (comptime_only) missing(usize) else @bitOffsetOf(T, field.name),
                 .bit_size = if (comptime_only) missing(usize) else getStructureBitSize(field.type),
                 .byte_size = if (comptime_only or isPacked(T)) missing(usize) else getStructureSize(field.type),
-                .slot = getObjectSlot(T, index),
+                .slot = try getTypeSlot(host, T, .{ .index = index }),
                 .structure = try getStructure(host, field.type),
             }, false);
         }
@@ -1378,7 +1334,7 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
                     // they're separate objects in the slots of the struct template
                     const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
                     const value_obj = try exportPointerTarget(host, default_value_ptr, true);
-                    const slot = getObjectSlot(T, index);
+                    const slot = try getTypeSlot(host, T, .{ .index = index });
                     template_maybe = template_maybe orelse try host.createTemplate(null);
                     try host.writeSlot(template_maybe.?, slot, value_obj);
                 }
@@ -1394,7 +1350,7 @@ fn addUnionMembers(host: anytype, structure: Value, comptime T: type) !void {
     const un = @typeInfo(T).Union;
     inline for (un.fields, 0..) |field, index| {
         switch (getMemberType(field.type)) {
-            .Object => _ = getObjectSlot(T, index),
+            .Object => _ = try getTypeSlot(host, T, .{ .index = index }),
             else => {},
         }
     }
@@ -1414,7 +1370,7 @@ fn addUnionMembers(host: anytype, structure: Value, comptime T: type) !void {
             .bit_offset = value_offset,
             .bit_size = getStructureBitSize(field.type),
             .byte_size = if (isPacked(T)) missing(usize) else getStructureSize(field.type),
-            .slot = getObjectSlot(T, index),
+            .slot = try getTypeSlot(host, T, .{ .index = index }),
             .structure = try getStructure(host, field.type),
         }, false);
     }
@@ -1550,7 +1506,7 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
                 if (comptime isSupported(DT) and (DT != type or isSupported(decl_value_ptr.*))) {
                     const is_const = comptime isConst(@TypeOf(decl_value_ptr));
                     if (is_const or !host.options.omit_variables) {
-                        const slot = getObjectSlot(Static, index);
+                        const slot = try getTypeSlot(host, Static, .{ .index = index });
                         try host.attachMember(structure, .{
                             .name = getCString(decl.name),
                             .member_type = if (is_const) .Comptime else .Static,
@@ -1573,7 +1529,7 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
             // add fields as static members
             inline for (en.fields, 0..) |field, index| {
                 const value = @field(T, field.name);
-                const slot = getObjectSlot(Static, offset + index);
+                const slot = try getTypeSlot(host, Static, .{ .index = offset + index });
                 try host.attachMember(structure, .{
                     .name = getCString(field.name),
                     .member_type = .Comptime,
@@ -1595,7 +1551,7 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
             inline for (errors, 0..) |err_rec, index| {
                 // get error from global set
                 const err = @field(anyerror, err_rec.name);
-                const slot = getObjectSlot(Static, offset + index);
+                const slot = try getTypeSlot(host, Static, .{ .index = offset + index });
                 try host.attachMember(structure, .{
                     .name = getCString(err_rec.name),
                     .member_type = .Comptime,
@@ -1703,34 +1659,42 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
 
 fn ArgumentStruct(comptime function: anytype) type {
     const info = @typeInfo(@TypeOf(function)).Fn;
-    var fields: [info.params.len + 1]std.builtin.Type.StructField = undefined;
-    var count = 0;
+    const count = get: {
+        var count = 1;
+        for (info.params) |param| {
+            if (param.type != std.mem.Allocator) {
+                count += 1;
+            }
+        }
+        break :get count;
+    };
+    var fields: [count]std.builtin.Type.StructField = undefined;
+    var index = 0;
     for (info.params) |param| {
         if (param.type != std.mem.Allocator) {
-            const name = std.fmt.comptimePrint("{d}", .{count});
-            fields[count] = .{
+            const name = std.fmt.comptimePrint("{d}", .{index});
+            fields[index] = .{
                 .name = name,
                 .type = param.type orelse void,
                 .is_comptime = false,
                 .alignment = @alignOf(param.type orelse void),
                 .default_value = null,
             };
-            count += 1;
+            index += 1;
         }
     }
-    fields[count] = .{
+    fields[index] = .{
         .name = "retval",
         .type = info.return_type orelse void,
         .is_comptime = false,
         .alignment = @alignOf(info.return_type orelse void),
         .default_value = null,
     };
-    count += 1;
     return @Type(.{
         .Struct = .{
             .layout = Auto,
             .decls = &.{},
-            .fields = fields[0..count],
+            .fields = &fields,
             .is_tuple = false,
         },
     });

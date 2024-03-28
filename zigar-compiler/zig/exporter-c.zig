@@ -84,6 +84,14 @@ pub const Host = struct {
         return value;
     }
 
+    pub fn getSlotNumber(self: Host, scope: u32, key: u32) !usize {
+        var result: u32 = undefined;
+        if (imports.get_slot_number(self.context, scope, key, &result) != .OK) {
+            return Error.UnableToObtainSlot;
+        }
+        return result;
+    }
+
     pub fn readSlot(self: Host, target: ?Value, id: usize) !Value {
         var result: Value = undefined;
         if (imports.read_slot(self.context, target, id, &result) != .OK) {
@@ -254,6 +262,7 @@ const Imports = extern struct {
     capture_string: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
     capture_view: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
     cast_view: *const fn (Call, Value, Value, bool, *Value) callconv(.C) Result,
+    get_slot_number: *const fn (Call, u32, u32, *u32) callconv(.C) Result,
     read_slot: *const fn (Call, ?Value, usize, *Value) callconv(.C) Result,
     write_slot: *const fn (Call, ?Value, usize, ?Value) callconv(.C) Result,
     begin_structure: *const fn (Call, *const Structure, *Value) callconv(.C) Result,
@@ -336,5 +345,5 @@ test "createModule" {
     };
     const module = createModule(Test);
     assert(module.version == 2);
-    assert(module.attributes.little_endian == (builtin.target.cpu.arch.endian() == .Little));
+    assert(module.attributes.little_endian == (builtin.target.cpu.arch.endian() == .little));
 }
