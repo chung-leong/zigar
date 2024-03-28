@@ -2,7 +2,7 @@ import { expect } from 'chai';
 
 import {
   article,
-  decamelizeErrorName,
+  deanimalizeErrorName,
   formatList,
   rethrowArgumentError,
   rethrowRangeError,
@@ -641,21 +641,26 @@ describe('Error functions', function() {
       expect(() => throwAccessingOpaque()).to.throw(TypeError);
     })
   })
-  describe('decamelizeErrorName', function() {
+  describe('deanimalizeErrorName', function() {
     it('should turn error name into readable sentence', function() {
       const name = 'UnableToRetrieveMemoryLocation';
-      const result = decamelizeErrorName(name);
+      const result = deanimalizeErrorName(name);
+      expect(result).to.equal('Unable to retrieve memory location');
+    })
+    it('should handle error name in snake_cast', function() {
+      const name = 'unable_to_retrieve_memory_location';
+      const result = deanimalizeErrorName(name);
       expect(result).to.equal('Unable to retrieve memory location');
     })
     it('should keep acronyms in uppercase', function() {
       const name1 = 'InvalidHTMLEncountered';
-      const result1 = decamelizeErrorName(name1);
+      const result1 = deanimalizeErrorName(name1);
       expect(result1).to.equal('Invalid HTML encountered');
       const name2 = 'InvalidHTML';
-      const result2 = decamelizeErrorName(name2);
+      const result2 = deanimalizeErrorName(name2);
       expect(result2).to.equal('Invalid HTML');
       const name3 = 'HTMLIsInvalid';
-      const result3 = decamelizeErrorName(name3);
+      const result3 = deanimalizeErrorName(name3);
       expect(result3).to.equal('HTML is invalid');
     })
   })

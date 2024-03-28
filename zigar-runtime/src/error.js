@@ -274,7 +274,7 @@ export function throwCreatingOpaque(structure) {
 }
 
 export function throwZigError(name) {
-  throw new Error(decamelizeErrorName(name));
+  throw new Error(deanimalizeErrorName(name));
 }
 
 export function warnImplicitArrayCreation(structure, arg) {
@@ -283,10 +283,12 @@ export function warnImplicitArrayCreation(structure, arg) {
   console.warn(`Implicitly creating ${created} from ${source}`);
 }
 
-export function decamelizeErrorName(name) {
-  // use a try block in case Unicode regex fails
+export function deanimalizeErrorName(name) {
+  // deal with snake_case first
+  let s = name.replace(/_/g, ' ');
+  // then camelCase, using a try block in case Unicode regex fails
   try {
-    const lc = name.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
+    s = s.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
       if (m1.length === 1) {
         return ` ${m1.toLocaleLowerCase()}${m2}`;
       } else {
@@ -299,11 +301,10 @@ export function decamelizeErrorName(name) {
         }
       }
     }).trimStart();
-    return lc.charAt(0).toLocaleUpperCase() + lc.substring(1);
-    /* c8 ignore next 3 */
+    /* c8 ignore next 2 */
   } catch (err) {
-    return name;
   }
+  return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 
 function getDescription(arg) {

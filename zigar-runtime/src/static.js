@@ -1,5 +1,5 @@
 import { getGlobalErrorSet } from './error-set.js';
-import { decamelizeErrorName } from './error.js';
+import { deanimalizeErrorName } from './error.js';
 import { getDescriptor } from './member.js';
 import { StructureType, defineProperties } from './structure.js';
 import { ITEMS, MORE, NAME, SLOTS } from './symbol.js';
@@ -70,7 +70,7 @@ export function addStaticMembers(structure, env) {
         error = constructor[SLOTS][slot] = previous;       
       } else {
         // set error message (overriding prototype) and add to hash
-        defineProperties(error, { message: { value: decamelizeErrorName(name) } });
+        defineProperties(error, { message: { value: deanimalizeErrorName(name) } });
         allErrors[index] = allErrors[error.message] = allErrors[`${error}`] = error;
       }
       errors[index] = errors[error.message] = errors[`${error}`] = error;
