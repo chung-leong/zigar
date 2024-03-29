@@ -31,19 +31,21 @@ export const StructureType = {
   Primitive: 0,
   Array: 1,
   Struct: 2,
-  ArgStruct: 3,
-  ExternUnion: 4,
-  BareUnion: 5,
-  TaggedUnion: 6,
-  ErrorUnion: 7,
-  ErrorSet: 8,
-  Enumeration: 9,
-  Optional: 10,
-  Pointer: 11,
-  Slice: 12,
-  Vector: 13,
-  Opaque: 14,
-  Function: 15,
+  ExternStruct: 3,
+  PackedStruct: 4,
+  ArgStruct: 5,
+  ExternUnion: 6,
+  BareUnion: 7,
+  TaggedUnion: 8,
+  ErrorUnion: 9,
+  ErrorSet: 10,
+  Enumeration: 11,
+  Optional: 12,
+  Pointer: 13,
+  Slice: 14,
+  Vector: 15,
+  Opaque: 16,
+  Function: 17,
 };
 
 const factories = Array(Object.values(StructureType).length);
@@ -58,6 +60,18 @@ export function useArray() {
 
 export function useStruct() {
   factories[StructureType.Struct] = defineStructShape;
+}
+
+export function usePackedStruct() {
+  factories[StructureType.PackedStruct] = defineStructShape;
+}
+
+export function useExternStruct() {
+  factories[StructureType.ExternStruct] = defineStructShape;
+}
+
+export function useArgStruct() {
+  factories[StructureType.ArgStruct] = defineArgStruct;
 }
 
 export function useExternUnion() {
@@ -101,12 +115,7 @@ export function useVector() {
 }
 
 export function useOpaque() {
-  factories[StructureType.Opaque] = defineOpaque
-  ;
-}
-
-export function useArgStruct() {
-  factories[StructureType.ArgStruct] = defineArgStruct;
+  factories[StructureType.Opaque] = defineOpaque;
 }
 
 export function getStructureFactory(type) {
@@ -494,6 +503,8 @@ export function useAllStructureTypes() {
   usePrimitive();
   useArray();
   useStruct();
+  useExternStruct();
+  usePackedStruct();
   useArgStruct();
   useExternUnion();
   useBareUnion();

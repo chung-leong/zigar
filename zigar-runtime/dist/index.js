@@ -2139,19 +2139,21 @@ const StructureType = {
   Primitive: 0,
   Array: 1,
   Struct: 2,
-  ArgStruct: 3,
-  ExternUnion: 4,
-  BareUnion: 5,
-  TaggedUnion: 6,
-  ErrorUnion: 7,
-  ErrorSet: 8,
-  Enumeration: 9,
-  Optional: 10,
-  Pointer: 11,
-  Slice: 12,
-  Vector: 13,
-  Opaque: 14,
-  Function: 15,
+  ExternStruct: 3,
+  PackedStruct: 4,
+  ArgStruct: 5,
+  ExternUnion: 6,
+  BareUnion: 7,
+  TaggedUnion: 8,
+  ErrorUnion: 9,
+  ErrorSet: 10,
+  Enumeration: 11,
+  Optional: 12,
+  Pointer: 13,
+  Slice: 14,
+  Vector: 15,
+  Opaque: 16,
+  Function: 17,
 };
 
 const factories$2 = Array(Object.values(StructureType).length);
@@ -2166,6 +2168,10 @@ function useArray() {
 
 function useStruct() {
   factories$2[StructureType.Struct] = defineStructShape;
+}
+
+function useArgStruct() {
+  factories$2[StructureType.ArgStruct] = defineArgStruct;
 }
 
 function useExternUnion() {
@@ -2209,12 +2215,7 @@ function useVector() {
 }
 
 function useOpaque() {
-  factories$2[StructureType.Opaque] = defineOpaque
-  ;
-}
-
-function useArgStruct() {
-  factories$2[StructureType.ArgStruct] = defineArgStruct;
+  factories$2[StructureType.Opaque] = defineOpaque;
 }
 
 function getStructureFactory(type) {
