@@ -3261,7 +3261,7 @@ function throwCreatingOpaque(structure) {
 }
 
 function throwZigError(name) {
-  throw new Error(decamelizeErrorName(name));
+  throw new Error(deanimalizeErrorName(name));
 }
 
 function warnImplicitArrayCreation(structure, arg) {
@@ -3270,10 +3270,12 @@ function warnImplicitArrayCreation(structure, arg) {
   console.warn(`Implicitly creating ${created} from ${source}`);
 }
 
-function decamelizeErrorName(name) {
-  // use a try block in case Unicode regex fails
+function deanimalizeErrorName(name) {
+  // deal with snake_case first
+  let s = name.replace(/_/g, ' ');
+  // then camelCase, using a try block in case Unicode regex fails
   try {
-    const lc = name.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
+    s = s.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
       if (m1.length === 1) {
         return ` ${m1.toLocaleLowerCase()}${m2}`;
       } else {
@@ -3286,11 +3288,10 @@ function decamelizeErrorName(name) {
         }
       }
     }).trimStart();
-    return lc.charAt(0).toLocaleUpperCase() + lc.substring(1);
-    /* c8 ignore next 3 */
+    /* c8 ignore next 2 */
   } catch (err) {
-    return name;
   }
+  return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 
 function getDescription(arg) {
@@ -4124,7 +4125,7 @@ function addStaticMembers(structure, env) {
         error = constructor[SLOTS][slot] = previous;       
       } else {
         // set error message (overriding prototype) and add to hash
-        defineProperties(error, { message: { value: decamelizeErrorName(name) } });
+        defineProperties(error, { message: { value: deanimalizeErrorName(name) } });
         allErrors[index] = allErrors[error.message] = allErrors[`${error}`] = error;
       }
       errors[index] = errors[error.message] = errors[`${error}`] = error;
@@ -5143,9 +5144,9 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   async instantiateWebAssembly(source) {
-    const env = this.exportFunctions();
     const res = await source;
-    const wasi = await this.getWASI();
+    const env = this.exportFunctions();
+    const wasi = this.getWASI();
     const imports = { env, wasi_snapshot_preview1: wasi };
     if (res[Symbol.toStringTag] === 'Response') {
       return WebAssembly.instantiateStreaming(res, imports);
@@ -5248,11 +5249,12 @@ class WebAssemblyEnvironment extends Environment {
     return args.retval;
   }
 
-  async getWASI() {
+  getWASI() {
     return { 
+      proc_exit: (rval) => {
+      },
       fd_write: (fd, iovs_ptr, iovs_count, written_ptr) => {
         if (fd === 1 || fd === 2) {
-          debugger;
           const dv = new DataView(this.memory.buffer);
           let written = 0;
           for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
@@ -5267,6 +5269,13 @@ class WebAssemblyEnvironment extends Environment {
         } else {
           return 1;
         }
+      },
+      random_get: (buf, buf_len) => {
+        const dv = new DataView(this.memory.buffer);
+        for (let i = 0; i < buf_len; i++) {
+          dv.setUint8(Math.floor(256 * Math.random()));
+        }
+        return 0;
       },
     };
   }

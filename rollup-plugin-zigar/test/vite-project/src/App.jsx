@@ -1,14 +1,15 @@
-import { useState, useCallback } from 'react'
-import { sha1 } from './sha1.zig';
-import './App.css'
+import { useCallback, useState } from 'react';
+import './App.css';
+import { getLength, sha1 } from './sha1.zig';
 
 function App() {
   const [ text, setText ] = useState('');
   const [ hash, setHash ] = useState('');
   const onChange = useCallback((evt) => {
     const { value } = evt.target;
+    const len = getLength(value);
     setText(value);
-    setHash(sha1(value).string);
+    setHash(`${sha1(value).string} (${len})`);
   }, []);
 
   return (

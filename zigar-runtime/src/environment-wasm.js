@@ -256,9 +256,9 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   async instantiateWebAssembly(source) {
-    const env = this.exportFunctions();
     const res = await source;
-    const wasi = await this.getWASI();
+    const env = this.exportFunctions();
+    const wasi = this.getWASI();
     const imports = { env, wasi_snapshot_preview1: wasi };
     if (res[Symbol.toStringTag] === 'Response') {
       return WebAssembly.instantiateStreaming(res, imports);
@@ -370,11 +370,12 @@ export class WebAssemblyEnvironment extends Environment {
     return args.retval;
   }
 
-  async getWASI() {
+  getWASI() {
     return { 
+      proc_exit: (rval) => {
+      },
       fd_write: (fd, iovs_ptr, iovs_count, written_ptr) => {
         if (fd === 1 || fd === 2) {
-          debugger;
           const dv = new DataView(this.memory.buffer);
           let written = 0;
           for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
@@ -389,6 +390,13 @@ export class WebAssemblyEnvironment extends Environment {
         } else {
           return 1;
         }
+      },
+      random_get: (buf, buf_len) => {
+        const dv = new DataView(this.memory.buffer);
+        for (let i = 0; i < buf_len; i++) {
+          dv.setUint8(Math.floor(256 * Math.random()));
+        }
+        return 0;
       },
     };
   }

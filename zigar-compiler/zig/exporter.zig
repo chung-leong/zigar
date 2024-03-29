@@ -994,10 +994,10 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
     const target_structure = switch (pt.size) {
         .One => child_structure,
         else => slice: {
-            const slice_slot = getGlobalSlot(host, .{ .structure = pt.child, .size = pt.size });
+            const slice_slot = try getGlobalSlot(host, .{ .structure = pt.child, .size = pt.size });
             const slice_def: Structure = .{
-                .name = getSliceName(T),
-                .structure_type = .Slice,
+                .name = comptime getSliceName(T),
+                .structure_type = .slice,
                 .length = 0,
                 .byte_size = @sizeOf(pt.child),
                 .alignment = @alignOf(pt.child),

@@ -2982,7 +2982,7 @@ function throwCreatingOpaque(structure) {
 }
 
 function throwZigError(name) {
-  throw new Error(decamelizeErrorName(name));
+  throw new Error(deanimalizeErrorName(name));
 }
 
 function warnImplicitArrayCreation(structure, arg) {
@@ -2991,10 +2991,12 @@ function warnImplicitArrayCreation(structure, arg) {
   console.warn(`Implicitly creating ${created} from ${source}`);
 }
 
-function decamelizeErrorName(name) {
-  // use a try block in case Unicode regex fails
+function deanimalizeErrorName(name) {
+  // deal with snake_case first
+  let s = name.replace(/_/g, ' ');
+  // then camelCase, using a try block in case Unicode regex fails
   try {
-    const lc = name.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
+    s = s.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
       if (m1.length === 1) {
         return ` ${m1.toLocaleLowerCase()}${m2}`;
       } else {
@@ -3007,11 +3009,10 @@ function decamelizeErrorName(name) {
         }
       }
     }).trimStart();
-    return lc.charAt(0).toLocaleUpperCase() + lc.substring(1);
-    /* c8 ignore next 3 */
+    /* c8 ignore next 2 */
   } catch (err) {
-    return name;
   }
+  return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 
 function getDescription(arg) {
@@ -5062,7 +5063,7 @@ function runCompilerSync(zigCmd, soBuildDir) {
 function formatProjectConfig(config) {
   const lines = [];
   const fields = [ 
-    'moduleName', 'modulePath', 'moduleDir', 'exporterPath', 'stubPath', 'outputPath'
+    'moduleName', 'modulePath', 'moduleDir', 'exporterPath', 'stubPath', 'outputPath', 'useLibc'
   ];  
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -5073,6 +5074,8 @@ function formatProjectConfig(config) {
   return lines.join('\n');
 }
 
+const wasmMainFn = `int main(void) { return 0; }`;
+
 async function createProject(config, dir) {
   const content = formatProjectConfig(config);
   const cfgFilePath = path.join(dir, 'build-cfg.zig');
@@ -5082,6 +5085,11 @@ async function createProject(config, dir) {
   if (config.packageConfigPath) {
     const packageConfigPath = path.join(dir, 'build.zig.zon');
     await copyFile(config.packageConfigPath, packageConfigPath);
+  }
+  if (config.useLibc && config.platform === 'wasi') {
+    // need empty main function
+    const mainFilePath = path.join(dir, 'main.c');
+    await promises.writeFile(mainFilePath, wasmMainFn);
   }
 }
 
@@ -5094,6 +5102,10 @@ function createProjectSync(config, dir) {
   if (config.packageConfigPath) {
     const packageConfigPath = path.join(dir, 'build.zig.zon');
     copyFileSync(config.packageConfigPath, packageConfigPath);
+  }
+  if (config.useLibc && config.platform === 'wasi') {
+    const mainFilePath = path.join(dir, 'main.c');
+    fs.writeFileSync(mainFilePath, wasmMainFn);
   }
 }
 
@@ -5124,6 +5136,7 @@ function createConfig(srcPath, modPath, options = {}) {
     arch = getArch(),
     nativeCpu = false,
     optimize = 'Debug',
+    useLibc = isWASM.test(arch) ? false : true,
     clean = false,
     buildDir = path.join(os.tmpdir(), 'zigar-build'),
     zigCmd = (() => {
@@ -5194,6 +5207,7 @@ function createConfig(srcPath, modPath, options = {}) {
     platform,
     arch,
     optimize,
+    useLibc,
     nativeCpu,
     moduleName,
     modulePath,
@@ -5237,6 +5251,10 @@ const optionsForCompile = {
   omitExports: {
     type: 'boolean',
     title: 'Omit export statements',
+  },
+  useLibc: {
+    type: 'boolean',
+    title: 'Link in C standard library',
   },
   topLevelAwait: {
     type: 'boolean',
@@ -5501,7 +5519,7 @@ function addStaticMembers(structure, env) {
         error = constructor[SLOTS][slot] = previous;       
       } else {
         // set error message (overriding prototype) and add to hash
-        defineProperties(error, { message: { value: decamelizeErrorName(name) } });
+        defineProperties(error, { message: { value: deanimalizeErrorName(name) } });
         allErrors[index] = allErrors[error.message] = allErrors[`${error}`] = error;
       }
       errors[index] = errors[error.message] = errors[`${error}`] = error;
@@ -6398,9 +6416,9 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   async instantiateWebAssembly(source) {
-    const env = this.exportFunctions();
     const res = await source;
-    const wasi = await this.getWASI();
+    const env = this.exportFunctions();
+    const wasi = this.getWASI();
     const imports = { env, wasi_snapshot_preview1: wasi };
     if (res[Symbol.toStringTag] === 'Response') {
       return WebAssembly.instantiateStreaming(res, imports);
@@ -6512,11 +6530,12 @@ class WebAssemblyEnvironment extends Environment {
     return args.retval;
   }
 
-  async getWASI() {
+  getWASI() {
     return { 
+      proc_exit: (rval) => {
+      },
       fd_write: (fd, iovs_ptr, iovs_count, written_ptr) => {
         if (fd === 1 || fd === 2) {
-          debugger;
           const dv = new DataView(this.memory.buffer);
           let written = 0;
           for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
@@ -6531,6 +6550,13 @@ class WebAssemblyEnvironment extends Environment {
         } else {
           return 1;
         }
+      },
+      random_get: (buf, buf_len) => {
+        const dv = new DataView(this.memory.buffer);
+        for (let i = 0; i < buf_len; i++) {
+          dv.setUint8(Math.floor(256 * Math.random()));
+        }
+        return 0;
       },
     };
   }

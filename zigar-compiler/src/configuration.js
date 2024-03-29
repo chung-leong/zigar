@@ -19,6 +19,10 @@ export const optionsForCompile = {
     type: 'boolean',
     title: 'Omit export statements',
   },
+  useLibc: {
+    type: 'boolean',
+    title: 'Link in C standard library',
+  },
   topLevelAwait: {
     type: 'boolean',
     title: 'Use top-level await to load WASM file',

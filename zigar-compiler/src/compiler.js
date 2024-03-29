@@ -191,7 +191,7 @@ export function runCompilerSync(zigCmd, soBuildDir) {
 export function formatProjectConfig(config) {
   const lines = [];
   const fields = [ 
-    'moduleName', 'modulePath', 'moduleDir', 'exporterPath', 'stubPath', 'outputPath'
+    'moduleName', 'modulePath', 'moduleDir', 'exporterPath', 'stubPath', 'outputPath', 'useLibc'
   ];  
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -202,6 +202,8 @@ export function formatProjectConfig(config) {
   return lines.join('\n');
 }
 
+const wasmMainFn = `int main(void) { return 0; }`;
+
 export async function createProject(config, dir) {
   const content = formatProjectConfig(config);
   const cfgFilePath = join(dir, 'build-cfg.zig');
@@ -211,6 +213,11 @@ export async function createProject(config, dir) {
   if (config.packageConfigPath) {
     const packageConfigPath = join(dir, 'build.zig.zon');
     await copyFile(config.packageConfigPath, packageConfigPath);
+  }
+  if (config.useLibc && config.platform === 'wasi') {
+    // need empty main function
+    const mainFilePath = join(dir, 'main.c');
+    await writeFile(mainFilePath, wasmMainFn);
   }
 }
 
@@ -223,6 +230,10 @@ export function createProjectSync(config, dir) {
   if (config.packageConfigPath) {
     const packageConfigPath = join(dir, 'build.zig.zon');
     copyFileSync(config.packageConfigPath, packageConfigPath);
+  }
+  if (config.useLibc && config.platform === 'wasi') {
+    const mainFilePath = join(dir, 'main.c');
+    writeFileSync(mainFilePath, wasmMainFn);
   }
 }
 
@@ -253,6 +264,7 @@ export function createConfig(srcPath, modPath, options = {}) {
     arch = getArch(),
     nativeCpu = false,
     optimize = 'Debug',
+    useLibc = isWASM.test(arch) ? false : true,
     clean = false,
     buildDir = join(os.tmpdir(), 'zigar-build'),
     zigCmd = (() => {
@@ -323,6 +335,7 @@ export function createConfig(srcPath, modPath, options = {}) {
     platform,
     arch,
     optimize,
+    useLibc,
     nativeCpu,
     moduleName,
     modulePath,
