@@ -5159,10 +5159,12 @@ class WebAssemblyEnvironment extends Environment {
   loadModule(source) {
     return this.initPromise = (async () => {
       const { instance } = await this.instantiateWebAssembly(source);
-      this.memory = instance.exports.memory;
+      const { memory, _initialize } = instance.exports;
       this.importFunctions(instance.exports);
       this.trackInstance(instance);
       this.runtimeSafety = this.isRuntimeSafetyActive();
+      this.memory = memory;
+      _initialize?.();
     })();
   }
 

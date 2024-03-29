@@ -17,6 +17,7 @@ pub fn build(b: *std.Build) void {
     });
     if (is_wasm) {
         lib.rdynamic = true;
+        lib.wasi_exec_model = .reactor;
     }
     const imports = .{};
     if (@hasDecl(std.Build.Step.Compile, "addModule")) {
@@ -46,10 +47,6 @@ pub fn build(b: *std.Build) void {
     }
     if (cfg.use_libc) {
         lib.linkLibC();
-        if (is_wasm) {
-            // add empty function expected by libc
-            lib.addCSourceFile(.{ .file = .{ .path = "./main.c" }, .flags = &.{} });
-        }
     }
     const wf = b.addWriteFiles();
     wf.addCopyFileToSource(lib.getEmittedBin(), cfg.output_path);

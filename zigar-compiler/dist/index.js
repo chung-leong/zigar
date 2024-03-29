@@ -2182,6 +2182,14 @@ function useStruct() {
   factories$2[StructureType.Struct] = defineStructShape;
 }
 
+function usePackedStruct() {
+  factories$2[StructureType.PackedStruct] = defineStructShape;
+}
+
+function useExternStruct() {
+  factories$2[StructureType.ExternStruct] = defineStructShape;
+}
+
 function useArgStruct() {
   factories$2[StructureType.ArgStruct] = defineArgStruct;
 }
@@ -2608,6 +2616,8 @@ function useAllStructureTypes() {
   usePrimitive();
   useArray();
   useStruct();
+  useExternStruct();
+  usePackedStruct();
   useArgStruct();
   useExternUnion();
   useBareUnion();
@@ -5072,8 +5082,6 @@ function formatProjectConfig(config) {
   return lines.join('\n');
 }
 
-const wasmMainFn = `int main(void) { return 0; }`;
-
 async function createProject(config, dir) {
   const content = formatProjectConfig(config);
   const cfgFilePath = join(dir, 'build-cfg.zig');
@@ -5083,11 +5091,6 @@ async function createProject(config, dir) {
   if (config.packageConfigPath) {
     const packageConfigPath = join(dir, 'build.zig.zon');
     await copyFile(config.packageConfigPath, packageConfigPath);
-  }
-  if (config.useLibc && config.platform === 'wasi') {
-    // need empty main function
-    const mainFilePath = join(dir, 'main.c');
-    await writeFile(mainFilePath, wasmMainFn);
   }
 }
 
@@ -5100,10 +5103,6 @@ function createProjectSync(config, dir) {
   if (config.packageConfigPath) {
     const packageConfigPath = join(dir, 'build.zig.zon');
     copyFileSync(config.packageConfigPath, packageConfigPath);
-  }
-  if (config.useLibc && config.platform === 'wasi') {
-    const mainFilePath = join(dir, 'main.c');
-    writeFileSync(mainFilePath, wasmMainFn);
   }
 }
 
@@ -6428,10 +6427,12 @@ class WebAssemblyEnvironment extends Environment {
   loadModule(source) {
     return this.initPromise = (async () => {
       const { instance } = await this.instantiateWebAssembly(source);
-      this.memory = instance.exports.memory;
+      const { memory, _initialize } = instance.exports;
       this.importFunctions(instance.exports);
       this.trackInstance(instance);
       this.runtimeSafety = this.isRuntimeSafetyActive();
+      this.memory = memory;
+      _initialize?.();
     })();
   }
 

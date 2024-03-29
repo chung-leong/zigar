@@ -214,11 +214,6 @@ export async function createProject(config, dir) {
     const packageConfigPath = join(dir, 'build.zig.zon');
     await copyFile(config.packageConfigPath, packageConfigPath);
   }
-  if (config.useLibc && config.platform === 'wasi') {
-    // need empty main function
-    const mainFilePath = join(dir, 'main.c');
-    await writeFile(mainFilePath, wasmMainFn);
-  }
 }
 
 export function createProjectSync(config, dir) {
@@ -230,10 +225,6 @@ export function createProjectSync(config, dir) {
   if (config.packageConfigPath) {
     const packageConfigPath = join(dir, 'build.zig.zon');
     copyFileSync(config.packageConfigPath, packageConfigPath);
-  }
-  if (config.useLibc && config.platform === 'wasi') {
-    const mainFilePath = join(dir, 'main.c');
-    writeFileSync(mainFilePath, wasmMainFn);
   }
 }
 
