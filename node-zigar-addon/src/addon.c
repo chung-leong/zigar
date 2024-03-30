@@ -413,26 +413,17 @@ napi_value obtain_external_buffer(napi_env env,
     napi_value buffer;
     void* src = (void*) address;
     void* dest;
-    switch (napi_create_external_arraybuffer(env, src, len, finalize_external_buffer, md, &buffer)) {
-        case napi_ok:
-            /* create a reference to the module so that the shared library doesn't get unloaded
-            while the external buffer is still around pointing to it */
-            reference_module(md);
-            buffer_count++;
-            break;
-#ifdef napi_no_external_buffers_allowed
-        case napi_no_external_buffers_allowed:
-            /* use a regular buffer instead when we can't create an external one */
-            if (napi_create_arraybuffer(env, len, &dest, &buffer) == napi_ok) {
-                if (len > 0) {
-                    memcpy(dest, src, len);
-                }
-                break;
-            }
-#endif
-        default:
-            return throw_last_error(env);
+    /* need to include at least one byte */
+    if (len == 0) {
+        len += 1;
     }
+    if (napi_create_external_arraybuffer(env, src, len, finalize_external_buffer, md, &buffer) != napi_ok) {
+        return throw_last_error(env);
+    }
+    /* create a reference to the module so that the shared library doesn't get unloaded
+       while the external buffer is still around pointing to it */
+    reference_module(md);
+    buffer_count++;
     return buffer;
 }
 
