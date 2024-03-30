@@ -3273,6 +3273,8 @@ function getTypedArrayClass(member) {
       case 4: return Float32Array;
       case 8: return Float64Array;
     }
+  } else if (memberType === MemberType.Object) {
+    return member.structure.typedArray;
   }
   return null;
 }
@@ -6092,11 +6094,15 @@ class Environment {
         if (!currentTarget || isMutable(this)) {
           // obtain address and length from memory
           location = pointer[LOCATION_GETTER]();
-          // get view of memory that pointer points to
-          const len = (Target[SIZE] !== undefined) ? location.length * Target[SIZE] : undefined;
-          const dv = env.findMemory(location.address, len);
-          // create the target
-          newTarget = Target.call(ENVIRONMENT, dv, { writable });
+          if (!isInvalidAddress(location.address)) {
+            // get view of memory that pointer points to
+            const len = (Target[SIZE] !== undefined) ? location.length * Target[SIZE] : undefined;
+            const dv = env.findMemory(location.address, len);
+            // create the target
+            newTarget = Target.call(ENVIRONMENT, dv, { writable });
+          } else {
+            newTarget = null;
+          }
         } else {
           newTarget = currentTarget;
         }
@@ -6161,6 +6167,14 @@ function findMemoryIndex(array, address) {
 
 function add(address, len) {
   return address + ((typeof(address) === 'bigint') ? BigInt(len) : len);
+}
+
+function isInvalidAddress(address) {
+  if (typeof(address) === 'bigint') {
+    return address === 0xaaaaaaaaaaaaaaaan;
+  } else {
+    return address === 0xaaaaaaaa;
+  }
 }
 
 function isElectron() {

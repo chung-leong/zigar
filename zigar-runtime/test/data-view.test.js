@@ -111,6 +111,19 @@ describe('Data view functions', function() {
         expect(f).to.equal(types[index++]);
       }
     })
+    it('should return type array constructor of child elements', function() {
+      const byteSize = 4 * 4;
+      const member = {
+        type: MemberType.Object,
+        bitSize: byteSize * 8,
+        byteSize,
+        structure: {
+          typedArray: Float32Array,
+        },
+      };
+      const f = getTypedArrayClass(member);
+      expect(f).to.equal(Float32Array);
+    })
   })
   describe('getDataView', function() {
     it('should return a DataView when given an ArrayBuffer', function() {

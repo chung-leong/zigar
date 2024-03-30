@@ -232,6 +232,8 @@ export function getTypedArrayClass(member) {
       case 4: return Float32Array;
       case 8: return Float64Array;
     }
+  } else if (memberType === MemberType.Object) {
+    return member.structure.typedArray;
   }
   return null;
 }
