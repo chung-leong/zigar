@@ -324,8 +324,13 @@ test "hasPointerArguments" {
     assert(hasPointerArguments(ArgC) == false);
 }
 
+fn calculateHash(comptime name: []const u8) u32 {
+    @setEvalBranchQuota(name.len * 3);
+    return std.hash.cityhash.CityHash32.hash(name);
+}
+
 fn getUniqueId(comptime arg: anytype) u32 {
-    return std.hash.cityhash.CityHash32.hash(@typeName(@TypeOf(arg)));
+    return calculateHash(@typeName(@TypeOf(arg)));
 }
 
 test "getUniqueId" {
@@ -727,7 +732,7 @@ fn getStructureName(comptime T: type) [*:0]const u8 {
                     break :select "struct";
                 };
                 const struct_prefix = if (struct_type[0] == 'e') "ErrorSet" else "Struct";
-                const id = std.hash.cityhash.CityHash32.hash(name);
+                const id = calculateHash(name);
                 return std.fmt.comptimePrint("{s}{d}", .{ struct_prefix, id });
             }
             return name;
@@ -738,7 +743,7 @@ fn getStructureName(comptime T: type) [*:0]const u8 {
             // @typeInfo(@typeInfo(@TypeOf([function])).Fn.returnType).error_set
             const parent_index = getIndexOf(name, '(');
             if (parent_index != -1) {
-                const id = std.hash.cityhash.CityHash32.hash(name);
+                const id = calculateHash(name);
                 return std.fmt.comptimePrint("ErrorSet{d:0>4}", .{id});
             }
             // named error set looks like a struct
