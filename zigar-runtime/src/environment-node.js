@@ -24,6 +24,7 @@ export class NodeEnvironment extends Environment {
   addressMap = new WeakMap();
   /* c8 ignore next */
   defaultAlignment = [ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? 16 : 8;
+  nullBuffer = new ArrayBuffer(0);
 
   allocateRelocMemory(len, align) {
     // allocate extra memory for alignment purpose when align is larger than the default
@@ -81,6 +82,9 @@ export class NodeEnvironment extends Environment {
   }
 
   obtainFixedView(address, len) {
+    if (!len && !address) {
+      return this.obtainView(this.nullBuffer);
+    }
     const buffer = this.obtainExternBuffer(address, len);
     this.addressMap.set(buffer, address);
     return this.obtainView(buffer, 0, len);
