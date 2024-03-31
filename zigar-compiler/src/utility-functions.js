@@ -88,7 +88,6 @@ export function findMatchingFilesSync(dir, re) {
 }
 
 export async function acquireLock(soBuildDir) {
-  const staleTime = 60000;
   const pidPath = join(soBuildDir, 'pid');
   while (true)   {
     try {
@@ -99,24 +98,17 @@ export async function acquireLock(soBuildDir) {
       return;
     } catch (err) {
       if (err.code === 'EEXIST') {
-        const last = (await findFile(pidPath))?.mtime;
-        const now = new Date();
-        const diff = now - last;
-        if (diff > staleTime) {
-          // lock file has been abandoned
-          await deleteFile(pidPath);
-          continue;
+        if (checkPidFile(pidPath)) {
+          await delay(250);
         }
       } else {
         throw err;
       }
     }
-    await delay(250);
   }
 }
 
 export function acquireLockSync(soBuildDir) {
-  const staleTime = 60000;
   const pidPath = join(soBuildDir, 'pid');
   while (true)   {
     try {
@@ -127,19 +119,13 @@ export function acquireLockSync(soBuildDir) {
       return;
     } catch (err) {
       if (err.code === 'EEXIST') {
-        const last = findFileSync(pidPath)?.mtime;
-        const now = new Date();
-        const diff = now - last;
-        if (diff > staleTime) {
-          // lock file has been abandoned
-          deleteFileSync(pidPath);
-          continue;
+        if (checkPidFile(pidPath)) {
+          delaySync(250);
         }
       } else {
         throw err;
       }
     }
-    delaySync(50);
   }
 }
 
@@ -151,6 +137,26 @@ export async function releaseLock(soBuildDir) {
 export function releaseLockSync(soBuildDir) {
   const pidPath = join(soBuildDir, 'pid');
   deleteFileSync(pidPath);
+}
+
+function checkPidFile(pidPath) {
+  const staleTime = 60000 * 5;
+  let stale = false;
+  try {
+    const pid = loadFileSync(pidPath);
+    exec(`ps -p ${pid}`);
+    const last = findFileSync(pidPath)?.mtime || 0;
+    const diff = new Date() - last;
+    if (diff > staleTime) {
+      stale = true;
+    }
+  } catch (err) {
+    stale = true;
+  }
+  if (stale) {
+    deleteFileSync(pidPath);
+  }
+  return !stale;
 }
 
 export async function copyFile(srcPath, dstPath) {

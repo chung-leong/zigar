@@ -131,7 +131,7 @@ export function compileSync(srcPath, modPath, options) {
       try {
         // create config file
         createProjectSync(config, moduleBuildDir);
-        // then run the compiler
+        // then run the compiler   
         runCompilerSync(zigCmd, moduleBuildDir);
       } finally {
         releaseLockSync(moduleBuildDir);
@@ -142,10 +142,6 @@ export function compileSync(srcPath, modPath, options) {
     } 
   }
   return { outputPath, changed }
-}
-
-function findCUsage(content) {
-  return content.includes('@cImport') || content.includes('std.heap.c_allocator');
 }
 
 export async function runCompiler(zigCmd, soBuildDir) {

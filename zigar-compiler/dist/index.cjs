@@ -4643,7 +4643,6 @@ function findMatchingFilesSync(dir, re) {
 }
 
 async function acquireLock(soBuildDir) {
-  const staleTime = 60000;
   const pidPath = path.join(soBuildDir, 'pid');
   while (true)   {
     try {
@@ -4654,24 +4653,17 @@ async function acquireLock(soBuildDir) {
       return;
     } catch (err) {
       if (err.code === 'EEXIST') {
-        const last = (await findFile(pidPath))?.mtime;
-        const now = new Date();
-        const diff = now - last;
-        if (diff > staleTime) {
-          // lock file has been abandoned
-          await deleteFile(pidPath);
-          continue;
+        if (checkPidFile(pidPath)) {
+          await delay(250);
         }
       } else {
         throw err;
       }
     }
-    await delay(250);
   }
 }
 
 function acquireLockSync(soBuildDir) {
-  const staleTime = 60000;
   const pidPath = path.join(soBuildDir, 'pid');
   while (true)   {
     try {
@@ -4682,19 +4674,13 @@ function acquireLockSync(soBuildDir) {
       return;
     } catch (err) {
       if (err.code === 'EEXIST') {
-        const last = findFileSync(pidPath)?.mtime;
-        const now = new Date();
-        const diff = now - last;
-        if (diff > staleTime) {
-          // lock file has been abandoned
-          deleteFileSync(pidPath);
-          continue;
+        if (checkPidFile(pidPath)) {
+          delaySync(250);
         }
       } else {
         throw err;
       }
     }
-    delaySync(50);
   }
 }
 
@@ -4706,6 +4692,26 @@ async function releaseLock(soBuildDir) {
 function releaseLockSync(soBuildDir) {
   const pidPath = path.join(soBuildDir, 'pid');
   deleteFileSync(pidPath);
+}
+
+function checkPidFile(pidPath) {
+  const staleTime = 60000 * 5;
+  let stale = false;
+  try {
+    const pid = loadFileSync(pidPath);
+    exec(`ps -p ${pid}`);
+    const last = findFileSync(pidPath)?.mtime || 0;
+    const diff = new Date() - last;
+    if (diff > staleTime) {
+      stale = true;
+    }
+  } catch (err) {
+    stale = true;
+  }
+  if (stale) {
+    deleteFileSync(pidPath);
+  }
+  return !stale;
 }
 
 async function copyFile(srcPath, dstPath) {
@@ -5020,7 +5026,7 @@ function compileSync(srcPath, modPath, options) {
       try {
         // create config file
         createProjectSync(config, moduleBuildDir);
-        // then run the compiler
+        // then run the compiler   
         runCompilerSync(zigCmd, moduleBuildDir);
       } finally {
         releaseLockSync(moduleBuildDir);
