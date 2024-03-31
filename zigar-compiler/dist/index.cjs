@@ -388,12 +388,14 @@ function encodeText(text, encoding = 'utf-8') {
 }
 
 function encodeBase64(dv) {
+
   const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
   const bstr = String.fromCharCode.apply(null, ta);
   return btoa(bstr);
 }
 
 function decodeBase64(str) {
+
   const bstr = atob(str);
   const ta = new Uint8Array(bstr.length);
   for (let i = 0; i < ta.byteLength; i++) {
@@ -1039,6 +1041,7 @@ function defineArray(structure, env) {
     instance: { members: [ member ] },
     hasPointer,
   } = structure;
+
   const { get, set } = getDescriptor(member, env);
   const hasStringProp = canBeString(member);
   const propApplier = createPropertyApplier(structure);
@@ -1684,6 +1687,7 @@ function defineSlice(structure, env) {
     },
     hasPointer,
   } = structure;
+
   const { get, set } = getDescriptor(member, env);
   const { byteSize: elementSize, structure: elementStructure } = member;
   const sentinel = getSentinel(structure, env);
@@ -1795,6 +1799,7 @@ function getSentinel(structure, env) {
   if (!sentinel) {
     return;
   }
+
   const { get: getSentinelValue } = getDescriptor(sentinel, env);
   const value = getSentinelValue.call(template, 0);
   const { get } = getDescriptor(member, env);
@@ -2040,6 +2045,7 @@ function defineVector(structure, env) {
     align,
     instance: { members: [ member ] },
   } = structure;
+
   const { bitSize: elementBitSize, structure: elementStructure } = member;
   const elementDescriptors = {};
   for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
@@ -2243,6 +2249,7 @@ function useOpaque() {
 
 function getStructureFactory(type) {
   const f = factories$2[type];
+
   return f;
 }
 
@@ -3108,6 +3115,7 @@ function useExtendedFloat() {
 
 function getExtendedTypeAccessor(access, member) {
   const f = factories$1[member.type];
+
   return f(access, member);
 }
 
@@ -3865,6 +3873,7 @@ function hasStandardFloatSize({ bitSize }) {
 
 function getDescriptor(member, env) {
   const f = factories[member.type];
+
   return f(member, env);
 }
 
@@ -4124,6 +4133,7 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
   const { bitOffset, byteSize } = member;
   const getter = getDataViewAccessor('get', member);
   const setter = getDataViewAccessor('set', member);
+
   if (bitOffset !== undefined) {
     const offset = bitOffset >> 3;
     return {
@@ -4642,19 +4652,19 @@ function findMatchingFilesSync(dir, re) {
   return map;
 }
 
-async function acquireLock(soBuildDir) {
-  const pidPath = path.join(soBuildDir, 'pid');
+async function acquireLock(pidPath, staleTime) {
   while (true)   {
     try {
-      await createDirectory(soBuildDir);
+      await createDirectory(path.dirname(pidPath));
       const handle = await promises.open(pidPath, 'wx');
       handle.write(`${process.pid}`);
       handle.close();
-      return;
+      break;
     } catch (err) {
       if (err.code === 'EEXIST') {
-        if (checkPidFile(pidPath)) {
+        if (checkPidFile(pidPath, staleTime)) {
           await delay(250);
+          continue;
         }
       } else {
         throw err;
@@ -4663,18 +4673,17 @@ async function acquireLock(soBuildDir) {
   }
 }
 
-function acquireLockSync(soBuildDir) {
-  const pidPath = path.join(soBuildDir, 'pid');
+function acquireLockSync(pidPath, staleTime) {
   while (true)   {
     try {
-      createDirectorySync(soBuildDir);
+      createDirectorySync(path.dirname(pidPath));
       const handle = fs.openSync(pidPath, 'wx');
       fs.writeSync(handle, `${process.pid}`);
       fs.closeSync(handle);
-      return;
+      break;
     } catch (err) {
       if (err.code === 'EEXIST') {
-        if (checkPidFile(pidPath)) {
+        if (checkPidFile(pidPath, staleTime)) {
           delaySync(250);
         }
       } else {
@@ -4684,22 +4693,23 @@ function acquireLockSync(soBuildDir) {
   }
 }
 
-async function releaseLock(soBuildDir) {
-  const pidPath = path.join(soBuildDir, 'pid');
+async function releaseLock(pidPath) {
   await deleteFile(pidPath);
 }
 
-function releaseLockSync(soBuildDir) {
-  const pidPath = path.join(soBuildDir, 'pid');
+function releaseLockSync(pidPath) {
   deleteFileSync(pidPath);
 }
 
-function checkPidFile(pidPath) {
-  const staleTime = 60000 * 5;
+function checkPidFile(pidPath, staleTime = 60000 * 5) {
   let stale = false;
   try {
     const pid = loadFileSync(pidPath);
-    exec(`ps -p ${pid}`);
+    if (os.platform() === 'win32') {
+      child_process.execSync(`tasklist /nh /fi "pid eq ${pid}" | findstr .exe`, { stdio: 'pipe' }).toString();
+    } else {
+      child_process.execSync(`ps -p ${pid}`).toString();
+    }
     const last = findFileSync(pidPath)?.mtime || 0;
     const diff = new Date() - last;
     if (diff > staleTime) {
@@ -4955,17 +4965,18 @@ async function compile(srcPath, modPath, options) {
       }
       const { zigCmd, moduleBuildDir } = config;
       // only one process can compile a given file at a time
-      await acquireLock(moduleBuildDir);
+      const pidPath = `${moduleBuildDir}.pid`;
+      await acquireLock(pidPath);
       try {
         // create config file
         await createProject(config, moduleBuildDir);
         // then run the compiler
         await runCompiler(zigCmd, moduleBuildDir);
       } finally {
-        await releaseLock(moduleBuildDir);
         if (config.clean) {
           await deleteDirectory(moduleBuildDir);
         }
+        await releaseLock(pidPath);
       }
     }   
   }
@@ -5022,17 +5033,18 @@ function compileSync(srcPath, modPath, options) {
       }
       const { zigCmd, moduleBuildDir } = config;
       // only one process can compile a given file at a time
-      acquireLockSync(moduleBuildDir);
+      const pidPath = `${moduleBuildDir}.pid`;
+      acquireLockSync(pidPath);
       try {
         // create config file
         createProjectSync(config, moduleBuildDir);
         // then run the compiler   
         runCompilerSync(zigCmd, moduleBuildDir);
       } finally {
-        releaseLockSync(moduleBuildDir);
         if (config.clean) {
           deleteDirectorySync(moduleBuildDir);
         }
+        releaseLockSync(pidPath);
       }
     } 
   }
@@ -5545,6 +5557,7 @@ class Environment {
   slots = {};
   structures = [];
   /* COMPTIME-ONLY-END */
+
   imports;
   console = globalThis.console;
 
@@ -5993,6 +6006,7 @@ class Environment {
   }
 
 
+
   getShadowAddress(target, cluster) {
     if (cluster) {
       const dv = target[MEMORY];
@@ -6246,6 +6260,7 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   getBufferAddress(buffer) {
+
     return 0;
   }
 

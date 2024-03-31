@@ -1,8 +1,9 @@
 import { expect, use } from 'chai';
 import { chaiPromised } from 'chai-promised';
+import { writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { fileURLToPath } from 'url';
 
 use(chaiPromised);
 
@@ -15,8 +16,8 @@ import {
   deleteDirectorySync,
   deleteFile,
   deleteFileSync,
-  findDirectory,
-  findDirectorySync,
+  findFile,
+  findFileSync,
   findMatchingFiles,
   findMatchingFilesSync,
   loadFile,
@@ -149,68 +150,78 @@ describe('Utility functions', function() {
   })
   describe('acquireLock', function() {
     it('should create a directory and place a lock on it', async function() {
-      const dir = join(tmpdir(), (Math.random() * 0x7FFFFFF).toString(16));
+      const path = join(tmpdir(), (Math.random() * 0x7FFFFFF).toString(16));
       let lock1 = false, lock2 = false;
-      const promise1 = acquireLock(dir, 60 * 1000);
+      const promise1 = acquireLock(path, 60 * 1000);
       promise1.then(() => lock1 = true);
       await delay(100);
       expect(lock1).to.be.true;
-      const promise2 = acquireLock(dir, 60 * 1000);
+      const promise2 = acquireLock(path, 60 * 1000);
       promise2.then(() => lock2 = true);
       await delay(100);
       expect(lock2).to.be.false;
-      await releaseLock(dir);
-      await delay(250);
+      await releaseLock(path);
+      await delay(500);
       expect(lock2).to.be.true;
-      await releaseLock(dir);
-      await deleteDirectory(dir);
-      const info = await findDirectory(dir);
+      await releaseLock(path);
+      const info = await findFile(path);
       expect(info).to.be.undefined;
     })
+    it('should detect that existing pid file is stale', async function() {
+      const path = join(tmpdir(), (Math.random() * 0x7FFFFFF).toString(16));
+      writeFileSync(path, '1234');
+      const promise = acquireLock(path, 60 * 1000);
+      let lock = false;
+      promise.then(() => lock = true);
+      await delay(250);
+      expect(lock).to.be.true;
+    })
     it('should fail when directory is illegal', async function() {
-      const promise = acquireLock(`/dir/null`, 60 * 1000);
+      const promise = acquireLock(`///`, 60 * 1000);
       await expect(promise).to.eventually.be.rejected;
     })
     it('should overwrite a lock after a while', async function() {
-      const dir = join(tmpdir(), (Math.random() * 0x7FFFFFF).toString(16));
-      await acquireLock(dir, 60 * 1000);
+      const path = join(tmpdir(), (Math.random() * 0x7FFFFFF).toString(16));
+      await acquireLock(path, 60 * 1000);
       let lock2 = false;
-      const promise2 = acquireLock(dir, 200);
+      const promise2 = acquireLock(path, 200);
       promise2.then(() => lock2 = true);
       await delay(100);
       expect(lock2).to.be.false;
-      await delay(300);
+      await delay(500);
       expect(lock2).to.be.true;
-      await releaseLock(dir);
-      await deleteDirectory(dir);
+      await releaseLock(path);
     })
   })
   describe('acquireLockSync', function() {
     it('should create a directory and place a lock on it', async function() {
-      const dir = join(tmpdir(), (Math.random() * 0x7FFFFFF).toString(16));
-      acquireLockSync(dir, 60 * 1000);
-      const promise = acquireLock(dir, 60 * 1000);
+      const path = join(tmpdir(), (Math.random() * 0x7FFFFFF).toString(16));
+      acquireLockSync(path, 60 * 1000);
+      const promise = acquireLock(path, 60 * 1000);
       let lock2 = false;
       promise.then(() => lock2 = true);
       await delay(50);
       expect(lock2).to.be.false;      
-      releaseLockSync(dir);
-      await delay(300);
+      releaseLockSync(path);
+      await delay(500);
       expect(lock2).to.be.true;      
-      releaseLockSync(dir);
-      deleteDirectorySync(dir);
-      const info = findDirectorySync(dir);
+      releaseLockSync(path);
+      const info = findFileSync(path);
       expect(info).to.be.undefined;
     })
+    it('should detect that existing pid file is stale', async function() {
+      const path = join(tmpdir(), (Math.random() * 0x7FFFFFF).toString(16));
+      writeFileSync(path, '1234');
+      acquireLockSync(path, 60 * 1000);
+    })
     it('should fail when directory is illegal', function() {
-      expect(() => acquireLockSync(`/dir/null`, 60 * 1000)).to.throw();
+      expect(() => acquireLockSync(`///`, 60 * 1000)).to.throw();
     })
     it('should overwrite a lock after a while', function() {
-      const dir = join(tmpdir(), (Math.random() * 0x7FFFFFF).toString(16));
-      acquireLockSync(dir, 60 * 1000);
-      acquireLockSync(dir, 200);
-      releaseLockSync(dir);
-      deleteDirectorySync(dir);
+      const path = join(tmpdir(), (Math.random() * 0x7FFFFFF).toString(16));
+      acquireLockSync(path, 60 * 1000);
+      acquireLockSync(path, 200);
+      releaseLockSync(path);
     })
   })
   describe('normalizePath', function() {

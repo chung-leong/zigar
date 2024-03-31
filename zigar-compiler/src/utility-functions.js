@@ -8,7 +8,7 @@ import {
   chmod, lstat, mkdir, open, readFile, readdir, rmdir, stat, unlink, writeFile
 } from 'fs/promises';
 import os from 'os';
-import { join, parse, sep } from 'path';
+import { dirname, join, parse, sep } from 'path';
 import { fileURLToPath } from 'url';
 
 export async function findFile(path, follow = true) {
@@ -87,20 +87,19 @@ export function findMatchingFilesSync(dir, re) {
   return map;
 }
 
-export async function acquireLock(soBuildDir, staleTime) {
-  const pidPath = `${soBuildDir}.pid`;
+export async function acquireLock(pidPath, staleTime) {
   while (true)   {
     try {
-      await createDirectory(soBuildDir);
+      await createDirectory(dirname(pidPath));
       const handle = await open(pidPath, 'wx');
       handle.write(`${process.pid}`);
       handle.close();
-      return;
+      break;
     } catch (err) {
-      console.log(`pid exists: ${pidPath}`);
       if (err.code === 'EEXIST') {
         if (checkPidFile(pidPath, staleTime)) {
           await delay(250);
+          continue;
         }
       } else {
         throw err;
@@ -109,15 +108,14 @@ export async function acquireLock(soBuildDir, staleTime) {
   }
 }
 
-export function acquireLockSync(soBuildDir, staleTime) {
-  const pidPath = `${soBuildDir}.pid`;
+export function acquireLockSync(pidPath, staleTime) {
   while (true)   {
     try {
-      createDirectorySync(soBuildDir);
+      createDirectorySync(dirname(pidPath));
       const handle = openSync(pidPath, 'wx');
       writeSync(handle, `${process.pid}`);
       closeSync(handle);
-      return;
+      break;
     } catch (err) {
       if (err.code === 'EEXIST') {
         if (checkPidFile(pidPath, staleTime)) {
@@ -130,13 +128,11 @@ export function acquireLockSync(soBuildDir, staleTime) {
   }
 }
 
-export async function releaseLock(soBuildDir) {
-  const pidPath = `${soBuildDir}.pid`;
+export async function releaseLock(pidPath) {
   await deleteFile(pidPath);
 }
 
-export function releaseLockSync(soBuildDir) {
-  const pidPath = `${soBuildDir}.pid`;
+export function releaseLockSync(pidPath) {
   deleteFileSync(pidPath);
 }
 
@@ -144,15 +140,17 @@ function checkPidFile(pidPath, staleTime = 60000 * 5) {
   let stale = false;
   try {
     const pid = loadFileSync(pidPath);
-    const res = execSync(`ps -p ${pid}`).toString();
+    if (os.platform() === 'win32') {
+      execSync(`tasklist /nh /fi "pid eq ${pid}" | findstr .exe`, { stdio: 'pipe' }).toString();
+    } else {
+      execSync(`ps -p ${pid}`).toString();
+    }
     const last = findFileSync(pidPath)?.mtime || 0;
     const diff = new Date() - last;
     if (diff > staleTime) {
       stale = true;
     }
-    console.log({ pid, stale, res })
   } catch (err) {
-    console.log({ err });
     stale = true;
   }
   if (stale) {

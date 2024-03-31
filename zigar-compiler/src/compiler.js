@@ -60,17 +60,18 @@ export async function compile(srcPath, modPath, options) {
       }
       const { zigCmd, moduleBuildDir } = config;
       // only one process can compile a given file at a time
-      await acquireLock(moduleBuildDir);
+      const pidPath = `${moduleBuildDir}.pid`;
+      await acquireLock(pidPath);
       try {
         // create config file
         await createProject(config, moduleBuildDir);
         // then run the compiler
         await runCompiler(zigCmd, moduleBuildDir);
       } finally {
-        await releaseLock(moduleBuildDir);
         if (config.clean) {
           await deleteDirectory(moduleBuildDir);
         }
+        await releaseLock(pidPath);
       }
     }   
   }
@@ -127,17 +128,18 @@ export function compileSync(srcPath, modPath, options) {
       }
       const { zigCmd, moduleBuildDir } = config;
       // only one process can compile a given file at a time
-      acquireLockSync(moduleBuildDir);
+      const pidPath = `${moduleBuildDir}.pid`;
+      acquireLockSync(pidPath);
       try {
         // create config file
         createProjectSync(config, moduleBuildDir);
         // then run the compiler   
         runCompilerSync(zigCmd, moduleBuildDir);
       } finally {
-        releaseLockSync(moduleBuildDir);
         if (config.clean) {
           deleteDirectorySync(moduleBuildDir);
         }
+        releaseLockSync(pidPath);
       }
     } 
   }
