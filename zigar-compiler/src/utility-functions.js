@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import { createHash } from 'crypto';
 import {
   chmodSync, closeSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, rmdirSync,
@@ -87,8 +87,8 @@ export function findMatchingFilesSync(dir, re) {
   return map;
 }
 
-export async function acquireLock(soBuildDir) {
-  const pidPath = join(soBuildDir, 'pid');
+export async function acquireLock(soBuildDir, staleTime) {
+  const pidPath = `${soBuildDir}.pid`;
   while (true)   {
     try {
       await createDirectory(soBuildDir);
@@ -97,8 +97,9 @@ export async function acquireLock(soBuildDir) {
       handle.close();
       return;
     } catch (err) {
+      console.log(`pid exists: ${pidPath}`);
       if (err.code === 'EEXIST') {
-        if (checkPidFile(pidPath)) {
+        if (checkPidFile(pidPath, staleTime)) {
           await delay(250);
         }
       } else {
@@ -108,8 +109,8 @@ export async function acquireLock(soBuildDir) {
   }
 }
 
-export function acquireLockSync(soBuildDir) {
-  const pidPath = join(soBuildDir, 'pid');
+export function acquireLockSync(soBuildDir, staleTime) {
+  const pidPath = `${soBuildDir}.pid`;
   while (true)   {
     try {
       createDirectorySync(soBuildDir);
@@ -119,7 +120,7 @@ export function acquireLockSync(soBuildDir) {
       return;
     } catch (err) {
       if (err.code === 'EEXIST') {
-        if (checkPidFile(pidPath)) {
+        if (checkPidFile(pidPath, staleTime)) {
           delaySync(250);
         }
       } else {
@@ -130,27 +131,28 @@ export function acquireLockSync(soBuildDir) {
 }
 
 export async function releaseLock(soBuildDir) {
-  const pidPath = join(soBuildDir, 'pid');
+  const pidPath = `${soBuildDir}.pid`;
   await deleteFile(pidPath);
 }
 
 export function releaseLockSync(soBuildDir) {
-  const pidPath = join(soBuildDir, 'pid');
+  const pidPath = `${soBuildDir}.pid`;
   deleteFileSync(pidPath);
 }
 
-function checkPidFile(pidPath) {
-  const staleTime = 60000 * 5;
+function checkPidFile(pidPath, staleTime = 60000 * 5) {
   let stale = false;
   try {
     const pid = loadFileSync(pidPath);
-    exec(`ps -p ${pid}`);
+    const res = execSync(`ps -p ${pid}`).toString();
     const last = findFileSync(pidPath)?.mtime || 0;
     const diff = new Date() - last;
     if (diff > staleTime) {
       stale = true;
     }
+    console.log({ pid, stale, res })
   } catch (err) {
+    console.log({ err });
     stale = true;
   }
   if (stale) {
