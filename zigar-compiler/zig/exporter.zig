@@ -150,10 +150,9 @@ test "NextIntType" {
 
 fn IntType(comptime StartT: type, comptime n: comptime_int) type {
     var IT = StartT;
-    while (!isInRangeOf(n, IT)) {
+    return while (!isInRangeOf(n, IT)) {
         IT = NextIntType(IT);
-    }
-    return IT;
+    } else IT;
 }
 
 test "IntType" {
@@ -706,12 +705,11 @@ fn getStructureName(comptime T: type) [*:0]const u8 {
     const utils = struct {
         fn getIndexOf(comptime s: []const u8, comptime c: u8) comptime_int {
             @setEvalBranchQuota(s.len * 2);
-            inline for (s, 0..) |c2, index| {
+            return inline for (s, 0..) |c2, index| {
                 if (c2 == c) {
-                    return index;
+                    break index;
                 }
-            }
-            return -1;
+            } else -1;
         }
 
         fn getAlternateName(comptime name: []const u8) []const u8 {
@@ -1067,23 +1065,17 @@ fn isComptimeOnly(comptime T: type) bool {
         .Undefined,
         => true,
         .Array => |ar| isComptimeOnly(ar.child),
-        .Struct => |st| check: {
-            inline for (st.fields) |field| {
-                // structs with comptime fields of comptime type can be created at runtime
-                if (!field.is_comptime and isComptimeOnly(field.type)) {
-                    break :check true;
-                }
+        .Struct => |st| inline for (st.fields) |field| {
+            // structs with comptime fields of comptime type can be created at runtime
+            if (!field.is_comptime and isComptimeOnly(field.type)) {
+                break true;
             }
-            break :check false;
-        },
-        .Union => |st| check: {
-            inline for (st.fields) |field| {
-                if (isComptimeOnly(field.type)) {
-                    break :check true;
-                }
+        } else false,
+        .Union => |st| inline for (st.fields) |field| {
+            if (isComptimeOnly(field.type)) {
+                break true;
             }
-            break :check false;
-        },
+        } else false,
         .Optional => |op| isComptimeOnly(op.child),
         .ErrorUnion => |eu| isComptimeOnly(eu.payload),
         else => false,

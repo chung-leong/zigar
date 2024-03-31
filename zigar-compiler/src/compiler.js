@@ -5,9 +5,9 @@ import os from 'os';
 import { basename, join, parse, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import {
-  acquireLock, acquireLockSync, copyFile, copyFileSync, deleteDirectory, deleteDirectorySync,
-  findFile, findFileSync, findMatchingFiles, findMatchingFilesSync, getArch, getPlatform,
-  md5, releaseLock, releaseLockSync
+  acquireLock, acquireLockSync, copyFile, copyFileSync, createDirectory, createDirectorySync,
+  deleteDirectory, deleteDirectorySync, findFile, findFileSync, findMatchingFiles,
+  findMatchingFilesSync, getArch, getPlatform, md5, releaseLock, releaseLockSync
 } from './utility-functions.js';
 
 export async function compile(srcPath, modPath, options) {
@@ -203,6 +203,7 @@ export function formatProjectConfig(config) {
 const wasmMainFn = `int main(void) { return 0; }`;
 
 export async function createProject(config, dir) {
+  await createDirectory(dir);
   const content = formatProjectConfig(config);
   const cfgFilePath = join(dir, 'build-cfg.zig');
   await writeFile(cfgFilePath, content);
@@ -215,6 +216,7 @@ export async function createProject(config, dir) {
 }
 
 export function createProjectSync(config, dir) {
+  createDirectorySync(dir);
   const content = formatProjectConfig(config);
   const cfgFilePath = join(dir, 'build-cfg.zig');
   writeFileSync(cfgFilePath, content);

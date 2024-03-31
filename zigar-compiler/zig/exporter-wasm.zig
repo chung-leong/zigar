@@ -48,10 +48,9 @@ extern fn _endCall(call: Call, arg_struct: Value) void;
 
 fn strlen(s: [*:0]const u8) usize {
     var len: usize = 0;
-    while (s[len] != 0) {
+    return while (s[len] != 0) {
         len += 1;
-    }
-    return len;
+    } else len;
 }
 
 const allocator: std.mem.Allocator = .{
