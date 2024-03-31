@@ -5136,7 +5136,6 @@ function createConfig(srcPath, modPath, options = {}) {
   const {
     platform = getPlatform(),
     arch = getArch(),
-    nativeCpu = false,
     optimize = 'Debug',
     useLibc = isWASM.test(arch) ? false : true,
     clean = false,
@@ -5172,11 +5171,6 @@ function createConfig(srcPath, modPath, options = {}) {
         `-Doptimize=${optimize}`,
         `-Dtarget=${cpuArch}-${osTag}`,        
       ];
-      if (nativeCpu) {
-        if (arch === getArch() && platform === getPlatform()) {
-          args.push(`-Dcpu=native`);
-        }
-      }
       return `zig ${args.join(' ')}`;
     })(),
   } = options;
@@ -5210,7 +5204,6 @@ function createConfig(srcPath, modPath, options = {}) {
     arch,
     optimize,
     useLibc,
-    nativeCpu,
     moduleName,
     modulePath,
     moduleDir,

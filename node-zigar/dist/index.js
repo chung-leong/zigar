@@ -39,7 +39,6 @@ export async function load(url, context, nextLoad) {
   const options = {
     clean: false,
     optimize: 'Debug',
-    nativeCpu: false,
     platform: getPlatform(),
     arch: getArch(),
   };

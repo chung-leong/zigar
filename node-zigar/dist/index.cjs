@@ -25,7 +25,6 @@ Module._load = new Proxy(Module._load, {
     const options = {
       clean: false,
       optimize: 'Debug',
-      nativeCpu: false,
       platform: getPlatform(),
       arch: getArch(),
     };
