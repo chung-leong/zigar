@@ -1,0 +1,19 @@
+{
+  "name": "filter",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node --loader=node-zigar --no-warnings src/index.js",
+    "build": "node-zigar build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "fastify": "^4.26.2",
+    "node-zigar": "^0.11.1-alpha.9",
+    "sharp": "^0.33.3"
+  }
+}
