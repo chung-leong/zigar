@@ -90,6 +90,13 @@ describe('Static variable functions', function() {
       const descriptors = Object.getOwnPropertyDescriptors(Hello);
       expect(descriptors.superdog.set).to.be.a('function');
       expect(descriptors.supercat.set).to.be.undefined;
+      const names = [], values = [];
+      for (const [ name, value ] of Hello) {
+        names.push(name);
+        values.push(value);
+      }
+      expect(names).to.eql([ 'superdog', 'supercat' ]);
+      expect(values).to.eql([ 43, 4567 ]);
     })
     it('should attach variables to an enumeration', function() {
       const intStructure = env.beginStructure({

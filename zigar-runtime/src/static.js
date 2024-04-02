@@ -1,8 +1,9 @@
 import { getGlobalErrorSet } from './error-set.js';
 import { deanimalizeErrorName } from './error.js';
 import { getDescriptor } from './member.js';
+import { getStructIterator } from './struct.js';
 import { StructureType, defineProperties } from './structure.js';
-import { ITEMS, MORE, NAME, SLOTS } from './symbol.js';
+import { ITEMS, MORE, NAME, PROPS, SLOTS } from './symbol.js';
 
 export function addStaticMembers(structure, env) {
   const {
@@ -19,8 +20,10 @@ export function addStaticMembers(structure, env) {
   }
   defineProperties(constructor, {
     ...descriptors,
+    [Symbol.iterator]: { value: getStructIterator },
     // static variables are objects stored in the static template's slots
     [SLOTS]: { value: template[SLOTS] },
+    [PROPS]: { value: members.map(m => m.name) },
   });
   if (type === StructureType.Enumeration) {
     const enums = constructor[ITEMS];
