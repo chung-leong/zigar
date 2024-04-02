@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 const fastify = Fastify();
 
 fastify.get('/', (req, reply) => {  
-  const name = 'malgorzata-socha';
+  const name = 'sample';
   const filter = 'sepia';
   const tags = [ 
     { width: 150, height: 100, intensity: 0.0 },
