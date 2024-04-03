@@ -1,8 +1,10 @@
 import { readFile } from 'fs/promises';
 import { basename } from 'path';
 import { createEnvironment } from '../../zigar-runtime/src/index.js';
+import { findSourceFile } from '../dist/index.js';
 import { generateCode } from './code-generator.js';
 import { compile } from './compiler.js';
+import { getAbsoluteMapping } from './configuration.js';
 import { stripUnused } from './wasm-stripper.js';
 
 export async function transpile(path, options) {
@@ -14,6 +16,7 @@ export async function transpile(path, options) {
     keepNames = false,
     moduleResolver = (name) => name,
     wasmLoader,
+    sourceFiles,
     ...compileOptions
   } = options;
   if (typeof(wasmLoader) !== 'function') {
@@ -22,7 +25,10 @@ export async function transpile(path, options) {
     }
   }
   Object.assign(compileOptions, { arch: 'wasm32', platform: 'wasi' });
-  const { outputPath } = await compile(path, null, compileOptions);
+  const srcPath = path.endsWith('.zig') ? path : findSourceFile(path, { 
+    sourceFiles: getAbsoluteMapping(sourceFiles, process.cwd()),
+  });
+  const { outputPath } = await compile(srcPath, null, compileOptions);
   const content = await readFile(outputPath);
   const env = createEnvironment();
   env.loadModule(content);
@@ -37,9 +43,9 @@ export async function transpile(path, options) {
       dv = stripUnused(dv, { keepNames });
     }
     if (embedWASM) {
-      binarySource = embed(path, dv);
+      binarySource = embed(srcPath, dv);
     } else {
-      binarySource = await wasmLoader(path, dv);
+      binarySource = await wasmLoader(srcPath, dv);
     }
   }
   return generateCode(definition, {

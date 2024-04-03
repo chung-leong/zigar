@@ -59,7 +59,7 @@ export default function createPlugin(options = {}) {
       })
     },
     async load(id) {
-      if (id.endsWith('.zig')) {
+      if (id.endsWith('.zig') || id.endsWith('.zigar')) {
         const {
           useReadFile = false,
           embedWASM = false,

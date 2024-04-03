@@ -167,17 +167,21 @@ function processConfigFile(text, cfgPath, availableOptions) {
       throw new Error(`${key} is expected to be a ${option.type}, received: ${value}`);
     }
   }
-  const { sourceFiles } = options;
-  if (sourceFiles) {
-    const map = options.sourceFiles = {};
-    const cfgDir = dirname(cfgPath)
-    for (const [ module, source ] of Object.entries(sourceFiles)) {
-      const modulePath = resolve(cfgDir, module);
-      const sourcePath = resolve(cfgDir, source);
-      map[modulePath] = sourcePath;
-    }
-  }
+  options.sourceFiles = getAbsoluteMapping(options.sourceFiles, dirname(cfgPath));
   return options;
+}
+
+export function getAbsoluteMapping(sourceFiles, cfgDir) {
+  if (!sourceFiles) {
+    return;
+  }
+  const map = {};
+  for (const [ module, source ] of Object.entries(sourceFiles)) {
+    const modulePath = resolve(cfgDir, module);
+    const sourcePath = resolve(cfgDir, source);
+    map[modulePath] = sourcePath;
+  }
+  return map;
 }
 
 export function findSourceFile(modulePath, options) {
