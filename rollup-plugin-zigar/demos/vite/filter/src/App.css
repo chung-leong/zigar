@@ -32,11 +32,6 @@
   padding: 2px 10px 2px 10px;
 }
 
-.App .nav INPUT[type="file"] {
-  position: absolute;
-  visibility: hidden;
-}
-
 .App .contents {
   display: flex;
   width: 100%;
@@ -49,13 +44,9 @@
 }
 
 .App .contents .pane CANVAS {
-  display: block;
-  width: 100%;
   border: 1px dotted rgba(255, 255, 255, 0.10);
-}
-
-.App .contents .pane .controls {
-  margin-top: 10px;
+  max-width: 100%;
+  max-height: 90vh;
 }
 
 .App .contents .pane .controls INPUT {
@@ -75,4 +66,18 @@
   .App .contents .pane .controls {
     padding-left: 4px;
   }  
+}
+
+.hidden {
+  position: absolute;
+  visibility: hidden;
+  z-index: -1;
+}
+
+.align-left {
+  text-align: left;
+}
+
+.align-right {
+  text-align: right;
 }

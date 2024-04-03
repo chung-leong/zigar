@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SampleImage from '../img/sample.png';
-import { Input, createPartialOutput, kernel } from '../zig/sepia.zig';
 import './App.css';
 
 function App() {
@@ -46,16 +45,19 @@ function App() {
   useEffect(() => {
     // update the result when the bitmap or intensity parameter changes
     if (bitmap) {
-      const srcCanvas = srcCanvasRef.current;
-      const dstCanvas = dstCanvasRef.current;
-      const srcCTX = srcCanvas.getContext('2d', { willReadFrequently: true });
-      const { width, height } = srcCanvas;
-      const srcImageData = srcCTX.getImageData(0, 0, width, height);
-      const dstImageData = createImageData(width, height, srcImageData, { intensity });
-      dstCanvas.width = bitmap.width;
-      dstCanvas.height = bitmap.height;
-      const dstCTX = dstCanvas.getContext('2d');
-      dstCTX.putImageData(dstImageData, 0, 0);
+      (async () => {
+        const srcCanvas = srcCanvasRef.current;
+        const dstCanvas = dstCanvasRef.current;
+        const srcCTX = srcCanvas.getContext('2d', { willReadFrequently: true });
+        const { width, height } = srcCanvas;
+        const srcImageData = srcCTX.getImageData(0, 0, width, height);
+        purgeQueue();
+        const dstImageData = await createImageData(width, height, srcImageData, { intensity });
+        dstCanvas.width = width;
+        dstCanvas.height = height;
+        const dstCTX = dstCanvas.getContext('2d');
+        dstCTX.putImageData(dstImageData, 0, 0);
+      })();
     }
   }, [ bitmap, intensity ]);
 
@@ -63,13 +65,13 @@ function App() {
     <div className="App">
       <div className="nav">
         <span className="button" onClick={onOpenClick}>Open</span>
-        <input ref={fileInputRef} type="file" accept="image/*" onChange={onFileChange}/>
+        <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={onFileChange}/>
       </div>
       <div className="contents">
-        <div className="pane">
+        <div className="pane align-right">
           <canvas ref={srcCanvasRef}></canvas>
         </div>
-        <div className="pane">
+        <div className="pane align-left">
           <canvas ref={dstCanvasRef}></canvas>
           <div className="controls">
             Intensity: <input type="range" min={0} max={1} step={0.0001} value={intensity} onChange={onRangeChange}/>
@@ -80,78 +82,102 @@ function App() {
   )
 }
 
-export function createImageData(width, height, source = {}, params = {}) {
+export default App
+
+async function createImageData(width, height, source = {}, params = {}) {
   return createPartialImageData(width, height, 0, height, source, params);
 }
 
-export function createPartialImageData(width, height, start, count, source = {}, params = {}) {
-  const inputKeys = [];
-  for (const [ key ] of kernel.inputImages) {
-    inputKeys.push(key);
-  }
-  const outputKeys = [];
-  for (const [ key ] of kernel.outputImages) {
-    outputKeys.push(key);
-  }
-  if (Array.isArray(source)) {
-    const list = source;
-    source = {};
-    for (const [ index, key ] of inputKeys.entries()) {
-      source[key] = list[index];
+async function createPartialImageData(width, height, start, count, source = {}, params = {}) {
+  const transfer = [];
+  const args = [ width, height, start, count, source, params ];
+  if ('data' in source && 'width' in source && 'height' in source) {
+    transfer.push(source.data.buffer);
+  } else {
+    for (const image of Object.values(source)) {
+      transfer.push(image.data.buffer);
     }
   }
-  const input = new Input(undefined);
-  const missing = [];
-  let colorSpace;
-  for (const key of inputKeys) {
-    let imageData = source[key];
-    if (!imageData) {
-      // use the source as the sole input image when there's just one
-      if (inputKeys.length === 1 && [ 'data', 'width', 'height' ].every(k => !!source[k])) {
-        imageData = source;
-      } else {
-        missing.push(key);
-      }
-    }
-    input[key] = imageData;
-    if (colorSpace) {
-      if (imageData.colorSpace !== colorSpace) {
-        throw new Error(`Input images must all use the same color space: ${colorSpace}`);
-      }
-    } else {
-      colorSpace = imageData.colorSpace;
-    }
-  }
-  if (missing.length > 0) {
-    throw new Error(`Missing input image${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}`);
-  }
-  const output = createPartialOutput(width, height, start, count, input, params);
-  const createResult = (output) => {
-    const resultSet = {};
-    for (const key of outputKeys) {
-      const { data: { typedArray: ta }, width, height } = output[key];
-      let imageData;
-      if (typeof(ImageData) === 'function') {
-        // convert Uint8Array to Uint8ClampedArray required by ImageData
-        const clampedArray = new Uint8ClampedArray(ta.buffer, ta.byteOffset, ta.byteLength);
-        imageData = new ImageData(clampedArray, width, count, { colorSpace });
-      } else {
-        // for Node.js, which doesn't have ImageData
-        imageData = { data: ta, width, height };
-      }
-      if (outputKeys.length === 1) {
-        // just return the one image
-        return imageData;
-      }
-      resultSet[key] = imageData;
-    }
-    return resultSet;
-  };
-  if (output[Symbol.toStringTag] === 'Promise') {
-    // top-level await isn't used and WASM is not ready
-    return output.then(createResult);
-  }
-  return createResult(output);
+  return startJob('createPartialImageData', args, transfer);
 }
 
-export default App
+function purgeQueue() {
+  pendingRequests.splice(0);
+}
+
+let keepAlive = true;
+let maxCount = navigator.hardwareConcurrency;
+
+const activeWorkers = [];
+const idleWorkers = [];
+const pendingRequests = [];
+const jobs = [];
+
+let nextJobID = 1;
+
+async function acquireWorker() {
+  let worker = idleWorkers.shift();
+  if (!worker) {
+    if (maxCount < 1) {
+      throw new Error(`Unable to start worker because maxCount is ${maxCount}`);
+    }
+    if (activeWorkers.length < maxCount) {
+      // start a new one
+      worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+      worker.onmessage = handleMessage;
+      worker.onerror = (evt) => console.error(evt);
+    } else {
+      // wait for the next worker to become available again
+      return new Promise((resolve) => {
+        pendingRequests.push(resolve);
+      });
+    }
+  }
+  activeWorkers.push(worker);
+  return worker;
+}
+
+async function startJob(name, args = [], transfer = []) {
+  const worker = await acquireWorker();
+  const job = {
+    id: nextJobID++,
+    promise: null,
+    resolve: null,
+    reject: null,
+    worker,
+  };
+  job.promise = new Promise((resolve, reject) => {
+    job.resolve = resolve;
+    job.reject = reject;
+  });
+  jobs.push(job);
+  worker.onmessageerror = () => reject(new Error('Message error'));
+  worker.postMessage([ name, job.id, ...args], { transfer });
+  return job.promise;
+}
+
+function handleMessage(evt) {
+  const [ name, jobID, result ] = evt.data;
+  const jobIndex = jobs.findIndex(j => j.id === jobID);
+  const job = jobs[jobIndex];
+  jobs.splice(jobIndex, 1);
+  const { worker, resolve, reject } = job;
+  if (name !== 'error') {
+    resolve(result);
+  } else {
+    reject(result);
+  }
+  // work on pending request if any
+  const next = pendingRequests.shift();
+  if (next) {
+    next(worker);
+  } else {
+    const workerIndex = activeWorkers.indexOf(worker);
+    if (workerIndex !== -1) {
+      activeWorkers.splice(workerIndex, 1);
+    }
+    if (keepAlive && idleWorkers.length < maxCount) {
+      idleWorkers.push(worker);
+    }
+  }
+}

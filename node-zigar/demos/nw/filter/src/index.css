@@ -63,7 +63,7 @@ body {
 .App .contents {
   display: flex;
   width: 100%;
-  margin-top: 2em;
+  margin-top: 1em;
 }
 
 .App .contents .pane {
