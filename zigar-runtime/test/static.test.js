@@ -97,6 +97,8 @@ describe('Static variable functions', function() {
       }
       expect(names).to.eql([ 'superdog', 'supercat' ]);
       expect(values).to.eql([ 43, 4567 ]);
+      expect(Hello.valueOf()).to.eql({ superdog: 43, supercat: 4567 });
+      expect(JSON.stringify(Hello)).to.eql('{"superdog":43,"supercat":4567}');
     })
     it('should attach variables to an enumeration', function() {
       const intStructure = env.beginStructure({

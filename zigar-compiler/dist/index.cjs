@@ -5472,11 +5472,14 @@ function addStaticMembers(structure, env) {
     descriptors[member.name] = getDescriptor(member, env);
   }
   defineProperties(constructor, {
+    valueOf: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     ...descriptors,
     [Symbol.iterator]: { value: getStructIterator },
     // static variables are objects stored in the static template's slots
     [SLOTS]: { value: template[SLOTS] },
     [PROPS]: { value: members.map(m => m.name) },
+    [NORMALIZER]: { value: normalizeStruct },
   });
   if (type === StructureType.Enumeration) {
     const enums = constructor[ITEMS];
