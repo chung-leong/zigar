@@ -54,20 +54,6 @@
   width: 50%;
 }
 
-@media screen and (max-width: 600px) {
-  .App .contents {
-    flex-direction: column;
-  }
-
-  .App .contents .pane {
-    padding: 1px 2px 1px 2px;
-  }  
-
-  .App .contents .pane .controls {
-    padding-left: 4px;
-  }  
-}
-
 .hidden {
   position: absolute;
   visibility: hidden;
@@ -80,4 +66,22 @@
 
 .align-right {
   text-align: right;
+}
+
+@media screen and (max-width: 600px) {
+  .App .contents {
+    flex-direction: column;
+  }
+
+  .App .contents .pane {
+    padding: 1px 2px 1px 2px;
+  }  
+
+  .App .contents .pane .controls {
+    padding-left: 4px;
+  }
+
+  .align-right {
+    text-align: inherit;
+  } 
 }

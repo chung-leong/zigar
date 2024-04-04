@@ -44,8 +44,8 @@ function App() {
   }, [ bitmap ]);
   useEffect(() => {
     // update the result when the bitmap or intensity parameter changes
-    if (bitmap) {
-      (async () => {
+    (async() => {
+      if (bitmap) {      
         const srcCanvas = srcCanvasRef.current;
         const dstCanvas = dstCanvasRef.current;
         const srcCTX = srcCanvas.getContext('2d', { willReadFrequently: true });
@@ -57,8 +57,8 @@ function App() {
         dstCanvas.height = height;
         const dstCTX = dstCanvas.getContext('2d');
         dstCTX.putImageData(dstImageData, 0, 0);
-      })();
-    }
+      }  
+    })();
   }, [ bitmap, intensity ]);
 
   return (
@@ -84,21 +84,10 @@ function App() {
 
 export default App
 
-async function createImageData(width, height, source = {}, params = {}) {
-  return createPartialImageData(width, height, 0, height, source, params);
-}
-
-async function createPartialImageData(width, height, start, count, source = {}, params = {}) {
-  const transfer = [];
-  const args = [ width, height, start, count, source, params ];
-  if ('data' in source && 'width' in source && 'height' in source) {
-    transfer.push(source.data.buffer);
-  } else {
-    for (const image of Object.values(source)) {
-      transfer.push(image.data.buffer);
-    }
-  }
-  return startJob('createPartialImageData', args, transfer);
+async function createImageData(width, height, source, params) {
+  const args = [ width, height, source, params ];
+  const transfer = [ source.data.buffer ];
+  return startJob('createImageData', args, transfer);
 }
 
 function purgeQueue() {
@@ -113,7 +102,7 @@ const idleWorkers = [];
 const pendingRequests = [];
 const jobs = [];
 
-let nextJobID = 1;
+let nextJobId = 1;
 
 async function acquireWorker() {
   let worker = idleWorkers.shift();
@@ -128,9 +117,7 @@ async function acquireWorker() {
       worker.onerror = (evt) => console.error(evt);
     } else {
       // wait for the next worker to become available again
-      return new Promise((resolve) => {
-        pendingRequests.push(resolve);
-      });
+      return new Promise(resolve => pendingRequests.push(resolve));
     }
   }
   activeWorkers.push(worker);
@@ -140,7 +127,7 @@ async function acquireWorker() {
 async function startJob(name, args = [], transfer = []) {
   const worker = await acquireWorker();
   const job = {
-    id: nextJobID++,
+    id: nextJobId++,
     promise: null,
     resolve: null,
     reject: null,
@@ -157,8 +144,8 @@ async function startJob(name, args = [], transfer = []) {
 }
 
 function handleMessage(evt) {
-  const [ name, jobID, result ] = evt.data;
-  const jobIndex = jobs.findIndex(j => j.id === jobID);
+  const [ name, jobId, result ] = evt.data;
+  const jobIndex = jobs.findIndex(j => j.id === jobId);
   const job = jobs[jobIndex];
   jobs.splice(jobIndex, 1);
   const { worker, resolve, reject } = job;
