@@ -22,7 +22,7 @@ export async function compile(srcPath, modPath, options) {
   const { moduleDir, outputPath } = config;
   let changed = false;
   if (srcPath) {
-    const srcFileMap = await findMatchingFiles(moduleDir, /\.(zig|zon)$/);
+    const srcFileMap = await findMatchingFiles(moduleDir, /.\..*$/);
     // see if the (re-)compilation is necessary
     const soInfo = await findFile(outputPath);
     if (soInfo) {
@@ -90,7 +90,7 @@ export function compileSync(srcPath, modPath, options) {
   const { moduleDir, outputPath } = config;
   let changed = false;
   if (srcPath) {
-    const srcFileMap = findMatchingFilesSync(moduleDir, /\.(zig|zon)$/);
+    const srcFileMap = findMatchingFilesSync(moduleDir, /.\..*$/);
     // see if the (re-)compilation is necessary
     const soInfo = findFileSync(outputPath);
     if (soInfo) {
@@ -189,11 +189,12 @@ export function runCompilerSync(zigCmd, soBuildDir) {
 export function formatProjectConfig(config) {
   const lines = [];
   const fields = [ 
-    'moduleName', 'modulePath', 'moduleDir', 'exporterPath', 'stubPath', 'outputPath', 'useLibc'
+    'moduleName', 'modulePath', 'moduleDir', 'exporterPath', 'stubPath', 'outputPath', 
+    'useLibc', 'isWASM',
   ];  
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
-      const snakeCase = name.replace(/[A-Z]/g, m => '_' + m.toLowerCase());
+      const snakeCase = name.replace(/[A-Z]+/g, m => '_' + m.toLowerCase());
       lines.push(`pub const ${snakeCase} = ${JSON.stringify(value)};`);
     }
   }
@@ -247,14 +248,13 @@ export function getModuleCachePath(srcPath, options) {
   return join(cacheDir, folder, optimize, `${src.name}.zigar`);
 }
 
-const isWASM = /^wasm(32|64)$/;
-
 export function createConfig(srcPath, modPath, options = {}) {
   const {
     platform = getPlatform(),
     arch = getArch(),
     optimize = 'Debug',
-    useLibc = isWASM.test(arch) ? false : true,
+    isWASM = false,
+    useLibc = isWASM ? false : true,
     clean = false,
     buildDir = join(os.tmpdir(), 'zigar-build'),
     zigCmd = (() => {
@@ -291,7 +291,7 @@ export function createConfig(srcPath, modPath, options = {}) {
       return `zig ${args.join(' ')}`;
     })(),
   } = options;
-  const suffix = isWASM.test(arch) ? 'wasm' : 'c';
+  const suffix = isWASM ? 'wasm' : 'c';
   const src = parse(srcPath ?? '');
   const mod = parse(modPath ?? '');
   const moduleName = mod.name || src.name;
@@ -301,7 +301,7 @@ export function createConfig(srcPath, modPath, options = {}) {
   const moduleHash = md5(`${moduleDir}/${moduleName}`).slice(0, 8);
   const moduleBuildDir = join(buildDir, modulePrefix + '-' + moduleHash);   
   const outputPath = (() => {
-    if (!modPath && isWASM.test(arch)) {
+    if (!modPath && isWASM) {
       // save output in build folder
       return join(moduleBuildDir, optimize, `${src.name}.wasm`);
     } else {
@@ -320,7 +320,6 @@ export function createConfig(srcPath, modPath, options = {}) {
     platform,
     arch,
     optimize,
-    useLibc,
     moduleName,
     modulePath,
     moduleDir,
@@ -332,6 +331,8 @@ export function createConfig(srcPath, modPath, options = {}) {
     outputPath,
     clean,
     zigCmd,
+    useLibc,
+    isWASM,
   };
 }
 

@@ -4,21 +4,12 @@ const cfg = @import("./build-cfg.zig");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const arch = if (@hasDecl(@TypeOf(target), "getCpuArch")) target.getCpuArch() else target.result.cpu.arch;
-    const is_wasm = switch (arch) {
-        .wasm32, .wasm64 => true,
-        else => false,
-    };
     const lib = b.addSharedLibrary(.{
         .name = cfg.module_name,
         .root_source_file = .{ .path = cfg.stub_path },
         .target = target,
         .optimize = optimize,
     });
-    if (is_wasm) {
-        lib.rdynamic = true;
-        lib.wasi_exec_model = .reactor;
-    }
     const imports = .{};
     if (@hasDecl(std.Build.Step.Compile, "addModule")) {
         // Zig 0.11.0
@@ -38,12 +29,16 @@ pub fn build(b: *std.Build) void {
             .root_source_file = .{ .path = cfg.module_path },
             .imports = &imports,
         }));
-        if (is_wasm) {
+        if (cfg.is_wasm) {
             // WASM needs to be compiled as exe
             lib.kind = .exe;
             lib.linkage = .static;
             lib.entry = .disabled;
         }
+    }
+    if (cfg.is_wasm) {
+        lib.rdynamic = true;
+        lib.wasi_exec_model = .reactor;
     }
     if (cfg.use_libc) {
         lib.linkLibC();

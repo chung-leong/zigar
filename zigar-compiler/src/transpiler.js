@@ -24,7 +24,7 @@ export async function transpile(path, options) {
       throw new Error(`wasmLoader is a required option when embedWASM is false`);
     }
   }
-  Object.assign(compileOptions, { arch: 'wasm32', platform: 'wasi' });
+  Object.assign(compileOptions, { arch: 'wasm32', platform: 'wasi', isWASM: true });
   const srcPath = path.endsWith('.zig') ? path : findSourceFile(path, { 
     sourceFiles: getAbsoluteMapping(sourceFiles, process.cwd()),
   });
