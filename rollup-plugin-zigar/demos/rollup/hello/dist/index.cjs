@@ -601,19 +601,21 @@ const StructureType = {
   Primitive: 0,
   Array: 1,
   Struct: 2,
-  ArgStruct: 3,
-  ExternUnion: 4,
-  BareUnion: 5,
-  TaggedUnion: 6,
-  ErrorUnion: 7,
-  ErrorSet: 8,
-  Enumeration: 9,
-  Optional: 10,
-  Pointer: 11,
-  Slice: 12,
-  Vector: 13,
-  Opaque: 14,
-  Function: 15,
+  ExternStruct: 3,
+  PackedStruct: 4,
+  ArgStruct: 5,
+  ExternUnion: 6,
+  BareUnion: 7,
+  TaggedUnion: 8,
+  ErrorUnion: 9,
+  ErrorSet: 10,
+  Enumeration: 11,
+  Optional: 12,
+  Pointer: 13,
+  Slice: 14,
+  Vector: 15,
+  Opaque: 16,
+  Function: 17,
 };
 
 const factories$2 = Array(Object.values(StructureType).length);
@@ -1095,13 +1097,15 @@ function throwReadOnly() {
 }
 
 function throwZigError(name) {
-  throw new Error(decamelizeErrorName(name));
+  throw new Error(deanimalizeErrorName(name));
 }
 
-function decamelizeErrorName(name) {
-  // use a try block in case Unicode regex fails
+function deanimalizeErrorName(name) {
+  // deal with snake_case first
+  let s = name.replace(/_/g, ' ');
+  // then camelCase, using a try block in case Unicode regex fails
   try {
-    const lc = name.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
+    s = s.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
       if (m1.length === 1) {
         return ` ${m1.toLocaleLowerCase()}${m2}`;
       } else {
@@ -1114,11 +1118,10 @@ function decamelizeErrorName(name) {
         }
       }
     }).trimStart();
-    return lc.charAt(0).toLocaleUpperCase() + lc.substring(1);
-    /* c8 ignore next 3 */
+    /* c8 ignore next 2 */
   } catch (err) {
-    return name;
   }
+  return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 
 function getDescription(arg) {
@@ -1267,6 +1270,8 @@ function getTypedArrayClass(member) {
       case 4: return Float32Array;
       case 8: return Float64Array;
     }
+  } else if (memberType === MemberType.Object) {
+    return member.structure.typedArray;
   }
   return null;
 }
@@ -1340,9 +1345,14 @@ function addStaticMembers(structure, env) {
     descriptors[member.name] = getDescriptor(member, env);
   }
   defineProperties(constructor, {
+    valueOf: { value: getValueOf },
+    toJSON: { value: convertToJSON },
     ...descriptors,
+    [Symbol.iterator]: { value: getStructIterator },
     // static variables are objects stored in the static template's slots
     [SLOTS]: { value: template[SLOTS] },
+    [PROPS]: { value: members.map(m => m.name) },
+    [NORMALIZER]: { value: normalizeStruct },
   });
   if (type === StructureType.Enumeration) {
     const enums = constructor[ITEMS];
@@ -1392,7 +1402,7 @@ function addStaticMembers(structure, env) {
         error = constructor[SLOTS][slot] = previous;       
       } else {
         // set error message (overriding prototype) and add to hash
-        defineProperties(error, { message: { value: decamelizeErrorName(name) } });
+        defineProperties(error, { message: { value: deanimalizeErrorName(name) } });
         allErrors[index] = allErrors[error.message] = allErrors[`${error}`] = error;
       }
       errors[index] = errors[error.message] = errors[`${error}`] = error;
@@ -2079,11 +2089,15 @@ class Environment {
         if (!currentTarget || isMutable(this)) {
           // obtain address and length from memory
           location = pointer[LOCATION_GETTER]();
-          // get view of memory that pointer points to
-          const len = (Target[SIZE] !== undefined) ? location.length * Target[SIZE] : undefined;
-          const dv = env.findMemory(location.address, len);
-          // create the target
-          newTarget = Target.call(ENVIRONMENT, dv, { writable });
+          if (!isInvalidAddress(location.address)) {
+            // get view of memory that pointer points to
+            const len = (Target[SIZE] !== undefined) ? location.length * Target[SIZE] : undefined;
+            const dv = env.findMemory(location.address, len);
+            // create the target
+            newTarget = Target.call(ENVIRONMENT, dv, { writable });
+          } else {
+            newTarget = null;
+          }
         } else {
           newTarget = currentTarget;
         }
@@ -2164,6 +2178,14 @@ function subtract(address, len) {
   return address - ((typeof(address) === 'bigint') ? BigInt(len) : len);
 }
 
+function isInvalidAddress(address) {
+  if (typeof(address) === 'bigint') {
+    return address === 0xaaaaaaaaaaaaaaaan;
+  } else {
+    return address === 0xaaaaaaaa;
+  }
+}
+
 class WebAssemblyEnvironment extends Environment {
   imports = {
     getFactoryThunk: { argType: '', returnType: 'i' },
@@ -2180,6 +2202,7 @@ class WebAssemblyEnvironment extends Environment {
     captureString: { argType: 'ii', returnType: 'v' },
     captureView: { argType: 'iib', returnType: 'v' },
     castView: { argType: 'vvb', returnType: 'v' },
+    getSlotNumber: { argType: 'ii', returnType: 'i' },
     readSlot: { argType: 'vi', returnType: 'v' },
     writeSlot: { argType: 'viv' },
     getViewAddress: { argType: 'v', returnType: 'i' },
@@ -2195,7 +2218,6 @@ class WebAssemblyEnvironment extends Environment {
     attachTemplate: { argType: 'vvb' },
     finalizeShape: { argType: 'v' },
     endStructure: { argType: 'v' },
-    writeToConsole: { argType: 'v' },
     startCall: { argType: 'iv', returnType: 'i' },
     endCall: { argType: 'iv', returnType: 'i' },
   };
@@ -2411,22 +2433,26 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   async instantiateWebAssembly(source) {
+    const res = await source;
     const env = this.exportFunctions();
-    if (source[Symbol.toStringTag] === 'Response') {
-      return WebAssembly.instantiateStreaming(source, { env });
+    const wasi = this.getWASI();
+    const imports = { env, wasi_snapshot_preview1: wasi };
+    if (res[Symbol.toStringTag] === 'Response') {
+      return WebAssembly.instantiateStreaming(res, imports);
     } else {
-      const buffer = await source;
-      return WebAssembly.instantiate(buffer, { env });
+      return WebAssembly.instantiate(res, imports);
     }
   }
 
   loadModule(source) {
     return this.initPromise = (async () => {
       const { instance } = await this.instantiateWebAssembly(source);
-      this.memory = instance.exports.memory;
+      const { memory, _initialize } = instance.exports;
       this.importFunctions(instance.exports);
       this.trackInstance(instance);
       this.runtimeSafety = this.isRuntimeSafetyActive();
+      this.memory = memory;
+      _initialize?.();
     })();
   }
 
@@ -2445,7 +2471,6 @@ class WebAssemblyEnvironment extends Environment {
   }
 
 
-  /* RUNTIME-ONLY */
   getMemoryOffset(address) {
     // WASM address space starts at 0
     return address;
@@ -2514,7 +2539,37 @@ class WebAssemblyEnvironment extends Environment {
     }
     return args.retval;
   }
-  /* RUNTIME-ONLY */
+
+  getWASI() {
+    return { 
+      proc_exit: (rval) => {
+      },
+      fd_write: (fd, iovs_ptr, iovs_count, written_ptr) => {
+        if (fd === 1 || fd === 2) {
+          const dv = new DataView(this.memory.buffer);
+          let written = 0;
+          for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
+            const buf_ptr = dv.getUint32(p, true);
+            const buf_len = dv.getUint32(p + 4, true);
+            const buf = new DataView(this.memory.buffer, buf_ptr, buf_len);
+            this.writeToConsole(buf);
+            written += buf_len;
+          }
+          dv.setUint32(written_ptr, written, true);
+          return 0;            
+        } else {
+          return 1;
+        }
+      },
+      random_get: (buf, buf_len) => {
+        const dv = new DataView(this.memory.buffer);
+        for (let i = 0; i < buf_len; i++) {
+          dv.setUint8(Math.floor(256 * Math.random()));
+        }
+        return 0;
+      },
+    };
+  }
 }
 
 function createEnvironment(source) {
@@ -2568,6 +2623,7 @@ const f0 = {
 Object.assign(s0, {
   ...s,
   name: "void",
+  align: 1,
   instance: {
     members: [
       {
@@ -2583,8 +2639,9 @@ Object.assign(s0, {
 });
 Object.assign(s1, {
   ...s,
-  type: 3,
+  type: 5,
   name: "hello",
+  align: 1,
   instance: {
     members: [
       {
@@ -2605,6 +2662,7 @@ Object.assign(s2, {
   ...s,
   type: 2,
   name: "hello",
+  align: 1,
   static: {
     members: [],
     methods: [
@@ -2631,7 +2689,7 @@ env.recreateStructures(structures, options);
 // initiate loading and compilation of WASM bytecodes
 const source = (async () => {
   // hello.zig
-  const binaryString = atob("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KAIEEQMAIQELIAEPCyAAIAY2AghBAQteAQF/AkACQCAAQQxqKAIAIgUgAUsNACAAQRBqKAIAIAVqIAFNDQAgASACaiAFIAAoAggiAWpHDQEgACABIAJrNgIIDwsgACgCACABIAIgAyAEIAAoAgQoAggRAQALC24BA38CQEEALQCsikANAEEAQQE6AKyKQAtBACEAQQAhAQJAA0AgASECIABBAXENAUEMIQFBASEAQQAoAqiKQEUNAEEMIQEgAkG5hsAAakEMIAJrQQAQACICRQ0AIAIQAxoMAAsLQQBBADoArIpACwuOCQEAQYCAwAALhAkDAAAABAAAAAUAAAAAAAAAAAAAAAAAEAAGAAAABwAAAAgAAABEZXZpY2VCdXN5AFVuYWJsZVRvQWxsb2NhdGVNZW1vcnkAVW5hYmxlVG9GcmVlTWVtb3J5AE92ZXJmbG93AFVuYWJsZVRvQ3JlYXRlRGF0YVZpZXcASW5wdXRPdXRwdXQAaXNDb25zdABzbG90AEludmFsaWRBcmd1bWVudABOb1NwYWNlTGVmdABiaXRPZmZzZXQAYXJnU3RydWN0AFVuYWJsZVRvSW5zZXJ0T2JqZWN0AFVuYWJsZVRvUmV0cmlldmVPYmplY3QAVW5hYmxlVG9DcmVhdGVPYmplY3QAU3lzdGVtUmVzb3VyY2VzAGhhc1BvaW50ZXIAQ29ubmVjdGlvblJlc2V0QnlQZWVyAFVuYWJsZVRvQWRkU3RydWN0dXJlTWVtYmVyAFVuYWJsZVRvQWRkU3RhdGljTWVtYmVyAFVua25vd24AVW5hYmxlVG9TdGFydFN0cnVjdHVyZURlZmluaXRpb24ATG9ja1Zpb2xhdGlvbgBVbmFibGVUb1JldHJpZXZlTWVtb3J5TG9jYXRpb24AYWxpZ24AV291bGRCbG9jawBsZW5ndGgATm90T3BlbkZvcldyaXRpbmcAVW5hYmxlVG9DcmVhdGVTdHJpbmcARmlsZVRvb0JpZwBiaXRTaXplAGJ5dGVTaXplAFVuYWJsZVRvQ3JlYXRlU3RydWN0dXJlVGVtcGxhdGUAVW5hYmxlVG9BZGRTdHJ1Y3R1cmVUZW1wbGF0ZQBzdHJ1Y3R1cmUAVW5hYmxlVG9EZWZpbmVTdHJ1Y3R1cmUAdHlwZQBVbmFibGVUb1NldE9iamVjdFR5cGUAVW5hYmxlVG9GaW5kT2JqZWN0VHlwZQBCcm9rZW5QaXBlAG5hbWUAVW5hYmxlVG9Xcml0ZVRvQ29uc29sZQBVbmFibGVUb0FkZE1ldGhvZABQb2ludGVySXNJbnZhbGlkAE9wZXJhdGlvbkFib3J0ZWQAVW5leHBlY3RlZABpc1JlcXVpcmVkAEFjY2Vzc0RlbmllZAB0aHVua0lkAERpc2tRdW90YQBIZWxsbyB3b3JsZCEAcmV0dmFsAABoZWxsbwAAdm9pZAAAAAAAAAAAAAAAWQAQAAgAAABnARAABwAAAC8AEAAWAAAARgAQABIAAACeARAAHgAAAGIAEAAWAAAA7gAQABQAAACSAhAAFgAAAHwCEAAVAAAA1wAQABYAAADCABAAFAAAAG8BEAAgAAAANAEQABoAAABPARAAFwAAANACEAARAAAAGAIQAB8AAADnARAAFAAAADgCEAAcAAAAXwIQABcAAAC5AhAAFgAAAOICEAAQAAAAogAQAAsAAAAvAxAACQAAAPwBEAAKAAAAeQAQAAsAAAAkABAACgAAAJIAEAAPAAAAGgMQAAwAAACpAhAACgAAAAMBEAAPAAAA8wIQABAAAADVARAAEQAAAJABEAANAAAAwwEQAAoAAAAeARAAFQAAAAQDEAAKAAAA");
+  const binaryString = atob("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IQYgBCACTQ0CQQAhASAGIAdNDQIMAQsgACgCACABIAIgAyAEIAUgACgCBCgCBBEDACEBCyABDwsgACAGNgIIQQELXgEBfwJAAkAgAEEMaigCACIFIAFLDQAgAEEQaigCACAFaiABTQ0AIAEgAmogBSAAKAIIIgFqRw0BIAAgASACazYCCA8LIAAoAgAgASACIAMgBCAAKAIEKAIIEQEACwuAAQECfyMAQRBrIgAkAEEAIQECQEEALQDgjYAIDQBBAEEBOgDgjYAICwJAA0AgAUEMRg0BIABBDCABazYCCCAAIAFB+ouACGo2AgRBAiAAQQRqQQEgAEEMahADQf//A3ENASAAKAIMIAFqIQEMAAsLQQBBADoA4I2ACCAAQRBqJAALC8gMAgBBgICACAuQCQMAAAAEAAAABQAAAAAAAAAAAAAAAAAAAURldmljZUJ1c3kAdW5hYmxlX3RvX2FsbG9jYXRlX21lbW9yeQB1bmFibGVfdG9fZnJlZV9tZW1vcnkAT3ZlcmZsb3cAdW5hYmxlX3RvX2NyZWF0ZV9kYXRhX3ZpZXcASW5wdXRPdXRwdXQAdW5hYmxlX3RvX29idGFpbl9zbG90AEludmFsaWRBcmd1bWVudABOb1NwYWNlTGVmdAB1bmFibGVfdG9faW5zZXJ0X29iamVjdAB1bmFibGVfdG9fcmV0cmlldmVfb2JqZWN0AHVuYWJsZV90b19jcmVhdGVfb2JqZWN0AFN5c3RlbVJlc291cmNlcwBDb25uZWN0aW9uUmVzZXRCeVBlZXIAdW5hYmxlX3RvX2FkZF9zdHJ1Y3R1cmVfbWVtYmVyAHVuYWJsZV90b19hZGRfc3RhdGljX21lbWJlcgB1bmtub3duAHVuYWJsZV90b19zdGFydF9zdHJ1Y3R1cmVfZGVmaW5pdGlvbgBVdGY4RXhwZWN0ZWRDb250aW51YXRpb24ATG9ja1Zpb2xhdGlvbgB1bmFibGVfdG9fcmV0cmlldmVfbWVtb3J5X2xvY2F0aW9uAFdvdWxkQmxvY2sATm90T3BlbkZvcldyaXRpbmcAdW5hYmxlX3RvX2NyZWF0ZV9zdHJpbmcAVXRmOE92ZXJsb25nRW5jb2RpbmcARmlsZVRvb0JpZwBVdGY4RW5jb2Rlc1N1cnJvZ2F0ZUhhbGYAdW5hYmxlX3RvX2NyZWF0ZV9zdHJ1Y3R1cmVfdGVtcGxhdGUAdW5hYmxlX3RvX2FkZF9zdHJ1Y3R1cmVfdGVtcGxhdGUAdW5hYmxlX3RvX2RlZmluZV9zdHJ1Y3R1cmUAQnJva2VuUGlwZQB1bmFibGVfdG9fd3JpdGVfdG9fY29uc29sZQBVdGY4Q29kZXBvaW50VG9vTGFyZ2UAdW5hYmxlX3RvX2FkZF9tZXRob2QAcG9pbnRlcl9pc19pbnZhbGlkAE9wZXJhdGlvbkFib3J0ZWQAVW5leHBlY3RlZABBY2Nlc3NEZW5pZWQARGlza1F1b3RhAEludmFsaWRVdGY4AAAAAAAAAAAAUwAAAQgAAABgAQABBwAAACMAAAEZAAAAPQAAARUAAAC0AQABIgAAAFwAAAEaAAAA5wAAARcAAACDAAABFQAAAM0AAAEZAAAAtQAAARcAAABoAQABJAAAACUBAAEeAAAARAEAARsAAADhAgABFAAAAEUCAAEjAAAA9AEAARcAAABpAgABIAAAAIoCAAEaAAAAsAIAARoAAAD2AgABEgAAADwDAAELAAAAjQEAARgAAAAMAgABFAAAACwCAAEYAAAAywIAARUAAACpAAABCwAAADIDAAEJAAAAIQIAAQoAAAB3AAABCwAAABgAAAEKAAAAmQAAAQ8AAAAlAwABDAAAAKUCAAEKAAAA/wAAAQ8AAAAJAwABEAAAAOIBAAERAAAApgEAAQ0AAADXAQABCgAAAA8BAAEVAAAAGgMAAQoAAAAAQZCJgAgLpQMGAAAABwAAAAgAAABuYW1lAHR5cGUAbGVuZ3RoAGJ5dGVTaXplAGFsaWduAGlzQ29uc3QAaGFzUG9pbnRlcgBhcmdTdHJ1Y3QAdGh1bmtJZABpc1JlcXVpcmVkAGJpdE9mZnNldABiaXRTaXplAHNsb3QAc3RydWN0dXJlAGhlbGxvAABzdHJ1Y3R7Y29tcHRpbWUgc3RydWN0dXJlOiB0eXBlID0gaGVsbG99AHJldHZhbAAAc3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IGV4cG9ydGVyLkFyZ3VtZW50U3RydWN0KChmdW5jdGlvbiAnaGVsbG8nKSl9AHN0cnVjdHtjb21wdGltZSB0eXBlID0gZXhwb3J0ZXIuQXJndW1lbnRTdHJ1Y3QoKGZ1bmN0aW9uICdoZWxsbycpKX0Ac3RydWN0e2NvbXB0aW1lIGluZGV4OiB1c2l6ZSA9IDB9AEhlbGxvIHdvcmxkIQBzdHJ1Y3R7Y29tcHRpbWUgc3RydWN0dXJlOiB0eXBlID0gdm9pZH0Adm9pZAAA");
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);

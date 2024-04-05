@@ -30,6 +30,6 @@
   "license": "MIT",
   "dependencies": {
     "electron-squirrel-startup": "^1.0.0",
-    "node-zigar": "^0.11.1-alpha.8"
+    "node-zigar": "^0.11.1-beta.0"
   }
 }
