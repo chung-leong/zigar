@@ -113,6 +113,11 @@ async function acquireWorker() {
     if (activeWorkers.length < maxCount) {
       // start a new one
       worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+      // wait for start-up message from worker
+      await new Promise((resolve, reject) => {
+        worker.onmessage = resolve;
+        worker.onerror = reject;
+      });     
       worker.onmessage = handleMessage;
       worker.onerror = (evt) => console.error(evt);
     } else {

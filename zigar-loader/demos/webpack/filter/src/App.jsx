@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SampleImage from '../img/sample.png';
-import { createOutput } from '../zig/sepia.zig';
 import './App.css';
 
 function App() {
@@ -52,6 +51,7 @@ function App() {
         const srcCTX = srcCanvas.getContext('2d', { willReadFrequently: true });
         const { width, height } = srcCanvas;
         const srcImageData = srcCTX.getImageData(0, 0, width, height);
+        purgeQueue();
         const dstImageData = await createImageData(width, height, srcImageData, { intensity });
         dstCanvas.width = width;
         dstCanvas.height = height;
@@ -85,9 +85,91 @@ function App() {
 export default App
 
 async function createImageData(width, height, source, params) {
-  const input = { src: source };
-  const output = await createOutput(width, height, input, params);
-  const ta = output.dst.data.typedArray;
-  const clampedArray = new Uint8ClampedArray(ta.buffer, ta.byteOffset, ta.byteLength);
-  return new ImageData(clampedArray, width, height);
+  const args = [ width, height, source, params ];
+  const transfer = [ source.data.buffer ];
+  return startJob('createImageData', args, transfer);
+}
+
+function purgeQueue() {
+  pendingRequests.splice(0);
+}
+
+let keepAlive = true;
+let maxCount = navigator.hardwareConcurrency;
+
+const activeWorkers = [];
+const idleWorkers = [];
+const pendingRequests = [];
+const jobs = [];
+
+let nextJobId = 1;
+
+async function acquireWorker() {
+  let worker = idleWorkers.shift();
+  if (!worker) {
+    if (maxCount < 1) {
+      throw new Error(`Unable to start worker because maxCount is ${maxCount}`);
+    }
+    if (activeWorkers.length < maxCount) {
+      // start a new one
+      worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+      // wait for start-up message from worker
+      await new Promise((resolve, reject) => {
+        worker.onmessage = resolve;
+        worker.onerror = reject;
+      });     
+      worker.onmessage = handleMessage;
+      worker.onerror = (evt) => console.error(evt);
+    } else {
+      // wait for the next worker to become available again
+      return new Promise(resolve => pendingRequests.push(resolve));
+    }
+  }
+  activeWorkers.push(worker);
+  return worker;
+}
+
+async function startJob(name, args = [], transfer = []) {
+  const worker = await acquireWorker();
+  const job = {
+    id: nextJobId++,
+    promise: null,
+    resolve: null,
+    reject: null,
+    worker,
+  };
+  job.promise = new Promise((resolve, reject) => {
+    job.resolve = resolve;
+    job.reject = reject;
+  });
+  jobs.push(job);
+  worker.onmessageerror = () => reject(new Error('Message error'));
+  worker.postMessage([ name, job.id, ...args], { transfer });
+  return job.promise;
+}
+
+function handleMessage(evt) {
+  const [ name, jobId, result ] = evt.data;
+  const jobIndex = jobs.findIndex(j => j.id === jobId);
+  const job = jobs[jobIndex];
+  jobs.splice(jobIndex, 1);
+  const { worker, resolve, reject } = job;
+  if (name !== 'error') {
+    resolve(result);
+  } else {
+    reject(result);
+  }
+  // work on pending request if any
+  const next = pendingRequests.shift();
+  if (next) {
+    next(worker);
+  } else {
+    const workerIndex = activeWorkers.indexOf(worker);
+    if (workerIndex !== -1) {
+      activeWorkers.splice(workerIndex, 1);
+    }
+    if (keepAlive && idleWorkers.length < maxCount) {
+      idleWorkers.push(worker);
+    }
+  }
 }
