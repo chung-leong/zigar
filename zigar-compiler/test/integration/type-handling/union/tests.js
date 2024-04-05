@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { capture } from '../../capture.js';
 
 export function addTests(importModule, options) {
-  const { optimize } = options;
+  const { optimize, compilerVersion } = options;
   const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(optimize);
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
@@ -60,11 +60,19 @@ export function addTests(importModule, options) {
         print({ float: 3.14 });
         print({ string: "Hello" })
       });
-      expect(lines).to.eql([ 
-        'as-function-parameters.Variant{ .integer = 200 }',
-        'as-function-parameters.Variant{ .float = 3.14e+00 }', 
-        'as-function-parameters.Variant{ .string = { 72, 101, 108, 108, 111 } }', 
-      ]);
+      if (compilerVersion === '0.11.0') {
+        expect(lines).to.eql([ 
+          'as-function-parameters.Variant{ .integer = 200 }',
+          'as-function-parameters.Variant{ .float = 3.14e+00 }', 
+          'as-function-parameters.Variant{ .string = { 72, 101, 108, 108, 111 } }', 
+        ]);
+      } else {
+        expect(lines).to.eql([ 
+          'as-function-parameters.Variant{ .integer = 200 }',
+          'as-function-parameters.Variant{ .float = 3.14e0 }', 
+          'as-function-parameters.Variant{ .string = { 72, 101, 108, 108, 111 } }', 
+        ]);
+      }
     })
     it('should return union', async function() {
       this.timeout(120000);
@@ -85,7 +93,11 @@ export function addTests(importModule, options) {
         { integer: 777 }
       ]);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('{ array-of.Variant{ .integer = 123 }, array-of.Variant{ .float = 1.23e+00 }, array-of.Variant{ .string = { 119, 111, 114, 108, 100 } }, array-of.Variant{ .integer = 777 } }');
+      if (compilerVersion === '0.11.0') {
+        expect(before).to.equal('{ array-of.Variant{ .integer = 123 }, array-of.Variant{ .float = 1.23e+00 }, array-of.Variant{ .string = { 119, 111, 114, 108, 100 } }, array-of.Variant{ .integer = 777 } }');
+      } else {
+        expect(before).to.equal('{ array-of.Variant{ .integer = 123 }, array-of.Variant{ .float = 1.23e0 }, array-of.Variant{ .string = { 119, 111, 114, 108, 100 } }, array-of.Variant{ .integer = 777 } }');
+      }
     })
     it('should handle union in struct', async function() {
       this.timeout(120000);
@@ -100,10 +112,18 @@ export function addTests(importModule, options) {
         variant2: { float: 3.14 }
       });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-struct.StructA{ .variant1 = in-struct.Variant{ .float = 7.777e+00 }, .variant2 = in-struct.Variant{ .string = { 72, 101, 108, 108, 111 } } }');
+      if (compilerVersion === '0.11.0') {
+        expect(before).to.equal('in-struct.StructA{ .variant1 = in-struct.Variant{ .float = 7.777e+00 }, .variant2 = in-struct.Variant{ .string = { 72, 101, 108, 108, 111 } } }');
+      } else {
+        expect(before).to.equal('in-struct.StructA{ .variant1 = in-struct.Variant{ .float = 7.777e0 }, .variant2 = in-struct.Variant{ .string = { 72, 101, 108, 108, 111 } } }');
+      }
       module.variant_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-struct.StructA{ .variant1 = in-struct.Variant{ .string = { 119, 111, 114, 108, 100 } }, .variant2 = in-struct.Variant{ .float = 3.14e+00 } }');
+      if (compilerVersion === '0.11.0') {
+        expect(after).to.equal('in-struct.StructA{ .variant1 = in-struct.Variant{ .string = { 119, 111, 114, 108, 100 } }, .variant2 = in-struct.Variant{ .float = 3.14e+00 } }');
+      } else {
+        expect(after).to.equal('in-struct.StructA{ .variant1 = in-struct.Variant{ .string = { 119, 111, 114, 108, 100 } }, .variant2 = in-struct.Variant{ .float = 3.14e0 } }');
+      }
     })
     it('should not compile code with union in packed struct', async function() {
       this.timeout(120000);

@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { capture } from '../../capture.js';
 
 export function addTests(importModule, options) {
-  const { optimize } = options;
+  const { optimize, compilerVersion } = options;
   const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(optimize);
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
@@ -34,10 +34,17 @@ export function addTests(importModule, options) {
         print1(Math.PI, Math.PI);
         print2(Math.PI, Math.PI, Math.PI);
       });
-      expect(lines).to.eql([
-        '3.140625 3.1415927410125732',
-        '3.141592653589793 3.141592653589793e+00 3.141592653589793e+00',
-      ]);
+      if (compilerVersion === '0.11.0') {
+        expect(lines).to.eql([
+          '3.140625 3.1415927410125732',
+          '3.141592653589793 3.141592653589793e+00 3.141592653589793e+00',
+        ]); 
+      } else {
+        expect(lines).to.eql([
+          '3.14 3.1415927',
+          '3.141592653589793 3.141592653589793116e0 3.141592653589793115997963468544185e0',
+        ]);
+      }
     })
     it('should return float', async function() {
       this.timeout(120000);
@@ -55,20 +62,44 @@ export function addTests(importModule, options) {
       expect([ ...module.array2 ]).to.eql([ 1.1, 2.1, 3.1, 4.1 ]);
       expect([ ...module.array3 ]).to.eql([ 1.1, 2.1, 3.1, 4.1 ]);
       const [ before1 ] = await capture(() => print1());
-      expect(before1).to.equal('{ 1.25e+00, 2.25e+00, 3.25e+00, 4.25e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(before1).to.equal('{ 1.25e+00, 2.25e+00, 3.25e+00, 4.25e+00 }');
+      } else {
+        expect(before1).to.equal('{ 1.25e0, 2.25e0, 3.25e0, 4.25e0 }');
+      }
       module.array1 = [ 3.5, 3.5, 3.5, 3.5 ];
       const [ after1 ] = await capture(() => print1());
-      expect(after1).to.equal('{ 3.5e+00, 3.5e+00, 3.5e+00, 3.5e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(after1).to.equal('{ 3.5e+00, 3.5e+00, 3.5e+00, 3.5e+00 }');
+      } else {
+        expect(after1).to.equal('{ 3.5e0, 3.5e0, 3.5e0, 3.5e0 }');
+      }
       const [ before2 ] = await capture(() => print2());
-      expect(before2).to.equal('{ 1.1e+00, 2.1e+00, 3.1e+00, 4.1e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(before2).to.equal('{ 1.1e+00, 2.1e+00, 3.1e+00, 4.1e+00 }');
+      } else {
+        expect(before2).to.equal('{ 1.1e0, 2.1e0, 3.1e0, 4.1e0 }');
+      }
       module.array2 = [ 3.5, 3.5, 3.5, 3.5 ];
       const [ after2 ] = await capture(() => print2());
-      expect(after2).to.equal('{ 3.5e+00, 3.5e+00, 3.5e+00, 3.5e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(after2).to.equal('{ 3.5e+00, 3.5e+00, 3.5e+00, 3.5e+00 }');
+      } else {
+        expect(after2).to.equal('{ 3.5e0, 3.5e0, 3.5e0, 3.5e0 }');
+      }
       const [ before3 ] = await capture(() => print3());
-      expect(before3).to.equal('{ 1.1e+00, 2.1e+00, 3.1e+00, 4.1e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(before3).to.equal('{ 1.1e+00, 2.1e+00, 3.1e+00, 4.1e+00 }');
+      } else {
+        expect(before3).to.equal('{ 1.1e0, 2.1e0, 3.1e0, 4.1e0 }');
+      }
       module.array3 = [ 3.5, 3.5, 3.5, 3.5 ];
       const [ after3 ] = await capture(() => print1());
-      expect(after3).to.equal('{ 3.5e+00, 3.5e+00, 3.5e+00, 3.5e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(after3).to.equal('{ 3.5e+00, 3.5e+00, 3.5e+00, 3.5e+00 }');
+      } else {
+        expect(after3).to.equal('{ 3.5e0, 3.5e0, 3.5e0, 3.5e0 }');
+      }
     })
     it('should handle float in struct', async function() {
       this.timeout(120000);
@@ -77,10 +108,18 @@ export function addTests(importModule, options) {
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ number1: 123, number2: 0.456 });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-struct.StructA{ .number1 = -5.0e-01, .number2 = -4.44e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(before).to.equal('in-struct.StructA{ .number1 = -5.0e-01, .number2 = -4.44e+00 }');
+      } else {
+        expect(before).to.equal('in-struct.StructA{ .number1 = -5e-1, .number2 = -4.44e0 }');
+      }
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-struct.StructA{ .number1 = 1.23e+02, .number2 = 4.56e-01 }');
+      if (compilerVersion === '0.11.0') {
+        expect(after).to.equal('in-struct.StructA{ .number1 = 1.23e+02, .number2 = 4.56e-01 }');
+      } else {
+        expect(after).to.equal('in-struct.StructA{ .number1 = 1.23e2, .number2 = 4.56e-1 }');
+      }
     })
     it('should handle float in packed struct', async function() {
       this.timeout(120000);
@@ -89,10 +128,18 @@ export function addTests(importModule, options) {
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ state: false, number1: 1, number2: 2, number3: 3 });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-packed-struct.StructA{ .state = true, .number1 = 1.5e+00, .number2 = 7.77e+00, .number3 = -4.25e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(before).to.equal('in-packed-struct.StructA{ .state = true, .number1 = 1.5e+00, .number2 = 7.77e+00, .number3 = -4.25e+00 }');
+      } else {
+        expect(before).to.equal('in-packed-struct.StructA{ .state = true, .number1 = 1.5e0, .number2 = 7.77e0, .number3 = -4.25e0 }');
+      }
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-packed-struct.StructA{ .state = false, .number1 = 1.0e+00, .number2 = 2.0e+00, .number3 = 3.0e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(after).to.equal('in-packed-struct.StructA{ .state = false, .number1 = 1.0e+00, .number2 = 2.0e+00, .number3 = 3.0e+00 }');
+      } else {
+        expect(after).to.equal('in-packed-struct.StructA{ .state = false, .number1 = 1e0, .number2 = 2e0, .number3 = 3e0 }');
+      }
     })
     it('should handle float as comptime field', async function() {
       this.timeout(120000);
@@ -101,7 +148,11 @@ export function addTests(importModule, options) {
       const b = new StructA({ state: true });
       expect(b.number).to.equal(5.55);
       const [ line ] = await capture(() => print(b));
-      expect(line).to.equal('as-comptime-field.StructA{ .state = true, .number = 5.55e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(line).to.equal('as-comptime-field.StructA{ .state = true, .number = 5.55e+00 }');
+      } else {
+        expect(line).to.equal('as-comptime-field.StructA{ .state = true, .number = 5.55e0 }');
+      }
     })
     it('should handle float in bare union', async function() {
       this.timeout(120000);
@@ -145,7 +196,11 @@ export function addTests(importModule, options) {
       const { default: module, print } = await importTest('in-optional');
       expect(module.optional).to.equal(3.14);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('3.14e+00');
+      if (compilerVersion === '0.11.0') {
+        expect(before).to.equal('3.14e+00');
+      } else {
+        expect(before).to.equal('3.14e0');
+      }
       module.optional = null;
       expect(module.optional).to.be.null;
       const [ after ] = await capture(() => print());
@@ -158,7 +213,11 @@ export function addTests(importModule, options) {
       const { default: module, Error, print } = await importTest('in-error-union');
       expect(module.error_union).to.equal(3.14);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('3.14e+00');
+      if (compilerVersion === '0.11.0') {
+        expect(before).to.equal('3.14e+00');
+      } else {
+        expect(before).to.equal('3.14e0');
+      }
       module.error_union = Error.goldfish_died;
       expect(() => module.error_union).to.throw(Error.goldfish_died);
       const [ after ] = await capture(() => print());
@@ -173,21 +232,44 @@ export function addTests(importModule, options) {
       expect([ ...module.vector2 ]).to.eql([ 1.5, 2.5, 3.5, 4.5 ]);
       expect([ ...module.vector3 ]).to.eql([ 1.5, 2.5, 3.5, 4.5 ]);
       const [ before1 ] = await capture(() => print1());
-      expect(before1).to.equal('{ 1.5e+00, 2.5e+00, 3.5e+00, 4.5e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(before1).to.equal('{ 1.5e+00, 2.5e+00, 3.5e+00, 4.5e+00 }');
+      } else {
+        expect(before1).to.equal('{ 1.5e0, 2.5e0, 3.5e0, 4.5e0 }');
+      }
       module.vector1 = [ 3.5, 3.5, 3.5, 3.5 ];
       const [ after1 ] = await capture(() => print1());
-      expect(after1).to.equal('{ 3.5e+00, 3.5e+00, 3.5e+00, 3.5e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(after1).to.equal('{ 3.5e+00, 3.5e+00, 3.5e+00, 3.5e+00 }');
+      } else {
+        expect(after1).to.equal('{ 3.5e0, 3.5e0, 3.5e0, 3.5e0 }');
+      }
       const [ before2 ] = await capture(() => print2());
-      expect(before2).to.equal('{ 1.5e+00, 2.5e+00, 3.5e+00, 4.5e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(before2).to.equal('{ 1.5e+00, 2.5e+00, 3.5e+00, 4.5e+00 }');
+      } else {
+        expect(before2).to.equal('{ 1.5e0, 2.5e0, 3.5e0, 4.5e0 }');
+      }
       module.vector2 = [ 3.5, 3.5, 3.5, 3.5 ];
       const [ after2 ] = await capture(() => print2());
-      expect(after2).to.equal('{ 3.5e+00, 3.5e+00, 3.5e+00, 3.5e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(after2).to.equal('{ 3.5e+00, 3.5e+00, 3.5e+00, 3.5e+00 }');
+      } else {
+        expect(after2).to.equal('{ 3.5e0, 3.5e0, 3.5e0, 3.5e0 }');
+      }
       const [ before3 ] = await capture(() => print3());
-      expect(before3).to.equal('{ 1.5e+00, 2.5e+00, 3.5e+00, 4.5e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(before3).to.equal('{ 1.5e+00, 2.5e+00, 3.5e+00, 4.5e+00 }');
+      } else {
+        expect(before3).to.equal('{ 1.5e0, 2.5e0, 3.5e0, 4.5e0 }');
+      }
       module.vector3 = [ 3.5, 3.5, 3.5, 3.5 ];
       const [ after3 ] = await capture(() => print1());
-      expect(after3).to.equal('{ 3.5e+00, 3.5e+00, 3.5e+00, 3.5e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(after3).to.equal('{ 3.5e+00, 3.5e+00, 3.5e+00, 3.5e+00 }');
+      } else {
+        expect(after3).to.equal('{ 3.5e0, 3.5e0, 3.5e0, 3.5e0 }');
+      }
     })
-
   })
 }

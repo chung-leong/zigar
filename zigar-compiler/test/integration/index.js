@@ -1,3 +1,5 @@
+import { execSync } from 'child_process';
+
 import * as BenchmarksGame from './benchmarks-game/tests.js';
 import * as BuiltinFunctions from './builtin-functions/tests.js';
 import * as Console from './console/tests.js';
@@ -8,6 +10,8 @@ import * as PackageManager from './package-manager/tests.js';
 import * as TypeHandling from './type-handling/tests.js';
 
 export function addTests(importModule, options) {
+  const compilerVersion = execSync('zig version').toString().trim();
+  options = { ...options, compilerVersion };
   BenchmarksGame.addTests(importModule, options);
   Console.addTests(importModule, options);
   BuiltinFunctions.addTests(importModule, options);

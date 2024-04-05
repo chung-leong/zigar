@@ -5,7 +5,7 @@ import { capture } from '../../capture.js';
 use(chaiPromised);
 
 export function addTests(importModule, options) {
-  const { optimize } = options;
+  const { optimize, compilerVersion } = options;
   const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(optimize);
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
@@ -42,7 +42,11 @@ export function addTests(importModule, options) {
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ number1: 0.1, number2: 0.2 });
       const [ line ] = await capture(() => print());
-      expect(line).to.equal('in-struct.StructA{ .number1 = 1.1e+00, .number2 = 2.2e+00 }');
+      if (compilerVersion === '0.11.0') {
+        expect(line).to.equal('in-struct.StructA{ .number1 = 1.1e+00, .number2 = 2.2e+00 }');
+      } else {
+        expect(line).to.equal('in-struct.StructA{ .number1 = 1.1e0, .number2 = 2.2e0 }');
+      }
     })
     it('should handle comptime float in packed struct', async function() {
       this.timeout(120000);

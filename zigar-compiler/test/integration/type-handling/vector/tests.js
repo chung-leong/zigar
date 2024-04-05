@@ -5,7 +5,7 @@ import { capture } from '../../capture.js';
 use(chaiPromised);
 
 export function addTests(importModule, options) {
-  const { optimize } = options;
+  const { optimize, compilerVersion } = options;
   const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(optimize);
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
@@ -27,7 +27,11 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { print } = await importTest('as-function-parameters');
       const lines = await capture(() => print([ 1.1, 2.2, 3.3, 4.4 ]));
-      expect(lines).to.eql([ '{ 1.1e+00, 2.2e+00, 3.3e+00, 4.4e+00 }' ]);
+      if (compilerVersion === '0.11.0') {
+        expect(lines).to.eql([ '{ 1.1e+00, 2.2e+00, 3.3e+00, 4.4e+00 }' ]);
+      } else {
+        expect(lines).to.eql([ '{ 1.1e0, 2.2e0, 3.3e0, 4.4e0 }' ]);
+      }
     })
     it('should return vector', async function() {
       this.timeout(120000);
