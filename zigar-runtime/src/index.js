@@ -23,7 +23,7 @@ export {
 } from './member.js';
 export {
   useArgStruct, useArray, useBareUnion, useEnumeration, useErrorSet, useErrorUnion,
-  useExternUnion, useOpaque, useOptional, usePointer, usePrimitive, useSlice, useStruct,
-  useTaggedUnion, useVector
+  useExternStruct, useExternUnion, useOpaque, useOptional, usePackedStruct, usePointer,
+  usePrimitive, useSlice, useStruct, useTaggedUnion, useVector
 } from './structure.js';
 /* RUNTIME-ONLY-END */

@@ -2170,6 +2170,14 @@ function useStruct() {
   factories$2[StructureType.Struct] = defineStructShape;
 }
 
+function usePackedStruct() {
+  factories$2[StructureType.PackedStruct] = defineStructShape;
+}
+
+function useExternStruct() {
+  factories$2[StructureType.ExternStruct] = defineStructShape;
+}
+
 function useArgStruct() {
   factories$2[StructureType.ArgStruct] = defineArgStruct;
 }
@@ -5308,4 +5316,4 @@ function createEnvironment(source) {
 }
 /* RUNTIME-ONLY-END */
 
-export { createEnvironment, useArgStruct, useArray, useBareUnion, useBool, useComptime, useEnumeration, useEnumerationItem, useError, useErrorSet, useErrorUnion, useExtendedBool, useExtendedFloat, useExtendedInt, useExtendedUint, useExternUnion, useFloat, useInt, useLiteral, useNull, useObject, useOpaque, useOptional, usePointer, usePrimitive, useSlice, useStatic, useStruct, useTaggedUnion, useType, useUint, useUndefined, useVector, useVoid };
+export { createEnvironment, useArgStruct, useArray, useBareUnion, useBool, useComptime, useEnumeration, useEnumerationItem, useError, useErrorSet, useErrorUnion, useExtendedBool, useExtendedFloat, useExtendedInt, useExtendedUint, useExternStruct, useExternUnion, useFloat, useInt, useLiteral, useNull, useObject, useOpaque, useOptional, usePackedStruct, usePointer, usePrimitive, useSlice, useStatic, useStruct, useTaggedUnion, useType, useUint, useUndefined, useVector, useVoid };
