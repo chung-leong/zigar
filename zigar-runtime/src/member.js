@@ -1,5 +1,4 @@
 import { getBoolAccessor, getNumericAccessor } from './data-view.js';
-import { getGlobalErrorSet } from './error-set.js';
 import {
   rethrowRangeError, throwEnumExpected, throwErrorExpected, throwNotInErrorSet, throwNotUndefined,
   throwOverflow
@@ -234,23 +233,20 @@ export function getEnumerationItemDescriptor(member, env) {
 
 export function getErrorDescriptor(member, env) {
   const { structure } = member;
-  const { name } = structure;
   const { get: getValue, set: setValue } = getValueDescriptor(member, env);  
-  const acceptAny = name === 'anyerror';
-  const globalErrorSet = getGlobalErrorSet();
   const findError = function(value, allowZero = false) {
     const { constructor } = structure;
     let item;
     if (value === 0 && allowZero) {
       return;
     } else if (value instanceof Error) {
-      if (value instanceof (acceptAny ? globalErrorSet : constructor)) {
+      if (value instanceof constructor) {
         item = value;
       } else {
         throwNotInErrorSet(structure);
       }
     } else {
-      item = acceptAny ? globalErrorSet[value] : constructor(value);
+      item = constructor(value);
       if (!item) {
         throwErrorExpected(structure, value);
       } 

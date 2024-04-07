@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import { useAllExtendedTypes } from '../src/data-view.js';
-import { createGlobalErrorSet, getGlobalErrorSet } from '../src/error-set.js';
 import {
   MemberType, getDescriptor, isByteAligned, isReadOnly, useAllMemberTypes,
 } from '../src/member.js';
@@ -185,59 +184,6 @@ describe('Member functions', function() {
       expect(get.call(object, 3)).to.equal(error2);
       set.call(object, 2, 1);
       expect(get.call(object, 2)).to.equal(error1);
-      expect(() => set.call(object, new Error)).to.throw(TypeError);
-      expect(() => set.call(object, 3)).to.throw(TypeError);
-    })
-    it('should return descriptor for anyerror', function() {
-      const MyError = function(index) {
-        if (this) {
-          this.index = index;
-        } else {
-          switch (index) {
-            case 1: return error1;
-            case 2: return error2;
-          }
-        }
-      };
-      MyError.prototype[Symbol.toPrimitive] = function() {
-        return this.index;
-      };
-      createGlobalErrorSet();
-      const allErrors = getGlobalErrorSet();
-      Object.setPrototypeOf(MyError.prototype, allErrors.prototype);
-      const error1 = new MyError(1), error2 = new MyError(2);
-      allErrors[1] = error1;
-      allErrors[2] = error2;
-      const member = {
-        type: MemberType.Error,
-        bitSize: 16,
-        byteSize: 2,
-        bitOffset: 0,
-        structure: {
-          name: 'anyerror',
-          constructor: Error,
-          instance: {
-            members: [
-              {
-                type: MemberType.Uint,
-                bitSize: 16,
-                byteSize: 2,
-                bitOffset: 0
-              }
-            ]
-          }
-        }
-      };
-      const dv = new DataView(new ArrayBuffer(12));
-      const object = { [MEMORY]: dv };
-      const { get, set } = getDescriptor(member, env);
-      dv.setUint16(0, 1, true);
-      expect(get.call(object)).to.equal(error1);
-      set.call(object, error2);
-      expect(dv.getUint16(0, true)).to.equal(2);
-      expect(get.call(object)).to.equal(error2);
-      set.call(object, 1);
-      expect(get.call(object)).to.equal(error1);
       expect(() => set.call(object, new Error)).to.throw(TypeError);
       expect(() => set.call(object, 3)).to.throw(TypeError);
     })

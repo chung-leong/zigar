@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
 import { NodeEnvironment } from '../src/environment-node.js';
-import { createGlobalErrorSet, getGlobalErrorSet } from '../src/error-set.js';
+import { resetGlobalErrorSet } from '../src/error-set.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { ENVIRONMENT, MEMORY, SLOTS } from '../src/symbol.js';
@@ -12,7 +12,7 @@ describe('Error union functions', function() {
     beforeEach(function() {
       useAllMemberTypes();
       useAllStructureTypes();
-      createGlobalErrorSet();
+      resetGlobalErrorSet();
     })
     it('should define an error union', function() {
       const errorStructure = env.beginStructure({
@@ -931,8 +931,7 @@ describe('Error union functions', function() {
       const { constructor: Hello } = structure;
       const object = new Hello(123n);
       expect(object.$).to.equal(123n);
-      const AnyError = getGlobalErrorSet();
-      expect(() => object.$ = new AnyError('Doh!')).to.throw(TypeError)
+      expect(() => object.$ = new Error('Doh!')).to.throw(TypeError)
         .with.property('message').that.contains('Error');
     })
     it('should throw error when invalid value is given', function() {
@@ -994,6 +993,7 @@ describe('Error union functions', function() {
       const { constructor: Hello } = structure;
       expect(() => new Hello(null)).to.throw(TypeError);
       expect(() => new Hello({})).to.throw(SyntaxError);
+      expect(() => new Hello('Evil')).to.throw(SyntaxError);
     })    
     it('should recreate object when initialized with base64 string', function() {
       const errorStructure = env.beginStructure({

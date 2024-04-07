@@ -1,4 +1,5 @@
 import { getTypeName } from './data-view.js';
+import { isErrorJSON } from './error-set.js';
 import { MemberType } from './member.js';
 import { getPrimitiveType } from './primitive.js';
 import { StructureType } from './structure.js';
@@ -46,7 +47,10 @@ export function throwEnumExpected(structure, arg) {
 export function throwErrorExpected(structure, arg) {
   const { name } = structure;
   const type = typeof(arg);
-  if (type === 'string' || type === 'number') {
+  if (type === 'string' || type === 'number' || isErrorJSON(arg)) {
+    if (isErrorJSON(arg)) {
+      arg = `{ error: ${JSON.stringify(arg.error)} }`;
+    }
     throw new TypeError(`Error ${type} does not corresponds to any error in error set ${name}: ${arg}`);
   } else {
     throw new TypeError(`Error of the type ${name} expected, received ${arg}`);

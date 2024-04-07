@@ -1,4 +1,4 @@
-import { createGlobalErrorSet } from './error-set.js';
+import { resetGlobalErrorSet } from './error-set.js';
 import { throwAlignmentConflict } from './error.js';
 import { MemberType, useBool, useObject } from './member.js';
 import { getMemoryCopier } from './memory.js';
@@ -357,7 +357,7 @@ export class Environment {
       omitFunctions = false,
       omitVariables = isElectron(),
     } = options;
-    createGlobalErrorSet();
+    resetGlobalErrorSet();
     const thunkId = this.getFactoryThunk();
     const ArgStruct = this.defineFactoryArgStruct();
     const args = new ArgStruct([ { omitFunctions, omitVariables } ]);
@@ -510,7 +510,7 @@ export class Environment {
         return placeholder.structure;
       }
     };
-    createGlobalErrorSet();
+    resetGlobalErrorSet();
     const objectPlaceholders = new Map();
     for (const structure of structures) {
       // recreate the actual template using the provided placeholder

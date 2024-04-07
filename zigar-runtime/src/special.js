@@ -12,6 +12,7 @@ export function getValueOf() {
     if (normalizer) {
       let result = map.get(value);
       if (result === undefined) {
+        debugger;
         result = normalizer.call(value, process, options);
         map.set(value, result);
       }

@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
 import { Environment } from '../src/environment.js';
-import { createGlobalErrorSet } from '../src/error-set.js';
+import { resetGlobalErrorSet } from '../src/error-set.js';
 import { MemberType, useAllMemberTypes } from '../src/member.js';
 import { StructureType, useAllStructureTypes } from '../src/structure.js';
 import { ENVIRONMENT, SLOTS } from '../src/symbol.js';
@@ -12,7 +12,7 @@ describe('Error set functions', function() {
     beforeEach(function() {
       useAllMemberTypes();
       useAllStructureTypes();
-      createGlobalErrorSet();
+      resetGlobalErrorSet();
     })
     it('should define an error set', function() {
       const structure = env.beginStructure({
@@ -72,6 +72,104 @@ describe('Error set functions', function() {
       expect(JSON.stringify(object)).to.equal('{"error":"Unable to retrieve memory location"}');
       object.dataView.setInt16(0, -1);
       expect(() => JSON.stringify(object)).to.throw(TypeError);
+    })
+    it('should define anyerror', function() {
+      // define error first
+      const errorStructure1 = env.beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'ErrorSet1',
+        byteSize: 2,
+      });      
+      env.attachMember(errorStructure1, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+      });
+      env.attachMember(errorStructure1, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: errorStructure1,
+      }, true);
+      env.attachMember(errorStructure1, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: errorStructure1,
+      }, true);
+      env.finalizeShape(errorStructure1);
+      const { constructor: ErrorSet1 } = errorStructure1;
+      env.attachTemplate(errorStructure1, {
+        [SLOTS]: {
+          0: ErrorSet1.call(ENVIRONMENT, errorData(5), { writable: false }),
+          1: ErrorSet1.call(ENVIRONMENT, errorData(8), { writable: false }),
+        }
+      }, true);
+      env.finalizeStructure(errorStructure1);
+      // define anyerror
+      const structure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'anyerror',
+        byteSize: 2,
+      });      
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+      });
+      env.finalizeShape(structure);
+      const { constructor: AnyError } = structure;
+      env.finalizeStructure(structure);
+      // define another error afterward
+      const errorStructure2 = env.beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'ErrorSet1',
+        byteSize: 2,
+      });      
+      env.attachMember(errorStructure2, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+      });
+      env.attachMember(errorStructure2, {
+        name: 'pants_on_fire',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: errorStructure2,
+      }, true);
+      env.attachMember(errorStructure2, {
+        name: 'jesus_showed_up',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: errorStructure2,
+      }, true);
+      env.finalizeShape(errorStructure2);
+      const { constructor: ErrorSet2 } = errorStructure2;
+      env.attachTemplate(errorStructure2, {
+        [SLOTS]: {
+          0: ErrorSet2.call(ENVIRONMENT, errorData(6), { writable: false }),
+          1: ErrorSet2.call(ENVIRONMENT, errorData(7), { writable: false }),
+        }
+      }, true);
+      env.finalizeStructure(errorStructure2);
+      expect(AnyError).to.be.a('function');
+      expect(AnyError.UnableToRetrieveMemoryLocation).to.be.an.instanceOf(Error);
+      expect(AnyError.UnableToRetrieveMemoryLocation.message).to.equal('Unable to retrieve memory location');
+      expect(Number(AnyError.UnableToRetrieveMemoryLocation)).to.equal(Number(ErrorSet1.UnableToRetrieveMemoryLocation));
+      expect(AnyError.includes(ErrorSet1.UnableToRetrieveMemoryLocation)).to.be.true;
+      expect(Number(AnyError.pants_on_fire)).to.equal(Number(ErrorSet2.pants_on_fire));
+      expect(AnyError.pants_on_fire).to.be.instanceOf(Error);
+      expect(AnyError.pants_on_fire.message).to.equal('Pants on fire');
+      expect(AnyError.has(ErrorSet2.pants_on_fire)).to.be.true;
+      expect(AnyError.valueOf()).to.eql({
+        UnableToRetrieveMemoryLocation: AnyError.UnableToRetrieveMemoryLocation,
+        UnableToCreateObject: AnyError.UnableToCreateObject,
+        pants_on_fire: AnyError.pants_on_fire,
+        jesus_showed_up: AnyError.jesus_showed_up,
+      });
     })
     it('should create an object for storing an error', function() {
       const structure = env.beginStructure({
@@ -237,7 +335,7 @@ describe('Error set functions', function() {
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
       env.attachMember(structure, {
-        name: 'UnableToRetrieveMemoryLocation',
+        name: 'unable_to_retrieve_memory_location',
         type: MemberType.Comptime,
         slot: 0,
         structure,
@@ -258,172 +356,51 @@ describe('Error set functions', function() {
       const text = Hello.UnableToCreateObject.toString();
       expect(text).to.equal('Error: Unable to create object');
       expect(Hello(text)).to.equal(Hello.UnableToCreateObject);
+      expect(Hello('UnableToCreateObject')).to.equal(Hello.UnableToCreateObject);
+      expect(Hello('unable_to_retrieve_memory_location')).to.equal(Hello.unable_to_retrieve_memory_location);
+      expect(Hello('Error: Unable to retrieve memory location')).to.equal(Hello.unable_to_retrieve_memory_location);
+      expect(Hello('Unable to retrieve memory location')).to.be.undefined;
       expect(Hello('Dunno')).to.be.undefined;
     })
-    it('should make previously defined error sets its subclasses if it has all their errors', function() {
-      const catStructure = env.beginStructure({
+    it('should cast object to an error', function() {
+      const structure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'CatError',
+        name: 'Hello',
         byteSize: 2,
-      });
-      env.attachMember(catStructure, {
+      });      
+      env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
       });
-      env.finalizeShape(catStructure);
-      const { constructor: CatError } = catStructure;
-      env.attachMember(catStructure, {
-        name: 'CucumberEncountered',
+      env.finalizeShape(structure);
+      const { constructor: Hello } = structure;
+      env.attachMember(structure, {
+        name: 'unable_to_retrieve_memory_location',
         type: MemberType.Comptime,
         slot: 0,
-        structure: catStructure,
+        structure,
       }, true);
-      env.attachMember(catStructure, {
-        name: 'CatnipEncountered',
+      env.attachMember(structure, {
+        name: 'UnableToCreateObject',
         type: MemberType.Comptime,
         slot: 1,
-        structure: catStructure,
+        structure,
       }, true);
-      env.attachTemplate(catStructure, {
+      env.attachTemplate(structure, {
         [SLOTS]: {
-          0: CatError.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: CatError.call(ENVIRONMENT, errorData(6), { writable: false }),
-        },
+          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
+          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+        }
       }, true);
-      env.finalizeStructure(catStructure);
-      const dogStructure = env.beginStructure({
-        type: StructureType.ErrorSet,
-        name: 'DogError',
-        byteSize: 2,
-      });
-      env.attachMember(dogStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-      });
-      env.finalizeShape(dogStructure);
-      const { constructor: DogError } = dogStructure;
-      env.attachMember(dogStructure, {
-        name: 'StrangerEncountered',
-        type: MemberType.Comptime,
-        slot: 0,
-        structure: dogStructure,
-      }, true);
-      env.attachMember(dogStructure, {
-        name: 'BathRequired',
-        type: MemberType.Comptime,
-        slot: 1,
-        structure: dogStructure,
-      }, true);
-      env.attachTemplate(dogStructure, {
-        [SLOTS]: {
-          0: DogError.call(ENVIRONMENT, errorData(7), { writable: false }),
-          1: DogError.call(ENVIRONMENT, errorData(8), { writable: false }),
-        },
-      }, true);
-      env.finalizeStructure(dogStructure);
-      const petStructure = env.beginStructure({
-        type: StructureType.ErrorSet,
-        name: 'PetError',
-        byteSize: 2,
-      });
-      env.attachMember(petStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-      });
-      env.finalizeShape(petStructure);
-      const { constructor: PetError } = petStructure;
-      env.attachMember(petStructure, {
-        name: 'CucumberEncountered',
-        type: MemberType.Comptime,
-        slot: 0,
-        structure: petStructure,
-      }, true);
-      env.attachMember(petStructure, {
-        name: 'CatnipEncountered',
-        type: MemberType.Comptime,
-        slot: 1,
-        structure: petStructure,
-      }, true);
-      env.attachMember(petStructure, {
-        name: 'StrangerEncountered',
-        type: MemberType.Comptime,
-        slot: 2,
-        structure: petStructure,
-      }, true);
-      env.attachMember(petStructure, {
-        name: 'BathRequired',
-        type: MemberType.Comptime,
-        slot: 3,
-        structure: petStructure,
-      }, true);
-      env.attachTemplate(petStructure, {
-        [SLOTS]: {
-          0: PetError.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: PetError.call(ENVIRONMENT, errorData(6), { writable: false }),
-          2: PetError.call(ENVIRONMENT, errorData(7), { writable: false }),
-          3: PetError.call(ENVIRONMENT, errorData(8), { writable: false }),
-        },
-      }, true);
-      env.finalizeStructure(petStructure);
-      PetError.BathRequired;
-      expect(PetError.BathRequired).to.equal(DogError.BathRequired);
-      expect(DogError.BathRequired).to.be.instanceOf(PetError);
-      expect(CatError.CucumberEncountered).to.be.instanceOf(PetError);
+      env.finalizeStructure(structure);
+      expect(Hello({ error: 'Unable to create object' })).to.equal(Hello.UnableToCreateObject);
+      expect(Hello(JSON.parse(JSON.stringify(Hello.UnableToCreateObject)))).to.equal(Hello.UnableToCreateObject);
+      expect(Hello({ error: 'Unable to retrieve memory location' })).to.equal(Hello.unable_to_retrieve_memory_location);
+      expect(Hello({ error: 'UnableToCreateObject' })).to.be.undefined;
     })
-    it('should use previously defined error set as parent class if the other has all its error numbers', function() {
-      // same test as above, with the error sets processed in different order
-      const petStructure = env.beginStructure({
-        type: StructureType.ErrorSet,
-        name: 'PetError',
-        byteSize: 2,
-      });
-      env.attachMember(petStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-      });
-      env.finalizeShape(petStructure);
-      const { constructor: PetError } = petStructure;
-      env.attachMember(petStructure, {
-        name: 'CucumberEncountered',
-        type: MemberType.Comptime,
-        slot: 0,
-        structure: petStructure,
-      }, true);
-      env.attachMember(petStructure, {
-        name: 'CatnipEncountered',
-        type: MemberType.Comptime,
-        slot: 1,
-        structure: petStructure,
-      }, true);
-      env.attachMember(petStructure, {
-        name: 'StrangerEncountered',
-        type: MemberType.Comptime,
-        slot: 2,
-        structure: petStructure,
-      }, true);
-      env.attachMember(petStructure, {
-        name: 'BathRequired',
-        type: MemberType.Comptime,
-        slot: 3,
-        structure: petStructure,
-      }, true);
-      env.attachTemplate(petStructure, {
-        [SLOTS]: {
-          0: PetError.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: PetError.call(ENVIRONMENT, errorData(6), { writable: false }),
-          2: PetError.call(ENVIRONMENT, errorData(7), { writable: false }),
-          3: PetError.call(ENVIRONMENT, errorData(8), { writable: false }),
-        },
-      }, true);
-      env.finalizeStructure(petStructure);
+    it('should detect that set contains errors from a different set', function() {
       const catStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'CatError',
@@ -488,9 +465,57 @@ describe('Error set functions', function() {
         },
       }, true);
       env.finalizeStructure(dogStructure);
-      expect(PetError.BathRequired).to.equal(DogError.BathRequired);
-      expect(DogError.BathRequired).to.be.instanceOf(PetError);
-      expect(CatError.CucumberEncountered).to.be.instanceOf(PetError);
+      const petStructure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'PetError',
+        byteSize: 2,
+      });
+      env.attachMember(petStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+      });
+      env.finalizeShape(petStructure);
+      const { constructor: PetError } = petStructure;
+      env.attachMember(petStructure, {
+        name: 'CucumberEncountered',
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: petStructure,
+      }, true);
+      env.attachMember(petStructure, {
+        name: 'CatnipEncountered',
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: petStructure,
+      }, true);
+      env.attachMember(petStructure, {
+        name: 'StrangerEncountered',
+        type: MemberType.Comptime,
+        slot: 2,
+        structure: petStructure,
+      }, true);
+      env.attachMember(petStructure, {
+        name: 'BathRequired',
+        type: MemberType.Comptime,
+        slot: 3,
+        structure: petStructure,
+      }, true);
+      env.attachTemplate(petStructure, {
+        [SLOTS]: {
+          0: PetError.call(ENVIRONMENT, errorData(5), { writable: false }),
+          1: PetError.call(ENVIRONMENT, errorData(6), { writable: false }),
+          2: PetError.call(ENVIRONMENT, errorData(7), { writable: false }),
+          3: PetError.call(ENVIRONMENT, errorData(8), { writable: false }),
+        },
+      }, true);
+      env.finalizeStructure(petStructure);
+      expect(PetError.includes(DogError.BathRequired)).to.be.true;
+      expect(PetError.has(DogError.BathRequired)).to.be.true;
+      expect(PetError.has(CatError.CucumberEncountered)).to.be.true;
+      expect(PetError.includes(new Error('Doh'))).to.be.false;
+      expect(PetError.includes(null)).to.be.false;
     })
     it('should throw when no initializer is provided', function() {
       const structure = env.beginStructure({
@@ -595,6 +620,7 @@ describe('Error set functions', function() {
         }
       }, true);
       env.finalizeStructure(structure);
+      debugger;
       const object = new Hello({ typedArray: new Uint16Array([ 8 ])});
       expect(object.$).to.equal(Hello.UnableToCreateObject);
     }) 

@@ -78,3 +78,20 @@ export function defineEnumerationShape(structure, env) {
 export function normalizeEnumerationItem(cb) {
   return cb(this.$[NAME]);
 }
+
+export function appendEnumeration(enumeration, name, item) {
+  const enums = enumeration[ITEMS];
+  if (name !== undefined) {
+    // place item in hash to facilitate lookup, 
+    if (item instanceof constructor) {
+      // attach name to item so tagged union code can quickly find it
+      defineProperties(item, { [NAME]: { value: name } });  
+      // call toPrimitive directly since enum can be bigint or number
+      const index = item[Symbol.toPrimitive]();
+      enums[index] = enums[name] = item;          
+    }      
+  } else {
+    // non-exhaustive enum
+    defineProperties(enumeration, { [MORE]: { value: true } });
+  }
+}

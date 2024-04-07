@@ -1,4 +1,4 @@
-import { getGlobalErrorSet } from './error-set.js';
+import { getGlobalErrorSet, isErrorJSON } from './error-set.js';
 import { throwNotInErrorSet } from './error.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
@@ -63,20 +63,13 @@ export function defineErrorUnion(structure, env) {
           // we give setValue a chance to see if the error is actually an acceptable value
           // now is time to throw an error
           throwNotInErrorSet(structure);
+        } else if (isErrorJSON(arg)) {
+          setError.call(this, arg);
+          clearValue.call(this);
         } else if (arg && typeof(arg) === 'object') {
-          try {
-            if (propApplier.call(this, arg) === 0) {
-              throw err;
-            }
-          } catch (err) {
-            const { error } = arg;
-            if (typeof(error) === 'string') {
-              setError.call(this, error);
-              clearValue.call(this);
-            } else {
-              throw err;
-            }   
-          }                   
+          if (propApplier.call(this, arg) === 0) {
+            throw err;
+          }
         } else {
           throw err;
         }
