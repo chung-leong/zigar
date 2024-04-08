@@ -23,6 +23,7 @@ describe('Enumeration functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -68,6 +69,7 @@ describe('Enumeration functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -115,6 +117,7 @@ describe('Enumeration functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -153,6 +156,7 @@ describe('Enumeration functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -189,6 +193,7 @@ describe('Enumeration functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -225,6 +230,7 @@ describe('Enumeration functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -262,6 +268,7 @@ describe('Enumeration functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -300,6 +307,7 @@ describe('Enumeration functions', function() {
         bitSize: 64,
         bitOffset: 0,
         byteSize: 8,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -337,6 +345,7 @@ describe('Enumeration functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -376,6 +385,7 @@ describe('Enumeration functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -412,6 +422,7 @@ describe('Enumeration functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -448,6 +459,7 @@ describe('Enumeration functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -485,6 +497,7 @@ describe('Enumeration functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -502,6 +515,7 @@ describe('Enumeration functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -519,6 +533,7 @@ describe('Enumeration functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -555,6 +570,7 @@ describe('Enumeration functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -590,6 +606,7 @@ describe('Enumeration functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;

@@ -14,15 +14,13 @@ export const MemberType = {
   Int: 2,
   Uint: 3,
   Float: 4,
-  EnumerationItem: 5,
-  Error: 6,
-  Object: 7,
-  Type: 8,
-  Comptime: 9,
-  Static: 10,
-  Literal: 11,
-  Null: 12,
-  Undefined: 13,
+  Object: 5,
+  Type: 6,
+  Comptime: 7,
+  Static: 8,
+  Literal: 9,
+  Null: 10,
+  Undefined: 11,
 };
 
 export function isReadOnly(type) {
@@ -58,14 +56,6 @@ export function useFloat() {
   factories[MemberType.Float] = getFloatDescriptor;
 }
 
-export function useEnumerationItem() {
-  factories[MemberType.EnumerationItem] = getEnumerationItemDescriptor;
-}
-
-export function useError() {
-  factories[MemberType.Error] = getErrorDescriptor;
-}
-
 export function useObject() {
   factories[MemberType.Object] = getObjectDescriptor;
 }
@@ -94,6 +84,16 @@ export function useUndefined() {
   factories[MemberType.Undefined] = getUndefinedDescriptor;
 }
 
+const transformers = {};
+
+export function useEnumerationTransform() {
+  transformers[StructureType.Enumeration] = transformEnumerationDescriptor;
+}
+
+export function useErrorSetTransform() {
+  transformers[StructureType.ErrorSet] = transformErrorSetDescriptor;
+}
+
 export function isByteAligned({ bitOffset, bitSize, byteSize }) {
   return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
 }
@@ -116,6 +116,12 @@ export function getDescriptor(member, env) {
   }
   /* DEV-TEST-END */
   return f(member, env);
+}
+
+export function transformDescriptor(descriptor, member) {
+  const { structure } = member;
+  const t = transformers[structure?.type];
+  return (t) ? t(descriptor, structure) : descriptor;
 }
 
 export function getVoidDescriptor(member, env) {
@@ -157,12 +163,14 @@ export function getBoolDescriptor(member, env) {
 
 export function getIntDescriptor(member, env) {
   const getDataViewAccessor = addRuntimeCheck(env, getNumericAccessor);
-  return getDescriptorUsing(member, env, getDataViewAccessor)
+  const descriptor = getDescriptorUsing(member, env, getDataViewAccessor);
+  return transformDescriptor(descriptor, member);
 }
 
 export function getUintDescriptor(member, env) {
   const getDataViewAccessor = addRuntimeCheck(env, getNumericAccessor);
-  return getDescriptorUsing(member, env, getDataViewAccessor)
+  const descriptor = getDescriptorUsing(member, env, getDataViewAccessor);
+  return transformDescriptor(descriptor, member);
 }
 
 function addRuntimeCheck(env, getDataViewAccessor) {
@@ -188,89 +196,83 @@ export function getFloatDescriptor(member, env) {
   return getDescriptorUsing(member, env, getNumericAccessor)
 }
 
-function getValueDescriptor(member, env) {
-  // enum can be int or uint--need the type from the structure
-  const { type, structure } = member.structure.instance.members[0];
-  // combine that with the offset/size
-  const valueMember = { ...member, type, structure };
-  return getDescriptor(valueMember, env);
-}
-
-export function getEnumerationItemDescriptor(member, env) {
-  const { structure } = member;
-  const { get: getValue, set: setValue } = getValueDescriptor(member, env);
+export function transformEnumerationDescriptor(int, structure) {  
   const findEnum = function(value) {
     const { constructor } = structure;
     // the enumeration constructor returns the object for the int value
-    const item = (value instanceof constructor) ? value : constructor(value);
+    const item = constructor(value);
     if (!item) {
       throwEnumExpected(structure, value);
     }
     return item
   };
   return {
-    get: (getValue.length === 0) 
-    ? function getEnum() {
-        const value = getValue.call(this);
+    get: (int.get.length === 0) 
+    ? function getEnum(hint) {
+        const value = int.get.call(this);
+        if (hint === 'number') {
+          return value;
+        }
         return findEnum(value);
       }
     : function getEnumElement(index) {
-        const value = getValue.call(this, index);
+        const value = int.get.call(this, index);
         return findEnum(value);
       },
-    set: (setValue.length === 1) 
-    ? function setEnum(value) {
-        // call Symbol.toPrimitive directly as enum can be bigint or number
-        const item = findEnum(value);
-        setValue.call(this, item[Symbol.toPrimitive]());
+    set: (int.set.length === 1) 
+    ? function setEnum(value, hint) {
+        if (hint !== 'number') {
+          const item = findEnum(value);
+          // call Symbol.toPrimitive directly as enum can be bigint or number
+          value = item[Symbol.toPrimitive]();
+        }
+        int.set.call(this, value);
       }
     : function setEnumElement(index, value) {
         const item = findEnum(value);
-        setValue.call(this, index, item[Symbol.toPrimitive]());
+        int.set.call(this, index, item[Symbol.toPrimitive]());
       },
   };
 }
 
-export function getErrorDescriptor(member, env) {
-  const { structure } = member;
-  const { get: getValue, set: setValue } = getValueDescriptor(member, env);  
-  const findError = function(value, allowZero = false) {
+export function transformErrorSetDescriptor(int, structure) {
+  const findError = function(value) {
     const { constructor } = structure;
-    let item;
-    if (value === 0 && allowZero) {
-      return;
-    } else if (value instanceof Error) {
-      if (value instanceof constructor) {
-        item = value;
-      } else {
+    const item = constructor(value);
+    if (!item) {
+      if (value instanceof Error) {
         throwNotInErrorSet(structure);
-      }
-    } else {
-      item = constructor(value);
-      if (!item) {
+      } else {
         throwErrorExpected(structure, value);
-      } 
-    }
+      }
+    } 
     return item
   };
   return {
-    get: (getValue.length === 0) 
-    ? function getError(allowZero) {
-        const value = getValue.call(this);
-        return findError(value, allowZero);
+    get: (int.get.length === 0) 
+    ? function getError(hint) {
+        const value = int.get.call(this);
+        if (hint === 'number') {
+          return value;
+        }
+        return findError(value);
       }
     : function getErrorElement(index) {
-        const value = getValue.call(this, index);
+        const value = int.get.call(this, index);
         return findError(value, false);
       },
-    set: (setValue.length === 1) 
-    ? function setError(value, allowZero) {
-        const item = findError(value, allowZero);
-        setValue.call(this, Number(item ?? 0));
+    set: (int.set.length === 1) 
+    ? function setError(value, hint) {
+        if (hint !== 'number') {
+          const item = findError(value);
+          value = Number(item);
+        }
+        int.set.call(this, value);
       }
     : function setError(index, value) {
         const item = findError(value, false);
-        setValue.call(this, index, Number(item));
+        value = Number(item);
+        int.set.call(this, index, value);
       },
   };
 }
@@ -456,8 +458,6 @@ export function useAllMemberTypes() {
   useInt();
   useUint();
   useFloat();
-  useEnumerationItem();
-  useError();
   useObject();
   useType();
   useComptime();

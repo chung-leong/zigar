@@ -5,7 +5,7 @@ import { defineEnumerationShape } from './enumeration.js';
 import { defineErrorSet } from './error-set.js';
 import { defineErrorUnion } from './error-union.js';
 import { throwMissingInitializers, throwNoInitializer, throwNoProperty, throwReadOnly } from './error.js';
-import { MemberType, hasStandardFloatSize, hasStandardIntSize, isByteAligned, isReadOnly } from './member.js';
+import { MemberType, hasStandardFloatSize, hasStandardIntSize, isByteAligned, isReadOnly, useEnumerationTransform, useErrorSetTransform, useUint } from './member.js';
 import { defineOpaque } from './opaque.js';
 import { defineOptional } from './optional.js';
 import { copyPointer, definePointer } from './pointer.js';
@@ -92,10 +92,12 @@ export function useErrorUnion() {
 
 export function useErrorSet() {
   factories[StructureType.ErrorSet] = defineErrorSet;
+  useErrorSetTransform();
 }
 
 export function useEnumeration() {
   factories[StructureType.Enumeration] = defineEnumerationShape;
+  useEnumerationTransform();
 }
 
 export function useOptional() {
@@ -104,6 +106,7 @@ export function useOptional() {
 
 export function usePointer() {
   factories[StructureType.Pointer] = definePointer;
+  useUint();
 }
 
 export function useSlice() {
@@ -157,14 +160,6 @@ function flagMemberUsage(member, features) {
         features.useExtendedFloat = true;
       }
       break;
-    case MemberType.EnumerationItem: {
-      features.useEnumerationItem = true;
-      const { type, structure } = member.structure.instance.members[0]; 
-      flagMemberUsage({ ...member, type, structure }, features);
-    } break;
-    case MemberType.Error:
-      features.useError = true;
-      break;
     case MemberType.Object:
       features.useObject = true;
       break;
@@ -201,20 +196,6 @@ function flagStructureUsage(structure, features) {
       flagMemberUsage(member, features);
     }
   }
-  switch (type) {
-    case StructureType.Pointer:
-      // pointer structure has Object member, while needing support for Uint
-      features.useUint = true;
-      break;
-    case StructureType.Enumeration:
-      // enum structure has Int/Uint member, while needing support for EnumerationItem
-      features.useEnumerationItem = true;
-      break;
-    case StructureType.ErrorSet:
-      // error set structures have Uint member, while needing support for Error
-      features.useError = true;
-      break;
-  } 
 }
 
 export function getFeaturesUsed(structures) {

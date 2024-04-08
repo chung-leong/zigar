@@ -25,6 +25,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -62,7 +63,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
@@ -92,6 +93,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -129,7 +131,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
@@ -152,6 +154,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: anyErrorStructure,
       });
       env.finalizeShape(anyErrorStructure);
       const { constructor: AnyError } = anyErrorStructure;
@@ -165,6 +168,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -202,7 +206,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
@@ -230,6 +234,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -267,7 +272,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
@@ -292,6 +297,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -351,6 +357,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -384,6 +391,7 @@ describe('Error union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       env.attachMember(structStructure, {
         name: 'cat',
@@ -391,6 +399,7 @@ describe('Error union functions', function() {
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
+        structure: {},
       });
       env.finalizeShape(structStructure);
       env.finalizeStructure(structStructure);
@@ -410,7 +419,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
@@ -423,7 +432,7 @@ describe('Error union functions', function() {
       expect(object).to.be.an('!Animal');
       expect(object.$).to.be.an('Animal');
       object.$ = MyError.UnableToCreateObject;
-      expect(() => object.$).to.throw(MyError)
+      expect(() => object.$).to.throw(MyError.UnableToCreateObject)
         .with.property('message').that.equal('Unable to create object');
       object.$ = { dog: 1, cat: 1234 };
       expect(object.valueOf()).to.eql({ dog: 1, cat: 1234 });
@@ -439,6 +448,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -471,6 +481,7 @@ describe('Error union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       env.finalizeShape(intStructure);
       env.finalizeStructure(intStructure);
@@ -509,7 +520,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
@@ -536,6 +547,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -605,7 +617,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
@@ -632,6 +644,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -664,6 +677,7 @@ describe('Error union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       env.finalizeShape(intStructure);
       env.finalizeStructure(intStructure);
@@ -701,7 +715,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
@@ -726,6 +740,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -758,6 +773,7 @@ describe('Error union functions', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       env.finalizeShape(intStructure);
       env.finalizeStructure(intStructure);
@@ -795,7 +811,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
@@ -820,6 +836,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -857,7 +874,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
@@ -883,6 +900,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -920,7 +938,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
@@ -945,6 +963,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -982,7 +1001,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
@@ -1006,6 +1025,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -1043,7 +1063,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
@@ -1070,6 +1090,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -1107,7 +1128,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
@@ -1132,6 +1153,7 @@ describe('Error union functions', function() {
         byteSize: 4,
         bitOffset: 0,
         bitSize: 32,
+        structure: structStructure,
       });
       env.attachMember(structStructure, {
         name: 'cat',
@@ -1140,6 +1162,7 @@ describe('Error union functions', function() {
         byteSize: 4,
         bitOffset: 32,
         bitSize: 32,
+        structure: {},
       });     
       env.finalizeShape(structStructure);
       env.finalizeStructure(structStructure);
@@ -1153,6 +1176,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -1190,7 +1214,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: structStructure.byteSize * 8,
         bitSize: 16,
         byteSize: 2,
@@ -1217,6 +1241,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -1254,7 +1279,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,
@@ -1279,6 +1304,7 @@ describe('Error union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure,
       });
       env.finalizeShape(errorStructure);
       const { constructor: MyError } = errorStructure;
@@ -1316,7 +1342,7 @@ describe('Error union functions', function() {
       });
       env.attachMember(structure, {
         name: 'error',
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitOffset: 64,
         bitSize: 16,
         byteSize: 2,

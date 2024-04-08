@@ -265,85 +265,6 @@ describe('Structure functions', function() {
       expect(features).to.contain('useStruct');
       expect(features).to.contain('useExtendedBool');
     })
-    it('should report the need for standard enum support', function() {
-      const structures = [ 
-        {
-          type: StructureType.Struct,
-          instance: { 
-            members: [
-              {
-                type: MemberType.EnumerationItem,
-                bitSize: 32,
-                byteSize: 4,
-                structure: {
-                  instance: {
-                    members: [ { type: MemberType.Uint } ]
-                  }
-                }
-              }
-            ]
-          },
-          static: { members: [] },
-        }
-      ];
-      const features = getFeaturesUsed(structures);
-      expect(features).to.contain('useStruct');
-      expect(features).to.contain('useEnumerationItem');
-    })
-    it('should report the need for extended int support when unaligned enum is used', function() {
-      const structures = [ 
-        {
-          type: StructureType.Struct,
-          instance: { 
-            members: [
-              {
-                type: MemberType.EnumerationItem,
-                bitOffset: 2,
-                bitSize: 32,
-                structure: {
-                  instance: {
-                    members: [ { type: MemberType.Uint } ]
-                  }
-                }
-              }
-            ]
-          },
-          static: { members: [] },
-        }
-      ];
-      const features = getFeaturesUsed(structures);
-      expect(features).to.contain('useStruct');
-      expect(features).to.contain('useUint');
-      expect(features).to.contain('useExtendedUint');
-      expect(features).to.contain('useEnumerationItem');
-    })
-    it('should report the need for extended int support when non-standard enum is used', function() {
-      const structures = [ 
-        {
-          type: StructureType.Struct,
-          instance: { 
-            members: [
-              {
-                type: MemberType.EnumerationItem,
-                bitSize: 35,
-                byteSize: 8,
-                structure: {
-                  instance: {
-                    members: [ { type: MemberType.Uint } ]
-                  }
-                }
-              }
-            ]
-          },
-          static: { members: [] },
-        }
-      ];
-      const features = getFeaturesUsed(structures);
-      expect(features).to.contain('useStruct');
-      expect(features).to.contain('useUint');
-      expect(features).to.contain('useExtendedUint');
-      expect(features).to.contain('useEnumerationItem');
-    })
     it('should report the need for enum support when enum structure is used', function() {
       const structures = [ 
         {
@@ -367,7 +288,6 @@ describe('Structure functions', function() {
       ];
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useEnumeration');
-      expect(features).to.contain('useEnumerationItem');
       expect(features).to.contain('useUint');
     })
     it('should report the need for extended enum support when non-standard int is involved', function() {
@@ -393,29 +313,8 @@ describe('Structure functions', function() {
       ];
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useEnumeration');
-      expect(features).to.contain('useEnumerationItem');
       expect(features).to.contain('useUint');
       expect(features).to.contain('useExtendedUint');
-    })
-    it('should report the need for error support', function() {
-      const structures = [ 
-        {
-          type: StructureType.Struct,
-          instance: { 
-            members: [
-              {
-                type: MemberType.Error,
-                bitSize: 16,
-                byteSize: 2,
-              }
-            ]
-          },
-          static: { members: [] },
-        }
-      ];
-      const features = getFeaturesUsed(structures);
-      expect(features).to.contain('useStruct');
-      expect(features).to.contain('useError');
     })
     it('should report the need for error support when error set structure is used', function() {
       const structures = [ 
@@ -435,7 +334,6 @@ describe('Structure functions', function() {
       ];
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('useErrorSet');
-      expect(features).to.contain('useError');
       expect(features).to.contain('useUint');
     })
     it('should report the need for uint support when pointer structure is used', function() {
@@ -456,7 +354,6 @@ describe('Structure functions', function() {
       const features = getFeaturesUsed(structures);
       expect(features).to.contain('usePointer');
       expect(features).to.contain('useObject');
-      expect(features).to.contain('useUint');
     })
     it('should report the need for object support', function() {
       const structures = [ 

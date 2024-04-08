@@ -88,11 +88,13 @@ describe('Member functions', function() {
       expect(set).to.be.undefined;
     })
     it('should return error descriptor', function() {
-      const MyError = function(index) {
+      const MyError = function(arg) {
         if (this) {
-          this.index = index;
+          this.index = arg;
+        } else if (arg instanceof MyError) {
+          return arg;
         } else {
-          switch (index) {
+          switch (arg) {
             case 1: return error1;
             case 2: return error2;
           }
@@ -104,23 +106,14 @@ describe('Member functions', function() {
       Object.setPrototypeOf(MyError.prototype, Error.prototype);
       const error1 = new MyError(1), error2 = new MyError(2);
       const member = {
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         bitOffset: 0,
         structure: {
+          type: StructureType.ErrorSet,
           name: 'MyError',
           constructor: MyError,
-          instance: {
-            members: [
-              {
-                type: MemberType.Uint,
-                bitSize: 16,
-                byteSize: 2,
-                bitOffset: 0
-              }
-            ]
-          }
         }
       };
       const dv = new DataView(new ArrayBuffer(12));
@@ -128,6 +121,7 @@ describe('Member functions', function() {
       const { get, set } = getDescriptor(member, env);
       dv.setUint16(0, 1, true);
       expect(get.call(object)).to.equal(error1);
+      debugger;
       set.call(object, error2);
       expect(dv.getUint16(0, true)).to.equal(2);
       expect(get.call(object)).to.equal(error2);
@@ -137,11 +131,13 @@ describe('Member functions', function() {
       expect(() => set.call(object, 3)).to.throw(TypeError);
     })
     it('should return error element descriptor', function() {
-      const MyError = function(index) {
+      const MyError = function(arg) {
         if (this) {
-          this.index = index;
+          this.index = arg;
+        } else if (arg instanceof MyError) {
+          return arg;
         } else {
-          switch (index) {
+          switch (arg) {
             case 1: return error1;
             case 2: return error2;
           }
@@ -153,22 +149,13 @@ describe('Member functions', function() {
       Object.setPrototypeOf(MyError.prototype, Error.prototype);
       const error1 = new MyError(1), error2 = new MyError(2);
       const member = {
-        type: MemberType.Error,
+        type: MemberType.Uint,
         bitSize: 16,
         byteSize: 2,
         structure: {
+          type: StructureType.ErrorSet,
           name: 'MyError',
           constructor: MyError,
-          instance: {
-            members: [
-              {
-                type: MemberType.Uint,
-                bitSize: 16,
-                byteSize: 2,
-                bitOffset: 0
-              }
-            ]
-          }
         }
       };
       const dv = new DataView(new ArrayBuffer(12));
@@ -338,10 +325,11 @@ describe('Member functions', function() {
         [Symbol.toPrimitive]() { return 2 }
       };
       const DummyEnum = function(v) {
-        if (v === 1) {
-          return DummyValue1;
-        } else if (v === 2) {
-          return DummyValue2;
+        switch (v) {
+          case 1:
+          case DummyValue1: return DummyValue1; 
+          case 2:
+          case DummyValue2: return DummyValue2; 
         }
       };
       Object.setPrototypeOf(DummyValue1, DummyEnum.prototype);
@@ -350,23 +338,14 @@ describe('Member functions', function() {
       dv.setUint32(4, 1, true);
       const object = { [MEMORY]: dv };
       const member = {
-        type: MemberType.EnumerationItem,
+        type: MemberType.Uint,
         bitSize: 8,
         bitOffset: 32,
         byteSize: 1,
         structure: {
-          name: 'DummEnum',
+          name: 'DummyEnum',
           type: StructureType.Enumeration,
           constructor: DummyEnum,
-          instance: {
-            members: [ 
-              {
-                type: MemberType.Uint,
-                bitSize: 4,
-                bitOffset: 0,
-              } 
-            ]
-          }
         },
       };
       const { get, set } = getDescriptor(member, { ...env, runtimeSafety: false });
@@ -387,10 +366,11 @@ describe('Member functions', function() {
         [Symbol.toPrimitive]() { return 2 }
       };
       const DummyEnum = function(v) {
-        if (v === 1) {
-          return DummyValue1;
-        } else if (v === 2) {
-          return DummyValue2;
+        switch (v) {
+          case 1:
+          case DummyValue1: return DummyValue1; 
+          case 2:
+          case DummyValue2: return DummyValue2; 
         }
       };
       Object.setPrototypeOf(DummyValue1, DummyEnum.prototype);
@@ -400,22 +380,13 @@ describe('Member functions', function() {
       dv.setUint32(1, 2, true);
       const object = { [MEMORY]: dv };
       const member = {
-        type: MemberType.EnumerationItem,
+        type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
         structure: {
-          name: 'DummEnum',
+          name: 'DummyEnum',
           type: StructureType.Enumeration,
           constructor: DummyEnum,
-          instance: {
-            members: [ 
-              {
-                type: MemberType.Uint,
-                bitSize: 8,
-                byteSize: 1,
-              } 
-            ]
-          }
         },
       };
       const { get, set } = getDescriptor(member, { ...env, runtimeSafety: false });
@@ -437,10 +408,11 @@ describe('Member functions', function() {
         [Symbol.toPrimitive]() { return 2 }
       };
       const DummyEnum = function(v) {
-        if (v === 1) {
-          return DummyValue1;
-        } else if (v === 2) {
-          return DummyValue2;
+        switch (v) {
+          case 1:
+          case DummyValue1: return DummyValue1; 
+          case 2:
+          case DummyValue2: return DummyValue2; 
         }
       };
       Object.setPrototypeOf(DummyValue1, DummyEnum.prototype);
@@ -449,21 +421,12 @@ describe('Member functions', function() {
       dv.setUint32(4, 1, true);
       const object = { [MEMORY]: dv };
       const member = {
-        type: MemberType.EnumerationItem,
+        type: MemberType.Uint,
         bitSize: 4,
         bitOffset: 32,
         structure: { 
           type: StructureType.Enumeration, 
           constructor: DummyEnum,
-          instance: {
-            members: [ 
-              {
-                type: MemberType.Uint,
-                bitSize: 4,
-                bitOffset: 0,
-              } 
-            ]
-          }
         },
       };
       const { get, set } = getDescriptor(member, env);

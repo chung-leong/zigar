@@ -309,7 +309,7 @@ describe('Code generation', function() {
         instance: {
           members: [
             {
-              type: MemberType.EnumerationItem,
+              type: MemberType.Uint,
               bitOffset: 0,
               bitSize: 16,
               byteSize: 2,
@@ -327,8 +327,7 @@ describe('Code generation', function() {
       };
       const def = { structures: [ enumSetStructure, structure ], options, keys: { MEMORY, SLOTS, CONST }};
       const { code } = generateCode(def, params);
-      expect(code).to.contain('useEnumerationItem()');
-      expect(code).to.contain('enumItem');
+      expect(code).to.contain('useEnumeration()');
       expect(code).to.contain('enum {}');
     })
     it('should generate code for defining a non-standard enum type', function() {
@@ -367,7 +366,7 @@ describe('Code generation', function() {
         instance: {
           members: [
             {
-              type: MemberType.EnumerationItem,
+              type: MemberType.Uint,
               bitOffset: 3,
               bitSize: 16,
               structure: enumSetStructure,
@@ -384,7 +383,7 @@ describe('Code generation', function() {
       };
       const def = { structures: [ enumSetStructure, structure ], options, keys: { MEMORY, SLOTS, CONST }};
       const { code } = generateCode(def, params);
-      expect(code).to.contain('useEnumerationItem()');
+      expect(code).to.contain('useUint()');
       expect(code).to.contain('enumItem');
       expect(code).to.contain('enum {}');
     })

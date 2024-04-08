@@ -92,7 +92,7 @@ export function isExtendedType(member) {
     return true;
   }
   const { type, bitSize } = member;
-  if (type === MemberType.Int || type === MemberType.EnumerationItem) {
+  if (type === MemberType.Int) {
     return !(bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64);
   } else if (type === MemberType.Float) {
     return !(bitSize === 32 || bitSize === 64);

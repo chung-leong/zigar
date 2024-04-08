@@ -69,8 +69,6 @@ pub const MemberType = enum(u32) {
     int,
     uint,
     float,
-    enumeration_item,
-    @"error",
     object,
     type,
     @"comptime",
@@ -349,8 +347,8 @@ fn getMemberType(comptime T: type) MemberType {
         .Bool => .bool,
         .Int => |int| if (int.signedness == .signed) .int else .uint,
         .Float => .float,
-        .Enum => .enumeration_item,
-        .ErrorSet => .@"error",
+        .Enum => |en| getMemberType(en.tag_type),
+        .ErrorSet => .uint,
         .Struct,
         .Union,
         .Array,
@@ -946,7 +944,10 @@ test "getUnionSelector" {
 
 fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
     return switch (comptime getStructureType(T)) {
-        .primitive => addPrimitiveMember(host, structure, T),
+        .primitive,
+        .error_set,
+        .enumeration,
+        => addPrimitiveMember(host, structure, T),
         .array => addArrayMember(host, structure, T),
         .@"struct",
         .extern_struct,
@@ -958,8 +959,6 @@ fn addMembers(host: anytype, structure: Value, comptime T: type) !void {
         .tagged_union,
         => addUnionMembers(host, structure, T),
         .error_union => addErrorUnionMembers(host, structure, T),
-        .error_set => addErrorSetMember(host, structure, T),
-        .enumeration => addEnumerationMember(host, structure, T),
         .optional => addOptionalMembers(host, structure, T),
         .pointer => addPointerMember(host, structure, T),
         .vector => addVectorMember(host, structure, T),
@@ -1412,17 +1411,6 @@ test "StandardInt" {
     assert(StandardInt(i127) == i128);
 }
 
-fn addEnumerationMember(host: anytype, structure: Value, comptime T: type) !void {
-    const IT = StandardInt(@typeInfo(T).Enum.tag_type);
-    try host.attachMember(structure, .{
-        .member_type = getMemberType(IT),
-        .bit_size = getStructureBitSize(IT),
-        .bit_offset = 0,
-        .byte_size = getStructureSize(IT),
-        .structure = null,
-    }, false);
-}
-
 fn addOptionalMembers(host: anytype, structure: Value, comptime T: type) !void {
     const op = @typeInfo(T).Optional;
     // value always comes first
@@ -1473,32 +1461,6 @@ fn addErrorUnionMembers(host: anytype, structure: Value, comptime T: type) !void
         .bit_size = @bitSizeOf(anyerror),
         .byte_size = @sizeOf(anyerror),
         .structure = try getStructure(host, eu.error_set),
-    }, false);
-}
-
-fn ErrorIntType() type {
-    return @Type(.{
-        .Int = .{
-            .signedness = .unsigned,
-            .bits = @bitSizeOf(anyerror),
-        },
-    });
-}
-
-test "ErrorIntType" {
-    const T = ErrorIntType();
-    assert(T == u16);
-}
-
-fn addErrorSetMember(host: anytype, structure: Value, comptime T: type) !void {
-    _ = T;
-    const IT = ErrorIntType();
-    try host.attachMember(structure, .{
-        .member_type = getMemberType(IT),
-        .bit_size = getStructureBitSize(IT),
-        .bit_offset = 0,
-        .byte_size = getStructureSize(IT),
-        .structure = null,
     }, false);
 }
 

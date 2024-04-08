@@ -1,17 +1,14 @@
-import { getGlobalErrorSet, isErrorJSON } from './error-set.js';
+import { isErrorJSON } from './error-set.js';
 import { throwNotInErrorSet } from './error.js';
 import { MemberType, getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
 import { copyPointer, resetPointer } from './pointer.js';
-import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, normalizeValue } from './special.js';
+import {
+  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, normalizeValue
+} from './special.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
-import {
-  ALIGN, COPIER, NORMALIZER,
-  POINTER_VISITOR,
-  RESETTER, SIZE,
-  VIVIFICATOR
-} from './symbol.js';
+import { ALIGN, CLASS, COPIER, NORMALIZER, POINTER_VISITOR, RESETTER, SIZE, VIVIFICATOR } from './symbol.js';
 
 export function defineErrorUnion(structure, env) {
   const {
@@ -23,18 +20,17 @@ export function defineErrorUnion(structure, env) {
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   const { get: getError, set: setError } = getDescriptor(members[1], env);
   const get = function() {
-    const error = getError.call(this, true);
-    if (error) {
-      throw error;
+    const errNum = getError.call(this, 'number');
+    if (errNum) {
+      throw getError.call(this);
     } else {
       return getValue.call(this);
     }
   };
   const isValueVoid = members[0].type === MemberType.Void;
-  const acceptAny = members[1].structure.name === 'anyerror';
-  const TargetError = (acceptAny) ? getGlobalErrorSet() : members[1].structure.constructor;
+  const TargetError = members[1].structure.constructor[CLASS];
   const isChildActive = function() {
-    return !getError.call(this, true);
+    return !getError.call(this, 'number');
   };
   const clearValue = function() {
     this[RESETTER]();
@@ -57,7 +53,7 @@ export function defineErrorUnion(structure, env) {
       try {
         // call setValue() first, in case it throws
         setValue.call(this, arg);
-        setError.call(this, 0, true);
+        setError.call(this, 0, 'number');
       } catch (err) {
         if (arg instanceof Error) {
           // we give setValue a chance to see if the error is actually an acceptable value

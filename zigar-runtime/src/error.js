@@ -1,6 +1,5 @@
 import { getTypeName } from './data-view.js';
 import { isErrorJSON } from './error-set.js';
-import { MemberType } from './member.js';
 import { getPrimitiveType } from './primitive.js';
 import { StructureType } from './structure.js';
 
@@ -101,9 +100,13 @@ export function throwInvalidArrayInitializer(structure, arg, shapeless = false) 
   const acceptable = [];
   const primitive = getPrimitiveType(member);
   if (primitive) {
-    acceptable.push(`array of ${primitive}s`);
-  } else if (member.type === MemberType.EnumerationItem) {
-    acceptable.push(`array of enum items`);
+    let object;
+    switch (member.structure?.type) {
+      case StructureType.Enumeration: object = 'enum item'; break;
+      case StructureType.ErrorSet: object = 'error'; break;
+      default: object = primitive;
+    }
+    acceptable.push(`array of ${object}s`);
   } else {
     acceptable.push(`array of objects`);
   }

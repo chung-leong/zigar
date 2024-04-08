@@ -9,10 +9,8 @@ import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, 
 import { getChildVivificator, getPointerVisitor } from './struct.js';
 import { StructureType, attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
 import {
-  ALIGN, COPIER,
-  NAME, NORMALIZER, POINTER_VISITOR,
-  PROPS,
-  PROP_GETTERS, PROP_SETTERS, SIZE, TAG, VIVIFICATOR
+  ALIGN, COPIER, NAME, NORMALIZER, POINTER_VISITOR, PROPS, PROP_GETTERS, PROP_SETTERS, SIZE, TAG,
+  VIVIFICATOR
 } from './symbol.js';
 
 export function defineUnionShape(structure, env) {

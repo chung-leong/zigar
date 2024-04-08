@@ -119,7 +119,7 @@ describe('Method functions', function() {
       });
       env.attachMember(argStruct, {
         name: '0',
-        type: MemberType.EnumerationItem,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,

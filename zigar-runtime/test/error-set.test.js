@@ -25,6 +25,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -63,12 +64,12 @@ describe('Error set functions', function() {
       } catch (err) {
         expect(err).to.equal(Hello.UnableToCreateObject);
       }
-      expect(() => Hello.UnableToCreateObject.$ = Hello.UnableToCreateObject).to.throw(TypeError);
       const object = new Hello(Hello.UnableToCreateObject);
       expect(object.$).to.equal(Hello.UnableToCreateObject);
       object.$ = Hello.UnableToRetrieveMemoryLocation;
       expect(object.$).to.equal(Hello.UnableToRetrieveMemoryLocation);
       expect(object.valueOf()).to.equal(Hello.UnableToRetrieveMemoryLocation);
+      expect(JSON.stringify(Hello.UnableToRetrieveMemoryLocation)).to.equal('{"error":"Unable to retrieve memory location"}');
       expect(JSON.stringify(object)).to.equal('{"error":"Unable to retrieve memory location"}');
       object.dataView.setInt16(0, -1);
       expect(() => JSON.stringify(object)).to.throw(TypeError);
@@ -85,6 +86,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure1
       });
       env.attachMember(errorStructure1, {
         name: 'UnableToRetrieveMemoryLocation',
@@ -133,6 +135,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: errorStructure2
       });
       env.attachMember(errorStructure2, {
         name: 'pants_on_fire',
@@ -159,11 +162,11 @@ describe('Error set functions', function() {
       expect(AnyError.UnableToRetrieveMemoryLocation).to.be.an.instanceOf(Error);
       expect(AnyError.UnableToRetrieveMemoryLocation.message).to.equal('Unable to retrieve memory location');
       expect(Number(AnyError.UnableToRetrieveMemoryLocation)).to.equal(Number(ErrorSet1.UnableToRetrieveMemoryLocation));
-      expect(AnyError.includes(ErrorSet1.UnableToRetrieveMemoryLocation)).to.be.true;
+      expect(ErrorSet1.UnableToRetrieveMemoryLocation in AnyError).to.be.true;
       expect(Number(AnyError.pants_on_fire)).to.equal(Number(ErrorSet2.pants_on_fire));
       expect(AnyError.pants_on_fire).to.be.instanceOf(Error);
       expect(AnyError.pants_on_fire.message).to.equal('Pants on fire');
-      expect(AnyError.has(ErrorSet2.pants_on_fire)).to.be.true;
+      expect(ErrorSet2.pants_on_fire in AnyError).to.be.true;
       expect(AnyError.valueOf()).to.eql({
         UnableToRetrieveMemoryLocation: AnyError.UnableToRetrieveMemoryLocation,
         UnableToCreateObject: AnyError.UnableToCreateObject,
@@ -182,6 +185,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -205,7 +209,7 @@ describe('Error set functions', function() {
       }, true);
       env.finalizeStructure(structure);
       const error = new Hello(5);
-      expect(error.message).to.equal(Hello.UnableToRetrieveMemoryLocation.message);
+      expect(error.$.message).to.equal(Hello.UnableToRetrieveMemoryLocation.message);
     })
     it('should cast view used for storing an error', function() {
       const structure = env.beginStructure({
@@ -218,6 +222,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -243,7 +248,7 @@ describe('Error set functions', function() {
       const dv = new DataView(new ArrayBuffer(structure.byteSize));
       dv.setUint16(0, 5, true);
       const error = Hello(dv);
-      expect(error.message).to.equal(Hello.UnableToRetrieveMemoryLocation.message);
+      expect(error.$.message).to.equal(Hello.UnableToRetrieveMemoryLocation.message);
     })
     it('should cast the same buffer to the same object', function() {
       const structure = env.beginStructure({
@@ -256,6 +261,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -294,6 +300,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -331,6 +338,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -373,6 +381,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -411,6 +420,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: catStructure
       });
       env.finalizeShape(catStructure);
       const { constructor: CatError } = catStructure;
@@ -443,6 +453,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: dogStructure,
       });
       env.finalizeShape(dogStructure);
       const { constructor: DogError } = dogStructure;
@@ -475,6 +486,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: petStructure,
       });
       env.finalizeShape(petStructure);
       const { constructor: PetError } = petStructure;
@@ -511,11 +523,13 @@ describe('Error set functions', function() {
         },
       }, true);
       env.finalizeStructure(petStructure);
-      expect(PetError.includes(DogError.BathRequired)).to.be.true;
-      expect(PetError.has(DogError.BathRequired)).to.be.true;
-      expect(PetError.has(CatError.CucumberEncountered)).to.be.true;
-      expect(PetError.includes(new Error('Doh'))).to.be.false;
-      expect(PetError.includes(null)).to.be.false;
+      expect(DogError.BathRequired in PetError).to.be.true;
+      expect(DogError.BathRequired in DogError).to.be.true;
+      expect(CatError.CucumberEncountered in PetError).to.be.true;
+      expect(DogError.BathRequired).to.equal(PetError.BathRequired);
+      expect(CatError.CucumberEncountered).to.equal(PetError.CucumberEncountered);
+      expect(new Error('Doh') in PetError).to.be.false;
+      expect(null in PetError).to.be.false;
     })
     it('should throw when no initializer is provided', function() {
       const structure = env.beginStructure({
@@ -528,6 +542,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -563,6 +578,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -598,6 +614,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -635,6 +652,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;
@@ -670,6 +688,7 @@ describe('Error set functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure,
       });
       env.finalizeShape(structure);
       const { constructor: Hello } = structure;

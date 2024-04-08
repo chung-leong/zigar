@@ -650,7 +650,7 @@ describe('Union functions', function() {
       });
       env.attachMember(structure, {
         name: 'selector',
-        type: MemberType.EnumerationItem,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 32,
         byteSize: 2,
@@ -740,7 +740,7 @@ describe('Union functions', function() {
       });
       env.attachMember(structure, {
         name: 'selector',
-        type: MemberType.EnumerationItem,
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
@@ -842,7 +842,7 @@ describe('Union functions', function() {
       });
       env.attachMember(structure, {
         name: 'selector',
-        type: MemberType.EnumerationItem,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 64,
         byteSize: 2,
@@ -947,7 +947,7 @@ describe('Union functions', function() {
       });
       env.attachMember(structure, {
         name: 'selector',
-        type: MemberType.EnumerationItem,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 64,
         byteSize: 2,
@@ -1050,7 +1050,7 @@ describe('Union functions', function() {
       });
       env.attachMember(structure, {
         name: 'selector',
-        type: MemberType.EnumerationItem,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 64,
         byteSize: 2,
@@ -1155,7 +1155,7 @@ describe('Union functions', function() {
       });
       env.attachMember(structure, {
         name: 'selector',
-        type: MemberType.EnumerationItem,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 64,
         byteSize: 2,
@@ -1266,7 +1266,7 @@ describe('Union functions', function() {
       });
       env.attachMember(structure, {
         name: 'selector',
-        type: MemberType.EnumerationItem,
+        type: MemberType.Uint,
         bitSize: 16,
         bitOffset: 64,
         byteSize: 2,

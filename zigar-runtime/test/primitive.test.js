@@ -457,7 +457,6 @@ describe('Primitive functions', function() {
         { type: MemberType.Int, bitSize: 4, bitOffset: 0 },
         { type: MemberType.Float, bitSize: 16, bitOffset: 0 },
         { type: MemberType.Float, bitSize: 80, bitOffset: 0 },
-        { type: MemberType.EnumerationItem, bitSize: 4, bitOffset: 0 },
       ];
       for (const member of members) {
         expect(isExtendedType(member)).to.be.true;
@@ -471,7 +470,6 @@ describe('Primitive functions', function() {
         { type: MemberType.Int, bitSize: 64, bitOffset: 0 },
         { type: MemberType.Float, bitSize: 32, bitOffset: 0 },
         { type: MemberType.Float, bitSize: 64, bitOffset: 0 },
-        { type: MemberType.EnumerationItem, bitSize: 16, bitOffset: 0 },
       ];
       for (const member of members) {
         expect(isExtendedType(member)).to.be.false;
@@ -485,7 +483,6 @@ describe('Primitive functions', function() {
         { type: MemberType.Int, bitSize: 64, bitOffset: 1 },
         { type: MemberType.Float, bitSize: 32, bitOffset: 1 },
         { type: MemberType.Float, bitSize: 64, bitOffset: 1 },
-        { type: MemberType.EnumerationItem, bitSize: 16, bitOffset: 1 },
       ];
       for (const member of members) {
         expect(isExtendedType(member)).to.be.true;

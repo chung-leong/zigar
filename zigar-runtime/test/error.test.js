@@ -216,15 +216,39 @@ describe('Error functions', function() {
         instance: {
           members: [
             {
-              type: MemberType.EnumerationItem,
+              type: MemberType.Uint,
               bitSize: 32,
               byteSize: 4,
+              structure: {
+                type: StructureType.Enumeration,
+              }
             }
           ],
         },
       };
       expect(() => throwInvalidArrayInitializer(structure, {})).to.throw(TypeError)
         .with.property('message').that.contains('enum items');
+    })
+    it('should throw an error for error array initializers', function() {
+      const structure = {
+        name: 'Hello',
+        type: StructureType.Array,
+        byteSize: 8,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 4,
+              structure: {
+                type: StructureType.ErrorSet,
+              }
+            }
+          ],
+        },
+      };
+      expect(() => throwInvalidArrayInitializer(structure, {})).to.throw(TypeError)
+        .with.property('message').that.contains('errors');
     })
     it('should throw an error for object array initializers', function() {
       const structure = {

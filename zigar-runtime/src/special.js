@@ -12,7 +12,6 @@ export function getValueOf() {
     if (normalizer) {
       let result = map.get(value);
       if (result === undefined) {
-        debugger;
         result = normalizer.call(value, process, options);
         map.set(value, result);
       }
@@ -33,12 +32,12 @@ export function convertToJSON() {
   const process = function(value) {
     const normalizer = value?.[NORMALIZER];
     if (normalizer) {
-      if (value instanceof Error) {
-        return { error: value.message };
-      }      
       let result = map.get(value);
       if (result === undefined) {
         result = normalizer.call(value, process, options);
+        if (typeof(result?.toJSON) === 'function') {
+          result = result.toJSON();
+        }      
         map.set(value, result);
       }
       return result;
