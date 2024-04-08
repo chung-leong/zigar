@@ -19,14 +19,16 @@ export function addTests(importModule, options) {
         NormalError,
         StrangeError,
         PossibleError,
+        CommonError,
         print,
       } = await importTest('as-static-variables');
       expect(NormalError.OutOfMemory).to.be.instanceOf(Error);
-      expect(NormalError.OutOfMemory).to.be.instanceOf(NormalError);
-      expect(PossibleError.OutOfMemory).to.be.instanceOf(PossibleError);
+      expect(NormalError.OutOfMemory in NormalError).to.be.true;
+      expect(NormalError.OutOfMemory).to.equal(PossibleError.OutOfMemory);
+      expect(PossibleError.OutOfMemory in PossibleError).to.be.true;
       expect(StrangeError.SystemIsOnFire).to.equal(PossibleError.SystemIsOnFire);
-      expect(StrangeError.SystemIsOnFire).to.be.instanceOf(PossibleError);
-      expect(() => StrangeError.SystemIsOnFire.$ = StrangeError.SystemIsOnFire).to.throw(TypeError);
+      expect(StrangeError.SystemIsOnFire in PossibleError).to.be.true;
+      expect(StrangeError.NoMoreBeer).to.equal(CommonError.NoMoreBeer);
       expect(module.error_var).to.equal(NormalError.FileNotFound);
       const [ before ] = await capture(() => print());
       expect(before).to.equal('error.FileNotFound');

@@ -13,6 +13,11 @@ pub const NormalError = error{
     OutOfMemory,
 };
 
+pub const CommonError = error{
+    OutOfMemory,
+    NoMoreBeer,
+};
+
 pub const PossibleError = NormalError || StrangeError;
 
 pub var error_var = NormalError.FileNotFound;

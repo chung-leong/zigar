@@ -28,7 +28,7 @@ export function defineErrorUnion(structure, env) {
     }
   };
   const isValueVoid = members[0].type === MemberType.Void;
-  const TargetError = members[1].structure.constructor[CLASS];
+  const errorSet = members[1].structure.constructor;
   const isChildActive = function() {
     return !getError.call(this, 'number');
   };
@@ -46,7 +46,7 @@ export function defineErrorUnion(structure, env) {
           this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       }
-    } else if (arg instanceof TargetError) {
+    } else if (arg instanceof errorSet[CLASS] && errorSet(arg)) {
       setError.call(this, arg);
       clearValue.call(this);
     } else if (arg !== undefined || isValueVoid) {
