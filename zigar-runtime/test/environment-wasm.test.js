@@ -451,7 +451,9 @@ describe('WebAssemblyEnvironment', function() {
       const buffer = await readFile(url.pathname);
       expect(env.getFactoryThunk).to.be.undefined;
       await env.loadModule(buffer);
-      expect(env.getFactoryThunk).to.be.a('function');
+      expect(env.allocateExternMemory).to.be.a('function');
+      expect(env.freeExternMemory).to.be.a('function');
+      expect(env.runThunk).to.be.a('function');
     })
   })
   describe('trackInstance', function() {
