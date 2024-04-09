@@ -11,8 +11,7 @@ import { StructureType, attachDescriptors, createConstructor, defineProperties }
 import {
   ALIGN, CONST, COPIER, ENVIRONMENT, FIXED_LOCATION, GETTER, LOCATION_GETTER, LOCATION_SETTER,
   MEMORY, NORMALIZER, PARENT, POINTER, POINTER_VISITOR, PROXY, SETTER, SIZE, SLOTS, TARGET_GETTER,
-  TARGET_SETTER,
-  VIVIFICATOR
+  TARGET_SETTER, VIVIFICATOR
 } from './symbol.js';
 
 export function definePointer(structure, env) {

@@ -700,64 +700,22 @@ fn getStructure(host: anytype, comptime T: type) Error!Value {
 }
 
 fn getStructureName(comptime T: type) [*:0]const u8 {
-    const utils = struct {
-        fn getIndexOf(comptime s: []const u8, comptime c: u8) comptime_int {
-            @setEvalBranchQuota(s.len * 2);
-            return inline for (s, 0..) |c2, index| {
-                if (c2 == c) {
-                    break index;
-                }
-            } else -1;
-        }
-
-        fn getAlternateName(comptime name: []const u8) []const u8 {
-            const exclam_index = getIndexOf(name, '!');
-            if (exclam_index != -1) {
-                const err_name = getErrorName(name[0..exclam_index]);
-                const type_name = getAlternateName(name[exclam_index + 1 .. name.len]);
-                return std.fmt.comptimePrint("{s}!{s}", .{ err_name, type_name });
-            }
-            const curly_index = getIndexOf(name, '{');
-            if (curly_index != -1) {
-                const struct_type = select: {
-                    if (curly_index == 5) {
-                        if (name[0] == 'e' and name[1] == 'r' and name[2] == 'r' and name[3] == 'o' and name[4] == 'r') {
-                            break :select "error set";
-                        }
-                    }
-                    break :select "struct";
-                };
-                const struct_prefix = if (struct_type[0] == 'e') "ErrorSet" else "Struct";
-                const id = calculateHash(name);
-                return std.fmt.comptimePrint("{s}{d}", .{ struct_prefix, id });
-            }
-            return name;
-        }
-
-        fn getErrorName(comptime name: []const u8) []const u8 {
-            // if there's an open parenthesis, then the name is something complicated like
-            // @typeInfo(@typeInfo(@TypeOf([function])).Fn.returnType).error_set
-            const parent_index = getIndexOf(name, '(');
-            if (parent_index != -1) {
-                const id = calculateHash(name);
-                return std.fmt.comptimePrint("ErrorSet{d:0>4}", .{id});
-            }
-            // named error set looks like a struct
-            return getAlternateName(name);
-        }
-
-        fn getBigInt(comptime s: []const u8) comptime_int {
-            comptime var result: comptime_int = 0;
-            @setEvalBranchQuota(s.len * 4);
-            inline for (s) |c| {
-                result = (result << 8) | @as(comptime_int, @intCast(c));
-            }
-            return result;
-        }
+    const name = @typeName(T);
+    const alternate_name = comptime switch (@typeInfo(T)) {
+        .ErrorSet => std.fmt.comptimePrint("ErrorSet{d}", .{calculateHash(name)}),
+        .Struct => if (getFunctionName(T)) |func_name|
+            func_name
+        else if (findPrefix(name, "struct{"))
+            std.fmt.comptimePrint("Struct{d}", .{calculateHash(name)})
+        else
+            name,
+        .ErrorUnion => |eu| format: {
+            const es_name = getStructureName(eu.error_set);
+            const pl_name = getStructureName(eu.payload);
+            break :format std.fmt.comptimePrint("{s}!{s}", .{ es_name, pl_name });
+        },
+        else => name,
     };
-    // name a structure after the function if it's an ArgStruct
-    const name = comptime getFunctionName(T) orelse @typeName(T);
-    const alternate_name = comptime utils.getAlternateName(name);
     return getCString(alternate_name);
 }
 
@@ -775,7 +733,7 @@ test "getStructureName" {
     assert(name1[0] == '[');
     assert(name1[1] == ']');
     assert(name1[4] == 0);
-    const ArgT = ArgumentStruct(ns.hello);
+    const ArgT = ArgumentStruct(ns.hello, @TypeOf(ns.hello));
     const name2 = getStructureName(ArgT);
     assert(name2[0] == 'h');
     assert(name2[1] == 'e');
@@ -1603,7 +1561,7 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
                             }
                         }
                         const function = @field(T, decl.name);
-                        const ArgT = ArgumentStruct(function);
+                        const ArgT = ArgumentStruct(function, @TypeOf(function));
                         const arg_structure = try getStructure(host, ArgT);
                         const is_static_only = static: {
                             if (f.params.len > 0) {
@@ -1629,8 +1587,10 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
     };
 }
 
-fn ArgumentStruct(comptime function: anytype) type {
-    const info = @typeInfo(@TypeOf(function)).Fn;
+// pass function itself so the name appears in the type name and the function type so that
+// the type name will be unique
+fn ArgumentStruct(comptime _: anytype, comptime T: type) type {
+    const info = @typeInfo(T).Fn;
     const count = get: {
         var count = 1;
         for (info.params) |param| {
@@ -1687,20 +1647,71 @@ test "ArgumentStruct" {
             return arg1 < arg2;
         }
     };
-    const ArgA = ArgumentStruct(Test.A);
+    const ArgA = ArgumentStruct(Test.A, @TypeOf(Test.A));
     const fieldsA = std.meta.fields(ArgA);
     assert(fieldsA.len == 3);
     assert(fieldsA[0].name[0] == '0');
     assert(fieldsA[1].name[0] == '1');
     assert(fieldsA[2].name[0] == 'r');
-    const ArgB = ArgumentStruct(Test.B);
+    const ArgB = ArgumentStruct(Test.B, @TypeOf(Test.B));
     const fieldsB = std.meta.fields(ArgB);
     assert(fieldsB.len == 2);
     assert(fieldsB[0].name[0] == '0');
     assert(fieldsB[1].name[0] == 'r');
-    const ArgC = ArgumentStruct(Test.C);
+    const ArgC = ArgumentStruct(Test.C, @TypeOf(Test.C));
     const fieldsC = std.meta.fields(ArgC);
     assert(fieldsC.len == 3);
+}
+
+fn findPrefix(comptime name: []const u8, comptime prefix: []const u8) bool {
+    if (name.len < prefix.len) {
+        return false;
+    }
+    inline for (prefix, 0..) |c, index| {
+        if (name[index] != c) {
+            return false;
+        }
+    }
+    return true;
+}
+
+fn findIndex(comptime name: []const u8, comptime c: u8, comptime start: usize) usize {
+    comptime var index = start;
+    inline while (index < name.len) : (index += 1) {
+        if (name[index] == c) {
+            break;
+        }
+    }
+    return index;
+}
+
+fn getFunctionName(comptime T: type) ?[]const u8 {
+    const name = @typeName(T);
+    const prefix = "exporter.ArgumentStruct((function '";
+    if (findPrefix(name, prefix)) {
+        const start = prefix.len;
+        const end = findIndex(name, '\'', start);
+        return name[start..end];
+    }
+    return null;
+}
+
+test "getFunctionName" {
+    const Test = struct {
+        fn A(a: i32, b: bool) bool {
+            return if (a > 10 and b) true else false;
+        }
+
+        fn @"weird name  "() void {}
+    };
+    const ArgA = ArgumentStruct(Test.A, @TypeOf(Test.A));
+    const name_a = getFunctionName(ArgA) orelse "";
+    assert(name_a[0] == 'A');
+    assert(name_a.len == 1);
+    const ArgWeird = ArgumentStruct(Test.@"weird name  ", @TypeOf(Test.@"weird name  "));
+    const name_weird = getFunctionName(ArgWeird) orelse "";
+    assert(name_weird[0] == 'w');
+    assert(name_weird.len == 12);
 }
 
 fn isArgumentStruct(comptime T: type) bool {
@@ -1713,40 +1724,8 @@ test "isArgumentStruct" {
             return if (a > 10 and b) true else false;
         }
     };
-    const ArgA = ArgumentStruct(Test.A);
+    const ArgA = ArgumentStruct(Test.A, @TypeOf(Test.A));
     assert(isArgumentStruct(ArgA) == true);
-}
-
-fn getFunctionName(comptime ArgT: type) ?[]const u8 {
-    const name = @typeName(ArgT);
-    const prefix = "exporter.ArgumentStruct((function '";
-    if (name.len < prefix.len) {
-        return null;
-    }
-    inline for (prefix, 0..) |c, index| {
-        if (name[index] != c) {
-            return null;
-        }
-    }
-    return name[prefix.len .. name.len - 3];
-}
-
-test "getFunctionName" {
-    const Test = struct {
-        fn A(a: i32, b: bool) bool {
-            return if (a > 10 and b) true else false;
-        }
-
-        fn @"weird name  "() void {}
-    };
-    const ArgA = ArgumentStruct(Test.A);
-    const name_a = getFunctionName(ArgA) orelse "function";
-    assert(name_a[0] == 'A');
-    assert(name_a.len == 1);
-    const ArgWeird = ArgumentStruct(Test.@"weird name  ");
-    const name_weird = getFunctionName(ArgWeird) orelse "function";
-    assert(name_weird[0] == 'w');
-    assert(name_weird.len == 12);
 }
 
 fn createAllocator(host_ptr: anytype) std.mem.Allocator {
@@ -1833,7 +1812,7 @@ test "createThunk" {
             return if (a > 10 and b) true else false;
         }
     };
-    const ArgA = ArgumentStruct(Test.A);
+    const ArgA = ArgumentStruct(Test.A, @TypeOf(Test.A));
     const Host = @import("./exporter-c.zig").Host;
     const thunk = createThunk(Host, Test.A, ArgA);
     switch (@typeInfo(@TypeOf(thunk))) {

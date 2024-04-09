@@ -343,5 +343,5 @@ test "createModule" {
     };
     const module = createModule(Test);
     assert(module.version == 2);
-    assert(module.attributes.little_endian == (builtin.target.cpu.arch.endian() == .little));
+    assert(module.attributes.little_endian == (builtin.target.cpu.arch.endian() == enum_little));
 }
