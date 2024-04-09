@@ -6,6 +6,7 @@ import {
   add,
   findSortedIndex,
   getAlignedAddress,
+  isInvalidAddress,
   isMisaligned,
   subtract,
 } from '../src/environment.js';
@@ -245,6 +246,16 @@ describe('Environment', function() {
       };
       const dv = new DataView(new ArrayBuffer(8));
       const object = env.castView(structure, dv);
+    })
+  })
+  describe('getSlotNumber', function() {
+    it('should return the same number when the same key is given', function() {
+      const env = new Environment();
+      const s1 = env.getSlotNumber(0, 1234);
+      const s2 = env.getSlotNumber(0, 1234);
+      const s3 = env.getSlotNumber(0, 12345);
+      expect(s2).to.equal(s1);
+      expect(s3).to.not.equal(s1);
     })
   })
   describe('readSlot', function() {
@@ -2090,6 +2101,50 @@ describe('Environment', function() {
       env.acquirePointerTargets(object);
       expect(object[0]['*']).to.equal(123);
     })    
+    it('should clear slot when pointer has invalid address', function() {
+      const env = new Environment();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*i32',
+        byteSize: 8,
+        hasPointer: true,
+        isConst: false,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const { constructor: Int32Ptr } = ptrStructure;
+      env.inFixedMemory = function() {
+        return false;
+      };
+      const ptr = new Int32Ptr(new Int32(123));
+      expect(ptr['*']).to.equal(123);
+      ptr[MEMORY].setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
+      env.acquirePointerTargets(ptr);
+      expect(() => ptr['*']).to.throw(TypeError)
+        .with.property('message').that.contains('Null')
+    })    
     it('should be able to handle self-referencing structures', function() {
       const env = new Environment();
       const structure = env.beginStructure({
@@ -2502,6 +2557,17 @@ describe('Environment', function() {
     })
     it(`should subtract a bigint to from bigint`, function() {
       expect(subtract(15n, 5n)).to.equal(10n);
+    })
+  })
+  describe('isInvalidAddress', function() {
+    it(`should return true when 0xaaaaaaaa is given`, function() {
+      expect(isInvalidAddress(0xaaaaaaaa)).to.be.true;
+    })
+    it(`should return true when 0xaaaaaaaaaaaaaaaan is given`, function() {
+      expect(isInvalidAddress(0xaaaaaaaaaaaaaaaan)).to.be.true;
+    })
+    it(`should return false when address valid`, function() {
+      expect(isInvalidAddress(0x1000n)).to.be.false;
     })
   })
 })

@@ -57,7 +57,6 @@ export function defineErrorSet(structure, env) {
   // items are inserted when static members get attached in static.js
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
-  const getMessage = function() { return this.$.message };
   const instanceDescriptors = {
     $: { get, set },
     dataView: getDataViewDescriptor(structure),
