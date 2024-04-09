@@ -702,7 +702,10 @@ fn getStructure(host: anytype, comptime T: type) Error!Value {
 fn getStructureName(comptime T: type) [*:0]const u8 {
     const name = @typeName(T);
     const alternate_name = comptime switch (@typeInfo(T)) {
-        .ErrorSet => std.fmt.comptimePrint("ErrorSet{d}", .{calculateHash(name)}),
+        .ErrorSet => if (T == anyerror)
+            name
+        else
+            std.fmt.comptimePrint("ErrorSet{d}", .{calculateHash(name)}),
         .Struct => if (getFunctionName(T)) |func_name|
             func_name
         else if (findPrefix(name, "struct{"))
