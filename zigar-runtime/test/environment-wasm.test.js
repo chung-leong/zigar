@@ -655,4 +655,112 @@ describe('WebAssemblyEnvironment', function() {
       }
     })
   })
+  describe('getWASI', function() {
+    it('should do nothing when when proc_exit is invoked', async function() {
+      const env = new WebAssemblyEnvironment();
+      const wasi = env.getWASI();
+      expect(() => wasi.proc_exit()).to.not.throw();
+    })
+    it('should write to console when fd_write is invoked', async function() {
+      const env = new WebAssemblyEnvironment();
+      const wasi = env.getWASI();
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+      const bufferAddress = 16;
+      const stringAddress = 64;
+      const writtenAddress = 128;
+      const dv = new DataView(memory.buffer);
+      const text = 'ABC\n';
+      for (let i = 0; i < text.length; i++) {
+        dv.setUint8(stringAddress + i, text.charCodeAt(i));
+      }
+      dv.setUint32(bufferAddress, stringAddress, true);
+      dv.setUint32(bufferAddress + 4, text.length, true);
+      const [ line ] = await capture(() => {
+        wasi.fd_write(1, bufferAddress, 1, writtenAddress);
+      });
+      expect(line).to.equal(text.trim());
+      const written = dv.getUint32(writtenAddress, true);
+      expect(written).to.equal(4);
+    })
+    it('should write to console when call to fd_write is directed at stderr', async function() {
+      const env = new WebAssemblyEnvironment();
+      const wasi = env.getWASI();
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+      const bufferAddress = 16;
+      const stringAddress = 64;
+      const writtenAddress = 128;
+      const dv = new DataView(memory.buffer);
+      const text = 'ABC\n';
+      for (let i = 0; i < text.length; i++) {
+        dv.setUint8(stringAddress + i, text.charCodeAt(i));
+      }
+      dv.setUint32(bufferAddress, stringAddress, true);
+      dv.setUint32(bufferAddress + 4, text.length, true);
+      const [ line ] = await capture(() => {
+        wasi.fd_write(2, bufferAddress, 1, writtenAddress);
+      });
+      expect(line).to.equal(text.trim());
+      const written = dv.getUint32(writtenAddress, true);
+      expect(written).to.equal(4);
+    })
+    it('should return error code when file descriptor is not stdout or stderr', async function() {
+      const env = new WebAssemblyEnvironment();
+      const wasi = env.getWASI();
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+      const bufferAddress = 16;
+      const stringAddress = 64;
+      const writtenAddress = 128;
+      const dv = new DataView(memory.buffer);
+      const text = 'ABC\n';
+      for (let i = 0; i < text.length; i++) {
+        dv.setUint8(stringAddress + i, text.charCodeAt(i));
+      }
+      dv.setUint32(bufferAddress, stringAddress, true);
+      dv.setUint32(bufferAddress + 4, text.length, true);
+      let result;
+      const [ line ] = await capture(() => {
+        result = wasi.fd_write(3, bufferAddress, 1, writtenAddress);
+      });
+      expect(result).to.not.equal(0);
+      expect(line).to.be.undefined;
+    })
+    it('should fill a buffer with random bytes when random_get is invoked', async function() {
+      const env = new WebAssemblyEnvironment();
+      const wasi = env.getWASI();
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+      const bufferAddress = 16;
+      const bufferLength = 8;
+      const dv = new DataView(memory.buffer);
+      wasi.random_get(bufferAddress, bufferLength);
+      let allZeroes = true;
+      for (let i = 0; i < bufferLength; i++) {
+        const byte = dv.getUint8(bufferAddress + i);
+        if (byte !== 0) {
+          allZeroes = false;
+        }
+      }
+      expect(allZeroes).to.be.false;
+    })
+  })
 })
+
+async function capture(cb) {
+  const logFn = console.log;
+  const lines = [];
+  try {
+    console.log = (text) => {
+      if (typeof(text) === 'string') {
+        for (const line of text.split(/\r?\n/)) {
+          lines.push(line)
+        }
+      } else {
+        logFn.call(console, text);
+      }
+    };
+    await cb();
+  } finally {
+    console.log = logFn;
+  }
+  return lines;
+}
+

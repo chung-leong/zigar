@@ -275,6 +275,8 @@ export class WebAssemblyEnvironment extends Environment {
       this.trackInstance(instance);
       this.runtimeSafety = this.isRuntimeSafetyActive();
       this.memory = memory;
+      // run the init function if there one
+      /* c8 ignore next */
       _initialize?.();
     })();
   }
@@ -394,9 +396,9 @@ export class WebAssemblyEnvironment extends Environment {
         }
       },
       random_get: (buf, buf_len) => {
-        const dv = new DataView(this.memory.buffer);
+        const dv = new DataView(this.memory.buffer, buf, buf_len);
         for (let i = 0; i < buf_len; i++) {
-          dv.setUint8(Math.floor(256 * Math.random()));
+          dv.setUint8(i, Math.floor(256 * Math.random()));
         }
         return 0;
       },
