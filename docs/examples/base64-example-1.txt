@@ -1,0 +1,2 @@
+{ number1: 1000, number2: 2000, number3: 0 }
+{ number1: 1000, number2: 2000, number3: 0 }

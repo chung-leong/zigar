@@ -1,0 +1,2 @@
+sqrt(36) = 6
+Negative number

@@ -1,0 +1,8 @@
+enum-literal-example-1.Pet {
+  [Symbol(memory)]: DataView {
+    byteLength: 1,
+    byteOffset: 0,
+    buffer: ArrayBuffer { [Uint8Contents]: <02>, byteLength: 1 }
+  }
+}
+dragon

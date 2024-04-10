@@ -14,7 +14,7 @@ pub const User = struct {
     popularity: i64 = -1,
     address: ?Address,
 
-    pub fn print(self: @This()) void {
+    pub fn print(self: User) void {
         std.debug.print("Name: {s}\n", .{self.name});
         std.debug.print("E-mail: {s}\n", .{self.email});
         if (self.age) |age| {
@@ -27,6 +27,5 @@ pub const User = struct {
             std.debug.print("State: {s}\n", .{address.state});
             std.debug.print("ZIP code: {d}\n", .{address.zipCode});
         }
-        std.debug.print("---\n", .{});
     }
 };

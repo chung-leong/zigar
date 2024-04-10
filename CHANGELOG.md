@@ -14,5 +14,6 @@
 * Improved handling of enum
 * Improved conversion to JSON
 * Fixed rounding error for f16, f32, f80 and f128
+* Fixed error sets
 * Consolidated runtime for native-code execution and WebAssembly into single codebase
 * Switched from Node-gyp to more modern Node-API, eliminating C++ code and need for Python

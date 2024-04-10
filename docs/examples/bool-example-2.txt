@@ -1,0 +1,19 @@
+{
+  option1: false,
+  option2: false,
+  option3: false,
+  option4: false,
+  option5: false,
+  option6: false,
+  option7: false,
+  option8: true,
+  option9: false,
+  option10: false,
+  option11: false,
+  option12: false,
+  option13: false,
+  option14: false,
+  option15: false,
+  option16: false
+}
+size = 2

@@ -1,0 +1,2 @@
+dot product = -2.5
+cross product = [ 9,-4.5,-5 ]
