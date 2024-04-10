@@ -116,12 +116,14 @@ class ZigErrorBase extends Error {
   }
 
   [Symbol.toPrimitive](hint) {
-    if (hint === 'string') {
-      return Error.prototype.toString.call(this, hint);
-    } else {
-      return this.number;
+    switch (hint) {
+      case 'string':
+      case 'default':
+        return Error.prototype.toString.call(this, hint);
+      default:
+        return this.number;
     }
-  }  
+  }
 
   toJSON() {
     return { error: this.message };

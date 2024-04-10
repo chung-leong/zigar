@@ -1357,7 +1357,13 @@ function defineEnumerationShape(structure, env) {
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
   const toPrimitive = function(hint) {
-    return (hint === 'string') ? this.$[NAME] : get.call(this, 'number');
+    switch (hint) {
+      case 'string':
+      case 'default':
+        return this.$[NAME];
+      default:
+        return get.call(this, 'number');
+    }
   };
   const instanceDescriptors = {
     $: { get, set },
@@ -1365,6 +1371,7 @@ function defineEnumerationShape(structure, env) {
     base64: getBase64Descriptor(structure),
     typedArray: typedArray && getTypedArrayDescriptor(structure),
     valueOf: { value: getValueOf },
+    toString: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.toPrimitive]: { value: toPrimitive },
@@ -1875,6 +1882,7 @@ function defineUnionShape(structure, env) {
       return child === active;
     }
   : never;
+  const getTagClass = function() { return selectorMember.structure.constructor };
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const instanceDescriptors = {
@@ -1895,8 +1903,9 @@ function defineUnionShape(structure, env) {
     [PROPS]: fieldDescriptor,
   };  
   const staticDescriptors = {
+    enum: isTagged && { get: getTagClass },
     [ALIGN]: { value: align },
-    [SIZE]: { value: byteSize },
+    [SIZE]: { value: byteSize },    
   };
   attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
   // replace regular setters with ones that change the active field
@@ -3045,12 +3054,14 @@ class ZigErrorBase extends Error {
   }
 
   [Symbol.toPrimitive](hint) {
-    if (hint === 'string') {
-      return Error.prototype.toString.call(this, hint);
-    } else {
-      return this.number;
+    switch (hint) {
+      case 'string':
+      case 'default':
+        return Error.prototype.toString.call(this, hint);
+      default:
+        return this.number;
     }
-  }  
+  }
 
   toJSON() {
     return { error: this.message };
@@ -4141,9 +4152,9 @@ function addStaticMembers(structure, env) {
     ...descriptors,
     [Symbol.iterator]: { value: getStructIterator },
     // static variables are objects stored in the static template's slots
-    [SLOTS]: template ? { value: template[SLOTS] } : undefined,
+    [SLOTS]: template && { value: template[SLOTS] },
     // anyerror would have props already
-    [PROPS]: !constructor[PROPS] ? { value: members.map(m => m.name) } : undefined,
+    [PROPS]: !constructor[PROPS] && { value: members.map(m => m.name) },
     [NORMALIZER]: { value: normalizeStruct },
   });
   if (type === StructureType.Enumeration) {
@@ -5199,6 +5210,8 @@ class WebAssemblyEnvironment extends Environment {
       this.trackInstance(instance);
       this.runtimeSafety = this.isRuntimeSafetyActive();
       this.memory = memory;
+      // run the init function if there one
+      /* c8 ignore next */
       _initialize?.();
     })();
   }
@@ -5309,9 +5322,9 @@ class WebAssemblyEnvironment extends Environment {
         }
       },
       random_get: (buf, buf_len) => {
-        const dv = new DataView(this.memory.buffer);
+        const dv = new DataView(this.memory.buffer, buf, buf_len);
         for (let i = 0; i < buf_len; i++) {
-          dv.setUint8(Math.floor(256 * Math.random()));
+          dv.setUint8(i, Math.floor(256 * Math.random()));
         }
         return 0;
       },

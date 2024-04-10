@@ -49,7 +49,9 @@ describe('Enumeration functions', function() {
       expect(Number(Hello.Dog)).to.equal(0);
       expect(Number(Hello.Cat)).to.equal(1);
       expect(`${Hello.Dog}`).to.equal('Dog');
+      expect(Hello.Dog + '').to.equal('Dog');
       expect(Hello.Dog.valueOf()).to.equal('Dog');
+      expect(Hello.Dog.toString()).to.equal('Dog');
       expect(Hello.Dog === Hello.Dog).to.be.true;
       expect(Hello.Dog === Hello.Cat).to.be.false;
       expect(() => Hello.Dog.$ = Hello.Dog).to.throw(TypeError);

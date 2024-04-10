@@ -54,6 +54,8 @@ describe('Error set functions', function() {
       expect(Hello.UnableToRetrieveMemoryLocation.message).to.equal('Unable to retrieve memory location');
       expect(Hello.UnableToCreateObject.message).to.equal('Unable to create object');
       expect(`${Hello.UnableToCreateObject}`).to.equal(`Error: Unable to create object`);
+      expect(Hello.UnableToCreateObject + '').to.equal(`Error: Unable to create object`);
+      expect(Hello.UnableToCreateObject.toString()).to.equal(`Error: Unable to create object`);
       expect(Hello.UnableToRetrieveMemoryLocation.valueOf()).to.equal(Hello.UnableToRetrieveMemoryLocation);
       expect(Number(Hello.UnableToRetrieveMemoryLocation)).to.equal(5);
       expect(Number(Hello.UnableToCreateObject)).to.equal(8);

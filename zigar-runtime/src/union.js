@@ -142,6 +142,7 @@ export function defineUnionShape(structure, env) {
       return child === active;
     }
   : never;
+  const getTagClass = function() { return selectorMember.structure.constructor };
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const instanceDescriptors = {
@@ -162,8 +163,9 @@ export function defineUnionShape(structure, env) {
     [PROPS]: fieldDescriptor,
   };  
   const staticDescriptors = {
+    enum: isTagged && { get: getTagClass },
     [ALIGN]: { value: align },
-    [SIZE]: { value: byteSize },
+    [SIZE]: { value: byteSize },    
   };
   attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
   // replace regular setters with ones that change the active field

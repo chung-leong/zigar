@@ -22,9 +22,9 @@ export function addStaticMembers(structure, env) {
     ...descriptors,
     [Symbol.iterator]: { value: getStructIterator },
     // static variables are objects stored in the static template's slots
-    [SLOTS]: template ? { value: template[SLOTS] } : undefined,
+    [SLOTS]: template && { value: template[SLOTS] },
     // anyerror would have props already
-    [PROPS]: !constructor[PROPS] ? { value: members.map(m => m.name) } : undefined,
+    [PROPS]: !constructor[PROPS] && { value: members.map(m => m.name) },
     [NORMALIZER]: { value: normalizeStruct },
   });
   if (type === StructureType.Enumeration) {

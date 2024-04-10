@@ -53,7 +53,13 @@ export function defineEnumerationShape(structure, env) {
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
   const toPrimitive = function(hint) {
-    return (hint === 'string') ? this.$[NAME] : get.call(this, 'number');
+    switch (hint) {
+      case 'string':
+      case 'default':
+        return this.$[NAME];
+      default:
+        return get.call(this, 'number');
+    }
   };
   const instanceDescriptors = {
     $: { get, set },
@@ -61,6 +67,7 @@ export function defineEnumerationShape(structure, env) {
     base64: getBase64Descriptor(structure),
     typedArray: typedArray && getTypedArrayDescriptor(structure),
     valueOf: { value: getValueOf },
+    toString: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.toPrimitive]: { value: toPrimitive },
