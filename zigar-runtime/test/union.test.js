@@ -683,7 +683,7 @@ describe('Union functions', function() {
       expect(object.dog).to.be.null;
       expect(object.cat).to.equal(567);
       expect(HelloTag(object)).to.equal(HelloTag.cat);
-      expect(Hello.enum).to.equal(HelloTag);
+      expect(Hello.tag).to.equal(HelloTag);
     })
     it('should only have a single enumerable property', function() {
       const enumStructure = env.beginStructure({

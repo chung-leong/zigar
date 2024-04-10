@@ -1903,7 +1903,7 @@ function defineUnionShape(structure, env) {
     [PROPS]: fieldDescriptor,
   };  
   const staticDescriptors = {
-    enum: isTagged && { get: getTagClass },
+    tag: isTagged && { get: getTagClass },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },    
   };

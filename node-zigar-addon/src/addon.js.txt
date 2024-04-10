@@ -1907,7 +1907,7 @@
 "      [PROPS]: fieldDescriptor,\n"
 "    };  \n"
 "    const staticDescriptors = {\n"
-"      enum: isTagged && { get: getTagClass },\n"
+"      tag: isTagged && { get: getTagClass },\n"
 "      [ALIGN]: { value: align },\n"
 "      [SIZE]: { value: byteSize },    \n"
 "    };\n"
