@@ -1,0 +1,9 @@
+Extern:
+123
+456n
+Regular (wrong):
+456
+123n
+Regular (correct):
+123
+456n
