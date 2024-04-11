@@ -2138,6 +2138,12 @@ describe('Environment', function() {
       env.inFixedMemory = function() {
         return false;
       };
+      env.obtainFixedView = function(address, len) {
+        if (isInvalidAddress(address)) {
+          return null;
+        }
+        throw new Error('Unexpected input');
+      };
       const ptr = new Int32Ptr(new Int32(123));
       expect(ptr['*']).to.equal(123);
       ptr[MEMORY].setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);

@@ -4847,15 +4847,10 @@ class Environment {
         if (!currentTarget || isMutable(this)) {
           // obtain address and length from memory
           location = pointer[LOCATION_GETTER]();
-          if (!isInvalidAddress(location.address)) {
-            // get view of memory that pointer points to
-            const len = (Target[SIZE] !== undefined) ? location.length * Target[SIZE] : undefined;
-            const dv = env.findMemory(location.address, len);
-            // create the target
-            newTarget = Target.call(ENVIRONMENT, dv, { writable });
-          } else {
-            newTarget = null;
-          }
+          // get view of memory that pointer points to
+          const len = (Target[SIZE] !== undefined) ? location.length * Target[SIZE] : undefined;
+          const dv = env.findMemory(location.address, len);
+          newTarget = (dv) ? Target.call(ENVIRONMENT, dv, { writable }) : null;
         } else {
           newTarget = currentTarget;
         }
@@ -4937,7 +4932,9 @@ function subtract(address, len) {
 }
 
 function isInvalidAddress(address) {
-  if (typeof(address) === 'bigint') {
+  if (!address) {
+    return true;
+  } else if (typeof(address) === 'bigint') {
     return address === 0xaaaaaaaaaaaaaaaan;
   } else {
     return address === 0xaaaaaaaa;
@@ -5012,30 +5009,27 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   allocateFixedMemory(len, align) {
-    if (len === 0) {
-      return new DataView(this.memory.buffer, 0, 0);
-    }
-    const address = this.allocateExternMemory(len, align);
+    const address = (len) ? this.allocateExternMemory(len, align) : 0;
     const dv = this.obtainFixedView(address, len);
     dv[ALIGN] = align;
     return dv;
   }
 
   freeFixedMemory(address, len, align) {
-    if (len === 0) {
-      return;
+    if (len) {
+      this.freeExternMemory(address, len, align);
     }
-    this.freeExternMemory(address, len, align);
   }
 
   obtainFixedView(address, len) {
-    const { memory } = this;
-    if (len === 0 && address === -1431655766) { // 0xAAAAAAAA
-      address = 0;
+    if ((!address && !len) || !isInvalidAddress(address)) {
+      const { memory } = this;
+      const dv = this.obtainView(memory.buffer, address, len);
+      dv[MEMORY] = { memory, address, len };
+      return dv;  
+    } else {
+      return null;
     }
-    const dv = this.obtainView(memory.buffer, address, len);
-    dv[MEMORY] = { memory, address, len };
-    return dv;
   }
 
   releaseFixedView(dv) {
