@@ -9,8 +9,8 @@ pub const Directory = struct {
     entries: []const DirectoryEntry,
 };
 pub const DirectoryEntry = union(enum) {
-    file: File,
-    dir: Directory,
+    file: *const File,
+    dir: *const Directory,
 };
 
 fn indent(depth: u32) void {
@@ -19,12 +19,12 @@ fn indent(depth: u32) void {
     }
 }
 
-fn printFile(file: File, depth: u32) void {
+fn printFile(file: *const File, depth: u32) void {
     indent(depth);
     std.debug.print("{s} ({d})\n", .{ file.name, file.data.len });
 }
 
-fn printDirectory(dir: Directory, depth: u32) void {
+fn printDirectory(dir: *const Directory, depth: u32) void {
     indent(depth);
     std.debug.print("{s}/\n", .{dir.name});
     for (dir.entries) |entry| {
@@ -35,6 +35,6 @@ fn printDirectory(dir: Directory, depth: u32) void {
     }
 }
 
-pub fn printDirectoryTree(dir: Directory) void {
+pub fn printDirectoryTree(dir: *const Directory) void {
     printDirectory(dir, 0);
 }

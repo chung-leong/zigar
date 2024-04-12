@@ -374,14 +374,14 @@ test "getMemberType" {
 }
 
 fn isSupported(comptime T: type) bool {
-    const Recursive = struct {
-        fn check(comptime CT: type, comptime scanning_before: anytype) bool {
-            inline for (scanning_before) |ST| {
-                if (ST == CT) {
+    const recursively = struct {
+        fn check(comptime CT: type, comptime checking_before: anytype) bool {
+            inline for (checking_before) |BT| {
+                if (CT == BT) {
                     return true;
                 }
             }
-            const scanning_now: [scanning_before.len + 1]type = scanning_before ++ .{CT};
+            const checking_now = checking_before ++ .{CT};
             return switch (@typeInfo(CT)) {
                 .Type,
                 .Bool,
@@ -398,15 +398,15 @@ fn isSupported(comptime T: type) bool {
                 .Vector,
                 .EnumLiteral,
                 => true,
-                .ErrorUnion => |eu| check(eu.payload, scanning_now),
-                inline .Array, .Optional, .Pointer => |ar| check(ar.child, scanning_now),
+                .ErrorUnion => |eu| check(eu.payload, checking_now),
+                inline .Array, .Optional, .Pointer => |ar| check(ar.child, checking_now),
                 .Struct => |st| inline for (st.fields) |field| {
-                    if (!field.is_comptime and !check(field.type, scanning_now)) {
+                    if (!field.is_comptime and !check(field.type, checking_now)) {
                         break false;
                     }
                 } else true,
                 .Union => |un| inline for (un.fields) |field| {
-                    if (!check(field.type, scanning_now)) {
+                    if (!check(field.type, checking_now)) {
                         break false;
                     }
                 } else true,
@@ -414,7 +414,7 @@ fn isSupported(comptime T: type) bool {
             };
         }
     };
-    return Recursive.check(T, [0]type{});
+    return recursively.check(T, .{});
 }
 
 test "isSupported" {
