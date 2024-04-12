@@ -51,6 +51,9 @@ describe('Pointer functions', function() {
       const intPointer = new Int32Ptr(int32);
       expect(intPointer['*']).to.equal(1234);
       expect(intPointer.valueOf()).to.equal(1234);
+      expect(Number(intPointer)).to.equal(1234);
+      expect(String(intPointer)).to.equal('1234');
+      expect(`${intPointer}`).to.equal('1234');
     })
     it('should cast the same buffer to the same object', function() {
       const intStructure = env.beginStructure({

@@ -548,9 +548,7 @@ function definePointer(structure, env) {
   } = env;
   const { structure: targetStructure } = member;
   const { sentinel } = targetStructure;
-  const isTargetSlice = (targetStructure.type === StructureType.Slice);
-  const isTargetPointer = (targetStructure.type === StructureType.Pointer);
-  const hasLength = isTargetSlice && !sentinel;  
+  const hasLength = (targetStructure.type === StructureType.Slice) && !sentinel;  
   const addressSize = (hasLength) ? byteSize / 2 : byteSize;
   const { get: getAddress, set: setAddress } = getDescriptor({
     type: MemberType.Uint,
@@ -619,7 +617,7 @@ function definePointer(structure, env) {
     } else if (isPointerOf(arg, Target)) {
       // const/non-const casting
       return new constructor(Target(arg['*'], { writable: !isConst }), options);
-    } else if (isTargetSlice) {
+    } else if (targetStructure.type === StructureType.Slice) {
       // allow casting to slice through constructor of its pointer
       return new constructor(Target(arg), options);
     } else {
@@ -627,7 +625,7 @@ function definePointer(structure, env) {
     }
   };
   const finalizer = function() {
-    const handlers = (isTargetPointer) ? {} : proxyHandlers$1;
+    const handlers = (targetStructure.type === StructureType.Pointer) ? {} : proxyHandlers$1;
     const proxy = new Proxy(this, handlers);
     // hide the proxy so console wouldn't display a recursive structure
     Object.defineProperty(this, PROXY, { value: proxy });
@@ -694,6 +692,7 @@ function definePointer(structure, env) {
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
+    [Symbol.toPrimitive]: (targetStructure.type === StructureType.Primitive) && { value: getPointerPrimitve },
     [TARGET_GETTER]: { value: getTargetObject },
     [TARGET_SETTER]: { value: setTargetObject },
     [LOCATION_GETTER]: { value: addressGetter },
@@ -714,13 +713,18 @@ function definePointer(structure, env) {
 }
 
 function normalizePointer(cb) {
-  let target;
+  let value;
   try {
-    target = this['*'];
+    value = this['*'];
   } catch (err) {
-    target = Symbol.for('inaccessible');
+    value = Symbol.for('inaccessible');
   }
-  return cb(target);
+  return cb(value);
+}
+
+function getPointerPrimitve(hint) {
+  const target = this[SLOTS][0];
+  return target[Symbol.toPrimitive](hint);
 }
 
 function getProxy() {
@@ -1356,15 +1360,6 @@ function defineEnumerationShape(structure, env) {
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
-  const toPrimitive = function(hint) {
-    switch (hint) {
-      case 'string':
-      case 'default':
-        return this.$[NAME];
-      default:
-        return get.call(this, 'number');
-    }
-  };
   const instanceDescriptors = {
     $: { get, set },
     dataView: getDataViewDescriptor(structure),
@@ -1374,7 +1369,7 @@ function defineEnumerationShape(structure, env) {
     toString: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    [Symbol.toPrimitive]: { value: toPrimitive },
+    [Symbol.toPrimitive]: { value: getEnumerationItemPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [NORMALIZER]: { value: normalizeEnumerationItem },
   };
@@ -1384,6 +1379,16 @@ function defineEnumerationShape(structure, env) {
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
+function getEnumerationItemPrimitive(hint) {
+  switch (hint) {
+    case 'string':
+    case 'default':
+      return this.$[NAME];
+    default:
+      return get.call(this, 'number');
+  }
+}
+
 function normalizeEnumerationItem(cb) {
   return cb(this.$[NAME]);
 }
