@@ -374,42 +374,47 @@ test "getMemberType" {
 }
 
 fn isSupported(comptime T: type) bool {
-    return switch (@typeInfo(T)) {
-        .Type,
-        .Bool,
-        .Int,
-        .ComptimeInt,
-        .Float,
-        .ComptimeFloat,
-        .Void,
-        .Null,
-        .Undefined,
-        .ErrorSet,
-        .Enum,
-        .Opaque,
-        .Vector,
-        .EnumLiteral,
-        => true,
-        .ErrorUnion => |eu| isSupported(eu.payload),
-        .Struct => |st| check_fields: {
-            inline for (st.fields) |field| {
-                if (!field.is_comptime and !isSupported(field.type)) {
-                    break :check_fields false;
+    const Recursive = struct {
+        fn check(comptime CT: type, comptime scanning_before: anytype) bool {
+            inline for (scanning_before) |ST| {
+                if (ST == CT) {
+                    return true;
                 }
             }
-            break :check_fields true;
-        },
-        .Union => |un| check_fields: {
-            inline for (un.fields) |field| {
-                if (!isSupported(field.type)) {
-                    break :check_fields false;
-                }
-            }
-            break :check_fields true;
-        },
-        inline .Array, .Optional, .Pointer => |ar| isSupported(ar.child),
-        else => false,
+            const scanning_now: [scanning_before.len + 1]type = scanning_before ++ .{CT};
+            return switch (@typeInfo(CT)) {
+                .Type,
+                .Bool,
+                .Int,
+                .ComptimeInt,
+                .Float,
+                .ComptimeFloat,
+                .Void,
+                .Null,
+                .Undefined,
+                .ErrorSet,
+                .Enum,
+                .Opaque,
+                .Vector,
+                .EnumLiteral,
+                => true,
+                .ErrorUnion => |eu| check(eu.payload, scanning_now),
+                inline .Array, .Optional, .Pointer => |ar| check(ar.child, scanning_now),
+                .Struct => |st| inline for (st.fields) |field| {
+                    if (!field.is_comptime and !check(field.type, scanning_now)) {
+                        break false;
+                    }
+                } else true,
+                .Union => |un| inline for (un.fields) |field| {
+                    if (!check(field.type, scanning_now)) {
+                        break false;
+                    }
+                } else true,
+                else => false,
+            };
+        }
     };
+    return Recursive.check(T, [0]type{});
 }
 
 test "isSupported" {
@@ -420,11 +425,21 @@ test "isSupported" {
     const StructB = struct {
         thunk: Thunk,
     };
+    const StructC = struct {
+        number: i32 = 0,
+        ptr: *@This(),
+    };
+    const StructD = struct {
+        thunk: Thunk,
+        ptr: *@This(),
+    };
     assert(isSupported(StructA) == true);
     assert(isSupported(StructB) == false);
     assert(isSupported(Thunk) == false);
     assert(isSupported(*StructA) == true);
     assert(isSupported(*StructB) == false);
+    assert(isSupported(StructC) == true);
+    assert(isSupported(StructD) == false);
 }
 
 fn getStructureType(comptime T: type) StructureType {
