@@ -1,4 +1,4 @@
 #!/bin/bash
 NAME=`basename "$@" .js`
-node --experimental-loader node-zigar --no-warnings $NAME > "$NAME.txt"
+node --experimental-loader node-zigar --no-warnings --expose-gc $NAME > "$NAME.txt"
 cat "$NAME.txt"
