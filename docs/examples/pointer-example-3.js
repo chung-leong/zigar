@@ -1,5 +1,8 @@
 import { printDirectoryTree } from './pointer-example-3.zig';
 
+const catImgData = new ArrayBuffer(8000);
+const dogImgData = new ArrayBuffer(16000);
+
 printDirectoryTree({
     name: 'root',
     entries: [
@@ -8,8 +11,8 @@ printDirectoryTree({
             dir: { 
                 name: 'images',
                 entries: [
-                    { file: { name: 'cat.jpg', data: new ArrayBuffer(8000) } },
-                    { file: { name: 'lobster.jpg', data: new ArrayBuffer(16000) } },
+                    { file: { name: 'cat.jpg', data: catImgData } },
+                    { file: { name: 'dog.jpg', data: dogImgData } },
                 ]
             }
         },
