@@ -1360,6 +1360,15 @@ function defineEnumerationShape(structure, env) {
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const toPrimitive = function(hint) {
+    switch (hint) {
+      case 'string':
+      case 'default':
+        return this.$[NAME];
+      default:
+        return get.call(this, 'number');
+    }
+  };
   const instanceDescriptors = {
     $: { get, set },
     dataView: getDataViewDescriptor(structure),
@@ -1369,7 +1378,7 @@ function defineEnumerationShape(structure, env) {
     toString: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    [Symbol.toPrimitive]: { value: getEnumerationItemPrimitive },
+    [Symbol.toPrimitive]: { value: toPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [NORMALIZER]: { value: normalizeEnumerationItem },
   };
@@ -1379,16 +1388,6 @@ function defineEnumerationShape(structure, env) {
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
-function getEnumerationItemPrimitive(hint) {
-  switch (hint) {
-    case 'string':
-    case 'default':
-      return this.$[NAME];
-    default:
-      return get.call(this, 'number');
-  }
-}
-
 function normalizeEnumerationItem(cb) {
   return cb(this.$[NAME]);
 }
@@ -3655,9 +3654,11 @@ function getCompatibleTags(structure) {
     tags.push(typedArray.name);
     tags.push('DataView');
     if (typedArray === Uint8Array || typedArray === Int8Array) {
-      tags.push('Uint8ClampedArray');
       tags.push('ArrayBuffer');
       tags.push('SharedArrayBuffer');
+      if (typedArray === Uint8Array) {
+        tags.push('Uint8ClampedArray');
+      }
     }
   }
   return tags;
