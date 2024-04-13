@@ -77,9 +77,9 @@ export function getDataViewDescriptor(structure, handlers = {}) {
       /* WASM-ONLY-END */
       return this[MEMORY];
     },
-    set(dv) {
+    set(dv, fixed) {
       checkDataView(dv);
-      setDataView.call(this, dv, structure, true, handlers);
+      setDataView.call(this, dv, structure, true, fixed, handlers);
     },
   });
 }
@@ -89,12 +89,12 @@ export function getBase64Descriptor(structure, handlers = {}) {
     get() {
       return encodeBase64(this.dataView);
     },
-    set(str) {
+    set(str, fixed) {
       if (typeof(str) !== 'string') {
         throwTypeMismatch('string', str);
       }
       const dv = decodeBase64(str);
-      setDataView.call(this, dv, structure, false, handlers);
+      setDataView.call(this, dv, structure, false, fixed, handlers);
     }
   });
 }
@@ -110,7 +110,7 @@ export function getStringDescriptor(structure, handlers = {}) {
       const s = decodeText(ta, `utf-${charSize * 8}`);
       return (sentinel?.value === undefined) ? s : s.slice(0, -1);
     },
-    set(str) {
+    set(str, fixed) {
       if (typeof(str) !== 'string') {
         throwTypeMismatch('a string', str);
       }
@@ -121,7 +121,7 @@ export function getStringDescriptor(structure, handlers = {}) {
       }
       const ta = encodeText(str, `utf-${charSize * 8}`);
       const dv = new DataView(ta.buffer);   
-      setDataView.call(this, dv, structure, false, handlers);
+      setDataView.call(this, dv, structure, false, fixed, handlers);
     },
   });
 }
@@ -134,12 +134,12 @@ export function getTypedArrayDescriptor(structure, handlers = {}) {
       const length = dv.byteLength / typedArray.BYTES_PER_ELEMENT;
       return new typedArray(dv.buffer, dv.byteOffset, length);
     },
-    set(ta) {
+    set(ta, fixed) {
       if (!isTypedArray(ta, typedArray)) {
         throwTypeMismatch(typedArray.name, ta);
       }
       const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
-      setDataView.call(this, dv, structure, true, handlers);
+      setDataView.call(this, dv, structure, true, fixed, handlers);
     },
   });
 }

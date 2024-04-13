@@ -92,7 +92,7 @@ export function defineSlice(structure, env) {
         throwInvalidArrayInitializer(structure, arg, !this[MEMORY]);
       }
     } else if (arg && typeof(arg) === 'object') {
-      if (propApplier.call(this, arg) === 0) {
+      if (propApplier.call(this, arg, fixed) === 0) {
         throwInvalidArrayInitializer(structure, arg);
       }
     } else if (arg !== undefined) {

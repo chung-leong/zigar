@@ -464,9 +464,9 @@ function getDataViewDescriptor(structure, handlers = {}) {
       /* WASM-ONLY-END */
       return this[MEMORY];
     },
-    set(dv) {
+    set(dv, fixed) {
       checkDataView(dv);
-      setDataView.call(this, dv, structure, true, handlers);
+      setDataView.call(this, dv, structure, true, fixed, handlers);
     },
   });
 }
@@ -476,12 +476,12 @@ function getBase64Descriptor(structure, handlers = {}) {
     get() {
       return encodeBase64(this.dataView);
     },
-    set(str) {
+    set(str, fixed) {
       if (typeof(str) !== 'string') {
         throwTypeMismatch('string', str);
       }
       const dv = decodeBase64(str);
-      setDataView.call(this, dv, structure, false, handlers);
+      setDataView.call(this, dv, structure, false, fixed, handlers);
     }
   });
 }
@@ -497,7 +497,7 @@ function getStringDescriptor(structure, handlers = {}) {
       const s = decodeText(ta, `utf-${charSize * 8}`);
       return (sentinel?.value === undefined) ? s : s.slice(0, -1);
     },
-    set(str) {
+    set(str, fixed) {
       if (typeof(str) !== 'string') {
         throwTypeMismatch('a string', str);
       }
@@ -508,7 +508,7 @@ function getStringDescriptor(structure, handlers = {}) {
       }
       const ta = encodeText(str, `utf-${charSize * 8}`);
       const dv = new DataView(ta.buffer);   
-      setDataView.call(this, dv, structure, false, handlers);
+      setDataView.call(this, dv, structure, false, fixed, handlers);
     },
   });
 }
@@ -521,12 +521,12 @@ function getTypedArrayDescriptor(structure, handlers = {}) {
       const length = dv.byteLength / typedArray.BYTES_PER_ELEMENT;
       return new typedArray(dv.buffer, dv.byteOffset, length);
     },
-    set(ta) {
+    set(ta, fixed) {
       if (!isTypedArray(ta, typedArray)) {
         throwTypeMismatch(typedArray.name, ta);
       }
       const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
-      setDataView.call(this, dv, structure, true, handlers);
+      setDataView.call(this, dv, structure, true, fixed, handlers);
     },
   });
 }
@@ -1666,7 +1666,7 @@ function defineSlice(structure, env) {
         throwInvalidArrayInitializer(structure, arg, !this[MEMORY]);
       }
     } else if (arg && typeof(arg) === 'object') {
-      if (propApplier.call(this, arg) === 0) {
+      if (propApplier.call(this, arg, fixed) === 0) {
         throwInvalidArrayInitializer(structure, arg);
       }
     } else if (arg !== undefined) {
@@ -2311,7 +2311,7 @@ function createConstructor(structure, handlers, env) {
       }
       self = Object.create(writable ? constructor.prototype : constructor[CONST_PROTOTYPE]);
       if (shapeDefiner) {
-        setDataView.call(self, dv, structure, false, { shapeDefiner });
+        setDataView.call(self, dv, structure, false, false, { shapeDefiner });
       } else {
         self[MEMORY] = dv;
       }
@@ -2351,7 +2351,7 @@ function createConstructor(structure, handlers, env) {
 
 function createPropertyApplier(structure) {
   const { instance: { template } } = structure;  
-  return function(arg) {
+  return function(arg, fixed) {
     const argKeys = Object.keys(arg);
     const propSetters = this[PROP_SETTERS];
     const allKeys = this[ALL_KEYS];
@@ -2406,7 +2406,7 @@ function createPropertyApplier(structure) {
     }
     for (const key of argKeys) {
       const set = propSetters[key];
-      set.call(this, arg[key]);
+      set.call(this, arg[key], fixed);
     }
     return argKeys.length;
   };
@@ -3555,7 +3555,7 @@ function checkDataViewSize(dv, structure) {
   }
 }
 
-function setDataView(dv, structure, copy, handlers) {
+function setDataView(dv, structure, copy, fixed, handlers) {
   const { byteSize, type, sentinel } = structure;
   const multiple = type === StructureType.Slice;
   if (!this[MEMORY]) {
@@ -3564,7 +3564,11 @@ function setDataView(dv, structure, copy, handlers) {
     const len = dv.byteLength / byteSize;
     const source = { [MEMORY]: dv };
     sentinel?.validateData(source, len);
-    shapeDefiner.call(this, copy ? null : dv, len);
+    if (fixed) {
+      // need to copy when target object is in fixed memory
+      copy = true;
+    }
+    shapeDefiner.call(this, copy ? null : dv, len, fixed);
     if (copy) {
       this[COPIER](source);
     }  

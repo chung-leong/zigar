@@ -167,7 +167,7 @@ export function checkDataViewSize(dv, structure) {
   }
 }
 
-export function setDataView(dv, structure, copy, handlers) {
+export function setDataView(dv, structure, copy, fixed, handlers) {
   const { byteSize, type, sentinel } = structure;
   const multiple = type === StructureType.Slice;
   if (!this[MEMORY]) {
@@ -176,7 +176,11 @@ export function setDataView(dv, structure, copy, handlers) {
     const len = dv.byteLength / byteSize;
     const source = { [MEMORY]: dv };
     sentinel?.validateData(source, len);
-    shapeDefiner.call(this, copy ? null : dv, len);
+    if (fixed) {
+      // need to copy when target object is in fixed memory
+      copy = true;
+    }
+    shapeDefiner.call(this, copy ? null : dv, len, fixed);
     if (copy) {
       this[COPIER](source);
     }  

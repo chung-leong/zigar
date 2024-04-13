@@ -340,7 +340,7 @@ export function createConstructor(structure, handlers, env) {
       }
       self = Object.create(writable ? constructor.prototype : constructor[CONST_PROTOTYPE]);
       if (shapeDefiner) {
-        setDataView.call(self, dv, structure, false, { shapeDefiner });
+        setDataView.call(self, dv, structure, false, false, { shapeDefiner });
       } else {
         self[MEMORY] = dv;
       }
@@ -380,7 +380,7 @@ export function createConstructor(structure, handlers, env) {
 
 export function createPropertyApplier(structure) {
   const { instance: { template } } = structure;  
-  return function(arg) {
+  return function(arg, fixed) {
     const argKeys = Object.keys(arg);
     const propSetters = this[PROP_SETTERS];
     const allKeys = this[ALL_KEYS];
@@ -435,7 +435,7 @@ export function createPropertyApplier(structure) {
     }
     for (const key of argKeys) {
       const set = propSetters[key];
-      set.call(this, arg[key]);
+      set.call(this, arg[key], fixed);
     }
     return argKeys.length;
   };
