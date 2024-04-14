@@ -1,0 +1,2 @@
+nobody (none)
+Pointers in fixed memory cannot point to garbage-collected object
