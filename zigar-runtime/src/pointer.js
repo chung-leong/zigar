@@ -5,7 +5,7 @@ import {
   warnImplicitArrayCreation
 } from './error.js';
 import { MemberType, getDescriptor, isValueExpected } from './member.js';
-import { getDestructor, getMemoryCopier, restoreMemory } from './memory.js';
+import { getMemoryCopier, restoreMemory } from './memory.js';
 import { convertToJSON, getValueOf } from './special.js';
 import { StructureType, attachDescriptors, createConstructor, defineProperties } from './structure.js';
 import {
@@ -169,7 +169,7 @@ export function definePointer(structure, env) {
     '$': { get: getProxy, set: initializer },
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
-    delete: { value: getDestructor(env) },
+    delete: { value: deleteTarget },
     [Symbol.toPrimitive]: (targetStructure.type === StructureType.Primitive) && { value: getPointerPrimitve },
     [TARGET_GETTER]: { value: getTargetObject },
     [TARGET_SETTER]: { value: setTargetObject },
@@ -198,6 +198,11 @@ function normalizePointer(cb) {
     value = Symbol.for('inaccessible');
   }
   return cb(value);
+}
+
+function deleteTarget() {
+  const target = this[SLOTS][0];
+  target?.delete();
 }
 
 function getPointerPrimitve(hint) {
