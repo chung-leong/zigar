@@ -769,39 +769,26 @@ test "getStructureName" {
 
 fn getSliceName(comptime T: type) [*:0]const u8 {
     const ptr_name = @typeName(T);
-    switch (@typeInfo(T).Pointer.size) {
-        .Slice => {
-            comptime var array: [ptr_name.len + 2]u8 = undefined;
-            comptime var index = 0;
-            comptime var underscore_inserted = false;
-            inline for (ptr_name) |c| {
-                array[index] = c;
-                index += 1;
-                if (c == '[' and !underscore_inserted) {
-                    array[index] = '_';
-                    index += 1;
-                    underscore_inserted = true;
-                }
-            }
-            array[index] = 0;
-            return getCString(array[0..index]);
-        },
-        .Many => {
-            comptime var array: [ptr_name.len + 1]u8 = undefined;
-            comptime var asterisk_replaced = false;
-            const replacement = if (@typeInfo(T).Pointer.sentinel) |_| '_' else '0';
-            inline for (ptr_name, 0..) |c, index| {
-                if (c == '*' and !asterisk_replaced) {
-                    array[index] = replacement;
-                    asterisk_replaced = true;
-                } else {
-                    array[index] = c;
-                }
-            }
-            array[ptr_name.len] = 0;
-            return getCString(array[0..ptr_name.len]);
-        },
-        else => @compileError("Unexpected pointer type: " ++ @typeName(T)),
+    const needle = switch (@typeInfo(T).Pointer.size) {
+        .Slice => "[",
+        .C => "[*c",
+        .Many => "[*",
+        else => @compileError("Unexpected pointer type: " ++ ptr_name),
+    };
+    const replacement = if (@typeInfo(T).Pointer.size == .Slice or @typeInfo(T).Pointer.sentinel != null)
+        "[_"
+    else
+        "[0";
+    const new_len = ptr_name.len - needle.len + replacement.len;
+    if (std.mem.indexOf(u8, ptr_name, needle)) |index| {
+        comptime var array: [ptr_name.len + 2]u8 = undefined;
+        @memcpy(array[0..index], ptr_name[0..index]);
+        @memcpy(array[index .. index + replacement.len], replacement);
+        @memcpy(array[index + replacement.len .. new_len], ptr_name[index + needle.len .. ptr_name.len]);
+        array[new_len] = 0;
+        return getCString(&array);
+    } else {
+        @compileError("Unexpected pointer type: " ++ ptr_name);
     }
 }
 
@@ -838,6 +825,11 @@ test "getSliceName" {
     assert(name5[1] == '0');
     assert(name5[2] == ']');
     assert(name5[11] == 0);
+    const name6 = comptime getSliceName([*c]const u8);
+    assert(name6[0] == '[');
+    assert(name6[1] == '0');
+    assert(name6[2] == ']');
+    assert(name6[11] == 0);
 }
 
 fn getSentinel(comptime T: type) ?@typeInfo(T).Pointer.child {
