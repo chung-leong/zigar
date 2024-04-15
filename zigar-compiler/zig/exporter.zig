@@ -977,11 +977,13 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
     const target_structure = switch (pt.size) {
         .One => child_structure,
         else => slice: {
+            // set the length to zero when slice is always empty
+            const length = if (pt.size == .Slice or pt.sentinel != null) missing(usize) else 0;
             const slice_slot = try getGlobalSlot(host, .{ .structure = pt.child, .size = pt.size });
             const slice_def: Structure = .{
                 .name = comptime getSliceName(T),
                 .structure_type = .slice,
-                .length = 0,
+                .length = length,
                 .byte_size = @sizeOf(pt.child),
                 .alignment = @alignOf(pt.child),
                 .has_pointer = hasPointer(pt.child),

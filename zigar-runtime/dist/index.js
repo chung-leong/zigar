@@ -547,8 +547,9 @@ function definePointer(structure, env) {
     runtimeSafety = true,
   } = env;
   const { structure: targetStructure } = member;
-  const { sentinel } = targetStructure;
-  const hasLength = (targetStructure.type === StructureType.Slice) && !sentinel;  
+  const { type, sentinel, length } = targetStructure;
+  // length for slice can be zero or undefined
+  const hasLength = (type === StructureType.Slice) && targetStructure.length === undefined && !sentinel;  
   const addressSize = (hasLength) ? byteSize / 2 : byteSize;
   const { get: getAddress, set: setAddress } = getDescriptor({
     type: MemberType.Uint,
@@ -587,7 +588,7 @@ function definePointer(structure, env) {
       if (env.inFixedMemory(arg)) {
         const loc = {
           address: env.getViewAddress(arg[MEMORY]),
-          length: (hasLength) ? arg.length : 1
+          length: (hasLength) ? arg.length : fixedLength
         };
         addressSetter.call(this, loc);
         this[FIXED_LOCATION] = loc;
@@ -617,7 +618,7 @@ function definePointer(structure, env) {
     } else if (isPointerOf(arg, Target)) {
       // const/non-const casting
       return new constructor(Target(arg['*'], { writable: !isConst }), options);
-    } else if (targetStructure.type === StructureType.Slice) {
+    } else if (type === StructureType.Slice) {
       // allow casting to slice through constructor of its pointer
       return new constructor(Target(arg), options);
     } else {
@@ -625,7 +626,7 @@ function definePointer(structure, env) {
     }
   };
   const finalizer = function() {
-    const handlers = (targetStructure.type === StructureType.Pointer) ? {} : proxyHandlers$1;
+    const handlers = (type === StructureType.Pointer) ? {} : proxyHandlers$1;
     const proxy = new Proxy(this, handlers);
     // hide the proxy so console wouldn't display a recursive structure
     Object.defineProperty(this, PROXY, { value: proxy });
@@ -677,13 +678,14 @@ function definePointer(structure, env) {
     setAddress.call(this, address);
     setLength?.call(this, length);
   };
+  const fixedLength = (type != StructureType.Slice) ? 1 : length;
   const addressGetter = function() {
     const address = getAddress.call(this);
     const length = (getLength) 
     ? getLength.call(this)
     : (sentinel)
       ? (address) ? env.findSentinel(address, sentinel.bytes) + 1 : 0
-      : 1;
+      : fixedLength;
     return { address, length };
   };
   const instanceDescriptors = {
@@ -692,7 +694,7 @@ function definePointer(structure, env) {
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: deleteTarget },
-    [Symbol.toPrimitive]: (targetStructure.type === StructureType.Primitive) && { value: getPointerPrimitve },
+    [Symbol.toPrimitive]: (type === StructureType.Primitive) && { value: getPointerPrimitve },
     [TARGET_GETTER]: { value: getTargetObject },
     [TARGET_SETTER]: { value: setTargetObject },
     [LOCATION_GETTER]: { value: addressGetter },
