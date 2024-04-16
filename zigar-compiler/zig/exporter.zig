@@ -373,7 +373,7 @@ test "getMemberType" {
     assert(getMemberType(type) == .type);
 }
 
-fn isSupported(comptime T: type, comptime is_comptime: bool) bool {
+fn isSupported(comptime T: type) bool {
     const recursively = struct {
         fn check(comptime CT: type, comptime checking_before: anytype) bool {
             @setEvalBranchQuota(10000);
@@ -384,6 +384,7 @@ fn isSupported(comptime T: type, comptime is_comptime: bool) bool {
             }
             const checking_now = checking_before ++ .{CT};
             return switch (@typeInfo(CT)) {
+                .Type,
                 .Bool,
                 .Int,
                 .ComptimeInt,
@@ -394,10 +395,10 @@ fn isSupported(comptime T: type, comptime is_comptime: bool) bool {
                 .Undefined,
                 .ErrorSet,
                 .Enum,
+                .Opaque,
                 .Vector,
+                .EnumLiteral,
                 => true,
-                .Opaque => CT != anyopaque,
-                .EnumLiteral, .Type => is_comptime,
                 .ErrorUnion => |eu| check(eu.payload, checking_now),
                 inline .Array, .Optional, .Pointer => |ar| check(ar.child, checking_now),
                 .Struct => |st| inline for (st.fields) |field| {
@@ -433,17 +434,13 @@ test "isSupported" {
         thunk: Thunk,
         ptr: *@This(),
     };
-    assert(isSupported(StructA, false) == true);
-    assert(isSupported(StructB, false) == false);
-    assert(isSupported(Thunk, false) == false);
-    assert(isSupported(*StructA, false) == true);
-    assert(isSupported(*StructB, false) == false);
-    assert(isSupported(StructC, false) == true);
-    assert(isSupported(StructD, false) == false);
-    assert(isSupported(type, false) == false);
-    assert(isSupported(type, true) == true);
-    assert(isSupported(*anyopaque, true) == false);
-    assert(isSupported(struct { scope: @Type(.EnumLiteral) }, false) == false);
+    assert(isSupported(StructA) == true);
+    assert(isSupported(StructB) == false);
+    assert(isSupported(Thunk) == false);
+    assert(isSupported(*StructA) == true);
+    assert(isSupported(*StructB) == false);
+    assert(isSupported(StructC) == true);
+    assert(isSupported(StructD) == false);
 }
 
 fn getStructureType(comptime T: type) StructureType {
@@ -1282,7 +1279,7 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
         }
     }
     inline for (st.fields, 0..) |field, index| {
-        if (comptime isSupported(field.type, field.is_comptime)) {
+        if (comptime isSupported(field.type)) {
             const comptime_only = field.is_comptime or isComptimeOnly(field.type);
             try host.attachMember(structure, .{
                 .name = getCString(field.name),
@@ -1299,8 +1296,9 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
     if (!isArgumentStruct(T)) {
         // add default values
         var template_maybe: ?Value = null;
-        if (@sizeOf(T) > 0) {
-            var values: T = undefined;
+        const CFT = ComptimeFree(T);
+        if (@sizeOf(CFT) > 0) {
+            var values: CFT = undefined;
             // obtain byte array containing data of default values
             // can't use std.mem.zeroInit() here, since it'd fail with unions
             const bytes: []u8 = std.mem.asBytes(&values);
@@ -1309,9 +1307,16 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
             }
             inline for (st.fields) |field| {
                 if (field.default_value) |opaque_ptr| {
-                    if (!field.is_comptime) {
+                    const FT = @TypeOf(@field(values, field.name));
+                    if (@sizeOf(FT) != 0) {
                         const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-                        @field(values, field.name) = default_value_ptr.*;
+                        if (FT == field.type) {
+                            @field(values, field.name) = default_value_ptr.*;
+                        } else {
+                            // need cast here, as destination field is a different type with matching layout
+                            const dest_ptr: *field.type = @ptrCast(&@field(values, field.name));
+                            dest_ptr.* = default_value_ptr.*;
+                        }
                     }
                 }
             }
@@ -1322,7 +1327,7 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
         inline for (st.fields, 0..) |field, index| {
             if (field.default_value) |opaque_ptr| {
                 const comptime_only = field.is_comptime or isComptimeOnly(field.type);
-                if (comptime_only and comptime isSupported(field.type, field.is_comptime)) {
+                if (comptime_only and comptime isSupported(field.type)) {
                     // comptime members aren't stored in the struct's memory
                     // they're separate objects in the slots of the struct template
                     const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
@@ -1458,10 +1463,10 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
         inline .Struct, .Union, .Enum, .Opaque => |st| {
             inline for (st.decls, 0..) |decl, index| {
                 const decl_value_ptr = &@field(T, decl.name);
-                if (comptime isSupported(@TypeOf(decl_value_ptr), true)) {
+                if (comptime isSupported(@TypeOf(decl_value_ptr))) {
                     const DT = @TypeOf(decl_value_ptr.*);
-                    // export a type only if it's supported
-                    if (comptime DT != type or isSupported(decl_value_ptr.*, false)) {
+                    // export type only if it's supported
+                    if (comptime DT != type or isSupported(decl_value_ptr.*)) {
                         const is_const = comptime isConst(@TypeOf(decl_value_ptr));
                         if (is_const or !host.options.omit_variables) {
                             const slot = try getTypeSlot(host, Static, .{ .index = index });
@@ -1534,7 +1539,7 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
 fn hasUnsupported(comptime params: []const std.builtin.Type.Fn.Param) bool {
     return inline for (params) |param| {
         if (param.type) |T| {
-            if (T != std.mem.Allocator and !isSupported(T, false)) {
+            if (T != std.mem.Allocator and !isSupported(T)) {
                 break true;
             }
         } else {
@@ -1584,7 +1589,7 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
                             continue;
                         }
                         if (f.return_type) |RT| {
-                            if (comptime !isSupported(RT, false)) {
+                            if (comptime !isSupported(RT)) {
                                 continue;
                             }
                         }
