@@ -1,0 +1,45 @@
+{
+  name: '$',
+  desc: {
+    get: [Function: getSelf],
+    set: [Function: initializer],
+    enumerable: false,
+    configurable: true
+  }
+}
+{
+  name: 'dataView',
+  desc: {
+    get: [Function: get] { special: true },
+    set: [Function: set] { special: true },
+    enumerable: false,
+    configurable: true
+  }
+}
+{
+  name: 'base64',
+  desc: {
+    get: [Function: get] { special: true },
+    set: [Function: set] { special: true },
+    enumerable: false,
+    configurable: true
+  }
+}
+{
+  name: 'x',
+  desc: {
+    get: [Function: getValue],
+    set: [Function: setValue] { required: true },
+    enumerable: true,
+    configurable: true
+  }
+}
+{
+  name: 'y',
+  desc: {
+    get: [Function: getValue],
+    set: [Function: setValue] { required: true },
+    enumerable: true,
+    configurable: true
+  }
+}

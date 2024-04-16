@@ -1,0 +1,34 @@
+data-type-example-2.Line {
+  [Symbol(slots)]: {
+    '0': data-type-example-2.Point { [Symbol(memory)]: [DataView] },
+    '1': data-type-example-2.Point { [Symbol(memory)]: [DataView] }
+  },
+  [Symbol(memory)]: DataView {
+    byteLength: 16,
+    byteOffset: 0,
+    buffer: ArrayBuffer {
+      [Uint8Contents]: <00 00 00 00 00 00 00 00 00 00 80 3f 00 00 80 3f>,
+      byteLength: 16
+    }
+  }
+}
+data-type-example-2.Point {
+  [Symbol(memory)]: DataView {
+    byteLength: 8,
+    byteOffset: 0,
+    buffer: ArrayBuffer {
+      [Uint8Contents]: <00 00 00 00 00 00 00 00 00 00 80 3f 00 00 80 3f>,
+      byteLength: 16
+    }
+  }
+}
+data-type-example-2.Point {
+  [Symbol(memory)]: DataView {
+    byteLength: 8,
+    byteOffset: 8,
+    buffer: ArrayBuffer {
+      [Uint8Contents]: <00 00 00 00 00 00 00 00 00 00 80 3f 00 00 80 3f>,
+      byteLength: 16
+    }
+  }
+}
