@@ -1,0 +1,8 @@
+@alignOf([4]f32) = 4
+@alignOf(@Vector(4, f32)) = 16
+@alignOf([2]f64) = 8
+@alignOf(@Vector(2, f64)) = 16
+@alignOf([4]f64) = 8
+@alignOf(@Vector(4, f64)) = 32
+@alignOf([8]f64) = 8
+@alignOf(@Vector(8, f64)) = 64

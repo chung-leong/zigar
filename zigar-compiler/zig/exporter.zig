@@ -373,9 +373,10 @@ test "getMemberType" {
     assert(getMemberType(type) == .type);
 }
 
-fn isSupported(comptime T: type) bool {
+fn isSupported(comptime T: type, comptime is_comptime: bool) bool {
     const recursively = struct {
         fn check(comptime CT: type, comptime checking_before: anytype) bool {
+            @setEvalBranchQuota(10000);
             inline for (checking_before) |BT| {
                 if (CT == BT) {
                     return true;
@@ -383,7 +384,6 @@ fn isSupported(comptime T: type) bool {
             }
             const checking_now = checking_before ++ .{CT};
             return switch (@typeInfo(CT)) {
-                .Type,
                 .Bool,
                 .Int,
                 .ComptimeInt,
@@ -394,10 +394,10 @@ fn isSupported(comptime T: type) bool {
                 .Undefined,
                 .ErrorSet,
                 .Enum,
-                .Opaque,
                 .Vector,
-                .EnumLiteral,
                 => true,
+                .Opaque => CT != anyopaque,
+                .EnumLiteral, .Type => is_comptime,
                 .ErrorUnion => |eu| check(eu.payload, checking_now),
                 inline .Array, .Optional, .Pointer => |ar| check(ar.child, checking_now),
                 .Struct => |st| inline for (st.fields) |field| {
@@ -433,13 +433,17 @@ test "isSupported" {
         thunk: Thunk,
         ptr: *@This(),
     };
-    assert(isSupported(StructA) == true);
-    assert(isSupported(StructB) == false);
-    assert(isSupported(Thunk) == false);
-    assert(isSupported(*StructA) == true);
-    assert(isSupported(*StructB) == false);
-    assert(isSupported(StructC) == true);
-    assert(isSupported(StructD) == false);
+    assert(isSupported(StructA, false) == true);
+    assert(isSupported(StructB, false) == false);
+    assert(isSupported(Thunk, false) == false);
+    assert(isSupported(*StructA, false) == true);
+    assert(isSupported(*StructB, false) == false);
+    assert(isSupported(StructC, false) == true);
+    assert(isSupported(StructD, false) == false);
+    assert(isSupported(type, false) == false);
+    assert(isSupported(type, true) == true);
+    assert(isSupported(*anyopaque, true) == false);
+    assert(isSupported(struct { scope: @Type(.EnumLiteral) }, false) == false);
 }
 
 fn getStructureType(comptime T: type) StructureType {
@@ -506,6 +510,7 @@ test "getStructureSize" {
 fn getStructureAlign(comptime T: type) u16 {
     return switch (@typeInfo(T)) {
         .Opaque => missing(u16),
+        .ErrorSet => @alignOf(anyerror),
         else => return @alignOf(T),
     };
 }
@@ -1025,30 +1030,47 @@ fn addPointerMember(host: anytype, structure: Value, comptime T: type) !void {
 }
 
 fn isComptimeOnly(comptime T: type) bool {
-    return switch (@typeInfo(T)) {
-        .ComptimeFloat,
-        .ComptimeInt,
-        .EnumLiteral,
-        .Type,
-        .Null,
-        .Undefined,
-        => true,
-        .Array => |ar| isComptimeOnly(ar.child),
-        .Struct => |st| inline for (st.fields) |field| {
-            // structs with comptime fields of comptime type can be created at runtime
-            if (!field.is_comptime and isComptimeOnly(field.type)) {
-                break true;
+    const recursively = struct {
+        fn check(comptime CT: type, comptime checking_before: anytype) bool {
+            @setEvalBranchQuota(10000);
+            inline for (checking_before) |BT| {
+                if (CT == BT) {
+                    return false;
+                }
             }
-        } else false,
-        .Union => |st| inline for (st.fields) |field| {
-            if (isComptimeOnly(field.type)) {
-                break true;
-            }
-        } else false,
-        .Optional => |op| isComptimeOnly(op.child),
-        .ErrorUnion => |eu| isComptimeOnly(eu.payload),
-        else => false,
+            const checking_now = checking_before ++ .{CT};
+            return switch (@typeInfo(CT)) {
+                .ComptimeFloat,
+                .ComptimeInt,
+                .EnumLiteral,
+                .Type,
+                .Null,
+                .Undefined,
+                => true,
+                inline .Array, .Optional, .Pointer => |ar| check(ar.child, checking_now),
+                .Struct => |st| inline for (st.fields) |field| {
+                    // structs with comptime fields of comptime type can be created at runtime
+                    if (!field.is_comptime and check(field.type, checking_now)) {
+                        break true;
+                    }
+                } else false,
+                .Union => |st| inline for (st.fields) |field| {
+                    if (check(field.type, checking_now)) {
+                        break true;
+                    }
+                } else false,
+                .ErrorUnion => |eu| check(eu.payload, checking_now),
+                else => false,
+            };
+        }
     };
+    return recursively.check(T, .{});
+}
+
+test "isComptimeOnly" {
+    assert(isComptimeOnly(type) == true);
+    assert(isComptimeOnly(*type) == true);
+    assert(isComptimeOnly(*?type) == true);
 }
 
 fn ComptimeFree(comptime T: type) type {
@@ -1260,7 +1282,7 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
         }
     }
     inline for (st.fields, 0..) |field, index| {
-        if (comptime isSupported(field.type)) {
+        if (comptime isSupported(field.type, field.is_comptime)) {
             const comptime_only = field.is_comptime or isComptimeOnly(field.type);
             try host.attachMember(structure, .{
                 .name = getCString(field.name),
@@ -1277,9 +1299,8 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
     if (!isArgumentStruct(T)) {
         // add default values
         var template_maybe: ?Value = null;
-        const CFT = ComptimeFree(T);
-        if (@sizeOf(CFT) > 0) {
-            var values: CFT = undefined;
+        if (@sizeOf(T) > 0) {
+            var values: T = undefined;
             // obtain byte array containing data of default values
             // can't use std.mem.zeroInit() here, since it'd fail with unions
             const bytes: []u8 = std.mem.asBytes(&values);
@@ -1288,16 +1309,9 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
             }
             inline for (st.fields) |field| {
                 if (field.default_value) |opaque_ptr| {
-                    const FT = @TypeOf(@field(values, field.name));
-                    if (@sizeOf(FT) != 0) {
+                    if (!field.is_comptime) {
                         const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-                        if (FT == field.type) {
-                            @field(values, field.name) = default_value_ptr.*;
-                        } else {
-                            // need cast here, as destination field is a different type with matching layout
-                            const dest_ptr: *field.type = @ptrCast(&@field(values, field.name));
-                            dest_ptr.* = default_value_ptr.*;
-                        }
+                        @field(values, field.name) = default_value_ptr.*;
                     }
                 }
             }
@@ -1308,7 +1322,7 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
         inline for (st.fields, 0..) |field, index| {
             if (field.default_value) |opaque_ptr| {
                 const comptime_only = field.is_comptime or isComptimeOnly(field.type);
-                if (comptime_only and comptime isSupported(field.type)) {
+                if (comptime_only and comptime isSupported(field.type, field.is_comptime)) {
                     // comptime members aren't stored in the struct's memory
                     // they're separate objects in the slots of the struct template
                     const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
@@ -1444,20 +1458,23 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
         inline .Struct, .Union, .Enum, .Opaque => |st| {
             inline for (st.decls, 0..) |decl, index| {
                 const decl_value_ptr = &@field(T, decl.name);
-                const DT = @TypeOf(decl_value_ptr.*);
-                if (comptime isSupported(DT) and (DT != type or isSupported(decl_value_ptr.*))) {
-                    const is_const = comptime isConst(@TypeOf(decl_value_ptr));
-                    if (is_const or !host.options.omit_variables) {
-                        const slot = try getTypeSlot(host, Static, .{ .index = index });
-                        try host.attachMember(structure, .{
-                            .name = getCString(decl.name),
-                            .member_type = if (is_const) .@"comptime" else .static,
-                            .slot = slot,
-                            .structure = try getStructure(host, DT),
-                        }, true);
-                        const value_obj = try exportPointerTarget(host, decl_value_ptr, is_const);
-                        template_maybe = template_maybe orelse try host.createTemplate(null);
-                        try host.writeSlot(template_maybe.?, slot, value_obj);
+                if (comptime isSupported(@TypeOf(decl_value_ptr), true)) {
+                    const DT = @TypeOf(decl_value_ptr.*);
+                    // export a type only if it's supported
+                    if (comptime DT != type or isSupported(decl_value_ptr.*, false)) {
+                        const is_const = comptime isConst(@TypeOf(decl_value_ptr));
+                        if (is_const or !host.options.omit_variables) {
+                            const slot = try getTypeSlot(host, Static, .{ .index = index });
+                            try host.attachMember(structure, .{
+                                .name = getCString(decl.name),
+                                .member_type = if (is_const) .@"comptime" else .static,
+                                .slot = slot,
+                                .structure = try getStructure(host, DT),
+                            }, true);
+                            const value_obj = try exportPointerTarget(host, decl_value_ptr, is_const);
+                            template_maybe = template_maybe orelse try host.createTemplate(null);
+                            try host.writeSlot(template_maybe.?, slot, value_obj);
+                        }
                     }
                 }
                 offset += 1;
@@ -1515,16 +1532,15 @@ fn addStaticMembers(host: anytype, structure: Value, comptime T: type) !void {
 }
 
 fn hasUnsupported(comptime params: []const std.builtin.Type.Fn.Param) bool {
-    inline for (params) |param| {
+    return inline for (params) |param| {
         if (param.type) |T| {
-            if (T != std.mem.Allocator and !isSupported(T)) {
-                return true;
+            if (T != std.mem.Allocator and !isSupported(T, false)) {
+                break true;
             }
         } else {
-            return true;
+            break true;
         }
-    }
-    return false;
+    } else false;
 }
 
 test "hasUnsupported" {
@@ -1568,7 +1584,7 @@ fn addMethods(host: anytype, structure: Value, comptime T: type) !void {
                             continue;
                         }
                         if (f.return_type) |RT| {
-                            if (comptime !isSupported(RT)) {
+                            if (comptime !isSupported(RT, false)) {
                                 continue;
                             }
                         }
@@ -1802,8 +1818,12 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
                     index += 1;
                 }
             }
-            // never inline the function so its name would show up in the trace
-            arg_ptr.*.retval = @call(.never_inline, function, args);
+            // never inline the function so its name would show up in the trace (unless it's marked inline)
+            const modifier = switch (@typeInfo(@TypeOf(function)).Fn.calling_convention) {
+                .Inline => .auto,
+                else => .never_inline,
+            };
+            arg_ptr.*.retval = @call(modifier, function, args);
         }
 
         fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {

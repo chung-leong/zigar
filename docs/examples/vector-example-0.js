@@ -1,3 +1,3 @@
-import { showAlignments } from './vector-example-1.zig';
+import { showAlignments } from './vector-example-0.zig';
 
 showAlignments();
