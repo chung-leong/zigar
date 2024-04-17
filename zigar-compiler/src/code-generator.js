@@ -1,5 +1,6 @@
-import { MemberType, isReadOnly } from '../../zigar-runtime/src/member.js';
-import { StructureType, findAllObjects, getFeaturesUsed } from '../../zigar-runtime/src/structure.js';
+import { isReadOnly } from '../../zigar-runtime/src/member.js';
+import { findAllObjects, getFeaturesUsed } from '../../zigar-runtime/src/structure.js';
+import { MemberType, StructureType } from '../../zigar-runtime/src/types.js';
 
 export function generateCode(definition, params) {
   const { structures, options, keys } = definition;
@@ -293,7 +294,7 @@ function getExports(structures) {
   }
   for (const member of root.static.members) {
     // only read-only properties are exportable
-    if (isReadOnly(member.type) && legal.test(member.name)) {
+    if (isReadOnly(member) && legal.test(member.name)) {
       try {
         // make sure that getter wouldn't throw (possible with error union)
         constructor[member.name];
