@@ -1,3 +1,429 @@
+const MemberType = {
+  Void: 0,
+  Bool: 1,
+  Int: 2,
+  Uint: 3,
+  Float: 4,
+  Object: 5,
+  Type: 6,
+  Comptime: 7,
+  Static: 8,
+  Literal: 9,
+  Null: 10,
+  Undefined: 11,
+};
+
+const StructureType = {
+  Primitive: 0,
+  Array: 1,
+  Struct: 2,
+  ExternStruct: 3,
+  PackedStruct: 4,
+  ArgStruct: 5,
+  ExternUnion: 6,
+  BareUnion: 7,
+  TaggedUnion: 8,
+  ErrorUnion: 9,
+  ErrorSet: 10,
+  Enumeration: 11,
+  Optional: 12,
+  Pointer: 13,
+  Slice: 14,
+  Vector: 15,
+  Opaque: 16,
+  Function: 17,
+};
+
+function getTypeName(member) {
+  const { type, bitSize, byteSize } = member;
+  if (type === MemberType.Int) {
+    return `${bitSize <= 32 ? '' : 'Big' }Int${bitSize}`;
+  } else if (type === MemberType.Uint) {
+    return `${bitSize <= 32 ? '' : 'Big' }Uint${bitSize}`;
+  } else if (type === MemberType.Float) {
+    return `Float${bitSize}`;
+  } else if (type === MemberType.Bool) {
+    const boolSize = (byteSize !== undefined) ? byteSize * 8 : 1;
+    return `Bool${boolSize}`;
+  } else if (type === MemberType.Void) {
+    return `Null`;
+  }
+}
+
+function getIntRange(member) {
+  const { type, bitSize } = member;
+  const signed = (type === MemberType.Int);
+  let magBits = (signed) ? bitSize - 1 : bitSize;
+  if (bitSize <= 32) {
+    const max = 2 ** magBits - 1;
+    const min = (signed) ? -(2 ** magBits) : 0;
+    return { min, max };
+  } else {
+    magBits = BigInt(magBits);
+    const max = 2n ** magBits - 1n;
+    const min = (signed) ? -(2n ** magBits) : 0n;
+    return { min, max };
+  }
+}
+
+function getPrimitiveClass({ type, bitSize }) {
+  if (type === MemberType.Int || type === MemberType.Uint) {
+    if (bitSize <= 32) {
+      return Number;
+    } else {
+      return BigInt;
+    }
+  } else if (type === MemberType.Float) {
+    return Number;
+  } else if (type === MemberType.Bool) {
+    return Boolean;
+  }
+}
+
+function getPrimitiveType(member) {
+  const Primitive = getPrimitiveClass(member);
+  if (Primitive) {
+    return typeof(Primitive(0));
+  }
+}
+
+function isByteAligned({ bitOffset, bitSize, byteSize }) {
+  return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
+}
+
+function isErrorJSON(arg) {
+  return typeof(arg) === 'object' && typeof(arg.error) === 'string' && Object.keys(arg).length === 1  ;
+}
+
+function throwNoInitializer(structure) {
+  const { name } = structure;
+  throw new TypeError(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`);
+}
+
+function throwBufferSizeMismatch(structure, dv, target = null) {
+  const { name, type, byteSize } = structure;
+  const actual = dv.byteLength;
+  const s = (byteSize !== 1) ? 's' : '';
+  if (type === StructureType.Slice && !target) {
+    throw new TypeError(`${name} has elements that are ${byteSize} byte${s} in length, received ${actual}`);
+  } else {
+    const total = (type === StructureType.Slice) ? target.length * byteSize : byteSize;
+    throw new TypeError(`${name} has ${total} byte${s}, received ${actual}`);
+  }
+}
+
+function throwBufferExpected(structure) {
+  const { type, byteSize, typedArray } = structure;
+  const s = (byteSize !== 1) ? 's' : '';
+  const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle);
+  if (typedArray) {
+    acceptable.push(addArticle(typedArray.name));
+  }
+  if (type === StructureType.Slice) {
+    throw new TypeError(`Expecting ${formatList(acceptable)} that can accommodate items ${byteSize} byte${s} in length`);
+  } else {
+    throw new TypeError(`Expecting ${formatList(acceptable)} that is ${byteSize} byte${s} in length`);
+  }
+}
+
+function throwEnumExpected(structure, arg) {
+  const { name } = structure;
+  if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+    throw new TypeError(`Value given does not correspond to an item of enum ${name}: ${arg}`);
+  } else {
+    throw new TypeError(`Enum item of the type ${name} expected, received ${arg}`);
+  }
+}
+
+function throwErrorExpected(structure, arg) {
+  const { name } = structure;
+  const type = typeof(arg);
+  if (type === 'string' || type === 'number' || isErrorJSON(arg)) {
+    if (isErrorJSON(arg)) {
+      arg = `{ error: ${JSON.stringify(arg.error)} }`;
+    }
+    throw new TypeError(`Error ${type} does not corresponds to any error in error set ${name}: ${arg}`);
+  } else {
+    throw new TypeError(`Error of the type ${name} expected, received ${arg}`);
+  }
+}
+
+function throwNotInErrorSet(structure) {
+  const { name } = structure;
+  throw new TypeError(`Error given is not a part of error set ${name}`);
+}
+
+function throwMultipleUnionInitializers(structure) {
+  const { name } = structure;
+  throw new TypeError(`Only one property of ${name} can be given a value`);
+}
+
+function throwInactiveUnionProperty(structure, name, currentName) {
+  throw new TypeError(`Accessing property ${name} when ${currentName} is active`);
+}
+
+function throwMissingUnionInitializer(structure, arg, exclusion) {
+  const { name, instance: { members } } = structure;
+  const missing = members.slice(0, exclusion ? -1 : undefined).map(m => m.name);
+  throw new TypeError(`${name} needs an initializer for one of its union properties: ${missing.join(', ')}`);
+}
+
+function throwInvalidInitializer(structure, expected, arg) {
+  const { name } = structure;
+  const acceptable = [];
+  if (Array.isArray(expected)) {
+    for (const type of expected) {
+      acceptable.push(addArticle(type));
+    }
+  } else {
+    acceptable.push(addArticle(expected));
+  }
+  const received = getDescription(arg);
+  throw new TypeError(`${name} expects ${formatList(acceptable)} as argument, received ${received}`);
+}
+
+function throwInvalidArrayInitializer(structure, arg, shapeless = false) {
+  const { instance: { members: [ member ] }, type, typedArray } = structure;
+  const acceptable = [];
+  const primitive = getPrimitiveType(member);
+  if (primitive) {
+    let object;
+    switch (member.structure?.type) {
+      case StructureType.Enumeration: object = 'enum item'; break;
+      case StructureType.ErrorSet: object = 'error'; break;
+      default: object = primitive;
+    }
+    acceptable.push(`array of ${object}s`);
+  } else {
+    acceptable.push(`array of objects`);
+  }
+  if (typedArray) {
+    acceptable.push(typedArray.name);
+  }
+  if (type === StructureType.Slice && shapeless) {
+    acceptable.push(`length`);
+  }
+  throwInvalidInitializer(structure, acceptable.join(' or '), arg);
+}
+
+function throwArrayLengthMismatch(structure, target, arg) {
+  const { name, length, instance: { members: [ member ] } } = structure;
+  const { structure: { constructor: elementConstructor} } = member;
+  const { length: argLength, constructor: argConstructor } = arg;
+  // get length from object whech it's a slice
+  const actualLength = target?.length ?? length;
+  const s = (actualLength !== 1) ? 's' : '';
+  let received;
+  if (argConstructor === elementConstructor) {
+    received = `only a single one`;
+  } else if (argConstructor.child === elementConstructor) {
+    received = `a slice/array that has ${argLength}`;
+  } else {
+    received = `${argLength} initializer${argLength > 1 ? 's' : ''}`;
+  }
+  throw new TypeError(`${name} has ${actualLength} element${s}, received ${received}`);
+}
+
+function throwMissingInitializers(structure, missing) {
+  const { name } = structure;
+  throw new TypeError(`Missing initializers for ${name}: ${missing.join(', ')}`);
+}
+
+function throwNoProperty(structure, propName) {
+  const { name, instance: { members } } = structure;
+  const member = members.find(m => m.name === propName);
+  if (member) {
+    throw new TypeError(`Comptime value cannot be changed: ${propName}`);
+  } else {
+    throw new TypeError(`${name} does not have a property with that name: ${propName}`);
+  }
+}
+
+function throwArgumentCountMismatch(structure, actual) {
+  const { name, instance: { members } } = structure;
+  const argCount = members.length - 1;
+  const s = (argCount !== 1) ? 's' : '';
+  throw new Error(`${name} expects ${argCount} argument${s}, received ${actual}`);
+}
+
+function rethrowArgumentError(structure, index, err) {
+  const { name, instance: { members } } = structure;
+  // Zig currently does not provide the argument name
+  const argName = `args[${index}]`;
+  const argCount = members.length - 1;
+  const prefix = (index !== 0) ? '..., ' : '';
+  const suffix = (index !== argCount - 1) ? ', ...' : '';
+  const argLabel = prefix + argName + suffix;
+  const newError = new err.constructor(`${name}(${argLabel}): ${err.message}`);
+  newError.stack = err.stack;
+  throw newError;
+}
+
+function throwNoCastingToPointer(structure) {
+  throw new TypeError(`Non-slice pointers can only be created with the help of the new operator`);
+}
+
+function throwConstantConstraint(structure, pointer) {
+  const { name: target } = structure;
+  const { constructor: { name } } = pointer;
+  throw new TypeError(`Conversion of ${name} to ${target} requires an explicit cast`);
+}
+
+function throwMisplacedSentinel(structure, value, index, length) {
+  const { name } = structure;
+  throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}, found at ${index}`);
+}
+
+function throwMissingSentinel(structure, value, length) {
+  const { name } = structure;
+  throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}`);
+}
+
+function throwAlignmentConflict(align1, align2) {
+  throw new TypeError(`Unable to simultaneously align memory to ${align2}-byte and ${align1}-byte boundary`);
+}
+
+function throwTypeMismatch(expected, arg) {
+  const received = getDescription(arg);
+  throw new TypeError(`Expected ${addArticle(expected)}, received ${received}`)
+}
+
+function throwInaccessiblePointer() {
+  throw new TypeError(`Pointers within an untagged union are not accessible`);
+}
+
+function throwNullPointer() {
+  throw new TypeError(`Null pointer`);
+}
+
+function throwInvalidPointerTarget(structure, arg) {
+  const { name } = structure;
+  let target;
+  if (arg != null) {
+    const type = typeof(arg);
+    const noun = (type === 'object' && arg.constructor !== Object) ? `${arg.constructor.name} object`: type;
+    const a = article(noun);
+    target = `${a} ${noun}`;
+  } else {
+    target = arg + '';
+  }
+  throw new TypeError(`${name} cannot point to ${target}`)
+}
+
+function throwFixedMemoryTargetRequired(structure, arg) {
+  throw new TypeError(`Pointers in fixed memory cannot point to garbage-collected object`);
+}
+
+
+function throwOverflow(member, value) {
+  const typeName = getTypeName(member);
+  throw new TypeError(`${typeName} cannot represent the value given: ${value}`);
+}
+
+function throwOutOfBound(member, index) {
+  const { name } = member;
+  throw new RangeError(`Index exceeds the size of ${name ?? 'array'}: ${index}`);
+}
+
+function rethrowRangeError(member, index, err) {
+  if (err instanceof RangeError) {
+    throwOutOfBound(member, index);
+  } else {
+    throw err;
+  }
+}
+
+function throwNotUndefined(member) {
+  const { name } = member;
+  throw new RangeError(`Property ${name} can only be undefined`);
+}
+
+function throwNotOnByteBoundary(member) {
+  const { name, structure: { name: { struct }} } = member;
+  throw new TypeError(`Unable to create ${struct} as it is not situated on a byte boundary: ${name}`);
+}
+
+function throwReadOnly() {
+  throw new TypeError(`Unable to modify read-only object`);
+}
+
+function throwReadOnlyTarget(structure) {
+  const { name } = structure;
+  throw new TypeError(`${name} cannot point to a read-only object`);
+}
+
+function throwAccessingOpaque(structure) {
+  const { name } = structure;
+  throw new TypeError(`Unable to access opaque structure ${name}`);
+}
+
+function throwCreatingOpaque(structure) {
+  const { name } = structure;
+  throw new TypeError(`Unable to create instance of ${name}, as it is opaque`);
+}
+
+function throwZigError(name) {
+  throw new Error(deanimalizeErrorName(name));
+}
+
+function warnImplicitArrayCreation(structure, arg) {
+  const created = addArticle(structure.typedArray.name);
+  const source = addArticle(arg.constructor.name);
+  console.warn(`Implicitly creating ${created} from ${source}`);
+}
+
+function deanimalizeErrorName(name) {
+  // deal with snake_case first
+  let s = name.replace(/_/g, ' ');
+  // then camelCase, using a try block in case Unicode regex fails
+  try {
+    s = s.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
+      if (m1.length === 1) {
+        return ` ${m1.toLocaleLowerCase()}${m2}`;
+      } else {
+        if (m2) {
+          const acronym = m1.substring(0, m1.length - 1);
+          const letter = m1.charAt(m1.length - 1).toLocaleLowerCase();
+          return ` ${acronym} ${letter}${m2}`;
+        } else {
+          return ` ${m1}`;
+        }
+      }
+    }).trimStart();
+    /* c8 ignore next 2 */
+  } catch (err) {
+  }
+  return s.charAt(0).toLocaleUpperCase() + s.substring(1);
+}
+
+function getDescription(arg) {
+  const type = typeof(arg);
+  let s;
+  if (type === 'object') {
+    s = (arg) ? Object.prototype.toString.call(arg) : 'null';
+  } else {
+    s = type;
+  }
+  return addArticle(s);
+}
+
+function addArticle(noun) {
+  return `${article(noun)} ${noun}`;
+}
+
+function article(noun) {
+  return /^\W*[aeiou]/i.test(noun) ? 'an' : 'a';
+}
+
+function formatList(list, conj = 'or') {
+  const sep = ` ${conj} `;
+  if (list.length > 2) {
+    return list.slice(0, -1).join(', ') + sep + list[list.length - 1];
+  } else {
+    return list.join(sep);
+  }
+}
+
 const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
 const PARENT = Symbol('parent');
@@ -325,6 +751,1381 @@ function restoreMemory() {
   return true;
 }
 
+function getBoolAccessor(access, member) {
+  return cacheMethod(access, member, () => {
+    if (isByteAligned(member)) {
+      const { byteSize } = member;
+      const typeName = getTypeName({ type: MemberType.Int, bitSize: byteSize * 8 });
+      if (access === 'get') {
+        const get = DataView.prototype[`get${typeName}`];
+        return function(offset, littleEndian) {
+          return !!get.call(this, offset, littleEndian);
+        };
+      } else {
+        const set = DataView.prototype[`set${typeName}`];
+        const T = (byteSize > 4) ? 1n : 1;
+        const F = (byteSize > 4) ? 0n : 0;
+        return function(offset, value, littleEndian) {
+          set.call(this, offset, value ? T : F, littleEndian);
+        };
+      }
+    } else {
+      return getExtendedTypeAccessor(access, member);
+    }
+  });
+}
+
+function getNumericAccessor(access, member) {
+  return cacheMethod(access, member, (name) => {
+    if (DataView.prototype[name]) {
+      return DataView.prototype[name];
+    } else {
+      return getExtendedTypeAccessor(access, member);
+    }
+  });
+}
+
+const factories$2 = {};
+
+function useExtendedBool() {
+  factories$2[MemberType.Bool] = getExtendedBoolAccessor;
+}
+
+function useExtendedInt() {
+  factories$2[MemberType.Int] = getExtendedIntAccessor;
+}
+
+function useExtendedUint() {
+  factories$2[MemberType.Uint] = getExtendedUintAccessor;
+}
+
+function useExtendedFloat() {
+  factories$2[MemberType.Float] = getExtendedFloatAccessor;
+}
+
+function getExtendedTypeAccessor(access, member) {
+  const f = factories$2[member.type];
+  return f(access, member);
+}
+
+function getExtendedBoolAccessor(access, member) {
+  const { bitOffset } = member;
+  const bitPos = bitOffset & 0x07;
+  const mask = 1 << bitPos;
+  const get = DataView.prototype.getInt8;
+  if (access === 'get') {
+    return function(offset) {
+      const n = get.call(this, offset);
+      return !!(n & mask);
+    };
+  } else {
+    const set = DataView.prototype.setInt8;
+    return function(offset, value) {
+      const n = get.call(this, offset);
+      const b = (value) ? n | mask : n & ~mask;
+      set.call(this, offset, b);
+    };
+  }
+}
+
+function getExtendedIntAccessor(access, member) {
+  if (isByteAligned(member)) {
+    return getAlignedIntAccessor(access, member)
+  } else {
+    return getUnalignedIntAccessor(access, member);
+  }
+}
+
+function getExtendedUintAccessor(access, member) {
+  if (isByteAligned(member)) {
+    return getAlignedUintAccessor(access, member)
+  } else {
+    return getUnalignedUintAccessor(access, member);
+  }
+}
+
+function getExtendedFloatAccessor(access, member) {
+  if (isByteAligned(member)) {
+    return getAlignedFloatAccessor(access, member)
+  } else {
+    return getUnalignedFloatAccessor(access, member);
+  }
+}
+
+function getDataView(structure, arg, env) {
+  const { type, byteSize, typedArray } = structure;
+  let dv;
+  // not using instanceof just in case we're getting objects created in other contexts
+  const tag = arg?.[Symbol.toStringTag];
+  if (tag === 'DataView') {
+    dv = arg;
+  } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
+    dv = env.obtainView(arg, 0, arg.byteLength);
+  } else if (typedArray && tag === typedArray.name || (tag === 'Uint8ClampedArray' && typedArray === Uint8Array)) {
+    dv = env.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);
+  } else if (tag === 'Uint8Array' && typeof(Buffer) === 'function' && arg instanceof Buffer) {
+    dv = env.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);
+  } else {
+    const memory = arg?.[MEMORY];
+    if (memory) {
+      const { constructor, instance: { members: [ member ] } } = structure;
+      if (arg instanceof constructor) {
+        return memory;
+      } else if (type === StructureType.Array || type === StructureType.Slice || type === StructureType.Vector) {
+        const { byteSize: elementSize, structure: { constructor: Child } } = member;
+        const number = findElements(arg, Child);
+        if (number !== undefined) {
+          if (type === StructureType.Slice || number * elementSize === byteSize) {
+            return memory;
+          } else {
+            throwArrayLengthMismatch(structure, null, arg);
+          }
+        } 
+      }
+    }
+  }
+  if (dv && byteSize !== undefined) {
+    checkDataViewSize(dv, structure);
+  }
+  return dv;
+}
+
+function checkDataView(dv) {
+  if (dv?.[Symbol.toStringTag] !== 'DataView') {
+    throwTypeMismatch('a DataView', dv);
+  }
+  return dv;
+}
+
+function checkDataViewSize(dv, structure) {
+  const { byteSize, type } = structure;
+  const multiple = type === StructureType.Slice;
+  if (multiple ? dv.byteLength % byteSize !== 0 : dv.byteLength !== byteSize) {
+    throwBufferSizeMismatch(structure, dv);
+  }
+}
+
+function setDataView(dv, structure, copy, fixed, handlers) {
+  const { byteSize, type, sentinel } = structure;
+  const multiple = type === StructureType.Slice;
+  if (!this[MEMORY]) {
+    const { shapeDefiner } = handlers;
+    checkDataViewSize(dv, structure);
+    const len = dv.byteLength / byteSize;
+    const source = { [MEMORY]: dv };
+    sentinel?.validateData(source, len);
+    if (fixed) {
+      // need to copy when target object is in fixed memory
+      copy = true;
+    }
+    shapeDefiner.call(this, copy ? null : dv, len, fixed);
+    if (copy) {
+      this[COPIER](source);
+    }  
+  } else {
+    const byteLength = multiple ? byteSize * this.length : byteSize;
+    if (dv.byteLength !== byteLength) {
+      throwBufferSizeMismatch(structure, dv, this);
+    }
+    const source = { [MEMORY]: dv };
+    sentinel?.validateData(source, this.length);
+    this[COPIER](source); 
+  }
+}
+
+function findElements(arg, Child) {
+  // casting to a array/slice
+  const { constructor: Arg } = arg;
+  if (Arg === Child) {
+    // matching object
+    return 1;
+  } else if (Arg.child === Child) {
+    // matching slice/array
+    return arg.length;
+  }
+}
+
+function requireDataView(structure, arg, env) {
+  const dv = getDataView(structure, arg, env);
+  if (!dv) {
+    throwBufferExpected(structure);
+  }
+  return dv;
+}
+
+function getTypedArrayClass(member) {
+  const { type: memberType, byteSize } = member;
+  if (memberType === MemberType.Int) {
+    switch (byteSize) {
+      case 1: return Int8Array;
+      case 2: return Int16Array;
+      case 4: return Int32Array;
+      case 8: return BigInt64Array;
+    }
+  } else if (memberType === MemberType.Uint) {
+    switch (byteSize) {
+      case 1: return Uint8Array;
+      case 2: return Uint16Array;
+      case 4: return Uint32Array;
+      case 8: return BigUint64Array;
+    }
+  } else if (memberType === MemberType.Float) {
+    switch (byteSize) {
+      case 4: return Float32Array;
+      case 8: return Float64Array;
+    }
+  } else if (memberType === MemberType.Object) {
+    return member.structure.typedArray;
+  }
+  return null;
+}
+
+function isTypedArray(arg, TypedArray) {
+  const tag = arg?.[Symbol.toStringTag];
+  return (!!TypedArray && tag === TypedArray.name);
+}
+
+function isCompatible(arg, constructor) {
+  const tags = constructor[COMPAT];
+  if (tags) {
+    const tag = arg?.[Symbol.toStringTag];
+    if (tags.includes(tag)) {
+      return true;
+    }
+  }
+  if (constructor.child) {
+    if (findElements(arg, constructor.child) !== undefined) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getCompatibleTags(structure) {
+  const { typedArray } = structure;
+  const tags = [];
+  if (typedArray) {
+    tags.push(typedArray.name);
+    tags.push('DataView');
+    if (typedArray === Uint8Array || typedArray === Int8Array) {
+      tags.push('ArrayBuffer');
+      tags.push('SharedArrayBuffer');
+      if (typedArray === Uint8Array) {
+        tags.push('Uint8ClampedArray');
+      }
+    }
+  }
+  return tags;
+}
+
+function isBuffer(arg, typedArray) {
+  const tag = arg?.[Symbol.toStringTag];
+  if (tag === 'DataView' || tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
+    return true;
+  } else if (typedArray && tag === typedArray.name) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+function getBigIntDescriptor(bitSize) {
+  const getWord = DataView.prototype.getBigUint64;
+  const setWord = DataView.prototype.setBigUint64;
+  const wordCount = Math.ceil(bitSize / 64);
+  return {
+    get: function(offset, littleEndian) {
+      let n = 0n;
+      if (littleEndian) {
+        for (let i = 0, j = offset + (wordCount - 1) * 8; i < wordCount; i++, j -= 8) {
+          const w = getWord.call(this, j, littleEndian);
+          n = (n << 64n) | w;
+        }
+      } else {
+        for (let i = 0, j = offset; i < wordCount; i++, j += 8) {
+          const w = getWord.call(this, j, littleEndian);
+          n = (n << 64n) | w;
+        }
+      }
+      return n;
+    },
+    set: function(offset, value, littleEndian) {
+      let n = value;
+      const mask = 0xFFFFFFFFFFFFFFFFn;
+      if (littleEndian) {
+        for (let i = 0, j = offset; i < wordCount; i++, j += 8) {
+          const w = n & mask;
+          setWord.call(this, j, w, littleEndian);
+          n >>= 64n;
+        }
+      } else {
+        n <<= BigInt(wordCount * 64 - bitSize);
+        for (let i = 0, j = offset + (wordCount - 1) * 8; i < wordCount; i++, j -= 8) {
+          const w = n & mask;
+          setWord.call(this, j, w, littleEndian);
+          n >>= 64n;
+        }
+      }
+      return n;
+    },
+  };
+}
+
+function getAlignedIntAccessor(access, member) {
+  const { bitSize, byteSize } = member;
+  if (bitSize < 64) {
+    // actual number of bits needed when stored aligned
+    const typeName = getTypeName({ ...member, bitSize: byteSize * 8 });
+    const get = DataView.prototype[`get${typeName}`];
+    const set = DataView.prototype[`set${typeName}`];
+    const signMask = (bitSize <= 32) ? 2 ** (bitSize - 1) : 2n ** BigInt(bitSize - 1);
+    const valueMask = (bitSize <= 32) ? signMask - 1 : signMask - 1n;
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const n = get.call(this, offset, littleEndian);
+        return (n & valueMask) - (n & signMask);
+      };
+    } else {
+      return function(offset, value, littleEndian) {
+        const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
+        set.call(this, offset, n, littleEndian);
+      };
+    }
+  } else {
+    // larger than 64 bits
+    const { get, set } = getBigIntDescriptor(bitSize);
+    const signMask = 2n ** BigInt(bitSize - 1);
+    const valueMask = signMask - 1n;
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const n = get.call(this, offset, littleEndian);
+        return (n & valueMask) - (n & signMask);
+      };
+    } else {
+      return function(offset, value, littleEndian) {
+        const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
+        set.call(this, offset, n, littleEndian);
+      };
+    }
+  }
+}
+
+function getAlignedUintAccessor(access, member) {
+  const { bitSize, byteSize } = member;
+  if (bitSize < 64) {
+    // actual number of bits needed when stored aligned
+    const typeName = getTypeName({ ...member, bitSize: byteSize * 8 });
+    const get = DataView.prototype[`get${typeName}`];
+    const set = DataView.prototype[`set${typeName}`];
+    const valueMask = (bitSize <= 32) ? (2 ** bitSize) - 1 : (2n ** BigInt(bitSize)) - 1n;
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const n = get.call(this, offset, littleEndian);
+        return n & valueMask;
+      };
+    } else {
+      return function(offset, value, littleEndian) {
+        const n = value & valueMask;
+        set.call(this, offset, n, littleEndian);
+      };
+    }
+  } else {
+    // larger than 64 bits
+    const { get, set } = getBigIntDescriptor(bitSize);
+    const valueMask = (2n ** BigInt(bitSize)) - 1n;
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const n = get.call(this, offset, littleEndian);
+        return n & valueMask;
+      };
+    } else {
+      return function(offset, value, littleEndian) {
+        const n = value & valueMask;
+        set.call(this, offset, n, littleEndian);
+      };
+    }
+  }
+}
+
+function getUnalignedIntAccessor(access, member) {
+  const { bitSize, bitOffset } = member;
+  const bitPos = bitOffset & 0x07;
+  if (bitPos + bitSize <= 8) {
+    const set = DataView.prototype.setUint8;
+    const get = DataView.prototype.getUint8;
+    // sub-8-bit numbers have real use cases
+    const signMask = 2 ** (bitSize - 1);
+    const valueMask = signMask - 1;
+    if (access === 'get') {
+      return function(offset) {
+        const n = get.call(this, offset);
+        const s = n >>> bitPos;
+        return (s & valueMask) - (s & signMask);
+      };
+    } else {
+      const outsideMask = 0xFF ^ ((valueMask | signMask) << bitPos);
+      return function(offset, value) {
+        let b = get.call(this, offset);
+        const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
+        b = (b & outsideMask) | (n << bitPos);
+        set.call(this, offset, b);
+      };
+    }
+  }
+  return getUnalignedNumericAccessor(access, member);
+}
+
+function getUnalignedUintAccessor(access, member) {
+  const { bitSize, bitOffset } = member;
+  const bitPos = bitOffset & 0x07;
+  if (bitPos + bitSize <= 8) {
+    const set = DataView.prototype.setUint8;
+    const get = DataView.prototype.getUint8;
+    const valueMask = (2 ** bitSize - 1);
+    if (access === 'get') {
+      return function(offset) {
+        const n = get.call(this, offset);
+        const s = n >>> bitPos;
+        return s & valueMask;
+      };
+    } else {
+      const outsideMask = 0xFF ^ (valueMask << bitPos);
+      return function(offset, value) {
+        const n = get.call(this, offset);
+        const b = (n & outsideMask) | ((value & valueMask) << bitPos);
+        set.call(this, offset, b);
+      };
+    }
+  }
+  return getUnalignedNumericAccessor(access, member);
+}
+
+function getAlignedFloatAccessor(access, member) {
+  const { bitSize, byteSize } = member;
+  if (bitSize === 16) {
+    const buf = new DataView(new ArrayBuffer(4));
+    const set = DataView.prototype.setUint16;
+    const get = DataView.prototype.getUint16;
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const n = get.call(this, offset, littleEndian);
+        const sign = n >>> 15;
+        const exp = (n & 0x7C00) >> 10;
+        const frac = n & 0x03FF;
+        if (exp === 0) {
+          return (sign) ? -0 : 0;
+        } else if (exp === 0x1F) {
+          if (!frac) {
+            return (sign) ? -Infinity : Infinity;
+          } else {
+            return NaN;
+          }
+        }
+        const n32 = (sign << 31) | ((exp - 15 + 127) << 23) | (frac << 13);
+        buf.setUint32(0, n32, littleEndian);
+        return buf.getFloat32(0, littleEndian);
+      }
+    } else {
+      return function(offset, value, littleEndian) {
+        buf.setFloat32(0, value, littleEndian);
+        const n = buf.getUint32(0, littleEndian);
+        const sign = n >>> 31;
+        const exp = (n & 0x7F800000) >> 23;
+        const frac = n & 0x007FFFFF;
+        const exp16 = (exp - 127 + 15);
+        let n16;
+        if (exp === 0) {
+          n16 = sign << 15;
+        } else if (exp === 0xFF) {
+          n16 = sign << 15 | 0x1F << 10 | (frac ? 1 : 0);
+        } else if (exp16 >= 31) {
+          n16 = sign << 15 | 0x1F << 10;
+        } else {
+          n16 = sign << 15 | exp16 << 10 | (frac >> 13);
+        }
+        set.call(this, offset, n16, littleEndian);
+      }
+    }
+  } else if (bitSize === 80) {
+    const buf = new DataView(new ArrayBuffer(8));
+    const get = function(offset, littleEndian) {
+      const w1 = BigInt(this.getUint32(offset + (littleEndian ? 0 : byteSize - 4), littleEndian));
+      const w2 = BigInt(this.getUint32(offset + (littleEndian ? 4 : byteSize - 8), littleEndian));
+      const w3 = BigInt(this.getUint32(offset + (littleEndian ? 8 : byteSize - 12), littleEndian));
+      return w1 | w2 << 32n | w3 << 64n;
+    };
+    const set = function(offset, value, littleEndian) {
+      const w1 = value & 0xFFFFFFFFn;
+      const w2 = (value >> 32n) & 0xFFFFFFFFn;
+      const w3 = (value >> 64n) & 0xFFFFFFFFn;
+      this.setUint32(offset + (littleEndian ? 0 : byteSize - 4), Number(w1), littleEndian);
+      this.setUint32(offset + (littleEndian ? 4 : byteSize - 8), Number(w2), littleEndian);
+      this.setUint32(offset + (littleEndian ? 8 : byteSize - 12), Number(w3), littleEndian);
+    };
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const n = get.call(this, offset, littleEndian);
+        const sign = n >> 79n;
+        const exp = (n & 0x7FFF0000000000000000n) >> 64n;
+        const frac = n & 0x00007FFFFFFFFFFFFFFFn;
+        if (exp === 0n) {
+          return (sign) ? -0 : 0;
+        } else if (exp === 0x7FFFn) {
+          if (!frac) {
+            return (sign) ? -Infinity : Infinity;
+          } else {
+            return NaN;
+          }
+        }
+        const exp64 = exp - 16383n + 1023n;
+        if (exp64 >= 2047n) {
+          return (sign) ? -Infinity : Infinity;
+        }
+        const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 11n) + BigInt((frac & (2n**11n - 1n)) >= 2n**10n);
+        buf.setBigUint64(0, n64, littleEndian);
+        return buf.getFloat64(0, littleEndian);
+      }
+    } else {
+      return function(offset, value, littleEndian) {
+        buf.setFloat64(0, value, littleEndian);
+        const n = buf.getBigUint64(0, littleEndian);
+        const sign = n >> 63n;
+        const exp = (n & 0x7FF0000000000000n) >> 52n;
+        const frac = n & 0x000FFFFFFFFFFFFFn;
+        let n80;
+        if (exp === 0n) {
+          n80 = sign << 79n | (frac << 11n);
+        } else if (exp === 0x07FFn) {
+          n80 = sign << 79n | 0x7FFFn << 64n | (frac ? 0x00002000000000000000n : 0n) | 0x00008000000000000000n;
+          //                                                 ^ bit 61                       ^ bit 63
+        } else {
+          n80 = sign << 79n | (exp - 1023n + 16383n) << 64n | (frac << 11n) | 0x00008000000000000000n;
+        }
+        set.call(this, offset, n80, littleEndian);
+      }
+    }
+  } else if (bitSize === 128) {
+    const buf = new DataView(new ArrayBuffer(8));
+    const get = function(offset, littleEndian) {
+      const w1 = BigInt(this.getUint32(offset + (littleEndian ? 0 : byteSize - 4), littleEndian));
+      const w2 = BigInt(this.getUint32(offset + (littleEndian ? 4 : byteSize - 8), littleEndian));
+      const w3 = BigInt(this.getUint32(offset + (littleEndian ? 8 : byteSize - 12), littleEndian));
+      const w4 = BigInt(this.getUint32(offset + (littleEndian ? 12 : byteSize - 16), littleEndian));
+      return w1 | w2 << 32n | w3 << 64n | w4 << 96n;
+    };
+    const set = function(offset, value, littleEndian) {
+      const w1 = value & 0xFFFFFFFFn;
+      const w2 = (value >> 32n) & 0xFFFFFFFFn;
+      const w3 = (value >> 64n) & 0xFFFFFFFFn;
+      const w4 = (value >> 96n) & 0xFFFFFFFFn;
+      this.setUint32(offset + (littleEndian ? 0 : byteSize - 4), Number(w1), littleEndian);
+      this.setUint32(offset + (littleEndian ? 4 : byteSize - 8), Number(w2), littleEndian);
+      this.setUint32(offset + (littleEndian ? 8 : byteSize - 12), Number(w3), littleEndian);
+      this.setUint32(offset + (littleEndian ? 12 : byteSize - 16), Number(w4), littleEndian);
+    };
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const n = get.call(this, offset, littleEndian);
+        const sign = n >> 127n;
+        const exp = (n & 0x7FFF0000000000000000000000000000n) >> 112n;
+        const frac = n & 0x0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFn;
+        if (exp === 0n) {
+          return (sign) ? -0 : 0;
+        } else if (exp === 0x7FFFn) {
+          if (!frac) {
+            return (sign) ? -Infinity : Infinity;
+          } else {
+            return NaN;
+          }
+        }
+        const exp64 = exp - 16383n + 1023n;
+        if (exp64 >= 2047n) {
+          return (sign) ? -Infinity : Infinity;
+        }
+        const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 60n) + BigInt((frac & (2n**60n - 1n)) >= 2n**59n);
+        buf.setBigUint64(0, n64, littleEndian);
+        return buf.getFloat64(0, littleEndian);
+      }
+    } else {
+      return function(offset, value, littleEndian) {
+        buf.setFloat64(0, value, littleEndian);
+        const n = buf.getBigUint64(0, littleEndian);
+        const sign = n >> 63n;
+        const exp = (n & 0x7FF0000000000000n) >> 52n;
+        const frac = n & 0x000FFFFFFFFFFFFFn;
+        let n128;
+        if (exp === 0n) {
+          n128 = sign << 127n | (frac << 60n);
+        } else if (exp === 0x07FFn) {
+          n128 = sign << 127n | 0x7FFFn << 112n | (frac ? 1n : 0n);
+        } else {
+          n128 = sign << 127n | (exp - 1023n + 16383n) << 112n | (frac << 60n);
+        }
+        set.call(this, offset, n128, littleEndian);
+      }
+    }
+  }
+}
+
+function getUnalignedFloatAccessor(access, member) {
+  return getUnalignedNumericAccessor(access, member);
+}
+
+function getUnalignedNumericAccessor(access, member) {
+  // pathological usage scenario--handle it anyway by copying the bitSize into a
+  // temporary buffer, bit-aligning the data
+  const { bitSize, bitOffset } = member;
+  const bitPos = bitOffset & 0x07;
+  const byteSize = [ 1, 2, 4, 8 ].find(b => b * 8 >= bitSize) ?? Math.ceil(bitSize / 64) * 64;
+  const buf = new DataView(new ArrayBuffer(byteSize));
+  if (access === 'get') {
+    const getAligned = getNumericAccessor('get', { ...member, byteSize });
+    const copyBits = getBitAlignFunction(bitPos, bitSize, true);
+    return function(offset, littleEndian) {
+      copyBits(buf, this, offset);
+      return getAligned.call(buf, 0, littleEndian);
+    };
+  } else {
+    const setAligned = getNumericAccessor('set', { ...member, byteSize });
+    const applyBits = getBitAlignFunction(bitPos, bitSize, false);
+    return function(offset, value, littleEndian) {
+      setAligned.call(buf, 0, value, littleEndian);
+      applyBits(this, buf, offset);
+    };
+  }
+}
+
+const methodCache = {};
+
+function cacheMethod(access, member, cb) {
+  const { type, bitOffset, bitSize, structure } = member;
+  const bitPos = bitOffset & 0x07;
+  const typeName = getTypeName(member);
+  const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
+  const isInt = type === MemberType.Int || type === MemberType.Uint;
+  let name = `${access}${typeName}${suffix}`;
+  let isSize = false, originalName = name;
+  if (isInt && bitSize === 64) {
+    const zigTypeName = structure?.name;
+    if (zigTypeName === 'usize' || zigTypeName === 'isize') {
+      name += 'Size';
+      isSize = true;
+    }
+  }
+  let fn = methodCache[name];
+  if (!fn) {
+    if (isInt && access === 'set') {
+      // add auto-conversion between number and bigint
+      const Primitive = getPrimitiveClass(member);
+      const set = cb(originalName);
+      fn = function(offset, value, littleEndian) {
+        set.call(this, offset, Primitive(value), littleEndian);
+      };
+    } else if (isSize && access === 'get') {
+      // use number instead of bigint where possible
+      const get = cb(originalName);
+      const min = BigInt(Number.MIN_SAFE_INTEGER);
+      const max = BigInt(Number.MAX_SAFE_INTEGER);
+      fn = function(offset, littleEndian) {
+        const value = get.call(this, offset, littleEndian);
+        if (min <= value && value <= max) {
+          return Number(value);
+        } else {
+          return value;
+        }
+      };
+    } else {
+      fn = cb(name);
+    }
+    if (fn && fn.name !== name) {
+      Object.defineProperty(fn, 'name', { value: name, configurable: true, writable: false });
+    }
+    methodCache[name] = fn;
+  }
+  return fn;
+}
+
+function isReadOnly({ type }) {
+  switch (type) {
+    case MemberType.Type:
+    case MemberType.Comptime:
+    case MemberType.Literal:
+      return true;
+    default:
+      return false;
+  }
+}
+
+const factories$1 = {};
+
+function useVoid() {
+  factories$1[MemberType.Void] = getVoidDescriptor;
+}
+
+function useBool() {
+  factories$1[MemberType.Bool] = getBoolDescriptor;
+}
+
+function useInt() {
+  factories$1[MemberType.Int] = getIntDescriptor;
+}
+
+function useUint() {
+  factories$1[MemberType.Uint] = getUintDescriptor;
+}
+
+function useFloat() {
+  factories$1[MemberType.Float] = getFloatDescriptor;
+}
+
+function useObject() {
+  factories$1[MemberType.Object] = getObjectDescriptor;
+}
+
+function useType() {
+  factories$1[MemberType.Type] = getTypeDescriptor;
+}
+
+function useComptime() {
+  factories$1[MemberType.Comptime] = getComptimeDescriptor;
+}
+
+function useStatic() {
+  factories$1[MemberType.Static] = getStaticDescriptor;
+}
+
+function useLiteral() {
+  factories$1[MemberType.Literal] = getLiteralDescriptor;
+}
+
+function useNull() {
+  factories$1[MemberType.Null] = getNullDescriptor;
+}
+
+function useUndefined() {
+  factories$1[MemberType.Undefined] = getUndefinedDescriptor;
+}
+
+const transformers = {};
+
+function useEnumerationTransform() {
+  transformers[StructureType.Enumeration] = transformEnumerationDescriptor;
+}
+
+function useErrorSetTransform() {
+  transformers[StructureType.ErrorSet] = transformErrorSetDescriptor;
+}
+
+function getDescriptor(member, env) {
+  const f = factories$1[member.type];
+  return f(member, env);
+}
+
+function transformDescriptor(descriptor, member) {
+  const { structure } = member;
+  const t = transformers[structure?.type];
+  return (t) ? t(descriptor, structure) : descriptor;
+}
+
+function getVoidDescriptor(member, env) {
+  const { runtimeSafety } = env;
+  return {
+    get: function() {
+      return undefined;
+    },
+    set: (runtimeSafety)
+    ? function(value) {
+        if (value !== undefined) {
+          throwNotUndefined(member);
+        }
+      }
+    : function() {},
+  }
+}
+
+function getNullDescriptor(member, env) {
+  return {
+    get: function() {
+      return null;
+    },
+  }
+}
+
+function getUndefinedDescriptor(member, env) {
+  return {
+    get: function() {
+      return undefined;
+    },
+  }
+}
+
+function getBoolDescriptor(member, env) {
+  return getDescriptorUsing(member, env, getBoolAccessor)
+}
+
+function getIntDescriptor(member, env) {
+  const getDataViewAccessor = addRuntimeCheck(env, getNumericAccessor);
+  const descriptor = getDescriptorUsing(member, env, getDataViewAccessor);
+  return transformDescriptor(descriptor, member);
+}
+
+function getUintDescriptor(member, env) {
+  const getDataViewAccessor = addRuntimeCheck(env, getNumericAccessor);
+  const descriptor = getDescriptorUsing(member, env, getDataViewAccessor);
+  return transformDescriptor(descriptor, member);
+}
+
+function addRuntimeCheck(env, getDataViewAccessor) {
+  return function (access, member) {
+    const {
+      runtimeSafety = true,
+    } = env;
+    const accessor = getDataViewAccessor(access, member);
+    if (runtimeSafety && access === 'set') {
+      const { min, max } = getIntRange(member);
+      return function(offset, value, littleEndian) {
+        if (value < min || value > max) {
+          throwOverflow(member, value);
+        }
+        accessor.call(this, offset, value, littleEndian);
+      };
+    }
+    return accessor;
+  };
+}
+
+function getFloatDescriptor(member, env) {
+  return getDescriptorUsing(member, env, getNumericAccessor)
+}
+
+function transformEnumerationDescriptor(int, structure) {  
+  const findEnum = function(value) {
+    const { constructor } = structure;
+    // the enumeration constructor returns the object for the int value
+    const item = constructor(value);
+    if (!item) {
+      throwEnumExpected(structure, value);
+    }
+    return item
+  };
+  return {
+    get: (int.get.length === 0) 
+    ? function getEnum(hint) {
+        const value = int.get.call(this);
+        if (hint === 'number') {
+          return value;
+        }
+        return findEnum(value);
+      }
+    : function getEnumElement(index) {
+        const value = int.get.call(this, index);
+        return findEnum(value);
+      },
+    set: (int.set.length === 1) 
+    ? function setEnum(value, hint) {
+        if (hint !== 'number') {
+          const item = findEnum(value);
+          // call Symbol.toPrimitive directly as enum can be bigint or number
+          value = item[Symbol.toPrimitive]();
+        }
+        int.set.call(this, value);
+      }
+    : function setEnumElement(index, value) {
+        const item = findEnum(value);
+        int.set.call(this, index, item[Symbol.toPrimitive]());
+      },
+  };
+}
+
+function transformErrorSetDescriptor(int, structure) {
+  const findError = function(value) {
+    const { constructor } = structure;
+    const item = constructor(value);
+    if (!item) {
+      if (value instanceof Error) {
+        throwNotInErrorSet(structure);
+      } else {
+        throwErrorExpected(structure, value);
+      }
+    } 
+    return item
+  };
+  return {
+    get: (int.get.length === 0) 
+    ? function getError(hint) {
+        const value = int.get.call(this);
+        if (hint === 'number') {
+          return value;
+        }
+        return findError(value);
+      }
+    : function getErrorElement(index) {
+        const value = int.get.call(this, index);
+        return findError(value);
+      },
+    set: (int.set.length === 1) 
+    ? function setError(value, hint) {
+        if (hint !== 'number') {
+          const item = findError(value);
+          value = Number(item);
+        }
+        int.set.call(this, value);
+      }
+    : function setError(index, value) {
+        const item = findError(value);
+        value = Number(item);
+        int.set.call(this, index, value);
+      },
+  };
+}
+
+function isValueExpected(structure) {
+  switch (structure.type) {
+    case StructureType.Primitive:
+    case StructureType.ErrorUnion:
+    case StructureType.Optional:
+    case StructureType.Enumeration:
+    case StructureType.ErrorSet:
+      return true;
+    default:
+      return false;
+  }
+}
+
+function getValue(slot) {
+  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
+  return object[GETTER]();
+}
+
+function getObject(slot) {
+  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
+  return object;
+}
+
+function setValue(slot, value) {
+  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
+  object[SETTER](value);
+}
+
+function bindSlot(slot, { get, set }) {
+  if (slot !== undefined) {
+    return { 
+      get: function() {
+        return get.call(this, slot);
+      },
+      set: (set) 
+      ? function(arg) {
+          return set.call(this, slot, arg);
+        } 
+      : undefined,
+    };
+  } else {
+    // array accessors
+    return { get, set };
+  }
+}
+
+function getObjectDescriptor(member, env) {
+  const { structure, slot } = member;
+  return bindSlot(slot, {
+    get: isValueExpected(structure) ? getValue : getObject,
+    set: setValue,
+  });
+}
+
+function getType(slot) {
+  // unsupported types will have undefined structure
+  const structure = this[SLOTS][slot];
+  return structure?.constructor;
+}
+
+function getTypeDescriptor(member, env) {
+  const { slot } = member;
+  return bindSlot(slot, { get: getType });
+}
+
+function getComptimeDescriptor(member, env) {
+  const { slot, structure } = member;
+  return bindSlot(slot, {
+    get: isValueExpected(structure) ? getValue : getObject,
+  });
+}
+
+function getStaticDescriptor(member, env) {
+  const { slot, structure } = member;
+  return bindSlot(slot, {
+    get: isValueExpected(structure) ? getValue : getObject,
+    set: setValue,
+  });
+}
+
+function getLiteral(slot) {
+  const object = this[SLOTS][slot];
+  return object.string;
+}
+
+function getLiteralDescriptor(member, env) {
+  const { slot } = member;
+  return bindSlot(slot, { get: getLiteral });
+}
+
+function getDescriptorUsing(member, env, getDataViewAccessor) {
+  const {
+    littleEndian = true,
+  } = env;
+  const { bitOffset, byteSize } = member;
+  const getter = getDataViewAccessor('get', member);
+  const setter = getDataViewAccessor('set', member);
+  if (bitOffset !== undefined) {
+    const offset = bitOffset >> 3;
+    return {
+      get: function getValue() {
+        /* WASM-ONLY */
+        try {
+        /* WASM-ONLY-END*/
+          return getter.call(this[MEMORY], offset, littleEndian);
+        /* WASM-ONLY */
+        } catch (err) {
+          if (err instanceof TypeError && restoreMemory.call(this)) {
+            return getter.call(this[MEMORY], offset, littleEndian);
+          } else {
+            throw err;
+          }
+        }
+        /* WASM-ONLY-END*/
+      },
+      set: function setValue(value) {
+        /* WASM-ONLY */
+        try {
+        /* WASM-ONLY-END*/
+        return setter.call(this[MEMORY], offset, value, littleEndian);
+        /* WASM-ONLY */
+        } catch (err) {
+          if (err instanceof TypeError && restoreMemory.call(this)) {
+            return setter.call(this[MEMORY], offset, value, littleEndian);
+          } else {
+            throw err;
+          }
+        }
+        /* WASM-ONLY-END*/
+      }
+    }
+  } else {
+    return {
+      get: function getElement(index) {
+        try {
+          return getter.call(this[MEMORY], index * byteSize, littleEndian);
+        } catch (err) {
+          /* WASM-ONLY */
+          if (err instanceof TypeError && restoreMemory.call(this)) {
+            return getter.call(this[MEMORY], index * byteSize, littleEndian);
+          } else {
+          /* WASM-ONLY-END */
+            rethrowRangeError(member, index, err);
+          /* WASM-ONLY */
+          }
+          /* WASM-ONLY-END */
+        }
+      },
+      set: function setElement(index, value) {
+        /* WASM-ONLY */
+        try {
+        /* WASM-ONLY-END */
+          return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
+        /* WASM-ONLY */
+        } catch (err) {
+          if (err instanceof TypeError && restoreMemory.call(this)) {
+            return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
+          } else {
+            rethrowRangeError(member, index, err);
+          }
+        }
+        /* WASM-ONLY-END */
+      },
+    }
+  }
+}
+
+function defineProperties(object, descriptors) {
+  for (const [ name, descriptor ] of Object.entries(descriptors)) {
+    if (descriptor) {
+      const { 
+        set,
+        get,
+        value,
+        enumerable,
+        configurable = true,
+        writable = true,
+      } = descriptor;
+      Object.defineProperty(object, name, (get) 
+        ? { get, set, configurable, enumerable } 
+        : { value, configurable, enumerable, writable }
+      );
+    }
+  }
+  for (const symbol of Object.getOwnPropertySymbols(descriptors)) {
+    const descriptor = descriptors[symbol];
+    if (descriptor) {
+      Object.defineProperty(object, symbol, descriptor);
+    }
+  }
+}
+
+function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) {
+  // create prototype for read-only objects
+  const prototypeRO = {};
+  Object.setPrototypeOf(prototypeRO, constructor.prototype);
+  const instanceDescriptorsRO = {};
+  const propSetters = {};
+  for (const [ name, descriptor ] of Object.entries(instanceDescriptors)) {
+    if (descriptor?.set) {
+      instanceDescriptorsRO[name] = { ...descriptor, set: throwReadOnly };
+      // save the setters so we can initialize read-only objects
+      if (name !== '$') {
+        propSetters[name] = descriptor.set;
+      }
+    } else if (name === 'set') {
+      instanceDescriptorsRO[name] = { value: throwReadOnly, configurable: true, writable: true };
+    }
+  }
+  const vivificate = instanceDescriptors[VIVIFICATOR]?.value;
+  const vivificateDescriptor = { 
+    // vivificate child objects as read-only too
+    value: function(slot) { 
+      return vivificate.call(this, slot, false);
+    }
+  };
+  const { get, set } = instanceDescriptors.$;
+  defineProperties(constructor.prototype, { 
+    [CONST]: { value: false },
+    [ALL_KEYS]: { value: Object.keys(propSetters) },
+    [SETTER]: { value: set },
+    [GETTER]: { value: get },
+    [PROP_SETTERS]: { value: propSetters },
+    ...instanceDescriptors,
+  });
+  defineProperties(constructor, {
+    [CONST_PROTOTYPE]: { value: prototypeRO },
+    ...staticDescriptors,
+  }); 
+  defineProperties(prototypeRO, { 
+    constructor: { value: constructor, configurable: true },
+    [CONST]: { value: true },
+    [SETTER]: { value: throwReadOnly },
+    [VIVIFICATOR]: vivificate && vivificateDescriptor,
+    ...instanceDescriptorsRO,
+  });
+  return constructor;
+}
+
+function createConstructor(structure, handlers, env) {
+  const {
+    byteSize,
+    align,
+    instance: { members, template },
+    hasPointer,
+  } = structure;
+  const {
+    modifier,
+    initializer,
+    finalizer,
+    alternateCaster,
+    shapeDefiner,
+  } = handlers;
+  const hasSlots = needSlots(members);
+  // comptime fields are stored in the instance template's slots
+  let comptimeFieldSlots;
+  if (template?.[SLOTS]) {
+    const comptimeMembers = members.filter(m => isReadOnly(m));
+    if (comptimeMembers.length > 0) {
+      comptimeFieldSlots = comptimeMembers.map(m => m.slot);
+    } 
+  }
+  const cache = new ObjectCache();
+  const constructor = function(arg, options = {}) {
+    const {
+      writable = true,
+      fixed = false,
+    } = options;
+    const creating = this instanceof constructor;
+    let self, dv;
+    if (creating) {
+      if (arguments.length === 0) {
+        throwNoInitializer(structure);
+      }
+      self = this;
+      if (hasSlots) {
+        self[SLOTS] = {};
+      }
+      if (shapeDefiner) {
+        // provided by defineSlice(); the slice is different from other structures as it does not have 
+        // a fixed size; memory is allocated by the slice initializer based on the argument given
+        initializer.call(self, arg, fixed);
+        dv = self[MEMORY]; 
+      } else {
+        self[MEMORY] = dv = env.allocateMemory(byteSize, align, fixed);
+      }
+    } else {
+      if (alternateCaster) {
+        // casting from number, string, etc.
+        self = alternateCaster.call(this, arg, options);
+        if (self !== false) {
+          return self;
+        }
+      }
+      // look for buffer
+      dv = requireDataView(structure, arg, env);
+      if (self = cache.find(dv, writable)) {
+        return self;
+      }
+      self = Object.create(writable ? constructor.prototype : constructor[CONST_PROTOTYPE]);
+      if (shapeDefiner) {
+        setDataView.call(self, dv, structure, false, false, { shapeDefiner });
+      } else {
+        self[MEMORY] = dv;
+      }
+      if (hasSlots) {
+        self[SLOTS] = {};
+        if (hasPointer && arg instanceof constructor) {
+          // copy pointer from other object
+          self[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
+        } 
+      }
+    }
+    if (comptimeFieldSlots) {
+      for (const slot of comptimeFieldSlots) {
+        self[SLOTS][slot] = template[SLOTS][slot];
+      }
+    }
+    if (modifier) {
+      modifier.call(self);
+    }
+    if (creating) {
+      // initialize object unless it's been done already
+      if (!shapeDefiner) {
+        initializer.call(self, arg);
+      }
+      if (!writable) {
+        // create object with read-only prototype
+        self = Object.assign(Object.create(constructor[CONST_PROTOTYPE]), self);
+      } 
+    }
+    if (finalizer) {
+      self = finalizer.call(self);
+    }
+    return cache.save(dv, writable, self); 
+  };
+  return constructor;
+}
+
+function copyPointer({ source }) {
+  const target = source[SLOTS][0];
+  if (target) {
+    this[TARGET_SETTER](target);
+  }
+}
+
+function createPropertyApplier(structure) {
+  const { instance: { template } } = structure;  
+  return function(arg, fixed) {
+    const argKeys = Object.keys(arg);
+    const propSetters = this[PROP_SETTERS];
+    const allKeys = this[ALL_KEYS];
+    // don't accept unknown props
+    for (const key of argKeys) {
+      if (!(key in propSetters)) {
+        throwNoProperty(structure, key);
+      }
+    }
+    // checking each name so that we would see inenumerable initializers as well
+    let normalCount = 0;
+    let normalFound = 0;
+    let normalMissing = 0;
+    let specialFound = 0;
+    for (const key of allKeys) {
+      const set = propSetters[key];
+      if (set.special) {
+        if (key in arg) {
+          specialFound++;
+        }
+      } else {
+        normalCount++;
+        if (key in arg) {
+          normalFound++;
+        } else if (set.required) {
+          normalMissing++;
+        }
+      }
+    }
+    if (normalMissing !== 0 && specialFound === 0) {
+      const missing = allKeys.filter(k => propSetters[k].required && !(k in arg));
+      throwMissingInitializers(structure, missing);
+    }
+    if (specialFound + normalFound > argKeys.length) {
+      // some props aren't enumerable
+      for (const key of allKeys) {
+        if (key in arg) {
+          if (!argKeys.includes(key)) {
+            argKeys.push(key);
+          }
+        }
+      }
+    }
+    // apply default values unless all properties are initialized
+    if (normalFound < normalCount && specialFound === 0) {
+      if (template) {
+        if (template[MEMORY]) {
+          this[COPIER](template);
+        }
+        this[POINTER_VISITOR]?.(copyPointer, { vivificate: true, source: template });
+      }
+    }
+    for (const key of argKeys) {
+      const set = propSetters[key];
+      set.call(this, arg[key], fixed);
+    }
+    return argKeys.length;
+  };
+}
+
+function needSlots(members) {
+  for (const { type } of members) {
+    switch (type) {
+      case MemberType.Object:
+      case MemberType.Comptime:
+      case MemberType.Type:
+      case MemberType.Literal:
+        return true;
+    }
+  }
+  return false;
+}
+
+function getSelf() {
+  return this;
+}
+
+class ObjectCache {
+  [0] = null;
+  [1] = null;
+
+  find(dv, writable) {
+    const key = (writable) ? 0 : 1;
+    const map = this[key];
+    return map?.get(dv);
+  }
+
+  save(dv, writable, object) {
+    const key = (writable) ? 0 : 1;
+    let map = this[key];    
+    if (!map) {
+      map = this[key] = new WeakMap();
+    }
+    map.set(dv, object);
+    return object;
+  }
+}
+
 const decoders = {};
 const encoders = {};
 
@@ -536,6 +2337,256 @@ function markAsSpecial({ get, set }) {
   return { get, set };
 }
 
+let currentGlobalSet;
+let currentErrorClass;
+
+function defineErrorSet(structure, env) {
+  const {
+    name,
+    byteSize,
+    align,
+    instance: { members: [ member ] },
+  } = structure;
+  if (!currentErrorClass) {
+    currentErrorClass = class ZigError extends ZigErrorBase {};
+    currentGlobalSet = defineErrorSet({ ...structure, name: 'anyerror' }, env);
+  } 
+  if (currentGlobalSet && name === 'anyerror') {
+    structure.constructor = currentGlobalSet;
+    structure.typedArray = getTypedArrayClass(member);
+    return currentGlobalSet;
+  }
+  const errorClass = currentErrorClass;
+  const { get, set } = getDescriptor(member, env);
+  const expected = [ 'string', 'number' ];
+  const propApplier = createPropertyApplier(structure);
+  const initializer = function(arg) {
+    if (arg instanceof constructor[CLASS]) {
+      set.call(this, arg);
+    } else if (arg && typeof(arg) === 'object' && !isErrorJSON(arg)) {
+      if (propApplier.call(this, arg) === 0) {
+        throwInvalidInitializer(structure, expected, arg);
+      }  
+    } else if (arg !== undefined) {
+      set.call(this, arg);
+    }
+  };
+  const alternateCaster = function(arg) {
+    if (typeof(arg) === 'number' || typeof(arg) === 'string') {
+      return constructor[arg];
+    } else if (arg instanceof constructor[CLASS]) {
+      return constructor[Number(arg)];
+    } else if (isErrorJSON(arg)) {
+      return constructor[`Error: ${arg.error}`];
+    } else if (!getDataView(structure, arg, env)) {
+      throwInvalidInitializer(structure, expected, arg);
+    } else {
+      return false;
+    }
+  };
+  // items are inserted when static members get attached in static.js
+  const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const instanceDescriptors = {
+    $: { get, set },
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
+    typedArray: typedArray && getTypedArrayDescriptor(structure),
+    valueOf: { value: getValueOf },
+    toJSON: { value: convertToJSON },
+    delete: { value: getDestructor(env) },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [NORMALIZER]: { value: get },
+  };
+  const staticDescriptors = {
+    [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
+    [CLASS]: { value: errorClass },
+    // the PROPS array is normally set in static.js; it needs to be set here for anyerror 
+    // so we can add names to it as error sets are defined
+    [PROPS]: (name === 'anyerror') ? { value: [] } : undefined,
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+function appendErrorSet(errorSet, name, es) {
+  // our Zig export code places error set instance into the static template, which we can't 
+  // use since all errors need to have the same parent class; here we get the error number 
+  // and create the actual error object if hasn't been created already for an earlier set
+  const number = es[GETTER]('number');
+  let error = currentGlobalSet[number];
+  if (!error) {
+    const errorClass = errorSet[CLASS];
+    error = new errorClass(name, number);
+  }
+  const string = String(error);
+  const descriptors = {
+    [number]: { value: error },
+    [string]: { value: error },
+    [name]: { value: error },
+  };
+  defineProperties(errorSet, descriptors);
+  defineProperties(currentGlobalSet, descriptors); 
+  // add name to prop list
+  currentGlobalSet[PROPS].push(name);
+}
+
+function resetGlobalErrorSet() {
+  currentErrorClass = currentGlobalSet = undefined;
+}
+
+class ZigErrorBase extends Error {
+  constructor(name, number) {
+    super(deanimalizeErrorName(name));
+    this.number = number;
+  }
+
+  [Symbol.toPrimitive](hint) {
+    switch (hint) {
+      case 'string':
+      case 'default':
+        return Error.prototype.toString.call(this, hint);
+      default:
+        return this.number;
+    }
+  }
+
+  toJSON() {
+    return { error: this.message };
+  }
+}
+
+function addMethods(s, env) {
+  const add = (target, { methods }, pushThis) => {
+    const descriptors = {};
+    const re = /^(get|set)\s+([\s\S]+)/;
+    for (const method of methods) {
+      const f = env.createCaller(method, pushThis);
+      const m = re.exec(f.name);
+      if (m) {
+        // getter/setter
+        const type = m[1], propName = m[2];
+        const argRequired = (type === 'get') ? 0 : 1;
+        const argCount = getArgumentCount(method, pushThis);
+        // need to match arg count, since instance methods also show up as static methods
+        if (argCount === argRequired) {
+          let descriptor = descriptors[propName];
+          if (!descriptor) {
+            descriptor = descriptors[propName] = { configurable: true, enumerable: true };
+          }
+          descriptor[type] = f; 
+        }
+      } else {
+        descriptors[f.name] = { value: f, configurable: true, writable: true };
+      }
+    }
+    defineProperties(target, descriptors);
+  };
+  add(s.constructor, s.static, false);
+  add(s.constructor.prototype, s.instance, true);
+}
+
+function getArgumentCount(method, pushThis) {
+  const { argStruct: { instance: { members } } } = method;  
+  return members.length - (pushThis ? 2 : 1);
+}
+
+function defineEnumerationShape(structure, env) {
+  const {
+    byteSize,
+    align,
+    instance: {
+      members: [ member ],
+    },
+  } = structure;
+  const { get, set } = getDescriptor(member, env);
+  const expected = [ 'string', 'number', 'tagged union' ];
+  const propApplier = createPropertyApplier(structure);
+  const initializer = function(arg) {
+    if (arg && typeof(arg) === 'object') {
+      if (propApplier.call(this, arg) === 0) {
+        throwInvalidInitializer(structure, expected, arg);
+      }
+    } else if (arg !== undefined) {
+      set.call(this, arg);
+    }
+  };
+  const alternateCaster = function(arg) {
+    if (typeof(arg)  === 'string' || typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+      let item = constructor[arg];
+      if (!item) {
+        if (constructor[MORE] && typeof(arg) !== 'string') {
+          // create the item on-the-fly when enum is non-exhaustive
+          item = new constructor(undefined);
+          debugger;        
+          set.call(item, arg, 'number');
+          appendEnumeration(constructor, `${arg}`, item);
+        }
+      }
+      return item;
+    } else if (arg instanceof constructor) {
+      return arg;
+    } else if (arg?.[TAG] instanceof constructor) {
+      // a tagged union, return the active tag
+      return arg[TAG];
+    } else if (!getDataView(structure, arg, env)) {
+      throwInvalidInitializer(structure, expected, arg);
+    } else {
+      return false;
+    }
+  };
+  const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const toPrimitive = function(hint) {
+    switch (hint) {
+      case 'string':
+      case 'default':
+        return this.$[NAME];
+      default:
+        return get.call(this, 'number');
+    }
+  };
+  const instanceDescriptors = {
+    $: { get, set },
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
+    typedArray: typedArray && getTypedArrayDescriptor(structure),
+    valueOf: { value: getValueOf },
+    toString: { value: getValueOf },
+    toJSON: { value: convertToJSON },
+    delete: { value: getDestructor(env) },
+    [Symbol.toPrimitive]: { value: toPrimitive },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [NORMALIZER]: { value: normalizeEnumerationItem },
+  };
+  const staticDescriptors = {
+    [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+function normalizeEnumerationItem(cb) {
+  return cb(this.$[NAME]);
+}
+
+function appendEnumeration(enumeration, name, item) {
+  if (name !== undefined) {
+    // enum can have static variables 
+    if (item instanceof enumeration) {
+      // attach name to item so tagged union code can quickly find it
+      defineProperties(item, { [NAME]: { value: name } });  
+      // call toPrimitive directly since enum can be bigint or number
+      const index = item[Symbol.toPrimitive]();
+      defineProperties(enumeration, {
+        [index]: { value: item },
+        [name]: { value: item },
+      });      
+    }
+  } else {
+    // non-exhaustive enum
+    defineProperties(enumeration, { [MORE]: { value: true } });
+  }
+}
+
 function definePointer(structure, env) {
   const {
     byteSize,
@@ -736,13 +2787,6 @@ function getPointerPrimitve(hint) {
 
 function getProxy() {
   return this[PROXY];
-}
-
-function copyPointer({ source }) {
-  const target = source[SLOTS][0];
-  if (target) {
-    this[TARGET_SETTER](target);
-  }
 }
 
 function resetPointer({ isActive }) {
@@ -979,6 +3023,38 @@ function getPointerVisitor$1(structure, visitorOptions = {}) {
       }
     }
   };
+}
+
+function addStaticMembers(structure, env) {
+  const {
+    type,
+    constructor,
+    static: { members, template },
+  } = structure;
+  const descriptors = {};
+  for (const member of members) {
+    descriptors[member.name] = getDescriptor(member, env);
+  }
+  defineProperties(constructor, {
+    valueOf: { value: getValueOf },
+    toJSON: { value: convertToJSON },
+    ...descriptors,
+    [Symbol.iterator]: { value: getStructIterator },
+    // static variables are objects stored in the static template's slots
+    [SLOTS]: template && { value: template[SLOTS] },
+    // anyerror would have props already
+    [PROPS]: !constructor[PROPS] && { value: members.map(m => m.name) },
+    [NORMALIZER]: { value: normalizeStruct },
+  });
+  if (type === StructureType.Enumeration) {
+    for (const { name, slot } of members) {
+      appendEnumeration(constructor, name, constructor[SLOTS][slot]);
+    }
+  } else if (type === StructureType.ErrorSet) {
+    for (const { name, slot } of members) {
+      appendErrorSet(constructor, name, constructor[SLOTS][slot]);
+    }
+  }
 }
 
 function defineArgStruct(structure, env) {
@@ -1321,103 +3397,6 @@ const proxyHandlers = {
   },
 };
 
-function defineEnumerationShape(structure, env) {
-  const {
-    byteSize,
-    align,
-    instance: {
-      members: [ member ],
-    },
-  } = structure;
-  const { get, set } = getDescriptor(member, env);
-  const expected = [ 'string', 'number', 'tagged union' ];
-  const propApplier = createPropertyApplier(structure);
-  const initializer = function(arg) {
-    if (arg && typeof(arg) === 'object') {
-      if (propApplier.call(this, arg) === 0) {
-        throwInvalidInitializer(structure, expected, arg);
-      }
-    } else if (arg !== undefined) {
-      set.call(this, arg);
-    }
-  };
-  const alternateCaster = function(arg) {
-    if (typeof(arg)  === 'string' || typeof(arg) === 'number' || typeof(arg) === 'bigint') {
-      let item = constructor[arg];
-      if (!item) {
-        if (constructor[MORE] && typeof(arg) !== 'string') {
-          // create the item on-the-fly when enum is non-exhaustive
-          item = new constructor(undefined);
-          debugger;        
-          set.call(item, arg, 'number');
-          appendEnumeration(constructor, `${arg}`, item);
-        }
-      }
-      return item;
-    } else if (arg instanceof constructor) {
-      return arg;
-    } else if (arg?.[TAG] instanceof constructor) {
-      // a tagged union, return the active tag
-      return arg[TAG];
-    } else if (!getDataView(structure, arg, env)) {
-      throwInvalidInitializer(structure, expected, arg);
-    } else {
-      return false;
-    }
-  };
-  const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
-  const typedArray = structure.typedArray = getTypedArrayClass(member);
-  const toPrimitive = function(hint) {
-    switch (hint) {
-      case 'string':
-      case 'default':
-        return this.$[NAME];
-      default:
-        return get.call(this, 'number');
-    }
-  };
-  const instanceDescriptors = {
-    $: { get, set },
-    dataView: getDataViewDescriptor(structure),
-    base64: getBase64Descriptor(structure),
-    typedArray: typedArray && getTypedArrayDescriptor(structure),
-    valueOf: { value: getValueOf },
-    toString: { value: getValueOf },
-    toJSON: { value: convertToJSON },
-    delete: { value: getDestructor(env) },
-    [Symbol.toPrimitive]: { value: toPrimitive },
-    [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizeEnumerationItem },
-  };
-  const staticDescriptors = {
-    [ALIGN]: { value: align },
-    [SIZE]: { value: byteSize },
-  };
-  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
-}
-function normalizeEnumerationItem(cb) {
-  return cb(this.$[NAME]);
-}
-
-function appendEnumeration(enumeration, name, item) {
-  if (name !== undefined) {
-    // enum can have static variables 
-    if (item instanceof enumeration) {
-      // attach name to item so tagged union code can quickly find it
-      defineProperties(item, { [NAME]: { value: name } });  
-      // call toPrimitive directly since enum can be bigint or number
-      const index = item[Symbol.toPrimitive]();
-      defineProperties(enumeration, {
-        [index]: { value: item },
-        [name]: { value: item },
-      });      
-    }
-  } else {
-    // non-exhaustive enum
-    defineProperties(enumeration, { [MORE]: { value: true } });
-  }
-}
-
 function defineErrorUnion(structure, env) {
   const {
     byteSize,
@@ -1603,6 +3582,50 @@ function defineOptional(structure, env) {
     [NORMALIZER]: { value: normalizeValue },
   };
   const staticDescriptors = {
+    [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+
+function definePrimitive(structure, env) {
+  const {
+    byteSize,
+    align,
+    instance: { members: [ member ] },
+  } = structure;
+  const { get, set } = getDescriptor(member, env);
+  const propApplier = createPropertyApplier(structure);
+  const initializer = function(arg) {
+    if (arg instanceof constructor) {
+      this[COPIER](arg);
+    } else {
+      if (arg && typeof(arg) === 'object') {
+        if (propApplier.call(this, arg) === 0) {
+          const type = getPrimitiveType(member);
+          throwInvalidInitializer(structure, type, arg);
+        }
+      } else if (arg !== undefined) {
+        set.call(this, arg);
+      }
+    }
+  };
+  const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const instanceDescriptors = {
+    $: { get, set },
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
+    typedArray: typedArray && getTypedArrayDescriptor(structure),
+    valueOf: { value: getValueOf },
+    toJSON: { value: convertToJSON },
+    delete: { value: getDestructor(env) },
+    [Symbol.toPrimitive]: { value: get },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [NORMALIZER]: { value: normalizeValue },
+  };
+  const staticDescriptors = {
+    [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   };
@@ -2085,2104 +4108,82 @@ function getVectorEntries() {
   };
 }
 
-const StructureType = {
-  Primitive: 0,
-  Array: 1,
-  Struct: 2,
-  ExternStruct: 3,
-  PackedStruct: 4,
-  ArgStruct: 5,
-  ExternUnion: 6,
-  BareUnion: 7,
-  TaggedUnion: 8,
-  ErrorUnion: 9,
-  ErrorSet: 10,
-  Enumeration: 11,
-  Optional: 12,
-  Pointer: 13,
-  Slice: 14,
-  Vector: 15,
-  Opaque: 16,
-  Function: 17,
-};
-
-const factories$2 = Array(Object.values(StructureType).length);
+const factories = Array(Object.values(StructureType).length);
 
 function usePrimitive() {
-  factories$2[StructureType.Primitive] = definePrimitive;
+  factories[StructureType.Primitive] = definePrimitive;
 }
 
 function useArray() {
-  factories$2[StructureType.Array] = defineArray;
+  factories[StructureType.Array] = defineArray;
 }
 
 function useStruct() {
-  factories$2[StructureType.Struct] = defineStructShape;
+  factories[StructureType.Struct] = defineStructShape;
 }
 
 function usePackedStruct() {
-  factories$2[StructureType.PackedStruct] = defineStructShape;
+  factories[StructureType.PackedStruct] = defineStructShape;
 }
 
 function useExternStruct() {
-  factories$2[StructureType.ExternStruct] = defineStructShape;
+  factories[StructureType.ExternStruct] = defineStructShape;
 }
 
 function useArgStruct() {
-  factories$2[StructureType.ArgStruct] = defineArgStruct;
+  factories[StructureType.ArgStruct] = defineArgStruct;
 }
 
 function useExternUnion() {
-  factories$2[StructureType.ExternUnion] = defineUnionShape;
+  factories[StructureType.ExternUnion] = defineUnionShape;
 }
 
 function useBareUnion() {
-  factories$2[StructureType.BareUnion] = defineUnionShape;
+  factories[StructureType.BareUnion] = defineUnionShape;
 }
 
 function useTaggedUnion() {
-  factories$2[StructureType.TaggedUnion] = defineUnionShape;
+  factories[StructureType.TaggedUnion] = defineUnionShape;
 }
 
 function useErrorUnion() {
-  factories$2[StructureType.ErrorUnion] = defineErrorUnion;
+  factories[StructureType.ErrorUnion] = defineErrorUnion;
 }
 
 function useErrorSet() {
-  factories$2[StructureType.ErrorSet] = defineErrorSet;
+  factories[StructureType.ErrorSet] = defineErrorSet;
   useErrorSetTransform();
 }
 
 function useEnumeration() {
-  factories$2[StructureType.Enumeration] = defineEnumerationShape;
+  factories[StructureType.Enumeration] = defineEnumerationShape;
   useEnumerationTransform();
 }
 
 function useOptional() {
-  factories$2[StructureType.Optional] = defineOptional;
+  factories[StructureType.Optional] = defineOptional;
 }
 
 function usePointer() {
-  factories$2[StructureType.Pointer] = definePointer;
+  factories[StructureType.Pointer] = definePointer;
   useUint();
 }
 
 function useSlice() {
-  factories$2[StructureType.Slice] = defineSlice;
+  factories[StructureType.Slice] = defineSlice;
 }
 
 function useVector() {
-  factories$2[StructureType.Vector] = defineVector;
+  factories[StructureType.Vector] = defineVector;
 }
 
 function useOpaque() {
-  factories$2[StructureType.Opaque] = defineOpaque;
+  factories[StructureType.Opaque] = defineOpaque;
 }
 
 function getStructureFactory(type) {
-  const f = factories$2[type];
+  const f = factories[type];
   return f;
-}
-
-function defineProperties(object, descriptors) {
-  for (const [ name, descriptor ] of Object.entries(descriptors)) {
-    if (descriptor) {
-      const { 
-        set,
-        get,
-        value,
-        enumerable,
-        configurable = true,
-        writable = true,
-      } = descriptor;
-      Object.defineProperty(object, name, (get) 
-        ? { get, set, configurable, enumerable } 
-        : { value, configurable, enumerable, writable }
-      );
-    }
-  }
-  for (const symbol of Object.getOwnPropertySymbols(descriptors)) {
-    const descriptor = descriptors[symbol];
-    if (descriptor) {
-      Object.defineProperty(object, symbol, descriptor);
-    }
-  }
-}
-
-function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) {
-  // create prototype for read-only objects
-  const prototypeRO = {};
-  Object.setPrototypeOf(prototypeRO, constructor.prototype);
-  const instanceDescriptorsRO = {};
-  const propSetters = {};
-  for (const [ name, descriptor ] of Object.entries(instanceDescriptors)) {
-    if (descriptor?.set) {
-      instanceDescriptorsRO[name] = { ...descriptor, set: throwReadOnly };
-      // save the setters so we can initialize read-only objects
-      if (name !== '$') {
-        propSetters[name] = descriptor.set;
-      }
-    } else if (name === 'set') {
-      instanceDescriptorsRO[name] = { value: throwReadOnly, configurable: true, writable: true };
-    }
-  }
-  const vivificate = instanceDescriptors[VIVIFICATOR]?.value;
-  const vivificateDescriptor = { 
-    // vivificate child objects as read-only too
-    value: function(slot) { 
-      return vivificate.call(this, slot, false);
-    }
-  };
-  const { get, set } = instanceDescriptors.$;
-  defineProperties(constructor.prototype, { 
-    [CONST]: { value: false },
-    [ALL_KEYS]: { value: Object.keys(propSetters) },
-    [SETTER]: { value: set },
-    [GETTER]: { value: get },
-    [PROP_SETTERS]: { value: propSetters },
-    ...instanceDescriptors,
-  });
-  defineProperties(constructor, {
-    [CONST_PROTOTYPE]: { value: prototypeRO },
-    ...staticDescriptors,
-  }); 
-  defineProperties(prototypeRO, { 
-    constructor: { value: constructor, configurable: true },
-    [CONST]: { value: true },
-    [SETTER]: { value: throwReadOnly },
-    [VIVIFICATOR]: vivificate && vivificateDescriptor,
-    ...instanceDescriptorsRO,
-  });
-  return constructor;
-}
-
-function createConstructor(structure, handlers, env) {
-  const {
-    byteSize,
-    align,
-    instance: { members, template },
-    hasPointer,
-  } = structure;
-  const {
-    modifier,
-    initializer,
-    finalizer,
-    alternateCaster,
-    shapeDefiner,
-  } = handlers;
-  const hasSlots = needSlots(members);
-  // comptime fields are stored in the instance template's slots
-  let comptimeFieldSlots;
-  if (template?.[SLOTS]) {
-    const comptimeMembers = members.filter(m => isReadOnly(m.type));
-    if (comptimeMembers.length > 0) {
-      comptimeFieldSlots = comptimeMembers.map(m => m.slot);
-    } 
-  }
-  const cache = new ObjectCache();
-  const constructor = function(arg, options = {}) {
-    const {
-      writable = true,
-      fixed = false,
-    } = options;
-    const creating = this instanceof constructor;
-    let self, dv;
-    if (creating) {
-      if (arguments.length === 0) {
-        throwNoInitializer(structure);
-      }
-      self = this;
-      if (hasSlots) {
-        self[SLOTS] = {};
-      }
-      if (shapeDefiner) {
-        // provided by defineSlice(); the slice is different from other structures as it does not have 
-        // a fixed size; memory is allocated by the slice initializer based on the argument given
-        initializer.call(self, arg, fixed);
-        dv = self[MEMORY]; 
-      } else {
-        self[MEMORY] = dv = env.allocateMemory(byteSize, align, fixed);
-      }
-    } else {
-      if (alternateCaster) {
-        // casting from number, string, etc.
-        self = alternateCaster.call(this, arg, options);
-        if (self !== false) {
-          return self;
-        }
-      }
-      // look for buffer
-      dv = requireDataView(structure, arg, env);
-      if (self = cache.find(dv, writable)) {
-        return self;
-      }
-      self = Object.create(writable ? constructor.prototype : constructor[CONST_PROTOTYPE]);
-      if (shapeDefiner) {
-        setDataView.call(self, dv, structure, false, false, { shapeDefiner });
-      } else {
-        self[MEMORY] = dv;
-      }
-      if (hasSlots) {
-        self[SLOTS] = {};
-        if (hasPointer && arg instanceof constructor) {
-          // copy pointer from other object
-          self[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
-        } 
-      }
-    }
-    if (comptimeFieldSlots) {
-      for (const slot of comptimeFieldSlots) {
-        self[SLOTS][slot] = template[SLOTS][slot];
-      }
-    }
-    if (modifier) {
-      modifier.call(self);
-    }
-    if (creating) {
-      // initialize object unless it's been done already
-      if (!shapeDefiner) {
-        initializer.call(self, arg);
-      }
-      if (!writable) {
-        // create object with read-only prototype
-        self = Object.assign(Object.create(constructor[CONST_PROTOTYPE]), self);
-      } 
-    }
-    if (finalizer) {
-      self = finalizer.call(self);
-    }
-    return cache.save(dv, writable, self); 
-  };
-  return constructor;
-}
-
-function createPropertyApplier(structure) {
-  const { instance: { template } } = structure;  
-  return function(arg, fixed) {
-    const argKeys = Object.keys(arg);
-    const propSetters = this[PROP_SETTERS];
-    const allKeys = this[ALL_KEYS];
-    // don't accept unknown props
-    for (const key of argKeys) {
-      if (!(key in propSetters)) {
-        throwNoProperty(structure, key);
-      }
-    }
-    // checking each name so that we would see inenumerable initializers as well
-    let normalCount = 0;
-    let normalFound = 0;
-    let normalMissing = 0;
-    let specialFound = 0;
-    for (const key of allKeys) {
-      const set = propSetters[key];
-      if (set.special) {
-        if (key in arg) {
-          specialFound++;
-        }
-      } else {
-        normalCount++;
-        if (key in arg) {
-          normalFound++;
-        } else if (set.required) {
-          normalMissing++;
-        }
-      }
-    }
-    if (normalMissing !== 0 && specialFound === 0) {
-      const missing = allKeys.filter(k => propSetters[k].required && !(k in arg));
-      throwMissingInitializers(structure, missing);
-    }
-    if (specialFound + normalFound > argKeys.length) {
-      // some props aren't enumerable
-      for (const key of allKeys) {
-        if (key in arg) {
-          if (!argKeys.includes(key)) {
-            argKeys.push(key);
-          }
-        }
-      }
-    }
-    // apply default values unless all properties are initialized
-    if (normalFound < normalCount && specialFound === 0) {
-      if (template) {
-        if (template[MEMORY]) {
-          this[COPIER](template);
-        }
-        this[POINTER_VISITOR]?.(copyPointer, { vivificate: true, source: template });
-      }
-    }
-    for (const key of argKeys) {
-      const set = propSetters[key];
-      set.call(this, arg[key], fixed);
-    }
-    return argKeys.length;
-  };
-}
-
-function needSlots(members) {
-  for (const { type } of members) {
-    switch (type) {
-      case MemberType.Object:
-      case MemberType.Comptime:
-      case MemberType.Type:
-      case MemberType.Literal:
-        return true;
-    }
-  }
-  return false;
-}
-
-function getSelf() {
-  return this;
-}
-
-class ObjectCache {
-  [0] = null;
-  [1] = null;
-
-  find(dv, writable) {
-    const key = (writable) ? 0 : 1;
-    const map = this[key];
-    return map?.get(dv);
-  }
-
-  save(dv, writable, object) {
-    const key = (writable) ? 0 : 1;
-    let map = this[key];    
-    if (!map) {
-      map = this[key] = new WeakMap();
-    }
-    map.set(dv, object);
-    return object;
-  }
-}
-
-function definePrimitive(structure, env) {
-  const {
-    byteSize,
-    align,
-    instance: { members: [ member ] },
-  } = structure;
-  const { get, set } = getDescriptor(member, env);
-  const propApplier = createPropertyApplier(structure);
-  const initializer = function(arg) {
-    if (arg instanceof constructor) {
-      this[COPIER](arg);
-    } else {
-      if (arg && typeof(arg) === 'object') {
-        if (propApplier.call(this, arg) === 0) {
-          const type = getPrimitiveType(member);
-          throwInvalidInitializer(structure, type, arg);
-        }
-      } else if (arg !== undefined) {
-        set.call(this, arg);
-      }
-    }
-  };
-  const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
-  const typedArray = structure.typedArray = getTypedArrayClass(member);
-  const instanceDescriptors = {
-    $: { get, set },
-    dataView: getDataViewDescriptor(structure),
-    base64: getBase64Descriptor(structure),
-    typedArray: typedArray && getTypedArrayDescriptor(structure),
-    valueOf: { value: getValueOf },
-    toJSON: { value: convertToJSON },
-    delete: { value: getDestructor(env) },
-    [Symbol.toPrimitive]: { value: get },
-    [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizeValue },
-  };
-  const staticDescriptors = {
-    [COMPAT]: { value: getCompatibleTags(structure) },
-    [ALIGN]: { value: align },
-    [SIZE]: { value: byteSize },
-  };
-  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
-}
-function getIntRange(member) {
-  const { type, bitSize } = member;
-  const signed = (type === MemberType.Int);
-  let magBits = (signed) ? bitSize - 1 : bitSize;
-  if (bitSize <= 32) {
-    const max = 2 ** magBits - 1;
-    const min = (signed) ? -(2 ** magBits) : 0;
-    return { min, max };
-  } else {
-    magBits = BigInt(magBits);
-    const max = 2n ** magBits - 1n;
-    const min = (signed) ? -(2n ** magBits) : 0n;
-    return { min, max };
-  }
-}
-
-function getPrimitiveClass({ type, bitSize }) {
-  if (type === MemberType.Int || type === MemberType.Uint) {
-    if (bitSize <= 32) {
-      return Number;
-    } else {
-      return BigInt;
-    }
-  } else if (type === MemberType.Float) {
-    return Number;
-  } else if (type === MemberType.Bool) {
-    return Boolean;
-  }
-}
-
-function getPrimitiveType(member) {
-  const Primitive = getPrimitiveClass(member);
-  if (Primitive) {
-    return typeof(Primitive(0));
-  }
-}
-
-const MemberType = {
-  Void: 0,
-  Bool: 1,
-  Int: 2,
-  Uint: 3,
-  Float: 4,
-  Object: 5,
-  Type: 6,
-  Comptime: 7,
-  Static: 8,
-  Literal: 9,
-  Null: 10,
-  Undefined: 11,
-};
-
-function isReadOnly(type) {
-  switch (type) {
-    case MemberType.Type:
-    case MemberType.Comptime:
-    case MemberType.Literal:
-      return true;
-    default:
-      return false;
-  }
-}
-
-const factories$1 = {};
-
-function useVoid() {
-  factories$1[MemberType.Void] = getVoidDescriptor;
-}
-
-function useBool() {
-  factories$1[MemberType.Bool] = getBoolDescriptor;
-}
-
-function useInt() {
-  factories$1[MemberType.Int] = getIntDescriptor;
-}
-
-function useUint() {
-  factories$1[MemberType.Uint] = getUintDescriptor;
-}
-
-function useFloat() {
-  factories$1[MemberType.Float] = getFloatDescriptor;
-}
-
-function useObject() {
-  factories$1[MemberType.Object] = getObjectDescriptor;
-}
-
-function useType() {
-  factories$1[MemberType.Type] = getTypeDescriptor;
-}
-
-function useComptime() {
-  factories$1[MemberType.Comptime] = getComptimeDescriptor;
-}
-
-function useStatic() {
-  factories$1[MemberType.Static] = getStaticDescriptor;
-}
-
-function useLiteral() {
-  factories$1[MemberType.Literal] = getLiteralDescriptor;
-}
-
-function useNull() {
-  factories$1[MemberType.Null] = getNullDescriptor;
-}
-
-function useUndefined() {
-  factories$1[MemberType.Undefined] = getUndefinedDescriptor;
-}
-
-const transformers = {};
-
-function useEnumerationTransform() {
-  transformers[StructureType.Enumeration] = transformEnumerationDescriptor;
-}
-
-function useErrorSetTransform() {
-  transformers[StructureType.ErrorSet] = transformErrorSetDescriptor;
-}
-
-function isByteAligned({ bitOffset, bitSize, byteSize }) {
-  return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
-}
-
-function getDescriptor(member, env) {
-  const f = factories$1[member.type];
-  return f(member, env);
-}
-
-function transformDescriptor(descriptor, member) {
-  const { structure } = member;
-  const t = transformers[structure?.type];
-  return (t) ? t(descriptor, structure) : descriptor;
-}
-
-function getVoidDescriptor(member, env) {
-  const { runtimeSafety } = env;
-  return {
-    get: function() {
-      return undefined;
-    },
-    set: (runtimeSafety)
-    ? function(value) {
-        if (value !== undefined) {
-          throwNotUndefined(member);
-        }
-      }
-    : function() {},
-  }
-}
-
-function getNullDescriptor(member, env) {
-  return {
-    get: function() {
-      return null;
-    },
-  }
-}
-
-function getUndefinedDescriptor(member, env) {
-  return {
-    get: function() {
-      return undefined;
-    },
-  }
-}
-
-function getBoolDescriptor(member, env) {
-  return getDescriptorUsing(member, env, getBoolAccessor)
-}
-
-function getIntDescriptor(member, env) {
-  const getDataViewAccessor = addRuntimeCheck(env, getNumericAccessor);
-  const descriptor = getDescriptorUsing(member, env, getDataViewAccessor);
-  return transformDescriptor(descriptor, member);
-}
-
-function getUintDescriptor(member, env) {
-  const getDataViewAccessor = addRuntimeCheck(env, getNumericAccessor);
-  const descriptor = getDescriptorUsing(member, env, getDataViewAccessor);
-  return transformDescriptor(descriptor, member);
-}
-
-function addRuntimeCheck(env, getDataViewAccessor) {
-  return function (access, member) {
-    const {
-      runtimeSafety = true,
-    } = env;
-    const accessor = getDataViewAccessor(access, member);
-    if (runtimeSafety && access === 'set') {
-      const { min, max } = getIntRange(member);
-      return function(offset, value, littleEndian) {
-        if (value < min || value > max) {
-          throwOverflow(member, value);
-        }
-        accessor.call(this, offset, value, littleEndian);
-      };
-    }
-    return accessor;
-  };
-}
-
-function getFloatDescriptor(member, env) {
-  return getDescriptorUsing(member, env, getNumericAccessor)
-}
-
-function transformEnumerationDescriptor(int, structure) {  
-  const findEnum = function(value) {
-    const { constructor } = structure;
-    // the enumeration constructor returns the object for the int value
-    const item = constructor(value);
-    if (!item) {
-      throwEnumExpected(structure, value);
-    }
-    return item
-  };
-  return {
-    get: (int.get.length === 0) 
-    ? function getEnum(hint) {
-        const value = int.get.call(this);
-        if (hint === 'number') {
-          return value;
-        }
-        return findEnum(value);
-      }
-    : function getEnumElement(index) {
-        const value = int.get.call(this, index);
-        return findEnum(value);
-      },
-    set: (int.set.length === 1) 
-    ? function setEnum(value, hint) {
-        if (hint !== 'number') {
-          const item = findEnum(value);
-          // call Symbol.toPrimitive directly as enum can be bigint or number
-          value = item[Symbol.toPrimitive]();
-        }
-        int.set.call(this, value);
-      }
-    : function setEnumElement(index, value) {
-        const item = findEnum(value);
-        int.set.call(this, index, item[Symbol.toPrimitive]());
-      },
-  };
-}
-
-function transformErrorSetDescriptor(int, structure) {
-  const findError = function(value) {
-    const { constructor } = structure;
-    const item = constructor(value);
-    if (!item) {
-      if (value instanceof Error) {
-        throwNotInErrorSet(structure);
-      } else {
-        throwErrorExpected(structure, value);
-      }
-    } 
-    return item
-  };
-  return {
-    get: (int.get.length === 0) 
-    ? function getError(hint) {
-        const value = int.get.call(this);
-        if (hint === 'number') {
-          return value;
-        }
-        return findError(value);
-      }
-    : function getErrorElement(index) {
-        const value = int.get.call(this, index);
-        return findError(value);
-      },
-    set: (int.set.length === 1) 
-    ? function setError(value, hint) {
-        if (hint !== 'number') {
-          const item = findError(value);
-          value = Number(item);
-        }
-        int.set.call(this, value);
-      }
-    : function setError(index, value) {
-        const item = findError(value);
-        value = Number(item);
-        int.set.call(this, index, value);
-      },
-  };
-}
-
-function isValueExpected(structure) {
-  switch (structure.type) {
-    case StructureType.Primitive:
-    case StructureType.ErrorUnion:
-    case StructureType.Optional:
-    case StructureType.Enumeration:
-    case StructureType.ErrorSet:
-      return true;
-    default:
-      return false;
-  }
-}
-
-function getValue(slot) {
-  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
-  return object[GETTER]();
-}
-
-function getObject(slot) {
-  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
-  return object;
-}
-
-function setValue(slot, value) {
-  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
-  object[SETTER](value);
-}
-
-function bindSlot(slot, { get, set }) {
-  if (slot !== undefined) {
-    return { 
-      get: function() {
-        return get.call(this, slot);
-      },
-      set: (set) 
-      ? function(arg) {
-          return set.call(this, slot, arg);
-        } 
-      : undefined,
-    };
-  } else {
-    // array accessors
-    return { get, set };
-  }
-}
-
-function getObjectDescriptor(member, env) {
-  const { structure, slot } = member;
-  return bindSlot(slot, {
-    get: isValueExpected(structure) ? getValue : getObject,
-    set: setValue,
-  });
-}
-
-function getType(slot) {
-  // unsupported types will have undefined structure
-  const structure = this[SLOTS][slot];
-  return structure?.constructor;
-}
-
-function getTypeDescriptor(member, env) {
-  const { slot } = member;
-  return bindSlot(slot, { get: getType });
-}
-
-function getComptimeDescriptor(member, env) {
-  const { slot, structure } = member;
-  return bindSlot(slot, {
-    get: isValueExpected(structure) ? getValue : getObject,
-  });
-}
-
-function getStaticDescriptor(member, env) {
-  const { slot, structure } = member;
-  return bindSlot(slot, {
-    get: isValueExpected(structure) ? getValue : getObject,
-    set: setValue,
-  });
-}
-
-function getLiteral(slot) {
-  const object = this[SLOTS][slot];
-  return object.string;
-}
-
-function getLiteralDescriptor(member, env) {
-  const { slot } = member;
-  return bindSlot(slot, { get: getLiteral });
-}
-
-function getDescriptorUsing(member, env, getDataViewAccessor) {
-  const {
-    littleEndian = true,
-  } = env;
-  const { bitOffset, byteSize } = member;
-  const getter = getDataViewAccessor('get', member);
-  const setter = getDataViewAccessor('set', member);
-  if (bitOffset !== undefined) {
-    const offset = bitOffset >> 3;
-    return {
-      get: function getValue() {
-        /* WASM-ONLY */
-        try {
-        /* WASM-ONLY-END*/
-          return getter.call(this[MEMORY], offset, littleEndian);
-        /* WASM-ONLY */
-        } catch (err) {
-          if (err instanceof TypeError && restoreMemory.call(this)) {
-            return getter.call(this[MEMORY], offset, littleEndian);
-          } else {
-            throw err;
-          }
-        }
-        /* WASM-ONLY-END*/
-      },
-      set: function setValue(value) {
-        /* WASM-ONLY */
-        try {
-        /* WASM-ONLY-END*/
-        return setter.call(this[MEMORY], offset, value, littleEndian);
-        /* WASM-ONLY */
-        } catch (err) {
-          if (err instanceof TypeError && restoreMemory.call(this)) {
-            return setter.call(this[MEMORY], offset, value, littleEndian);
-          } else {
-            throw err;
-          }
-        }
-        /* WASM-ONLY-END*/
-      }
-    }
-  } else {
-    return {
-      get: function getElement(index) {
-        try {
-          return getter.call(this[MEMORY], index * byteSize, littleEndian);
-        } catch (err) {
-          /* WASM-ONLY */
-          if (err instanceof TypeError && restoreMemory.call(this)) {
-            return getter.call(this[MEMORY], index * byteSize, littleEndian);
-          } else {
-          /* WASM-ONLY-END */
-            rethrowRangeError(member, index, err);
-          /* WASM-ONLY */
-          }
-          /* WASM-ONLY-END */
-        }
-      },
-      set: function setElement(index, value) {
-        /* WASM-ONLY */
-        try {
-        /* WASM-ONLY-END */
-          return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
-        /* WASM-ONLY */
-        } catch (err) {
-          if (err instanceof TypeError && restoreMemory.call(this)) {
-            return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
-          } else {
-            rethrowRangeError(member, index, err);
-          }
-        }
-        /* WASM-ONLY-END */
-      },
-    }
-  }
-}
-
-let currentGlobalSet;
-let currentErrorClass;
-
-function defineErrorSet(structure, env) {
-  const {
-    name,
-    byteSize,
-    align,
-    instance: { members: [ member ] },
-  } = structure;
-  if (!currentErrorClass) {
-    currentErrorClass = class ZigError extends ZigErrorBase {};
-    currentGlobalSet = defineErrorSet({ ...structure, name: 'anyerror' }, env);
-  } 
-  if (currentGlobalSet && name === 'anyerror') {
-    structure.constructor = currentGlobalSet;
-    structure.typedArray = getTypedArrayClass(member);
-    return currentGlobalSet;
-  }
-  const errorClass = currentErrorClass;
-  const { get, set } = getDescriptor(member, env);
-  const expected = [ 'string', 'number' ];
-  const propApplier = createPropertyApplier(structure);
-  const initializer = function(arg) {
-    if (arg instanceof constructor[CLASS]) {
-      set.call(this, arg);
-    } else if (arg && typeof(arg) === 'object' && !isErrorJSON(arg)) {
-      if (propApplier.call(this, arg) === 0) {
-        throwInvalidInitializer(structure, expected, arg);
-      }  
-    } else if (arg !== undefined) {
-      set.call(this, arg);
-    }
-  };
-  const alternateCaster = function(arg) {
-    if (typeof(arg) === 'number' || typeof(arg) === 'string') {
-      return constructor[arg];
-    } else if (arg instanceof constructor[CLASS]) {
-      return constructor[Number(arg)];
-    } else if (isErrorJSON(arg)) {
-      return constructor[`Error: ${arg.error}`];
-    } else if (!getDataView(structure, arg, env)) {
-      throwInvalidInitializer(structure, expected, arg);
-    } else {
-      return false;
-    }
-  };
-  // items are inserted when static members get attached in static.js
-  const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster }, env);
-  const typedArray = structure.typedArray = getTypedArrayClass(member);
-  const instanceDescriptors = {
-    $: { get, set },
-    dataView: getDataViewDescriptor(structure),
-    base64: getBase64Descriptor(structure),
-    typedArray: typedArray && getTypedArrayDescriptor(structure),
-    valueOf: { value: getValueOf },
-    toJSON: { value: convertToJSON },
-    delete: { value: getDestructor(env) },
-    [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: get },
-  };
-  const staticDescriptors = {
-    [ALIGN]: { value: align },
-    [SIZE]: { value: byteSize },
-    [CLASS]: { value: errorClass },
-    // the PROPS array is normally set in static.js; it needs to be set here for anyerror 
-    // so we can add names to it as error sets are defined
-    [PROPS]: (name === 'anyerror') ? { value: [] } : undefined,
-  };
-  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
-}
-function appendErrorSet(errorSet, name, es) {
-  // our Zig export code places error set instance into the static template, which we can't 
-  // use since all errors need to have the same parent class; here we get the error number 
-  // and create the actual error object if hasn't been created already for an earlier set
-  const number = es[GETTER]('number');
-  let error = currentGlobalSet[number];
-  if (!error) {
-    const errorClass = errorSet[CLASS];
-    error = new errorClass(name, number);
-  }
-  const string = String(error);
-  const descriptors = {
-    [number]: { value: error },
-    [string]: { value: error },
-    [name]: { value: error },
-  };
-  defineProperties(errorSet, descriptors);
-  defineProperties(currentGlobalSet, descriptors); 
-  // add name to prop list
-  currentGlobalSet[PROPS].push(name);
-}
-
-function resetGlobalErrorSet() {
-  currentErrorClass = currentGlobalSet = undefined;
-}
-
-function isErrorJSON(arg) {
-  return typeof(arg) === 'object' && typeof(arg.error) === 'string' && Object.keys(arg).length === 1  ;
-}
-
-class ZigErrorBase extends Error {
-  constructor(name, number) {
-    super(deanimalizeErrorName(name));
-    this.number = number;
-  }
-
-  [Symbol.toPrimitive](hint) {
-    switch (hint) {
-      case 'string':
-      case 'default':
-        return Error.prototype.toString.call(this, hint);
-      default:
-        return this.number;
-    }
-  }
-
-  toJSON() {
-    return { error: this.message };
-  }
-}
-
-function throwNoInitializer(structure) {
-  const { name } = structure;
-  throw new TypeError(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`);
-}
-
-function throwBufferSizeMismatch(structure, dv, target = null) {
-  const { name, type, byteSize } = structure;
-  const actual = dv.byteLength;
-  const s = (byteSize !== 1) ? 's' : '';
-  if (type === StructureType.Slice && !target) {
-    throw new TypeError(`${name} has elements that are ${byteSize} byte${s} in length, received ${actual}`);
-  } else {
-    const total = (type === StructureType.Slice) ? target.length * byteSize : byteSize;
-    throw new TypeError(`${name} has ${total} byte${s}, received ${actual}`);
-  }
-}
-
-function throwBufferExpected(structure) {
-  const { type, byteSize, typedArray } = structure;
-  const s = (byteSize !== 1) ? 's' : '';
-  const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle);
-  if (typedArray) {
-    acceptable.push(addArticle(typedArray.name));
-  }
-  if (type === StructureType.Slice) {
-    throw new TypeError(`Expecting ${formatList(acceptable)} that can accommodate items ${byteSize} byte${s} in length`);
-  } else {
-    throw new TypeError(`Expecting ${formatList(acceptable)} that is ${byteSize} byte${s} in length`);
-  }
-}
-
-function throwEnumExpected(structure, arg) {
-  const { name } = structure;
-  if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
-    throw new TypeError(`Value given does not correspond to an item of enum ${name}: ${arg}`);
-  } else {
-    throw new TypeError(`Enum item of the type ${name} expected, received ${arg}`);
-  }
-}
-
-function throwErrorExpected(structure, arg) {
-  const { name } = structure;
-  const type = typeof(arg);
-  if (type === 'string' || type === 'number' || isErrorJSON(arg)) {
-    if (isErrorJSON(arg)) {
-      arg = `{ error: ${JSON.stringify(arg.error)} }`;
-    }
-    throw new TypeError(`Error ${type} does not corresponds to any error in error set ${name}: ${arg}`);
-  } else {
-    throw new TypeError(`Error of the type ${name} expected, received ${arg}`);
-  }
-}
-
-function throwNotInErrorSet(structure) {
-  const { name } = structure;
-  throw new TypeError(`Error given is not a part of error set ${name}`);
-}
-
-function throwMultipleUnionInitializers(structure) {
-  const { name } = structure;
-  throw new TypeError(`Only one property of ${name} can be given a value`);
-}
-
-function throwInactiveUnionProperty(structure, name, currentName) {
-  throw new TypeError(`Accessing property ${name} when ${currentName} is active`);
-}
-
-function throwMissingUnionInitializer(structure, arg, exclusion) {
-  const { name, instance: { members } } = structure;
-  const missing = members.slice(0, exclusion ? -1 : undefined).map(m => m.name);
-  throw new TypeError(`${name} needs an initializer for one of its union properties: ${missing.join(', ')}`);
-}
-
-function throwInvalidInitializer(structure, expected, arg) {
-  const { name } = structure;
-  const acceptable = [];
-  if (Array.isArray(expected)) {
-    for (const type of expected) {
-      acceptable.push(addArticle(type));
-    }
-  } else {
-    acceptable.push(addArticle(expected));
-  }
-  const received = getDescription(arg);
-  throw new TypeError(`${name} expects ${formatList(acceptable)} as argument, received ${received}`);
-}
-
-function throwInvalidArrayInitializer(structure, arg, shapeless = false) {
-  const { instance: { members: [ member ] }, type, typedArray } = structure;
-  const acceptable = [];
-  const primitive = getPrimitiveType(member);
-  if (primitive) {
-    let object;
-    switch (member.structure?.type) {
-      case StructureType.Enumeration: object = 'enum item'; break;
-      case StructureType.ErrorSet: object = 'error'; break;
-      default: object = primitive;
-    }
-    acceptable.push(`array of ${object}s`);
-  } else {
-    acceptable.push(`array of objects`);
-  }
-  if (typedArray) {
-    acceptable.push(typedArray.name);
-  }
-  if (type === StructureType.Slice && shapeless) {
-    acceptable.push(`length`);
-  }
-  throwInvalidInitializer(structure, acceptable.join(' or '), arg);
-}
-
-function throwArrayLengthMismatch(structure, target, arg) {
-  const { name, length, instance: { members: [ member ] } } = structure;
-  const { structure: { constructor: elementConstructor} } = member;
-  const { length: argLength, constructor: argConstructor } = arg;
-  // get length from object whech it's a slice
-  const actualLength = target?.length ?? length;
-  const s = (actualLength !== 1) ? 's' : '';
-  let received;
-  if (argConstructor === elementConstructor) {
-    received = `only a single one`;
-  } else if (argConstructor.child === elementConstructor) {
-    received = `a slice/array that has ${argLength}`;
-  } else {
-    received = `${argLength} initializer${argLength > 1 ? 's' : ''}`;
-  }
-  throw new TypeError(`${name} has ${actualLength} element${s}, received ${received}`);
-}
-
-function throwMissingInitializers(structure, missing) {
-  const { name } = structure;
-  throw new TypeError(`Missing initializers for ${name}: ${missing.join(', ')}`);
-}
-
-function throwNoProperty(structure, propName) {
-  const { name, instance: { members } } = structure;
-  const member = members.find(m => m.name === propName);
-  if (member) {
-    throw new TypeError(`Comptime value cannot be changed: ${propName}`);
-  } else {
-    throw new TypeError(`${name} does not have a property with that name: ${propName}`);
-  }
-}
-
-function throwArgumentCountMismatch(structure, actual) {
-  const { name, instance: { members } } = structure;
-  const argCount = members.length - 1;
-  const s = (argCount !== 1) ? 's' : '';
-  throw new Error(`${name} expects ${argCount} argument${s}, received ${actual}`);
-}
-
-function rethrowArgumentError(structure, index, err) {
-  const { name, instance: { members } } = structure;
-  // Zig currently does not provide the argument name
-  const argName = `args[${index}]`;
-  const argCount = members.length - 1;
-  const prefix = (index !== 0) ? '..., ' : '';
-  const suffix = (index !== argCount - 1) ? ', ...' : '';
-  const argLabel = prefix + argName + suffix;
-  const newError = new err.constructor(`${name}(${argLabel}): ${err.message}`);
-  newError.stack = err.stack;
-  throw newError;
-}
-
-function throwNoCastingToPointer(structure) {
-  throw new TypeError(`Non-slice pointers can only be created with the help of the new operator`);
-}
-
-function throwConstantConstraint(structure, pointer) {
-  const { name: target } = structure;
-  const { constructor: { name } } = pointer;
-  throw new TypeError(`Conversion of ${name} to ${target} requires an explicit cast`);
-}
-
-function throwMisplacedSentinel(structure, value, index, length) {
-  const { name } = structure;
-  throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}, found at ${index}`);
-}
-
-function throwMissingSentinel(structure, value, length) {
-  const { name } = structure;
-  throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}`);
-}
-
-function throwAlignmentConflict(align1, align2) {
-  throw new TypeError(`Unable to simultaneously align memory to ${align2}-byte and ${align1}-byte boundary`);
-}
-
-function throwTypeMismatch(expected, arg) {
-  const received = getDescription(arg);
-  throw new TypeError(`Expected ${addArticle(expected)}, received ${received}`)
-}
-
-function throwInaccessiblePointer() {
-  throw new TypeError(`Pointers within an untagged union are not accessible`);
-}
-
-function throwNullPointer() {
-  throw new TypeError(`Null pointer`);
-}
-
-function throwInvalidPointerTarget(structure, arg) {
-  const { name } = structure;
-  let target;
-  if (arg != null) {
-    const type = typeof(arg);
-    const noun = (type === 'object' && arg.constructor !== Object) ? `${arg.constructor.name} object`: type;
-    const a = article(noun);
-    target = `${a} ${noun}`;
-  } else {
-    target = arg + '';
-  }
-  throw new TypeError(`${name} cannot point to ${target}`)
-}
-
-function throwFixedMemoryTargetRequired(structure, arg) {
-  throw new TypeError(`Pointers in fixed memory cannot point to garbage-collected object`);
-}
-
-
-function throwOverflow(member, value) {
-  const typeName = getTypeName(member);
-  throw new TypeError(`${typeName} cannot represent the value given: ${value}`);
-}
-
-function throwOutOfBound(member, index) {
-  const { name } = member;
-  throw new RangeError(`Index exceeds the size of ${name ?? 'array'}: ${index}`);
-}
-
-function rethrowRangeError(member, index, err) {
-  if (err instanceof RangeError) {
-    throwOutOfBound(member, index);
-  } else {
-    throw err;
-  }
-}
-
-function throwNotUndefined(member) {
-  const { name } = member;
-  throw new RangeError(`Property ${name} can only be undefined`);
-}
-
-function throwNotOnByteBoundary(member) {
-  const { name, structure: { name: { struct }} } = member;
-  throw new TypeError(`Unable to create ${struct} as it is not situated on a byte boundary: ${name}`);
-}
-
-function throwReadOnly() {
-  throw new TypeError(`Unable to modify read-only object`);
-}
-
-function throwReadOnlyTarget(structure) {
-  const { name } = structure;
-  throw new TypeError(`${name} cannot point to a read-only object`);
-}
-
-function throwAccessingOpaque(structure) {
-  const { name } = structure;
-  throw new TypeError(`Unable to access opaque structure ${name}`);
-}
-
-function throwCreatingOpaque(structure) {
-  const { name } = structure;
-  throw new TypeError(`Unable to create instance of ${name}, as it is opaque`);
-}
-
-function throwZigError(name) {
-  throw new Error(deanimalizeErrorName(name));
-}
-
-function warnImplicitArrayCreation(structure, arg) {
-  const created = addArticle(structure.typedArray.name);
-  const source = addArticle(arg.constructor.name);
-  console.warn(`Implicitly creating ${created} from ${source}`);
-}
-
-function deanimalizeErrorName(name) {
-  // deal with snake_case first
-  let s = name.replace(/_/g, ' ');
-  // then camelCase, using a try block in case Unicode regex fails
-  try {
-    s = s.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
-      if (m1.length === 1) {
-        return ` ${m1.toLocaleLowerCase()}${m2}`;
-      } else {
-        if (m2) {
-          const acronym = m1.substring(0, m1.length - 1);
-          const letter = m1.charAt(m1.length - 1).toLocaleLowerCase();
-          return ` ${acronym} ${letter}${m2}`;
-        } else {
-          return ` ${m1}`;
-        }
-      }
-    }).trimStart();
-    /* c8 ignore next 2 */
-  } catch (err) {
-  }
-  return s.charAt(0).toLocaleUpperCase() + s.substring(1);
-}
-
-function getDescription(arg) {
-  const type = typeof(arg);
-  let s;
-  if (type === 'object') {
-    s = (arg) ? Object.prototype.toString.call(arg) : 'null';
-  } else {
-    s = type;
-  }
-  return addArticle(s);
-}
-
-function addArticle(noun) {
-  return `${article(noun)} ${noun}`;
-}
-
-function article(noun) {
-  return /^\W*[aeiou]/i.test(noun) ? 'an' : 'a';
-}
-
-function formatList(list, conj = 'or') {
-  const sep = ` ${conj} `;
-  if (list.length > 2) {
-    return list.slice(0, -1).join(', ') + sep + list[list.length - 1];
-  } else {
-    return list.join(sep);
-  }
-}
-
-function getBoolAccessor(access, member) {
-  return cacheMethod(access, member, () => {
-    if (isByteAligned(member)) {
-      const { byteSize } = member;
-      const typeName = getTypeName({ type: MemberType.Int, bitSize: byteSize * 8 });
-      if (access === 'get') {
-        const get = DataView.prototype[`get${typeName}`];
-        return function(offset, littleEndian) {
-          return !!get.call(this, offset, littleEndian);
-        };
-      } else {
-        const set = DataView.prototype[`set${typeName}`];
-        const T = (byteSize > 4) ? 1n : 1;
-        const F = (byteSize > 4) ? 0n : 0;
-        return function(offset, value, littleEndian) {
-          set.call(this, offset, value ? T : F, littleEndian);
-        };
-      }
-    } else {
-      return getExtendedTypeAccessor(access, member);
-    }
-  });
-}
-
-function getNumericAccessor(access, member) {
-  return cacheMethod(access, member, (name) => {
-    if (DataView.prototype[name]) {
-      return DataView.prototype[name];
-    } else {
-      return getExtendedTypeAccessor(access, member);
-    }
-  });
-}
-
-const factories = {};
-
-function useExtendedBool() {
-  factories[MemberType.Bool] = getExtendedBoolAccessor;
-}
-
-function useExtendedInt() {
-  factories[MemberType.Int] = getExtendedIntAccessor;
-}
-
-function useExtendedUint() {
-  factories[MemberType.Uint] = getExtendedUintAccessor;
-}
-
-function useExtendedFloat() {
-  factories[MemberType.Float] = getExtendedFloatAccessor;
-}
-
-function getExtendedTypeAccessor(access, member) {
-  const f = factories[member.type];
-  return f(access, member);
-}
-
-function getExtendedBoolAccessor(access, member) {
-  const { bitOffset } = member;
-  const bitPos = bitOffset & 0x07;
-  const mask = 1 << bitPos;
-  const get = DataView.prototype.getInt8;
-  if (access === 'get') {
-    return function(offset) {
-      const n = get.call(this, offset);
-      return !!(n & mask);
-    };
-  } else {
-    const set = DataView.prototype.setInt8;
-    return function(offset, value) {
-      const n = get.call(this, offset);
-      const b = (value) ? n | mask : n & ~mask;
-      set.call(this, offset, b);
-    };
-  }
-}
-
-function getExtendedIntAccessor(access, member) {
-  if (isByteAligned(member)) {
-    return getAlignedIntAccessor(access, member)
-  } else {
-    return getUnalignedIntAccessor(access, member);
-  }
-}
-
-function getExtendedUintAccessor(access, member) {
-  if (isByteAligned(member)) {
-    return getAlignedUintAccessor(access, member)
-  } else {
-    return getUnalignedUintAccessor(access, member);
-  }
-}
-
-function getExtendedFloatAccessor(access, member) {
-  if (isByteAligned(member)) {
-    return getAlignedFloatAccessor(access, member)
-  } else {
-    return getUnalignedFloatAccessor(access, member);
-  }
-}
-
-function getDataView(structure, arg, env) {
-  const { type, byteSize, typedArray } = structure;
-  let dv;
-  // not using instanceof just in case we're getting objects created in other contexts
-  const tag = arg?.[Symbol.toStringTag];
-  if (tag === 'DataView') {
-    dv = arg;
-  } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
-    dv = env.obtainView(arg, 0, arg.byteLength);
-  } else if (typedArray && tag === typedArray.name || (tag === 'Uint8ClampedArray' && typedArray === Uint8Array)) {
-    dv = env.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);
-  } else if (tag === 'Uint8Array' && typeof(Buffer) === 'function' && arg instanceof Buffer) {
-    dv = env.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);
-  } else {
-    const memory = arg?.[MEMORY];
-    if (memory) {
-      const { constructor, instance: { members: [ member ] } } = structure;
-      if (arg instanceof constructor) {
-        return memory;
-      } else if (type === StructureType.Array || type === StructureType.Slice || type === StructureType.Vector) {
-        const { byteSize: elementSize, structure: { constructor: Child } } = member;
-        const number = findElements(arg, Child);
-        if (number !== undefined) {
-          if (type === StructureType.Slice || number * elementSize === byteSize) {
-            return memory;
-          } else {
-            throwArrayLengthMismatch(structure, null, arg);
-          }
-        } 
-      }
-    }
-  }
-  if (dv && byteSize !== undefined) {
-    checkDataViewSize(dv, structure);
-  }
-  return dv;
-}
-
-function checkDataView(dv) {
-  if (dv?.[Symbol.toStringTag] !== 'DataView') {
-    throwTypeMismatch('a DataView', dv);
-  }
-  return dv;
-}
-
-function checkDataViewSize(dv, structure) {
-  const { byteSize, type } = structure;
-  const multiple = type === StructureType.Slice;
-  if (multiple ? dv.byteLength % byteSize !== 0 : dv.byteLength !== byteSize) {
-    throwBufferSizeMismatch(structure, dv);
-  }
-}
-
-function setDataView(dv, structure, copy, fixed, handlers) {
-  const { byteSize, type, sentinel } = structure;
-  const multiple = type === StructureType.Slice;
-  if (!this[MEMORY]) {
-    const { shapeDefiner } = handlers;
-    checkDataViewSize(dv, structure);
-    const len = dv.byteLength / byteSize;
-    const source = { [MEMORY]: dv };
-    sentinel?.validateData(source, len);
-    if (fixed) {
-      // need to copy when target object is in fixed memory
-      copy = true;
-    }
-    shapeDefiner.call(this, copy ? null : dv, len, fixed);
-    if (copy) {
-      this[COPIER](source);
-    }  
-  } else {
-    const byteLength = multiple ? byteSize * this.length : byteSize;
-    if (dv.byteLength !== byteLength) {
-      throwBufferSizeMismatch(structure, dv, this);
-    }
-    const source = { [MEMORY]: dv };
-    sentinel?.validateData(source, this.length);
-    this[COPIER](source); 
-  }
-}
-
-function findElements(arg, Child) {
-  // casting to a array/slice
-  const { constructor: Arg } = arg;
-  if (Arg === Child) {
-    // matching object
-    return 1;
-  } else if (Arg.child === Child) {
-    // matching slice/array
-    return arg.length;
-  }
-}
-
-function requireDataView(structure, arg, env) {
-  const dv = getDataView(structure, arg, env);
-  if (!dv) {
-    throwBufferExpected(structure);
-  }
-  return dv;
-}
-
-function getTypedArrayClass(member) {
-  const { type: memberType, byteSize } = member;
-  if (memberType === MemberType.Int) {
-    switch (byteSize) {
-      case 1: return Int8Array;
-      case 2: return Int16Array;
-      case 4: return Int32Array;
-      case 8: return BigInt64Array;
-    }
-  } else if (memberType === MemberType.Uint) {
-    switch (byteSize) {
-      case 1: return Uint8Array;
-      case 2: return Uint16Array;
-      case 4: return Uint32Array;
-      case 8: return BigUint64Array;
-    }
-  } else if (memberType === MemberType.Float) {
-    switch (byteSize) {
-      case 4: return Float32Array;
-      case 8: return Float64Array;
-    }
-  } else if (memberType === MemberType.Object) {
-    return member.structure.typedArray;
-  }
-  return null;
-}
-
-function isTypedArray(arg, TypedArray) {
-  const tag = arg?.[Symbol.toStringTag];
-  return (!!TypedArray && tag === TypedArray.name);
-}
-
-function isCompatible(arg, constructor) {
-  const tags = constructor[COMPAT];
-  if (tags) {
-    const tag = arg?.[Symbol.toStringTag];
-    if (tags.includes(tag)) {
-      return true;
-    }
-  }
-  if (constructor.child) {
-    if (findElements(arg, constructor.child) !== undefined) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function getCompatibleTags(structure) {
-  const { typedArray } = structure;
-  const tags = [];
-  if (typedArray) {
-    tags.push(typedArray.name);
-    tags.push('DataView');
-    if (typedArray === Uint8Array || typedArray === Int8Array) {
-      tags.push('ArrayBuffer');
-      tags.push('SharedArrayBuffer');
-      if (typedArray === Uint8Array) {
-        tags.push('Uint8ClampedArray');
-      }
-    }
-  }
-  return tags;
-}
-
-function isBuffer(arg, typedArray) {
-  const tag = arg?.[Symbol.toStringTag];
-  if (tag === 'DataView' || tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
-    return true;
-  } else if (typedArray && tag === typedArray.name) {
-    return true;
-  } else {
-    return false;
-  }
-}
-
-function getTypeName(member) {
-  const { type, bitSize, byteSize } = member;
-  if (type === MemberType.Int) {
-    return `${bitSize <= 32 ? '' : 'Big' }Int${bitSize}`;
-  } else if (type === MemberType.Uint) {
-    return `${bitSize <= 32 ? '' : 'Big' }Uint${bitSize}`;
-  } else if (type === MemberType.Float) {
-    return `Float${bitSize}`;
-  } else if (type === MemberType.Bool) {
-    const boolSize = (byteSize !== undefined) ? byteSize * 8 : 1;
-    return `Bool${boolSize}`;
-  } else if (type === MemberType.Void) {
-    return `Null`;
-  }
-}
-
-function getBigIntDescriptor(bitSize) {
-  const getWord = DataView.prototype.getBigUint64;
-  const setWord = DataView.prototype.setBigUint64;
-  const wordCount = Math.ceil(bitSize / 64);
-  return {
-    get: function(offset, littleEndian) {
-      let n = 0n;
-      if (littleEndian) {
-        for (let i = 0, j = offset + (wordCount - 1) * 8; i < wordCount; i++, j -= 8) {
-          const w = getWord.call(this, j, littleEndian);
-          n = (n << 64n) | w;
-        }
-      } else {
-        for (let i = 0, j = offset; i < wordCount; i++, j += 8) {
-          const w = getWord.call(this, j, littleEndian);
-          n = (n << 64n) | w;
-        }
-      }
-      return n;
-    },
-    set: function(offset, value, littleEndian) {
-      let n = value;
-      const mask = 0xFFFFFFFFFFFFFFFFn;
-      if (littleEndian) {
-        for (let i = 0, j = offset; i < wordCount; i++, j += 8) {
-          const w = n & mask;
-          setWord.call(this, j, w, littleEndian);
-          n >>= 64n;
-        }
-      } else {
-        n <<= BigInt(wordCount * 64 - bitSize);
-        for (let i = 0, j = offset + (wordCount - 1) * 8; i < wordCount; i++, j -= 8) {
-          const w = n & mask;
-          setWord.call(this, j, w, littleEndian);
-          n >>= 64n;
-        }
-      }
-      return n;
-    },
-  };
-}
-
-function getAlignedIntAccessor(access, member) {
-  const { bitSize, byteSize } = member;
-  if (bitSize < 64) {
-    // actual number of bits needed when stored aligned
-    const typeName = getTypeName({ ...member, bitSize: byteSize * 8 });
-    const get = DataView.prototype[`get${typeName}`];
-    const set = DataView.prototype[`set${typeName}`];
-    const signMask = (bitSize <= 32) ? 2 ** (bitSize - 1) : 2n ** BigInt(bitSize - 1);
-    const valueMask = (bitSize <= 32) ? signMask - 1 : signMask - 1n;
-    if (access === 'get') {
-      return function(offset, littleEndian) {
-        const n = get.call(this, offset, littleEndian);
-        return (n & valueMask) - (n & signMask);
-      };
-    } else {
-      return function(offset, value, littleEndian) {
-        const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
-        set.call(this, offset, n, littleEndian);
-      };
-    }
-  } else {
-    // larger than 64 bits
-    const { get, set } = getBigIntDescriptor(bitSize);
-    const signMask = 2n ** BigInt(bitSize - 1);
-    const valueMask = signMask - 1n;
-    if (access === 'get') {
-      return function(offset, littleEndian) {
-        const n = get.call(this, offset, littleEndian);
-        return (n & valueMask) - (n & signMask);
-      };
-    } else {
-      return function(offset, value, littleEndian) {
-        const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
-        set.call(this, offset, n, littleEndian);
-      };
-    }
-  }
-}
-
-function getAlignedUintAccessor(access, member) {
-  const { bitSize, byteSize } = member;
-  if (bitSize < 64) {
-    // actual number of bits needed when stored aligned
-    const typeName = getTypeName({ ...member, bitSize: byteSize * 8 });
-    const get = DataView.prototype[`get${typeName}`];
-    const set = DataView.prototype[`set${typeName}`];
-    const valueMask = (bitSize <= 32) ? (2 ** bitSize) - 1 : (2n ** BigInt(bitSize)) - 1n;
-    if (access === 'get') {
-      return function(offset, littleEndian) {
-        const n = get.call(this, offset, littleEndian);
-        return n & valueMask;
-      };
-    } else {
-      return function(offset, value, littleEndian) {
-        const n = value & valueMask;
-        set.call(this, offset, n, littleEndian);
-      };
-    }
-  } else {
-    // larger than 64 bits
-    const { get, set } = getBigIntDescriptor(bitSize);
-    const valueMask = (2n ** BigInt(bitSize)) - 1n;
-    if (access === 'get') {
-      return function(offset, littleEndian) {
-        const n = get.call(this, offset, littleEndian);
-        return n & valueMask;
-      };
-    } else {
-      return function(offset, value, littleEndian) {
-        const n = value & valueMask;
-        set.call(this, offset, n, littleEndian);
-      };
-    }
-  }
-}
-
-function getUnalignedIntAccessor(access, member) {
-  const { bitSize, bitOffset } = member;
-  const bitPos = bitOffset & 0x07;
-  if (bitPos + bitSize <= 8) {
-    const set = DataView.prototype.setUint8;
-    const get = DataView.prototype.getUint8;
-    // sub-8-bit numbers have real use cases
-    const signMask = 2 ** (bitSize - 1);
-    const valueMask = signMask - 1;
-    if (access === 'get') {
-      return function(offset) {
-        const n = get.call(this, offset);
-        const s = n >>> bitPos;
-        return (s & valueMask) - (s & signMask);
-      };
-    } else {
-      const outsideMask = 0xFF ^ ((valueMask | signMask) << bitPos);
-      return function(offset, value) {
-        let b = get.call(this, offset);
-        const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
-        b = (b & outsideMask) | (n << bitPos);
-        set.call(this, offset, b);
-      };
-    }
-  }
-  return getUnalignedNumericAccessor(access, member);
-}
-
-function getUnalignedUintAccessor(access, member) {
-  const { bitSize, bitOffset } = member;
-  const bitPos = bitOffset & 0x07;
-  if (bitPos + bitSize <= 8) {
-    const set = DataView.prototype.setUint8;
-    const get = DataView.prototype.getUint8;
-    const valueMask = (2 ** bitSize - 1);
-    if (access === 'get') {
-      return function(offset) {
-        const n = get.call(this, offset);
-        const s = n >>> bitPos;
-        return s & valueMask;
-      };
-    } else {
-      const outsideMask = 0xFF ^ (valueMask << bitPos);
-      return function(offset, value) {
-        const n = get.call(this, offset);
-        const b = (n & outsideMask) | ((value & valueMask) << bitPos);
-        set.call(this, offset, b);
-      };
-    }
-  }
-  return getUnalignedNumericAccessor(access, member);
-}
-
-function getAlignedFloatAccessor(access, member) {
-  const { bitSize, byteSize } = member;
-  if (bitSize === 16) {
-    const buf = new DataView(new ArrayBuffer(4));
-    const set = DataView.prototype.setUint16;
-    const get = DataView.prototype.getUint16;
-    if (access === 'get') {
-      return function(offset, littleEndian) {
-        const n = get.call(this, offset, littleEndian);
-        const sign = n >>> 15;
-        const exp = (n & 0x7C00) >> 10;
-        const frac = n & 0x03FF;
-        if (exp === 0) {
-          return (sign) ? -0 : 0;
-        } else if (exp === 0x1F) {
-          if (!frac) {
-            return (sign) ? -Infinity : Infinity;
-          } else {
-            return NaN;
-          }
-        }
-        const n32 = (sign << 31) | ((exp - 15 + 127) << 23) | (frac << 13);
-        buf.setUint32(0, n32, littleEndian);
-        return buf.getFloat32(0, littleEndian);
-      }
-    } else {
-      return function(offset, value, littleEndian) {
-        buf.setFloat32(0, value, littleEndian);
-        const n = buf.getUint32(0, littleEndian);
-        const sign = n >>> 31;
-        const exp = (n & 0x7F800000) >> 23;
-        const frac = n & 0x007FFFFF;
-        const exp16 = (exp - 127 + 15);
-        let n16;
-        if (exp === 0) {
-          n16 = sign << 15;
-        } else if (exp === 0xFF) {
-          n16 = sign << 15 | 0x1F << 10 | (frac ? 1 : 0);
-        } else if (exp16 >= 31) {
-          n16 = sign << 15 | 0x1F << 10;
-        } else {
-          n16 = sign << 15 | exp16 << 10 | (frac >> 13);
-        }
-        set.call(this, offset, n16, littleEndian);
-      }
-    }
-  } else if (bitSize === 80) {
-    const buf = new DataView(new ArrayBuffer(8));
-    const get = function(offset, littleEndian) {
-      const w1 = BigInt(this.getUint32(offset + (littleEndian ? 0 : byteSize - 4), littleEndian));
-      const w2 = BigInt(this.getUint32(offset + (littleEndian ? 4 : byteSize - 8), littleEndian));
-      const w3 = BigInt(this.getUint32(offset + (littleEndian ? 8 : byteSize - 12), littleEndian));
-      return w1 | w2 << 32n | w3 << 64n;
-    };
-    const set = function(offset, value, littleEndian) {
-      const w1 = value & 0xFFFFFFFFn;
-      const w2 = (value >> 32n) & 0xFFFFFFFFn;
-      const w3 = (value >> 64n) & 0xFFFFFFFFn;
-      this.setUint32(offset + (littleEndian ? 0 : byteSize - 4), Number(w1), littleEndian);
-      this.setUint32(offset + (littleEndian ? 4 : byteSize - 8), Number(w2), littleEndian);
-      this.setUint32(offset + (littleEndian ? 8 : byteSize - 12), Number(w3), littleEndian);
-    };
-    if (access === 'get') {
-      return function(offset, littleEndian) {
-        const n = get.call(this, offset, littleEndian);
-        const sign = n >> 79n;
-        const exp = (n & 0x7FFF0000000000000000n) >> 64n;
-        const frac = n & 0x00007FFFFFFFFFFFFFFFn;
-        if (exp === 0n) {
-          return (sign) ? -0 : 0;
-        } else if (exp === 0x7FFFn) {
-          if (!frac) {
-            return (sign) ? -Infinity : Infinity;
-          } else {
-            return NaN;
-          }
-        }
-        const exp64 = exp - 16383n + 1023n;
-        if (exp64 >= 2047n) {
-          return (sign) ? -Infinity : Infinity;
-        }
-        const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 11n) + BigInt((frac & (2n**11n - 1n)) >= 2n**10n);
-        buf.setBigUint64(0, n64, littleEndian);
-        return buf.getFloat64(0, littleEndian);
-      }
-    } else {
-      return function(offset, value, littleEndian) {
-        buf.setFloat64(0, value, littleEndian);
-        const n = buf.getBigUint64(0, littleEndian);
-        const sign = n >> 63n;
-        const exp = (n & 0x7FF0000000000000n) >> 52n;
-        const frac = n & 0x000FFFFFFFFFFFFFn;
-        let n80;
-        if (exp === 0n) {
-          n80 = sign << 79n | (frac << 11n);
-        } else if (exp === 0x07FFn) {
-          n80 = sign << 79n | 0x7FFFn << 64n | (frac ? 0x00002000000000000000n : 0n) | 0x00008000000000000000n;
-          //                                                 ^ bit 61                       ^ bit 63
-        } else {
-          n80 = sign << 79n | (exp - 1023n + 16383n) << 64n | (frac << 11n) | 0x00008000000000000000n;
-        }
-        set.call(this, offset, n80, littleEndian);
-      }
-    }
-  } else if (bitSize === 128) {
-    const buf = new DataView(new ArrayBuffer(8));
-    const get = function(offset, littleEndian) {
-      const w1 = BigInt(this.getUint32(offset + (littleEndian ? 0 : byteSize - 4), littleEndian));
-      const w2 = BigInt(this.getUint32(offset + (littleEndian ? 4 : byteSize - 8), littleEndian));
-      const w3 = BigInt(this.getUint32(offset + (littleEndian ? 8 : byteSize - 12), littleEndian));
-      const w4 = BigInt(this.getUint32(offset + (littleEndian ? 12 : byteSize - 16), littleEndian));
-      return w1 | w2 << 32n | w3 << 64n | w4 << 96n;
-    };
-    const set = function(offset, value, littleEndian) {
-      const w1 = value & 0xFFFFFFFFn;
-      const w2 = (value >> 32n) & 0xFFFFFFFFn;
-      const w3 = (value >> 64n) & 0xFFFFFFFFn;
-      const w4 = (value >> 96n) & 0xFFFFFFFFn;
-      this.setUint32(offset + (littleEndian ? 0 : byteSize - 4), Number(w1), littleEndian);
-      this.setUint32(offset + (littleEndian ? 4 : byteSize - 8), Number(w2), littleEndian);
-      this.setUint32(offset + (littleEndian ? 8 : byteSize - 12), Number(w3), littleEndian);
-      this.setUint32(offset + (littleEndian ? 12 : byteSize - 16), Number(w4), littleEndian);
-    };
-    if (access === 'get') {
-      return function(offset, littleEndian) {
-        const n = get.call(this, offset, littleEndian);
-        const sign = n >> 127n;
-        const exp = (n & 0x7FFF0000000000000000000000000000n) >> 112n;
-        const frac = n & 0x0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFn;
-        if (exp === 0n) {
-          return (sign) ? -0 : 0;
-        } else if (exp === 0x7FFFn) {
-          if (!frac) {
-            return (sign) ? -Infinity : Infinity;
-          } else {
-            return NaN;
-          }
-        }
-        const exp64 = exp - 16383n + 1023n;
-        if (exp64 >= 2047n) {
-          return (sign) ? -Infinity : Infinity;
-        }
-        const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 60n) + BigInt((frac & (2n**60n - 1n)) >= 2n**59n);
-        buf.setBigUint64(0, n64, littleEndian);
-        return buf.getFloat64(0, littleEndian);
-      }
-    } else {
-      return function(offset, value, littleEndian) {
-        buf.setFloat64(0, value, littleEndian);
-        const n = buf.getBigUint64(0, littleEndian);
-        const sign = n >> 63n;
-        const exp = (n & 0x7FF0000000000000n) >> 52n;
-        const frac = n & 0x000FFFFFFFFFFFFFn;
-        let n128;
-        if (exp === 0n) {
-          n128 = sign << 127n | (frac << 60n);
-        } else if (exp === 0x07FFn) {
-          n128 = sign << 127n | 0x7FFFn << 112n | (frac ? 1n : 0n);
-        } else {
-          n128 = sign << 127n | (exp - 1023n + 16383n) << 112n | (frac << 60n);
-        }
-        set.call(this, offset, n128, littleEndian);
-      }
-    }
-  }
-}
-
-function getUnalignedFloatAccessor(access, member) {
-  return getUnalignedNumericAccessor(access, member);
-}
-
-function getUnalignedNumericAccessor(access, member) {
-  // pathological usage scenario--handle it anyway by copying the bitSize into a
-  // temporary buffer, bit-aligning the data
-  const { bitSize, bitOffset } = member;
-  const bitPos = bitOffset & 0x07;
-  const byteSize = [ 1, 2, 4, 8 ].find(b => b * 8 >= bitSize) ?? Math.ceil(bitSize / 64) * 64;
-  const buf = new DataView(new ArrayBuffer(byteSize));
-  if (access === 'get') {
-    const getAligned = getNumericAccessor('get', { ...member, byteSize });
-    const copyBits = getBitAlignFunction(bitPos, bitSize, true);
-    return function(offset, littleEndian) {
-      copyBits(buf, this, offset);
-      return getAligned.call(buf, 0, littleEndian);
-    };
-  } else {
-    const setAligned = getNumericAccessor('set', { ...member, byteSize });
-    const applyBits = getBitAlignFunction(bitPos, bitSize, false);
-    return function(offset, value, littleEndian) {
-      setAligned.call(buf, 0, value, littleEndian);
-      applyBits(this, buf, offset);
-    };
-  }
-}
-
-const methodCache = {};
-
-function cacheMethod(access, member, cb) {
-  const { type, bitOffset, bitSize, structure } = member;
-  const bitPos = bitOffset & 0x07;
-  const typeName = getTypeName(member);
-  const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
-  const isInt = type === MemberType.Int || type === MemberType.Uint;
-  let name = `${access}${typeName}${suffix}`;
-  let isSize = false, originalName = name;
-  if (isInt && bitSize === 64) {
-    const zigTypeName = structure?.name;
-    if (zigTypeName === 'usize' || zigTypeName === 'isize') {
-      name += 'Size';
-      isSize = true;
-    }
-  }
-  let fn = methodCache[name];
-  if (!fn) {
-    if (isInt && access === 'set') {
-      // add auto-conversion between number and bigint
-      const Primitive = getPrimitiveClass(member);
-      const set = cb(originalName);
-      fn = function(offset, value, littleEndian) {
-        set.call(this, offset, Primitive(value), littleEndian);
-      };
-    } else if (isSize && access === 'get') {
-      // use number instead of bigint where possible
-      const get = cb(originalName);
-      const min = BigInt(Number.MIN_SAFE_INTEGER);
-      const max = BigInt(Number.MAX_SAFE_INTEGER);
-      fn = function(offset, littleEndian) {
-        const value = get.call(this, offset, littleEndian);
-        if (min <= value && value <= max) {
-          return Number(value);
-        } else {
-          return value;
-        }
-      };
-    } else {
-      fn = cb(name);
-    }
-    if (fn && fn.name !== name) {
-      Object.defineProperty(fn, 'name', { value: name, configurable: true, writable: false });
-    }
-    methodCache[name] = fn;
-  }
-  return fn;
-}
-
-function addMethods(s, env) {
-  const add = (target, { methods }, pushThis) => {
-    const descriptors = {};
-    const re = /^(get|set)\s+([\s\S]+)/;
-    for (const method of methods) {
-      const f = env.createCaller(method, pushThis);
-      const m = re.exec(f.name);
-      if (m) {
-        // getter/setter
-        const type = m[1], propName = m[2];
-        const argRequired = (type === 'get') ? 0 : 1;
-        const argCount = getArgumentCount(method, pushThis);
-        // need to match arg count, since instance methods also show up as static methods
-        if (argCount === argRequired) {
-          let descriptor = descriptors[propName];
-          if (!descriptor) {
-            descriptor = descriptors[propName] = { configurable: true, enumerable: true };
-          }
-          descriptor[type] = f; 
-        }
-      } else {
-        descriptors[f.name] = { value: f, configurable: true, writable: true };
-      }
-    }
-    defineProperties(target, descriptors);
-  };
-  add(s.constructor, s.static, false);
-  add(s.constructor.prototype, s.instance, true);
-}
-
-function getArgumentCount(method, pushThis) {
-  const { argStruct: { instance: { members } } } = method;  
-  return members.length - (pushThis ? 2 : 1);
-}
-
-function addStaticMembers(structure, env) {
-  const {
-    type,
-    constructor,
-    static: { members, template },
-  } = structure;
-  const descriptors = {};
-  for (const member of members) {
-    descriptors[member.name] = getDescriptor(member, env);
-  }
-  defineProperties(constructor, {
-    valueOf: { value: getValueOf },
-    toJSON: { value: convertToJSON },
-    ...descriptors,
-    [Symbol.iterator]: { value: getStructIterator },
-    // static variables are objects stored in the static template's slots
-    [SLOTS]: template && { value: template[SLOTS] },
-    // anyerror would have props already
-    [PROPS]: !constructor[PROPS] && { value: members.map(m => m.name) },
-    [NORMALIZER]: { value: normalizeStruct },
-  });
-  if (type === StructureType.Enumeration) {
-    for (const { name, slot } of members) {
-      appendEnumeration(constructor, name, constructor[SLOTS][slot]);
-    }
-  } else if (type === StructureType.ErrorSet) {
-    for (const { name, slot } of members) {
-      appendErrorSet(constructor, name, constructor[SLOTS][slot]);
-    }
-  }
 }
 
 class Environment {
@@ -4555,7 +4556,7 @@ class Environment {
     }
   }
 
-  getControlObject() {
+  getSpecialExports() {
     return {
       init: () => this.initPromise ?? Promise.resolve(),
       abandon: () => this.abandon(),

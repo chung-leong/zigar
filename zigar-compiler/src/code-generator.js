@@ -31,7 +31,7 @@ export function generateCode(definition, params) {
   addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
   add(`const env = createEnvironment(${addonDir ? JSON.stringify({ addonDir }, undefined, 2) : null});`);
-  add(`const __zigar = env.getControlObject();`);
+  add(`const __zigar = env.getSpecialExports();`);
   add(`\n// recreate structures`);
   add(`env.recreateStructures(structures, options);`);
   if (binarySource) {

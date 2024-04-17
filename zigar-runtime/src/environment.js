@@ -437,7 +437,7 @@ export class Environment {
     // clear comptime-only variables
     this.slots = {};
     this.structures = [];
-    module.__zigar = this.getControlObject();
+    module.__zigar = this.getSpecialExports();
     return module;
   }
   /* COMPTIME-ONLY-END */
@@ -618,7 +618,7 @@ export class Environment {
     }
   }
 
-  getControlObject() {
+  getSpecialExports() {
     return {
       init: () => this.initPromise ?? Promise.resolve(),
       abandon: () => this.abandon(),

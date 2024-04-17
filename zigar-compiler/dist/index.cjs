@@ -4300,7 +4300,7 @@ function generateCode(definition, params) {
   addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
   add(`const env = createEnvironment(${addonDir ? JSON.stringify({ addonDir }, undefined, 2) : null});`);
-  add(`const __zigar = env.getControlObject();`);
+  add(`const __zigar = env.getSpecialExports();`);
   add(`\n// recreate structures`);
   add(`env.recreateStructures(structures, options);`);
   if (binarySource) {
@@ -5976,7 +5976,7 @@ class Environment {
     // clear comptime-only variables
     this.slots = {};
     this.structures = [];
-    module.__zigar = this.getControlObject();
+    module.__zigar = this.getSpecialExports();
     return module;
   }
   /* COMPTIME-ONLY-END */
