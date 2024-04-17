@@ -2,16 +2,21 @@ import {
   throwInactiveUnionProperty, throwInvalidInitializer, throwMissingUnionInitializer,
   throwMultipleUnionInitializers
 } from './error.js';
-import { MemberType, getDescriptor } from './member.js';
+import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
+import {
+  attachDescriptors, createConstructor, createPropertyApplier, getSelf
+} from './object.js';
 import { copyPointer, disablePointer, never, resetPointer } from './pointer.js';
-import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, handleError } from './special.js';
+import {
+  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, handleError
+} from './special.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
-import { StructureType, attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
 import {
   ALIGN, COPIER, NAME, NORMALIZER, POINTER_VISITOR, PROPS, PROP_GETTERS, PROP_SETTERS, SIZE, TAG,
   VIVIFICATOR
 } from './symbol.js';
+import { MemberType, StructureType } from './types.js';
 
 export function defineUnionShape(structure, env) {
   const {

@@ -1,17 +1,17 @@
 import { resetGlobalErrorSet } from './error-set.js';
 import { throwAlignmentConflict } from './error.js';
-import { MemberType, useBool, useObject } from './member.js';
+import { useBool, useObject } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { addMethods } from './method.js';
+import { defineProperties } from './object.js';
 import { addStaticMembers } from './static.js';
-import {
-  StructureType, defineProperties, findAllObjects, getStructureFactory, useArgStruct
-} from './structure.js';
+import { findAllObjects, getStructureFactory, useArgStruct } from './structure.js';
 import {
   ALIGN, ATTRIBUTES, CONST, COPIER, ENVIRONMENT, FIXED_LOCATION, LOCATION_GETTER, LOCATION_SETTER,
   MEMORY, POINTER, POINTER_VISITOR, SIZE, SLOTS, TARGET_GETTER
 } from './symbol.js';
 import { decodeText } from './text.js';
+import { MemberType, StructureType } from './types.js';
 
 export class Environment {
   context;

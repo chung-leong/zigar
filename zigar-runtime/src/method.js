@@ -1,4 +1,4 @@
-import { defineProperties } from "./structure.js";
+import { defineProperties } from "./object.js";
 
 export function addMethods(s, env) {
   const add = (target, { methods }, pushThis) => {

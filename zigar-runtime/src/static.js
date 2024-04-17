@@ -1,10 +1,11 @@
 import { appendEnumeration } from './enumeration.js';
 import { appendErrorSet } from './error-set.js';
 import { getDescriptor } from './member.js';
+import { defineProperties } from './object.js';
 import { convertToJSON, getValueOf } from './special.js';
 import { getStructIterator, normalizeStruct } from './struct.js';
-import { StructureType, defineProperties } from './structure.js';
 import { NORMALIZER, PROPS, SLOTS } from './symbol.js';
+import { StructureType } from './types.js';
 
 export function addStaticMembers(structure, env) {
   const {

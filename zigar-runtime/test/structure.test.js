@@ -1,19 +1,14 @@
 import { expect } from 'chai';
 
 import { Environment } from '../src/environment.js';
-import { MemberType } from '../src/member.js';
 import {
-  ObjectCache,
-  StructureType,
-  defineProperties,
   findAllObjects,
   getFeaturesUsed,
-  getSelf,
   getStructureFactory,
-  needSlots,
   useOpaque
 } from '../src/structure.js';
-import { MEMORY, SLOTS } from '../src/symbol.js';
+import { SLOTS } from '../src/symbol.js';
+import { MemberType, StructureType } from '../src/types.js';
 
 describe('Structure functions', function() {
   const env = new Environment();
@@ -504,58 +499,6 @@ describe('Structure functions', function() {
       expect(features).to.contain('useStatic');
     })
   })
-  describe('defineProperties', function() {
-    it('should define properties on an object', function() {
-      const object = {};
-      defineProperties(object, {
-        hello: { value: 5 },
-        world: { get: () => 6 },
-        universe: false,
-      });
-      expect(object.hello).to.equal(5);
-      expect(object.world).to.equal(6);
-      expect(object).to.not.have.property('universe');
-    })
-  })
-  describe('attachDescriptors', function() {
-    it('should attach descriptors to a constructor', function() {
-    })
-  })
-  describe('needSlots', function() {
-    it('should return true when a structure has object members', function() {
-      const structure = {
-        type: StructureType.Struct,
-        instance: {
-          members: [
-            {
-              type: MemberType.Object,
-            }
-          ]
-        }
-      };
-      expect(needSlots(structure.instance.members)).to.be.true;
-    });
-    it('should return true when a structure has comptime fields', function() {
-      const structure = {
-        type: StructureType.Struct,
-        instance: {
-          members: [
-            {
-              type: MemberType.Comptime,
-            }
-          ]
-        }
-      };
-      expect(needSlots(structure.instance.members)).to.be.true;
-    });
-  })
-  describe('getSelf', function() {
-    it('should return this', function() {
-      const object = {};
-      const result = getSelf.call(object);
-      expect(result).to.equal(object);
-    })
-  })
   describe('findAllObjects', function() {
     it('should return a list of objects used by the given list of structures', function() {
       const object1 = {};
@@ -584,28 +527,6 @@ describe('Structure functions', function() {
       expect(list).to.contain(object3);
       expect(list).to.contain(object4);
       expect(list).to.contain(object5);
-    })
-  })
-  describe('ObjectCache', function() {
-    describe('save/find', function() {
-      it('should save object to cache', function() {
-        const cache = new ObjectCache();
-        const dv = new DataView(new ArrayBuffer(4));
-        expect(cache.find(dv, false)).to.be.undefined;
-        const object = { [MEMORY]: dv };
-        cache.save(dv, false, object);
-        expect(cache.find(dv, false)).to.equal(object);
-        expect(cache.find(dv, true)).to.be.undefined;
-      })
-      it('should save writabl object separately', function() {
-        const cache = new ObjectCache();
-        const dv = new DataView(new ArrayBuffer(4));
-        expect(cache.find(dv, true)).to.be.undefined;
-        const object = { [MEMORY]: dv };
-        cache.save(dv, true, object);
-        expect(cache.find(dv, true)).to.equal(object);
-        expect(cache.find(dv, false)).to.be.undefined;
-      })
     })
   })
 })

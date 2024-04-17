@@ -2,9 +2,10 @@ import { getDataView, getTypedArrayClass } from './data-view.js';
 import { deanimalizeErrorName, throwInvalidInitializer } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
+import { attachDescriptors, createConstructor, createPropertyApplier, defineProperties } from './object.js';
 import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf } from './special.js';
-import { attachDescriptors, createConstructor, createPropertyApplier, defineProperties } from './structure.js';
 import { ALIGN, CLASS, COPIER, GETTER, NORMALIZER, PROPS, SIZE } from './symbol.js';
+import { isErrorJSON } from './types.js';
 
 let currentGlobalSet;
 let currentErrorClass;
@@ -103,10 +104,6 @@ export function appendErrorSet(errorSet, name, es) {
 
 export function resetGlobalErrorSet() {
   currentErrorClass = currentGlobalSet = undefined;
-}
-
-export function isErrorJSON(arg) {
-  return typeof(arg) === 'object' && typeof(arg.error) === 'string' && Object.keys(arg).length === 1  ;
 }
 
 class ZigErrorBase extends Error {

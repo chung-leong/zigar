@@ -4,26 +4,10 @@ import {
   throwOverflow
 } from './error.js';
 import { restoreMemory } from './memory.js';
-import { getIntRange } from './primitive.js';
-import { StructureType } from './structure.js';
 import { GETTER, MEMORY, SETTER, SLOTS, VIVIFICATOR } from './symbol.js';
+import { MemberType, StructureType, getIntRange } from './types.js';
 
-export const MemberType = {
-  Void: 0,
-  Bool: 1,
-  Int: 2,
-  Uint: 3,
-  Float: 4,
-  Object: 5,
-  Type: 6,
-  Comptime: 7,
-  Static: 8,
-  Literal: 9,
-  Null: 10,
-  Undefined: 11,
-};
-
-export function isReadOnly(type) {
+export function isReadOnly({ type }) {
   switch (type) {
     case MemberType.Type:
     case MemberType.Comptime:
@@ -92,18 +76,6 @@ export function useEnumerationTransform() {
 
 export function useErrorSetTransform() {
   transformers[StructureType.ErrorSet] = transformErrorSetDescriptor;
-}
-
-export function isByteAligned({ bitOffset, bitSize, byteSize }) {
-  return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
-}
-
-export function hasStandardIntSize({ bitSize }) {
-  return bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64;
-}
-
-export function hasStandardFloatSize({ bitSize }) {
-  return bitSize === 32 || bitSize === 64;
 }
 
 export function getDescriptor(member, env) {

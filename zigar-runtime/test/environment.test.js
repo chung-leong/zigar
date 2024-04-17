@@ -10,13 +10,14 @@ import {
   isMisaligned,
   subtract,
 } from '../src/environment.js';
-import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
-import { StructureType, useAllStructureTypes } from '../src/structure.js';
+import { useAllStructureTypes } from '../src/structure.js';
 import {
   ALIGN, ATTRIBUTES, CONST, COPIER, ENVIRONMENT, FIXED_LOCATION, MEMORY, POINTER_VISITOR, SLOTS,
   TARGET_GETTER
 } from '../src/symbol.js';
+import { MemberType, StructureType } from '../src/types.js';
 
 describe('Environment', function() {
   beforeEach(function() {

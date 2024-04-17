@@ -7,17 +7,18 @@ import {
   throwArrayLengthMismatch, throwInvalidArrayInitializer, throwMisplacedSentinel,
   throwMissingSentinel
 } from './error.js';
-import { MemberType, getDescriptor } from './member.js';
+import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
+import { attachDescriptors, createConstructor, createPropertyApplier } from './object.js';
 import { copyPointer, getProxy } from './pointer.js';
 import {
-  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getStringDescriptor, getTypedArrayDescriptor,
-  getValueOf
+  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getStringDescriptor,
+  getTypedArrayDescriptor, getValueOf
 } from './special.js';
-import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import {
   ALIGN, COMPAT, COPIER, LENGTH, MEMORY, NORMALIZER, POINTER_VISITOR, SIZE, VIVIFICATOR
 } from './symbol.js';
+import { MemberType } from './types.js';
 
 export function defineSlice(structure, env) {
   const {

@@ -41,8 +41,7 @@ import {
   throwTypeMismatch,
   throwZigError,
 } from '../src/error.js';
-import { MemberType } from '../src/member.js';
-import { StructureType } from '../src/structure.js';
+import { MemberType, StructureType } from '../src/types.js';
 
 describe('Error functions', function() {
   describe('throwNoInitializer', function() {

@@ -3,8 +3,9 @@ import { expect } from 'chai';
 import { useAllExtendedTypes } from '../src/data-view.js';
 import { NodeEnvironment } from '../src/environment-node.js';
 import { useAllMemberTypes } from '../src/member.js';
-import { StructureType, useAllStructureTypes } from '../src/structure.js';
+import { useAllStructureTypes } from '../src/structure.js';
 import { ENVIRONMENT } from '../src/symbol.js';
+import { StructureType } from '../src/types.js';
 
 describe('Opaque functions', function() {
   const env = new NodeEnvironment();

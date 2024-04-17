@@ -1,8 +1,8 @@
 import { getCompatibleTags } from './data-view.js';
 import { throwAccessingOpaque, throwCreatingOpaque } from './error.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
+import { attachDescriptors, createConstructor } from './object.js';
 import { convertToJSON, getDataViewDescriptor, getValueOf } from './special.js';
-import { attachDescriptors, createConstructor } from './structure.js';
 import { ALIGN, COMPAT, COPIER, NORMALIZER, SIZE } from './symbol.js';
 
 export function defineOpaque(structure, env) {

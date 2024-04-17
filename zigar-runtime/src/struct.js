@@ -1,15 +1,13 @@
 import { throwInvalidInitializer, throwNotOnByteBoundary } from './error.js';
-import { MemberType, getDescriptor } from './member.js';
+import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
+import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './object.js';
 import { always, copyPointer } from './pointer.js';
 import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, handleError } from './special.js';
-import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
 import {
-  ALIGN, COPIER,
-  MEMORY, NORMALIZER, PARENT, POINTER_VISITOR,
-  PROPS,
-  SIZE, SLOTS, VIVIFICATOR
+  ALIGN, COPIER, MEMORY, NORMALIZER, PARENT, POINTER_VISITOR, PROPS, SIZE, SLOTS, VIVIFICATOR
 } from './symbol.js';
+import { MemberType } from './types.js';
 
 export function defineStructShape(structure, env) {
   const {

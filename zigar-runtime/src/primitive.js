@@ -1,10 +1,14 @@
 import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
 import { throwInvalidInitializer } from './error.js';
-import { MemberType, getDescriptor, isByteAligned } from './member.js';
+import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf, normalizeValue } from './special.js';
-import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
+import { attachDescriptors, createConstructor, createPropertyApplier } from './object.js';
+import {
+  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf,
+  normalizeValue
+} from './special.js';
 import { ALIGN, COMPAT, COPIER, NORMALIZER, SIZE } from './symbol.js';
+import { getPrimitiveType } from './types.js';
 
 export function definePrimitive(structure, env) {
   const {
@@ -49,54 +53,3 @@ export function definePrimitive(structure, env) {
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };
-
-export function getIntRange(member) {
-  const { type, bitSize } = member;
-  const signed = (type === MemberType.Int);
-  let magBits = (signed) ? bitSize - 1 : bitSize;
-  if (bitSize <= 32) {
-    const max = 2 ** magBits - 1;
-    const min = (signed) ? -(2 ** magBits) : 0;
-    return { min, max };
-  } else {
-    magBits = BigInt(magBits);
-    const max = 2n ** magBits - 1n;
-    const min = (signed) ? -(2n ** magBits) : 0n;
-    return { min, max };
-  }
-}
-
-export function getPrimitiveClass({ type, bitSize }) {
-  if (type === MemberType.Int || type === MemberType.Uint) {
-    if (bitSize <= 32) {
-      return Number;
-    } else {
-      return BigInt;
-    }
-  } else if (type === MemberType.Float) {
-    return Number;
-  } else if (type === MemberType.Bool) {
-    return Boolean;
-  }
-}
-
-export function getPrimitiveType(member) {
-  const Primitive = getPrimitiveClass(member);
-  if (Primitive) {
-    return typeof(Primitive(0));
-  }
-}
-
-export function isExtendedType(member) {
-  if (!isByteAligned(member)) {
-    return true;
-  }
-  const { type, bitSize } = member;
-  if (type === MemberType.Int) {
-    return !(bitSize === 8 || bitSize === 16 || bitSize === 32 || bitSize === 64);
-  } else if (type === MemberType.Float) {
-    return !(bitSize === 32 || bitSize === 64);
-  } else {
-    return false;
-  }
-}

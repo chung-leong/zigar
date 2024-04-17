@@ -4,15 +4,16 @@ import {
   throwInvalidPointerTarget, throwNoCastingToPointer, throwNullPointer, throwReadOnlyTarget,
   warnImplicitArrayCreation
 } from './error.js';
-import { MemberType, getDescriptor, isValueExpected } from './member.js';
+import { getDescriptor, isValueExpected } from './member.js';
 import { getMemoryCopier, restoreMemory } from './memory.js';
+import { attachDescriptors, createConstructor, defineProperties } from './object.js';
 import { convertToJSON, getValueOf } from './special.js';
-import { StructureType, attachDescriptors, createConstructor, defineProperties } from './structure.js';
 import {
   ALIGN, CONST, COPIER, ENVIRONMENT, FIXED_LOCATION, GETTER, LOCATION_GETTER, LOCATION_SETTER,
   MEMORY, NORMALIZER, PARENT, POINTER, POINTER_VISITOR, PROXY, SETTER, SIZE, SLOTS, TARGET_GETTER,
   TARGET_SETTER, VIVIFICATOR
 } from './symbol.js';
+import { MemberType, StructureType } from './types.js';
 
 export function definePointer(structure, env) {
   const {
@@ -216,12 +217,8 @@ export function getProxy() {
   return this[PROXY];
 }
 
-export function copyPointer({ source }) {
-  const target = source[SLOTS][0];
-  if (target) {
-    this[TARGET_SETTER](target);
-  }
-}
+// function needed in object.js so it's defined there
+export { copyPointer } from '../src/object.js';
 
 export function resetPointer({ isActive }) {
   if (this[SLOTS][0] && !isActive(this)) {

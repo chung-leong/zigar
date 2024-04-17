@@ -2,8 +2,10 @@ import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
 import { throwArrayLengthMismatch, throwInvalidArrayInitializer } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf } from './special.js';
-import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './structure.js';
+import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './object.js';
+import {
+  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf
+} from './special.js';
 import { ALIGN, COMPAT, COPIER, NORMALIZER, PROP_SETTERS, SIZE } from './symbol.js';
 
 export function defineVector(structure, env) {

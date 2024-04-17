@@ -1,9 +1,11 @@
-import { throwArrayLengthMismatch, throwBufferExpected, throwBufferSizeMismatch, throwTypeMismatch } from './error.js';
-import { MemberType, isByteAligned } from './member.js';
+import {
+  throwArrayLengthMismatch, throwBufferExpected, throwBufferSizeMismatch, throwTypeMismatch
+} from './error.js';
 import { getBitAlignFunction } from './memory.js';
-import { getPrimitiveClass } from './primitive.js';
-import { StructureType } from './structure.js';
 import { COMPAT, COPIER, MEMORY } from './symbol.js';
+import {
+  MemberType, StructureType, getPrimitiveClass, getTypeName, isByteAligned
+} from './types.js';
 
 export function getBoolAccessor(access, member) {
   return cacheMethod(access, member, () => {
@@ -288,22 +290,6 @@ export function isBuffer(arg, typedArray) {
     return true;
   } else {
     return false;
-  }
-}
-
-export function getTypeName(member) {
-  const { type, bitSize, byteSize } = member;
-  if (type === MemberType.Int) {
-    return `${bitSize <= 32 ? '' : 'Big' }Int${bitSize}`;
-  } else if (type === MemberType.Uint) {
-    return `${bitSize <= 32 ? '' : 'Big' }Uint${bitSize}`;
-  } else if (type === MemberType.Float) {
-    return `Float${bitSize}`;
-  } else if (type === MemberType.Bool) {
-    const boolSize = (byteSize !== undefined) ? byteSize * 8 : 1;
-    return `Bool${boolSize}`;
-  } else if (type === MemberType.Void) {
-    return `Null`;
   }
 }
 

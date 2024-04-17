@@ -2,9 +2,10 @@ import { expect } from 'chai';
 
 import { useAllExtendedTypes } from '../src/data-view.js';
 import { NodeEnvironment } from '../src/environment-node.js';
-import { MemberType, useAllMemberTypes } from '../src/member.js';
-import { StructureType, useAllStructureTypes } from '../src/structure.js';
+import { useAllMemberTypes } from '../src/member.js';
+import { useAllStructureTypes } from '../src/structure.js';
 import { ENVIRONMENT, LOCATION_GETTER, LOCATION_SETTER, MEMORY, POINTER } from '../src/symbol.js';
+import { MemberType, StructureType } from '../src/types.js';
 
 describe('Pointer functions', function() {
   const env = new NodeEnvironment();

@@ -2,9 +2,10 @@ import { expect } from 'chai';
 import 'mocha-skip-if';
 
 import { NodeEnvironment } from '../src/environment-node.js';
-import { MemberType, useAllMemberTypes } from '../src/member.js';
-import { StructureType, useAllStructureTypes } from '../src/structure.js';
+import { useAllMemberTypes } from '../src/member.js';
+import { useAllStructureTypes } from '../src/structure.js';
 import { POINTER_VISITOR } from '../src/symbol.js';
+import { MemberType, StructureType } from '../src/types.js';
 
 describe('ArgStruct functions', function() {
   const env = new NodeEnvironment();

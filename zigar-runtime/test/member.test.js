@@ -2,10 +2,13 @@ import { expect } from 'chai';
 
 import { useAllExtendedTypes } from '../src/data-view.js';
 import {
-  MemberType, getDescriptor, isByteAligned, isReadOnly, useAllMemberTypes,
+  getDescriptor,
+  isReadOnly,
+  useAllMemberTypes,
 } from '../src/member.js';
-import { StructureType, useAllStructureTypes } from '../src/structure.js';
+import { useAllStructureTypes } from '../src/structure.js';
 import { GETTER, MEMORY, SETTER, SLOTS, VIVIFICATOR } from '../src/symbol.js';
+import { MemberType, StructureType, isByteAligned } from '../src/types.js';
 
 describe('Member functions', function() {
   beforeEach(function() {
@@ -15,10 +18,10 @@ describe('Member functions', function() {
   })
   describe('isReadOnly', function() {
     it('should return true for certain types', function() {
-      expect(isReadOnly(MemberType.Comptime)).to.be.true;
-      expect(isReadOnly(MemberType.Type)).to.be.true;
-      expect(isReadOnly(MemberType.Literal)).to.be.true;
-      expect(isReadOnly(MemberType.Int)).to.be.false;
+      expect(isReadOnly({ type: MemberType.Comptime })).to.be.true;
+      expect(isReadOnly({ type: MemberType.Type })).to.be.true;
+      expect(isReadOnly({ type: MemberType.Literal })).to.be.true;
+      expect(isReadOnly({ type: MemberType.Int })).to.be.false;
     })
   })
   describe('isByteAligned', function() {

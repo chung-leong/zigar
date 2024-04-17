@@ -2,8 +2,8 @@ import { getDataView, getTypedArrayClass } from './data-view.js';
 import { throwInvalidInitializer } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
+import { attachDescriptors, createConstructor, createPropertyApplier, defineProperties } from './object.js';
 import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf } from './special.js';
-import { attachDescriptors, createConstructor, createPropertyApplier, defineProperties } from './structure.js';
 import { ALIGN, COPIER, MORE, NAME, NORMALIZER, SIZE, TAG } from './symbol.js';
 
 export function defineEnumerationShape(structure, env) {

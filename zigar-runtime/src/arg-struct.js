@@ -1,9 +1,10 @@
 import { rethrowArgumentError, throwArgumentCountMismatch } from './error.js';
-import { MemberType, getDescriptor } from './member.js';
+import { getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
+import { defineProperties } from './object.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
-import { defineProperties } from './structure.js';
 import { ALIGN, COPIER, MEMORY, POINTER_VISITOR, SIZE, SLOTS, VIVIFICATOR } from './symbol.js';
+import { MemberType } from './types.js';
 
 export function defineArgStruct(structure, env) {
   const {

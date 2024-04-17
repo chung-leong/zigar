@@ -6,7 +6,6 @@ import {
   getBoolAccessor,
   getDataView,
   getNumericAccessor,
-  getTypeName,
   getTypedArrayClass,
   isBuffer,
   isTypedArray,
@@ -14,10 +13,8 @@ import {
   useAllExtendedTypes
 } from '../src/data-view.js';
 import { Environment } from '../src/environment.js';
-import { MemberType } from '../src/member.js';
-import { getIntRange } from '../src/primitive.js';
-import { StructureType } from '../src/structure.js';
 import { MEMORY } from '../src/symbol.js';
+import { MemberType, StructureType, getIntRange } from '../src/types.js';
 
 describe('Data view functions', function() {
   beforeEach(function() {
@@ -330,56 +327,6 @@ describe('Data view functions', function() {
       const arg = {};
       expect(() => requireDataView(structure, arg)).to.throw(TypeError)
         .with.property('message').that.contains('8');
-    })
-  })
-  describe('getTypeName', function() {
-    it('should return the name for a integer type', function() {
-      const members = [
-        { type: MemberType.Int, bitSize: 32 },
-        { type: MemberType.Int, bitSize: 64 },
-        { type: MemberType.Int, bitSize: 33 },
-      ];
-      expect(getTypeName(members[0])).to.equal('Int32');
-      expect(getTypeName(members[1])).to.equal('BigInt64');
-      expect(getTypeName(members[2])).to.equal('BigInt33');
-    })
-    it('should return the correct name for unsigned integers', function() {
-      const members = [
-        { type: MemberType.Uint, bitSize: 32 },
-        { type: MemberType.Uint, bitSize: 64 },
-        { type: MemberType.Uint, bitSize: 33 },
-      ];
-      expect(getTypeName(members[0])).to.equal('Uint32');
-      expect(getTypeName(members[1])).to.equal('BigUint64');
-      expect(getTypeName(members[2])).to.equal('BigUint33');
-    })
-    it('should return the correct names for floats', function() {
-      const members = [
-        { type: MemberType.Float, bitSize: 16 },
-        { type: MemberType.Float, bitSize: 32 },
-        { type: MemberType.Float, bitSize: 64 },
-        { type: MemberType.Float, bitSize: 128 },
-      ];
-      expect(getTypeName(members[0])).to.equal('Float16');
-      expect(getTypeName(members[1])).to.equal('Float32');
-      expect(getTypeName(members[2])).to.equal('Float64');
-      expect(getTypeName(members[3])).to.equal('Float128');
-    })
-    it('should return the correct names for boolean', function() {
-      const members = [
-        { type: MemberType.Bool, bitSize: 1, byteSize: 1 },
-        { type: MemberType.Bool, bitSize: 1, byteSize: 8 },
-        { type: MemberType.Bool, bitSize: 1 },
-      ];
-      expect(getTypeName(members[0])).to.equal('Bool8');
-      expect(getTypeName(members[1])).to.equal('Bool64');
-      expect(getTypeName(members[2])).to.equal('Bool1');
-    })
-    it('should return "Null" for Void', function() {
-      const members = [
-        { type: MemberType.Void, bitSize: 0 },
-      ];
-      expect(getTypeName(members[0])).to.equal('Null');
     })
   })
   describe('getBoolAccessor', function() {

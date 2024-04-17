@@ -1,18 +1,13 @@
-import { MemberType, getDescriptor } from './member.js';
+import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
+import { attachDescriptors, createConstructor } from './object.js';
 import { copyPointer, resetPointer } from './pointer.js';
 import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, normalizeValue } from './special.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
-import { attachDescriptors, createConstructor } from './structure.js';
 import {
-  ALIGN,
-  COPIER,
-  NORMALIZER,
-  POINTER_VISITOR,
-  RESETTER,
-  SIZE,
-  VIVIFICATOR
+  ALIGN, COPIER, NORMALIZER, POINTER_VISITOR, RESETTER, SIZE, VIVIFICATOR
 } from './symbol.js';
+import { MemberType } from './types.js';
 
 export function defineOptional(structure, env) {
   const {

@@ -1,7 +1,4 @@
-import { getTypeName } from './data-view.js';
-import { isErrorJSON } from './error-set.js';
-import { getPrimitiveType } from './primitive.js';
-import { StructureType } from './structure.js';
+import { StructureType, getPrimitiveType, getTypeName, isErrorJSON } from './types.js';
 
 export function throwNoInitializer(structure) {
   const { name } = structure;

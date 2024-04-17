@@ -7,10 +7,11 @@ import {
   transformIterable,
 } from '../src/array.js';
 import { NodeEnvironment } from '../src/environment-node.js';
-import { MemberType, getDescriptor, useAllMemberTypes } from '../src/member.js';
-import { StructureType, useAllStructureTypes } from '../src/structure.js';
+import { getDescriptor, useAllMemberTypes } from '../src/member.js';
+import { useAllStructureTypes } from '../src/structure.js';
 import { MEMORY, POINTER_VISITOR } from '../src/symbol.js';
 import { encodeBase64 } from '../src/text.js';
+import { MemberType, StructureType } from '../src/types.js';
 
 describe('Array functions', function() {
   const env = new NodeEnvironment();

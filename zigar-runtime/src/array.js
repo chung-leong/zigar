@@ -1,18 +1,18 @@
 import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
 import { throwArrayLengthMismatch, throwInvalidArrayInitializer } from './error.js';
-import { MemberType, getDescriptor } from './member.js';
+import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
+import { attachDescriptors, createConstructor, createPropertyApplier } from './object.js';
 import { always, copyPointer, getProxy } from './pointer.js';
 import {
   convertToJSON, getBase64Descriptor, getDataViewDescriptor, getStringDescriptor,
   getTypedArrayDescriptor, getValueOf, handleError
 } from './special.js';
-import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import {
-  ALIGN, ARRAY, COMPAT, COPIER, ELEMENT_GETTER, ELEMENT_SETTER,
-  MEMORY, NORMALIZER, PARENT,
+  ALIGN, ARRAY, COMPAT, COPIER, ELEMENT_GETTER, ELEMENT_SETTER, MEMORY, NORMALIZER, PARENT,
   POINTER_VISITOR, PROXY, SIZE, SLOTS, VIVIFICATOR
 } from './symbol.js';
+import { MemberType } from './types.js';
 
 export function defineArray(structure, env) {
   const {

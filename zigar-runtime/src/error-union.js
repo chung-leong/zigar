@@ -1,14 +1,14 @@
-import { isErrorJSON } from './error-set.js';
 import { throwNotInErrorSet } from './error.js';
-import { MemberType, getDescriptor } from './member.js';
+import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
+import { attachDescriptors, createConstructor, createPropertyApplier } from './object.js';
 import { copyPointer, resetPointer } from './pointer.js';
 import {
   convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, normalizeValue
 } from './special.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
-import { attachDescriptors, createConstructor, createPropertyApplier } from './structure.js';
 import { ALIGN, CLASS, COPIER, NORMALIZER, POINTER_VISITOR, RESETTER, SIZE, VIVIFICATOR } from './symbol.js';
+import { MemberType, isErrorJSON } from './types.js';
 
 export function defineErrorUnion(structure, env) {
   const {

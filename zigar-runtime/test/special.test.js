@@ -2,14 +2,15 @@ import { expect } from 'chai';
 
 import { useAllExtendedTypes } from '../src/data-view.js';
 import { Environment } from '../src/environment.js';
-import { MemberType, useAllMemberTypes } from '../src/member.js';
+import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
 import {
   convertToJSON, getBase64Descriptor, getDataViewDescriptor, getStringDescriptor,
   getTypedArrayDescriptor, getValueOf,
 } from '../src/special.js';
-import { StructureType, useAllStructureTypes } from '../src/structure.js';
+import { useAllStructureTypes } from '../src/structure.js';
 import { COPIER, MEMORY, NORMALIZER } from '../src/symbol.js';
+import { MemberType, StructureType } from '../src/types.js';
 
 describe('Special property functions', function() {
   const env = new Environment();
