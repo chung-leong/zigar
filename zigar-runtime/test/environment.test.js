@@ -7,8 +7,7 @@ import {
   findSortedIndex,
   getAlignedAddress,
   isInvalidAddress,
-  isMisaligned,
-  subtract,
+  isMisaligned
 } from '../src/environment.js';
 import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
@@ -2553,17 +2552,6 @@ describe('Environment', function() {
     })
     it(`should add a bigint to a bigint`, function() {
       expect(add(5n, 5n)).to.equal(10n);
-    })
-  })
-  describe('subtract', function() {
-    it(`should subtract a number from another`, function() {
-      expect(subtract(15, 5)).to.equal(10);
-    })
-    it(`should subtract a number to from bigint`, function() {
-      expect(subtract(15n, 5)).to.equal(10n);
-    })
-    it(`should subtract a bigint to from bigint`, function() {
-      expect(subtract(15n, 5n)).to.equal(10n);
     })
   })
   describe('isInvalidAddress', function() {

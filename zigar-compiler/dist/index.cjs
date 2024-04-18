@@ -6113,7 +6113,7 @@ class Environment {
         const shadow = this.createClusterShadow(cluster);
         cluster.address = this.getViewAddress(shadow[MEMORY]);
       }
-      return add(cluster.address, dv.byteOffset);
+      return add(cluster.address, dv.byteOffset - cluster.start);
     } else {
       const shadow = this.createShadow(target);
       return this.getViewAddress(shadow[MEMORY]);

@@ -4818,7 +4818,7 @@ class Environment {
     const unalignedShadowDV = this.allocateShadowMemory(len + maxAlign, 1);
     const unalignedAddress = this.getViewAddress(unalignedShadowDV);
     const maxAlignAddress = getAlignedAddress(add(unalignedAddress, maxAlignOffset), maxAlign);
-    const shadowAddress = subtract(maxAlignAddress, maxAlignOffset);
+    const shadowAddress = add(maxAlignAddress, start - maxAlignOffset);
     const shadowOffset = unalignedShadowDV.byteOffset + Number(shadowAddress - unalignedAddress);
     const shadowDV = new DataView(unalignedShadowDV.buffer, shadowOffset, len);
     // make sure that other pointers are correctly aligned also
@@ -4827,7 +4827,7 @@ class Environment {
       const offset = dv.byteOffset;
       if (offset !== maxAlignOffset) {
         const align = target.constructor[ALIGN] ?? dv[ALIGN];
-        if (isMisaligned(add(shadowAddress, offset), align)) {
+        if (isMisaligned(add(shadowAddress, offset - start), align)) {
           throw new AlignmentConflict(align, maxAlign);
         }
       }
@@ -4856,7 +4856,7 @@ class Environment {
         const shadow = this.createClusterShadow(cluster);
         cluster.address = this.getViewAddress(shadow[MEMORY]);
       }
-      return add(cluster.address, dv.byteOffset);
+      return add(cluster.address, dv.byteOffset - cluster.start);
     } else {
       const shadow = this.createShadow(target);
       return this.getViewAddress(shadow[MEMORY]);
@@ -5027,10 +5027,6 @@ function getAlignedAddress(address, align) {
 
 function add(address, len) {
   return address + ((typeof(address) === 'bigint') ? BigInt(len) : len);
-}
-
-function subtract(address, len) {
-  return address - ((typeof(address) === 'bigint') ? BigInt(len) : len);
 }
 
 function isInvalidAddress(address) {
