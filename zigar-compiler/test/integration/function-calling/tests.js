@@ -397,5 +397,24 @@ export function addTests(importModule, options) {
       const result = returnNumber(1234);
       expect(result).to.equal(1234);
     })
+    it('should handle pointer in struct', async function() {
+      this.timeout(120000);
+      const { User } = await importTest('handle-pointer-in-struct');
+      const user = new User({ name: 'Alice', age: 5 });
+      const before = await capture(() => {
+        user.print1();
+        user.print2();
+        user.print3();
+      });
+      expect(before).to.eql([ 'Alice', 'Alice', 'Alice' ]);
+      // change pointer and call a second time
+      user.name = 'Bob';
+      const after = await capture(() => {
+        user.print1();
+        user.print2();
+        user.print3();
+      });
+      expect(after).to.eql([ 'Bob', 'Bob', 'Bob' ]);
+    });
   })
 }
