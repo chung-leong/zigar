@@ -1,4 +1,4 @@
-import { throwInvalidInitializer, throwNotOnByteBoundary } from './error.js';
+import { InvalidInitializer, NotOnByteBoundary } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './object.js';
@@ -35,7 +35,7 @@ export function defineStructShape(structure, env) {
     } else if (arg && typeof(arg) === 'object') {
       propApplier.call(this, arg);
     } else if (arg !== undefined) {
-      throwInvalidInitializer(structure, 'object', arg);
+      throw new InvalidInitializer(structure, 'object', arg);
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
@@ -115,7 +115,7 @@ export function getChildVivificator(structure) {
     let len = byteSize;
     if (len === undefined) {
       if (bitOffset & 7) {
-        throwNotOnByteBoundary(member);
+        throw new NotOnByteBoundary(member);
       }
       len = member.bitSize >> 3;
     }

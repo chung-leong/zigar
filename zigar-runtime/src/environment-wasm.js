@@ -1,5 +1,5 @@
 import { Environment, isInvalidAddress } from './environment.js';
-import { throwZigError } from './error.js';
+import { ZigError } from './error.js';
 import { getCopyFunction, getMemoryCopier, restoreMemory } from './memory.js';
 import { ALIGN, ATTRIBUTES, COPIER, MEMORY, POINTER_VISITOR } from './symbol.js';
 import { decodeText } from './text.js';
@@ -360,12 +360,12 @@ export class WebAssemblyEnvironment extends Environment {
         // wait for fulfillment, then either return result or throw
         return err.then((err) => {
           if (err) {
-            throwZigError(err);
+            throw new ZigError(err);
           }
           return args.retval;
         });
       } else {
-        throwZigError(err);
+        throw new ZigError(err);
       }
     }
     return args.retval;

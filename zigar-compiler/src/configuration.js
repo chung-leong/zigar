@@ -84,7 +84,7 @@ export function extractOptions(searchParams, availableOptions) {
     const key = getCamelCase(name, names);
     const option = availableOptions[key];
     if (!option) {
-      throwUnknownOption(name);
+      throw new UnknownOption(name);
     }
     if (key === 'optimize') {
       options[key] = getCamelCase(string, [ 'Debug', 'ReleaseSafe', 'ReleaseFast', 'ReleaseSmall' ]);
@@ -115,9 +115,11 @@ function getCamelCase(name, names) {
   return name;
 }
 
-function throwUnknownOption(key) {
-  const adjective = (allOptions[key]) ? 'Unavailable' : 'Unrecognized';
-  throw new Error(`${adjective} option: ${key}`);
+class UnknownOption extends Error {
+  constructor(key) {
+    const adjective = (allOptions[key]) ? 'Unavailable' : 'Unrecognized';
+    super(`${adjective} option: ${key}`);
+  }
 }
 
 export async function findConfigFile(name, dir) {
@@ -161,7 +163,7 @@ function processConfigFile(text, cfgPath, availableOptions) {
   for (const [ key, value ] of Object.entries(options)) {
     const option = availableOptions[key];
     if (!option) {
-      throwUnknownOption(key);
+      throw new UnknownOption(key);
     }
     if (typeof(value) !== option.type) {
       throw new Error(`${key} is expected to be a ${option.type}, received: ${value}`);

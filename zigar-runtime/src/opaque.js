@@ -1,5 +1,5 @@
 import { getCompatibleTags } from './data-view.js';
-import { throwAccessingOpaque, throwCreatingOpaque } from './error.js';
+import { AccessingOpaque, CreatingOpaque } from './error.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { attachDescriptors, createConstructor } from './object.js';
 import { convertToJSON, getDataViewDescriptor, getValueOf } from './special.js';
@@ -11,10 +11,10 @@ export function defineOpaque(structure, env) {
     align,
   } = structure;
   const initializer = function() {
-    throwCreatingOpaque(structure);
+    throw new CreatingOpaque(structure);
   };
   const valueAccessor = function() {
-    throwAccessingOpaque(structure);
+    throw new AccessingOpaque(structure);
   };
   const toPrimitive = function(hint) {
     const { name } = structure;

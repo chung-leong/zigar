@@ -1,6 +1,4 @@
-import {
-  throwArrayLengthMismatch, throwBufferExpected, throwBufferSizeMismatch, throwTypeMismatch
-} from './error.js';
+import { ArrayLengthMismatch, BufferExpected, BufferSizeMismatch, TypeMismatch } from './error.js';
 import { getBitAlignFunction } from './memory.js';
 import { COMPAT, COPIER, MEMORY } from './symbol.js';
 import {
@@ -142,7 +140,7 @@ export function getDataView(structure, arg, env) {
           if (type === StructureType.Slice || number * elementSize === byteSize) {
             return memory;
           } else {
-            throwArrayLengthMismatch(structure, null, arg);
+            throw new ArrayLengthMismatch(structure, null, arg);
           }
         } 
       }
@@ -156,7 +154,7 @@ export function getDataView(structure, arg, env) {
 
 export function checkDataView(dv) {
   if (dv?.[Symbol.toStringTag] !== 'DataView') {
-    throwTypeMismatch('a DataView', dv);
+    throw new TypeMismatch('a DataView', dv);
   }
   return dv;
 }
@@ -165,7 +163,7 @@ export function checkDataViewSize(dv, structure) {
   const { byteSize, type } = structure;
   const multiple = type === StructureType.Slice;
   if (multiple ? dv.byteLength % byteSize !== 0 : dv.byteLength !== byteSize) {
-    throwBufferSizeMismatch(structure, dv);
+    throw new BufferSizeMismatch(structure, dv);
   }
 }
 
@@ -189,7 +187,7 @@ export function setDataView(dv, structure, copy, fixed, handlers) {
   } else {
     const byteLength = multiple ? byteSize * this.length : byteSize;
     if (dv.byteLength !== byteLength) {
-      throwBufferSizeMismatch(structure, dv, this);
+      throw new BufferSizeMismatch(structure, dv, this);
     }
     const source = { [MEMORY]: dv };
     sentinel?.validateData(source, this.length);
@@ -212,7 +210,7 @@ function findElements(arg, Child) {
 export function requireDataView(structure, arg, env) {
   const dv = getDataView(structure, arg, env);
   if (!dv) {
-    throwBufferExpected(structure);
+    throw new BufferExpected(structure);
   }
   return dv;
 }

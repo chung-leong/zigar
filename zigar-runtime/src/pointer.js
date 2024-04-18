@@ -1,8 +1,7 @@
 import { getDataView, isBuffer, isCompatible } from './data-view.js';
 import {
-  throwConstantConstraint, throwFixedMemoryTargetRequired, throwInaccessiblePointer,
-  throwInvalidPointerTarget, throwNoCastingToPointer, throwNullPointer, throwReadOnlyTarget,
-  warnImplicitArrayCreation
+  ConstantConstraint, FixedMemoryTargetRequired, InaccessiblePointer, InvalidPointerTarget,
+  NoCastingToPointer, NullPointer, ReadOnlyTarget, warnImplicitArrayCreation
 } from './error.js';
 import { getDescriptor, isValueExpected } from './member.js';
 import { getMemoryCopier, restoreMemory } from './memory.js';
@@ -59,7 +58,11 @@ export function definePointer(structure, env) {
   };
   const getTargetObject = function() {
     updateTarget.call(this);
-    return this[SLOTS][0] ?? throwNullPointer();
+    const target = this[SLOTS][0];
+    if (!target) {
+      throw new NullPointer();
+    }
+    return target;
   };
   const setTargetObject = function(arg) {
     if (env.inFixedMemory(this)) {
@@ -72,7 +75,7 @@ export function definePointer(structure, env) {
         addressSetter.call(this, loc);
         this[FIXED_LOCATION] = loc;
       } else {
-        throwFixedMemoryTargetRequired(structure, arg);
+        throw new FixedMemoryTargetRequired(structure, arg);
       }
     }
     this[SLOTS][0] = arg;
@@ -85,7 +88,10 @@ export function definePointer(structure, env) {
   : getTargetObject;
   const setTarget = function(value) {
     updateTarget.call(this);
-    const object = this[SLOTS][0] ?? throwNullPointer();
+    const object = this[SLOTS][0];
+    if (!object) {
+      throw new NullPointer();
+    }
     return object[SETTER](value);
   };
   const alternateCaster = function(arg, options) {
@@ -101,7 +107,7 @@ export function definePointer(structure, env) {
       // allow casting to slice through constructor of its pointer
       return new constructor(Target(arg), options);
     } else {
-      throwNoCastingToPointer(structure);
+      throw new NoCastingToPointer(structure);
     }
   };
   const finalizer = function() {
@@ -116,7 +122,7 @@ export function definePointer(structure, env) {
     if (isPointerOf(arg, Target)) {
       // initialize with the other pointer'structure target
       if (!isConst && arg.constructor.const) {
-        throwConstantConstraint(structure, arg);
+        throw new ConstantConstraint(structure, arg);
       }
       arg = arg[SLOTS][0];
     }
@@ -128,7 +134,7 @@ export function definePointer(structure, env) {
         // create read-only version
         arg = Target(arg, { writable: false });
       } else if (!isConst && arg[CONST]) {
-        throwReadOnlyTarget(structure);       
+        throw new ReadOnlyTarget(structure);       
       }
     } else if (isCompatible(arg, Target)) {
       // autocast to target type
@@ -148,7 +154,7 @@ export function definePointer(structure, env) {
       }
       arg = autoObj;
     } else if (arg !== undefined) {
-      throwInvalidPointerTarget(structure, arg);
+      throw new InvalidPointerTarget(structure, arg);
     }
     this[TARGET_SETTER](arg);
   };
@@ -180,7 +186,7 @@ export function definePointer(structure, env) {
     [LOCATION_SETTER]: { value: addressSetter },
     [POINTER_VISITOR]: { value: visitPointer },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [VIVIFICATOR]: { value: throwNullPointer },
+    [VIVIFICATOR]: { value: () => { throw new NullPointer() } },
     [NORMALIZER]: { value: normalizePointer },
     [FIXED_LOCATION]: { value: undefined, writable: true },
   };
@@ -227,8 +233,9 @@ export function resetPointer({ isActive }) {
 }
 
 export function disablePointer() {
-  const disabledProp = { get: throwInaccessiblePointer, set: throwInaccessiblePointer };
-  const disabledFunc = { value: throwInaccessiblePointer };
+  const throwError = () => { throw new InaccessiblePointer() };
+  const disabledProp = { get: throwError, set: throwError };
+  const disabledFunc = { value: throwError };
   defineProperties(this[POINTER], {
     '*': disabledProp,
     '$': disabledProp,

@@ -1,70 +1,69 @@
 import { expect } from 'chai';
 
 import {
+  AccessingOpaque,
+  AlignmentConflict,
+  ArgumentCountMismatch,
+  ArrayLengthMismatch,
+  AssigningToConstant,
+  BufferExpected,
+  BufferSizeMismatch,
+  ConstantConstraint,
+  CreatingOpaque,
+  EnumExpected,
+  ErrorExpected,
+  FixedMemoryTargetRequired,
+  InaccessiblePointer,
+  InactiveUnionProperty,
+  InvalidArrayInitializer,
+  InvalidInitializer,
+  InvalidPointerTarget,
+  InvalidType,
+  MisplacedSentinel,
+  MissingInitializers,
+  MissingSentinel,
+  MissingUnionInitializer,
+  MultipleUnionInitializers,
+  NoCastingToPointer,
+  NoInitializer,
+  NoProperty,
+  NotInErrorSet,
+  NotOnByteBoundary,
+  NotUndefined,
+  NullPointer,
+  OutOfBound,
+  Overflow,
+  TypeMismatch,
+  ZigError,
+  adjustArgumentError,
+  adjustRangeError,
   article,
   deanimalizeErrorName,
   formatList,
-  rethrowArgumentError,
-  rethrowRangeError,
-  throwAccessingOpaque,
-  throwAlignmentConflict,
-  throwArgumentCountMismatch,
-  throwArrayLengthMismatch,
-  throwAssigningToConstant,
-  throwBufferExpected,
-  throwBufferSizeMismatch,
-  throwConstantConstraint,
-  throwCreatingOpaque,
-  throwEnumExpected,
-  throwErrorExpected,
-  throwFixedMemoryTargetRequired,
-  throwInaccessiblePointer,
-  throwInactiveUnionProperty,
-  throwInvalidArrayInitializer,
-  throwInvalidInitializer,
-  throwInvalidPointerTarget,
-  throwInvalidType,
-  throwMisplacedSentinel,
-  throwMissingInitializers,
-  throwMissingSentinel,
-  throwMissingUnionInitializer,
-  throwMultipleUnionInitializers,
-  throwNoCastingToPointer,
-  throwNoInitializer,
-  throwNoProperty,
-  throwNotInErrorSet,
-  throwNotOnByteBoundary,
-  throwNotUndefined,
-  throwNullPointer,
-  throwOutOfBound,
-  throwOverflow,
-  throwTypeMismatch,
-  throwZigError,
 } from '../src/error.js';
 import { MemberType, StructureType } from '../src/types.js';
 
 describe('Error functions', function() {
-  describe('throwNoInitializer', function() {
-    it('should throw a type error', function() {
+  describe('NoInitializer', function() {
+    it('should have expected message', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Struct,
         byteSize: 8,
       };
-      expect(() => throwNoInitializer(structure)).to.throw(TypeError)
-        .with.property('message').that.contains('undefined');
+      const err = new NoInitializer(structure);
+      expect(err.message).to.contain('undefined');
     })
-
   })
-  describe('throwBufferSizeMismatch', function() {
-    it('should throw a type error', function() {
+  describe('BufferSizeMismatch', function() {
+    it('should have expected message', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Struct,
         byteSize: 8,
       };
-      expect(() => throwBufferSizeMismatch(structure, 16)).to.throw(TypeError)
-        .with.property('message').that.contains('Hello');
+      const err = new BufferSizeMismatch(structure, 16);
+      expect(err.message).to.contain('Hello');
     })
     it('should use different message for shapeless slices', function() {
       const structure = {
@@ -72,8 +71,8 @@ describe('Error functions', function() {
         type: StructureType.Slice,
         byteSize: 8,
       };
-      expect(() => throwBufferSizeMismatch(structure, 16)).to.throw(TypeError)
-        .with.property('message').that.contains('elements');
+      const err = new BufferSizeMismatch(structure, 16);
+      expect(err.message).to.contain('elements');
     })
     it('should not use different message when a slice has been created already', function() {
       const structure = {
@@ -81,8 +80,8 @@ describe('Error functions', function() {
         type: StructureType.Slice,
         byteSize: 8,
       };
-      expect(() => throwBufferSizeMismatch(structure, 16, { length: 5 })).to.throw(TypeError)
-        .with.property('message').that.does.not.contains('elements');
+      const err = new BufferSizeMismatch(structure, 16, { length: 5 });
+      expect(err.message).to.not.contain('elements');
     })
     it('should use singular wording when size is 1', function() {
       const structure = {
@@ -90,29 +89,27 @@ describe('Error functions', function() {
         type: StructureType.Slice,
         byteSize: 1,
       };
-      expect(() => throwBufferSizeMismatch(structure, 16)).to.throw(TypeError)
-        .with.property('message').that.does.not.contains('bytes');
+      const err = new BufferSizeMismatch(structure, 16);
+      expect(err.message).to.not.contain('bytes');
     })
   })
-  describe('throwBufferExpected', function() {
-    it('should throw a type error', function() {
+  describe('BufferExpected', function() {
+    it('should have expected message', function() {
       const structure1 = {
         name: 'Hello',
         type: StructureType.Struct,
         byteSize: 88,
       };
-      expect(() => throwBufferExpected(structure1)).to.throw(TypeError)
-        .with.property('message').that.contains('88')
-        .and.that.contains('an ArrayBuffer or a DataView');
+      const err1 = new BufferExpected(structure1);
+      expect(err1.message).to.contain('88').and.contain('an ArrayBuffer or a DataView');
       const structure2 = {
         name: 'Hello',
         type: StructureType.Struct,
         byteSize: 88,
         typedArray: Uint16Array,
       };
-      expect(() => throwBufferExpected(structure2)).to.throw(TypeError)
-        .with.property('message').that.contains('88')
-        .and.that.contains('an ArrayBuffer, a DataView or an Uint16Array');
+      const err2 = new BufferExpected(structure2);
+      expect(err2.message).to.contain('88').and.contain('an ArrayBuffer, a DataView or an Uint16Array');
     })
     it('should use singular wording when size is 1', function() {
       const structure = {
@@ -120,75 +117,73 @@ describe('Error functions', function() {
         type: StructureType.Struct,
         byteSize: 1,
       };
-      expect(() => throwBufferExpected(structure)).to.throw(TypeError)
-        .with.property('message').that.does.not.contains('bytes');
+      const err = new BufferExpected(structure);
+      expect(err.message).to.not.contain('bytes');
     })
 
   })
-  describe('throwEnumExpected', function() {
-    it('should throw a type error', function() {
+  describe('EnumExpected', function() {
+    it('should have expected message', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Enumeration,
         byteSize: 8,
       };
-      expect(() => throwEnumExpected(structure, {})).to.throw(TypeError)
-        .with.property('message').that.contains('Hello');
-      expect(() => throwEnumExpected(structure, 16)).to.throw(TypeError)
-        .with.property('message').that.contains('16');
-
+      const err1 = new EnumExpected(structure, {});
+      expect(err1.message).to.contain('Hello');
+      const err2 = new EnumExpected(structure, 16);
+      expect(err2.message).to.contain('16');
     })
   })
-  describe('throwErrorExpected', function() {
-    it('should throw a type error', function() {
+  describe('ErrorExpected', function() {
+    it('should have expected message', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.ErrorSet,
         byteSize: 8,
       };
-      expect(() => throwErrorExpected(structure, {})).to.throw(TypeError)
-        .with.property('message').that.contains('Hello');
-      expect(() => throwErrorExpected(structure, 1)).to.throw(TypeError)
-        .with.property('message').that.contains('1');
-      expect(() => throwErrorExpected(structure, 'cow')).to.throw(TypeError)
-        .with.property('message').that.contains('cow');
-
+      const err1 = new ErrorExpected(structure, {});
+      expect(err1.message).to.contain('Hello');
+      const err2 = new ErrorExpected(structure, 1);
+      expect(err2.message).to.contain('1');
+      const err3 = new ErrorExpected(structure, 'cow');
+      expect(err3.message).to.contain('cow');
     })
   })
-  describe('throwNotInErrorSet', function() {
-    it('should throw a type error', function() {
+  describe('NotInErrorSet', function() {
+    it('should have expected message', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.ErrorSet,
         byteSize: 8,
       };
-      expect(() => throwNotInErrorSet(structure)).to.throw(TypeError)
-        .with.property('message').that.contains('Hello');
+      const err = new NotInErrorSet(structure);
+      expect(err.message).to.contain('Hello');
     })
   })
-  describe('throwInvalidType', function() {
-    it('should throw a type error', function() {
+  describe('InvalidType', function() {
+    it('should have expected message', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Struct,
         byteSize: 8,
       };
-      expect(() => throwInvalidType(structure, 16)).to.throw(TypeError)
-        .with.property('message').that.contains('Hello');
+      const err = new InvalidType(structure, 16);
+      expect(err.message).to.contain('Hello');
     })
   })
-  describe('throwMultipleUnionInitializers', function() {
-    it('should throw a type error', function() {
+  describe('MultipleUnionInitializers', function() {
+    it('should have expected message', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.BareUnion,
         byteSize: 8,
       };
-      expect(() => throwMultipleUnionInitializers(structure, 16)).to.throw(TypeError)
-        .with.property('message').that.contains('Hello');
+      const err = new MultipleUnionInitializers(structure, 16);
+      expect(err.message).to.contain('Hello');
     })
   })
-  describe('throwInvalidArrayInitializer', function() {
+  describe('InvalidArrayInitializer', function() {
     it('should throw an error for primitive array initializers', function() {
       const structure = {
         name: 'Hello',
@@ -204,8 +199,8 @@ describe('Error functions', function() {
           ],
         },
       };
-      expect(() => throwInvalidArrayInitializer(structure, {})).to.throw(TypeError)
-        .with.property('message').that.contains('number');
+      const err = new InvalidArrayInitializer(structure, {});
+      expect(err.message).to.contain('number');
     })
     it('should throw an error for enumeration array initializers', function() {
       const structure = {
@@ -225,8 +220,8 @@ describe('Error functions', function() {
           ],
         },
       };
-      expect(() => throwInvalidArrayInitializer(structure, {})).to.throw(TypeError)
-        .with.property('message').that.contains('enum items');
+      const err = new InvalidArrayInitializer(structure, {});
+      expect(err.message).to.contain('enum items');
     })
     it('should throw an error for error array initializers', function() {
       const structure = {
@@ -246,8 +241,8 @@ describe('Error functions', function() {
           ],
         },
       };
-      expect(() => throwInvalidArrayInitializer(structure, {})).to.throw(TypeError)
-        .with.property('message').that.contains('errors');
+      const err = new InvalidArrayInitializer(structure, {});
+      expect(err.message).to.contain('errors');
     })
     it('should throw an error for object array initializers', function() {
       const structure = {
@@ -264,12 +259,12 @@ describe('Error functions', function() {
           ],
         },
       };
-      expect(() => throwInvalidArrayInitializer(structure, {})).to.throw(TypeError)
-        .with.property('message').that.contains('objects');
+      const err = new InvalidArrayInitializer(structure, {});
+      expect(err.message).to.contain('objects');
     })
   })
-  describe('throwArrayLengthMismatch', function() {
-    it('should throw a type error', function() {
+  describe('ArrayLengthMismatch', function() {
+    it('should have expected message', function() {
       const elementConstructor = function() {};
       const arrayConstructor = function() {};
       arrayConstructor.child = elementConstructor;
@@ -291,21 +286,20 @@ describe('Error functions', function() {
         },
         constructor: arrayConstructor,
       };
-      expect(() => throwArrayLengthMismatch(structure, { length: 1 }, { length: 5 })).to.throw(TypeError)
-        .with.property('message').that.contains('1 element').and.that.contains('5 initializers');
-      expect(() => throwArrayLengthMismatch(structure, { length: 2 }, { length: 1 })).to.throw(TypeError)
-        .with.property('message').that.contains('2 elements').and.that.contains('1 initializer');
-      expect(() => throwArrayLengthMismatch(structure, { length: 2 }, new elementConstructor())).to.throw(TypeError)
-        .with.property('message').that.contains('only a single one');
+      const err1 = new ArrayLengthMismatch(structure, { length: 1 }, { length: 5 });
+      expect(err1.message).to.contain('5 initializers');
+      const err2 = new ArrayLengthMismatch(structure, { length: 2 }, { length: 1 });
+      expect(err2.message).to.contain('1 initializer');
+      const err3 = new ArrayLengthMismatch(structure, { length: 2 }, new elementConstructor());
+      expect(err3.message).to.contain('only a single one');
       const array = new arrayConstructor();
       array.length = 5;
-      expect(() => throwArrayLengthMismatch(structure, { length: 2 }, array)).to.throw(TypeError)
-        .with.property('message').that.contains('a slice/array that has 5');
-
+      const err4 = new ArrayLengthMismatch(structure, { length: 2 }, array);
+      expect(err4.message).to.contain('a slice/array that has 5');
     })
   })
-  describe('throwInactiveUnionProperty', function() {
-    it('should throw a type error', function() {
+  describe('InactiveUnionProperty', function() {
+    it('should have expected message', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.BareUnion,
@@ -317,12 +311,12 @@ describe('Error functions', function() {
           ]
         }
       };
-      expect(() => throwInactiveUnionProperty(structure, 'cat', 'dog')).to.throw(TypeError)
-        .with.property('message').that.contains('cat');
+      const err = new InactiveUnionProperty(structure, 'cat', 'dog');
+      expect(err.message).to.contain('cat');
     })
   })
-  describe('throwMissingUnionInitializer', function() {
-    it('should throw a type error', function() {
+  describe('MissingUnionInitializer', function() {
+    it('should have expected message', function() {
       const structure1 = {
         name: 'Hello',
         type: StructureType.BareUnion,
@@ -334,8 +328,8 @@ describe('Error functions', function() {
           ]
         }
       };
-      expect(() => throwMissingUnionInitializer(structure1, {}, false)).to.throw(TypeError)
-        .with.property('message').that.contains('cat').and.that.contains('dog');
+      const err1 = new MissingUnionInitializer(structure1, {}, false);
+      expect(err1.message).to.contain('cat').and.contain('dog');
       const structure2 = {
         name: 'Hello',
         type: StructureType.BareUnion,
@@ -348,23 +342,23 @@ describe('Error functions', function() {
           ]
         }
       };
-      expect(() => throwMissingUnionInitializer(structure2, {}, true)).to.throw(TypeError)
-        .with.property('message').that.does.not.contain('selector');
+      const err2 = new MissingUnionInitializer(structure2, {}, true);
+      expect(err2.message).to.not.contain('selector');
     })
   })
-  describe('throwInvalidInitializer', function() {
-    it('should throw a type error', function() {
+  describe('InvalidInitializer', function() {
+    it('should have expected message', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.BareUnion,
         byteSize: 8,
       };
-      expect(() => throwInvalidInitializer(structure, 'object', 16)).to.throw(TypeError)
-        .with.property('message').that.contains('Hello');
+      const err = new InvalidInitializer(structure, 'object', 16);
+      expect(err.message).to.contain('Hello');
     })
   })
-  describe('throwMissingInitializers', function() {
-    it('should throw a type error', function() {
+  describe('MissingInitializers', function() {
+    it('should have expected message', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.BareUnion,
@@ -376,12 +370,12 @@ describe('Error functions', function() {
           ],
         }
       };
-      expect(() => throwMissingInitializers(structure, [ 'dog' ])).to.throw(TypeError)
-        .with.property('message').that.contains('Hello');
+      const err = new MissingInitializers(structure, [ 'dog' ]);
+      expect(err.message).to.contain('Hello');
     })
   })
-  describe('throwNoProperty', function() {
-    it('should throw a type error', function() {
+  describe('NoProperty', function() {
+    it('should have expected message', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.BareUnion,
@@ -390,8 +384,8 @@ describe('Error functions', function() {
           members: [ { name: 'cat' } ]
         },
       };
-      expect(() => throwNoProperty(structure, 'cow')).to.throw(TypeError)
-        .with.property('message').that.contains('Hello');
+      const err = new NoProperty(structure, 'cow');
+      expect(err.message).to.contain('Hello');
     })
     it('should indicate field is comptime when member is present', function() {
       const structure = {
@@ -402,11 +396,11 @@ describe('Error functions', function() {
           members: [ { name: 'cat' } ]
         },
       };
-      expect(() => throwNoProperty(structure, 'cat')).to.throw(TypeError)
-        .with.property('message').that.contains('Comptime');
+      const err = new NoProperty(structure, 'cat');
+      expect(err.message).to.contain('Comptime');
     })
   })
-  describe('throwArgumentCountMismatch', function() {
+  describe('ArgumentCountMismatch', function() {
     it('should throw an error', function() {
       const structure1 = {
         name: 'Hello',
@@ -432,14 +426,219 @@ describe('Error functions', function() {
           ],
         }
       };
-      expect(() => throwArgumentCountMismatch(structure1, 0)).to.throw(Error)
-        .with.property('message').that.contains('0').and.contains('3 arguments');
-      expect(() => throwArgumentCountMismatch(structure2, 0)).to.throw(Error)
-        .with.property('message').that.contains('0').and.contains('1 argument,');
+      const err1 = new ArgumentCountMismatch(structure1, 0);
+      expect(err1.message).to.contain('0').and.contain('3 arguments');
+      const err2 = new ArgumentCountMismatch(structure2, 0);
+      expect(err2.message).to.contain('0').and.contain('1 argument,');
     })
   })
-  describe('rethrowArgumentError', function() {
-    it('should rethrow an error', function() {
+  describe('NoCastingToPointer', function() {
+    it('should have expected message', function() {
+      const structure = {
+        name: '*Hello',
+        type: StructureType.Pointer,
+        byteSize: 8,
+        instance: {
+          members: [],
+        },
+        hasPointer: true,
+      };
+      const err = new NoCastingToPointer(structure);
+      expect(err.message).to.contain('new operator');
+    })
+  })
+  describe('ConstantConstraint', function() {
+    it('should have expected message', function() {
+      const structure = {
+        name: '[]const u8',
+        type: StructureType.Pointer,
+        byteSize: 1,
+        instance: {
+          members: [],
+        },
+        hasPointer: true,
+      };
+      const pointer = {};
+      const err = new ConstantConstraint(structure, pointer);
+      expect(err.message).to.contain('[]const u8');
+    })
+  })
+  describe('MisplacedSentinel', function() {
+    it('should have expected message', function() {
+      const structure = {
+        name: '[_:0]u8',
+        type: StructureType.Slice,
+        byteSize: 1,
+        instance: {
+          members: [],
+        },
+        hasPointer: false,
+      };
+      const err = new MisplacedSentinel(structure, 0, 5, 8);
+      expect(err.message).to.contain('0').and.contain(5).and.contain('8');
+    })
+  })
+  describe('MissingSentinel', function() {
+    it('should have expected message', function() {
+      const structure = {
+        name: '[_:0]u8',
+        type: StructureType.Slice,
+        byteSize: 1,
+        instance: {
+          members: [],
+        },
+        hasPointer: false,
+      };
+      const err = new MissingSentinel(structure, 0, 8);
+      expect(err.message).to.contain('0').and.contain('8');
+    })
+  })
+  describe('AlignmentConflict', function() {
+    it('should have expected message', function() {
+      const err = new AlignmentConflict(4, 3);
+      expect(err.message).to.contain('4-byte').and.contain('3-byte');
+    })
+  })
+  describe('AssigningToConstant', function() {
+    it('should have expected message', function() {
+      const pointer = { constructor: { name: 'Hello' }};
+      const err = new AssigningToConstant(pointer);
+      expect(err.message).to.contain('Hello');
+    })
+  })
+  describe('TypeMismatch', function() {
+    it('should have expected message', function() {
+      const err = new TypeMismatch('string', 8);
+      expect(err.message).to.contain('a string');
+    })
+  })
+  describe('InaccessiblePointer', function() {
+    it('should have expected message', function() {
+      const err = new InaccessiblePointer();
+      expect(err.message).to.contain('not accessible');
+    })
+  })
+  describe('NullPointer', function() {
+    it('should have expected message', function() {
+      const err = new NullPointer();
+      expect(err.message).to.contain('Null pointer');
+    })
+  })
+  describe('InvalidPointerTarget', function() {
+    it('should have expected message', function() {
+      const structure = {
+        name: '*Hello',
+        type: StructureType.Pointer,
+        byteSize: 8,
+        instance: {
+          members: [],
+        },
+        hasPointer: true,
+      };
+      function Bear() {};
+      function Antelope() {};
+      const err1 = new InvalidPointerTarget(structure, new Bear());
+      expect(err1.message).to.contain('a Bear object');
+      const err2 = new InvalidPointerTarget(structure, new Antelope());
+      expect(err2.message).to.contain('an Antelope object');
+      const err3 = new InvalidPointerTarget(structure, false);
+      expect(err3.message).to.contain('a boolean');
+      const err4 = new InvalidPointerTarget(structure, {});
+      expect(err4.message).to.contain('an object');
+      const err5 = new InvalidPointerTarget(structure, undefined);
+      expect(err5.message).to.contain('undefined');
+    })
+  })
+  describe('FixedMemoryTargetRequired', function() {
+    it('should have expected message', function() {
+      const structure = {
+        name: '*Hello',
+        type: StructureType.Pointer,
+        byteSize: 8,
+        instance: {
+          members: [],
+        },
+        hasPointer: true,
+      };
+      const err = new FixedMemoryTargetRequired(structure, null);
+      expect(err.message).to.contain('fixed memory');
+    })
+  })
+  describe('Overflow', function() {
+    it('should have expected message', function() {
+      const member = {
+        name: 'hello',
+        type: MemberType.Int,
+        bitSize: 8,
+      };
+      const err = new Overflow(member, 1024);
+      expect(err.message).to.contain('Int8');
+    })
+  })
+  describe('OutOfBound', function() {
+    it('should throw a range error', function() {
+      const member1 = {
+        name: 'hello',
+        type: MemberType.Int,
+        bitSize: 8,
+        bitOffset: 0,
+      };
+      const err1 = new OutOfBound(member1, 16);
+      expect(err1.message).to.contain('hello');
+      const member2 = {
+        type: MemberType.Int,
+        bitSize: 8,
+      };
+      const err2 = new OutOfBound(member2, 16);
+      expect(err2.message).to.contain('array');
+    })
+  })
+  describe('NotUndefined', function() {
+    it('should have expected message', function() {
+      const member = {
+        name: 'hello',
+        type: MemberType.Int,
+        bitSize: 8,
+      };
+      const err = new NotUndefined(member);
+      expect(err.message).to.contain('hello');
+    })
+  })
+  describe('NotOnByteBoundary', function() {
+    it('should have expected message', function() {
+      const member = {
+        name: 'hello',
+        type: MemberType.Object,
+        bitSize: 8,
+        bitOffset: 33,
+        structure: { name: 'Hello' }
+      };
+      const err = new NotOnByteBoundary(member);
+      expect(err.message).to.contain('hello');
+    })
+  })
+  describe('CreatingOpaque', function() {
+    it('should have expected message', function() {
+      const structure =  { name: 'Apple' };
+      const err = new CreatingOpaque(structure);
+      expect(err.message).to.contain('Apple');
+    })
+  })
+  describe('AccessingOpaque', function() {
+    it('should have expected message', function() {
+      const structure =  { name: 'Apple' };
+      const err = new AccessingOpaque(structure);
+      expect(err.message).to.contain('Apple');
+    })
+  })
+  describe('ZigError', function() {
+    it('should throw error with the correct message', function() {
+      const err = new ZigError('PantsOnFire');
+      expect(err.message).to.contain('Pants on fire');
+    })
+  })
+  describe('adjustArgumentError', function() {
+    it('should add argument number to an error', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.BareUnion,
@@ -454,214 +653,25 @@ describe('Error functions', function() {
         }
       };
       const err = new TypeError('Something');
-      expect(() => rethrowArgumentError(structure, 0, err)).to.throw(TypeError)
-        .with.property('message').that.contains('(args[0], ...)').and.contains(err.message);
-      expect(() => rethrowArgumentError(structure, 1, err)).to.throw(TypeError)
-        .with.property('message').that.contains('(..., args[1], ...)');
-      expect(() => rethrowArgumentError(structure, 2, err)).to.throw(TypeError)
-        .with.property('message').that.contains('(..., args[2])');
+      const err1 = adjustArgumentError(structure, 0, err);
+      expect(err1.message).to.contain('(args[0], ...)').and.contain(err.message);
+      const err2 = adjustArgumentError(structure, 1, err);
+      expect(err2.message).to.contain('(..., args[1], ...)');
+      const err3 = adjustArgumentError(structure, 2, err);
+      expect(err3.message).to.contain('(..., args[2])');
     })
   })
-  describe('throwNoCastingToPointer', function() {
-    it('should throw a type error', function() {
-      const structure = {
-        name: '*Hello',
-        type: StructureType.Pointer,
-        byteSize: 8,
-        instance: {
-          members: [],
-        },
-        hasPointer: true,
-      };
-      expect(() => throwNoCastingToPointer(structure)).to.throw(TypeError);
-    })
-  })
-  describe('throwConstantConstraint', function() {
-    it('should throw a type error', function() {
-      const structure = {
-        name: '[]const u8',
-        type: StructureType.Pointer,
-        byteSize: 1,
-        instance: {
-          members: [],
-        },
-        hasPointer: true,
-      };
-      const pointer = {};
-      expect(() => throwConstantConstraint(structure, pointer)).to.throw(TypeError);
-    })
-  })
-  describe('throwMisplacedSentinel', function() {
-    it('should throw a type error', function() {
-      const structure = {
-        name: '[_:0]u8',
-        type: StructureType.Slice,
-        byteSize: 1,
-        instance: {
-          members: [],
-        },
-        hasPointer: false,
-      };
-      expect(() => throwMisplacedSentinel(structure, 0, 5, 8)).to.throw(TypeError);
-    })
-  })
-  describe('throwMissingSentinel', function() {
-    it('should throw a type error', function() {
-      const structure = {
-        name: '[_:0]u8',
-        type: StructureType.Slice,
-        byteSize: 1,
-        instance: {
-          members: [],
-        },
-        hasPointer: false,
-      };
-      expect(() => throwMissingSentinel(structure, 0, 8)).to.throw(TypeError);
-    })
-  })
-  describe('throwAlignmentConflict', function() {
-    it('should throw a type error', function() {
-      expect(() => throwAlignmentConflict(4, 3)).to.throw(TypeError)
-        .with.property('message').that.contains('4-byte').and.contains('3-byte');
-    })
-  })
-  describe('throwAssigningToConstant', function() {
-    it('should throw a type error', function() {
-      const pointer = { constructor: { name: 'Hello' }};
-      expect(() => throwAssigningToConstant(pointer)).to.throw(TypeError)
-        .with.property('message').that.contains('Hello');
-    })
-  })
-  describe('throwTypeMismatch', function() {
-    it('should throw a type error', function() {
-      expect(() => throwTypeMismatch('string', 8)).to.throw(TypeError)
-        .with.property('message').that.contains('a string');
-    })
-  })
-  describe('throwInaccessiblePointer', function() {
-    it('should throw a type error', function() {
-      expect(() => throwInaccessiblePointer()).to.throw(TypeError);
-    })
-  })
-  describe('throwNullPointer', function() {
-    it('should throw a type error', function() {
-      expect(() => throwNullPointer()).to.throw(TypeError);
-    })
-  })
-  describe('throwInvalidPointerTarget', function() {
-    it('should throw a type error', function() {
-      const structure = {
-        name: '*Hello',
-        type: StructureType.Pointer,
-        byteSize: 8,
-        instance: {
-          members: [],
-        },
-        hasPointer: true,
-      };
-      function Bear() {};
-      function Antelope() {};
-      expect(() => throwInvalidPointerTarget(structure, new Bear())).to.throw(TypeError)
-        .with.property('message').that.contains('a Bear object');
-      expect(() => throwInvalidPointerTarget(structure, new Antelope())).to.throw(TypeError)
-        .with.property('message').that.contains('an Antelope object');
-      expect(() => throwInvalidPointerTarget(structure, false)).to.throw(TypeError)
-        .with.property('message').that.contains('a boolean');
-      expect(() => throwInvalidPointerTarget(structure, {})).to.throw(TypeError)
-        .with.property('message').that.contains('an object');
-      expect(() => throwInvalidPointerTarget(structure, undefined)).to.throw(TypeError)
-        .with.property('message').that.contains('undefined');
-    })
-  })
-  describe('throwFixedMemoryTargetRequired', function() {
-    it('should throw a type error', function() {
-      const structure = {
-        name: '*Hello',
-        type: StructureType.Pointer,
-        byteSize: 8,
-        instance: {
-          members: [],
-        },
-        hasPointer: true,
-      };
-      expect(() => throwFixedMemoryTargetRequired(structure, null)).to.throw(TypeError);
-    })
-  })
-  describe('throwOverflow', function() {
-    it('should throw a type error', function() {
-      const member = {
-        name: 'hello',
-        type: MemberType.Int,
-        bitSize: 8,
-      };
-      expect(() => throwOverflow(member, 1024)).to.throw(TypeError)
-        .with.property('message').that.contains('Int8');
-    })
-  })
-  describe('throwOutOfBound', function() {
-    it('should throw a range error', function() {
-      const member1 = {
-        name: 'hello',
-        type: MemberType.Int,
-        bitSize: 8,
-        bitOffset: 0,
-      };
-      expect(() => throwOutOfBound(member1, 16)).to.throw(RangeError)
-        .with.property('message').that.contains('hello');
-      const member2 = {
-        type: MemberType.Int,
-        bitSize: 8,
-      };
-      expect(() => throwOutOfBound(member2, 16)).to.throw(RangeError)
-        .with.property('message').that.contains('array');
-
-    })
-  })
-  describe('rethrowRangeError', function() {
+  describe('adjustRangeError', function() {
     it('should throw range error when given a range error', function() {
       const member = {
         name: 'hello',
         type: MemberType.Int,
         bitSize: 8,
       };
-      expect(() => rethrowRangeError(member, 5, new RangeError)).to.throw(RangeError);
-      expect(() => rethrowRangeError(member, 5, new TypeError)).to.throw(TypeError);
-    })
-  })
-  describe('throwNotUndefined', function() {
-    it('should throw a type error', function() {
-      const member = {
-        name: 'hello',
-        type: MemberType.Int,
-        bitSize: 8,
-      };
-      expect(() => throwNotUndefined(member)).to.throw(RangeError)
-        .with.property('message').that.contains('hello');
-    })
-  })
-  describe('throwNotOnByteBoundary', function() {
-    it('should throw a type error', function() {
-      const member = {
-        name: 'hello',
-        type: MemberType.Object,
-        bitSize: 8,
-        bitOffset: 33,
-        structure: { name: 'Hello' }
-      };
-      expect(() => throwNotOnByteBoundary(member)).to.throw(TypeError)
-        .with.property('message').that.contains('hello');
-    })
-  })
-  describe('throwCreatingOpaque', function() {
-    it('should throw a type error', function() {
-      const structure =  { name: 'Apple' };
-      expect(() => throwCreatingOpaque()).to.throw(TypeError);
-    })
-  })
-  describe('throwAccessingOpaque', function() {
-    it('should throw a type error', function() {
-      const structure =  { name: 'Apple' };
-      expect(() => throwAccessingOpaque()).to.throw(TypeError);
+      const err1 = adjustRangeError(member, 5, new RangeError);
+      expect(err1.message).to.contain('hello');
+      const err2 = adjustRangeError(member, 5, new TypeError);
+      expect(err2).to.be.instanceOf(TypeError);
     })
   })
   describe('deanimalizeErrorName', function() {
@@ -685,12 +695,6 @@ describe('Error functions', function() {
       const name3 = 'HTMLIsInvalid';
       const result3 = deanimalizeErrorName(name3);
       expect(result3).to.equal('HTML is invalid');
-    })
-  })
-  describe('throwZigError', function() {
-    it('should throw error with the correct message', function() {
-      expect(() => throwZigError('PantsOnFire')).to.throw()
-        .with.property('message').that.equals('Pants on fire');
     })
   })
   describe('article', function() {

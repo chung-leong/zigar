@@ -1,4 +1,4 @@
-import { throwNotInErrorSet } from './error.js';
+import { NotInErrorSet } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
 import { attachDescriptors, createConstructor, createPropertyApplier } from './object.js';
@@ -58,7 +58,7 @@ export function defineErrorUnion(structure, env) {
         if (arg instanceof Error) {
           // we give setValue a chance to see if the error is actually an acceptable value
           // now is time to throw an error
-          throwNotInErrorSet(structure);
+          throw new NotInErrorSet(structure);
         } else if (isErrorJSON(arg)) {
           setError.call(this, arg);
           clearValue.call(this);

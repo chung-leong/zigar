@@ -4,8 +4,7 @@ import {
 } from './array.js';
 import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
 import {
-  throwArrayLengthMismatch, throwInvalidArrayInitializer, throwMisplacedSentinel,
-  throwMissingSentinel
+  ArrayLengthMismatch, InvalidArrayInitializer, MisplacedSentinel, MissingSentinel
 } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
@@ -55,7 +54,7 @@ export function defineSlice(structure, env) {
   };
   const shapeChecker = function(arg, length) {
     if (length !== this[LENGTH]) {
-      throwArrayLengthMismatch(structure, this, arg);
+      throw new ArrayLengthMismatch(structure, this, arg);
     }
   };
   // the initializer behave differently depending on whether it's called by the
@@ -90,14 +89,14 @@ export function defineSlice(structure, env) {
       if (!this[MEMORY] && arg >= 0 && isFinite(arg)) {
         shapeDefiner.call(this, null, arg);
       } else {
-        throwInvalidArrayInitializer(structure, arg, !this[MEMORY]);
+        throw new InvalidArrayInitializer(structure, arg, !this[MEMORY]);
       }
     } else if (arg && typeof(arg) === 'object') {
       if (propApplier.call(this, arg, fixed) === 0) {
-        throwInvalidArrayInitializer(structure, arg);
+        throw new InvalidArrayInitializer(structure, arg);
       }
     } else if (arg !== undefined) {
-      throwInvalidArrayInitializer(structure, arg);
+      throw new InvalidArrayInitializer(structure, arg);
     }
   };
   const finalizer = createArrayProxy;
@@ -159,22 +158,22 @@ export function getSentinel(structure, env) {
   const { get } = getDescriptor(member, env);
   const validateValue = (runtimeSafety) ? function(v, i, l) {
     if (v === value && i !== l - 1) {
-      throwMisplacedSentinel(structure, v, i, l);
+      throw new MisplacedSentinel(structure, v, i, l);
     } else if (v !== value && i === l - 1) {
-      throwMissingSentinel(structure, value, i, l);
+      throw new MissingSentinel(structure, value, i, l);
     }
   } : function(v, i, l) {
     if (v !== value && i === l - 1) {
-      throwMissingSentinel(structure, value, l);
+      throw new MissingSentinel(structure, value, l);
     }
   };
   const validateData = (runtimeSafety) ? function(source, len) {
     for (let i = 0; i < len; i++) {
       const v = get.call(source, i);
       if (v === value && i !== len - 1) {
-        throwMisplacedSentinel(structure, value, i, len);
+        throw new MisplacedSentinel(structure, value, i, len);
       } else if (v !== value && i === len - 1) {
-        throwMissingSentinel(structure, value, len);
+        throw new MissingSentinel(structure, value, len);
       }
     }
   } : function(source, len) {
@@ -182,7 +181,7 @@ export function getSentinel(structure, env) {
       const i = len - 1;
       const v = get.call(source, i);
       if (v !== value) {
-        throwMissingSentinel(structure, value, len);
+        throw new MissingSentinel(structure, value, len);
       }
     }
   };

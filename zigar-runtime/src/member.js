@@ -1,7 +1,6 @@
 import { getBoolAccessor, getNumericAccessor } from './data-view.js';
 import {
-  rethrowRangeError, throwEnumExpected, throwErrorExpected, throwNotInErrorSet, throwNotUndefined,
-  throwOverflow
+  EnumExpected, ErrorExpected, NotInErrorSet, NotUndefined, Overflow, adjustRangeError
 } from './error.js';
 import { restoreMemory } from './memory.js';
 import { GETTER, MEMORY, SETTER, SLOTS, VIVIFICATOR } from './symbol.js';
@@ -105,7 +104,7 @@ export function getVoidDescriptor(member, env) {
     set: (runtimeSafety)
     ? function(value) {
         if (value !== undefined) {
-          throwNotUndefined(member);
+          throw new NotUndefined(member);
         }
       }
     : function() {},
@@ -155,7 +154,7 @@ function addRuntimeCheck(env, getDataViewAccessor) {
       const { min, max } = getIntRange(member);
       return function(offset, value, littleEndian) {
         if (value < min || value > max) {
-          throwOverflow(member, value);
+          throw new Overflow(member, value);
         }
         accessor.call(this, offset, value, littleEndian);
       };
@@ -174,7 +173,7 @@ export function transformEnumerationDescriptor(int, structure) {
     // the enumeration constructor returns the object for the int value
     const item = constructor(value);
     if (!item) {
-      throwEnumExpected(structure, value);
+      throw new EnumExpected(structure, value);
     }
     return item
   };
@@ -213,9 +212,9 @@ export function transformErrorSetDescriptor(int, structure) {
     const item = constructor(value);
     if (!item) {
       if (value instanceof Error) {
-        throwNotInErrorSet(structure);
+        throw new NotInErrorSet(structure);
       } else {
-        throwErrorExpected(structure, value);
+        throw new ErrorExpected(structure, value);
       }
     } 
     return item
@@ -397,7 +396,7 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
             return getter.call(this[MEMORY], index * byteSize, littleEndian);
           } else {
           /* WASM-ONLY-END */
-            rethrowRangeError(member, index, err);
+            throw adjustRangeError(member, index, err);
           /* WASM-ONLY */
           }
           /* WASM-ONLY-END */
@@ -413,7 +412,7 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
           if (err instanceof TypeError && restoreMemory.call(this)) {
             return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
           } else {
-            rethrowRangeError(member, index, err);
+            throw adjustRangeError(member, index, err);
           }
         }
         /* WASM-ONLY-END */

@@ -1,5 +1,5 @@
 import { Environment, add, getAlignedAddress, isInvalidAddress, isMisaligned } from './environment.js';
-import { throwZigError } from './error.js';
+import { ZigError } from './error.js';
 import { ALIGN, MEMORY, POINTER_VISITOR } from './symbol.js';
 
 export class NodeEnvironment extends Environment {
@@ -168,7 +168,7 @@ export class NodeEnvironment extends Environment {
     // error strings returned by the thunk are due to problems in the thunking process
     // (i.e. bugs in export.zig)
     if (err) {
-      throwZigError(err);
+      throw new ZigError(err);
     }
     return args.retval;
   }

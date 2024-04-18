@@ -1,5 +1,5 @@
 import { checkDataView, isTypedArray, setDataView } from './data-view.js';
-import { throwTypeMismatch } from './error.js';
+import { TypeMismatch } from './error.js';
 import { restoreMemory } from './memory.js';
 import { MEMORY, NORMALIZER } from './symbol.js';
 import { decodeBase64, decodeText, encodeBase64, encodeText } from './text.js';
@@ -91,7 +91,7 @@ export function getBase64Descriptor(structure, handlers = {}) {
     },
     set(str, fixed) {
       if (typeof(str) !== 'string') {
-        throwTypeMismatch('string', str);
+        throw new TypeMismatch('string', str);
       }
       const dv = decodeBase64(str);
       setDataView.call(this, dv, structure, false, fixed, handlers);
@@ -112,7 +112,7 @@ export function getStringDescriptor(structure, handlers = {}) {
     },
     set(str, fixed) {
       if (typeof(str) !== 'string') {
-        throwTypeMismatch('a string', str);
+        throw new TypeMismatch('a string', str);
       }
       if (sentinel?.value !== undefined) {
         if (str.charCodeAt(str.length - 1) !== sentinel.value) {
@@ -136,7 +136,7 @@ export function getTypedArrayDescriptor(structure, handlers = {}) {
     },
     set(ta, fixed) {
       if (!isTypedArray(ta, typedArray)) {
-        throwTypeMismatch(typedArray.name, ta);
+        throw new TypeMismatch(typedArray.name, ta);
       }
       const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
       setDataView.call(this, dv, structure, true, fixed, handlers);

@@ -1,5 +1,5 @@
 import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
-import { throwInvalidInitializer } from './error.js';
+import { InvalidInitializer } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { attachDescriptors, createConstructor, createPropertyApplier } from './object.js';
@@ -25,7 +25,7 @@ export function definePrimitive(structure, env) {
       if (arg && typeof(arg) === 'object') {
         if (propApplier.call(this, arg) === 0) {
           const type = getPrimitiveType(member);
-          throwInvalidInitializer(structure, type, arg);
+          throw new InvalidInitializer(structure, type, arg);
         }
       } else if (arg !== undefined) {
         set.call(this, arg);

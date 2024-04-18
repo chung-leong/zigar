@@ -1,4 +1,4 @@
-import { rethrowArgumentError, throwArgumentCountMismatch } from './error.js';
+import { ArgumentCountMismatch, adjustArgumentError } from './error.js';
 import { getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { defineProperties } from './object.js';
@@ -26,13 +26,13 @@ export function defineArgStruct(structure, env) {
   const argCount = argNames.length;
   const initializer = function(args) {
     if (args.length !== argCount) {
-      throwArgumentCountMismatch(structure, args.length);
+      throw new ArgumentCountMismatch(structure, args.length);
     }
     for (const [ index, name ] of argNames.entries()) {
       try {
         this[name] = args[index];
       } catch (err) {
-        rethrowArgumentError(structure, index, err);
+        throw adjustArgumentError(structure, index, err);
       }
     }
   };

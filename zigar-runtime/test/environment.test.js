@@ -1155,13 +1155,13 @@ describe('Environment', function() {
       expect(() => env.runThunk()).to.throw();
     })
   })
-  describe('getControlObject', function() {    
+  describe('getSpecialExports', function() {    
     it('should return object for controlling module', async function() {
       const env = new Environment();
       env.imports = {
         runThunk: function() {},
       };
-      const object = env.getControlObject();
+      const object = env.getSpecialExports();
       expect(object.init).to.be.a('function');
       expect(object.abandon).to.be.a('function');
       expect(object.released).to.be.a('function');
@@ -1179,7 +1179,7 @@ describe('Environment', function() {
       dv.setUint8(1, '\n'.charCodeAt(0));
       const [ before ] = await capture(() => env.writeToConsole(dv));
       expect(before).to.equal('?');
-      const object = env.getControlObject();
+      const object = env.getSpecialExports();
       let content;
       object.connect({ 
         log(s) {

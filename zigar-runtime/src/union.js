@@ -1,6 +1,5 @@
 import {
-  throwInactiveUnionProperty, throwInvalidInitializer, throwMissingUnionInitializer,
-  throwMultipleUnionInitializers
+  InactiveUnionProperty, InvalidInitializer, MissingUnionInitializer, MultipleUnionInitializers
 } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
@@ -66,7 +65,7 @@ export function defineUnionShape(structure, env) {
           } else {
             // whereas bare union does not, since the condition is not detectable 
             // when runtime safety is off
-            throwInactiveUnionProperty(structure, name, currentName);
+            throw new InactiveUnionProperty(structure, name, currentName);
           }
         }
         this[POINTER_VISITOR]?.(resetPointer);
@@ -77,7 +76,7 @@ export function defineUnionShape(structure, env) {
     ? function(value) {
         const currentName = getActiveField.call(this);
         if (name !== currentName) {
-          throwInactiveUnionProperty(structure, name, currentName);
+          throw new InactiveUnionProperty(structure, name, currentName);
         }
         setValue.call(this, value);
       }
@@ -111,13 +110,13 @@ export function defineUnionShape(structure, env) {
         }
       }
       if (found > 1) {
-        throwMultipleUnionInitializers(structure);
+        throw new MultipleUnionInitializers(structure);
       }
       if (propApplier.call(this, arg) === 0 && !hasDefaultMember) {
-        throwMissingUnionInitializer(structure, arg, exclusion);
+        throw new MissingUnionInitializer(structure, arg, exclusion);
       }
     } else if (arg !== undefined) {
-      throwInvalidInitializer(structure, 'object with a single property', arg);
+      throw new InvalidInitializer(structure, 'object with a single property', arg);
     }
   };
   // non-tagged union as marked as not having pointers--if there're actually

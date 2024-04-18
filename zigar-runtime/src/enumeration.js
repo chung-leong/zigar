@@ -1,5 +1,5 @@
 import { getDataView, getTypedArrayClass } from './data-view.js';
-import { throwInvalidInitializer } from './error.js';
+import { InvalidInitializer } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { attachDescriptors, createConstructor, createPropertyApplier, defineProperties } from './object.js';
@@ -20,7 +20,7 @@ export function defineEnumerationShape(structure, env) {
   const initializer = function(arg) {
     if (arg && typeof(arg) === 'object') {
       if (propApplier.call(this, arg) === 0) {
-        throwInvalidInitializer(structure, expected, arg);
+        throw new InvalidInitializer(structure, expected, arg);
       }
     } else if (arg !== undefined) {
       set.call(this, arg);
@@ -45,7 +45,7 @@ export function defineEnumerationShape(structure, env) {
       // a tagged union, return the active tag
       return arg[TAG];
     } else if (!getDataView(structure, arg, env)) {
-      throwInvalidInitializer(structure, expected, arg);
+      throw new InvalidInitializer(structure, expected, arg);
     } else {
       return false;
     }

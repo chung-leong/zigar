@@ -1,5 +1,5 @@
 import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
-import { throwArrayLengthMismatch, throwInvalidArrayInitializer } from './error.js';
+import { ArrayLengthMismatch, InvalidArrayInitializer } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { attachDescriptors, createConstructor, createPropertyApplier } from './object.js';
@@ -47,7 +47,7 @@ export function defineArray(structure, env) {
       if (arg?.[Symbol.iterator]) {
         arg = transformIterable(arg);
         if (arg.length !== length) {
-          throwArrayLengthMismatch(structure, this, arg);
+          throw new ArrayLengthMismatch(structure, this, arg);
         }
         let i = 0;
         for (const value of arg) {
@@ -55,10 +55,10 @@ export function defineArray(structure, env) {
         }
       } else if (arg && typeof(arg) === 'object') {
         if (propApplier.call(this, arg) === 0) {
-          throwInvalidArrayInitializer(structure, arg);
+          throw new InvalidArrayInitializer(structure, arg);
         }
       } else if (arg !== undefined) {
-        throwInvalidArrayInitializer(structure, arg);
+        throw new InvalidArrayInitializer(structure, arg);
       }
     }
   };

@@ -1,5 +1,5 @@
 import { getDataView, getTypedArrayClass } from './data-view.js';
-import { deanimalizeErrorName, throwInvalidInitializer } from './error.js';
+import { InvalidInitializer, deanimalizeErrorName } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { attachDescriptors, createConstructor, createPropertyApplier, defineProperties } from './object.js';
@@ -35,7 +35,7 @@ export function defineErrorSet(structure, env) {
       set.call(this, arg);
     } else if (arg && typeof(arg) === 'object' && !isErrorJSON(arg)) {
       if (propApplier.call(this, arg) === 0) {
-        throwInvalidInitializer(structure, expected, arg);
+        throw new InvalidInitializer(structure, expected, arg);
       }  
     } else if (arg !== undefined) {
       set.call(this, arg);
@@ -50,7 +50,7 @@ export function defineErrorSet(structure, env) {
     } else if (isErrorJSON(arg)) {
       return constructor[`Error: ${arg.error}`];
     } else if (!getDataView(structure, arg, env)) {
-      throwInvalidInitializer(structure, expected, arg);
+      throw new InvalidInitializer(structure, expected, arg);
     } else {
       return false;
     }

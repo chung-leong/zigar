@@ -111,158 +111,328 @@ function isErrorJSON(arg) {
   return typeof(arg) === 'object' && typeof(arg.error) === 'string' && Object.keys(arg).length === 1  ;
 }
 
-function throwNoInitializer(structure) {
-  const { name } = structure;
-  throw new TypeError(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`);
-}
-
-function throwBufferSizeMismatch(structure, dv, target = null) {
-  const { name, type, byteSize } = structure;
-  const actual = dv.byteLength;
-  const s = (byteSize !== 1) ? 's' : '';
-  if (type === StructureType.Slice && !target) {
-    throw new TypeError(`${name} has elements that are ${byteSize} byte${s} in length, received ${actual}`);
-  } else {
-    const total = (type === StructureType.Slice) ? target.length * byteSize : byteSize;
-    throw new TypeError(`${name} has ${total} byte${s}, received ${actual}`);
+class NoInitializer extends TypeError {
+  constructor(structure) {
+    const { name } = structure;
+    super(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`); 
   }
 }
 
-function throwBufferExpected(structure) {
-  const { type, byteSize, typedArray } = structure;
-  const s = (byteSize !== 1) ? 's' : '';
-  const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle);
-  if (typedArray) {
-    acceptable.push(addArticle(typedArray.name));
-  }
-  if (type === StructureType.Slice) {
-    throw new TypeError(`Expecting ${formatList(acceptable)} that can accommodate items ${byteSize} byte${s} in length`);
-  } else {
-    throw new TypeError(`Expecting ${formatList(acceptable)} that is ${byteSize} byte${s} in length`);
-  }
-}
-
-function throwEnumExpected(structure, arg) {
-  const { name } = structure;
-  if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
-    throw new TypeError(`Value given does not correspond to an item of enum ${name}: ${arg}`);
-  } else {
-    throw new TypeError(`Enum item of the type ${name} expected, received ${arg}`);
-  }
-}
-
-function throwErrorExpected(structure, arg) {
-  const { name } = structure;
-  const type = typeof(arg);
-  if (type === 'string' || type === 'number' || isErrorJSON(arg)) {
-    if (isErrorJSON(arg)) {
-      arg = `{ error: ${JSON.stringify(arg.error)} }`;
+class BufferSizeMismatch extends TypeError {
+  constructor(structure, dv, target = null) {
+    const { name, type, byteSize } = structure;
+    const actual = dv.byteLength;
+    const s = (byteSize !== 1) ? 's' : '';
+    let msg;
+    if (type === StructureType.Slice && !target) {
+      msg = `${name} has elements that are ${byteSize} byte${s} in length, received ${actual}`;
+    } else {
+      const total = (type === StructureType.Slice) ? target.length * byteSize : byteSize;
+      msg = `${name} has ${total} byte${s}, received ${actual}`;
     }
-    throw new TypeError(`Error ${type} does not corresponds to any error in error set ${name}: ${arg}`);
-  } else {
-    throw new TypeError(`Error of the type ${name} expected, received ${arg}`);
+    super(msg);
   }
 }
 
-function throwNotInErrorSet(structure) {
-  const { name } = structure;
-  throw new TypeError(`Error given is not a part of error set ${name}`);
-}
-
-function throwMultipleUnionInitializers(structure) {
-  const { name } = structure;
-  throw new TypeError(`Only one property of ${name} can be given a value`);
-}
-
-function throwInactiveUnionProperty(structure, name, currentName) {
-  throw new TypeError(`Accessing property ${name} when ${currentName} is active`);
-}
-
-function throwMissingUnionInitializer(structure, arg, exclusion) {
-  const { name, instance: { members } } = structure;
-  const missing = members.slice(0, exclusion ? -1 : undefined).map(m => m.name);
-  throw new TypeError(`${name} needs an initializer for one of its union properties: ${missing.join(', ')}`);
-}
-
-function throwInvalidInitializer(structure, expected, arg) {
-  const { name } = structure;
-  const acceptable = [];
-  if (Array.isArray(expected)) {
-    for (const type of expected) {
-      acceptable.push(addArticle(type));
+class BufferExpected extends TypeError {
+  constructor(structure) {
+    const { type, byteSize, typedArray } = structure;
+    const s = (byteSize !== 1) ? 's' : '';
+    const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle);
+    if (typedArray) {
+      acceptable.push(addArticle(typedArray.name));
     }
-  } else {
-    acceptable.push(addArticle(expected));
-  }
-  const received = getDescription(arg);
-  throw new TypeError(`${name} expects ${formatList(acceptable)} as argument, received ${received}`);
-}
-
-function throwInvalidArrayInitializer(structure, arg, shapeless = false) {
-  const { instance: { members: [ member ] }, type, typedArray } = structure;
-  const acceptable = [];
-  const primitive = getPrimitiveType(member);
-  if (primitive) {
-    let object;
-    switch (member.structure?.type) {
-      case StructureType.Enumeration: object = 'enum item'; break;
-      case StructureType.ErrorSet: object = 'error'; break;
-      default: object = primitive;
+    let msg;
+    if (type === StructureType.Slice) {
+      msg = `Expecting ${formatList(acceptable)} that can accommodate items ${byteSize} byte${s} in length`;
+    } else {
+      msg = `Expecting ${formatList(acceptable)} that is ${byteSize} byte${s} in length`;
     }
-    acceptable.push(`array of ${object}s`);
-  } else {
-    acceptable.push(`array of objects`);
-  }
-  if (typedArray) {
-    acceptable.push(typedArray.name);
-  }
-  if (type === StructureType.Slice && shapeless) {
-    acceptable.push(`length`);
-  }
-  throwInvalidInitializer(structure, acceptable.join(' or '), arg);
-}
-
-function throwArrayLengthMismatch(structure, target, arg) {
-  const { name, length, instance: { members: [ member ] } } = structure;
-  const { structure: { constructor: elementConstructor} } = member;
-  const { length: argLength, constructor: argConstructor } = arg;
-  // get length from object whech it's a slice
-  const actualLength = target?.length ?? length;
-  const s = (actualLength !== 1) ? 's' : '';
-  let received;
-  if (argConstructor === elementConstructor) {
-    received = `only a single one`;
-  } else if (argConstructor.child === elementConstructor) {
-    received = `a slice/array that has ${argLength}`;
-  } else {
-    received = `${argLength} initializer${argLength > 1 ? 's' : ''}`;
-  }
-  throw new TypeError(`${name} has ${actualLength} element${s}, received ${received}`);
-}
-
-function throwMissingInitializers(structure, missing) {
-  const { name } = structure;
-  throw new TypeError(`Missing initializers for ${name}: ${missing.join(', ')}`);
-}
-
-function throwNoProperty(structure, propName) {
-  const { name, instance: { members } } = structure;
-  const member = members.find(m => m.name === propName);
-  if (member) {
-    throw new TypeError(`Comptime value cannot be changed: ${propName}`);
-  } else {
-    throw new TypeError(`${name} does not have a property with that name: ${propName}`);
+    super(msg);
   }
 }
 
-function throwArgumentCountMismatch(structure, actual) {
-  const { name, instance: { members } } = structure;
-  const argCount = members.length - 1;
-  const s = (argCount !== 1) ? 's' : '';
-  throw new Error(`${name} expects ${argCount} argument${s}, received ${actual}`);
+class EnumExpected extends TypeError {
+  constructor(structure, arg) {
+    const { name } = structure;
+    let msg;
+    if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+      msg = `Value given does not correspond to an item of enum ${name}: ${arg}`;
+    } else {
+      msg = `Enum item of the type ${name} expected, received ${arg}`;
+    }
+    super(msg);
+  }
 }
 
-function rethrowArgumentError(structure, index, err) {
+class ErrorExpected extends TypeError {
+  constructor(structure, arg) {
+    const { name } = structure;
+    const type = typeof(arg);
+    let msg;
+    if (type === 'string' || type === 'number' || isErrorJSON(arg)) {
+      if (isErrorJSON(arg)) {
+        arg = `{ error: ${JSON.stringify(arg.error)} }`;
+      }
+      msg = `Error ${type} does not corresponds to any error in error set ${name}: ${arg}`;
+    } else {
+      msg = `Error of the type ${name} expected, received ${arg}`;
+    }
+    super(msg);
+  }
+}
+
+class NotInErrorSet extends TypeError {
+  constructor(structure) {
+    const { name } = structure;
+    super(`Error given is not a part of error set ${name}`);
+  }
+}
+
+class MultipleUnionInitializers extends TypeError {
+  constructor(structure) {
+    const { name } = structure;
+    super(`Only one property of ${name} can be given a value`);
+  }
+}
+
+class InactiveUnionProperty extends TypeError {
+  constructor(structure, name, currentName) {
+    super(`Accessing property ${name} when ${currentName} is active`);
+  }
+}
+
+class MissingUnionInitializer extends TypeError {
+  constructor(structure, arg, exclusion) {
+    const { name, instance: { members } } = structure;
+    const missing = members.slice(0, exclusion ? -1 : undefined).map(m => m.name);
+    super(`${name} needs an initializer for one of its union properties: ${missing.join(', ')}`);
+  }
+}
+
+class InvalidInitializer extends TypeError {
+  constructor(structure, expected, arg) {
+    const { name } = structure;
+    const acceptable = [];
+    if (Array.isArray(expected)) {
+      for (const type of expected) {
+        acceptable.push(addArticle(type));
+      }
+    } else {
+      acceptable.push(addArticle(expected));
+    }
+    const received = getDescription(arg);
+    super(`${name} expects ${formatList(acceptable)} as argument, received ${received}`);
+  }
+}
+
+class InvalidArrayInitializer extends InvalidInitializer {
+  constructor(structure, arg, shapeless = false) {
+    const { instance: { members: [ member ] }, type, typedArray } = structure;
+    const acceptable = [];
+    const primitive = getPrimitiveType(member);
+    if (primitive) {
+      let object;
+      switch (member.structure?.type) {
+        case StructureType.Enumeration: object = 'enum item'; break;
+        case StructureType.ErrorSet: object = 'error'; break;
+        default: object = primitive;
+      }
+      acceptable.push(`array of ${object}s`);
+    } else {
+      acceptable.push(`array of objects`);
+    }
+    if (typedArray) {
+      acceptable.push(typedArray.name);
+    }
+    if (type === StructureType.Slice && shapeless) {
+      acceptable.push(`length`);
+    }
+    super(structure, acceptable.join(' or '), arg);
+  }
+}
+
+class ArrayLengthMismatch extends TypeError {
+  constructor(structure, target, arg) {
+    const { name, length, instance: { members: [ member ] } } = structure;
+    const { structure: { constructor: elementConstructor} } = member;
+    const { length: argLength, constructor: argConstructor } = arg;
+    // get length from object whech it's a slice
+    const actualLength = target?.length ?? length;
+    const s = (actualLength !== 1) ? 's' : '';
+    let received;
+    if (argConstructor === elementConstructor) {
+      received = `only a single one`;
+    } else if (argConstructor.child === elementConstructor) {
+      received = `a slice/array that has ${argLength}`;
+    } else {
+      received = `${argLength} initializer${argLength > 1 ? 's' : ''}`;
+    }
+    super(`${name} has ${actualLength} element${s}, received ${received}`);
+  }
+}
+
+class MissingInitializers extends TypeError {
+  constructor(structure, missing) {
+    const { name } = structure;
+    super(`Missing initializers for ${name}: ${missing.join(', ')}`);
+  }
+}
+
+class NoProperty extends TypeError {
+  constructor(structure, propName) {
+    const { name, instance: { members } } = structure;
+    const member = members.find(m => m.name === propName);
+    let msg;
+    if (member) {
+      msg = `Comptime value cannot be changed: ${propName}`;
+    } else {
+      msg = `${name} does not have a property with that name: ${propName}`;
+    }
+    super(msg);
+  }
+}
+
+class ArgumentCountMismatch extends Error {
+  constructor(structure, actual) {
+    const { name, instance: { members } } = structure;
+    const argCount = members.length - 1;
+    const s = (argCount !== 1) ? 's' : '';
+    super(`${name} expects ${argCount} argument${s}, received ${actual}`);
+  }
+}
+
+class NoCastingToPointer extends TypeError {
+  constructor(structure) {
+    super(`Non-slice pointers can only be created with the help of the new operator`);
+  }
+}
+
+class ConstantConstraint extends TypeError {
+  constructor(structure, pointer) {
+    const { name: target } = structure;
+    const { constructor: { name } } = pointer;
+    super(`Conversion of ${name} to ${target} requires an explicit cast`);
+  }
+}
+
+class MisplacedSentinel extends TypeError {
+  constructor(structure, value, index, length) {
+    const { name } = structure;
+    super(`${name} expects the sentinel value ${value} at ${length - 1}, found at ${index}`);
+  }
+}
+
+class MissingSentinel extends TypeError {
+  constructor(structure, value, length) {
+    const { name } = structure;
+    super(`${name} expects the sentinel value ${value} at ${length - 1}`);
+  }
+}
+
+class TypeMismatch extends TypeError {
+  constructor(expected, arg) {
+    const received = getDescription(arg);
+    super(`Expected ${addArticle(expected)}, received ${received}`);
+  }
+}
+
+class InaccessiblePointer extends TypeError {
+  constructor() {
+    super(`Pointers within an untagged union are not accessible`);
+  }
+}
+
+class NullPointer extends TypeError {
+  constructor() {
+    super(`Null pointer`);
+  }
+}
+
+class InvalidPointerTarget extends TypeError {
+  constructor(structure, arg) {
+    const { name } = structure;
+    let target;
+    if (arg != null) {
+      const type = typeof(arg);
+      const noun = (type === 'object' && arg.constructor !== Object) ? `${arg.constructor.name} object`: type;
+      const a = article(noun);
+      target = `${a} ${noun}`;
+    } else {
+      target = arg + '';
+    }
+    super(`${name} cannot point to ${target}`);
+  }
+}
+
+class FixedMemoryTargetRequired extends TypeError {
+  constructor(structure, arg) {
+    super(`Pointers in fixed memory cannot point to garbage-collected object`);
+  }
+}
+
+class Overflow extends TypeError {
+  constructor(member, value) {
+    const typeName = getTypeName(member);
+    super(`${typeName} cannot represent the value given: ${value}`);
+  }
+}
+
+class OutOfBound extends RangeError {
+  constructor(member, index) {
+    const { name } = member;
+    super(`Index exceeds the size of ${name ?? 'array'}: ${index}`);
+  }
+}
+
+class NotUndefined extends RangeError {
+  constructor(member) {
+    const { name } = member;
+    super(`Property ${name} can only be undefined`);
+  }
+}
+
+class NotOnByteBoundary extends TypeError {
+  constructor(member) {
+    const { name, structure: { name: { struct }} } = member;
+    super(`Unable to create ${struct} as it is not situated on a byte boundary: ${name}`);
+  }
+}
+
+class ReadOnly extends TypeError {
+  constructor() {
+    super(`Unable to modify read-only object`);
+  }
+}
+
+class ReadOnlyTarget extends TypeError {
+  constructor(structure) {
+    const { name } = structure;
+    super(`${name} cannot point to a read-only object`);
+  }
+}
+
+class AccessingOpaque extends TypeError {
+  constructor(structure) {
+    const { name } = structure;
+    super(`Unable to access opaque structure ${name}`);
+  }
+}
+
+class CreatingOpaque extends TypeError {
+  constructor(structure) {
+    const { name } = structure;
+    super(`Unable to create instance of ${name}, as it is opaque`);
+  }
+}
+
+class ZigError extends Error {
+  constructor(name) {
+    super(deanimalizeErrorName(name));
+  }
+}
+
+function adjustArgumentError(structure, index, err) {
   const { name, instance: { members } } = structure;
   // Zig currently does not provide the argument name
   const argName = `args[${index}]`;
@@ -270,112 +440,17 @@ function rethrowArgumentError(structure, index, err) {
   const prefix = (index !== 0) ? '..., ' : '';
   const suffix = (index !== argCount - 1) ? ', ...' : '';
   const argLabel = prefix + argName + suffix;
-  const newError = new err.constructor(`${name}(${argLabel}): ${err.message}`);
+  const newError = Object.create(err.constructor.prototype);
+  newError.message = `${name}(${argLabel}): ${err.message}`;
   newError.stack = err.stack;
-  throw newError;
+  return newError;
 }
 
-function throwNoCastingToPointer(structure) {
-  throw new TypeError(`Non-slice pointers can only be created with the help of the new operator`);
-}
-
-function throwConstantConstraint(structure, pointer) {
-  const { name: target } = structure;
-  const { constructor: { name } } = pointer;
-  throw new TypeError(`Conversion of ${name} to ${target} requires an explicit cast`);
-}
-
-function throwMisplacedSentinel(structure, value, index, length) {
-  const { name } = structure;
-  throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}, found at ${index}`);
-}
-
-function throwMissingSentinel(structure, value, length) {
-  const { name } = structure;
-  throw new TypeError(`${name} expects the sentinel value ${value} at ${length - 1}`);
-}
-
-function throwTypeMismatch(expected, arg) {
-  const received = getDescription(arg);
-  throw new TypeError(`Expected ${addArticle(expected)}, received ${received}`)
-}
-
-function throwInaccessiblePointer() {
-  throw new TypeError(`Pointers within an untagged union are not accessible`);
-}
-
-function throwNullPointer() {
-  throw new TypeError(`Null pointer`);
-}
-
-function throwInvalidPointerTarget(structure, arg) {
-  const { name } = structure;
-  let target;
-  if (arg != null) {
-    const type = typeof(arg);
-    const noun = (type === 'object' && arg.constructor !== Object) ? `${arg.constructor.name} object`: type;
-    const a = article(noun);
-    target = `${a} ${noun}`;
-  } else {
-    target = arg + '';
+function adjustRangeError(member, index, err) {
+  if (err instanceof RangeError && !(err instanceof OutOfBound)) {
+    err = new OutOfBound(member, index);
   }
-  throw new TypeError(`${name} cannot point to ${target}`)
-}
-
-function throwFixedMemoryTargetRequired(structure, arg) {
-  throw new TypeError(`Pointers in fixed memory cannot point to garbage-collected object`);
-}
-
-
-function throwOverflow(member, value) {
-  const typeName = getTypeName(member);
-  throw new TypeError(`${typeName} cannot represent the value given: ${value}`);
-}
-
-function throwOutOfBound(member, index) {
-  const { name } = member;
-  throw new RangeError(`Index exceeds the size of ${name ?? 'array'}: ${index}`);
-}
-
-function rethrowRangeError(member, index, err) {
-  if (err instanceof RangeError) {
-    throwOutOfBound(member, index);
-  } else {
-    throw err;
-  }
-}
-
-function throwNotUndefined(member) {
-  const { name } = member;
-  throw new RangeError(`Property ${name} can only be undefined`);
-}
-
-function throwNotOnByteBoundary(member) {
-  const { name, structure: { name: { struct }} } = member;
-  throw new TypeError(`Unable to create ${struct} as it is not situated on a byte boundary: ${name}`);
-}
-
-function throwReadOnly() {
-  throw new TypeError(`Unable to modify read-only object`);
-}
-
-function throwReadOnlyTarget(structure) {
-  const { name } = structure;
-  throw new TypeError(`${name} cannot point to a read-only object`);
-}
-
-function throwAccessingOpaque(structure) {
-  const { name } = structure;
-  throw new TypeError(`Unable to access opaque structure ${name}`);
-}
-
-function throwCreatingOpaque(structure) {
-  const { name } = structure;
-  throw new TypeError(`Unable to create instance of ${name}, as it is opaque`);
-}
-
-function throwZigError(name) {
-  throw new Error(deanimalizeErrorName(name));
+  return err;
 }
 
 function warnImplicitArrayCreation(structure, arg) {
@@ -890,7 +965,7 @@ function getDataView(structure, arg, env) {
           if (type === StructureType.Slice || number * elementSize === byteSize) {
             return memory;
           } else {
-            throwArrayLengthMismatch(structure, null, arg);
+            throw new ArrayLengthMismatch(structure, null, arg);
           }
         } 
       }
@@ -904,7 +979,7 @@ function getDataView(structure, arg, env) {
 
 function checkDataView(dv) {
   if (dv?.[Symbol.toStringTag] !== 'DataView') {
-    throwTypeMismatch('a DataView', dv);
+    throw new TypeMismatch('a DataView', dv);
   }
   return dv;
 }
@@ -913,7 +988,7 @@ function checkDataViewSize(dv, structure) {
   const { byteSize, type } = structure;
   const multiple = type === StructureType.Slice;
   if (multiple ? dv.byteLength % byteSize !== 0 : dv.byteLength !== byteSize) {
-    throwBufferSizeMismatch(structure, dv);
+    throw new BufferSizeMismatch(structure, dv);
   }
 }
 
@@ -937,7 +1012,7 @@ function setDataView(dv, structure, copy, fixed, handlers) {
   } else {
     const byteLength = multiple ? byteSize * this.length : byteSize;
     if (dv.byteLength !== byteLength) {
-      throwBufferSizeMismatch(structure, dv, this);
+      throw new BufferSizeMismatch(structure, dv, this);
     }
     const source = { [MEMORY]: dv };
     sentinel?.validateData(source, this.length);
@@ -960,7 +1035,7 @@ function findElements(arg, Child) {
 function requireDataView(structure, arg, env) {
   const dv = getDataView(structure, arg, env);
   if (!dv) {
-    throwBufferExpected(structure);
+    throw new BufferExpected(structure);
   }
   return dv;
 }
@@ -1555,7 +1630,7 @@ function getVoidDescriptor(member, env) {
     set: (runtimeSafety)
     ? function(value) {
         if (value !== undefined) {
-          throwNotUndefined(member);
+          throw new NotUndefined(member);
         }
       }
     : function() {},
@@ -1604,7 +1679,7 @@ function addRuntimeCheck(env, getDataViewAccessor) {
       const { min, max } = getIntRange(member);
       return function(offset, value, littleEndian) {
         if (value < min || value > max) {
-          throwOverflow(member, value);
+          throw new Overflow(member, value);
         }
         accessor.call(this, offset, value, littleEndian);
       };
@@ -1623,7 +1698,7 @@ function transformEnumerationDescriptor(int, structure) {
     // the enumeration constructor returns the object for the int value
     const item = constructor(value);
     if (!item) {
-      throwEnumExpected(structure, value);
+      throw new EnumExpected(structure, value);
     }
     return item
   };
@@ -1662,9 +1737,9 @@ function transformErrorSetDescriptor(int, structure) {
     const item = constructor(value);
     if (!item) {
       if (value instanceof Error) {
-        throwNotInErrorSet(structure);
+        throw new NotInErrorSet(structure);
       } else {
-        throwErrorExpected(structure, value);
+        throw new ErrorExpected(structure, value);
       }
     } 
     return item
@@ -1840,7 +1915,7 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
             return getter.call(this[MEMORY], index * byteSize, littleEndian);
           } else {
           /* WASM-ONLY-END */
-            rethrowRangeError(member, index, err);
+            throw adjustRangeError(member, index, err);
           /* WASM-ONLY */
           }
           /* WASM-ONLY-END */
@@ -1856,7 +1931,7 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
           if (err instanceof TypeError && restoreMemory.call(this)) {
             return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
           } else {
-            rethrowRangeError(member, index, err);
+            throw adjustRangeError(member, index, err);
           }
         }
         /* WASM-ONLY-END */
@@ -1911,15 +1986,16 @@ function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) 
   Object.setPrototypeOf(prototypeRO, constructor.prototype);
   const instanceDescriptorsRO = {};
   const propSetters = {};
+  const throwError = () => { throw new ReadOnly() };
   for (const [ name, descriptor ] of Object.entries(instanceDescriptors)) {
     if (descriptor?.set) {
-      instanceDescriptorsRO[name] = { ...descriptor, set: throwReadOnly };
+      instanceDescriptorsRO[name] = { ...descriptor, set: throwError };
       // save the setters so we can initialize read-only objects
       if (name !== '$') {
         propSetters[name] = descriptor.set;
       }
     } else if (name === 'set') {
-      instanceDescriptorsRO[name] = { value: throwReadOnly, configurable: true, writable: true };
+      instanceDescriptorsRO[name] = { value: throwError, configurable: true, writable: true };
     }
   }
   const vivificate = instanceDescriptors[VIVIFICATOR]?.value;
@@ -1945,7 +2021,7 @@ function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) 
   defineProperties(prototypeRO, { 
     constructor: { value: constructor, configurable: true },
     [CONST]: { value: true },
-    [SETTER]: { value: throwReadOnly },
+    [SETTER]: { value: () => { throw new ReadOnly() } },
     [VIVIFICATOR]: vivificate && vivificateDescriptor,
     ...instanceDescriptorsRO,
   });
@@ -1985,7 +2061,7 @@ function createConstructor(structure, handlers, env) {
     let self, dv;
     if (creating) {
       if (arguments.length === 0) {
-        throwNoInitializer(structure);
+        throw new NoInitializer(structure);
       }
       self = this;
       if (hasSlots) {
@@ -2068,7 +2144,7 @@ function createPropertyApplier(structure) {
     // don't accept unknown props
     for (const key of argKeys) {
       if (!(key in propSetters)) {
-        throwNoProperty(structure, key);
+        throw new NoProperty(structure, key);
       }
     }
     // checking each name so that we would see inenumerable initializers as well
@@ -2093,7 +2169,7 @@ function createPropertyApplier(structure) {
     }
     if (normalMissing !== 0 && specialFound === 0) {
       const missing = allKeys.filter(k => propSetters[k].required && !(k in arg));
-      throwMissingInitializers(structure, missing);
+      throw new MissingInitializers(structure, missing);
     }
     if (specialFound + normalFound > argKeys.length) {
       // some props aren't enumerable
@@ -2313,7 +2389,7 @@ function getBase64Descriptor(structure, handlers = {}) {
     },
     set(str, fixed) {
       if (typeof(str) !== 'string') {
-        throwTypeMismatch('string', str);
+        throw new TypeMismatch('string', str);
       }
       const dv = decodeBase64(str);
       setDataView.call(this, dv, structure, false, fixed, handlers);
@@ -2334,7 +2410,7 @@ function getStringDescriptor(structure, handlers = {}) {
     },
     set(str, fixed) {
       if (typeof(str) !== 'string') {
-        throwTypeMismatch('a string', str);
+        throw new TypeMismatch('a string', str);
       }
       if (sentinel?.value !== undefined) {
         if (str.charCodeAt(str.length - 1) !== sentinel.value) {
@@ -2358,7 +2434,7 @@ function getTypedArrayDescriptor(structure, handlers = {}) {
     },
     set(ta, fixed) {
       if (!isTypedArray(ta, typedArray)) {
-        throwTypeMismatch(typedArray.name, ta);
+        throw new TypeMismatch(typedArray.name, ta);
       }
       const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
       setDataView.call(this, dv, structure, true, fixed, handlers);
@@ -2415,7 +2491,11 @@ function definePointer(structure, env) {
   };
   const getTargetObject = function() {
     updateTarget.call(this);
-    return this[SLOTS][0] ?? throwNullPointer();
+    const target = this[SLOTS][0];
+    if (!target) {
+      throw new NullPointer();
+    }
+    return target;
   };
   const setTargetObject = function(arg) {
     if (env.inFixedMemory(this)) {
@@ -2428,7 +2508,7 @@ function definePointer(structure, env) {
         addressSetter.call(this, loc);
         this[FIXED_LOCATION] = loc;
       } else {
-        throwFixedMemoryTargetRequired();
+        throw new FixedMemoryTargetRequired(structure, arg);
       }
     }
     this[SLOTS][0] = arg;
@@ -2441,7 +2521,10 @@ function definePointer(structure, env) {
   : getTargetObject;
   const setTarget = function(value) {
     updateTarget.call(this);
-    const object = this[SLOTS][0] ?? throwNullPointer();
+    const object = this[SLOTS][0];
+    if (!object) {
+      throw new NullPointer();
+    }
     return object[SETTER](value);
   };
   const alternateCaster = function(arg, options) {
@@ -2457,7 +2540,7 @@ function definePointer(structure, env) {
       // allow casting to slice through constructor of its pointer
       return new constructor(Target(arg), options);
     } else {
-      throwNoCastingToPointer();
+      throw new NoCastingToPointer(structure);
     }
   };
   const finalizer = function() {
@@ -2472,7 +2555,7 @@ function definePointer(structure, env) {
     if (isPointerOf(arg, Target)) {
       // initialize with the other pointer'structure target
       if (!isConst && arg.constructor.const) {
-        throwConstantConstraint(structure, arg);
+        throw new ConstantConstraint(structure, arg);
       }
       arg = arg[SLOTS][0];
     }
@@ -2484,7 +2567,7 @@ function definePointer(structure, env) {
         // create read-only version
         arg = Target(arg, { writable: false });
       } else if (!isConst && arg[CONST]) {
-        throwReadOnlyTarget(structure);       
+        throw new ReadOnlyTarget(structure);       
       }
     } else if (isCompatible(arg, Target)) {
       // autocast to target type
@@ -2504,7 +2587,7 @@ function definePointer(structure, env) {
       }
       arg = autoObj;
     } else if (arg !== undefined) {
-      throwInvalidPointerTarget(structure, arg);
+      throw new InvalidPointerTarget(structure, arg);
     }
     this[TARGET_SETTER](arg);
   };
@@ -2536,7 +2619,7 @@ function definePointer(structure, env) {
     [LOCATION_SETTER]: { value: addressSetter },
     [POINTER_VISITOR]: { value: visitPointer },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [VIVIFICATOR]: { value: throwNullPointer },
+    [VIVIFICATOR]: { value: () => { throw new NullPointer() } },
     [NORMALIZER]: { value: normalizePointer },
     [FIXED_LOCATION]: { value: undefined, writable: true },
   };
@@ -2580,8 +2663,9 @@ function resetPointer({ isActive }) {
 }
 
 function disablePointer() {
-  const disabledProp = { get: throwInaccessiblePointer, set: throwInaccessiblePointer };
-  const disabledFunc = { value: throwInaccessiblePointer };
+  const throwError = () => { throw new InaccessiblePointer() };
+  const disabledProp = { get: throwError, set: throwError };
+  const disabledFunc = { value: throwError };
   defineProperties(this[POINTER], {
     '*': disabledProp,
     '$': disabledProp,
@@ -2677,7 +2761,7 @@ function defineStructShape(structure, env) {
     } else if (arg && typeof(arg) === 'object') {
       propApplier.call(this, arg);
     } else if (arg !== undefined) {
-      throwInvalidInitializer(structure, 'object', arg);
+      throw new InvalidInitializer(structure, 'object', arg);
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
@@ -2757,7 +2841,7 @@ function getChildVivificator$1(structure) {
     let len = byteSize;
     if (len === undefined) {
       if (bitOffset & 7) {
-        throwNotOnByteBoundary(member);
+        throw new NotOnByteBoundary(member);
       }
       len = member.bitSize >> 3;
     }
@@ -2829,13 +2913,13 @@ function defineArgStruct(structure, env) {
   const argCount = argNames.length;
   const initializer = function(args) {
     if (args.length !== argCount) {
-      throwArgumentCountMismatch(structure, args.length);
+      throw new ArgumentCountMismatch(structure, args.length);
     }
     for (const [ index, name ] of argNames.entries()) {
       try {
         this[name] = args[index];
       } catch (err) {
-        rethrowArgumentError(structure, index, err);
+        throw adjustArgumentError(structure, index, err);
       }
     }
   };
@@ -2883,7 +2967,7 @@ function defineArray(structure, env) {
       if (arg?.[Symbol.iterator]) {
         arg = transformIterable(arg);
         if (arg.length !== length) {
-          throwArrayLengthMismatch(structure, this, arg);
+          throw new ArrayLengthMismatch(structure, this, arg);
         }
         let i = 0;
         for (const value of arg) {
@@ -2891,10 +2975,10 @@ function defineArray(structure, env) {
         }
       } else if (arg && typeof(arg) === 'object') {
         if (propApplier.call(this, arg) === 0) {
-          throwInvalidArrayInitializer(structure, arg);
+          throw new InvalidArrayInitializer(structure, arg);
         }
       } else if (arg !== undefined) {
-        throwInvalidArrayInitializer(structure, arg);
+        throw new InvalidArrayInitializer(structure, arg);
       }
     }
   };
@@ -3163,7 +3247,7 @@ function defineEnumerationShape(structure, env) {
   const initializer = function(arg) {
     if (arg && typeof(arg) === 'object') {
       if (propApplier.call(this, arg) === 0) {
-        throwInvalidInitializer(structure, expected, arg);
+        throw new InvalidInitializer(structure, expected, arg);
       }
     } else if (arg !== undefined) {
       set.call(this, arg);
@@ -3188,7 +3272,7 @@ function defineEnumerationShape(structure, env) {
       // a tagged union, return the active tag
       return arg[TAG];
     } else if (!getDataView(structure, arg, env)) {
-      throwInvalidInitializer(structure, expected, arg);
+      throw new InvalidInitializer(structure, expected, arg);
     } else {
       return false;
     }
@@ -3274,7 +3358,7 @@ function defineErrorSet(structure, env) {
       set.call(this, arg);
     } else if (arg && typeof(arg) === 'object' && !isErrorJSON(arg)) {
       if (propApplier.call(this, arg) === 0) {
-        throwInvalidInitializer(structure, expected, arg);
+        throw new InvalidInitializer(structure, expected, arg);
       }  
     } else if (arg !== undefined) {
       set.call(this, arg);
@@ -3288,7 +3372,7 @@ function defineErrorSet(structure, env) {
     } else if (isErrorJSON(arg)) {
       return constructor[`Error: ${arg.error}`];
     } else if (!getDataView(structure, arg, env)) {
-      throwInvalidInitializer(structure, expected, arg);
+      throw new InvalidInitializer(structure, expected, arg);
     } else {
       return false;
     }
@@ -3412,7 +3496,7 @@ function defineErrorUnion(structure, env) {
         if (arg instanceof Error) {
           // we give setValue a chance to see if the error is actually an acceptable value
           // now is time to throw an error
-          throwNotInErrorSet(structure);
+          throw new NotInErrorSet(structure);
         } else if (isErrorJSON(arg)) {
           setError.call(this, arg);
           clearValue.call(this);
@@ -3454,10 +3538,10 @@ function defineOpaque(structure, env) {
     align,
   } = structure;
   const initializer = function() {
-    throwCreatingOpaque(structure);
+    throw new CreatingOpaque(structure);
   };
   const valueAccessor = function() {
-    throwAccessingOpaque(structure);
+    throw new AccessingOpaque(structure);
   };
   const toPrimitive = function(hint) {
     const { name } = structure;
@@ -3570,7 +3654,7 @@ function definePrimitive(structure, env) {
       if (arg && typeof(arg) === 'object') {
         if (propApplier.call(this, arg) === 0) {
           const type = getPrimitiveType(member);
-          throwInvalidInitializer(structure, type, arg);
+          throw new InvalidInitializer(structure, type, arg);
         }
       } else if (arg !== undefined) {
         set.call(this, arg);
@@ -3625,7 +3709,7 @@ function defineSlice(structure, env) {
   };
   const shapeChecker = function(arg, length) {
     if (length !== this[LENGTH]) {
-      throwArrayLengthMismatch(structure, this, arg);
+      throw new ArrayLengthMismatch(structure, this, arg);
     }
   };
   // the initializer behave differently depending on whether it's called by the
@@ -3660,14 +3744,14 @@ function defineSlice(structure, env) {
       if (!this[MEMORY] && arg >= 0 && isFinite(arg)) {
         shapeDefiner.call(this, null, arg);
       } else {
-        throwInvalidArrayInitializer(structure, arg, !this[MEMORY]);
+        throw new InvalidArrayInitializer(structure, arg, !this[MEMORY]);
       }
     } else if (arg && typeof(arg) === 'object') {
       if (propApplier.call(this, arg, fixed) === 0) {
-        throwInvalidArrayInitializer(structure, arg);
+        throw new InvalidArrayInitializer(structure, arg);
       }
     } else if (arg !== undefined) {
-      throwInvalidArrayInitializer(structure, arg);
+      throw new InvalidArrayInitializer(structure, arg);
     }
   };
   const finalizer = createArrayProxy;
@@ -3723,22 +3807,22 @@ function getSentinel(structure, env) {
   const { get } = getDescriptor(member, env);
   const validateValue = (runtimeSafety) ? function(v, i, l) {
     if (v === value && i !== l - 1) {
-      throwMisplacedSentinel(structure, v, i, l);
+      throw new MisplacedSentinel(structure, v, i, l);
     } else if (v !== value && i === l - 1) {
-      throwMissingSentinel(structure, value, i);
+      throw new MissingSentinel(structure, value, i, l);
     }
   } : function(v, i, l) {
     if (v !== value && i === l - 1) {
-      throwMissingSentinel(structure, value, l);
+      throw new MissingSentinel(structure, value, l);
     }
   };
   const validateData = (runtimeSafety) ? function(source, len) {
     for (let i = 0; i < len; i++) {
       const v = get.call(source, i);
       if (v === value && i !== len - 1) {
-        throwMisplacedSentinel(structure, value, i, len);
+        throw new MisplacedSentinel(structure, value, i, len);
       } else if (v !== value && i === len - 1) {
-        throwMissingSentinel(structure, value, len);
+        throw new MissingSentinel(structure, value, len);
       }
     }
   } : function(source, len) {
@@ -3746,7 +3830,7 @@ function getSentinel(structure, env) {
       const i = len - 1;
       const v = get.call(source, i);
       if (v !== value) {
-        throwMissingSentinel(structure, value, len);
+        throw new MissingSentinel(structure, value, len);
       }
     }
   };
@@ -3802,7 +3886,7 @@ function defineUnionShape(structure, env) {
           } else {
             // whereas bare union does not, since the condition is not detectable 
             // when runtime safety is off
-            throwInactiveUnionProperty(structure, name, currentName);
+            throw new InactiveUnionProperty(structure, name, currentName);
           }
         }
         this[POINTER_VISITOR]?.(resetPointer);
@@ -3813,7 +3897,7 @@ function defineUnionShape(structure, env) {
     ? function(value) {
         const currentName = getActiveField.call(this);
         if (name !== currentName) {
-          throwInactiveUnionProperty(structure, name, currentName);
+          throw new InactiveUnionProperty(structure, name, currentName);
         }
         setValue.call(this, value);
       }
@@ -3847,13 +3931,13 @@ function defineUnionShape(structure, env) {
         }
       }
       if (found > 1) {
-        throwMultipleUnionInitializers(structure);
+        throw new MultipleUnionInitializers(structure);
       }
       if (propApplier.call(this, arg) === 0 && !hasDefaultMember) {
-        throwMissingUnionInitializer(structure, arg, exclusion);
+        throw new MissingUnionInitializer(structure, arg, exclusion);
       }
     } else if (arg !== undefined) {
-      throwInvalidInitializer(structure, 'object with a single property', arg);
+      throw new InvalidInitializer(structure, 'object with a single property', arg);
     }
   };
   // non-tagged union as marked as not having pointers--if there're actually
@@ -3982,7 +4066,7 @@ function defineVector(structure, env) {
         argLen = arg.length;
       }
       if (argLen !== length) {
-        throwArrayLengthMismatch(structure, this, arg);
+        throw new ArrayLengthMismatch(structure, this, arg);
       }
       let i = 0;
       for (const value of arg) {
@@ -3990,10 +4074,10 @@ function defineVector(structure, env) {
       }
     } else if (arg && typeof(arg) === 'object') {
       if (propApplier.call(this, arg) === 0) {
-        throwInvalidArrayInitializer(structure, arg);
+        throw new InvalidArrayInitializer(structure, arg);
       }
     } else if (arg !== undefined) {
-      throwInvalidArrayInitializer(structure, arg);
+      throw new InvalidArrayInitializer(structure, arg);
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
@@ -5380,7 +5464,7 @@ function extractOptions(searchParams, availableOptions) {
     const key = getCamelCase(name, names);
     const option = availableOptions[key];
     if (!option) {
-      throwUnknownOption(name);
+      throw new UnknownOption(name);
     }
     if (key === 'optimize') {
       options[key] = getCamelCase(string, [ 'Debug', 'ReleaseSafe', 'ReleaseFast', 'ReleaseSmall' ]);
@@ -5411,9 +5495,11 @@ function getCamelCase(name, names) {
   return name;
 }
 
-function throwUnknownOption(key) {
-  const adjective = (allOptions[key]) ? 'Unavailable' : 'Unrecognized';
-  throw new Error(`${adjective} option: ${key}`);
+class UnknownOption extends Error {
+  constructor(key) {
+    const adjective = (allOptions[key]) ? 'Unavailable' : 'Unrecognized';
+    super(`${adjective} option: ${key}`);
+  }
 }
 
 async function findConfigFile(name, dir) {
@@ -5457,7 +5543,7 @@ function processConfigFile(text, cfgPath, availableOptions) {
   for (const [ key, value ] of Object.entries(options)) {
     const option = availableOptions[key];
     if (!option) {
-      throwUnknownOption(key);
+      throw new UnknownOption(key);
     }
     if (typeof(value) !== option.type) {
       throw new Error(`${key} is expected to be a ${option.type}, received: ${value}`);
@@ -6554,12 +6640,12 @@ class WebAssemblyEnvironment extends Environment {
         // wait for fulfillment, then either return result or throw
         return err.then((err) => {
           if (err) {
-            throwZigError(err);
+            throw new ZigError(err);
           }
           return args.retval;
         });
       } else {
-        throwZigError(err);
+        throw new ZigError(err);
       }
     }
     return args.retval;

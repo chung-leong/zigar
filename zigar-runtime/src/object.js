@@ -1,7 +1,5 @@
 import { requireDataView, setDataView } from './data-view.js';
-import {
-  throwMissingInitializers, throwNoInitializer, throwNoProperty, throwReadOnly
-} from './error.js';
+import { MissingInitializers, NoInitializer, NoProperty, ReadOnly } from './error.js';
 import { isReadOnly } from './member.js';
 import {
   ALL_KEYS, CONST, CONST_PROTOTYPE, COPIER, GETTER, MEMORY, POINTER_VISITOR, PROP_SETTERS, SETTER,
@@ -40,15 +38,16 @@ export function attachDescriptors(constructor, instanceDescriptors, staticDescri
   Object.setPrototypeOf(prototypeRO, constructor.prototype);
   const instanceDescriptorsRO = {};
   const propSetters = {};
+  const throwError = () => { throw new ReadOnly() };
   for (const [ name, descriptor ] of Object.entries(instanceDescriptors)) {
     if (descriptor?.set) {
-      instanceDescriptorsRO[name] = { ...descriptor, set: throwReadOnly };
+      instanceDescriptorsRO[name] = { ...descriptor, set: throwError };
       // save the setters so we can initialize read-only objects
       if (name !== '$') {
         propSetters[name] = descriptor.set;
       }
     } else if (name === 'set') {
-      instanceDescriptorsRO[name] = { value: throwReadOnly, configurable: true, writable: true };
+      instanceDescriptorsRO[name] = { value: throwError, configurable: true, writable: true };
     }
   }
   const vivificate = instanceDescriptors[VIVIFICATOR]?.value;
@@ -74,7 +73,7 @@ export function attachDescriptors(constructor, instanceDescriptors, staticDescri
   defineProperties(prototypeRO, { 
     constructor: { value: constructor, configurable: true },
     [CONST]: { value: true },
-    [SETTER]: { value: throwReadOnly },
+    [SETTER]: { value: () => { throw new ReadOnly() } },
     [VIVIFICATOR]: vivificate && vivificateDescriptor,
     ...instanceDescriptorsRO,
   });
@@ -114,7 +113,7 @@ export function createConstructor(structure, handlers, env) {
     let self, dv;
     if (creating) {
       if (arguments.length === 0) {
-        throwNoInitializer(structure);
+        throw new NoInitializer(structure);
       }
       self = this;
       if (hasSlots) {
@@ -197,7 +196,7 @@ export function createPropertyApplier(structure) {
     // don't accept unknown props
     for (const key of argKeys) {
       if (!(key in propSetters)) {
-        throwNoProperty(structure, key);
+        throw new NoProperty(structure, key);
       }
     }
     // checking each name so that we would see inenumerable initializers as well
@@ -222,7 +221,7 @@ export function createPropertyApplier(structure) {
     }
     if (normalMissing !== 0 && specialFound === 0) {
       const missing = allKeys.filter(k => propSetters[k].required && !(k in arg));
-      throwMissingInitializers(structure, missing)
+      throw new MissingInitializers(structure, missing);
     }
     if (specialFound + normalFound > argKeys.length) {
       // some props aren't enumerable

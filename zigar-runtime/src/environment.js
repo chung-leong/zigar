@@ -1,5 +1,5 @@
 import { resetGlobalErrorSet } from './error-set.js';
-import { throwAlignmentConflict } from './error.js';
+import { AlignmentConflict } from './error.js';
 import { useBool, useObject } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { addMethods } from './method.js';
@@ -608,9 +608,7 @@ export class Environment {
   }
 
   releaseFunctions() {
-    const throwError = function() {
-      throw new Error(`Module was abandoned`);
-    };
+    const throwError = () => { throw new Error(`Module was abandoned`) };
     for (const name of Object.keys(this.imports)) {
       if (this[name]) {
         this[name] = throwError;
@@ -806,7 +804,7 @@ export class Environment {
       if (offset !== maxAlignOffset) {
         const align = target.constructor[ALIGN] ?? dv[ALIGN];
         if (isMisaligned(add(shadowAddress, offset), align)) {
-          throwAlignmentConflict(align, maxAlign);
+          throw new AlignmentConflict(align, maxAlign);
         }
       }
     }
