@@ -69,20 +69,12 @@ describe('Object functions', function() {
       it('should save object to cache', function() {
         const cache = new ObjectCache();
         const dv = new DataView(new ArrayBuffer(4));
-        expect(cache.find(dv, false)).to.be.undefined;
+        expect(cache.find(dv)).to.be.undefined;
         const object = { [MEMORY]: dv };
-        cache.save(dv, false, object);
-        expect(cache.find(dv, false)).to.equal(object);
-        expect(cache.find(dv, true)).to.be.undefined;
-      })
-      it('should save writabl object separately', function() {
-        const cache = new ObjectCache();
-        const dv = new DataView(new ArrayBuffer(4));
-        expect(cache.find(dv, true)).to.be.undefined;
-        const object = { [MEMORY]: dv };
-        cache.save(dv, true, object);
-        expect(cache.find(dv, true)).to.equal(object);
-        expect(cache.find(dv, false)).to.be.undefined;
+        cache.save(dv, object);
+        expect(cache.find(dv)).to.equal(object);
+        const dv2 = new DataView(new ArrayBuffer(8));
+        expect(cache.find(dv2)).to.be.undefined;
       })
     })
   })

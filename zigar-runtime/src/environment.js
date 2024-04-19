@@ -7,8 +7,8 @@ import { defineProperties } from './object.js';
 import { addStaticMembers } from './static.js';
 import { findAllObjects, getStructureFactory, useArgStruct } from './structure.js';
 import {
-  ALIGN, ATTRIBUTES, CONST, COPIER, ENVIRONMENT, FIXED_LOCATION, LOCATION_GETTER, LOCATION_SETTER,
-  MEMORY, POINTER, POINTER_VISITOR, SIZE, SLOTS, TARGET_GETTER
+  ALIGN, ATTRIBUTES, COPIER, ENVIRONMENT, FIXED_LOCATION, LOCATION_GETTER, LOCATION_SETTER, MEMORY,
+  POINTER, POINTER_VISITOR, SIZE, SLOTS, TARGET_GETTER
 } from './symbol.js';
 import { decodeText } from './text.js';
 import { MemberType, StructureType } from './types.js';
@@ -201,9 +201,9 @@ export class Environment {
     }
   }
 
-  castView(structure, dv, writable) {
+  castView(structure, dv) {
     const { constructor, hasPointer } = structure;
-    const object = constructor.call(ENVIRONMENT, dv, { writable });
+    const object = constructor.call(ENVIRONMENT, dv);
     if (hasPointer) {
       // acquire targets of pointers
       this.acquirePointerTargets(object);
@@ -382,7 +382,7 @@ export class Environment {
     return { 
       structures, 
       options: { runtimeSafety, littleEndian }, 
-      keys: { MEMORY, SLOTS, CONST } 
+      keys: { MEMORY, SLOTS } 
     };
   }
 
@@ -495,8 +495,7 @@ export class Environment {
         const dv = this.obtainView(array.buffer, offset, length);
         const { constructor } = placeholder.structure;
         const { reloc, const: isConst } = placeholder;
-        const writable = reloc !== undefined && isConst !== true;
-        const object = constructor.call(ENVIRONMENT, dv, { writable });
+        const object = constructor.call(ENVIRONMENT, dv);
         if (placeholder.slots) {
           insertObjects(object[SLOTS], placeholder.slots);
         }
@@ -928,7 +927,7 @@ export class Environment {
           // get view of memory that pointer points to
           const len = (Target[SIZE] !== undefined) ? location.length * Target[SIZE] : undefined;
           const dv = env.findMemory(location.address, len);
-          newTarget = (dv) ? Target.call(ENVIRONMENT, dv, { writable }) : null;
+          newTarget = (dv) ? Target.call(ENVIRONMENT, dv) : null;
         } else {
           newTarget = currentTarget;
         }

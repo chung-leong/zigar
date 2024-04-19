@@ -1,9 +1,10 @@
 import { requireDataView, setDataView } from './data-view.js';
-import { MissingInitializers, NoInitializer, NoProperty, ReadOnly } from './error.js';
+import { MissingInitializers, NoInitializer, NoProperty, throwReadOnly } from './error.js';
 import { isReadOnly } from './member.js';
 import {
-  ALL_KEYS, CONST, CONST_PROTOTYPE, COPIER, GETTER, MEMORY, POINTER_VISITOR, PROP_SETTERS, SETTER,
-  SLOTS, TARGET_SETTER, VIVIFICATOR
+  ALL_KEYS,
+  CONST_TARGET, COPIER, GETTER, MEMORY, POINTER_VISITOR, PROP_SETTERS, SETTER, SLOTS, TARGET_SETTER,
+  VIVIFICATOR
 } from './symbol.js';
 import { MemberType } from './types.js';
 
@@ -34,20 +35,13 @@ export function defineProperties(object, descriptors) {
 
 export function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) {
   // create prototype for read-only objects
-  const prototypeRO = {};
-  Object.setPrototypeOf(prototypeRO, constructor.prototype);
-  const instanceDescriptorsRO = {};
   const propSetters = {};
-  const throwError = () => { throw new ReadOnly() };
   for (const [ name, descriptor ] of Object.entries(instanceDescriptors)) {
     if (descriptor?.set) {
-      instanceDescriptorsRO[name] = { ...descriptor, set: throwError };
       // save the setters so we can initialize read-only objects
       if (name !== '$') {
         propSetters[name] = descriptor.set;
       }
-    } else if (name === 'set') {
-      instanceDescriptorsRO[name] = { value: throwError, configurable: true, writable: true };
     }
   }
   const vivificate = instanceDescriptors[VIVIFICATOR]?.value;
@@ -59,25 +53,22 @@ export function attachDescriptors(constructor, instanceDescriptors, staticDescri
   };
   const { get, set } = instanceDescriptors.$;
   defineProperties(constructor.prototype, { 
-    [CONST]: { value: false },
     [ALL_KEYS]: { value: Object.keys(propSetters) },
     [SETTER]: { value: set },
     [GETTER]: { value: get },
     [PROP_SETTERS]: { value: propSetters },
     ...instanceDescriptors,
   });
-  defineProperties(constructor, {
-    [CONST_PROTOTYPE]: { value: prototypeRO },
-    ...staticDescriptors,
-  }); 
-  defineProperties(prototypeRO, { 
-    constructor: { value: constructor, configurable: true },
-    [CONST]: { value: true },
-    [SETTER]: { value: () => { throw new ReadOnly() } },
-    [VIVIFICATOR]: vivificate && vivificateDescriptor,
-    ...instanceDescriptorsRO,
-  });
+  defineProperties(constructor, staticDescriptors);
   return constructor;
+}
+
+export function makeReadOnly(object) {
+  defineProperties(object, {
+    $: { get: object[GETTER], set: throwReadOnly },
+    [SETTER]: { value: throwReadOnly },
+    [CONST_TARGET]: { value: object },
+  });
 }
 
 export function createConstructor(structure, handlers, env) {
@@ -106,7 +97,6 @@ export function createConstructor(structure, handlers, env) {
   const cache = new ObjectCache();
   const constructor = function(arg, options = {}) {
     const {
-      writable = true,
       fixed = false,
     } = options;
     const creating = this instanceof constructor;
@@ -137,10 +127,10 @@ export function createConstructor(structure, handlers, env) {
       }
       // look for buffer
       dv = requireDataView(structure, arg, env);
-      if (self = cache.find(dv, writable)) {
+      if (self = cache.find(dv)) {
         return self;
       }
-      self = Object.create(writable ? constructor.prototype : constructor[CONST_PROTOTYPE]);
+      self = Object.create(constructor.prototype);
       if (shapeDefiner) {
         setDataView.call(self, dv, structure, false, false, { shapeDefiner });
       } else {
@@ -167,15 +157,11 @@ export function createConstructor(structure, handlers, env) {
       if (!shapeDefiner) {
         initializer.call(self, arg);
       }
-      if (!writable) {
-        // create object with read-only prototype
-        self = Object.assign(Object.create(constructor[CONST_PROTOTYPE]), self);
-      } 
     }
     if (finalizer) {
       self = finalizer.call(self);
     }
-    return cache.save(dv, writable, self); 
+    return cache.save(dv, self); 
   };
   return constructor;
 }
@@ -268,22 +254,14 @@ export function getSelf() {
 }
 
 export class ObjectCache {
-  [0] = null;
-  [1] = null;
+  map = new WeakMap();
 
-  find(dv, writable) {
-    const key = (writable) ? 0 : 1;
-    const map = this[key];
-    return map?.get(dv);
+  find(dv) {
+    return this.map.get(dv);
   }
 
-  save(dv, writable, object) {
-    const key = (writable) ? 0 : 1;
-    let map = this[key];    
-    if (!map) {
-      map = this[key] = new WeakMap();
-    }
-    map.set(dv, object);
+  save(dv, object) {
+    this.map.set(dv, object);
     return object;
   }
 }

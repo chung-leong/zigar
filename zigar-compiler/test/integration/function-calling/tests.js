@@ -400,7 +400,7 @@ export function addTests(importModule, options) {
     it('should handle pointer in struct', async function() {
       this.timeout(120000);
       const { User } = await importTest('handle-pointer-in-struct');
-      const user = new User({ name: 'Alice', age: 5 });
+      const user = new User({ name: 'Alice' });
       const before = await capture(() => {
         user.print1();
         user.print2();

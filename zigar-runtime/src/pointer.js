@@ -1,16 +1,16 @@
 import { getDataView, isBuffer, isCompatible } from './data-view.js';
 import {
   ConstantConstraint, FixedMemoryTargetRequired, InaccessiblePointer, InvalidPointerTarget,
-  NoCastingToPointer, NullPointer, ReadOnlyTarget, warnImplicitArrayCreation
+  NoCastingToPointer, NullPointer, ReadOnlyTarget, throwReadOnly, warnImplicitArrayCreation
 } from './error.js';
 import { getDescriptor, isValueExpected } from './member.js';
 import { getMemoryCopier, restoreMemory } from './memory.js';
 import { attachDescriptors, createConstructor, defineProperties } from './object.js';
 import { convertToJSON, getValueOf } from './special.js';
 import {
-  ALIGN, CONST, COPIER, ENVIRONMENT, FIXED_LOCATION, GETTER, LOCATION_GETTER, LOCATION_SETTER,
-  MEMORY, NORMALIZER, PARENT, POINTER, POINTER_VISITOR, PROXY, SETTER, SIZE, SLOTS, TARGET_GETTER,
-  TARGET_SETTER, VIVIFICATOR
+  ALIGN, CONST_PROXY, CONST_TARGET, COPIER, ENVIRONMENT, FIXED_LOCATION, GETTER, LOCATION_GETTER,
+  LOCATION_SETTER, MEMORY, NORMALIZER, PARENT, POINTER, POINTER_VISITOR, PROXY, SETTER, SIZE,
+  SLOTS, TARGET_GETTER, TARGET_SETTER, VIVIFICATOR
 } from './symbol.js';
 import { MemberType, StructureType } from './types.js';
 
@@ -50,7 +50,7 @@ export function definePointer(structure, env) {
       if (location.address !== prevLocation.address || location.length !== prevLocation.length) {
         const { constructor: Target } = targetStructure;
         const dv = env.findMemory(location.address, location.length * Target[SIZE]);
-        const target = Target.call(ENVIRONMENT, dv, { writable: !isConst });
+        const target = Target.call(ENVIRONMENT, dv);
         this[SLOTS][0] = target;
         this[FIXED_LOCATION] = location;
       }
@@ -62,7 +62,7 @@ export function definePointer(structure, env) {
     if (!target) {
       throw new NullPointer();
     }
-    return target;
+    return (isConst) ? getConstProxy(target) : target;
   };
   const setTargetObject = function(arg) {
     if (env.inFixedMemory(this)) {
@@ -86,14 +86,16 @@ export function definePointer(structure, env) {
       return target[GETTER]();
     }
   : getTargetObject;
-  const setTarget = function(value) {
-    updateTarget.call(this);
-    const object = this[SLOTS][0];
-    if (!object) {
-      throw new NullPointer();
-    }
-    return object[SETTER](value);
-  };
+  const setTarget = !isConst
+  ? function(value) {
+      updateTarget.call(this);
+      const object = this[SLOTS][0];
+      if (!object) {
+        throw new NullPointer();
+      }
+      return object[SETTER](value);
+    } 
+  : throwReadOnly;
   const alternateCaster = function(arg, options) {
     const Target = targetStructure.constructor;
     if ((this === ENVIRONMENT || this === PARENT) || arg instanceof constructor) {
@@ -102,7 +104,7 @@ export function definePointer(structure, env) {
       return false;
     } else if (isPointerOf(arg, Target)) {
       // const/non-const casting
-      return new constructor(Target(arg['*'], { writable: !isConst }), options);
+      return new constructor(Target(arg['*']), options);
     } else if (type === StructureType.Slice) {
       // allow casting to slice through constructor of its pointer
       return new constructor(Target(arg), options);
@@ -130,20 +132,22 @@ export function definePointer(structure, env) {
       /* wasm-only */
       restoreMemory.call(arg);
       /* wasm-only-end */
-      if (isConst && !arg[CONST]) {
-        // create read-only version
-        arg = Target(arg, { writable: false });
-      } else if (!isConst && arg[CONST]) {
-        throw new ReadOnlyTarget(structure);       
+      const constTarget = arg[CONST_TARGET];
+      if (constTarget) {
+        if (isConst) {
+          arg = constTarget;
+        } else {
+          throw new ReadOnlyTarget(structure);
+        }
       }
     } else if (isCompatible(arg, Target)) {
       // autocast to target type
       const dv = getDataView(targetStructure, arg, env);
-      arg = Target(dv, { writable: !isConst });
+      arg = Target(dv);
     } else if (arg !== undefined && !arg[MEMORY]) {
       // autovivificate target object
       const fixed = env.inFixedMemory(this);
-      const autoObj = new Target(arg, { writable: !isConst, fixed });
+      const autoObj = new Target(arg, { fixed });
       if (runtimeSafety) {
         // creation of a new slice using a typed array is probably
         // not what the user wants; it's more likely that the intention
@@ -258,6 +262,16 @@ function isPointerOf(arg, Target) {
   return (arg?.constructor?.child === Target && arg['*']);
 }
 
+function getConstProxy(target) {
+  let proxy = target[CONST_PROXY];
+  if (!proxy) {
+    Object.defineProperty(target, CONST_PROXY, { value: undefined, configurable: true })
+    proxy = new Proxy(target, constTargetHandlers);
+    Object.defineProperty(target, CONST_PROXY, { value: proxy })
+  }
+  return proxy;
+}
+
 const proxyHandlers = {
   get(pointer, name) {
     if (name === POINTER) {
@@ -295,6 +309,28 @@ const proxyHandlers = {
       return name in target;
     }
   },
+};
+
+const constTargetHandlers = {
+  get(target, name) {
+    if (name === CONST_TARGET) {
+      return target;
+    } else {
+      const value = target[name];
+      if (typeof(value) === 'object' && value[CONST_TARGET] === null) {
+        return getConstProxy(value);
+      } 
+      return value;
+    }
+  },
+  set(target, name, value) {
+    const ptr = target[POINTER];
+    if (ptr && !(name in ptr)) {
+      ptr[name] = value;
+      return true;
+    }
+    throwReadOnly();
+  }
 };
 
 export function always() {

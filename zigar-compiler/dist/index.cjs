@@ -456,6 +456,10 @@ function adjustRangeError(member, index, err) {
   return err;
 }
 
+function throwReadOnly() {
+  throw new ReadOnly();
+}
+
 function warnImplicitArrayCreation(structure, arg) {
   const created = addArticle(structure.typedArray.name);
   const source = addArticle(arg.constructor.name);
@@ -540,8 +544,8 @@ const SIZE = Symbol('size');
 const ALIGN = Symbol('align');
 const ARRAY = Symbol('array');
 const POINTER = Symbol('pointer');
-const CONST = Symbol('const');
-const CONST_PROTOTYPE = Symbol('constProto');
+const CONST_TARGET = Symbol('constTarget');
+const CONST_PROXY = Symbol('constProxy');
 const COPIER = Symbol('copier');
 const RESETTER = Symbol('resetter');
 const NORMALIZER = Symbol('normalizer');
@@ -1985,50 +1989,34 @@ function defineProperties(object, descriptors) {
 
 function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) {
   // create prototype for read-only objects
-  const prototypeRO = {};
-  Object.setPrototypeOf(prototypeRO, constructor.prototype);
-  const instanceDescriptorsRO = {};
   const propSetters = {};
-  const throwError = () => { throw new ReadOnly() };
   for (const [ name, descriptor ] of Object.entries(instanceDescriptors)) {
     if (descriptor?.set) {
-      instanceDescriptorsRO[name] = { ...descriptor, set: throwError };
       // save the setters so we can initialize read-only objects
       if (name !== '$') {
         propSetters[name] = descriptor.set;
       }
-    } else if (name === 'set') {
-      instanceDescriptorsRO[name] = { value: throwError, configurable: true, writable: true };
     }
   }
-  const vivificate = instanceDescriptors[VIVIFICATOR]?.value;
-  const vivificateDescriptor = { 
-    // vivificate child objects as read-only too
-    value: function(slot) { 
-      return vivificate.call(this, slot, false);
-    }
-  };
+  instanceDescriptors[VIVIFICATOR]?.value;
   const { get, set } = instanceDescriptors.$;
   defineProperties(constructor.prototype, { 
-    [CONST]: { value: false },
     [ALL_KEYS]: { value: Object.keys(propSetters) },
     [SETTER]: { value: set },
     [GETTER]: { value: get },
     [PROP_SETTERS]: { value: propSetters },
     ...instanceDescriptors,
   });
-  defineProperties(constructor, {
-    [CONST_PROTOTYPE]: { value: prototypeRO },
-    ...staticDescriptors,
-  }); 
-  defineProperties(prototypeRO, { 
-    constructor: { value: constructor, configurable: true },
-    [CONST]: { value: true },
-    [SETTER]: { value: () => { throw new ReadOnly() } },
-    [VIVIFICATOR]: vivificate && vivificateDescriptor,
-    ...instanceDescriptorsRO,
-  });
+  defineProperties(constructor, staticDescriptors);
   return constructor;
+}
+
+function makeReadOnly(object) {
+  defineProperties(object, {
+    $: { get: object[GETTER], set: throwReadOnly },
+    [SETTER]: { value: throwReadOnly },
+    [CONST_TARGET]: { value: object },
+  });
 }
 
 function createConstructor(structure, handlers, env) {
@@ -2057,7 +2045,6 @@ function createConstructor(structure, handlers, env) {
   const cache = new ObjectCache();
   const constructor = function(arg, options = {}) {
     const {
-      writable = true,
       fixed = false,
     } = options;
     const creating = this instanceof constructor;
@@ -2088,10 +2075,10 @@ function createConstructor(structure, handlers, env) {
       }
       // look for buffer
       dv = requireDataView(structure, arg, env);
-      if (self = cache.find(dv, writable)) {
+      if (self = cache.find(dv)) {
         return self;
       }
-      self = Object.create(writable ? constructor.prototype : constructor[CONST_PROTOTYPE]);
+      self = Object.create(constructor.prototype);
       if (shapeDefiner) {
         setDataView.call(self, dv, structure, false, false, { shapeDefiner });
       } else {
@@ -2118,15 +2105,11 @@ function createConstructor(structure, handlers, env) {
       if (!shapeDefiner) {
         initializer.call(self, arg);
       }
-      if (!writable) {
-        // create object with read-only prototype
-        self = Object.assign(Object.create(constructor[CONST_PROTOTYPE]), self);
-      } 
     }
     if (finalizer) {
       self = finalizer.call(self);
     }
-    return cache.save(dv, writable, self); 
+    return cache.save(dv, self); 
   };
   return constructor;
 }
@@ -2219,22 +2202,14 @@ function getSelf() {
 }
 
 class ObjectCache {
-  [0] = null;
-  [1] = null;
+  map = new WeakMap();
 
-  find(dv, writable) {
-    const key = (writable) ? 0 : 1;
-    const map = this[key];
-    return map?.get(dv);
+  find(dv) {
+    return this.map.get(dv);
   }
 
-  save(dv, writable, object) {
-    const key = (writable) ? 0 : 1;
-    let map = this[key];    
-    if (!map) {
-      map = this[key] = new WeakMap();
-    }
-    map.set(dv, object);
+  save(dv, object) {
+    this.map.set(dv, object);
     return object;
   }
 }
@@ -2486,7 +2461,7 @@ function definePointer(structure, env) {
       if (location.address !== prevLocation.address || location.length !== prevLocation.length) {
         const { constructor: Target } = targetStructure;
         const dv = env.findMemory(location.address, location.length * Target[SIZE]);
-        const target = Target.call(ENVIRONMENT, dv, { writable: !isConst });
+        const target = Target.call(ENVIRONMENT, dv);
         this[SLOTS][0] = target;
         this[FIXED_LOCATION] = location;
       }
@@ -2498,7 +2473,7 @@ function definePointer(structure, env) {
     if (!target) {
       throw new NullPointer();
     }
-    return target;
+    return (isConst) ? getConstProxy(target) : target;
   };
   const setTargetObject = function(arg) {
     if (env.inFixedMemory(this)) {
@@ -2522,14 +2497,16 @@ function definePointer(structure, env) {
       return target[GETTER]();
     }
   : getTargetObject;
-  const setTarget = function(value) {
-    updateTarget.call(this);
-    const object = this[SLOTS][0];
-    if (!object) {
-      throw new NullPointer();
-    }
-    return object[SETTER](value);
-  };
+  const setTarget = !isConst
+  ? function(value) {
+      updateTarget.call(this);
+      const object = this[SLOTS][0];
+      if (!object) {
+        throw new NullPointer();
+      }
+      return object[SETTER](value);
+    } 
+  : throwReadOnly;
   const alternateCaster = function(arg, options) {
     const Target = targetStructure.constructor;
     if ((this === ENVIRONMENT || this === PARENT) || arg instanceof constructor) {
@@ -2538,7 +2515,7 @@ function definePointer(structure, env) {
       return false;
     } else if (isPointerOf(arg, Target)) {
       // const/non-const casting
-      return new constructor(Target(arg['*'], { writable: !isConst }), options);
+      return new constructor(Target(arg['*']), options);
     } else if (type === StructureType.Slice) {
       // allow casting to slice through constructor of its pointer
       return new constructor(Target(arg), options);
@@ -2566,20 +2543,22 @@ function definePointer(structure, env) {
       /* wasm-only */
       restoreMemory.call(arg);
       /* wasm-only-end */
-      if (isConst && !arg[CONST]) {
-        // create read-only version
-        arg = Target(arg, { writable: false });
-      } else if (!isConst && arg[CONST]) {
-        throw new ReadOnlyTarget(structure);       
+      const constTarget = arg[CONST_TARGET];
+      if (constTarget) {
+        if (isConst) {
+          arg = constTarget;
+        } else {
+          throw new ReadOnlyTarget(structure);
+        }
       }
     } else if (isCompatible(arg, Target)) {
       // autocast to target type
       const dv = getDataView(targetStructure, arg, env);
-      arg = Target(dv, { writable: !isConst });
+      arg = Target(dv);
     } else if (arg !== undefined && !arg[MEMORY]) {
       // autovivificate target object
       const fixed = env.inFixedMemory(this);
-      const autoObj = new Target(arg, { writable: !isConst, fixed });
+      const autoObj = new Target(arg, { fixed });
       if (runtimeSafety) {
         // creation of a new slice using a typed array is probably
         // not what the user wants; it's more likely that the intention
@@ -2691,6 +2670,16 @@ function isPointerOf(arg, Target) {
   return (arg?.constructor?.child === Target && arg['*']);
 }
 
+function getConstProxy(target) {
+  let proxy = target[CONST_PROXY];
+  if (!proxy) {
+    Object.defineProperty(target, CONST_PROXY, { value: undefined, configurable: true });
+    proxy = new Proxy(target, constTargetHandlers);
+    Object.defineProperty(target, CONST_PROXY, { value: proxy });
+  }
+  return proxy;
+}
+
 const proxyHandlers$1 = {
   get(pointer, name) {
     if (name === POINTER) {
@@ -2728,6 +2717,28 @@ const proxyHandlers$1 = {
       return name in target;
     }
   },
+};
+
+const constTargetHandlers = {
+  get(target, name) {
+    if (name === CONST_TARGET) {
+      return target;
+    } else {
+      const value = target[name];
+      if (typeof(value) === 'object' && value[CONST_TARGET] === null) {
+        return getConstProxy(value);
+      } 
+      return value;
+    }
+  },
+  set(target, name, value) {
+    const ptr = target[POINTER];
+    if (ptr && !(name in ptr)) {
+      ptr[name] = value;
+      return true;
+    }
+    throwReadOnly();
+  }
 };
 
 function always() {
@@ -2835,7 +2846,7 @@ function getChildVivificator$1(structure) {
   for (const member of members.filter(m => m.type === MemberType.Object)) {
     objectMembers[member.slot] = member;
   }
-  return function vivificateChild(slot, writable = true) {
+  return function vivificateChild(slot) {
     const member = objectMembers[slot];
     const { bitOffset, byteSize, structure: { constructor } } = member;
     const dv = this[MEMORY];
@@ -2849,7 +2860,7 @@ function getChildVivificator$1(structure) {
       len = member.bitSize >> 3;
     }
     const childDV = new DataView(dv.buffer, offset, len);
-    const object = this[SLOTS][slot] = constructor.call(PARENT, childDV, { writable });
+    const object = this[SLOTS][slot] = constructor.call(PARENT, childDV);
     return object;
   }
 }
@@ -3084,13 +3095,13 @@ function getArrayEntries(options) {
 function getChildVivificator(structure) {
   const { instance: { members: [ member ]} } = structure;
   const { byteSize, structure: elementStructure } = member;
-  return function getChild(index, writable = true) {
+  return function getChild(index) {
     const { constructor } = elementStructure;
     const dv = this[MEMORY];
     const parentOffset = dv.byteOffset;
     const offset = parentOffset + byteSize * index;
     const childDV = new DataView(dv.buffer, offset, byteSize);
-    const object = this[SLOTS][index] = constructor.call(PARENT, childDV, { writable });
+    const object = this[SLOTS][index] = constructor.call(PARENT, childDV);
     return object;
   };
 }
@@ -3325,7 +3336,8 @@ function appendEnumeration(enumeration, name, item) {
       defineProperties(enumeration, {
         [index]: { value: item },
         [name]: { value: item },
-      });      
+      });
+      makeReadOnly(item);
     }
   } else {
     // non-exhaustive enum
@@ -3424,6 +3436,8 @@ function appendErrorSet(errorSet, name, es) {
   defineProperties(currentGlobalSet, descriptors); 
   // add name to prop list
   currentGlobalSet[PROPS].push(name);
+  // make read-only
+  makeReadOnly(es);
 }
 
 function resetGlobalErrorSet() {
@@ -4417,7 +4431,7 @@ function generateCode(definition, params) {
 
 function addStructureDefinitions(lines, definition) {
   const { structures, options, keys } = definition;
-  const { MEMORY, SLOTS, CONST } = keys;
+  const { MEMORY, SLOTS } = keys;
   const add = manageIndentation(lines);
   const defaultStructure = {
     constructor: null,
@@ -4526,9 +4540,6 @@ function addStructureDefinitions(lines, definition) {
         add(`memory: { ${pairs.join(', ')} },`);
         if (dv.hasOwnProperty('reloc')) {
           add(`reloc: ${dv.reloc},`);
-          if (object[CONST]) {
-            add(`const: true,`);
-          }
         }
       }
       const entries = (slots) ? Object.entries(slots).filter(a => a[1]) : [];
@@ -5826,9 +5837,9 @@ class Environment {
     }
   }
 
-  castView(structure, dv, writable) {
+  castView(structure, dv) {
     const { constructor, hasPointer } = structure;
-    const object = constructor.call(ENVIRONMENT, dv, { writable });
+    const object = constructor.call(ENVIRONMENT, dv);
     if (hasPointer) {
       // acquire targets of pointers
       this.acquirePointerTargets(object);
@@ -6007,7 +6018,7 @@ class Environment {
     return { 
       structures, 
       options: { runtimeSafety, littleEndian }, 
-      keys: { MEMORY, SLOTS, CONST } 
+      keys: { MEMORY, SLOTS } 
     };
   }
 
@@ -6209,7 +6220,7 @@ class Environment {
           // get view of memory that pointer points to
           const len = (Target[SIZE] !== undefined) ? location.length * Target[SIZE] : undefined;
           const dv = env.findMemory(location.address, len);
-          newTarget = (dv) ? Target.call(ENVIRONMENT, dv, { writable }) : null;
+          newTarget = (dv) ? Target.call(ENVIRONMENT, dv) : null;
         } else {
           newTarget = currentTarget;
         }

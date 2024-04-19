@@ -44,8 +44,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+          0: Hello.call(ENVIRONMENT, errorData(5)),
+          1: Hello.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(structure);
@@ -107,8 +107,8 @@ describe('Error set functions', function() {
       const { constructor: ErrorSet1 } = errorStructure1;
       env.attachTemplate(errorStructure1, {
         [SLOTS]: {
-          0: ErrorSet1.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: ErrorSet1.call(ENVIRONMENT, errorData(8), { writable: false }),
+          0: ErrorSet1.call(ENVIRONMENT, errorData(5)),
+          1: ErrorSet1.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(errorStructure1);
@@ -156,8 +156,8 @@ describe('Error set functions', function() {
       const { constructor: ErrorSet2 } = errorStructure2;
       env.attachTemplate(errorStructure2, {
         [SLOTS]: {
-          0: ErrorSet2.call(ENVIRONMENT, errorData(6), { writable: false }),
-          1: ErrorSet2.call(ENVIRONMENT, errorData(7), { writable: false }),
+          0: ErrorSet2.call(ENVIRONMENT, errorData(6)),
+          1: ErrorSet2.call(ENVIRONMENT, errorData(7)),
         }
       }, true);
       env.finalizeStructure(errorStructure2);
@@ -206,8 +206,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+          0: Hello.call(ENVIRONMENT, errorData(5)),
+          1: Hello.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(structure);
@@ -243,8 +243,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+          0: Hello.call(ENVIRONMENT, errorData(5)),
+          1: Hello.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(structure);
@@ -282,8 +282,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+          0: Hello.call(ENVIRONMENT, errorData(5)),
+          1: Hello.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(structure);
@@ -321,8 +321,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+          0: Hello.call(ENVIRONMENT, errorData(5)),
+          1: Hello.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(structure);
@@ -359,8 +359,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+          0: Hello.call(ENVIRONMENT, errorData(5)),
+          1: Hello.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(structure);
@@ -402,8 +402,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+          0: Hello.call(ENVIRONMENT, errorData(5)),
+          1: Hello.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(structure);
@@ -441,8 +441,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(catStructure, {
         [SLOTS]: {
-          0: CatError.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: CatError.call(ENVIRONMENT, errorData(6), { writable: false }),
+          0: CatError.call(ENVIRONMENT, errorData(5)),
+          1: CatError.call(ENVIRONMENT, errorData(6)),
         },
       }, true);
       env.finalizeStructure(catStructure);
@@ -474,8 +474,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(dogStructure, {
         [SLOTS]: {
-          0: DogError.call(ENVIRONMENT, errorData(7), { writable: false }),
-          1: DogError.call(ENVIRONMENT, errorData(8), { writable: false }),
+          0: DogError.call(ENVIRONMENT, errorData(7)),
+          1: DogError.call(ENVIRONMENT, errorData(8)),
         },
       }, true);
       env.finalizeStructure(dogStructure);
@@ -519,10 +519,10 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(petStructure, {
         [SLOTS]: {
-          0: PetError.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: PetError.call(ENVIRONMENT, errorData(6), { writable: false }),
-          2: PetError.call(ENVIRONMENT, errorData(7), { writable: false }),
-          3: PetError.call(ENVIRONMENT, errorData(8), { writable: false }),
+          0: PetError.call(ENVIRONMENT, errorData(5)),
+          1: PetError.call(ENVIRONMENT, errorData(6)),
+          2: PetError.call(ENVIRONMENT, errorData(7)),
+          3: PetError.call(ENVIRONMENT, errorData(8)),
         },
       }, true);
       env.finalizeStructure(petStructure);
@@ -563,8 +563,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+          0: Hello.call(ENVIRONMENT, errorData(5)),
+          1: Hello.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(structure);
@@ -599,8 +599,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+          0: Hello.call(ENVIRONMENT, errorData(5)),
+          1: Hello.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(structure);
@@ -635,8 +635,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+          0: Hello.call(ENVIRONMENT, errorData(5)),
+          1: Hello.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(structure);
@@ -673,8 +673,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+          0: Hello.call(ENVIRONMENT, errorData(5)),
+          1: Hello.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(structure);
@@ -709,8 +709,8 @@ describe('Error set functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, errorData(5), { writable: false }),
-          1: Hello.call(ENVIRONMENT, errorData(8), { writable: false }),
+          0: Hello.call(ENVIRONMENT, errorData(5)),
+          1: Hello.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
       env.finalizeStructure(structure);

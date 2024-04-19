@@ -1519,43 +1519,6 @@ describe('Union functions', function() {
       object.$ = { cat: 4567 };
       expect(object.cat).to.equal(4567);
     })
-    it('should be able to create read-only object', function() {
-      const structure = env.beginStructure({
-        type: StructureType.ExternUnion,
-        name: 'Hello',
-        byteSize: 4,
-      });
-      env.attachMember(structure, {
-        name: 'dog',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structure, {
-        name: 'cat',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachTemplate(structure, {
-        [MEMORY]: (() => {
-          const dv = new DataView(new ArrayBuffer(4));
-          dv.setInt32(0, 1234, true);
-          return dv;
-        })(),
-        [SLOTS]: {},
-      })
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      const object = new Hello({}, { writable: false });
-      expect(() => object.cat = 1).to.throw(TypeError);
-      expect(() => object.$ = { cat: 1 }).to.throw(TypeError);
-    })
   })
 })
 

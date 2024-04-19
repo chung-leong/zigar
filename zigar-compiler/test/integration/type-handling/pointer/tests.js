@@ -43,12 +43,14 @@ export function addTests(importModule, options) {
       expect([ ...module.uint32_array4 ]).to.eql([ 1, 2, 777, 4 ]);
       const [ after ] = await capture(() => print());
       expect(after).to.equal('{ 1, 2, 777, 4 }');
-      // this shouln't work
-      expect(() => module.text = "This is a test").to.throw(TypeError);
+      // modifying const pointer
+      expect(() => module.u8_slice = "This is a test").to.throw(TypeError);
+      // this works thanks to auto-allocation of fixed memory
+      expect(() => module.text = "This is a test").to.not.throw(TypeError);
       const lines = await capture(() => {
         printText();
         // allocate fixed memory
-        const text = allocText("This is a test");
+        const text = allocText("This is another test");
         module.text = text;
         printText();
         module.text = module.alt_text;
@@ -56,8 +58,8 @@ export function addTests(importModule, options) {
         freeText(text);
       });
       expect(lines).to.eql([
-        'Hello world',
         'This is a test',
+        'This is another test',
         'Goodbye cruel world',
       ]);
       const { string } = u8_slice_w_sentinel;

@@ -13,7 +13,7 @@ import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
 import { useAllStructureTypes } from '../src/structure.js';
 import {
-  ALIGN, ATTRIBUTES, CONST, COPIER, ENVIRONMENT, FIXED_LOCATION, MEMORY, POINTER_VISITOR, SLOTS,
+  ALIGN, ATTRIBUTES, COPIER, ENVIRONMENT, FIXED_LOCATION, MEMORY, POINTER_VISITOR, SLOTS,
   TARGET_GETTER
 } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
@@ -562,7 +562,6 @@ describe('Environment', function() {
       expect(structures[1]).to.equal(s2);
       expect(Object.values(keys)).to.include(MEMORY);
       expect(Object.values(keys)).to.include(SLOTS);
-      expect(Object.values(keys)).to.include(CONST);
     })
   })
   describe('prepareObjectsForExport', function() {

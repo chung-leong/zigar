@@ -406,27 +406,6 @@ describe('Vector functions', function() {
         .with.property('message').that.contains('an array')
         .and.that.contains('Uint32Array');
     })
-    it('should be able to create read-only object', function() {
-      const structure = env.beginStructure({
-        type: StructureType.Vector,
-        name: 'Hello',
-        length: 4,
-        byteSize: 4 * 4,
-      });
-      const constructor = function() {};
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: { constructor, typedArray: Uint32Array },
-      });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      const object = new Hello(new Uint32Array([ 1, 2, 3, 4 ]), { writable: false });
-      expect(() => object[0] = 2).to.throw(TypeError);
-      expect(() => object[0].$ = [ 0, 0, 0, 0 ]).to.throw(TypeError);
-    })
     it('should accept special initializers', function() {
       const structure = env.beginStructure({
         type: StructureType.Vector,

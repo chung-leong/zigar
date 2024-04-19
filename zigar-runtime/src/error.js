@@ -362,6 +362,10 @@ export function adjustRangeError(member, index, err) {
   return err;
 }
 
+export function throwReadOnly() {
+  throw new ReadOnly();
+}
+
 export function warnImplicitArrayCreation(structure, arg) {
   const created = addArticle(structure.typedArray.name);
   const source = addArticle(arg.constructor.name);

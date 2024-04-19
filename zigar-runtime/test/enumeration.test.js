@@ -42,8 +42,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ])), { writable: false }),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ])), { writable: false }),
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -94,8 +94,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ])), { writable: false }),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ])), { writable: false }),
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -138,8 +138,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ])), { writable: false }),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ])), { writable: false }),
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -177,8 +177,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ])), { writable: false }),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ])), { writable: false }),
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -214,8 +214,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ])), { writable: false }),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ])), { writable: false }),
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -251,8 +251,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ])), { writable: false }),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ])), { writable: false }),
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -289,8 +289,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 123 ])), { writable: false }),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 456 ])), { writable: false }),
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 123 ]))),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 456 ]))),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -328,8 +328,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new BigUint64Array([ 1234n ])), { writable: false }),
-          1: Hello.call(ENVIRONMENT, viewOf(new BigUint64Array([ 4567n ])), { writable: false }),
+          0: Hello.call(ENVIRONMENT, viewOf(new BigUint64Array([ 1234n ]))),
+          1: Hello.call(ENVIRONMENT, viewOf(new BigUint64Array([ 4567n ]))),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -366,8 +366,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ])), { writable: false }),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ])), { writable: false }),
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -406,8 +406,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ])), { writable: false }),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ])), { writable: false }),
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -443,8 +443,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ])), { writable: false }),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ])), { writable: false }),
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -480,8 +480,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ])), { writable: false }),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ])), { writable: false }),
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -554,8 +554,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 456 ])), { writable: false }),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 123 ])), { writable: false }),
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 456 ]))),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 123 ]))),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -591,8 +591,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 456 ])), { writable: false }),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 123 ])), { writable: false }),
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 456 ]))),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 123 ]))),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -627,8 +627,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 456 ])), { writable: false }),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 123 ])), { writable: false }),
+          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 456 ]))),
+          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 123 ]))),
         },
       }, true);
       env.finalizeStructure(structure);

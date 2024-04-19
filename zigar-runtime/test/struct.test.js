@@ -96,10 +96,6 @@ describe('Struct functions', function() {
       const dv = env.obtainView(buffer, 0, 8);
       const object3 = Hello(dv);
       expect(object3).to.equal(object1);
-      const object4 = Hello(dv, { writable: false });
-      expect(object4).to.not.equal(object1);
-      const object5 = Hello(dv, { writable: false });
-      expect(object5).to.equal(object4);
     })
     it('should initialize fields from object', function() {
       const structure = env.beginStructure({
@@ -1106,99 +1102,6 @@ describe('Struct functions', function() {
       expect(object.dog).to.equal(123);
       expect(object.cat).to.equal(456);
     })
-    it('should be able to create read-only object', function() {
-      const structure = env.beginStructure({
-        type: StructureType.Struct,
-        name: 'Hello',
-        byteSize: 4 * 2,
-      });
-      env.attachMember(structure, {
-        name: 'dog',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-      });
-      env.attachMember(structure, {
-        name: 'cat',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-      });
-      env.attachTemplate(structure, {
-        [MEMORY]: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setInt32(0, 1234, true);
-          dv.setInt32(4, 4567, true);
-          return dv;
-        })(),
-        [SLOTS]: {},
-      });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      expect(Hello).to.be.a('function');
-      const object = new Hello({}, { writable: false });
-      expect(() => object.dog = 123).to.throw(TypeError);
-      expect(() => object.cat = 123).to.throw(TypeError);
-      expect(() => object.$ = {}).to.throw(TypeError);
-    })
-    it('should make child object read-only too', function() {
-      const structStructure = env.beginStructure({
-        type: StructureType.Struct,
-        name: 'Hello',
-        byteSize: 4 * 2,
-      });
-      env.attachMember(structStructure, {
-        name: 'dog',
-        type: MemberType.Int,
-        isRequired: true,
-        byteSize: 4,
-        bitOffset: 0,
-        bitSize: 32,
-      });
-      env.attachMember(structStructure, {
-        name: 'cat',
-        type: MemberType.Int,
-        isRequired: true,
-        byteSize: 4,
-        bitOffset: 32,
-        bitSize: 32,
-      });     
-      env.finalizeShape(structStructure);
-      env.finalizeStructure(structStructure);
-      const structure = env.beginStructure({
-        type: StructureType.Struct,
-        name: 'Hello',
-        byteSize: structStructure.byteSize + 4,
-      });
-      env.attachMember(structure, {
-        name: 'pets',
-        type: MemberType.Object,
-        bitSize: structStructure.byteSize * 8,
-        bitOffset: 32,
-        byteSize: structStructure.byteSize,
-        slot: 0,
-        structure: structStructure,
-      });
-      env.attachMember(structure, {
-        name: 'money',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-      });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      const object = Hello(new ArrayBuffer(structure.byteSize), { writable: false });
-      const { pets } = object;
-      expect(() => pets.dog = 123).to.throw(TypeError)
-        .with.property('message').that.contains('read-only');
-      expect(() => pets.$ = { cat: 123 }).to.throw(TypeError)
-        .with.property('message').that.contains('read-only');
-    });
     it('should throw when copying a struct with pointer in reloc memory to one in fixed memory', function() {
       const env = new NodeEnvironment();
       env.allocateExternMemory = function(len, align) {

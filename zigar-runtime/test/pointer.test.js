@@ -396,7 +396,7 @@ describe('Pointer functions', function() {
       expect(entries).to.eql([ [ 'cat', 123 ], [ 'dog', 456 ] ]);
       expect(entries.valueOf()).to.eql([ [ 'cat', 123 ], [ 'dog', 456 ] ]);
     })
-    it('should convert target of pointer to read-only when it is const', function() {
+    it('should prevent modification of target when pointer is const', function() {
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -440,8 +440,11 @@ describe('Pointer functions', function() {
       const { constructor: HelloPtr } = structure;
       const object = new Hello({ cat: 123, dog: 456 });
       const pointer = new HelloPtr(object);
+      expect(() => pointer['*'] = { cat: 111, dog: 222 }).to.throw(TypeError)
+        .with.property('message').that.contains('read-only');
       const target = pointer['*'];
       expect(target).to.not.equal(object);
+      expect(() => target.cat = 999).to.throw(TypeError);
       expect(target.cat).to.equal(123);
       object.cat = 777;
       expect(target.cat).to.equal(777);
@@ -488,13 +491,33 @@ describe('Pointer functions', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: HelloPtr } = structure;
-      const object1 = new Hello({ cat: 123, dog: 456 });
-      const object2 = new Hello({ cat: 123, dog: 456 }, { writable: false });
-      const pointer = new HelloPtr(object1);
-      expect(() => pointer.$ = object2).to.throw(TypeError)
+      const constStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Hello',
+        byteSize: 4,
+        isConst: true,
+        hasPointer: true,
+      });
+      env.attachMember(constStructure, {
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        slot: 0,
+        structure: structStructure,
+      });
+      env.finalizeShape(constStructure);
+      env.finalizeStructure(constStructure);
+      const { constructor: HelloConstPtr } = constStructure;     
+      const constPointer = new HelloConstPtr({ cat: 123, dog: 456 });
+      const constTarget = constPointer['*'];
+      expect(() => new HelloPtr(constTarget)).to.throw(TypeError)
         .with.property('message').that.contains('read-only');
-        expect(() => new HelloPtr(object2)).to.throw(TypeError)
-        .with.property('message').that.contains('read-only');
+      const nonconstPointer = HelloPtr(constPointer);
+      const nonconstTarget = nonconstPointer['*'];
+      expect(() => new HelloPtr(nonconstTarget)).to.not.throw();
+      expect(() => nonconstTarget.cat = 777).to.not.throw();
+      expect(() => nonconstPointer.cat = 777).to.not.throw();
     })
     it('should automatically dereference pointers a single-level only', function() {
       const structStructure = env.beginStructure({
@@ -1339,12 +1362,12 @@ describe('Pointer functions', function() {
       const nonConstPointer = new U8SlicePtr(buffer);
       const constPointer = ConstU8SlicePtr(nonConstPointer);
       expect(constPointer['*']).to.not.equal(nonConstPointer['*']);
-      expect(constPointer['*']).to.equal(U8Slice(nonConstPointer['*'], { writable: false }));
       nonConstPointer[2] = 3;
+      Object.keys(constPointer['*']);
       expect(() => nonConstPointer[2] = 3).to.not.throw();
       expect(() => constPointer[2] = 3).to.throw(TypeError);
       const constPointer2 = new ConstU8SlicePtr(nonConstPointer);
-      expect(constPointer2['*']).to.equal(U8Slice(nonConstPointer['*'], { writable: false }));
+      expect(constPointer2['*']).to.equal(constPointer['*']);
     })
     it('should require explicit cast to convert const pointer to non-const pointer', function() {
       const uintStructure = env.beginStructure({
@@ -1734,43 +1757,6 @@ describe('Pointer functions', function() {
       pointer2.$ = pointer1;
       expect(dv3.getBigUint64(0, true)).to.equal(1000n);
       expect(dv3.getBigUint64(8, true)).to.equal(4n);
-    })
-    it('should be able to create read-only object', function() {
-      const intStructure = env.beginStructure({
-        type: StructureType.Primitive,
-        name: 'Int32',
-        byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-      });
-      env.finalizeShape(intStructure);
-      env.finalizeStructure(intStructure);
-      const { constructor: Int32 } = intStructure;
-      const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
-        byteSize: 8,
-        hasPointer: true,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Int32Ptr } = structure;
-      expect(Int32Ptr.child).to.equal(Int32);
-      const int32 = new Int32(1234);
-      const intPointer = new Int32Ptr(int32, { writable: false });
-      expect(() => intPointer.$ = int32).to.throw(TypeError);
     })
     it('should yield underlying pointer object', function() {
       const intStructure = env.beginStructure({

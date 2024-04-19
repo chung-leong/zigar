@@ -106,7 +106,7 @@ export function getChildVivificator(structure) {
   for (const member of members.filter(m => m.type === MemberType.Object)) {
     objectMembers[member.slot] = member;
   }
-  return function vivificateChild(slot, writable = true) {
+  return function vivificateChild(slot) {
     const member = objectMembers[slot];
     const { bitOffset, byteSize, structure: { constructor } } = member;
     const dv = this[MEMORY];
@@ -120,7 +120,7 @@ export function getChildVivificator(structure) {
       len = member.bitSize >> 3;
     }
     const childDV = new DataView(dv.buffer, offset, len);
-    const object = this[SLOTS][slot] = constructor.call(PARENT, childDV, { writable });
+    const object = this[SLOTS][slot] = constructor.call(PARENT, childDV);
     return object;
   }
 }

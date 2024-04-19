@@ -69,10 +69,6 @@ describe('Array functions', function() {
       const object1 = Hello(buffer);
       const object2 = Hello(buffer);
       expect(object2).to.equal(object1);
-      const object3 = Hello(buffer, { writable: false });
-      const object4 = Hello(buffer, { writable: false });
-      expect(object3).to.not.equal(object1);
-      expect(object4).to.equal(object3);
     })
     it('should allow array access using bracket operator', function() {
       const structure = env.beginStructure({
@@ -1110,75 +1106,6 @@ describe('Array functions', function() {
       object[Symbol.asyncIterator]();
       delete object[Symbol.asyncIterator];
       expect(object[Symbol.asyncIterator]).to.be.undefined;
-    })
-    it('should be able to create read-only object', function() {
-      const structure = env.beginStructure({
-        type: StructureType.Array,
-        name: 'Hello',
-        length: 8,
-        byteSize: 4 * 8,
-      });
-      const constructor = function() {};
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: { constructor, typedArray: Uint32Array }
-      });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      expect(Hello).to.be.a('function');
-      expect(Hello.child).to.equal(constructor);
-      const object = new Hello(new Uint32Array(8), { writable: false });
-      expect(() => object.set(0, 321)).to.throw();
-      expect(() => object[0] = 321).to.throw();
-    })
-    it('should make child object read-only too', function() {
-      const structStructure = env.beginStructure({
-        type: StructureType.Struct,
-        name: 'Hello',
-        byteSize: 4 * 2,
-      });
-      env.attachMember(structStructure, {
-        name: 'dog',
-        type: MemberType.Int,
-        isRequired: true,
-        byteSize: 4,
-        bitOffset: 0,
-        bitSize: 32,
-      });
-      env.attachMember(structStructure, {
-        name: 'cat',
-        type: MemberType.Int,
-        isRequired: true,
-        byteSize: 4,
-        bitOffset: 32,
-        bitSize: 32,
-      });
-      env.finalizeShape(structStructure);
-      env.finalizeStructure(structStructure);
-      const structure = env.beginStructure({
-        type: StructureType.Array,
-        name: 'Hello',
-        length: 4,
-        byteSize: structStructure.byteSize * 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: structStructure.byteSize * 8,
-        byteSize: structStructure.byteSize,
-        structure: structStructure,
-      });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      const objects = Hello(new ArrayBuffer(structure.byteSize), { writable: false });
-      const [ object ] = objects;
-      expect(() => object.dog = 123).to.throw(TypeError)
-        .with.property('message').that.contains('read-only');
-      expect(() => objects[2] = { cat: 123 }).to.throw(TypeError)
-        .with.property('message').that.contains('read-only');
     })
   })
   describe('getArrayIterator', function() {
