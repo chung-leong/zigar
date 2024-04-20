@@ -82,11 +82,13 @@ export class NodeEnvironment extends Environment {
   }
 
   obtainFixedView(address, len) {
-    if (!address && !len) {
-      // handle zero length slice
-      return this.obtainView(this.nullBuffer);
-    } else if (isInvalidAddress(address)) {
-      return null;
+    if (isInvalidAddress(address)) {
+      if (!len) {
+        // handle zero length slice
+        return this.obtainView(this.nullBuffer);
+      } else {
+        return null;
+      }
     } else {
       const buffer = this.obtainExternBuffer(address, len);
       this.addressMap.set(buffer, address);

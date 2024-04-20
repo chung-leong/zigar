@@ -1030,6 +1030,7 @@ function findElements(arg, Child) {
 function requireDataView(structure, arg, env) {
   const dv = getDataView(structure, arg, env);
   if (!dv) {
+    console.log(arg);
     throw new BufferExpected(structure);
   }
   return dv;
@@ -5175,14 +5176,17 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   obtainFixedView(address, len) {
-    if ((!address && !len) || !isInvalidAddress(address)) {
-      const { memory } = this;
-      const dv = this.obtainView(memory.buffer, address, len);
-      dv[MEMORY] = { memory, address, len };
-      return dv;  
-    } else {
-      return null;
+    if (isInvalidAddress(address)) {
+      if (!len) {
+        address = 0;
+      } else {
+        return null;
+      }
     }
+    const { memory } = this;
+    const dv = this.obtainView(memory.buffer, address, len);
+    dv[MEMORY] = { memory, address, len };
+    return dv;  
   }
 
   releaseFixedView(dv) {
