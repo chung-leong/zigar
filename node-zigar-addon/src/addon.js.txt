@@ -5131,7 +5131,7 @@
 "      const len = end - start;\n"
 "      const unalignedShadowDV = this.allocateShadowMemory(len + maxAlign, 1);\n"
 "      const unalignedAddress = this.getViewAddress(unalignedShadowDV);\n"
-"      const maxAlignAddress = getAlignedAddress(add(unalignedAddress, maxAlignOffset), maxAlign);\n"
+"      const maxAlignAddress = getAlignedAddress(add(unalignedAddress, maxAlignOffset - start), maxAlign);\n"
 "      const shadowAddress = add(maxAlignAddress, start - maxAlignOffset);\n"
 "      const shadowOffset = unalignedShadowDV.byteOffset + Number(shadowAddress - unalignedAddress);\n"
 "      const shadowDV = new DataView(unalignedShadowDV.buffer, shadowOffset, len);\n"

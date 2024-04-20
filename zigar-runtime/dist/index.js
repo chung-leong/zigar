@@ -4872,7 +4872,7 @@ class Environment {
     const len = end - start;
     const unalignedShadowDV = this.allocateShadowMemory(len + maxAlign, 1);
     const unalignedAddress = this.getViewAddress(unalignedShadowDV);
-    const maxAlignAddress = getAlignedAddress(add(unalignedAddress, maxAlignOffset), maxAlign);
+    const maxAlignAddress = getAlignedAddress(add(unalignedAddress, maxAlignOffset - start), maxAlign);
     const shadowAddress = add(maxAlignAddress, start - maxAlignOffset);
     const shadowOffset = unalignedShadowDV.byteOffset + Number(shadowAddress - unalignedAddress);
     const shadowDV = new DataView(unalignedShadowDV.buffer, shadowOffset, len);
