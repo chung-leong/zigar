@@ -22,7 +22,14 @@ export function addTests(importModule, options) {
       module.variable = { number1: 888, number2: 999 };
       const [ after2 ] = await capture(() => print());
       expect(after2).to.equal('as-static-variables.Struct{ .number1 = 888, .number2 = 999 }');
-      expect(comptime_struct.input.src.channels).to.equal(4);
+      expect(comptime_struct.valueOf()).to.eql({
+        input: {
+          src: {
+            channels: 4,
+          },
+          params: [ 0, 1, 2, 3 ],
+        }
+      });
       expect(tuple.valueOf()).to.eql([ 123, 3.14, 'evil' ]);
       expect(() => comptime_struct.input.src.channels = 5).to.throw(TypeError);
       expect(() => comptime_struct.input.src = { channels: 5 }).to.throw(TypeError);
