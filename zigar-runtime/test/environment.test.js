@@ -229,7 +229,7 @@ describe('Environment', function() {
         }
       };
       const dv = new DataView(new ArrayBuffer(0));
-      const object = env.castView(structure, dv);
+      const object = env.castView(structure, dv, true);
       expect(recv).to.equal(ENVIRONMENT);
       expect(arg).to.equal(dv);
     })
@@ -245,7 +245,7 @@ describe('Environment', function() {
         hasPointer: true,
       };
       const dv = new DataView(new ArrayBuffer(8));
-      const object = env.castView(structure, dv);
+      const object = env.castView(structure, dv, true);
     })
   })
   describe('getSlotNumber', function() {

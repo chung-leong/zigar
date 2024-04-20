@@ -2002,6 +2002,7 @@ function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) 
     [SETTER]: { value: set },
     [GETTER]: { value: get },
     [PROP_SETTERS]: { value: propSetters },
+    [CONST_TARGET]: { value: null },
     ...instanceDescriptors,
   });
   defineProperties(constructor, staticDescriptors);
@@ -2009,8 +2010,14 @@ function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) 
 }
 
 function makeReadOnly(object) {
+  const descriptors = Object.getOwnPropertyDescriptors(object.constructor.prototype);
+  for (const [ name, descriptor ] of Object.entries(descriptors)) {
+    if (descriptor.set) {
+      descriptor.set = throwReadOnly;
+      Object.defineProperty(object, name, descriptor);
+    }
+  }
   defineProperties(object, {
-    $: { get: object[GETTER], set: throwReadOnly },
     [SETTER]: { value: throwReadOnly },
     [CONST_TARGET]: { value: object },
   });
@@ -3334,7 +3341,6 @@ function appendEnumeration(enumeration, name, item) {
         [index]: { value: item },
         [name]: { value: item },
       });
-      makeReadOnly(item);
     }
   } else {
     // non-exhaustive enum
@@ -3433,8 +3439,6 @@ function appendErrorSet(errorSet, name, es) {
   defineProperties(currentGlobalSet, descriptors); 
   // add name to prop list
   currentGlobalSet[PROPS].push(name);
-  // make read-only
-  makeReadOnly(es);
 }
 
 function resetGlobalErrorSet() {
@@ -4428,7 +4432,7 @@ function generateCode(definition, params) {
 
 function addStructureDefinitions(lines, definition) {
   const { structures, options, keys } = definition;
-  const { MEMORY, SLOTS } = keys;
+  const { MEMORY, SLOTS, CONST_TARGET } = keys;
   const add = manageIndentation(lines);
   const defaultStructure = {
     constructor: null,
@@ -4537,6 +4541,9 @@ function addStructureDefinitions(lines, definition) {
         add(`memory: { ${pairs.join(', ')} },`);
         if (dv.hasOwnProperty('reloc')) {
           add(`reloc: ${dv.reloc},`);
+        }
+        if (object[CONST_TARGET]) {
+          add(`const: true,`);
         }
       }
       const entries = (slots) ? Object.entries(slots).filter(a => a[1]) : [];
@@ -5834,12 +5841,15 @@ class Environment {
     }
   }
 
-  castView(structure, dv) {
+  castView(structure, dv, writable) {
     const { constructor, hasPointer } = structure;
     const object = constructor.call(ENVIRONMENT, dv);
     if (hasPointer) {
       // acquire targets of pointers
       this.acquirePointerTargets(object);
+    }
+    if (!writable) {
+      makeReadOnly(object);
     }
     return object;
   }
@@ -6015,7 +6025,7 @@ class Environment {
     return { 
       structures, 
       options: { runtimeSafety, littleEndian }, 
-      keys: { MEMORY, SLOTS } 
+      keys: { MEMORY, SLOTS, CONST_TARGET },
     };
   }
 

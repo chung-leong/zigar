@@ -2,9 +2,8 @@ import { requireDataView, setDataView } from './data-view.js';
 import { MissingInitializers, NoInitializer, NoProperty, throwReadOnly } from './error.js';
 import { isReadOnly } from './member.js';
 import {
-  ALL_KEYS,
-  CONST_TARGET, COPIER, GETTER, MEMORY, POINTER_VISITOR, PROP_SETTERS, SETTER, SLOTS, TARGET_SETTER,
-  VIVIFICATOR
+  ALL_KEYS, CONST_TARGET, COPIER, GETTER, MEMORY, POINTER_VISITOR, PROP_SETTERS, SETTER, SLOTS,
+  TARGET_SETTER, VIVIFICATOR
 } from './symbol.js';
 import { MemberType } from './types.js';
 
@@ -57,6 +56,7 @@ export function attachDescriptors(constructor, instanceDescriptors, staticDescri
     [SETTER]: { value: set },
     [GETTER]: { value: get },
     [PROP_SETTERS]: { value: propSetters },
+    [CONST_TARGET]: { value: null },
     ...instanceDescriptors,
   });
   defineProperties(constructor, staticDescriptors);
@@ -64,8 +64,14 @@ export function attachDescriptors(constructor, instanceDescriptors, staticDescri
 }
 
 export function makeReadOnly(object) {
+  const descriptors = Object.getOwnPropertyDescriptors(object.constructor.prototype);
+  for (const [ name, descriptor ] of Object.entries(descriptors)) {
+    if (descriptor.set) {
+      descriptor.set = throwReadOnly;
+      Object.defineProperty(object, name, descriptor);
+    }
+  }
   defineProperties(object, {
-    $: { get: object[GETTER], set: throwReadOnly },
     [SETTER]: { value: throwReadOnly },
     [CONST_TARGET]: { value: object },
   });

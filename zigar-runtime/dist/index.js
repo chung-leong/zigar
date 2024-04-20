@@ -1970,6 +1970,7 @@ function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) 
     [SETTER]: { value: set },
     [GETTER]: { value: get },
     [PROP_SETTERS]: { value: propSetters },
+    [CONST_TARGET]: { value: null },
     ...instanceDescriptors,
   });
   defineProperties(constructor, staticDescriptors);
@@ -1977,8 +1978,14 @@ function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) 
 }
 
 function makeReadOnly(object) {
+  const descriptors = Object.getOwnPropertyDescriptors(object.constructor.prototype);
+  for (const [ name, descriptor ] of Object.entries(descriptors)) {
+    if (descriptor.set) {
+      descriptor.set = throwReadOnly;
+      Object.defineProperty(object, name, descriptor);
+    }
+  }
   defineProperties(object, {
-    $: { get: object[GETTER], set: throwReadOnly },
     [SETTER]: { value: throwReadOnly },
     [CONST_TARGET]: { value: object },
   });
@@ -2481,8 +2488,6 @@ function appendErrorSet(errorSet, name, es) {
   defineProperties(currentGlobalSet, descriptors); 
   // add name to prop list
   currentGlobalSet[PROPS].push(name);
-  // make read-only
-  makeReadOnly(es);
 }
 
 function resetGlobalErrorSet() {
@@ -2635,7 +2640,6 @@ function appendEnumeration(enumeration, name, item) {
         [index]: { value: item },
         [name]: { value: item },
       });
-      makeReadOnly(item);
     }
   } else {
     // non-exhaustive enum
@@ -4469,12 +4473,15 @@ class Environment {
     }
   }
 
-  castView(structure, dv) {
+  castView(structure, dv, writable) {
     const { constructor, hasPointer } = structure;
     const object = constructor.call(ENVIRONMENT, dv);
     if (hasPointer) {
       // acquire targets of pointers
       this.acquirePointerTargets(object);
+    }
+    if (!writable) {
+      makeReadOnly(object);
     }
     return object;
   }
@@ -4534,6 +4541,9 @@ class Environment {
         const { constructor } = placeholder.structure;
         const { reloc, const: isConst } = placeholder;
         const object = constructor.call(ENVIRONMENT, dv);
+        if (isConst) {
+          makeReadOnly(object);
+        }
         if (placeholder.slots) {
           insertObjects(object[SLOTS], placeholder.slots);
         }

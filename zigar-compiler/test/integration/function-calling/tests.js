@@ -416,5 +416,14 @@ export function addTests(importModule, options) {
       });
       expect(after).to.eql([ 'Bob', 'Bob', 'Bob' ]);
     });
+    it('should correctly return const pointer', async function() {
+      this.timeout(120000);
+      const { getUser } = await importTest('return-const-pointer');
+      const user = getUser();
+      expect(() => user.age = 18).to.throw(TypeError);
+      expect(() => user.name = "Jesus Christ").to.throw(TypeError);
+      expect(() => user.address.street = "Nowhere").to.throw(TypeError);
+      expect(() => user.address.zip = 33333).to.throw(TypeError);
+    });
   })
 }

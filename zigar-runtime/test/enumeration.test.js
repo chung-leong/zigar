@@ -3,7 +3,7 @@ import { expect } from 'chai';
 import { NodeEnvironment } from '../src/environment-node.js';
 import { useAllMemberTypes } from '../src/member.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { ENVIRONMENT, SLOTS } from '../src/symbol.js';
+import { SLOTS } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
 
 describe('Enumeration functions', function() {
@@ -42,8 +42,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
+          0: env.castView(structure, viewOf(new Uint32Array([ 0 ])), false),
+          1: env.castView(structure, viewOf(new Uint32Array([ 1 ])), false),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -94,8 +94,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
+          0: env.castView(structure, viewOf(new Uint32Array([ 0 ])), false),
+          1: env.castView(structure, viewOf(new Uint32Array([ 1 ])), false),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -138,8 +138,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
+          0: env.castView(structure, viewOf(new Uint32Array([ 0 ])), false),
+          1: env.castView(structure, viewOf(new Uint32Array([ 1 ])), false),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -177,8 +177,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
+          0: env.castView(structure, viewOf(new Uint32Array([ 0 ])), false),
+          1: env.castView(structure, viewOf(new Uint32Array([ 1 ])), false),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -214,8 +214,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
+          0: env.castView(structure, viewOf(new Uint32Array([ 0 ])), false),
+          1: env.castView(structure, viewOf(new Uint32Array([ 1 ])), false),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -251,8 +251,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
+          0: env.castView(structure, viewOf(new Uint32Array([ 0 ])), false),
+          1: env.castView(structure, viewOf(new Uint32Array([ 1 ])), false),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -289,8 +289,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 123 ]))),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 456 ]))),
+          0: env.castView(structure, viewOf(new Uint32Array([ 123 ])), false),
+          1: env.castView(structure, viewOf(new Uint32Array([ 456 ])), false),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -328,8 +328,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new BigUint64Array([ 1234n ]))),
-          1: Hello.call(ENVIRONMENT, viewOf(new BigUint64Array([ 4567n ]))),
+          0: env.castView(structure, viewOf(new BigUint64Array([ 1234n ])), false),
+          1: env.castView(structure, viewOf(new BigUint64Array([ 4567n ])), false),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -366,8 +366,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
+          0: env.castView(structure, viewOf(new Uint32Array([ 0 ])), false),
+          1: env.castView(structure, viewOf(new Uint32Array([ 1 ])), false),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -406,8 +406,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
+          0: env.castView(structure, viewOf(new Uint32Array([ 0 ])), false),
+          1: env.castView(structure, viewOf(new Uint32Array([ 1 ])), false),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -443,8 +443,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
+          0: env.castView(structure, viewOf(new Uint32Array([ 0 ])), false),
+          1: env.castView(structure, viewOf(new Uint32Array([ 1 ])), false),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -480,8 +480,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 0 ]))),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 1 ]))),
+          0: env.castView(structure, viewOf(new Uint32Array([ 0 ])), false),
+          1: env.castView(structure, viewOf(new Uint32Array([ 1 ])), false),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -554,8 +554,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 456 ]))),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 123 ]))),
+          0: env.castView(structure, viewOf(new Uint32Array([ 456 ])), false),
+          1: env.castView(structure, viewOf(new Uint32Array([ 123 ])), false),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -591,8 +591,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 456 ]))),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 123 ]))),
+          0: env.castView(structure, viewOf(new Uint32Array([ 456 ])), false),
+          1: env.castView(structure, viewOf(new Uint32Array([ 123 ])), false),
         },
       }, true);
       env.finalizeStructure(structure);
@@ -627,8 +627,8 @@ describe('Enumeration functions', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 456 ]))),
-          1: Hello.call(ENVIRONMENT, viewOf(new Uint32Array([ 123 ]))),
+          0: env.castView(structure, viewOf(new Uint32Array([ 456 ])), false),
+          1: env.castView(structure, viewOf(new Uint32Array([ 123 ])), false),
         },
       }, true);
       env.finalizeStructure(structure);

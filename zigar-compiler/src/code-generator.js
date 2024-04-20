@@ -64,7 +64,7 @@ export function generateCode(definition, params) {
 
 function addStructureDefinitions(lines, definition) {
   const { structures, options, keys } = definition;
-  const { MEMORY, SLOTS } = keys;
+  const { MEMORY, SLOTS, CONST_TARGET } = keys;
   const add = manageIndentation(lines);
   const defaultStructure = {
     constructor: null,
@@ -173,6 +173,9 @@ function addStructureDefinitions(lines, definition) {
         add(`memory: { ${pairs.join(', ')} },`);
         if (dv.hasOwnProperty('reloc')) {
           add(`reloc: ${dv.reloc},`);
+        }
+        if (object[CONST_TARGET]) {
+          add(`const: true,`);
         }
       }
       const entries = (slots) ? Object.entries(slots).filter(a => a[1]) : [];

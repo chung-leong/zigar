@@ -3,12 +3,12 @@ import { AlignmentConflict } from './error.js';
 import { useBool, useObject } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { addMethods } from './method.js';
-import { defineProperties } from './object.js';
+import { defineProperties, makeReadOnly } from './object.js';
 import { addStaticMembers } from './static.js';
 import { findAllObjects, getStructureFactory, useArgStruct } from './structure.js';
 import {
-  ALIGN, ATTRIBUTES, COPIER, ENVIRONMENT, FIXED_LOCATION, LOCATION_GETTER, LOCATION_SETTER, MEMORY,
-  POINTER, POINTER_VISITOR, SIZE, SLOTS, TARGET_GETTER
+  ALIGN, ATTRIBUTES, CONST_TARGET, COPIER, ENVIRONMENT, FIXED_LOCATION, LOCATION_GETTER,
+  LOCATION_SETTER, MEMORY, POINTER, POINTER_VISITOR, SIZE, SLOTS, TARGET_GETTER
 } from './symbol.js';
 import { decodeText } from './text.js';
 import { MemberType, StructureType } from './types.js';
@@ -201,12 +201,15 @@ export class Environment {
     }
   }
 
-  castView(structure, dv) {
+  castView(structure, dv, writable) {
     const { constructor, hasPointer } = structure;
     const object = constructor.call(ENVIRONMENT, dv);
     if (hasPointer) {
       // acquire targets of pointers
       this.acquirePointerTargets(object);
+    }
+    if (!writable) {
+      makeReadOnly(object);
     }
     return object;
   }
@@ -382,7 +385,7 @@ export class Environment {
     return { 
       structures, 
       options: { runtimeSafety, littleEndian }, 
-      keys: { MEMORY, SLOTS } 
+      keys: { MEMORY, SLOTS, CONST_TARGET },
     };
   }
 
@@ -496,6 +499,9 @@ export class Environment {
         const { constructor } = placeholder.structure;
         const { reloc, const: isConst } = placeholder;
         const object = constructor.call(ENVIRONMENT, dv);
+        if (isConst) {
+          makeReadOnly(object);
+        }
         if (placeholder.slots) {
           insertObjects(object[SLOTS], placeholder.slots);
         }
