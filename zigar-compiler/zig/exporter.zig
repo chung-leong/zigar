@@ -590,7 +590,8 @@ pub fn toMemory(ptr: anytype, is_comptime: bool) Memory {
         else => @intFromPtr(ptr),
     };
     const invalid_address = create: {
-        const invalid_ptr: *u8 = undefined;
+        var invalid_ptr: *u8 = undefined;
+        _ = &invalid_ptr;
         break :create @intFromPtr(invalid_ptr);
     };
     if (address == invalid_address) {
