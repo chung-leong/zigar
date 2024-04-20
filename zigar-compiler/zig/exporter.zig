@@ -88,6 +88,7 @@ pub const Structure = extern struct {
     byte_size: usize,
     alignment: u16,
     is_const: bool = false,
+    is_tuple: bool = false,
     has_pointer: bool,
 };
 
@@ -191,6 +192,18 @@ fn isConst(comptime T: type) bool {
 test "isConst" {
     assert(isConst(i32) == false);
     assert(isConst(*const i32) == true);
+}
+
+fn isTuple(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Struct => |st| st.is_tuple,
+        else => false,
+    };
+}
+
+test "isTuple" {
+    assert(isTuple(@TypeOf(.{})) == true);
+    assert(isTuple(struct {}) == false);
 }
 
 fn isPacked(comptime T: type) bool {
@@ -700,6 +713,7 @@ fn getStructure(host: anytype, comptime T: type) Error!Value {
             .byte_size = getStructureSize(T),
             .alignment = getStructureAlign(T),
             .is_const = isConst(T),
+            .is_tuple = isTuple(T),
             .has_pointer = hasPointer(T),
         };
         // create the structure and place it in the slot immediately
@@ -1283,7 +1297,7 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
         if (comptime isSupported(field.type)) {
             const comptime_only = field.is_comptime or isComptimeOnly(field.type);
             try host.attachMember(structure, .{
-                .name = if (st.is_tuple) null else getCString(field.name),
+                .name = getCString(field.name),
                 .member_type = if (field.is_comptime) .@"comptime" else getMemberType(field.type),
                 .is_required = field.default_value == null,
                 .bit_offset = if (comptime_only) missing(usize) else @bitOffsetOf(T, field.name),

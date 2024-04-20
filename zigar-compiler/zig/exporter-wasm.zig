@@ -262,6 +262,7 @@ pub const Host = struct {
             try insertProperty(structure, "align", def.alignment);
         }
         try insertProperty(structure, "isConst", def.is_const);
+        try insertProperty(structure, "isTuple", def.is_tuple);
         try insertProperty(structure, "hasPointer", def.has_pointer);
         if (_beginStructure(structure)) |s| {
             return s;

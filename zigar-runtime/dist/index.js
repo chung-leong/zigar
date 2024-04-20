@@ -3105,14 +3105,13 @@ function defineStructShape(structure, env) {
     byteSize,
     align,
     instance: { members },
+    isTuple,
     hasPointer,
   } = structure;  
   const memberDescriptors = {};
-  const isTuple = !!members.find(m => m.name === undefined);
-  for (const [ index, member ] of members.entries()) {
+  for (const member of members) {
     const { get, set } = getDescriptor(member, env);
-    const name = (isTuple) ? index : member.name;
-    memberDescriptors[name] = { get, set, configurable: true, enumerable: true };
+    memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
     if (member.isRequired && set) {
       set.required = true;
     }
@@ -3136,7 +3135,7 @@ function defineStructShape(structure, env) {
     $: { get: getSelf, set: initializer },
     dataView: getDataViewDescriptor(structure),
     base64: getBase64Descriptor(structure),
-    length: isTuple && { value: members.length },
+    length: isTuple && { value: parseInt(members[members.length - 1].name) + 1 },
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },

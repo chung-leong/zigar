@@ -1121,13 +1121,16 @@ describe('Struct functions', function() {
         type: StructureType.Struct,
         name: 'zig.super.Hello',
         byteSize: 0,
+        isTuple: true,
       });
       env.attachMember(structure, {
+        name: '0',
         type: MemberType.Comptime,
         slot: 0,
         structure: { type: StructureType.Primitive }
       });
       env.attachMember(structure, {
+        name: '1',
         type: MemberType.Comptime,
         slot: 1,
         structure: { type: StructureType.Primitive }

@@ -132,8 +132,11 @@ describe('WebAssemblyEnvironment', function() {
     it('should handle invalid address', function() {
       const env = new WebAssemblyEnvironment();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 }); 
-      const dv = env.obtainFixedView(0xAAAAAAAA, 0);
-      expect(dv).to.be.null;
+      const dv1 = env.obtainFixedView(0xAAAAAAAA, 4);
+      expect(dv1).to.be.null;
+      const dv2 = env.obtainFixedView(0xAAAAAAAA, 0);
+      expect(dv2).to.not.be.null;
+      expect(dv2.byteOffset).to.equal(0);
     })
     it('should handle reference to zero-length slice', function() {
       const env = new WebAssemblyEnvironment();

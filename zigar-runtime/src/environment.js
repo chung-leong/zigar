@@ -254,6 +254,7 @@ export class Environment {
       byteSize,
       align,
       isConst,
+      isTuple,
       hasPointer,
     } = def;
     return {
@@ -265,6 +266,7 @@ export class Environment {
       byteSize,
       align,
       isConst,
+      isTuple,
       hasPointer,
       instance: {
         members: [],

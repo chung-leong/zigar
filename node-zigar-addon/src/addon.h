@@ -65,6 +65,7 @@ typedef struct {
     size_t byte_size;
     uint16_t align;
     bool is_const;
+    bool is_tuple;
     bool has_pointer;
 } structure;
 
