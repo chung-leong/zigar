@@ -2,12 +2,14 @@ import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
 import { InvalidInitializer } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { attachDescriptors, createConstructor, createPropertyApplier } from './object.js';
+import {
+  attachDescriptors, createConstructor, createPropertyApplier, makeReadOnly
+} from './object.js';
 import {
   convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf,
   normalizeValue
 } from './special.js';
-import { ALIGN, COMPAT, COPIER, NORMALIZER, SIZE } from './symbol.js';
+import { ALIGN, COMPAT, COPIER, NORMALIZER, SIZE, WRITE_DISABLER } from './symbol.js';
 import { getPrimitiveType } from './types.js';
 
 export function definePrimitive(structure, env) {
@@ -45,6 +47,7 @@ export function definePrimitive(structure, env) {
     [Symbol.toPrimitive]: { value: get },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [NORMALIZER]: { value: normalizeValue },
+    [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     [COMPAT]: { value: getCompatibleTags(structure) },

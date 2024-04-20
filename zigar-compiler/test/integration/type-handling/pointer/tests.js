@@ -27,6 +27,7 @@ export function addTests(importModule, options) {
       expect(module.int32_slice).to.be.an('[]const i32');
       expect(module.int32_slice.get(0)).to.equal(123);
       expect([ ...module.int32_slice ]).to.eql([ 123, 456, 789 ]);
+      expect(() => module.int32_slice = [ 1, 2, 3 ]).to.throw(TypeError);
       expect(() => module.int32_slice[0] = 1).to.throw(TypeError);
       const slice = module.int32_slice['*'];
       expect(() => slice.$ = [ 1, 2, 3 ]).to.throw(TypeError);
@@ -35,6 +36,7 @@ export function addTests(importModule, options) {
       const nonConstSlice = module.int32_slice_nonconst['*'];
       expect(() => nonConstSlice[0] = 1).to.not.throw();
       expect(() => module.int32_slice_nonconst[0] = 123).to.not.throw();
+      expect(() => module.int32_slice_nonconst = [ 1, 2, 3 ]).to.throw(TypeError);
       expect(module.u8_slice).to.have.lengthOf(11);
       expect(u8_slice).to.have.lengthOf(11);
       expect(module.u8_slice.get(0)).to.equal('H'.charCodeAt(0));

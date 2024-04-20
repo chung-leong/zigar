@@ -10,7 +10,7 @@ import { convertToJSON, getValueOf } from './special.js';
 import {
   ALIGN, CONST_PROXY, CONST_TARGET, COPIER, ENVIRONMENT, FIXED_LOCATION, GETTER, LOCATION_GETTER,
   LOCATION_SETTER, MEMORY, NORMALIZER, PARENT, POINTER, POINTER_VISITOR, PROXY, SETTER, SIZE,
-  SLOTS, TARGET_GETTER, TARGET_SETTER, VIVIFICATOR
+  SLOTS, TARGET_GETTER, TARGET_SETTER, VIVIFICATOR, WRITE_DISABLER
 } from './symbol.js';
 import { MemberType, StructureType } from './types.js';
 
@@ -193,6 +193,7 @@ export function definePointer(structure, env) {
     [VIVIFICATOR]: { value: () => { throw new NullPointer() } },
     [NORMALIZER]: { value: normalizePointer },
     [FIXED_LOCATION]: { value: undefined, writable: true },
+    [WRITE_DISABLER]: { value: makePointerReadOnly },
   };
   const staticDescriptors = {
     child: { get: () => targetStructure.constructor },
@@ -201,6 +202,14 @@ export function definePointer(structure, env) {
     [SIZE]: { value: byteSize },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+
+function makePointerReadOnly() {  
+  const pointer = this[POINTER] ?? this;
+  const descriptor = Object.getOwnPropertyDescriptor(pointer.constructor.prototype, '$');
+  descriptor.set = throwReadOnly;
+  Object.defineProperty(pointer, '$', descriptor);
+  Object.defineProperty(pointer, CONST_TARGET, { value: pointer });
 }
 
 function normalizePointer(cb) {
@@ -317,7 +326,7 @@ const constTargetHandlers = {
       return target;
     } else {
       const value = target[name];
-      if (typeof(value) === 'object' && value[CONST_TARGET] === null) {
+      if (value?.[CONST_TARGET] === null) {
         return getConstProxy(value);
       } 
       return value;

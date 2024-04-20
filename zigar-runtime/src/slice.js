@@ -1,6 +1,6 @@
 import {
   canBeString, createArrayProxy, getArrayEntries, getArrayIterator, getChildVivificator,
-  getPointerVisitor, normalizeArray, transformIterable
+  getPointerVisitor, makeArrayReadOnly, normalizeArray, transformIterable
 } from './array.js';
 import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
 import {
@@ -15,7 +15,8 @@ import {
   getTypedArrayDescriptor, getValueOf
 } from './special.js';
 import {
-  ALIGN, COMPAT, COPIER, LENGTH, MEMORY, NORMALIZER, POINTER_VISITOR, SIZE, VIVIFICATOR
+  ALIGN, COMPAT, COPIER, LENGTH, MEMORY, NORMALIZER, POINTER_VISITOR, SIZE, VIVIFICATOR,
+  WRITE_DISABLER
 } from './symbol.js';
 import { MemberType } from './types.js';
 
@@ -122,6 +123,7 @@ export function defineSlice(structure, env) {
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
     [NORMALIZER]: { value: normalizeArray },
+    [WRITE_DISABLER]: { value: makeArrayReadOnly },
   };
   const staticDescriptors = {
     child: { get: () => elementStructure.constructor },

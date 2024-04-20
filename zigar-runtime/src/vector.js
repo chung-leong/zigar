@@ -2,11 +2,11 @@ import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './object.js';
+import { attachDescriptors, createConstructor, createPropertyApplier, getSelf, makeReadOnly } from './object.js';
 import {
   convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf
 } from './special.js';
-import { ALIGN, COMPAT, COPIER, NORMALIZER, PROP_SETTERS, SIZE } from './symbol.js';
+import { ALIGN, COMPAT, COPIER, NORMALIZER, PROP_SETTERS, SIZE, WRITE_DISABLER } from './symbol.js';
 
 export function defineVector(structure, env) {
   const {
@@ -71,6 +71,7 @@ export function defineVector(structure, env) {
     [Symbol.iterator]: { value: getVectorIterator },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [NORMALIZER]: { value: normalizeVector },
+    [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     child: { get: () => elementStructure.constructor },

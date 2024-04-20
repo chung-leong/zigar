@@ -17,6 +17,7 @@ export const TARGET_SETTER = Symbol('targetSetter');
 export const FIXED_LOCATION = Symbol('fixedLocation');
 export const PROP_GETTERS = Symbol('propGetters');
 export const PROP_SETTERS = Symbol('propSetters');
+export const WRITE_DISABLER = Symbol('writeDisabler');
 export const ALL_KEYS = Symbol('allKeys');
 export const LENGTH = Symbol('length');
 export const PROXY = Symbol('proxy');

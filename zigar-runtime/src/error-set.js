@@ -3,12 +3,12 @@ import { InvalidInitializer, deanimalizeErrorName } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import {
-  attachDescriptors, createConstructor, createPropertyApplier, defineProperties
+  attachDescriptors, createConstructor, createPropertyApplier, defineProperties, makeReadOnly
 } from './object.js';
 import {
   convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf
 } from './special.js';
-import { ALIGN, CLASS, COPIER, GETTER, NORMALIZER, PROPS, SIZE } from './symbol.js';
+import { ALIGN, CLASS, COPIER, GETTER, NORMALIZER, PROPS, SIZE, WRITE_DISABLER } from './symbol.js';
 import { isErrorJSON } from './types.js';
 
 let currentGlobalSet;
@@ -72,6 +72,7 @@ export function defineErrorSet(structure, env) {
     delete: { value: getDestructor(env) },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [NORMALIZER]: { value: get },
+    [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },

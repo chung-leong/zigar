@@ -63,18 +63,16 @@ export function attachDescriptors(constructor, instanceDescriptors, staticDescri
   return constructor;
 }
 
-export function makeReadOnly(object) {
-  const descriptors = Object.getOwnPropertyDescriptors(object.constructor.prototype);
+export function makeReadOnly() {
+  const descriptors = Object.getOwnPropertyDescriptors(this.constructor.prototype);
   for (const [ name, descriptor ] of Object.entries(descriptors)) {
     if (descriptor.set) {
       descriptor.set = throwReadOnly;
-      Object.defineProperty(object, name, descriptor);
+      Object.defineProperty(this, name, descriptor);
     }
   }
-  defineProperties(object, {
-    [SETTER]: { value: throwReadOnly },
-    [CONST_TARGET]: { value: object },
-  });
+  Object.defineProperty(this, SETTER, { value: throwReadOnly });
+  Object.defineProperty(this, CONST_TARGET, { value: this });
 }
 
 export function createConstructor(structure, handlers, env) {

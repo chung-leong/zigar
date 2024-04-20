@@ -523,6 +523,7 @@ const TARGET_SETTER = Symbol('targetSetter');
 const FIXED_LOCATION = Symbol('fixedLocation');
 const PROP_GETTERS = Symbol('propGetters');
 const PROP_SETTERS = Symbol('propSetters');
+const WRITE_DISABLER = Symbol('writeDisabler');
 const ALL_KEYS = Symbol('allKeys');
 const LENGTH = Symbol('length');
 const PROXY = Symbol('proxy');
@@ -1977,18 +1978,16 @@ function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) 
   return constructor;
 }
 
-function makeReadOnly(object) {
-  const descriptors = Object.getOwnPropertyDescriptors(object.constructor.prototype);
+function makeReadOnly() {
+  const descriptors = Object.getOwnPropertyDescriptors(this.constructor.prototype);
   for (const [ name, descriptor ] of Object.entries(descriptors)) {
     if (descriptor.set) {
       descriptor.set = throwReadOnly;
-      Object.defineProperty(object, name, descriptor);
+      Object.defineProperty(this, name, descriptor);
     }
   }
-  defineProperties(object, {
-    [SETTER]: { value: throwReadOnly },
-    [CONST_TARGET]: { value: object },
-  });
+  Object.defineProperty(this, SETTER, { value: throwReadOnly });
+  Object.defineProperty(this, CONST_TARGET, { value: this });
 }
 
 function createConstructor(structure, handlers, env) {
@@ -2457,6 +2456,7 @@ function defineErrorSet(structure, env) {
     delete: { value: getDestructor(env) },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [NORMALIZER]: { value: get },
+    [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
@@ -2617,6 +2617,7 @@ function defineEnumerationShape(structure, env) {
     [Symbol.toPrimitive]: { value: toPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [NORMALIZER]: { value: normalizeEnumerationItem },
+    [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
@@ -2826,6 +2827,7 @@ function definePointer(structure, env) {
     [VIVIFICATOR]: { value: () => { throw new NullPointer() } },
     [NORMALIZER]: { value: normalizePointer },
     [FIXED_LOCATION]: { value: undefined, writable: true },
+    [WRITE_DISABLER]: { value: makePointerReadOnly },
   };
   const staticDescriptors = {
     child: { get: () => targetStructure.constructor },
@@ -2834,6 +2836,14 @@ function definePointer(structure, env) {
     [SIZE]: { value: byteSize },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+
+function makePointerReadOnly() {  
+  const pointer = this[POINTER] ?? this;
+  const descriptor = Object.getOwnPropertyDescriptor(pointer.constructor.prototype, '$');
+  descriptor.set = throwReadOnly;
+  Object.defineProperty(pointer, '$', descriptor);
+  Object.defineProperty(pointer, CONST_TARGET, { value: pointer });
 }
 
 function normalizePointer(cb) {
@@ -2947,7 +2957,7 @@ const constTargetHandlers = {
       return target;
     } else {
       const value = target[name];
-      if (typeof(value) === 'object' && value[CONST_TARGET] === null) {
+      if (value?.[CONST_TARGET] === null) {
         return getConstProxy(value);
       } 
       return value;
@@ -3014,6 +3024,7 @@ function defineStructShape(structure, env) {
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, always) },
     [NORMALIZER]: { value: normalizeStruct },
+    [WRITE_DISABLER]: { value: makeReadOnly },    
     [PROPS]: { value: members.map(m => m.name) },
   };
   const staticDescriptors = {
@@ -3272,6 +3283,7 @@ function defineArray(structure, env) {
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor() },
     [NORMALIZER]: { value: normalizeArray },
+    [WRITE_DISABLER]: { value: makeArrayReadOnly },
   };
   const staticDescriptors = {
     child: { get: () => member.structure.constructor },
@@ -3287,6 +3299,20 @@ function createArrayProxy() {
   // hide the proxy so console wouldn't display a recursive structure
   Object.defineProperty(this, PROXY, { value: proxy }); 
   return proxy;
+}
+
+function makeArrayReadOnly() {
+  makeReadOnly.call(this);
+  Object.defineProperty(this, 'set', { value: throwReadOnly });
+  const get = this.get;
+  const getReadOnly = function(index) {
+    const element = get.call(this, index);
+    if (element?.[CONST_TARGET] === null) {
+      element[WRITE_DISABLER]?.();
+    }
+    return element;
+  };
+  Object.defineProperty(this, 'get', { value: getReadOnly });
 }
 
 function canBeString(member) {
@@ -3577,6 +3603,7 @@ function defineErrorUnion(structure, env) {
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, { isChildActive }) },
     [NORMALIZER]: { value: normalizeValue },
+    [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
@@ -3684,6 +3711,7 @@ function defineOptional(structure, env) {
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, { isChildActive }) },
     [NORMALIZER]: { value: normalizeValue },
+    [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
@@ -3727,6 +3755,7 @@ function definePrimitive(structure, env) {
     [Symbol.toPrimitive]: { value: get },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [NORMALIZER]: { value: normalizeValue },
+    [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     [COMPAT]: { value: getCompatibleTags(structure) },
@@ -3830,6 +3859,7 @@ function defineSlice(structure, env) {
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor() },
     [NORMALIZER]: { value: normalizeArray },
+    [WRITE_DISABLER]: { value: makeArrayReadOnly },
   };
   const staticDescriptors = {
     child: { get: () => elementStructure.constructor },
@@ -4038,6 +4068,7 @@ function defineUnionShape(structure, env) {
     [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor$1(structure, { isChildActive }) },
     [PROP_GETTERS]: { value: memberValueGetters },
     [NORMALIZER]: { value: normalizeUnion },
+    [WRITE_DISABLER]: { value: makeReadOnly },
     [PROPS]: fieldDescriptor,
   };  
   const staticDescriptors = {
@@ -4149,6 +4180,7 @@ function defineVector(structure, env) {
     [Symbol.iterator]: { value: getVectorIterator },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [NORMALIZER]: { value: normalizeVector },
+    [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     child: { get: () => elementStructure.constructor },
@@ -4481,7 +4513,7 @@ class Environment {
       this.acquirePointerTargets(object);
     }
     if (!writable) {
-      makeReadOnly(object);
+      object[WRITE_DISABLER]?.();
     }
     return object;
   }
@@ -4542,7 +4574,7 @@ class Environment {
         const { reloc, const: isConst } = placeholder;
         const object = constructor.call(ENVIRONMENT, dv);
         if (isConst) {
-          makeReadOnly(object);
+          object[WRITE_DISABLER]?.();
         }
         if (placeholder.slots) {
           insertObjects(object[SLOTS], placeholder.slots);

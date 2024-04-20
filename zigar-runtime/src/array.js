@@ -1,16 +1,18 @@
 import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
-import { ArrayLengthMismatch, InvalidArrayInitializer } from './error.js';
+import { ArrayLengthMismatch, InvalidArrayInitializer, throwReadOnly } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { attachDescriptors, createConstructor, createPropertyApplier } from './object.js';
+import {
+  attachDescriptors, createConstructor, createPropertyApplier, makeReadOnly
+} from './object.js';
 import { always, copyPointer, getProxy } from './pointer.js';
 import {
   convertToJSON, getBase64Descriptor, getDataViewDescriptor, getStringDescriptor,
   getTypedArrayDescriptor, getValueOf, handleError
 } from './special.js';
 import {
-  ALIGN, ARRAY, COMPAT, COPIER, ELEMENT_GETTER, ELEMENT_SETTER, MEMORY, NORMALIZER, PARENT,
-  POINTER_VISITOR, PROXY, SIZE, SLOTS, VIVIFICATOR
+  ALIGN, ARRAY, COMPAT, CONST_TARGET, COPIER, ELEMENT_GETTER, ELEMENT_SETTER, MEMORY, NORMALIZER, PARENT,
+  POINTER_VISITOR, PROXY, SIZE, SLOTS, VIVIFICATOR, WRITE_DISABLER
 } from './symbol.js';
 import { MemberType } from './types.js';
 
@@ -84,6 +86,7 @@ export function defineArray(structure, env) {
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
     [NORMALIZER]: { value: normalizeArray },
+    [WRITE_DISABLER]: { value: makeArrayReadOnly },
   };
   const staticDescriptors = {
     child: { get: () => member.structure.constructor },
@@ -99,6 +102,20 @@ export function createArrayProxy() {
   // hide the proxy so console wouldn't display a recursive structure
   Object.defineProperty(this, PROXY, { value: proxy }); 
   return proxy;
+}
+
+export function makeArrayReadOnly() {
+  makeReadOnly.call(this);
+  Object.defineProperty(this, 'set', { value: throwReadOnly });
+  const get = this.get;
+  const getReadOnly = function(index) {
+    const element = get.call(this, index);
+    if (element?.[CONST_TARGET] === null) {
+      element[WRITE_DISABLER]?.();
+    }
+    return element;
+  };
+  Object.defineProperty(this, 'get', { value: getReadOnly });
 }
 
 export function canBeString(member) {

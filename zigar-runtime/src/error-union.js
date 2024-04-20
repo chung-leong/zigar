@@ -1,13 +1,17 @@
 import { NotInErrorSet } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
-import { attachDescriptors, createConstructor, createPropertyApplier } from './object.js';
+import {
+  attachDescriptors, createConstructor, createPropertyApplier, makeReadOnly
+} from './object.js';
 import { copyPointer, resetPointer } from './pointer.js';
 import {
   convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, normalizeValue
 } from './special.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
-import { ALIGN, CLASS, COPIER, NORMALIZER, POINTER_VISITOR, RESETTER, SIZE, VIVIFICATOR } from './symbol.js';
+import {
+  ALIGN, CLASS, COPIER, NORMALIZER, POINTER_VISITOR, RESETTER, SIZE, VIVIFICATOR, WRITE_DISABLER
+} from './symbol.js';
 import { MemberType, isErrorJSON } from './types.js';
 
 export function defineErrorUnion(structure, env) {
@@ -86,6 +90,7 @@ export function defineErrorUnion(structure, env) {
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     [NORMALIZER]: { value: normalizeValue },
+    [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },

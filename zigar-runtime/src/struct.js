@@ -1,11 +1,15 @@
 import { InvalidInitializer, NotOnByteBoundary } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { attachDescriptors, createConstructor, createPropertyApplier, getSelf } from './object.js';
-import { always, copyPointer } from './pointer.js';
-import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, handleError } from './special.js';
 import {
-  ALIGN, COPIER, MEMORY, NORMALIZER, PARENT, POINTER_VISITOR, PROPS, SIZE, SLOTS, VIVIFICATOR
+  attachDescriptors, createConstructor, createPropertyApplier, getSelf, makeReadOnly
+} from './object.js';
+import { always, copyPointer } from './pointer.js';
+import {
+  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, handleError
+} from './special.js';
+import {
+  ALIGN, COPIER, MEMORY, NORMALIZER, PARENT, POINTER_VISITOR, PROPS, SIZE, SLOTS, VIVIFICATOR, WRITE_DISABLER
 } from './symbol.js';
 import { MemberType } from './types.js';
 
@@ -52,6 +56,7 @@ export function defineStructShape(structure, env) {
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, always) },
     [NORMALIZER]: { value: normalizeStruct },
+    [WRITE_DISABLER]: { value: makeReadOnly },    
     [PROPS]: { value: members.map(m => m.name) },
   };
   const staticDescriptors = {

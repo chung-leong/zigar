@@ -31,6 +31,7 @@ export function addTests(importModule, options) {
       expect(float64_array4x4).to.be.an('[4][4]f64');
       const row1 = float64_array4x4[1];
       expect(row1).to.be.an('[4]f64');
+      expect(() => float64_array4x4[1] = [ 0, 0, 0, 0 ]).to.throw(TypeError);
       expect(() => float64_array4x4[1][1] = 0).to.throw(TypeError);
       expect(module.int32_array4.valueOf()).to.eql([ 1, 123, 3, 4 ]);
       expect(JSON.stringify(module.int32_array4)).to.equal('[1,123,3,4]');

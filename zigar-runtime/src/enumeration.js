@@ -2,9 +2,13 @@ import { getDataView, getTypedArrayClass } from './data-view.js';
 import { InvalidInitializer } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { attachDescriptors, createConstructor, createPropertyApplier, defineProperties } from './object.js';
-import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf } from './special.js';
-import { ALIGN, COPIER, MORE, NAME, NORMALIZER, SIZE, TAG } from './symbol.js';
+import {
+  attachDescriptors, createConstructor, createPropertyApplier, defineProperties, makeReadOnly
+} from './object.js';
+import {
+  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf
+} from './special.js';
+import { ALIGN, COPIER, MORE, NAME, NORMALIZER, SIZE, TAG, WRITE_DISABLER } from './symbol.js';
 
 export function defineEnumerationShape(structure, env) {
   const {
@@ -73,6 +77,7 @@ export function defineEnumerationShape(structure, env) {
     [Symbol.toPrimitive]: { value: toPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [NORMALIZER]: { value: normalizeEnumerationItem },
+    [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },

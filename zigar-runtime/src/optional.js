@@ -1,11 +1,13 @@
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier, getMemoryResetter } from './memory.js';
-import { attachDescriptors, createConstructor } from './object.js';
+import { attachDescriptors, createConstructor, makeReadOnly } from './object.js';
 import { copyPointer, resetPointer } from './pointer.js';
-import { convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, normalizeValue } from './special.js';
+import {
+  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, normalizeValue
+} from './special.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
 import {
-  ALIGN, COPIER, NORMALIZER, POINTER_VISITOR, RESETTER, SIZE, VIVIFICATOR
+  ALIGN, COPIER, NORMALIZER, POINTER_VISITOR, RESETTER, SIZE, VIVIFICATOR, WRITE_DISABLER
 } from './symbol.js';
 import { MemberType } from './types.js';
 
@@ -71,6 +73,7 @@ export function defineOptional(structure, env) {
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     [NORMALIZER]: { value: normalizeValue },
+    [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },

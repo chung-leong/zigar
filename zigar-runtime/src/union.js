@@ -4,7 +4,7 @@ import {
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import {
-  attachDescriptors, createConstructor, createPropertyApplier, getSelf
+  attachDescriptors, createConstructor, createPropertyApplier, getSelf, makeReadOnly
 } from './object.js';
 import { copyPointer, disablePointer, never, resetPointer } from './pointer.js';
 import {
@@ -13,7 +13,8 @@ import {
 import { getChildVivificator, getPointerVisitor } from './struct.js';
 import {
   ALIGN, COPIER, NAME, NORMALIZER, POINTER_VISITOR, PROPS, PROP_GETTERS, PROP_SETTERS, SIZE, TAG,
-  VIVIFICATOR
+  VIVIFICATOR,
+  WRITE_DISABLER
 } from './symbol.js';
 import { MemberType, StructureType } from './types.js';
 
@@ -164,6 +165,7 @@ export function defineUnionShape(structure, env) {
     [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     [PROP_GETTERS]: { value: memberValueGetters },
     [NORMALIZER]: { value: normalizeUnion },
+    [WRITE_DISABLER]: { value: makeReadOnly },
     [PROPS]: fieldDescriptor,
   };  
   const staticDescriptors = {
