@@ -12,6 +12,7 @@ import {
   ALIGN, COPIER, MEMORY, NORMALIZER, PARENT, POINTER_VISITOR, PROPS, SIZE, SLOTS, VIVIFICATOR, WRITE_DISABLER
 } from './symbol.js';
 import { MemberType } from './types.js';
+import { getVectorEntriesIterator, getVectorIterator, normalizeVector } from './vector.js';
 
 export function defineStructShape(structure, env) {
   const {
@@ -21,9 +22,11 @@ export function defineStructShape(structure, env) {
     hasPointer,
   } = structure;  
   const memberDescriptors = {};
-  for (const member of members) {
+  const isTuple = !!members.find(m => m.name === undefined);
+  for (const [ index, member ] of members.entries()) {
     const { get, set } = getDescriptor(member, env);
-    memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
+    const name = (isTuple) ? index : member.name;
+    memberDescriptors[name] = { get, set, configurable: true, enumerable: true };
     if (member.isRequired && set) {
       set.required = true;
     }
@@ -47,15 +50,17 @@ export function defineStructShape(structure, env) {
     $: { get: getSelf, set: initializer },
     dataView: getDataViewDescriptor(structure),
     base64: getBase64Descriptor(structure),
+    length: isTuple && { value: members.length },
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
+    entries: isTuple && { value: getVectorEntriesIterator },
     ...memberDescriptors,
-    [Symbol.iterator]: { value: getStructIterator },
+    [Symbol.iterator]: { value: (isTuple) ? getVectorIterator : getStructIterator },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, always) },
-    [NORMALIZER]: { value: normalizeStruct },
+    [NORMALIZER]: { value: (isTuple) ? normalizeVector : normalizeStruct },
     [WRITE_DISABLER]: { value: makeReadOnly },    
     [PROPS]: { value: members.map(m => m.name) },
   };

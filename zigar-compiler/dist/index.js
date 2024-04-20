@@ -2762,6 +2762,124 @@ function never() {
   return false;
 }
 
+function defineVector(structure, env) {
+  const {
+    length,
+    byteSize,
+    align,
+    instance: { members: [ member ] },
+  } = structure;
+  const { bitSize: elementBitSize, structure: elementStructure } = member;
+  const elementDescriptors = {};
+  for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
+    const { get, set } = getDescriptor({ ...member, bitOffset }, env);
+    elementDescriptors[i] = { get, set, configurable: true };
+  }
+  const propApplier = createPropertyApplier(structure);
+  const initializer = function(arg) {
+    if (arg instanceof constructor) {
+      this[COPIER](arg);
+    } else if (arg?.[Symbol.iterator]) {
+      let argLen = arg.length;
+      if (typeof(argLen) !== 'number') {
+        arg = [ ...arg ];
+        argLen = arg.length;
+      }
+      if (argLen !== length) {
+        throw new ArrayLengthMismatch(structure, this, arg);
+      }
+      let i = 0;
+      for (const value of arg) {
+        this[PROP_SETTERS][i++].call(this, value);
+      }
+    } else if (arg && typeof(arg) === 'object') {
+      if (propApplier.call(this, arg) === 0) {
+        throw new InvalidArrayInitializer(structure, arg);
+      }
+    } else if (arg !== undefined) {
+      throw new InvalidArrayInitializer(structure, arg);
+    }
+  };
+  const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
+  const typedArray = structure.typedArray = getTypedArrayClass(member);
+  const instanceDescriptors = {
+    ...elementDescriptors,
+    $: { get: getSelf, set: initializer },
+    length: { value: length },
+    dataView: getDataViewDescriptor(structure),
+    base64: getBase64Descriptor(structure),
+    typedArray: typedArray && getTypedArrayDescriptor(structure),
+    valueOf: { value: getValueOf },
+    toJSON: { value: convertToJSON },
+    entries: { value: getVectorEntries },
+    delete: { value: getDestructor(structure) },
+    [Symbol.iterator]: { value: getVectorIterator },
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [NORMALIZER]: { value: normalizeVector },
+    [WRITE_DISABLER]: { value: makeReadOnly },
+  };
+  const staticDescriptors = {
+    child: { get: () => elementStructure.constructor },
+    [COMPAT]: { value: getCompatibleTags(structure) },
+    [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
+  };
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+}
+
+function normalizeVector(cb) {
+  const array = [];
+  for (const value of this) {
+    array.push(cb(value));
+  }
+  return array;
+}
+
+function getVectorIterator() {
+  const self = this;
+  const length = this.length;
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < length) {
+        const current = index++;
+        value = self[current];
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+
+function getVectorEntriesIterator() {
+  const self = this;
+  const length = this.length;
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < length) {
+        const current = index++;
+        value = [ current, self[current] ];
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+
+function getVectorEntries() {
+  return {
+    [Symbol.iterator]: getVectorEntriesIterator.bind(this),
+    length: this.length,
+  };
+}
+
 function defineStructShape(structure, env) {
   const {
     byteSize,
@@ -2770,9 +2888,11 @@ function defineStructShape(structure, env) {
     hasPointer,
   } = structure;  
   const memberDescriptors = {};
-  for (const member of members) {
+  const isTuple = !!members.find(m => m.name === undefined);
+  for (const [ index, member ] of members.entries()) {
     const { get, set } = getDescriptor(member, env);
-    memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
+    const name = (isTuple) ? index : member.name;
+    memberDescriptors[name] = { get, set, configurable: true, enumerable: true };
     if (member.isRequired && set) {
       set.required = true;
     }
@@ -2796,15 +2916,17 @@ function defineStructShape(structure, env) {
     $: { get: getSelf, set: initializer },
     dataView: getDataViewDescriptor(structure),
     base64: getBase64Descriptor(structure),
+    length: isTuple && { value: members.length },
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
+    entries: isTuple && { value: getVectorEntriesIterator },
     ...memberDescriptors,
-    [Symbol.iterator]: { value: getStructIterator },
+    [Symbol.iterator]: { value: (isTuple) ? getVectorIterator : getStructIterator },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, always) },
-    [NORMALIZER]: { value: normalizeStruct },
+    [NORMALIZER]: { value: (isTuple) ? normalizeVector : normalizeStruct },
     [WRITE_DISABLER]: { value: makeReadOnly },    
     [PROPS]: { value: members.map(m => m.name) },
   };
@@ -4089,124 +4211,6 @@ function getUnionEntriesIterator(options) {
       }
       return { value, done };
     },
-  };
-}
-
-function defineVector(structure, env) {
-  const {
-    length,
-    byteSize,
-    align,
-    instance: { members: [ member ] },
-  } = structure;
-  const { bitSize: elementBitSize, structure: elementStructure } = member;
-  const elementDescriptors = {};
-  for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
-    const { get, set } = getDescriptor({ ...member, bitOffset }, env);
-    elementDescriptors[i] = { get, set, configurable: true };
-  }
-  const propApplier = createPropertyApplier(structure);
-  const initializer = function(arg) {
-    if (arg instanceof constructor) {
-      this[COPIER](arg);
-    } else if (arg?.[Symbol.iterator]) {
-      let argLen = arg.length;
-      if (typeof(argLen) !== 'number') {
-        arg = [ ...arg ];
-        argLen = arg.length;
-      }
-      if (argLen !== length) {
-        throw new ArrayLengthMismatch(structure, this, arg);
-      }
-      let i = 0;
-      for (const value of arg) {
-        this[PROP_SETTERS][i++].call(this, value);
-      }
-    } else if (arg && typeof(arg) === 'object') {
-      if (propApplier.call(this, arg) === 0) {
-        throw new InvalidArrayInitializer(structure, arg);
-      }
-    } else if (arg !== undefined) {
-      throw new InvalidArrayInitializer(structure, arg);
-    }
-  };
-  const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
-  const typedArray = structure.typedArray = getTypedArrayClass(member);
-  const instanceDescriptors = {
-    ...elementDescriptors,
-    $: { get: getSelf, set: initializer },
-    length: { value: length },
-    dataView: getDataViewDescriptor(structure),
-    base64: getBase64Descriptor(structure),
-    typedArray: typedArray && getTypedArrayDescriptor(structure),
-    valueOf: { value: getValueOf },
-    toJSON: { value: convertToJSON },
-    entries: { value: getVectorEntries },
-    delete: { value: getDestructor(structure) },
-    [Symbol.iterator]: { value: getVectorIterator },
-    [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizeVector },
-    [WRITE_DISABLER]: { value: makeReadOnly },
-  };
-  const staticDescriptors = {
-    child: { get: () => elementStructure.constructor },
-    [COMPAT]: { value: getCompatibleTags(structure) },
-    [ALIGN]: { value: align },
-    [SIZE]: { value: byteSize },
-  };
-  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
-}
-
-function normalizeVector(cb, options) {
-  const array = [];
-  for (const [ index, value ] of getVectorEntries.call(this, options)) {
-    array.push(cb(value));
-  }
-  return array;
-}
-
-function getVectorIterator() {
-  const self = this;
-  const length = this.length;
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < length) {
-        const current = index++;
-        value = self[current];
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
-}
-
-function getVectorEntriesIterator() {
-  const self = this;
-  const length = this.length;
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < length) {
-        const current = index++;
-        value = [ current, self[current] ];
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
-}
-
-function getVectorEntries() {
-  return {
-    [Symbol.iterator]: getVectorEntriesIterator.bind(this),
-    length: this.length,
   };
 }
 

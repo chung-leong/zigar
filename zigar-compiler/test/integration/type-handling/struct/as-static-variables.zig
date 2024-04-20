@@ -14,6 +14,8 @@ pub const comptime_struct = struct {
     };
 };
 
+pub const tuple = .{ 123, 3.14, .evil };
+
 pub fn print() void {
     std.debug.print("{any}\n", .{variable});
 }

@@ -1102,6 +1102,50 @@ describe('Struct functions', function() {
       expect(object.dog).to.equal(123);
       expect(object.cat).to.equal(456);
     })
+    it('should define a tuple', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const structure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'zig.super.Hello',
+        byteSize: 0,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Comptime,
+        slot: 0,
+        structure: { type: StructureType.Primitive }
+      });
+      env.attachMember(structure, {
+        type: MemberType.Comptime,
+        slot: 1,
+        structure: { type: StructureType.Primitive }
+      });
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: Int32.call(ENVIRONMENT, viewOf(new Int32Array([ 123 ]))),
+          1: Int32.call(ENVIRONMENT, viewOf(new Int32Array([ 456 ]))),
+        },
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const object = new Hello({});
+      expect(object[0]).to.equal(123);
+      expect(object[1]).to.equal(456);
+      expect(object.valueOf()).to.eql([ 123, 456 ]);
+    })
     it('should throw when copying a struct with pointer in reloc memory to one in fixed memory', function() {
       const env = new NodeEnvironment();
       env.allocateExternMemory = function(len, align) {

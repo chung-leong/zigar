@@ -11,7 +11,7 @@ export function addTests(importModule, options) {
   describe('Struct', function() {
     it('should import struct as static variables', async function() {
       this.timeout(120000);
-      const { default: module, constant, comptime_struct, print } = await importTest('as-static-variables');
+      const { default: module, constant, comptime_struct, tuple, print } = await importTest('as-static-variables');
       expect(constant.valueOf()).to.eql({ number1: 123, number2: 456 });
       expect(() => constant.number1 = 1).to.throw(TypeError);
       const [ before ] = await capture(() => print());
@@ -23,9 +23,11 @@ export function addTests(importModule, options) {
       const [ after2 ] = await capture(() => print());
       expect(after2).to.equal('as-static-variables.Struct{ .number1 = 888, .number2 = 999 }');
       expect(comptime_struct.input.src.channels).to.equal(4);
-      expect(() => comptime_struct.input.src.channels = 5).to.throw(Error);
-      expect(() => comptime_struct.input.src = { channels: 5 }).to.throw(Error);
-      expect(() => comptime_struct.input = { src: { channels: 5 } }).to.throw(Error);
+      expect(tuple.valueOf()).to.eql([ 123, 3.14, 'evil' ]);
+      expect(() => comptime_struct.input.src.channels = 5).to.throw(TypeError);
+      expect(() => comptime_struct.input.src = { channels: 5 }).to.throw(TypeError);
+      expect(() => comptime_struct.input = { src: { channels: 5 } }).to.throw(TypeError);
+      expect(() => tuple[0] = 123).to.throw(TypeError);
       expect(JSON.stringify(module.variable)).to.equal('{"number1":888,"number2":999}');
     })
     it('should print struct arguments', async function() {

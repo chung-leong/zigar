@@ -82,9 +82,9 @@ export function defineVector(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-export function normalizeVector(cb, options) {
+export function normalizeVector(cb) {
   const array = [];
-  for (const [ index, value ] of getVectorEntries.call(this, options)) {
+  for (const value of this) {
     array.push(cb(value));
   }
   return array;

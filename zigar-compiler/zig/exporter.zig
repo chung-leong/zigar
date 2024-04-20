@@ -1282,7 +1282,7 @@ fn addStructMembers(host: anytype, structure: Value, comptime T: type) !void {
         if (comptime isSupported(field.type)) {
             const comptime_only = field.is_comptime or isComptimeOnly(field.type);
             try host.attachMember(structure, .{
-                .name = getCString(field.name),
+                .name = if (st.is_tuple) null else getCString(field.name),
                 .member_type = if (field.is_comptime) .@"comptime" else getMemberType(field.type),
                 .is_required = field.default_value == null,
                 .bit_offset = if (comptime_only) missing(usize) else @bitOffsetOf(T, field.name),
