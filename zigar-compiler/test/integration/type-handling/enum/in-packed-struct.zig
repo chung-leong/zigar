@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const Pet = enum {
+pub const Pet = enum(u4) {
     dog,
     cat,
     monkey,
