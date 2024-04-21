@@ -103,7 +103,7 @@ describe('Compilation', function() {
     it('should compile code for WASM32', async function() {
       this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'freestanding' };
+      const options = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'wasi' };
       const modPath = getModuleCachePath(srcPath, options);
       const { outputPath } = await compile(srcPath, modPath, options);
       const { size } = await stat(outputPath);
@@ -157,10 +157,12 @@ describe('Compilation', function() {
     it('should compile optimized code', async function() {
       this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options1 = { optimize: 'Debug', arch: 'wasm32', platform: 'freestanding' };
-      const options2 = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'freestanding' };
-      const result1 = await compile(srcPath, null, options1);
-      const result2 = await compile(srcPath, null, options2);
+      const options1 = { optimize: 'Debug', arch: 'wasm32', platform: 'wasi' };
+      const options2 = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'wasi' };
+      const modPath1 = getModuleCachePath(srcPath, options1);
+      const modPath2 = getModuleCachePath(srcPath, options2);
+      const result1 = await compile(srcPath, modPath1, options1);
+      const result2 = await compile(srcPath, modPath2, options2);
       const { size: before } = await stat(result1.outputPath);
       const { size: after } = await stat(result2.outputPath);
       expect(after).to.be.below(before);
@@ -292,7 +294,7 @@ describe('Compilation', function() {
     it('should compile code for WASM32', function() {
       this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'freestanding' };
+      const options = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'wasi' };
       const modPath = getModuleCachePath(srcPath, options);
       const { outputPath } = compileSync(srcPath, modPath, options);
       const { size } = statSync(outputPath);
@@ -301,10 +303,12 @@ describe('Compilation', function() {
     it('should compile optimized code', function() {
       this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options1 = { optimize: 'Debug', arch: 'wasm32', platform: 'freestanding' };
-      const options2 = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'freestanding' };
-      const result1 = compileSync(srcPath, null, options1);
-      const result2 = compileSync(srcPath, null, options2);
+      const options1 = { optimize: 'Debug', arch: 'wasm32', platform: 'wasi' };
+      const options2 = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'wasi' };
+      const modPath1 = getModuleCachePath(srcPath, options1);
+      const modPath2 = getModuleCachePath(srcPath, options2);
+      const result1 = compileSync(srcPath, modPath1, options1);
+      const result2 = compileSync(srcPath, modPath2, options2);
       const { size: before } = statSync(result1.outputPath);
       const { size: after } = statSync(result2.outputPath);
       expect(after).to.be.below(before);

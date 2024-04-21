@@ -101,6 +101,7 @@ export async function acquireLock(pidPath, staleTime) {
           await delay(250);
           continue;
         }
+        /* c8 ignore next 3 */
       } else {
         throw err;
       }
@@ -121,6 +122,7 @@ export function acquireLockSync(pidPath, staleTime) {
         if (checkPidFile(pidPath, staleTime)) {
           delaySync(250);
         }
+        /* c8 ignore next 3 */
       } else {
         throw err;
       }
@@ -140,12 +142,15 @@ function checkPidFile(pidPath, staleTime = 60000 * 5) {
   let stale = false;
   try {
     const pid = loadFileSync(pidPath);
-    if (os.platform() === 'win32') {
-      execSync(`tasklist /nh /fi "pid eq ${pid}" | findstr .exe`, { stdio: 'pipe' }).toString();
-    } else {
-      execSync(`ps -p ${pid}`).toString();
+    if (pid) {
+      /* c8 ignore next 5 */
+      if (os.platform() === 'win32') {
+        execSync(`tasklist /nh /fi "pid eq ${pid}" | findstr .exe`, { stdio: 'pipe' }).toString();
+      } else {
+        execSync(`ps -p ${pid}`).toString();
+      }
     }
-    const last = findFileSync(pidPath)?.mtime || 0;
+    const last = findFileSync(pidPath)?.mtime /* c8 ignore next */ || 0;
     const diff = new Date() - last;
     if (diff > staleTime) {
       stale = true;
@@ -216,8 +221,8 @@ export async function createDirectory(path) {
     await createDirectory(dir);
     try {
       await mkdir(path);
+      /* c8 ignore next 5 */
     } catch (err) {
-      /* c8 ignore next 3 */
       if (err.code != 'EEXIST') {
         throw err;
       }
@@ -232,8 +237,8 @@ export function createDirectorySync(path) {
     createDirectorySync(dir);
     try {
       mkdirSync(path);
+      /* c8 ignore next 5 */
     } catch (err) {
-      /* c8 ignore next 3 */
       if (err.code != 'EEXIST') {
         throw err;
       }

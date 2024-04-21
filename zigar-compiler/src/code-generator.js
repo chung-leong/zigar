@@ -30,7 +30,7 @@ export function generateCode(definition, params) {
   // write out the structures as object literals 
   addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
-  add(`const env = createEnvironment(${addonDir ? JSON.stringify({ addonDir }, undefined, 2) : null});`);
+  add(`const env = createEnvironment(${JSON.stringify({ addonDir }, undefined, 2)});`);
   add(`const __zigar = env.getSpecialExports();`);
   add(`\n// recreate structures`);
   add(`env.recreateStructures(structures, options);`);

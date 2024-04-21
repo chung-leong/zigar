@@ -174,19 +174,18 @@ function processConfigFile(text, cfgPath, availableOptions) {
 }
 
 export function getAbsoluteMapping(sourceFiles, cfgDir) {
-  if (!sourceFiles) {
-    return;
-  }
   const map = {};
-  for (const [ module, source ] of Object.entries(sourceFiles)) {
-    const modulePath = resolve(cfgDir, module);
-    const sourcePath = resolve(cfgDir, source);
-    map[modulePath] = sourcePath;
+  if (sourceFiles) {
+    for (const [ module, source ] of Object.entries(sourceFiles)) {
+      const modulePath = resolve(cfgDir, module);
+      const sourcePath = resolve(cfgDir, source);
+      map[modulePath] = sourcePath;
+    }
   }
   return map;
 }
 
 export function findSourceFile(modulePath, options) {
   const { sourceFiles } = options;
-  return sourceFiles?.[modulePath]; 
+  return sourceFiles[modulePath]; 
 }

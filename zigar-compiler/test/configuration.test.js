@@ -47,6 +47,16 @@ describe('Configuration', function() {
         embedWASM: true,
       });
     })
+    it('should extract numeric options', function() {
+      const { searchParams } = new URL('file:///home/someone/hello.zig?boo=100');
+      const fakeOptions = {
+        boo: {
+          type: 'number',
+        }
+      };
+      const options = extractOptions(searchParams, fakeOptions);
+      expect(options.boo).to.equal(100);
+    })
     it('should throw when option is not recognized', function() {
       const { searchParams } = new URL('file:///home/someone/hello.zig?build-folder=/tmp');
       expect(() => extractOptions(searchParams, optionsForCompile)).to.throw(Error)
