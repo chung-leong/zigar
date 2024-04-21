@@ -1,6 +1,6 @@
 {
   "name": "zigar-runtime",
-  "version": "0.11.1-beta.2",
+  "version": "0.11.1-beta.3",
   "description": "JavaScript runtime for code transpiled using Zigar",
   "main": "./dist/index.js",
   "type": "module",
