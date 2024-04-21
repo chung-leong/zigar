@@ -1736,7 +1736,7 @@ fn findIndex(comptime name: []const u8, comptime c: u8, comptime start: usize) u
 fn getFunctionName(comptime T: type) ?[]const u8 {
     const name = @typeName(T);
     const prefix = "exporter.ArgumentStruct((function '";
-    if (findPrefix(name, prefix)) {
+    if (comptime findPrefix(name, prefix)) {
         const start = prefix.len;
         const end = findIndex(name, '\'', start);
         return name[start..end];
