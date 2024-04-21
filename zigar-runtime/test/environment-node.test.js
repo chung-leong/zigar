@@ -142,13 +142,6 @@ describe('NodeEnvironment', function() {
       const dv2 = env.obtainFixedView(0xaaaaaaaaaaaaaaaan, 0);
       expect(dv2.buffer).to.equal(env.nullBuffer);
     })
-    it('should return null when address is invalid', function() {
-      const env = new NodeEnvironment();
-      const dv1 = env.obtainFixedView(0n, 4);
-      expect(dv1).to.be.null;
-      const dv2 = env.obtainFixedView(0xaaaaaaaaaaaaaaaan, 4);
-      expect(dv2).to.be.null;
-    })
   })
   describe('releaseFixedView', function() {    
     it('should free a data view that was allocated using allocateFixedMemory', function() {

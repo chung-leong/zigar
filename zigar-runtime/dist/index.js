@@ -1101,17 +1101,6 @@ function getCompatibleTags(structure) {
   return tags;
 }
 
-function isBuffer(arg, typedArray) {
-  const tag = arg?.[Symbol.toStringTag];
-  if (tag === 'DataView' || tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
-    return true;
-  } else if (typedArray && tag === typedArray.name) {
-    return true;
-  } else {
-    return false;
-  }
-}
-
 function getBigIntDescriptor(bitSize) {
   const getWord = DataView.prototype.getBigUint64;
   const setWord = DataView.prototype.setBigUint64;
@@ -2679,7 +2668,7 @@ function definePointer(structure, env) {
       const location = this[LOCATION_GETTER]();
       if (location.address !== prevLocation.address || location.length !== prevLocation.length) {
         const { constructor: Target } = targetStructure;
-        const dv = env.findMemory(location.address, location.length * Target[SIZE]);
+        const dv = env.findMemory(location.address, location.length, Target[SIZE]);
         const target = Target.call(ENVIRONMENT, dv);
         this[SLOTS][0] = target;
         this[FIXED_LOCATION] = location;
@@ -2782,8 +2771,11 @@ function definePointer(structure, env) {
         // creation of a new slice using a typed array is probably
         // not what the user wants; it's more likely that the intention
         // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
-        if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
-          warnImplicitArrayCreation(targetStructure, arg);
+        if (targetStructure.typedArray) {
+          const tag = arg?.buffer?.[Symbol.toStringTag];
+          if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
+            warnImplicitArrayCreation(targetStructure, arg);
+          }
         }
       }
       arg = autoObj;
@@ -3129,7 +3121,7 @@ function defineStructShape(structure, env) {
     $: { get: getSelf, set: initializer },
     dataView: getDataViewDescriptor(structure),
     base64: getBase64Descriptor(structure),
-    length: isTuple && { value: parseInt(members[members.length - 1].name) + 1 },
+    length: isTuple && { value: (members.length > 0) ? parseInt(members[members.length - 1].name) + 1 : 0 },
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
@@ -4430,7 +4422,15 @@ class Environment {
     }
   }
 
-  findMemory(address, len) {
+  findMemory(address, count, size) {
+    if (isInvalidAddress(address)) {
+      if (!count) {
+        address = 0;
+      } else {
+        return null;
+      }
+    }
+    let len = count * (size ?? 0);
     // check for null address (=== can't be used since address can be both number and bigint)
     if (this.context) {
       const { memoryList } = this.context;
@@ -4441,7 +4441,7 @@ class Environment {
       } else if (entry?.address <= address && address < add(entry.address, entry.len)) {
         const offset = Number(address - entry.address);
         const targetDV = entry.targetDV ?? entry.dv;
-        const isOpaque = len === undefined;
+        const isOpaque = size === undefined;
         if (isOpaque) {
           len = targetDV.byteLength - offset;
         }
@@ -4454,7 +4454,7 @@ class Environment {
       }
     }
     // not found in any of the buffers we've seen--assume it's fixed memory
-    return this.obtainFixedView(address, len ?? 0);
+    return this.obtainFixedView(address, len);
   }
 
   getViewAddress(dv) {
@@ -5003,8 +5003,7 @@ class Environment {
           // obtain address and length from memory
           location = pointer[LOCATION_GETTER]();
           // get view of memory that pointer points to
-          const len = (Target[SIZE] !== undefined) ? location.length * Target[SIZE] : undefined;
-          const dv = env.findMemory(location.address, len);
+          const dv = env.findMemory(location.address, location.length, Target[SIZE]);
           newTarget = (dv) ? Target.call(ENVIRONMENT, dv) : null;
         } else {
           newTarget = currentTarget;
@@ -5083,9 +5082,7 @@ function add(address, len) {
 }
 
 function isInvalidAddress(address) {
-  if (!address) {
-    return true;
-  } else if (typeof(address) === 'bigint') {
+  if (typeof(address) === 'bigint') {
     return address === 0xaaaaaaaaaaaaaaaan;
   } else {
     return address === 0xaaaaaaaa;
@@ -5149,7 +5146,7 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   freeHostMemory(address, len, align) {
-    const dv = this.findMemory(address, len);
+    const dv = this.findMemory(address, len, 1);
     this.removeShadow(dv);
     this.unregisterMemory(address);
     this.freeShadowMemory(address, len, align);
@@ -5173,13 +5170,6 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   obtainFixedView(address, len) {
-    if (isInvalidAddress(address)) {
-      if (!len) {
-        address = 0;
-      } else {
-        return null;
-      }
-    }
     const { memory } = this;
     const dv = this.obtainView(memory.buffer, address, len);
     dv[MEMORY] = { memory, address, len };

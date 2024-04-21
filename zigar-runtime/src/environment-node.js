@@ -1,4 +1,4 @@
-import { Environment, add, getAlignedAddress, isInvalidAddress, isMisaligned } from './environment.js';
+import { Environment, add, getAlignedAddress, isMisaligned } from './environment.js';
 import { ZigError } from './error.js';
 import { ALIGN, MEMORY, POINTER_VISITOR } from './symbol.js';
 
@@ -82,13 +82,9 @@ export class NodeEnvironment extends Environment {
   }
 
   obtainFixedView(address, len) {
-    if (isInvalidAddress(address)) {
-      if (!len) {
-        // handle zero length slice
-        return this.obtainView(this.nullBuffer);
-      } else {
-        return null;
-      }
+    if (!len) {
+      // handle zero length slice
+      return this.obtainView(this.nullBuffer);
     } else {
       const buffer = this.obtainExternBuffer(address, len);
       this.addressMap.set(buffer, address);

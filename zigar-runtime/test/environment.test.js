@@ -110,19 +110,19 @@ describe('Environment', function() {
       const dv1 = new DataView(new ArrayBuffer(32));
       env.startContext();
       const address = env.registerMemory(dv1);
-      const dv2 = env.findMemory(address, dv1.byteLength);
+      const dv2 = env.findMemory(address, dv1.byteLength, 1);
       expect(dv2).to.be.instanceOf(DataView);
       expect(dv2.buffer).to.equal(dv1.buffer);
       expect(dv2.byteOffset).to.equal(dv1.byteOffset);
     })
-    it('should find previously imported buffer when len is undefined', function() {
+    it('should find previously imported buffer when size is undefined', function() {
       const env = new Environment();
       env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
       env.getBufferAddress = () => 0x1000n;
       const dv1 = new DataView(new ArrayBuffer(32));
       env.startContext();
       const address = env.registerMemory(dv1);
-      const dv2 = env.findMemory(address, undefined);
+      const dv2 = env.findMemory(address, 1, undefined);
       expect(dv2).to.be.instanceOf(DataView);
       expect(dv2.buffer).to.equal(dv1.buffer);
       expect(dv2.byteOffset).to.equal(dv1.byteOffset);
@@ -134,7 +134,7 @@ describe('Environment', function() {
       const dv1 = new DataView(new ArrayBuffer(32));
       env.startContext();
       const address = env.registerMemory(dv1);
-      const dv2 = env.findMemory(address + 8n, 8);
+      const dv2 = env.findMemory(address + 8n, 8, 1);
       expect(dv2).to.be.instanceOf(DataView);
       expect(dv2.buffer).to.equal(dv1.buffer);
       expect(dv2.byteOffset).to.equal(8);
@@ -146,20 +146,32 @@ describe('Environment', function() {
       const dv1 = new DataView(new ArrayBuffer(32));
       env.startContext();
       const address = env.registerMemory(dv1);
-      const dv2 = env.findMemory(0xFF0000n, 8);
+      const dv2 = env.findMemory(0xFF0000n, 8, 1);
       expect(dv2).to.be.instanceOf(DataView);
       expect(dv2.buffer).to.be.instanceOf(SharedArrayBuffer);
     })
-    it('should return data view of shared memory if address is not knownand len is undefined', function() {
+    it('should return data view of shared memory if address is not known and size, is undefined', function() {
       const env = new Environment();
       env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
       env.getBufferAddress = () => 0x1000n;
       const dv1 = new DataView(new ArrayBuffer(32));
       env.startContext();
       const address = env.registerMemory(dv1);
-      const dv2 = env.findMemory(0xFF0000n, undefined);
+      const dv2 = env.findMemory(0xFF0000n, 4, undefined);
       expect(dv2).to.be.instanceOf(DataView);
       expect(dv2.buffer).to.be.instanceOf(SharedArrayBuffer);
+    })
+    it('should return null when address is invalid and count is above 0', function() {
+      const env = new Environment();
+      const dv = env.findMemory(0xaaaaaaaa, 14, 5);
+      expect(dv).to.be.null;
+    })
+    it('should return empty view when address is invalid and count is 0', function() {
+      const env = new Environment();
+      env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
+      env.getBufferAddress = () => 0x1000n;
+      const dv = env.findMemory(0xaaaaaaaa, 0, 5);
+      expect(dv.byteLength).to.equal(0);
     })
   })
   describe('getViewAddress', function() {

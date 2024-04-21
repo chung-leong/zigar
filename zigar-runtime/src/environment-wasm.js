@@ -1,4 +1,4 @@
-import { Environment, isInvalidAddress } from './environment.js';
+import { Environment } from './environment.js';
 import { ZigError } from './error.js';
 import { getCopyFunction, getMemoryCopier, restoreMemory } from './memory.js';
 import { ALIGN, ATTRIBUTES, COPIER, MEMORY, POINTER_VISITOR } from './symbol.js';
@@ -61,7 +61,7 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   freeHostMemory(address, len, align) {
-    const dv = this.findMemory(address, len);
+    const dv = this.findMemory(address, len, 1);
     this.removeShadow(dv);
     this.unregisterMemory(address);
     this.freeShadowMemory(address, len, align);
@@ -90,13 +90,6 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   obtainFixedView(address, len) {
-    if (isInvalidAddress(address)) {
-      if (!len) {
-        address = 0;
-      } else {
-        return null;
-      }
-    }
     const { memory } = this;
     const dv = this.obtainView(memory.buffer, address, len);
     dv[MEMORY] = { memory, address, len };

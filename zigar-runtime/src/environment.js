@@ -128,7 +128,15 @@ export class Environment {
     }
   }
 
-  findMemory(address, len) {
+  findMemory(address, count, size) {
+    if (isInvalidAddress(address)) {
+      if (!count) {
+        address = 0;
+      } else {
+        return null;
+      }
+    }
+    let len = count * (size ?? 0);
     // check for null address (=== can't be used since address can be both number and bigint)
     if (this.context) {
       const { memoryList } = this.context;
@@ -139,7 +147,7 @@ export class Environment {
       } else if (entry?.address <= address && address < add(entry.address, entry.len)) {
         const offset = Number(address - entry.address);
         const targetDV = entry.targetDV ?? entry.dv;
-        const isOpaque = len === undefined;
+        const isOpaque = size === undefined;
         if (isOpaque) {
           len = targetDV.byteLength - offset;
         }
@@ -152,7 +160,7 @@ export class Environment {
       }
     }
     // not found in any of the buffers we've seen--assume it's fixed memory
-    return this.obtainFixedView(address, len ?? 0);
+    return this.obtainFixedView(address, len);
   }
 
   getViewAddress(dv) {
@@ -933,8 +941,7 @@ export class Environment {
           // obtain address and length from memory
           location = pointer[LOCATION_GETTER]();
           // get view of memory that pointer points to
-          const len = (Target[SIZE] !== undefined) ? location.length * Target[SIZE] : undefined;
-          const dv = env.findMemory(location.address, len);
+          const dv = env.findMemory(location.address, location.length, Target[SIZE]);
           newTarget = (dv) ? Target.call(ENVIRONMENT, dv) : null;
         } else {
           newTarget = currentTarget;
@@ -1025,9 +1032,7 @@ export function add(address, len) {
 }
 
 export function isInvalidAddress(address) {
-  if (!address) {
-    return true;
-  } else if (typeof(address) === 'bigint') {
+  if (typeof(address) === 'bigint') {
     return address === 0xaaaaaaaaaaaaaaaan;
   } else {
     return address === 0xaaaaaaaa;

@@ -50,7 +50,7 @@ export function definePointer(structure, env) {
       const location = this[LOCATION_GETTER]();
       if (location.address !== prevLocation.address || location.length !== prevLocation.length) {
         const { constructor: Target } = targetStructure;
-        const dv = env.findMemory(location.address, location.length * Target[SIZE]);
+        const dv = env.findMemory(location.address, location.length, Target[SIZE]);
         const target = Target.call(ENVIRONMENT, dv);
         this[SLOTS][0] = target;
         this[FIXED_LOCATION] = location;
