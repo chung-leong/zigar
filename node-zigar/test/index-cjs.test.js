@@ -7,7 +7,7 @@ describe('CommonJS loader', function() {
     const require = createRequire(import.meta.url);
     it('should load Zig file', async function() {
       this.timeout(60000);
-      const uri = './zig-samples/function-simple.zig';
+      const uri = './zig-samples/simple.zig';
       const module = require(uri);
       expect(module.add).to.be.a('function');
     })
@@ -17,13 +17,13 @@ describe('CommonJS loader', function() {
     })
     it('should use query variables', async function() {
       this.timeout(300000);
-      const uri = './zig-samples/function-simple.zig?optimize=ReleaseSmall';
+      const uri = './zig-samples/simple.zig?optimize=ReleaseSafe';
       const module = require(uri);
       expect(module.add).to.be.a('function');
     })
     it('should use config file', async function() {
       this.timeout(300000);
-      const uri = './zig-samples/with-config/lib/simple.zigar';
+      const uri = './zig-samples/lib/simple.zigar';
       const module = require(uri);
       expect(module.add).to.be.a('function');
     })
