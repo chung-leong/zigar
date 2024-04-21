@@ -907,6 +907,7 @@ describe('Environment', function() {
                     })(),
                     structure: s1,
                     reloc: 0x2000n,
+                    const: true,
                   },
                 },
                 structure: s3,

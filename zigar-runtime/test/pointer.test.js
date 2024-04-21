@@ -4,17 +4,17 @@ import { useAllExtendedTypes } from '../src/data-view.js';
 import { NodeEnvironment } from '../src/environment-node.js';
 import { useAllMemberTypes } from '../src/member.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { ENVIRONMENT, LOCATION_GETTER, LOCATION_SETTER, MEMORY, POINTER } from '../src/symbol.js';
+import { ENVIRONMENT, LOCATION_GETTER, LOCATION_SETTER, MEMORY, POINTER, WRITE_DISABLER } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
 
 describe('Pointer functions', function() {
   const env = new NodeEnvironment();
-  describe('finalizePointer', function() {
-    beforeEach(function() {
-      useAllMemberTypes();
-      useAllStructureTypes();
-      useAllExtendedTypes();
-    })
+  beforeEach(function() {
+    useAllMemberTypes();
+    useAllStructureTypes();
+    useAllExtendedTypes();
+  })
+  describe('definePointer', function() {
     it('should define a pointer for pointing to integers', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -55,6 +55,7 @@ describe('Pointer functions', function() {
       expect(Number(intPointer)).to.equal(1234);
       expect(String(intPointer)).to.equal('1234');
       expect(`${intPointer}`).to.equal('1234');
+      expect(() => intPointer.delete()).to.not.throw();
     })
     it('should cast the same buffer to the same object', function() {
       const intStructure = env.beginStructure({
@@ -198,6 +199,54 @@ describe('Pointer functions', function() {
       const intPointer = new Int32Ptr(undefined);
       expect(() => intPointer['*']).to.throw('Null pointer');
       expect(() => intPointer['*'] = 123).to.throw('Null pointer');
+    })
+    it('should throw when element of array of null pointers is dereferenced', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Array,
+        name: '[2]*Int32',
+        byteSize: 16,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        byteSize: 8,
+        structure: ptrStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32PtrArray } = structure;
+      const ptrArray = new Int32PtrArray(undefined);
+      expect(() => ptrArray[0]['*']).to.throw('Null pointer');
     })
     it('should define a pointer for pointing to a structure', function() {
       const structStructure = env.beginStructure({
@@ -1368,6 +1417,8 @@ describe('Pointer functions', function() {
       expect(() => constPointer[2] = 3).to.throw(TypeError);
       const constPointer2 = new ConstU8SlicePtr(nonConstPointer);
       expect(constPointer2['*']).to.equal(constPointer['*']);
+      const constPointer3 = new ConstU8SlicePtr(constPointer['*']);
+      expect(constPointer3['*']).to.equal(constPointer['*']);
     })
     it('should require explicit cast to convert const pointer to non-const pointer', function() {
       const uintStructure = env.beginStructure({
@@ -1444,6 +1495,123 @@ describe('Pointer functions', function() {
       const nonConstPointer = U8SlicePtr(constPointer);
       nonConstPointer[2] = 123;
       expect(constPointer[2]).to.equal(123);
+    })
+    it('should return read-only target when pointer is const', function() {
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Target',
+        byteSize: 4,
+        hasPointer: false,
+      });
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'cow',
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]Target',
+        byteSize: 4,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Object,
+        bitSize: 32,
+        byteSize: 4,
+        structure: structStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const constStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '[]const Target',
+        byteSize: 8,
+        isConst: true,
+        hasPointer: true,
+      });
+      env.attachMember(constStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(constStructure);
+      env.finalizeStructure(constStructure);
+      const { constructor: ConstSlicePtr } = constStructure;
+      const buffer = new ArrayBuffer(4 * 4);
+      const constPointer = ConstSlicePtr(buffer);
+      const element = constPointer[0];
+      expect(() => element.cow = 123).to.throw(TypeError);
+    })
+    it('should not make pointers in read-only target const', function() {
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Target',
+        byteSize: 4,
+        hasPointer: false,
+      });
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'cow',
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Target',
+        byteSize: 8,
+        isConst: false,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: structStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const { constructor: TargetPtr } = ptrStructure;
+      const constStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*const *Target',
+        byteSize: 8,
+        isConst: true,
+        hasPointer: true,
+      });
+      env.attachMember(constStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.finalizeShape(constStructure);
+      env.finalizeStructure(constStructure);
+      const { constructor: ConstPtrPtr } = constStructure;
+      const ptr = new TargetPtr({ cow: 1234 });
+      const constPointer = new ConstPtrPtr(ptr);
+      const ptrRO = constPointer['*'];
+      // pointer is read-only so we can't set a new target
+      expect(ptrRO).to.be.instanceOf(TargetPtr);
+      expect(() => ptrRO.$ = 123).to.throw(TypeError);
+      // pointer is not const, however, so we can modify its target
+      expect(() => ptrRO.cow = 123).to.not.throw();
+      expect(ptrRO.cow).to.equal(123);
+      const constPointer2 = ConstPtrPtr(constPointer);
+
     })
     it('should permit assignment and delete operations like regular objects', function() {
       const structStructure = env.beginStructure({
@@ -2169,6 +2337,46 @@ describe('Pointer functions', function() {
       expect([ ...pointer ]).to.eql([ 8, 8, 8, 8 ]);
       pointer[LOCATION_SETTER]({ ...loc, length: 3 });
       expect([ ...pointer ]).to.eql([ 1, 2, 3 ]);
+    })
+  })
+  describe('makePointerReadOnly', function() {
+    it('should make pointer read-only', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '*Int32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Int32Ptr } = structure;
+      expect(Int32Ptr.child).to.equal(Int32);
+      const pointer = new Int32Ptr(1234);
+      pointer[WRITE_DISABLER]();
+      expect(() => pointer['*'] = 5).to.not.throw(TypeError);
+      expect(() => pointer.$ = 123).to.throw(TypeError);
     })
   })
 })

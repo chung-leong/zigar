@@ -9,17 +9,17 @@ import {
 import { NodeEnvironment } from '../src/environment-node.js';
 import { getDescriptor, useAllMemberTypes } from '../src/member.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { MEMORY, POINTER_VISITOR } from '../src/symbol.js';
+import { MEMORY, POINTER_VISITOR, WRITE_DISABLER } from '../src/symbol.js';
 import { encodeBase64 } from '../src/text.js';
 import { MemberType, StructureType } from '../src/types.js';
 
 describe('Array functions', function() {
   const env = new NodeEnvironment();
+  beforeEach(function() {
+    useAllMemberTypes();
+    useAllStructureTypes();
+  })
   describe('defineArray', function() {
-    beforeEach(function() {
-      useAllMemberTypes();
-      useAllStructureTypes();
-    })
     it('should define structure for holding an int array', function() {
       const structure = env.beginStructure({
         type: StructureType.Array,
@@ -359,7 +359,7 @@ describe('Array functions', function() {
       }
     })
     it('should allow assignment of string to [#]u16', function() {
-      const structure = env.beginStructure({
+        const structure = env.beginStructure({
         type: StructureType.Array,
         name: '[11]u16',
         length: 11,
@@ -1106,6 +1106,78 @@ describe('Array functions', function() {
       object[Symbol.asyncIterator]();
       delete object[Symbol.asyncIterator];
       expect(object[Symbol.asyncIterator]).to.be.undefined;
+    })
+  })
+  describe('makeArrayReadOnly', function() {
+    it('should make an array read-only', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Array,
+        name: 'Hello',
+        length: 8,
+        byteSize: 4 * 8,
+      });
+      const constructor = function() {};
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { constructor, typedArray: Uint32Array }
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      expect(Hello).to.be.a('function');
+      expect(Hello.child).to.equal(constructor);
+      const object = new Hello(new Uint32Array(8));
+      object[WRITE_DISABLER]();
+      expect(() => object[0] = 0).to.throw(TypeError);
+      expect(() => object.set(0, 5)).to.throw(TypeError);
+    })
+    it('should make child objects read-only as well', function() {
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 4 * 2,
+      });
+      env.attachMember(structStructure, {
+        name: 'dog',
+        type: MemberType.Int,
+        isRequired: true,
+        byteSize: 4,
+        bitOffset: 0,
+        bitSize: 32,
+      });
+      env.attachMember(structStructure, {
+        name: 'cat',
+        type: MemberType.Int,
+        isRequired: true,
+        byteSize: 4,
+        bitOffset: 32,
+        bitSize: 32,
+      });
+      env.finalizeShape(structStructure)
+      env.finalizeStructure(structStructure);
+      const { constructor: Hello } = structStructure;
+      const structure = env.beginStructure({
+        type: StructureType.Array,
+        name: '[4]Hello',
+        length: 4,
+        byteSize: 8 * 4,
+        hasPointer: false,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        byteSize: 8,
+        structure: structStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloArray } = structure;
+      const object = HelloArray(new ArrayBuffer(structure.byteSize));
+      object[WRITE_DISABLER]();
+      const element = object[0];
+      expect(() => element.cat = 8).to.throw(TypeError);
     })
   })
   describe('getArrayIterator', function() {

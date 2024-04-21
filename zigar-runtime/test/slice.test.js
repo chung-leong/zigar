@@ -276,7 +276,7 @@ describe('Slice functions', function() {
       for (let i = 0; i < str.length; i++) {
         expect(slice[i]).to.equal(str.charCodeAt(i));
       }
-    })
+    })   
     it('should allow reinitialization of []u16 using a string', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
@@ -319,6 +319,35 @@ describe('Slice functions', function() {
       const slice = new U16Slice(str);
       const slice2 = new U16Slice(str + '!');
       expect(() => slice.$ = slice2).to.throw(TypeError);
+    })
+    it('should initialize correctly from a string when fixed is specified', function() {
+      const env = new NodeEnvironment();
+      env.allocateExternMemory = function(len, align) {
+        return 0x1000n;
+      };
+      env.obtainExternBuffer = function(address, len) {
+        return new ArrayBuffer(len);
+      };
+      const structure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]u8',
+        byteSize: 1,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        byteSize: 1,
+        structure: { constructor: function() {}, typedArray: Uint8Array }
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: U8Slice } = structure;
+      const str = 'Hello world';
+      const slice = new U8Slice(str, { fixed: true });
+      expect(slice).to.have.lengthOf(str.length);
+      for (let i = 0; i < str.length; i++) {
+        expect(slice[i]).to.equal(str.charCodeAt(i));
+      }
     })
     it('should allow assignment of string to []u16', function() {
       const structure = env.beginStructure({

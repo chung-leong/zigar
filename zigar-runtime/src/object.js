@@ -3,7 +3,7 @@ import { MissingInitializers, NoInitializer, NoProperty, throwReadOnly } from '.
 import { isReadOnly } from './member.js';
 import {
   ALL_KEYS, CONST_TARGET, COPIER, GETTER, MEMORY, POINTER_VISITOR, PROP_SETTERS, SETTER, SLOTS,
-  TARGET_SETTER, VIVIFICATOR
+  TARGET_SETTER
 } from './symbol.js';
 import { MemberType } from './types.js';
 
@@ -43,13 +43,6 @@ export function attachDescriptors(constructor, instanceDescriptors, staticDescri
       }
     }
   }
-  const vivificate = instanceDescriptors[VIVIFICATOR]?.value;
-  const vivificateDescriptor = { 
-    // vivificate child objects as read-only too
-    value: function(slot) { 
-      return vivificate.call(this, slot, false);
-    }
-  };
   const { get, set } = instanceDescriptors.$;
   defineProperties(constructor.prototype, { 
     [ALL_KEYS]: { value: Object.keys(propSetters) },
@@ -142,10 +135,6 @@ export function createConstructor(structure, handlers, env) {
       }
       if (hasSlots) {
         self[SLOTS] = {};
-        if (hasPointer && arg instanceof constructor) {
-          // copy pointer from other object
-          self[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
-        } 
       }
     }
     if (comptimeFieldSlots) {

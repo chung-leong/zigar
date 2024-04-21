@@ -10,7 +10,8 @@ import { convertToJSON, getValueOf } from './special.js';
 import {
   ALIGN, CONST_PROXY, CONST_TARGET, COPIER, ENVIRONMENT, FIXED_LOCATION, GETTER, LOCATION_GETTER,
   LOCATION_SETTER, MEMORY, NORMALIZER, PARENT, POINTER, POINTER_VISITOR, PROXY, SETTER, SIZE,
-  SLOTS, TARGET_GETTER, TARGET_SETTER, VIVIFICATOR, WRITE_DISABLER
+  SLOTS, TARGET_GETTER, TARGET_SETTER,
+  WRITE_DISABLER
 } from './symbol.js';
 import { MemberType, StructureType } from './types.js';
 
@@ -190,7 +191,6 @@ export function definePointer(structure, env) {
     [LOCATION_SETTER]: { value: addressSetter },
     [POINTER_VISITOR]: { value: visitPointer },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [VIVIFICATOR]: { value: () => { throw new NullPointer() } },
     [NORMALIZER]: { value: normalizePointer },
     [FIXED_LOCATION]: { value: undefined, writable: true },
     [WRITE_DISABLER]: { value: makePointerReadOnly },
@@ -205,7 +205,7 @@ export function definePointer(structure, env) {
 }
 
 function makePointerReadOnly() {  
-  const pointer = this[POINTER] ?? this;
+  const pointer = this[POINTER];
   const descriptor = Object.getOwnPropertyDescriptor(pointer.constructor.prototype, '$');
   descriptor.set = throwReadOnly;
   Object.defineProperty(pointer, '$', descriptor);
@@ -335,7 +335,7 @@ const constTargetHandlers = {
   set(target, name, value) {
     const ptr = target[POINTER];
     if (ptr && !(name in ptr)) {
-      ptr[name] = value;
+      target[name] = value;
       return true;
     }
     throwReadOnly();
