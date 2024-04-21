@@ -665,11 +665,6 @@ describe('WebAssemblyEnvironment', function() {
     })
   })
   describe('getWASI', function() {
-    it('should do nothing when when proc_exit is invoked', async function() {
-      const env = new WebAssemblyEnvironment();
-      const wasi = env.getWASI();
-      expect(() => wasi.proc_exit()).to.not.throw();
-    })
     it('should write to console when fd_write is invoked', async function() {
       const env = new WebAssemblyEnvironment();
       const wasi = env.getWASI();
@@ -749,6 +744,14 @@ describe('WebAssemblyEnvironment', function() {
         }
       }
       expect(allZeroes).to.be.false;
+    })
+    it('should do nothing when when unsupported functions are invoked', async function() {
+      const env = new WebAssemblyEnvironment();
+      const wasi = env.getWASI();
+      expect(() => wasi.proc_exit()).to.not.throw();
+      expect(() => wasi.path_open()).to.not.throw();
+      expect(() => wasi.fd_read()).to.not.throw();
+      expect(() => wasi.fd_close()).to.not.throw();
     })
   })
 })

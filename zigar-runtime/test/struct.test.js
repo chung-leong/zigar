@@ -1149,6 +1149,19 @@ describe('Struct functions', function() {
       expect(object[1]).to.equal(456);
       expect(object.valueOf()).to.eql([ 123, 456 ]);
     })
+    it('should define an empty tuple', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'zig.super.Hello',
+        byteSize: 0,
+        isTuple: true,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const object = new Hello({});
+      expect(object.valueOf()).to.eql([]);
+    })
     it('should throw when copying a struct with pointer in reloc memory to one in fixed memory', function() {
       const env = new NodeEnvironment();
       env.allocateExternMemory = function(len, align) {

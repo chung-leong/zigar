@@ -7,7 +7,6 @@ import {
   getDataView,
   getNumericAccessor,
   getTypedArrayClass,
-  isBuffer,
   isTypedArray,
   requireDataView,
   useAllExtendedTypes
@@ -21,26 +20,6 @@ describe('Data view functions', function() {
     useAllExtendedTypes();
   })
   const env = new Environment();
-  describe('isBuffer', function() {
-    it('should return true when argument is an ArrayBuffer', function() {
-      expect(isBuffer(new ArrayBuffer(8))).to.be.true;
-    })
-    it('should return true when argument is an SharedArrayBuffer', function() {
-      expect(isBuffer(new SharedArrayBuffer(8))).to.be.true;
-    })
-    it('should return true when argument is a DataView', function() {
-      expect(isBuffer(new DataView(new ArrayBuffer(8)))).to.be.true;
-    })
-    it('should return false when argument does not contain a buffer', function() {
-      expect(isBuffer({})).to.be.false;
-    })
-    it('should return true when argument is a compatible typed array', function() {
-      expect(isBuffer(new Uint32Array(8), Uint32Array)).to.be.true;
-    })
-    it('should return false when argument is an incompatible typed array', function() {
-      expect(isBuffer(new Uint32Array(8), Int8Array)).to.be.false;
-    })
-  })
   describe('isTypedArray', function() {
     it('should return true when given the correct TypedArray', function() {
       const ta = new Int32Array(4);

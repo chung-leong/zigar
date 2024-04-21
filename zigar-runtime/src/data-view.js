@@ -281,17 +281,6 @@ export function getCompatibleTags(structure) {
   return tags;
 }
 
-export function isBuffer(arg, typedArray) {
-  const tag = arg?.[Symbol.toStringTag];
-  if (tag === 'DataView' || tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
-    return true;
-  } else if (typedArray && tag === typedArray.name) {
-    return true;
-  } else {
-    return false;
-  }
-}
-
 function getBigIntDescriptor(bitSize) {
   const getWord = DataView.prototype.getBigUint64;
   const setWord = DataView.prototype.setBigUint64;

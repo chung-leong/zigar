@@ -1,4 +1,4 @@
-import { getDataView, isBuffer, isCompatible } from './data-view.js';
+import { getDataView, isCompatible } from './data-view.js';
 import {
   ConstantConstraint, FixedMemoryTargetRequired, InaccessiblePointer, InvalidPointerTarget,
   NoCastingToPointer, NullPointer, ReadOnlyTarget, throwReadOnly, warnImplicitArrayCreation
@@ -153,8 +153,11 @@ export function definePointer(structure, env) {
         // creation of a new slice using a typed array is probably
         // not what the user wants; it's more likely that the intention
         // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
-        if (targetStructure.typedArray && isBuffer(arg?.buffer)) {
-          warnImplicitArrayCreation(targetStructure, arg);
+        if (targetStructure.typedArray) {
+          const tag = arg?.buffer?.[Symbol.toStringTag];
+          if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
+            warnImplicitArrayCreation(targetStructure, arg);
+          }
         }
       }
       arg = autoObj;
