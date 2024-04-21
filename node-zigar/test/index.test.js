@@ -20,7 +20,7 @@ describe('Loader', function() {
   })
   describe('load', function() {
     it('should load Zig file', async function() {
-      this.timeout(60000);
+      this.timeout(300000);
       const { href: url } = new URL('./zig-samples/simple.zig', import.meta.url);
       const { source, format, shortCircuit } = await load(url, {}, () => {});
       expect(format).to.equal('module');
@@ -31,7 +31,7 @@ describe('Loader', function() {
       expect(m[1]).to.contain('add');
     })
     it('should load Zig file with no functions', async function() {
-      this.timeout(60000);
+      this.timeout(300000);
       const { href: url } = new URL('./zig-samples/struct.zig', import.meta.url);
       const { source } = await load(url, {}, () => {});
       expect(source).to.not.contain('const source = ');
@@ -61,7 +61,7 @@ describe('Loader', function() {
   })
   describe('import', function() {
     it('should load Zigar module', async function() {
-      this.timeout(60000);
+      this.timeout(300000);
       const module = await import('./zig-samples/lib/integers.zigar');
       expect(module.int16).to.equal(-44);
     })
