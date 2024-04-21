@@ -1115,8 +1115,6 @@ function isBuffer(arg, typedArray) {
   const tag = arg?.[Symbol.toStringTag];
   if (tag === 'DataView' || tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
     return true;
-  } else if (typedArray && tag === typedArray.name) {
-    return true;
   } else {
     return false;
   }
