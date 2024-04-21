@@ -61,7 +61,7 @@ describe('Loader', function() {
       const port = 10001;
       const server = await createServer({
         root: absolute('./example'),
-        server: { host, port },
+        server: { host, port, watch: null },        
         plugins: [
           Zigar({}),
           NodeResolve({
