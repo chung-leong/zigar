@@ -376,8 +376,6 @@ export class WebAssemblyEnvironment extends Environment {
 
   getWASI() {
     return { 
-      proc_exit: (rval) => {
-      },
       fd_write: (fd, iovs_ptr, iovs_count, written_ptr) => {
         if (fd === 1 || fd === 2) {
           const dv = new DataView(this.memory.buffer);
@@ -402,6 +400,10 @@ export class WebAssemblyEnvironment extends Environment {
         }
         return 0;
       },
+      proc_exit: () => {},
+      path_open: () => 1,
+      fd_read: () => 1,
+      fd_close: () => 1,
     };
   }
 }

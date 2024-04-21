@@ -1965,7 +1965,6 @@ function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) 
       }
     }
   }
-  instanceDescriptors[VIVIFICATOR]?.value;
   const { get, set } = instanceDescriptors.$;
   defineProperties(constructor.prototype, { 
     [ALL_KEYS]: { value: Object.keys(propSetters) },
@@ -2058,10 +2057,6 @@ function createConstructor(structure, handlers, env) {
       }
       if (hasSlots) {
         self[SLOTS] = {};
-        if (hasPointer && arg instanceof constructor) {
-          // copy pointer from other object
-          self[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
-        } 
       }
     }
     if (comptimeFieldSlots) {
@@ -2825,7 +2820,6 @@ function definePointer(structure, env) {
     [LOCATION_SETTER]: { value: addressSetter },
     [POINTER_VISITOR]: { value: visitPointer },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [VIVIFICATOR]: { value: () => { throw new NullPointer() } },
     [NORMALIZER]: { value: normalizePointer },
     [FIXED_LOCATION]: { value: undefined, writable: true },
     [WRITE_DISABLER]: { value: makePointerReadOnly },
@@ -2840,7 +2834,7 @@ function definePointer(structure, env) {
 }
 
 function makePointerReadOnly() {  
-  const pointer = this[POINTER] ?? this;
+  const pointer = this[POINTER];
   const descriptor = Object.getOwnPropertyDescriptor(pointer.constructor.prototype, '$');
   descriptor.set = throwReadOnly;
   Object.defineProperty(pointer, '$', descriptor);
@@ -2967,7 +2961,7 @@ const constTargetHandlers = {
   set(target, name, value) {
     const ptr = target[POINTER];
     if (ptr && !(name in ptr)) {
-      ptr[name] = value;
+      target[name] = value;
       return true;
     }
     throwReadOnly();
@@ -5456,8 +5450,6 @@ class WebAssemblyEnvironment extends Environment {
 
   getWASI() {
     return { 
-      proc_exit: (rval) => {
-      },
       fd_write: (fd, iovs_ptr, iovs_count, written_ptr) => {
         if (fd === 1 || fd === 2) {
           const dv = new DataView(this.memory.buffer);
@@ -5482,6 +5474,10 @@ class WebAssemblyEnvironment extends Environment {
         }
         return 0;
       },
+      proc_exit: () => {},
+      path_open: () => 1,
+      fd_read: () => 1,
+      fd_close: () => 1,
     };
   }
 }

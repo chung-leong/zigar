@@ -2000,7 +2000,6 @@ function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) 
       }
     }
   }
-  instanceDescriptors[VIVIFICATOR]?.value;
   const { get, set } = instanceDescriptors.$;
   defineProperties(constructor.prototype, { 
     [ALL_KEYS]: { value: Object.keys(propSetters) },
@@ -2093,10 +2092,6 @@ function createConstructor(structure, handlers, env) {
       }
       if (hasSlots) {
         self[SLOTS] = {};
-        if (hasPointer && arg instanceof constructor) {
-          // copy pointer from other object
-          self[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
-        } 
       }
     }
     if (comptimeFieldSlots) {
@@ -2608,7 +2603,6 @@ function definePointer(structure, env) {
     [LOCATION_SETTER]: { value: addressSetter },
     [POINTER_VISITOR]: { value: visitPointer },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [VIVIFICATOR]: { value: () => { throw new NullPointer() } },
     [NORMALIZER]: { value: normalizePointer },
     [FIXED_LOCATION]: { value: undefined, writable: true },
     [WRITE_DISABLER]: { value: makePointerReadOnly },
@@ -2623,7 +2617,7 @@ function definePointer(structure, env) {
 }
 
 function makePointerReadOnly() {  
-  const pointer = this[POINTER] ?? this;
+  const pointer = this[POINTER];
   const descriptor = Object.getOwnPropertyDescriptor(pointer.constructor.prototype, '$');
   descriptor.set = throwReadOnly;
   Object.defineProperty(pointer, '$', descriptor);
@@ -2750,7 +2744,7 @@ const constTargetHandlers = {
   set(target, name, value) {
     const ptr = target[POINTER];
     if (ptr && !(name in ptr)) {
-      ptr[name] = value;
+      target[name] = value;
       return true;
     }
     throwReadOnly();
@@ -4437,7 +4431,7 @@ function generateCode(definition, params) {
   // write out the structures as object literals 
   addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
-  add(`const env = createEnvironment(${addonDir ? JSON.stringify({ addonDir }, undefined, 2) : null});`);
+  add(`const env = createEnvironment(${JSON.stringify({ addonDir }, undefined, 2)});`);
   add(`const __zigar = env.getSpecialExports();`);
   add(`\n// recreate structures`);
   add(`env.recreateStructures(structures, options);`);
@@ -4855,6 +4849,7 @@ async function acquireLock(pidPath, staleTime) {
           await delay(250);
           continue;
         }
+        /* c8 ignore next 3 */
       } else {
         throw err;
       }
@@ -4875,6 +4870,7 @@ function acquireLockSync(pidPath, staleTime) {
         if (checkPidFile(pidPath, staleTime)) {
           delaySync(250);
         }
+        /* c8 ignore next 3 */
       } else {
         throw err;
       }
@@ -4894,12 +4890,15 @@ function checkPidFile(pidPath, staleTime = 60000 * 5) {
   let stale = false;
   try {
     const pid = loadFileSync(pidPath);
-    if (os.platform() === 'win32') {
-      child_process.execSync(`tasklist /nh /fi "pid eq ${pid}" | findstr .exe`, { stdio: 'pipe' }).toString();
-    } else {
-      child_process.execSync(`ps -p ${pid}`).toString();
+    if (pid) {
+      /* c8 ignore next 5 */
+      if (os.platform() === 'win32') {
+        child_process.execSync(`tasklist /nh /fi "pid eq ${pid}" | findstr .exe`, { stdio: 'pipe' }).toString();
+      } else {
+        child_process.execSync(`ps -p ${pid}`).toString();
+      }
     }
-    const last = findFileSync(pidPath)?.mtime || 0;
+    const last = findFileSync(pidPath)?.mtime /* c8 ignore next */ || 0;
     const diff = new Date() - last;
     if (diff > staleTime) {
       stale = true;
@@ -4970,8 +4969,8 @@ async function createDirectory(path$1) {
     await createDirectory(dir);
     try {
       await promises.mkdir(path$1);
+      /* c8 ignore next 5 */
     } catch (err) {
-      /* c8 ignore next 3 */
       if (err.code != 'EEXIST') {
         throw err;
       }
@@ -4986,8 +4985,8 @@ function createDirectorySync(path$1) {
     createDirectorySync(dir);
     try {
       fs.mkdirSync(path$1);
+      /* c8 ignore next 5 */
     } catch (err) {
-      /* c8 ignore next 3 */
       if (err.code != 'EEXIST') {
         throw err;
       }
@@ -5612,21 +5611,20 @@ function processConfigFile(text, cfgPath, availableOptions) {
 }
 
 function getAbsoluteMapping(sourceFiles, cfgDir) {
-  if (!sourceFiles) {
-    return;
-  }
   const map = {};
-  for (const [ module, source ] of Object.entries(sourceFiles)) {
-    const modulePath = path.resolve(cfgDir, module);
-    const sourcePath = path.resolve(cfgDir, source);
-    map[modulePath] = sourcePath;
+  if (sourceFiles) {
+    for (const [ module, source ] of Object.entries(sourceFiles)) {
+      const modulePath = path.resolve(cfgDir, module);
+      const sourcePath = path.resolve(cfgDir, source);
+      map[modulePath] = sourcePath;
+    }
   }
   return map;
 }
 
 function findSourceFile(modulePath, options) {
   const { sourceFiles } = options;
-  return sourceFiles?.[modulePath]; 
+  return sourceFiles[modulePath]; 
 }
 
 function addMethods(s, env) {
@@ -6719,8 +6717,6 @@ class WebAssemblyEnvironment extends Environment {
 
   getWASI() {
     return { 
-      proc_exit: (rval) => {
-      },
       fd_write: (fd, iovs_ptr, iovs_count, written_ptr) => {
         if (fd === 1 || fd === 2) {
           const dv = new DataView(this.memory.buffer);
@@ -6745,6 +6741,10 @@ class WebAssemblyEnvironment extends Environment {
         }
         return 0;
       },
+      proc_exit: () => {},
+      path_open: () => 1,
+      fd_read: () => 1,
+      fd_close: () => 1,
     };
   }
 }
