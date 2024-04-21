@@ -21,12 +21,12 @@ describe('Loader', function() {
   describe('load', function() {
     it('should load Zig file', async function() {
       this.timeout(60000);
-      const { href: url } = new URL('./zig-samples/function-simple.zig', import.meta.url);
+      const { href: url } = new URL('./zig-samples/simple.zig', import.meta.url);
       const { source, format, shortCircuit } = await load(url, {}, () => {});
       expect(format).to.equal('module');
       expect(shortCircuit).to.be.true;
       expect(source).to.contain('const source = ');
-      expect(source).to.contain('runtimeSafety: true');
+      expect(source).to.contain('runtimeSafety: false');
       const m = /export \{([\s\S]*)\}/.exec(source);
       expect(m[1]).to.contain('add');
     })
@@ -48,13 +48,13 @@ describe('Loader', function() {
     })
     it('should use query variables', async function() {
       this.timeout(300000);
-      const { href: url } = new URL('./zig-samples/function-simple.zig?optimize=ReleaseSmall', import.meta.url);
+      const { href: url } = new URL('./zig-samples/simple.zig?optimize=ReleaseSafe', import.meta.url);
       const { source } = await load(url, {}, () => {});
-      expect(source).to.contain('runtimeSafety: false');
+      expect(source).to.contain('runtimeSafety: true');
     })
     it('should use config file', async function() {
       this.timeout(300000);
-      const { href: url } = new URL('./zig-samples/with-config/lib/simple.zigar', import.meta.url);
+      const { href: url } = new URL('./zig-samples/lib/simple.zigar', import.meta.url);
       const { source } = await load(url, {}, () => {});
       expect(source).to.contain('runtimeSafety: false');
     })
@@ -62,7 +62,7 @@ describe('Loader', function() {
   describe('import', function() {
     it('should load Zigar module', async function() {
       this.timeout(60000);
-      const module = await import('./sample-modules/integers.zigar');
+      const module = await import('./zig-samples/lib/integers.zigar');
       expect(module.int16).to.equal(-44);
     })
   })

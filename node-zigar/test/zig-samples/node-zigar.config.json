@@ -1,0 +1,16 @@
+{
+  "optimize": "ReleaseSmall",
+  "sourceFiles": {
+    "./lib/simple.zigar": "./simple.zig",
+    "./lib/integers.zigar": "./integers.zig"
+  },
+  "targets": [
+    { "platform": "win32", "arch": "x64" },
+    { "platform": "win32", "arch": "arm64" },
+    { "platform": "win32", "arch": "ia32" },
+    { "platform": "linux", "arch": "x64" },
+    { "platform": "linux", "arch": "arm64" },
+    { "platform": "darwin", "arch": "x64" },
+    { "platform": "darwin", "arch": "arm64" }
+  ]
+}

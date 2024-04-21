@@ -1,6 +1,0 @@
-{
-  "optimize": "ReleaseSmall",
-  "sourceFiles": {
-    "./lib/simple.zigar": "./src/function-simple.zig"
-  }
-}
