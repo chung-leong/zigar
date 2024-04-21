@@ -31,3 +31,8 @@ export fn runThunk(thunk_id: usize, arg_struct: Value) ?Value {
 export fn isRuntimeSafetyActive() bool {
     return exporter.isRuntimeSafetyActive();
 }
+
+pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
+    std.debug.print("{s}\n", .{msg});
+    return std.process.abort();
+}

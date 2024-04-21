@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
+import { capture } from '../capture.js';
 
 export function addTests(importModule, options) {
   const { target, optimize } = options;
@@ -13,17 +14,20 @@ export function addTests(importModule, options) {
     it('should produce an error return trace', async function() {
       this.timeout(120000);
       const { fail } = await importTest('wasm-error-trace');
-      if (runtimeSafety) {
-        expect(fail).to.throw(WebAssembly.RuntimeError)
-          .with.property('stack')
-            .that.contains('error-trace.fail')
-            .and.contains('error-trace.a')
-            .and.contains('error-trace.b')
-            .and.contains('error-trace.c')
-            .and.contains('error-trace.d');
-      } else {
-        expect(fail).to.not.throw();
-      }
+      const [ line ] = await capture(() => {
+        if (runtimeSafety) {
+          expect(fail).to.throw(WebAssembly.RuntimeError)
+            .with.property('stack')
+              .that.contains('error-trace.fail')
+              .and.contains('error-trace.a')
+              .and.contains('error-trace.b')
+              .and.contains('error-trace.c')
+              .and.contains('error-trace.d');
+        } else {
+          expect(fail).to.not.throw();
+        }    
+      });
+      expect(line).to.equal('reached unreachable code');
     })
   })
 }
