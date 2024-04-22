@@ -26,7 +26,7 @@ extern fn _allocateHostMemory(len: usize, alignment: u16) ?Value;
 extern fn _freeHostMemory(bytes: [*]u8, len: usize, alignment: u16) void;
 extern fn _captureString(bytes: ?[*]const u8, len: usize) ?Value;
 extern fn _captureView(bytes: ?[*]u8, len: usize, copy: bool) ?Value;
-extern fn _castView(structure: Value, dv: Value, writable: bool) ?Value;
+extern fn _castView(bytes: ?[*]u8, len: usize, copy: bool, structure: Value) ?Value;
 extern fn _getViewAddress(dv: Value) usize;
 extern fn _getSlotNumber(scope: u32, key: u32) u32;
 extern fn _readSlot(container: ?Value, slot: usize) ?Value;

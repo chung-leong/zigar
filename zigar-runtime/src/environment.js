@@ -209,15 +209,16 @@ export class Environment {
     }
   }
 
-  castView(structure, dv, writable) {
+  castView(address, len, copy, structure) {
     const { constructor, hasPointer } = structure;
+    const dv = this.captureView(address, len, copy);
     const object = constructor.call(ENVIRONMENT, dv);
     if (hasPointer) {
       // acquire targets of pointers
       this.acquirePointerTargets(object);
     }
-    if (!writable) {
-      object[WRITE_DISABLER]?.();
+    if (copy) {
+      object[WRITE_DISABLER]();
     }
     return object;
   }

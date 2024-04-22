@@ -82,7 +82,7 @@ export class NodeEnvironment extends Environment {
   }
 
   obtainFixedView(address, len) {
-    if (!len) {
+    if (!address && !len) {
       // handle zero length slice
       return this.obtainView(this.nullBuffer);
     } else {

@@ -14,7 +14,7 @@ import { getMemoryCopier } from '../src/memory.js';
 import { useAllStructureTypes } from '../src/structure.js';
 import {
   ALIGN, ATTRIBUTES, COPIER, ENVIRONMENT, FIXED_LOCATION, MEMORY, POINTER_VISITOR, SLOTS,
-  TARGET_GETTER
+  TARGET_GETTER, WRITE_DISABLER
 } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
 
@@ -232,32 +232,36 @@ describe('Environment', function() {
   describe('castView', function() {
     it('should call constructor without the use of the new operator', function() {
       const env = new Environment();
+      env.getBufferAddress = () => 0x10000;
+      env.copyBytes = (dv, address, len) => {};
       let recv, arg;
       const structure = {
         constructor: function(dv) {
           recv = this;
           arg = dv;
-          return {};
+          return {
+            [WRITE_DISABLER]: () => {},
+          };
         }
       };
-      const dv = new DataView(new ArrayBuffer(0));
-      const object = env.castView(structure, dv, true);
+      const object = env.castView(1234, 0, true, structure);
       expect(recv).to.equal(ENVIRONMENT);
-      expect(arg).to.equal(dv);
     })
     it('should try to create targets of pointers', function() {
       const env = new Environment();
+      env.getBufferAddress = () => 0x10000;
+      env.copyBytes = (dv, address, len) => {};
       let visitor;
       const structure = {
         constructor: function(dv) {
           return {
             [POINTER_VISITOR]: function(f) { visitor = f },
+            [WRITE_DISABLER]: () => {},
           };
         },
         hasPointer: true,
       };
-      const dv = new DataView(new ArrayBuffer(8));
-      const object = env.castView(structure, dv, true);
+      const object = env.castView(1234, 8, true, structure);
     })
   })
   describe('getSlotNumber', function() {

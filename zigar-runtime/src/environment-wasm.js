@@ -19,7 +19,7 @@ export class WebAssemblyEnvironment extends Environment {
     freeHostMemory: { argType: 'iii' },
     captureString: { argType: 'ii', returnType: 'v' },
     captureView: { argType: 'iib', returnType: 'v' },
-    castView: { argType: 'vvb', returnType: 'v' },
+    castView: { argType: 'iibv', returnType: 'v' },
     getSlotNumber: { argType: 'ii', returnType: 'i' },
     readSlot: { argType: 'vi', returnType: 'v' },
     writeSlot: { argType: 'viv' },

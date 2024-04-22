@@ -1266,9 +1266,8 @@ fn exportPointerTarget(host: anytype, comptime ptr: anytype, comptime is_comptim
         }
     };
     const memory = toMemory(value_ptr, is_comptime);
-    const dv = try host.captureView(memory);
     const structure = try getStructure(host, T);
-    const obj = try host.castView(structure, dv, !is_comptime);
+    const obj = try host.castView(memory, structure);
     if (comptime isComptimeOnly(T)) {
         try attachComptimeValues(host, obj, ptr.*);
     }
@@ -1277,8 +1276,7 @@ fn exportPointerTarget(host: anytype, comptime ptr: anytype, comptime is_comptim
 
 fn exportError(host: anytype, err: anyerror, structure: Value) !Value {
     const memory = toMemory(&err, true);
-    const dv = try host.captureView(memory);
-    const obj = try host.castView(structure, dv, false);
+    const obj = try host.castView(memory, structure);
     return obj;
 }
 

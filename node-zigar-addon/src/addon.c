@@ -102,7 +102,6 @@ result capture_view(call ctx,
                     napi_value* dest) {
     napi_env env = ctx->env;
     napi_value args[3];
-    napi_value result;
     if (napi_create_uintptr(env, (uintptr_t) mem->bytes, &args[0]) == napi_ok
      && napi_create_uint32(env, mem->len, &args[1]) == napi_ok
      && napi_get_boolean(env, mem->attributes.is_comptime, &args[2]) == napi_ok
@@ -113,14 +112,15 @@ result capture_view(call ctx,
 }
 
 result cast_view(call ctx,
+                 const memory* mem,
                  napi_value structure,
-                 napi_value dv,
-                 bool writable,
                  napi_value* dest) {
     napi_env env = ctx->env;
-    napi_value args[3] = { structure, dv };
-    if (napi_get_boolean(env, writable, &args[2]) == napi_ok
-     && call_js_function(ctx, "castView", 3, args, dest)) {
+    napi_value args[4] = { NULL, NULL, NULL, structure };
+    if (napi_create_uintptr(env, (uintptr_t) mem->bytes, &args[0]) == napi_ok
+     && napi_create_uint32(env, mem->len, &args[1]) == napi_ok
+     && napi_get_boolean(env, mem->attributes.is_comptime, &args[2]) == napi_ok
+     && call_js_function(ctx, "castView", 4, args, dest)) {
         return OK;
     }
     return FAILURE;
@@ -399,6 +399,8 @@ napi_value free_external_memory(napi_env env,
     return NULL;
 }
 
+#include <stdio.h>
+
 napi_value obtain_external_buffer(napi_env env,
                                   napi_callback_info info) {
     module_data* md;
@@ -419,8 +421,20 @@ napi_value obtain_external_buffer(napi_env env,
     if (len == 0) {
         len += 1;
     }
-    if (napi_create_external_arraybuffer(env, src, len, finalize_external_buffer, md, &buffer) != napi_ok) {
-        return throw_last_error(env);
+    switch (napi_create_external_arraybuffer(env, src, len, finalize_external_buffer, md, &buffer)) {
+        case napi_ok: break;
+        case napi_no_external_buffers_allowed: {
+            /* make copy of external memory instead */
+            void* copy;
+            if (napi_create_arraybuffer(env, len, &copy, &buffer) == napi_ok
+             && napi_add_finalizer(env, buffer, NULL, finalize_external_buffer, md, NULL) == napi_ok) {
+                memcpy(copy, src, len);
+                break;
+            } else {
+                /* fall through */
+            }
+        }
+        default: throw_last_error(env);
     }
     /* create a reference to the module so that the shared library doesn't get unloaded
        while the external buffer is still around pointing to it */

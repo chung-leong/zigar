@@ -135,12 +135,10 @@ describe('NodeEnvironment', function() {
       expect(dv2.byteLength).to.equal(0);
       expect(dv1).to.not.equal(dv2);
     })
-    it('should return a view to the null array when len is zero and address is invalid', function() {
+    it('should return a view to the null array when len is zero and address is 0', function() {
       const env = new NodeEnvironment();
-      const dv1 = env.obtainFixedView(0n, 0);
-      expect(dv1.buffer).to.equal(env.nullBuffer);
-      const dv2 = env.obtainFixedView(0xaaaaaaaaaaaaaaaan, 0);
-      expect(dv2.buffer).to.equal(env.nullBuffer);
+      const dv = env.obtainFixedView(0n, 0);
+      expect(dv.buffer).to.equal(env.nullBuffer);
     })
   })
   describe('releaseFixedView', function() {    

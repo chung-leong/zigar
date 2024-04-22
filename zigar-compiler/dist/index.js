@@ -5876,15 +5876,16 @@ class Environment {
     }
   }
 
-  castView(structure, dv, writable) {
+  castView(address, len, copy, structure) {
     const { constructor, hasPointer } = structure;
+    const dv = this.captureView(address, len, copy);
     const object = constructor.call(ENVIRONMENT, dv);
     if (hasPointer) {
       // acquire targets of pointers
       this.acquirePointerTargets(object);
     }
-    if (!writable) {
-      object[WRITE_DISABLER]?.();
+    if (copy) {
+      object[WRITE_DISABLER]();
     }
     return object;
   }
@@ -6359,7 +6360,7 @@ class WebAssemblyEnvironment extends Environment {
     freeHostMemory: { argType: 'iii' },
     captureString: { argType: 'ii', returnType: 'v' },
     captureView: { argType: 'iib', returnType: 'v' },
-    castView: { argType: 'vvb', returnType: 'v' },
+    castView: { argType: 'iibv', returnType: 'v' },
     getSlotNumber: { argType: 'ii', returnType: 'i' },
     readSlot: { argType: 'vi', returnType: 'v' },
     writeSlot: { argType: 'viv' },

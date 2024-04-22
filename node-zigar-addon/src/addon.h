@@ -112,7 +112,7 @@ typedef struct {
     result (__cdecl *free_host_memory)(call, const memory*);
     result (__cdecl *capture_string)(call, const memory*, napi_value*);
     result (__cdecl *capture_view)(call, const memory*, napi_value*);
-    result (__cdecl *cast_view)(call, napi_value, napi_value, bool, napi_value*);
+    result (__cdecl *cast_view)(call, const memory*, napi_value, napi_value*);
     result (__cdecl *get_slot_number)(call, uint32_t, uint32_t, uint32_t*);
     result (__cdecl *read_slot)(call, napi_value, size_t, napi_value*);
     result (__cdecl *write_slot)(call, napi_value, size_t, napi_value);
