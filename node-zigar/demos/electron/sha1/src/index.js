@@ -25,7 +25,7 @@ const createWindow = () => {
   // Open the DevTools.
   // mainWindow.webContents.openDevTools();
 
-  const onOpenlick = async () => {
+  const onOpenClick = async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({ properties: [ 'openFile' ]});
     if (!canceled) {
       const [ path ] = filePaths;
@@ -45,7 +45,7 @@ const createWindow = () => {
     {
       label: '&File',
       submenu: [
-        { label: '&Open', click: onOpenlick },
+        { label: '&Open', click: onOpenClick },
         { type: 'separator' },
         isMac ? { role: 'close' } : { role: 'quit' }
       ]

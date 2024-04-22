@@ -37,7 +37,6 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
     const srcCanvas = document.getElementById('srcCanvas');
     const dstCanvas = document.getElementById('dstCanvas');
     const intensity = document.getElementById('intensity');
-    const params = { intensity: 0.3 };
 
     // attach event handlers
     fileOpen.onchange = async (evt) => {
@@ -56,7 +55,6 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
     };
     intensity.oninput = (evt) => {
       const { target: { value } } = evt;
-      params.intensity = parseFloat(value);
       applyFilter();
     };
 
@@ -84,6 +82,7 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
     function applyFilter() {
       const srcCTX = srcCanvas.getContext('2d', { willReadFrequently: true });
       const { width, height } = srcCanvas;
+      const params = { intensity: parseFloat(intensity.value) };
       const srcImageData = srcCTX.getImageData(0, 0, width, height);
       const dstImageData = createImageData(width, height, srcImageData, params);
       dstCanvas.width = width;
