@@ -2,7 +2,7 @@ const { writeFile } = require('fs/promises');
 const { resolve } = require('path');
 const { pathToFileURL } = require('url');
 require('node-zigar/cjs');
-const { createOutput } = require('./lib/sepia.zigar');
+const { createOutput } = require('./zig/sepia.zig');
 
 const isMac = process.platform === 'darwin'
 

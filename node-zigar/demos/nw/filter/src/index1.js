@@ -1,8 +1,6 @@
 const { writeFile } = require('fs/promises');
 const { resolve } = require('path');
 const { pathToFileURL } = require('url');
-require('node-zigar/cjs');
-const { createOutput } = require('./lib/sepia.zigar');
 
 const isMac = process.platform === 'darwin'
 
@@ -85,20 +83,11 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
       const srcCTX = srcCanvas.getContext('2d', { willReadFrequently: true });
       const { width, height } = srcCanvas;
       const srcImageData = srcCTX.getImageData(0, 0, width, height);
-      const dstImageData = createImageData(width, height, srcImageData, params);
       dstCanvas.width = width;
       dstCanvas.height = height;
       const dstCTX = dstCanvas.getContext('2d');
-      dstCTX.putImageData(dstImageData, 0, 0);  
+      dstCTX.putImageData(srcImageData, 0, 0);
     }
-
-    function createImageData(width, height, source, params) {
-      const input = { src: source };
-      const output = createOutput(width, height, input, params);
-      const ta = output.dst.data.typedArray;
-      const clampedArray = new Uint8ClampedArray(ta.buffer, ta.byteOffset, ta.byteLength);
-      return new ImageData(clampedArray, width, height);
-    }  
   
     async function saveImage(path, type) {
       const blob = await new Promise((resolve, reject) => {
@@ -113,6 +102,6 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
       });   
       const buffer = await blob.arrayBuffer();
       await writeFile(path, new DataView(buffer)); 
-    }
+    }  
   };
 });
