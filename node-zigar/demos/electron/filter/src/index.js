@@ -3,7 +3,7 @@ const { writeFile } = require('fs/promises');
 const path = require('path');
 const { pathToFileURL } = require('url');
 require('node-zigar/cjs');
-const { createOutput } = require('../zig/sepia.zig');
+const { createOutput } = require('../lib/sepia.zigar');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
