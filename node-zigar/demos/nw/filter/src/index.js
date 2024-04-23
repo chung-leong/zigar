@@ -59,7 +59,7 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
     };
 
     // load sample image
-    const path = resolve(__dirname, './src/img/sample.png');
+    const path = resolve(__dirname, './img/sample.png');
     await loadImage(path);
 
     async function loadImage(path) {
