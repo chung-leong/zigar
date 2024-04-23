@@ -3,7 +3,7 @@ import zigar from 'rollup-plugin-zigar';
 
 export default [
   {
-    input: './src/index.js',
+    input: './src/sepia.js',
     plugins: [
       zigar({ 
         optimize: 'ReleaseSmall',
