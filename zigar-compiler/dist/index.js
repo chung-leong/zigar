@@ -5613,7 +5613,7 @@ function getAbsoluteMapping(sourceFiles, cfgDir) {
 
 function findSourceFile(modulePath, options) {
   const { sourceFiles } = options;
-  return sourceFiles[modulePath]; 
+  return sourceFiles?.[modulePath];
 }
 
 function addMethods(s, env) {

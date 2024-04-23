@@ -187,5 +187,5 @@ export function getAbsoluteMapping(sourceFiles, cfgDir) {
 
 export function findSourceFile(modulePath, options) {
   const { sourceFiles } = options;
-  return sourceFiles[modulePath]; 
+  return sourceFiles?.[modulePath];
 }
