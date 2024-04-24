@@ -1,12 +1,1 @@
-ZigError: File not found
-    at appendErrorSet (<anonymous>:3056:15)
-    at addStaticMembers (<anonymous>:4207:9)
-    at NodeEnvironment.finalizeStructure (<anonymous>:4657:7)
-    at NodeEnvironment.recreateStructures (<anonymous>:4736:14)
-    at file:///home/cleong/zigar/docs/examples/error-set-example-1.zig:419:5
-    at ModuleJob.run (node:internal/modules/esm/module_job:218:25)
-    at async ModuleLoader.import (node:internal/modules/esm/loader:329:24)
-    at async loadESM (node:internal/process/esm_loader:34:7)
-    at async handleMainPromise (node:internal/modules/run_main:113:12) {
-  number: 49
-}
+[ZigError: File not found] { number: 49 }
