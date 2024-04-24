@@ -50,10 +50,18 @@ app.on('window-all-closed', () => {
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
 require('node-zigar/cjs');
-const test = require('../zig/test.zig');
+const test = require('../zig/test.zig?omit-variables=0');
 
-console.log(test.constant_number);
-console.log(test.variable_number);
+console.log(`variable_number = ${test.variable_number} (JavaScript)`);
+console.log('setting variable to 8888 in JavaScript');
+test.variable_number = 8888;
+test.printVariable();
+console.log('setting variable to 1999 in Zig');
+test.changeVariable();
+test.printVariable();
+console.log(`variable_number = ${test.variable_number} (JavaScript)`);
 
-console.log(test.greeting(true).string);
-console.log(test.greeting(false).string);
+const { floatToString, freeString } = test;
+const array = floatToString(Math.PI);
+console.log(array.string);
+freeString(array);
