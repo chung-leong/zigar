@@ -1,0 +1,2 @@
+{ age: 72n, err: [ZigError: Fell to the dark side] { number: 47 } }
+{ age: 72, err: { error: 'Fell to the dark side' } }
