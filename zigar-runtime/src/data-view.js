@@ -210,7 +210,6 @@ function findElements(arg, Child) {
 export function requireDataView(structure, arg, env) {
   const dv = getDataView(structure, arg, env);
   if (!dv) {
-    console.log(arg);
     throw new BufferExpected(structure);
   }
   return dv;

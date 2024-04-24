@@ -375,10 +375,11 @@ class OutOfBound extends RangeError {
   }
 }
 
-class NotUndefined extends RangeError {
+class NotUndefined extends TypeError {
   constructor(member) {
     const { name } = member;
-    super(`Property ${name} can only be undefined`);
+    const rvalue = (name !== undefined) ? `Property ${name}` : `Element`;
+    super(`${rvalue} can only be undefined`);
   }
 }
 
@@ -1030,7 +1031,6 @@ function findElements(arg, Child) {
 function requireDataView(structure, arg, env) {
   const dv = getDataView(structure, arg, env);
   if (!dv) {
-    console.log(arg);
     throw new BufferExpected(structure);
   }
   return dv;
@@ -1600,19 +1600,26 @@ function transformDescriptor(descriptor, member) {
 }
 
 function getVoidDescriptor(member, env) {
-  const { runtimeSafety } = env;
+  const { bitOffset } = member;
   return {
     get: function() {
       return undefined;
     },
-    set: (runtimeSafety)
+    set: (bitOffset !== undefined)
     ? function(value) {
-        if (value !== undefined) {
-          throw new NotUndefined(member);
-        }
+      if (value !== undefined) {
+        throw new NotUndefined(member);
       }
-    : function() {},
-  }
+    }
+    : function(index, value) {
+      if (value !== undefined) {
+        throw new NotUndefined(member);
+      }
+      if (index < 0 || index >= this.length) {
+        throw new OutOfBound(member, index);
+      }
+    },
+  };
 }
 
 function getNullDescriptor(member, env) {
@@ -1620,7 +1627,7 @@ function getNullDescriptor(member, env) {
     get: function() {
       return null;
     },
-  }
+  };
 }
 
 function getUndefinedDescriptor(member, env) {
@@ -1628,7 +1635,7 @@ function getUndefinedDescriptor(member, env) {
     get: function() {
       return undefined;
     },
-  }
+  };
 }
 
 function getBoolDescriptor(member, env) {

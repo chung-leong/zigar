@@ -53,6 +53,7 @@ describe('Member functions', function() {
     it('should return void descriptor', function() {
       const member = {
         type: MemberType.Void,
+        bitOffset: 0,
         bitSize: 0,
         byteSize: 0,
       };
@@ -61,11 +62,25 @@ describe('Member functions', function() {
       const { get, set } = getDescriptor(member, env);
       expect(get.call(object)).to.be.undefined;
       expect(() => set.call(object, undefined)).to.not.throw();
-      expect(() => set.call(object, null)).to.throw();
-      expect(() => set.call(object, 0)).to.throw();
-      const { set: setNoCheck } = getDescriptor(member, { ...env, runtimeSafety: false });
-      expect(() => setNoCheck.call(object, undefined)).to.not.throw();
+      expect(() => set.call(object, null)).to.throw(TypeError);
+      expect(() => set.call(object, 0)).to.throw(TypeError);
     })
+    it('should return void element descriptor', function() {
+      const member = {
+        type: MemberType.Void,
+        bitSize: 0,
+        byteSize: 0,
+      };
+      const dv = new DataView(new ArrayBuffer(12));
+      const object = { [MEMORY]: dv, length: 4 };
+      const { get, set } = getDescriptor(member, env);
+      expect(get.call(object)).to.be.undefined;
+      expect(() => set.call(object, 3, undefined)).to.not.throw();
+      expect(() => set.call(object, 2, null)).to.throw(TypeError);
+      expect(() => set.call(object, 1, 0)).to.throw(TypeError);
+      expect(() => set.call(object, 4, undefined)).to.throw(RangeError);
+    })
+
     it('should return null descriptor', function() {
       const member = {
         type: MemberType.Null,

@@ -294,10 +294,11 @@ export class OutOfBound extends RangeError {
   }
 }
 
-export class NotUndefined extends RangeError {
+export class NotUndefined extends TypeError {
   constructor(member) {
     const { name } = member;
-    super(`Property ${name} can only be undefined`);
+    const rvalue = (name !== undefined) ? `Property ${name}` : `Element`
+    super(`${rvalue} can only be undefined`);
   }
 }
 

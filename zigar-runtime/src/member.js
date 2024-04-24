@@ -1,6 +1,6 @@
 import { getBoolAccessor, getNumericAccessor } from './data-view.js';
 import {
-  EnumExpected, ErrorExpected, NotInErrorSet, NotUndefined, Overflow, adjustRangeError
+  EnumExpected, ErrorExpected, NotInErrorSet, NotUndefined, OutOfBound, Overflow, adjustRangeError
 } from './error.js';
 import { restoreMemory } from './memory.js';
 import { GETTER, MEMORY, SETTER, SLOTS, VIVIFICATOR } from './symbol.js';
@@ -96,19 +96,26 @@ export function transformDescriptor(descriptor, member) {
 }
 
 export function getVoidDescriptor(member, env) {
-  const { runtimeSafety } = env;
+  const { bitOffset } = member;
   return {
     get: function() {
       return undefined;
     },
-    set: (runtimeSafety)
+    set: (bitOffset !== undefined)
     ? function(value) {
-        if (value !== undefined) {
-          throw new NotUndefined(member);
-        }
+      if (value !== undefined) {
+        throw new NotUndefined(member);
       }
-    : function() {},
-  }
+    }
+    : function(index, value) {
+      if (value !== undefined) {
+        throw new NotUndefined(member);
+      }
+      if (index < 0 || index >= this.length) {
+        throw new OutOfBound(member, index);
+      }
+    },
+  };
 }
 
 export function getNullDescriptor(member, env) {
@@ -117,7 +124,7 @@ export function getNullDescriptor(member, env) {
     get: function() {
       return null;
     },
-  }
+  };
 }
 
 export function getUndefinedDescriptor(member, env) {
@@ -125,7 +132,7 @@ export function getUndefinedDescriptor(member, env) {
     get: function() {
       return undefined;
     },
-  }
+  };
 }
 
 export function getBoolDescriptor(member, env) {
