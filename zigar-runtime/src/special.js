@@ -31,22 +31,22 @@ export function convertToJSON() {
   const options = { error: 'return' };
   const process = function(value) {
     const normalizer = value?.[NORMALIZER];
+    let result;
     if (normalizer) {
-      let result = map.get(value);
+      result = map.get(value);
       if (result === undefined) {
         result = normalizer.call(value, process, options);
-        if (typeof(result?.toJSON) === 'function') {
-          result = result.toJSON();
-        }      
         map.set(value, result);
       }
-      return result;
     } else {
-      if (typeof(value) === 'bigint' && INT_MIN <= value && value <= INT_MAX) {
-        return Number(value);
-      } 
-      return value;
+      result = value;
     }
+    if (typeof(result) === 'bigint' && INT_MIN <= result && result <= INT_MAX) {
+      result = Number(value);
+    } else if (typeof(result?.toJSON) === 'function') {
+      result = result.toJSON();
+    }
+    return result;
   }
   return process(this);
 }

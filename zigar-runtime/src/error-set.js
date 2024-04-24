@@ -115,6 +115,7 @@ class ZigErrorBase extends Error {
   constructor(name, number) {
     super(deanimalizeErrorName(name));
     this.number = number;
+    this.stack = undefined;
   }
 
   [Symbol.toPrimitive](hint) {
