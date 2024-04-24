@@ -1,0 +1,5 @@
+{
+  sound: { loud: undefined, thunderous: undefined, deafening: undefined },
+  fury: { angry: undefined, frenzied: undefined, tempestuous: undefined }
+}
+0

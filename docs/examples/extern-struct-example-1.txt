@@ -1,9 +1,6 @@
 Extern:
 123
-456n
+4567890123n
 Regular (wrong):
-456
+30923
 123n
-Regular (correct):
-123
-456n
