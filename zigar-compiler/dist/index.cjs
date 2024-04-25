@@ -2300,7 +2300,7 @@ function normalizeObject(object, forJSON) {
     if (type === undefined) {
       if (forJSON) {
         if (typeof(value) === 'bigint' && INT_MIN <= value && value <= INT_MAX) {
-          return Number(object);
+          return Number(value);
         } else if (value instanceof Error) {
           return { error: value.message };
         }

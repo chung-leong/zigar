@@ -2250,7 +2250,7 @@
 "      if (type === undefined) {\n"
 "        if (forJSON) {\n"
 "          if (typeof(value) === 'bigint' && INT_MIN <= value && value <= INT_MAX) {\n"
-"            return Number(object);\n"
+"            return Number(value);\n"
 "          } else if (value instanceof Error) {\n"
 "            return { error: value.message };\n"
 "          }\n"
