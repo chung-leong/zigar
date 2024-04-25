@@ -113,7 +113,6 @@ typedef struct {
     result (__cdecl *capture_string)(call, const memory*, napi_value*);
     result (__cdecl *capture_view)(call, const memory*, napi_value*);
     result (__cdecl *cast_view)(call, const memory*, napi_value, napi_value*);
-    result (__cdecl *get_slot_number)(call, uint32_t, uint32_t, uint32_t*);
     result (__cdecl *read_slot)(call, napi_value, size_t, napi_value*);
     result (__cdecl *write_slot)(call, napi_value, size_t, napi_value);
     result (__cdecl *begin_structure)(call, const structure*, napi_value*);
@@ -124,6 +123,7 @@ typedef struct {
     result (__cdecl *end_structure)(call, napi_value);
     result (__cdecl *create_template)(call, napi_value, napi_value*);
     result (__cdecl *write_to_console)(call, napi_value);
+    result (__cdecl *get_slot_number)(call, uint32_t, uint32_t, uint32_t*);
 } export_table;
 
 typedef struct {
