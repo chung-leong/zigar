@@ -135,6 +135,8 @@ export class Environment {
       } else {
         return null;
       }
+    } else if (!address && count) {
+      return null;
     }
     let len = count * (size ?? 0);
     // check for null address (=== can't be used since address can be both number and bigint)

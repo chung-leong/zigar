@@ -399,29 +399,25 @@ napi_value free_external_memory(napi_env env,
     return NULL;
 }
 
-#include <stdio.h>
-
 napi_value obtain_external_buffer(napi_env env,
                                   napi_callback_info info) {
     module_data* md;
     size_t argc = 2;
     napi_value args[2];
     uintptr_t address;
-    double len;
+    double len_float;
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
      || napi_get_value_uintptr(env, args[0], &address) != napi_ok) {
         return throw_error(env, "Address must be "UINTPTR_JS_TYPE);
-    } else if (napi_get_value_double(env, args[1], &len) != napi_ok) {
+    } else if (napi_get_value_double(env, args[1], &len_float) != napi_ok) {
         return throw_error(env, "Length must be number");
     }
     napi_value buffer;
     void* src = (void*) address;
     void* dest;
     /* need to include at least one byte */
-    if (len == 0) {
-        len += 1;
-    }
-    switch (napi_create_external_arraybuffer(env, src, len, finalize_external_buffer, md, &buffer)) {
+    size_t len = len_float, min_len = !len ? 1 : len;
+    switch (napi_create_external_arraybuffer(env, src, min_len, finalize_external_buffer, md, &buffer)) {
         case napi_ok: break;
         case napi_no_external_buffers_allowed: {
             /* make copy of external memory instead */
